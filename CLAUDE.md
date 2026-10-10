@@ -71,6 +71,7 @@ Short forms; the reasoning is in the linked file.
 - Anything a client predicts or draws from a server rule travels in RULES, to a joiner before any JOIN. [netcode](docs/netcode.md#rules-a-client-predicts-with-travel-in-rules)
 - Ammunition, the carried set and blind are owner-only. A replayed tick fires nothing (`begin_replay`). [netcode](docs/netcode.md#weapons-over-the-wire)
 - `INPUT_COPIES` (5) and `link_rtt_ms` are what keep commands on time under loss. [netcode](docs/netcode.md#inputs-and-the-clock-under-real-loss)
+- The local view is `view_now` (`DotFpsSampler.look_now()`, every frame) and the eye adds `drawn_offset` (`DotNetPredictor.visual_offset`); drawing the state's angles freezes the view on every frame with no tick. [netcode](docs/netcode.md#drawing-between-ticks)
 
 **Client**
 
