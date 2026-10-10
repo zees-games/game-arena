@@ -21,7 +21,7 @@ const ArenaPlayer := preload("arena_player.gd")
 ## nothing about either is a client's to choose.
 ##
 ## Ids are the session userid as a string, which is `ArenaPlayer.player_id` — the one id
-## space this game has. See the project's CLAUDE.md.
+## space this game has. See the project's docs/architecture.md.
 
 ## The damage type a slay or a slap carries. Empty is dot-combat's generic type, which
 ## armour does not absorb and nothing multiplies — an admin's slap for 10 is 10.

@@ -12,7 +12,7 @@ extends Node3D
 ## whoever walks through them collects them. They count per player ([member coins]); a
 ## server owner sets how many, what one is worth, whether a health pack comes too, whether
 ## any kill drops them, and how long they lie there (all `arena_drop_*` cvars). See
-## game-arena's CLAUDE.md.
+## game-arena's docs/modes.md.
 
 const CHANNEL := "arena.drops"
 

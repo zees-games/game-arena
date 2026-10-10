@@ -44,7 +44,7 @@ const ArenaPaths := preload("../game/arena_paths.gd")
 ##   tinted the colour the map's compiler measured for that texture — the same grid the
 ##   built-in maps wear, which is this game's look.
 ## - [b]Pushes, water, ladders and moving blocks[/b] (`mechanics`). Not run here; see the
-##   game's CLAUDE.md.
+##   game's docs/imported-maps.md.
 
 ## Metres per genre unit: 0.75 inch, the scale these maps were built at. Not the 1-inch
 ## figure sometimes quoted — at that scale a surf ramp is one the movement cannot hold.

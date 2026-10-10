@@ -250,7 +250,7 @@ func _boot() -> bool:
 
 	# The server's ENet is dot-core's own: DotTransportENet no longer advertises the engine's
 	# channel count as its incoming bandwidth (which throttled every client's commands to
-	# 1/32 for its first seconds; see CLAUDE.md "Real loss"), so nothing is built by hand.
+	# 1/32 for its first seconds; see docs/history.md), so nothing is built by hand.
 
 	_server = DotServer.new()
 	_server.name = "Server"

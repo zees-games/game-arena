@@ -1,0 +1,75 @@
+# Maps
+
+The built-in maps are `dm_box`, `dm_atrium` and `dm_pit`, each a list of boxes in `maps/arena_map.gd` ([architecture](architecture.md#one-description-three-representations)). The combat surf maps are in [imported-maps.md](imported-maps.md).
+
+## Maps are content, and these maps are code
+
+`ArenaMaps.catalogue()` builds a `DotMapCatalogue` from `ArenaMap.ids()` (and the imported ids), never from a second list. `DotMapDef.scene_path` names `arena_map.gd`, the script that produces the map, and `meta.builder` says so. Everything dot-map does with a def (rotation, cooldowns, nominations, ballots, sync) works on the id and the version and never opens the scene; only `DotMapLoader` reads `scene_path`, and `ArenaMapSession` overrides the load for a built-in map and falls through to `super` for a delivered one. The path is a real file so a validator can check it.
+
+**Versions are per map.** `ArenaMaps.MAP_VERSIONS` overrides `MAP_VERSION` for the maps that moved on. A record and a rotation cooldown are about a map at a version, so one shared constant would declare every map new whenever one changed. **Bump a map's version when its geometry changes.**
+
+## Changing the map
+
+`ArenaGame.setup` is not re-entrant: run twice it leaves two matches, two combat managers and two sets of spawns connected to the same signals. `ArenaGame.change_map` is the re-entrant path, and **the teardown is the feature**: every join is a signal connection, and a connection to a freed object errors at the next emit rather than at the skipped disconnect. That is why `ArenaProgress` has `unbind_world` / `bind_world`.
+
+What survives a change:
+
+- **The players do**, re-bodied against the new geometry by `ArenaPlayer.rebind_map`. Assigning the body is not enough, because `DotFpsMotor` holds the one it was built with.
+- **Their positions do not.** `_respawn_for_new_map` puts every present, non-spectating player through `_on_respawn_due` after `map_changed`, on the authority, so the director, sides, protection and loadouts apply; a client follows through the predictor's rewind. A kept position can be inside a box on the next map.
+- **The match, the combat manager and the world collision do not.** A new map is a new match, and the combat manager's trace is the map.
+- **The world layers are reconciled** to the mode ([modes](modes.md#modes-are-data)), and anything hooked to the combat manager rebinds on `map_changed`.
+
+`DotMatch.setup` collects spawn points with a `DotNodeRef` scoped to the game in `PARENT` mode (not `SELF`, which resolves against the match node and finds only the team manager). Unscoped it walks `current_scene`, so a second game in the process, or the outgoing map's points that `queue_free` has not yet removed, contributed spawns. `setup` passes `announce_empty = false` to `refresh_spawns`, because code-built maps add their points on the next lines and the warning would be noise indistinguishable from the real fault.
+
+## Reaching the players
+
+`ArenaMapDirector` is a catalogue, a rotation with a cooldown, a map clock with warnings and rtv, and `DotMapSyncHost`: announce, wait for every peer, swap, tell them to load. Without the sync a change is a change in one process and every client plays a world that no longer exists. With the vote loaded, the vote's clock is the one advanced and the director's is the fallback ([services](services.md#the-map-vote)).
+
+On the client:
+
+- `DotMapSyncClient` accepts an announced map only if it is in its own catalogue at the same version, or is delivered content inside its own mount. It must be built with a catalogue.
+- `DotMapSyncClient.changed` carries one argument where `DotMapSession.changed` carries two.
+- **`ArenaClient._on_map_changed` builds the `DotMapDef` it is handed, never `game.map`**, which is assigned only on the server. Rebuilding the old map leaves the player in geometry the server no longer has, which reads as the client freezing.
+
+`arena_map <id>` changes the map under the players; `arena_maps` lists what can be loaded. The map commands are console-only, never chat: a map change ends every round in progress.
+
+## Modes a map can host
+
+`ArenaMaps.supports_mode` answers whether a map can host a mode: a team mode needs tagged spawns, and siege, objectives and the props modes need a built world (`needs_built_world`). `dm_pit`'s spawns are untagged on purpose, which makes it the map that says no to a team mode; keep it so.
+
+- `ArenaMapSession` refuses on `_mode_after(map)`: the map's own mode if its def names one, otherwise the one already playing.
+- `ArenaMapDirector.restrict_rotation` narrows `DotMapRotation.order` to what the current mode can host before every ask, because the mode changes under a running server. It never empties the order: a mode no map can host is a configuration mistake, and "the map did not change" says so.
+
+## Every map is surveyed
+
+`ArenaMapSurvey` (`maps/arena_map_survey.gd`) runs over the box list and is asserted per map in `headless_match`'s *every map: slots and reach*:
+
+- `slots(map)`: every pair of boxes whose facing sides are under 0.8 m apart, running side by side at least 0.8 m, floor between, nothing in the gap, and not a declared climb. 0.8 is the family's width; the motor's hull is 0.7, so the rule errs toward calling a slot closed. A `Climb` keeps its two boxes, because 0.5 m of air between two crates is a jump and the declaration is the only thing that says so.
+- `reach(map)`: a 0.25 m grid of every surface a crouching player fits on, walked under `STEP_HEIGHT`, fallen off anywhere, jumped under `climb_limit()` within `jump_reach(rise)` along an arc that passes through no box, flood-filled from the spawns forward and backward. `unexplained()` is unreached and not declared `out_of_reach` (`ArenaMap.add_out_of_reach`); `trapped` is reached with no way back.
+- `ArenaMap.climb_limit()` and `jump_reach(rise)` keep no arithmetic of their own: they ask `DotFpsTunables` of the static `arena_tunables()` (1.125 m climb, 6.07 m reach flat, 4.64 m onto a 0.9 m rise).
+- Gaps between 0.8 and 1.05 m are printed as tight, not failed.
+
+**A bot that has to cover ground does not hold jump.** With `auto_hop` on and jump held, a player leaves the ground the tick it lands, gets no grounded acceleration, and bleeds to `max_air_wish_speed`: 9.00 m/s holding forward, 1.20 m/s holding forward and jump. That is the movement working, not a bug. A check that "the bot hopped" passes for a bot crawling at a metre a second, so every map check drives a walking bot and asserts its pace within 1.5 of `max_speed`; `headless_match` prints the two speeds under *what a bot actually travels at*. A bot turning in mid-hop keeps its old speed (air control only adds along the wish direction), so a climb test stands still on the top crate before turning.
+
+## Design rules every map follows
+
+These are what the shipped geometry was measured against. A change that breaks one is a design decision, not a tidy-up.
+
+- **Stairs are treads of 0.36** (under the 0.4 `step_height`, so held forward walks up). A stair ends flush against what it climbs to; stopped short, a player running up leaves the top tread into the air, and stopped 0.5 m short it leaves a slot.
+- **Crate climbs have 0.5 m gaps.** A hopping player carries about 0.6 m per hop, so 1.0 m gaps are not climbable.
+- **No gap between two boxes may be between 0 and 0.8 m** unless it is a declared climb; flush or at least 0.8.
+- **Every way onto a high point is watched from a higher one.** The trade for a new route up is that whoever holds the top sees all of it; checks trace a chest on every tread from that point.
+- **Headroom**: anything a player stands on with any part of the hull under a 3.0 m bridge can be no higher than 1.2 (`stand_height` over every tread is checked).
+- **Spawns are balanced and adding cover is not a reason to add one.** `dm_atrium`'s spawns are tagged by the sign of z, five and five; `dm_box` is its own half-turn about the origin (asserted over the whole box list; its stairs are computed as each other's half-turn); `dm_pit`'s nine are all untagged.
+
+### dm_box
+
+A room with a raised middle, two ledges at the x walls and an upper loop: ledge, gantry, ledge, gantry. Each gantry has one 0.9 m step against the pillar it passes, so the pillars at (4, -12) and (-4, 12) are a third tier (the nests). The two pillars beside the crate stacks are out of reach on purpose and declared so. The ledges are 6.5 m deep because the x-axis spawns stand at ±18 under the lip. Nest stairs run along each gantry's outer face and end flush against the nest pillar (which is why a run stops at a wall with the gantry one sidestep away); corner stairs along the north and south walls climb to a landing that carries the ledge into the corner. The NE and SW corners keep their stubs, which is what a half-turn rather than a mirror gives. dm_box has a platform at the origin, so a body teleported there is pushed out: start position checks on a spawn point.
+
+### dm_atrium
+
+A 60 m yard round a building with a ring at 4.6, a perch at 6.7, a south arcade and a north keep. The arcade is a colonnade, not a tunnel (opaque from above, open from the sides), with its roof (top 3.6) under the ring's underside at 4.0, so the ring still holds the map and the roof is a firing position under it. No spawn was added for it: every spawn it could carry would be on one side. The keep is a roofed room with a door at each end and a roof 0.9 over the ring; the 2 m alley and lane round it are load-bearing (walkable below, one jump up from the ring's north arm), and its west wall's firing slit has a 1.2 sill (over the climb limit) and 0.8 of opening (under a crouching player), because at 1.0 the sill becomes a reachable shelf. The east stair climbs from the east yard to the landing. The rampart joins the keep roof to the perch at 5.86, on piers 8 m apart, reachable only at its two ends (1.26 up from the ring, over the climb limit), so it is a route and not a second ring.
+
+### dm_pit
+
+28 m, a sunken floor with a catwalk ring at 3.6, two bridges crossing (one high point is a throne; the crossing makes the middle a junction), a shelf and perch at 5.4 in the south-west, and a lookout at 4.5 on the east arm so the perch has something to duel. The shelf is flush with the west and south arms' inner edges (x = -11, z = 11); half a metre clear leaves a 0.5 m slot that looks like a corridor from above. The lookout stands against the wall so the arm keeps 1.5 m of walkway; the ring is a loop and must not become two dead ends. The shelf stair runs from the floor up the shelf's east face under the north-south bridge, and its landing runs 0.8 m past the bridge's west edge because the step up happens with the hull still under the bridge. Each bridge is driven by a bot separately: they meet different arms.
