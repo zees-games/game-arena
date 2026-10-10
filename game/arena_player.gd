@@ -96,6 +96,23 @@ var view: Node3D = null
 ## The local player's camera. Null on a server, on a remote player, and headless.
 var camera: Camera3D = null
 
+## The view to draw this frame, (yaw, pitch) in degrees, or null for the simulated
+## state's. Set every frame by the client from `DotFpsSampler.look_now()`.
+##
+## [b]Because a frame with no tick in it would otherwise not turn.[/b] The state's angles
+## change only when a tick runs, and this game ticks 64 times a second: a 144 Hz display
+## has more frames with no tick than with one, and on each of them the view stood where the
+## last frame left it while the mouse moved, then caught up double on the next. game-g2gfast
+## measured it first at 128 ticks (one frame in nine at 144 Hz); `headless_view` here.
+var view_now: Variant = null
+
+## Added to where the local player is drawn this frame: what is left of the last
+## prediction corrections, easing to zero (`DotNetPredictor.visual_offset`). Without it a
+## correction moves the eye in one frame -- 30 cm in one frame for a 30 cm correction in
+## game-g2gfast's `headless_feel` -- where the predictor has always computed the offset
+## that eases it over a tenth of a second, and nothing read it.
+var drawn_offset: Vector3 = Vector3.ZERO
+
 ## Whether this player is holding the aim (right mouse). Client side, presentation only:
 ## the view model eases the weapon up and the camera zooms; nothing the server simulates.
 var aim_held: bool = false
@@ -1053,6 +1070,14 @@ func present(delta: float) -> void:
 	var drawn := controller.render_state() if camera != null else controller.state
 
 	if camera != null:
+		# This frame's view and what is left of the last corrections, from the client. A
+		# copy rather than the state: render_state duplicates, and the state is the tick's.
+		if view_now != null or drawn_offset != Vector3.ZERO:
+			drawn = drawn.duplicate_state() if drawn == controller.state else drawn
+			drawn.position += drawn_offset
+			if view_now != null:
+				drawn.yaw = (view_now as Vector2).x
+				drawn.pitch = (view_now as Vector2).y
 		# Written globally rather than by moving this node: this node is the
 		# controller's body, and the tick writes it. Moving it here would fight the
 		# simulation and, on the predicted local player, would be read back by

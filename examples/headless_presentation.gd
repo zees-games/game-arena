@@ -25,7 +25,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 135
+const CHECKS := 138
 
 var _passed := 0
 var _failed := 0
@@ -59,6 +59,7 @@ func _run() -> void:
 	_test_vote_is_heard()
 	_test_blind_and_beacon()
 	_test_a_respawn_faces_its_spawn()
+	_test_the_view_turns_every_frame()
 	_test_criticals_and_the_body()
 
 	print("")
@@ -994,6 +995,69 @@ func _test_a_respawn_faces_its_spawn() -> void:
 	_check(absf(wrapf(kept.yaw - (want + 45.0), -180.0, 180.0)) < 0.5,
 		"and a living player's look is left where the mouse put it (%.1f)" % kept.yaw)
 
+	client.free()
+	g.queue_free()
+	_done()
+
+
+## A frame on which no tick ran still turns the view, and a correction's offset is drawn.
+##
+## This game ticks 64 times a second, so on a 144 Hz display more frames run no tick than
+## run one, and the view was the state's angles, which only a tick moves: the view stood
+## still while the mouse moved, then turned double. game-g2gfast measured the same thing
+## at 128 ticks over a real socket (`headless_feel`); here it is the drawing alone, with no
+## tick at all between the mouse and the frame.
+func _test_the_view_turns_every_frame() -> void:
+	_section("A frame with no tick in it still turns the view")
+
+	var g := ArenaGame.new()
+	g.is_authority = true
+	add_child(g)
+	var _set := g.setup(ArenaMap.dm_box())
+	var added: DotResult = g.add_player(7, "Seven")
+	var p: ArenaPlayer = added.value if added.ok else null
+	if p == null:
+		_check(false, "a player to draw")
+		g.queue_free()
+		_done()
+		return
+	var _camera := p.attach_camera()
+
+	var client := ArenaClient.new()
+	client.game = g
+	client.player = p
+	client.mouse_capture_override = true
+	client._sampler = DotFpsSampler.new(p.controller.tunables)
+	client._sampler.look_at_angles(p.controller.state.yaw, 0.0)
+
+	client._fold_look()
+	p.present(1.0 / 144.0)
+	var before := rad_to_deg(p.camera.global_rotation.y)
+
+	# Mouse motion, and no tick: what a 144 Hz frame between two 64 Hz ticks is.
+	var motion := InputEventMouseMotion.new()
+	motion.relative = Vector2(-100.0, 0.0)
+	client._unhandled_input(motion)
+	client._fold_look()
+	p.present(1.0 / 144.0)
+	var after := rad_to_deg(p.camera.global_rotation.y)
+	var wanted := 100.0 * p.controller.tunables.mouse_sensitivity * p.controller.tunables.mouse_sensitivity_x
+	_check(absf(wrapf(after - before, -180.0, 180.0) - wanted) < 0.05,
+		"the camera turned with the mouse on a frame no tick ran on (%.2f of %.2f degrees)" % [
+			wrapf(after - before, -180.0, 180.0), wanted])
+	_check(is_equal_approx(client._sampler.sample(1.0 / 64.0).yaw, (p.view_now as Vector2).x),
+		"and the next command carries the view that was drawn")
+
+	# A correction's remainder is drawn where the eye is, not left for the next tick.
+	var eye := p.camera.global_position
+	p.drawn_offset = Vector3(0.3, 0.0, 0.0)
+	p.present(1.0 / 144.0)
+	_check(p.camera.global_position.distance_to(eye + Vector3(0.3, 0.0, 0.0)) < 0.01,
+		"a correction still easing moves the drawn eye by what is left of it",
+		str(p.camera.global_position - eye))
+
+	client.player = null
+	client.game = null
 	client.free()
 	g.queue_free()
 	_done()

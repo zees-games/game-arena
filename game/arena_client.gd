@@ -1175,9 +1175,13 @@ func _process(delta: float) -> void:
 	if extras != null:
 		extras.pump_voice(delta)
 
+	_fold_look()
+	_fold_correction()
+
 	# Your own body when you look down, if the server's `fp_body` rule is on.
 	if player != null and game != null and player.controller != null:
-		player.present_own_body(game.rule("fp_body") != 0.0, player.controller.state.yaw)
+		player.present_own_body(game.rule("fp_body") != 0.0,
+			(player.view_now as Vector2).x if player.view_now != null else player.controller.state.yaw)
 
 	_face_a_respawn()
 
@@ -1224,6 +1228,35 @@ func _process(delta: float) -> void:
 	_watch_projectiles()
 
 	_drive_spectator_camera()
+
+
+## Hands the local player this frame's view, this frame's mouse motion folded in, so a
+## frame on which no tick ran still turns. See [member ArenaPlayer.view_now].
+##
+## By name, with the state's angles as the fallback: a pack runs on whatever
+## dot-player-controller the client shell carries, and one older than `look_now` draws
+## exactly what it drew before. Not while the mouse is a pointer: nothing moves the view
+## then, and the state's angles are the honest answer.
+func _fold_look() -> void:
+	if player == null:
+		return
+	if _sampler == null or not _sampler.has_method(&"look_now"):
+		player.view_now = null
+		return
+	player.view_now = _sampler.call(&"look_now")
+
+
+## Hands the local player what is left of its prediction corrections, so the eye eases
+## across one rather than jumping with it. See [member ArenaPlayer.drawn_offset].
+func _fold_correction() -> void:
+	if player == null:
+		return
+	player.drawn_offset = Vector3.ZERO
+	if _offline or net == null or net.predictor == null or bridge == null:
+		return
+	var mine := bridge.behaviour_for(player.player_id)
+	if mine != null and mine.identity != null and mine.identity.is_predicted():
+		player.drawn_offset = net.predictor.visual_offset(mine.identity.net_id)
 
 
 ## Points the drawing and the explosions at whichever projectile layer the game has now.
