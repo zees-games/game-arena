@@ -55,6 +55,9 @@ const MUZZLE_OFFSET := Vector3(0.12, -0.14, -0.55)
 static var FX_DIR := ArenaPaths.rebase("res://scenes/fx")
 
 var settings: DotSettingsManager = null
+
+## The connection overlay (`net_stat` at the console). See [method DotMenuNetStat.follow].
+var net_stat: DotMenuNetStat = null
 var audio: DotAudioManager = null
 var fx: DotFxManager = null
 var console: DotConsoleController = null
@@ -95,6 +98,7 @@ func setup() -> DotResult:
 	if not consoled.ok:
 		return consoled
 	_build_chat()
+	net_stat = DotMenuNetStat.follow(self, settings)
 
 	# Every value pushed once, after everything exists. See the same call in the lobby
 	# and hungario: the builders read what they need today, and the arrangement rots the
@@ -178,7 +182,11 @@ static func schema() -> DotSettingsSchema:
 		.with_description("Zero turns camera shake off entirely."))
 	s.add(DotSettingsDef.boolean(&"allow_flashes", true, &"accessibility")
 		.with_description("Off draws no full-screen flashes at all."))
-	return s
+
+	# net_stat, net_stat_height, net_stat_position: dot-menu's, so they are the same keys,
+	# defaults and ranges as in every game on its menu, and the console below binds them
+	# by name like every other setting here.
+	return DotMenuStock.declare_net_stat(s)
 
 
 func _build_settings() -> DotResult:
