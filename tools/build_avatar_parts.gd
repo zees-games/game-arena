@@ -1,5 +1,8 @@
 extends SceneTree
 
+## Half a turn about Y: from the kit's +Z forward to the player's -Z. See [method _write].
+const FACE_FORWARD := Basis(Vector3.UP, PI)
+
 ## Generates the avatar part scenes from Kenney's Blocky Characters.
 ##
 ## [codeblock]
@@ -143,8 +146,13 @@ func _write(source: Node, letter: String, head_only: bool, scale: float) -> int:
 		# and then multiplying the origin again scales the LAYOUT twice while scaling
 		# each mesh once: limbs drift apart from a body that is the right size, which
 		# measures as a part 8% too tall and reads as a slightly wrong model.
-		mi.transform.origin = (mi.transform.origin - centre) * scale
-		mi.transform.basis = mi.transform.basis.scaled(Vector3(scale, scale, scale))
+		#
+		# And turned half a turn. The kit is glTF, which faces +Z; a player here looks down
+		# -Z (the camera and the rig share one yaw), so an unturned part walks backwards.
+		# Nothing measures that: the body is nearly the same front and back, and every
+		# member was seen wearing their face on the back of their head.
+		mi.transform.origin = FACE_FORWARD * ((mi.transform.origin - centre) * scale)
+		mi.transform.basis = FACE_FORWARD * mi.transform.basis.scaled(Vector3(scale, scale, scale))
 
 	for child in root.get_children():
 		child.owner = root

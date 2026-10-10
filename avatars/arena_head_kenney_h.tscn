@@ -41,8 +41,8 @@ _surfaces = [{
 blend_shape_mode = 0
 shadow_mesh = SubResource("ArrayMesh_fcelg")
 
-[node name="arena_head_kenney_h" type="Node3D" unique_id=1119300417]
+[node name="arena_head_kenney_h" type="Node3D" unique_id=1714534307]
 
-[node name="head" type="MeshInstance3D" parent="." unique_id=1928850794]
-transform = Transform3D(0.06666666, 0, 0, 0, 0.06666666, 0, 0, 0, 0.06666666, 0, -0.2666667, 0)
+[node name="head" type="MeshInstance3D" parent="." unique_id=452311833]
+transform = Transform3D(-0.06666666, 0, -5.8281846e-09, 0, 0.06666666, 0, 5.8281846e-09, 0, -0.06666666, 0, -0.2666667, 0)
 mesh = SubResource("ArrayMesh_e82ct")
