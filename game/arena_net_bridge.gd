@@ -10,6 +10,7 @@ const ArenaPlayer := preload("arena_player.gd")
 const ArenaPlayerNet := preload("arena_player_net.gd")
 const ArenaNpcNet := preload("arena_npc_net.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
+const ArenaBots := preload("arena_bots.gd")
 const ArenaRequest := preload("arena_request.gd")
 
 ## Joins [ArenaGame] to a [DotNetManager]. The netcode seam, and the only file in
@@ -500,10 +501,94 @@ func ensure_game_ticked(tick: int) -> void:
 func _commands() -> Dictionary:
 	var out: Dictionary = {}
 
+	# A bot's commands are made here, in the slot a client's input lands in, so the game
+	# ticks it exactly as it ticks a person. It sees the present, so no view lag.
+	for session_id in _bot_minds:
+		var behaviour: ArenaPlayerNet = _behaviours.get(session_id)
+		if behaviour == null or behaviour.player == null:
+			continue
+		var made := ArenaBots.think(game, behaviour.player, _bot_minds[session_id], _tick, float(Engine.physics_ticks_per_second))
+		behaviour.last_move = made[0]
+		behaviour.last_fire = made[1]
+		behaviour.last_view_lag = -1.0
+
 	for session_id in _behaviours:
 		var behaviour: ArenaPlayerNet = _behaviours[session_id]
 		out[int(session_id)] = [behaviour.last_move, behaviour.last_fire, behaviour.last_view_lag]
 
+	return out
+
+
+# --- Bots ------------------------------------------------------------------
+
+## Where a bot's session id starts. Far above any userid dot-server hands out (they count up
+## from 1 for the life of the process), and far below the entity table's ids (10^12), so a
+## bot's id is a player id like anybody's and can never be a person's.
+const BOT_SESSION_BASE := 900_000_000
+
+var _bot_minds: Dictionary = {}
+var _next_bot := 0
+
+
+## Adds a server-side bot called [param display_name]. Its session id, or 0 if the game
+## refused it.
+func add_bot(display_name: String) -> int:
+	if net == null or not net.is_server:
+		return 0
+
+	_next_bot += 1
+	var session_id := BOT_SESSION_BASE + _next_bot
+	var added := game.add_player(session_id, display_name)
+
+	if not added.ok:
+		return 0
+
+	var player := added.value as ArenaPlayer
+	player.set_meta(&"bot", true)
+
+	# Owned by the server (peer 0): nobody predicts it, every client mirrors it.
+	var identity := _build_identity(player, 0)
+	var registered := net.registry.register(identity, 0, net.clock.tick, net.config)
+
+	if not registered.ok:
+		_behaviours.erase(session_id)
+		game.remove_player(session_id)
+		return 0
+
+	var mind := ArenaBots.Mind.new()
+	mind.seed = session_id
+	_bot_minds[session_id] = mind
+
+	var payload := join_payload(session_id)
+	player_announced.emit(payload)
+	send_event(0, ArenaEvents.Kind.JOIN, payload)
+	return session_id
+
+
+## Takes a bot out, told to everybody as a leave.
+func remove_bot(session_id: int) -> void:
+	if not _bot_minds.has(session_id):
+		return
+
+	_bot_minds.erase(session_id)
+	var behaviour: ArenaPlayerNet = _behaviours.get(session_id)
+	_behaviours.erase(session_id)
+
+	if net != null and net.is_server:
+		send_event(0, ArenaEvents.Kind.LEAVE, ArenaEvents.write_leave(session_id))
+		var identity := behaviour.player.get_node_or_null(^"Identity") as DotNetIdentity if behaviour != null and behaviour.player != null else null
+		if identity != null and identity.net_id > 0:
+			net.registry.unregister(identity.net_id)
+
+	game.remove_player(session_id)
+
+
+## The bots in the game, oldest first.
+func bot_ids() -> Array[int]:
+	var out: Array[int] = []
+	for id in _bot_minds.keys():
+		out.append(int(id))
+	out.sort()
 	return out
 
 

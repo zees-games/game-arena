@@ -177,6 +177,12 @@ func _module_load() -> DotResult:
 	# for ever, nobody spawns, and the only thing on screen is a HUD saying WARMUP. A
 	# server with one player and no bots is a legitimate configuration and the operator
 	# is the one who knows whether it is theirs.
+	# [b]Bots, on by default.[/b] Fill mode: a server with one person on it plays a match of
+	# four, and every person who joins takes a bot's place. dot-server's DotBotQuota is the
+	# rule and its three cvars (bot_quota, bot_quota_mode, bot_quota_empty) are the
+	# operator's; `bot_quota_mode off` is a server with no bots.
+	_bot_quota = DotBotQuota.install(self, DEFAULT_BOT_QUOTA)
+
 	add_cvar(
 		"arena_minplayers",
 		str(game.match_node.rules.min_players),
@@ -570,6 +576,44 @@ func _build_vote() -> DotResult:
 	return DotResult.success(vote)
 
 
+## Players the default quota fills a server to.
+const DEFAULT_BOT_QUOTA := 4
+
+## How often the bot count is put right, seconds. Not every tick: adding a player is a
+## spawn, a loadout and a JOIN to everybody, and nobody notices a bot arriving a second late.
+const BOT_CHECK_SEC := 1.0
+
+const BOT_NAMES := ["Ada", "Brick", "Cog", "Dash", "Echo", "Fuse", "Grit", "Hex", "Ion", "Jolt", "Knox", "Lux"]
+
+var _bot_quota: DotBotQuota = null
+var _since_bot_check := 0.0
+
+
+## Adds or removes bots until there are as many as the quota wants for the people here.
+##
+## Newest out first, so a person joining takes the place of the bot that came last and the
+## longest-standing bots keep their scores. A bot an admin's map change or a mode change
+## took out is simply counted again.
+func _keep_bots() -> void:
+	if _bot_quota == null or bridge == null or game == null:
+		return
+
+	var humans := _joined.size()
+	var slots := server.config.max_players if server != null and server.config != null else -1
+	var wanted := _bot_quota.wanted(humans, slots)
+	var bots := bridge.bot_ids()
+
+	while bots.size() < wanted:
+		var name := "Bot %s" % BOT_NAMES[bots.size() % BOT_NAMES.size()]
+		var id := bridge.add_bot(name)
+		if id == 0:
+			break
+		bots.append(id)
+
+	while bots.size() > wanted:
+		bridge.remove_bot(bots.pop_back())
+
+
 ## One authoritative tick.
 func _physics_process(delta: float) -> void:
 	if not loaded or bridge == null:
@@ -577,6 +621,11 @@ func _physics_process(delta: float) -> void:
 
 	_tick += 1
 	bridge.server_tick(_tick)
+
+	_since_bot_check += delta
+	if _since_bot_check >= BOT_CHECK_SEC:
+		_since_bot_check = 0.0
+		_keep_bots()
 
 	# The map clock and the vote clock, from the SIMULATED tick rather than from the
 	# frame. Both addons make the same point and it is the same point: a server that

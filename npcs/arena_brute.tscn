@@ -7,3 +7,4 @@ script = ExtResource("1_body")
 body_radius = 0.70
 body_height = 2.30
 tint = Color(0.55, 0.20, 0.55, 1)
+skin = "o"

@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 114
+const CHECKS := 123
 
 var _passed := 0
 var _failed := 0
@@ -101,6 +101,7 @@ func _run() -> void:
 		_test_query()
 		await _test_browser()
 		_test_commands()
+		await _test_bots()
 		_test_unload()
 		_test_no_message_preloads_itself()
 
@@ -924,6 +925,74 @@ func _test_commands() -> void:
 	var restored := _server.console.execute("arena_mode %s" % was)
 	_check(restored.ok, "and it changes back", str(restored.error))
 	_check(_game.mode.id == StringName(was), "to the mode it started on")
+
+
+## Waits [param seconds] of the server's own physics ticks.
+func _wait_ticks(seconds: float) -> void:
+	for _i in int(seconds * Engine.physics_ticks_per_second):
+		await get_tree().physics_frame
+
+
+func _test_bots() -> void:
+	print("")
+	print("bots")
+
+	var module := _server.modules.get_module("arena") as ArenaModule
+	if not _check(module != null and module.bridge != null, "the module has a bridge to add bots through"):
+		return
+
+	_check(_server.console.find_cvar("bot_quota") != null and _server.console.get_string("bot_quota_mode", "") == "fill",
+		"bot_quota is the module's and fill is the default", _server.console.get_string("bot_quota_mode", ""))
+
+	# The sessions this suite adopts have no peer behind them, and seconds of ticking would
+	# send each a snapshot an RPC error at a time; headless_admin does the same.
+	if module.net != null:
+		module.net.send_fn = func(_peer: int, _payload: PackedByteArray, _delivery: int) -> void:
+			pass
+
+	_server.console.execute("bot_quota 4")
+	await _wait_ticks(2.5)
+	var people := module._joined.size()
+	var bots := module.bridge.bot_ids()
+	_check(bots.size() == 4 - people, "fill: bots and people make four", "%d bots, %d people" % [bots.size(), people])
+	_check(bots.size() > 0 and _game.player_for(bots[0]) != null and _game.player_for(bots[0]).has_meta(&"bot"),
+		"a bot is a player in the game, marked as one")
+
+	# A person joins and takes a bot's place.
+	var session := DotClientSession.new()
+	session.peer_id = 4343
+	session.userid = 78
+	session.display_name = "Bea"
+	var _adopted := _server.adopt_session(session)
+	_server.events.fire("client_spawn", {"userid": session.userid, "name": session.display_name})
+	await _wait_ticks(1.5)
+	_check(module.bridge.bot_ids().size() == bots.size() - 1, "a person joining takes a bot's place",
+		"%d -> %d" % [bots.size(), module.bridge.bot_ids().size()])
+	_check(not module.bridge.bot_ids().has(bots[bots.size() - 1]), "the newest bot is the one that goes")
+
+	# And the bot comes back when they leave.
+	_server.client_disconnected.emit(session, "test")
+	await _wait_ticks(1.5)
+	_check(module.bridge.bot_ids().size() == bots.size(), "and a bot comes back when they leave",
+		"%d" % module.bridge.bot_ids().size())
+
+	# They fight: within a few seconds one of them has fired at somebody it can see.
+	var fired := false
+	for _i in int(6.0 * Engine.physics_ticks_per_second):
+		await get_tree().physics_frame
+		for id in module.bridge.bot_ids():
+			var behaviour := module.bridge.behaviour_for(id)
+			if behaviour != null and behaviour.last_fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK):
+				fired = true
+		if fired:
+			break
+	_check(fired, "the bots fight")
+
+	_server.console.execute("bot_quota_mode off")
+	await _wait_ticks(1.5)
+	_check(module.bridge.bot_ids().is_empty(), "bot_quota_mode off takes them all out",
+		"%d left" % module.bridge.bot_ids().size())
+	_server.console.execute("bot_quota_mode fill")
 
 
 func _test_unload() -> void:
