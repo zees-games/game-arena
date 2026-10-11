@@ -296,6 +296,23 @@ func _build_settings() -> DotResult:
 	return DotResult.success(null)
 
 
+## Push to talk or an open microphone, on this player's voice (published by the client's
+## extras as `dot_voice_client`). Also when the voice is published after the settings
+## loaded, or a saved open microphone would wait for the switch to be touched.
+func _apply_push_to_talk() -> void:
+	var voice := DotRegistry.get_service(&"dot_voice_client")
+	if voice != null and voice.has_method(&"set_open_mic") and settings != null:
+		voice.call(&"set_open_mic", not settings.get_bool(&"push_to_talk", true))
+	var bus := DotRegistry.signals()
+	if not bus.service_registered.is_connected(_on_service_registered):
+		bus.service_registered.connect(_on_service_registered)
+
+
+func _on_service_registered(service: StringName, _instance: Object) -> void:
+	if service == &"dot_voice_client":
+		_apply_push_to_talk()
+
+
 func _on_setting_changed(key: StringName, value: Variant, _why: StringName) -> void:
 	match key:
 		&"master_volume":
@@ -306,6 +323,8 @@ func _on_setting_changed(key: StringName, value: Variant, _why: StringName) -> v
 			audio.mixer.apply_to_buses()
 		&"voice_volume":
 			audio.mixer.voice = float(value)
+		&"push_to_talk":
+			_apply_push_to_talk()
 			audio.mixer.apply_to_buses()
 		&"shake_scale":
 			fx.config.shake_scale = float(value)

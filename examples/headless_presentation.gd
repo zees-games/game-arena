@@ -670,7 +670,7 @@ func _test_every_key_is_an_action() -> void:
 		&"arena_reload": "R", &"arena_slot_1": "1", &"arena_slot_2": "2", &"arena_slot_3": "3",
 		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Wheel up",
 		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Q", &"arena_launch": "E",
-		&"arena_launch_props": "X", &"arena_punt": "G", &"arena_voice": "V",
+		&"arena_launch_props": "X", &"arena_punt": "G", &"dot_voice_talk": "V",
 		&"dot_fps_walk": "Alt",
 	}
 	var wrong: Array[String] = []
@@ -719,7 +719,7 @@ func _test_every_key_is_an_action() -> void:
 	for row in p.bindings.rows:
 		if p.bindings.stored(row, p.settings) == "V":
 			on_v.append(str(row["action"]))
-	_check(on_v == ["arena_voice"], "and V is on one row, push to talk", str(on_v))
+	_check(on_v == ["dot_voice_talk"], "and V is on one row, push to talk (dot-voice's action)", str(on_v))
 
 	# A client with this presentation and a stand-in player, not in the tree (see
 	# `_test_mouse_drives_view`); the pointer counts as captured.

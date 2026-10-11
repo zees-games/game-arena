@@ -219,9 +219,22 @@ func _build_voice() -> void:
 	voice.playback_root_ref = DotNodeRef.of_self()
 	add_child(voice)
 
-	# One encoded frame out, per capture. The manager does the gating, the codec and
-	# the framing; this is only where the bytes go.
-	voice.frame_sent.connect(func(_bytes: int) -> void: pass)
+	# One encoded frame out, per capture. This was `frame_sent.connect(pass)`: the manager
+	# captured, encoded and counted every frame and sent it nowhere, so no arena player was
+	# ever heard while received voice played.
+	voice.send_fn = func(bytes: PackedByteArray) -> void:
+		if bridge != null and bridge.link != null:
+			bridge.link.send_voice_frame(bytes)
+
+	# Placed where each speaker's player is; without this positional voice is flat.
+	voice.speaker_position_fn = func(speaker: int) -> Variant:
+		var player: Variant = game.player_for(speaker) if game != null else null
+		return player.controller.state.position if player != null else null
+
+	# The menu's voice settings and the player's block list (sm) find it by this name, and
+	# the server's sv_voice_enable reaches it, with or without a microphone.
+	voice.publish_as_client()
+	var _following := voice.follow_cvars(DotRegistry.get_service(&"dot_client_link"))
 
 	# Where a relayed frame arrives. Set on the bridge rather than the link, because
 	# the bridge is the only file that names both a link and a game.
@@ -239,23 +252,17 @@ func set_talking(pressed: bool) -> void:
 	if voice == null:
 		return
 
-	if pressed and not voice.is_capturing():
-		var started := voice.start_capture()
+	# The first press opens the microphone (dot-voice's update_talk), and only then.
+	var started := voice.update_talk(pressed)
 
-		if not started.ok:
-			# Headless, no device, or the browser refused. Reported once rather than
-			# per press: `AudioServer` reports a working sound card when there is
-			# none — 44100 Hz, a "Default" input device and zero latency — and only
-			# `get_driver_name()` says "Dummy", so a capability check built on any of
-			# the others passes on a machine with no audio at all.
-			DotLog.info(CHANNEL, "voice capture is not available", {
-				"why": started.error.message
-			})
-			voice_enabled = false
-			return
+	if pressed and not started.ok:
+		# Headless, no device, or the browser refused; update_talk says so once a press.
+		# `AudioServer` reports a working sound card when there is none, and only
+		# `get_driver_name()` says "Dummy".
+		DotLog.info(CHANNEL, "voice capture is not available", {"why": started.error.message})
+		return
 
-	_talking = pressed
-	voice.set_talking(pressed)
+	_talking = pressed and voice.server_enabled
 
 
 func is_talking() -> bool:

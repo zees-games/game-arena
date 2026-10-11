@@ -53,7 +53,9 @@ const WEAPON_PREVIOUS := &"arena_weapon_previous"
 const WEAPON_NEXT := &"arena_weapon_next"
 const WEAPON_LAST := &"arena_weapon_last"
 const PUNT := &"arena_punt"
-const VOICE := &"arena_voice"
+## dot-voice's action (DotVoiceManager.TALK_ACTION), so the talk key is one setting with every
+## other game's; still stored as bind_voice.
+const VOICE := &"dot_voice_talk"
 
 
 ## [param dot_ui_level] stands in for the host's dot-ui API level (a test of an older

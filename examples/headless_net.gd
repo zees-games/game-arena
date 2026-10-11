@@ -1,5 +1,6 @@
 extends Node
 
+const ArenaClientExtras := preload("../game/arena_client_extras.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaEvent := preload("../game/arena_event.gd")
 const ArenaContent := preload("../game/arena_content.gd")
@@ -37,7 +38,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 206
+const CHECKS := 211
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
@@ -92,7 +93,7 @@ func _run() -> void:
 	_test_ready_gate()
 	_test_predicted_node_is_not_moved()
 	await _test_map_sync_wire()
-	_test_voice_wire()
+	await _test_voice_wire()
 	_test_forced_noclip_is_predicted()
 	_test_blind_and_beacon()
 	_test_client_death_camera()
@@ -947,6 +948,77 @@ func _test_voice_wire() -> void:
 		server_link.voice_sent == before,
 		"and a voice frame addressed to peer 0 is refused rather than broadcast"
 	)
+
+	# [b]The client's own voice reaches the server.[/b] Armed: until 2026-10-11 the client's
+	# manager had `frame_sent.connect(pass)` where its send_fn belonged, so an arena player
+	# holding the talk key was heard by nobody, while every check above handed the link bytes.
+	relayed.clear()
+	# The bridge's own link, as `ArenaNetBridge` sets it on a real client; this harness
+	# attached the looped one by hand.
+	var held_link := client_bridge.link
+	client_bridge.link = client_link
+	var extras := ArenaClientExtras.new()
+	extras.name = "VoiceExtras"
+	add_child(extras)
+	var attached := extras.attach(client_bridge, client_entry["game"])
+	var voice: DotVoiceManager = extras.voice
+	_check(attached.ok and voice != null and not voice.is_capturing(),
+		"the client's voice attaches with no microphone open before the talk key")
+	if voice != null:
+		var mic := DotVoiceSourceBuffer.new()
+		mic.sample_rate = voice.config.sample_rate
+		mic.write(DotVoiceSourceBuffer.tone(440.0, 0.2, mic.sample_rate, 0.4))
+		voice.source = mic
+		extras.set_talking(true)
+		for _i in range(4):
+			await get_tree().process_frame
+		extras.set_talking(false)
+	_check(voice != null and voice.frames_sent > 0 and relayed.size() == voice.frames_sent,
+		"holding it sends the player's speech to the server (%d sent, %d relayed)" % [voice.frames_sent if voice != null else 0, relayed.size()])
+
+	# [b]The player's block list (sm) reaches arena's voice.[/b] dot-chat's DotChatSelfMute
+	# binds whatever is published as dot_voice_client; arena's manager did not publish, so
+	# `sm` muted a player's lines here and never their voice.
+	_check(voice != null and DotRegistry.get_service(&"dot_voice_client") == voice,
+		"the client's voice is published as dot_voice_client")
+	var self_mute := DotChatSelfMute.new()
+	self_mute.path = "user://arena_net_self_mute.json"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))
+	const TALKER := 1_900_000_001
+	self_mute.set_roster([{"id": 9, "name": "Loud", "key": "loud-key", "peer": TALKER}], 2)
+	self_mute.attach_voice(DotRegistry.get_service(&"dot_voice_client"))
+	var heard_buffer := DotVoiceSinkBuffer.new()
+	if voice != null:
+		heard_buffer.sample_rate = voice.config.sample_rate
+		voice.sink_factory = func(_speaker: int) -> DotVoiceSink: return heard_buffer
+	var talk := func() -> void:
+		var codec := DotVoiceCodec.instance_for(voice.config.codec_id)
+		for i in range(10):
+			var packet := DotVoicePacket.new()
+			packet.speaker = TALKER
+			packet.sequence = i
+			packet.starts_talk_spurt = i == 0
+			packet.sample_count = voice.config.frame_samples()
+			packet.codec_id = voice.config.codec_id
+			packet.payload = codec.encode(DotVoiceSourceBuffer.tone(300.0, voice.config.frame_ms / 1000.0, voice.config.sample_rate, 0.4))
+			var _r := voice.receive(packet.to_bytes())
+	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, true)
+	if voice != null:
+		talk.call()
+		for _i in range(15):
+			await get_tree().process_frame
+	_check(voice != null and voice.is_locally_muted(TALKER) and heard_buffer.frames_written == 0,
+		"sm on a player: their voice frames arrive and are not played (%d played)" % heard_buffer.frames_written)
+	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, false)
+	if voice != null:
+		talk.call()
+		var deadline := Time.get_ticks_msec() + 1000
+		while heard_buffer.frames_written == 0 and Time.get_ticks_msec() < deadline:
+			await get_tree().process_frame
+	_check(heard_buffer.frames_written > 0, "and unmuted, the same frames play (%d)" % heard_buffer.frames_written)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))
+	extras.queue_free()
+	client_bridge.link = held_link
 
 	server_link.queue_free()
 	client_link.queue_free()

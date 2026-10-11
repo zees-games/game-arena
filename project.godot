@@ -14,6 +14,10 @@ config/name="game-arena"
 config/features=PackedStringArray("4.7")
 run/main_scene="res://game/arena.tscn"
 
+[audio]
+
+driver/enable_input=true
+
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0

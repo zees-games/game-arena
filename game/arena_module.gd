@@ -434,6 +434,10 @@ func _build_services() -> DotResult:
 	if services.voice != null:
 		bridge.voice_relay_fn = services.relay_voice
 
+		# sv_voice_enable and sv_voice_mode: enforced on the router, replicated so a client
+		# hides its key. On this module, so they go when it unloads.
+		var _voice_cvars := services.voice.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
+
 	services.command_entered.connect(_on_chat_command)
 
 	return DotResult.success(services)

@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 138
+const CHECKS := 140
 
 var _passed := 0
 var _failed := 0
@@ -375,6 +375,18 @@ func _test_services() -> void:
 
 	_check(services.chat != null, "chat is running")
 	_check(services.voice != null, "voice is running")
+
+	# The operator's switch: registered by the module, replicated so clients hide their key,
+	# and enforced on the router.
+	var voice_cvar: DotConVar = _server.console.find_cvar("sv_voice_enable")
+	_check(voice_cvar != null and DotConsole.is_replicated(voice_cvar),
+		"sv_voice_enable is registered and replicated to clients")
+	var off_enabled := true
+	if voice_cvar != null and services.voice != null:
+		var _off := voice_cvar.set_value("0")
+		off_enabled = services.voice.enabled
+		var _on := voice_cvar.set_value("1")
+	_check(not off_enabled and services.voice != null and services.voice.enabled, "and turns the router off and on")
 	_check(services.moderation != null, "moderation is running")
 
 	# The registry names, which are how the three reach each other without importing
