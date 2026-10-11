@@ -114,27 +114,52 @@ static func catalogue() -> DotAvatarCatalogue:
 
 
 ## An avatar for a player who has none. Deterministic in the id.
+##
+## [b]Each slot chooses from its own mix of the seed[/b] ([method _pick]). The key's
+## string hash moves by only a little from one id to the next, and a server's ids are
+## consecutive (bots, a busy evening), so dividing that hash and taking a remainder gave
+## players 112..118 one head between them: a row of the same face in the world and in the
+## HUD's portraits. `headless_presentation` checks 16 consecutive ids.
 static func stock_avatar(player_key: StringName) -> DotAvatar:
 	var seed_value := absi(hash(String(player_key)))
 	var avatar := DotAvatar.make(SCHEMA_ID)
 
-	avatar.set_part(SLOT_BODY, BODIES[seed_value % BODIES.size()])
-	avatar.set_part(SLOT_HEAD, HEADS[(seed_value / 7) % HEADS.size()])
+	avatar.set_part(SLOT_BODY, BODIES[_pick(seed_value, 1, BODIES.size())])
+	avatar.set_part(SLOT_HEAD, HEADS[_pick(seed_value, 2, HEADS.size())])
 
-	if seed_value % 3 == 0:
-		avatar.set_part(SLOT_CREST, CRESTS[(seed_value / 13) % CRESTS.size()])
+	if _pick(seed_value, 3, 3) == 0:
+		avatar.set_part(SLOT_CREST, CRESTS[_pick(seed_value, 4, CRESTS.size())])
 
-	var body_colour := PALETTE[seed_value % PALETTE.size()]
+	var body_colour := PALETTE[_pick(seed_value, 5, PALETTE.size())]
 
 	avatar.set_colour(SLOT_BODY, 0, body_colour)
 	avatar.set_colour(SLOT_HEAD, 0, body_colour.lightened(0.3))
 
 	if avatar.has_slot(SLOT_CREST):
 		avatar.set_colour(
-			SLOT_CREST, 0, PALETTE[(seed_value / 3) % PALETTE.size()]
+			SLOT_CREST, 0, PALETTE[_pick(seed_value, 6, PALETTE.size())]
 		)
 
 	return avatar
+
+
+## A choice in `[0, count)` for one [param slot] of [param seed_value].
+##
+## Integer arithmetic only, so every machine and every build agrees about a player's look:
+## no floats, no engine hash of anything but the key, and every product kept under 2^59
+## (a 32-bit value times a 27-bit constant), so nothing relies on how a 64-bit overflow
+## wraps. The salt keeps the slots independent of one another.
+static func _pick(seed_value: int, slot: int, count: int) -> int:
+	return _mix(_mix(seed_value) ^ (slot * 0x9E3779B1 & 0xFFFFFFFF)) % count
+
+
+## A 32-bit integer finaliser: every input bit moves about half the output bits, so ids
+## one apart land far apart.
+static func _mix(value: int) -> int:
+	var x := value & 0xFFFFFFFF
+	x = (((x >> 16) ^ x) * 0x45D9F3B) & 0xFFFFFFFF
+	x = (((x >> 16) ^ x) * 0x45D9F3B) & 0xFFFFFFFF
+	return (x >> 16) ^ x
 
 
 ## Draws an avatar onto a rig. Returns how it went.

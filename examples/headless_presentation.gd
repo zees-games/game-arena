@@ -30,7 +30,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 172
+const CHECKS := 176
 
 var _passed := 0
 var _failed := 0
@@ -79,6 +79,7 @@ func _run() -> void:
 	_test_the_view_turns_every_frame()
 	_test_criticals_and_the_body()
 	_test_feedback_from_the_wire()
+	_test_stock_avatars_differ()
 
 	print("")
 	_check(
@@ -1448,6 +1449,42 @@ func _test_criticals_and_the_body() -> void:
 
 ## A client turns the server's HIT and AWARD into the hit marker, a damage number, the
 ## medals and "+points  Victim", read back off the wire exactly as a link delivers them.
+## A server's ids are consecutive (bots, a busy evening), and stock avatars are drawn in
+## the world and in the HUD's portrait row. The seed used to be the key's string hash,
+## which moves by a few per id, and `(seed / 7) % HEADS.size()` then gave players 112..118
+## the same head: a row of one face. Each slot now chooses from its own mix of the seed.
+func _test_stock_avatars_differ() -> void:
+	_section("Consecutive players do not wear the same stock face")
+
+	var heads := {}
+	var bodies := {}
+	var shared_with_previous := 0
+	var previous := &""
+	for id in range(112, 128):
+		var avatar := ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(id)))
+		var head := avatar.part_in(ArenaAvatars.SLOT_HEAD)
+		heads[head] = true
+		bodies[avatar.part_in(ArenaAvatars.SLOT_BODY)] = true
+		if head == previous:
+			shared_with_previous += 1
+		previous = head
+
+	# 16 picks from 20 heads land on about 11 distinct by chance; 8 leaves room for an
+	# unlucky but honest mix and fails the old pick, which gave 4 (12 of 15 neighbours shared).
+	_check(heads.size() >= 8, "16 consecutive players wear at least 8 different heads",
+		"%d distinct" % heads.size())
+	_check(shared_with_previous <= 3, "and few players share a head with the id before them",
+		"%d of 15 neighbours" % shared_with_previous)
+	_check(bodies.size() >= 8, "and at least 8 different bodies", "%d distinct" % bodies.size())
+
+	var again := ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(117)))
+	_check(
+		again.equals(ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(117)))),
+		"and a player's stock look is the same every time it is asked for"
+	)
+	_done()
+
+
 func _test_feedback_from_the_wire() -> void:
 	_section("The server's hits and medals become a hit marker, numbers, medals and points")
 	var M := ArenaAwards.Medal
