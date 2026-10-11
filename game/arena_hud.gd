@@ -815,9 +815,12 @@ const FIT_MIN := 0.5
 
 
 ## How much the HUD is scaled on a frame [param frame] pixels: 1 at 1280x720 and up, less
-## when either side is short of it.
-static func fit_scale(frame: Vector2) -> float:
-	return clampf(minf(frame.x / DESIGN_FRAME.x, frame.y / DESIGN_FRAME.y), FIT_MIN, 1.0)
+## when either side is short of it. The signature is dot-ui's `DotHud.fit_scale` (API 4),
+## which this overrides: a static of the same name with fewer arguments does not parse there.
+static func fit_scale(frame: Vector2, design: Vector2 = DESIGN_FRAME, minimum: float = FIT_MIN) -> float:
+	if design.x <= 0.0 or design.y <= 0.0:
+		return 1.0
+	return clampf(minf(frame.x / design.x, frame.y / design.y), minimum, 1.0)
 
 
 ## The viewport size the HUD was last fitted to; [method _process] refits when it moves.
