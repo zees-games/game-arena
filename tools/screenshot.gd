@@ -112,6 +112,7 @@ func _initialize() -> void:
 		root.add_child(_glance_game)
 		_staged_map = map
 		_staged_id = id
+		_glance_ballot = args.has("--ballot")
 		return
 
 	if map.is_imported():
@@ -270,6 +271,10 @@ func _process(delta: float) -> bool:
 ## What `ArenaHud`'s layout is judged by, at 16:9 and 4:3 (`RESOLUTION=1280x960`).
 var _glance_game: ArenaGame = null
 
+## `--glance --ballot`: the game vote open over the HUD, as a server running several games
+## shows it. See [method _stage_shell_ballot].
+var _glance_ballot := false
+
 const GLANCE_NAMES := ["You", "gamemann", "a_very_long_display_name", "bo", "quiet_one", "newcomer", "Rocket", "Viper"]
 
 
@@ -344,8 +349,16 @@ func _play_glance() -> void:
 	_local.controller.state.slide_time = 0.3
 	_local.controller.state.wall_jumps_in_air = 1
 
+	var late: Array = []
+	if _glance_ballot:
+		_stage_shell_ballot()
+		# What the server says in chat as the ballot opens, which this client centre-prints
+		# (`ArenaClient._on_said`, a system line). Staged late: the notice fades in 4 s.
+		late.append([10, func() -> void:
+			_hud.notice("Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)")])
+
 	_shots = [{
-		"name": "%s_glance_%s" % [String(_staged_id), String(game.mode_id)],
+		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), "_ballot" if _glance_ballot else ""],
 		"local": true,
 		"late": [
 			[12, func() -> void:
@@ -359,9 +372,78 @@ func _play_glance() -> void:
 				var target := game.player_for(117)
 				if target != null:
 					_hud.note_hit(117, 34.0, target.global_position + Vector3(0.0, 1.5, 0.0), false, false)],
-		],
+		] + late,
 		"wait": 34,
 	}]
+
+
+## A stand-in for the client shell's notice overlay with the game vote open: its HUD line
+## and its drawn ballot, placed where dot-server-deploy's `client/notice_overlay.gd` places
+## them (a copy, since that project is not an addon this game links; keep the two in step).
+## The shell draws over every game, so whether it covers this HUD is a question only a
+## frame of both together answers.
+func _stage_shell_ballot() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "ShellStandIn"
+	layer.layer = 20
+	root.add_child(layer)
+	var overlay := Control.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.theme = DotUiTheme.space().build()
+	layer.add_child(overlay)
+
+	# The line: across the top, centred by a container, 56 px down.
+	var top := MarginContainer.new()
+	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	top.add_theme_constant_override("margin_top", 56)
+	top.add_theme_constant_override("margin_left", 16)
+	top.add_theme_constant_override("margin_right", 16)
+	overlay.add_child(top)
+	var centre := CenterContainer.new()
+	top.add_child(centre)
+	var line := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.03, 0.04, 0.09, 0.78)
+	style.set_corner_radius_all(10)
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	line.add_theme_stylebox_override("panel", style)
+	var label := Label.new()
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 20)
+	label.text = "Vote for the next game: !game_vote 1-6  19s"
+	line.add_child(label)
+	centre.add_child(line)
+
+	# The ballots: down the right-hand side, 110 px down, 360 wide.
+	var column := VBoxContainer.new()
+	column.anchor_left = 1.0
+	column.anchor_right = 1.0
+	column.anchor_bottom = 1.0
+	column.offset_left = -376.0
+	column.offset_right = -16.0
+	column.offset_top = 110.0
+	column.offset_bottom = -16.0
+	overlay.add_child(column)
+	var ballot := DotBallotPanel.new()
+	ballot.ui_theme = DotUiTheme.space()
+	column.add_child(ballot)
+	ballot.show_state({
+		"open": true, "title": "Vote for the next game", "command": "game_vote",
+		"seconds": 19.0, "input": "both",
+		"options": [
+			{"id": "smash", "label": "Smash Copter", "votes": 0.0},
+			{"id": "hideseek", "label": "Hide & Seek", "votes": 0.0},
+			{"id": "delivery", "label": "Dangerous Delivery", "votes": 0.0},
+			{"id": "playground", "label": "Playground", "votes": 0.0},
+			{"id": "g2gfast", "label": "g2gfast", "votes": 0.0},
+			{"id": "keep", "label": "Don't change", "votes": 0.0},
+		],
+		"voters": {}, "people": {},
+	})
 
 
 # --- An imported map --------------------------------------------------------

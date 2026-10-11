@@ -455,11 +455,24 @@ class MedalRow extends Control:
 ## [b]It did not exist[/b], and three callers in `ArenaClient` (chat lines, the map
 ## changing, the map loaded) had called it since the client was written. Found adding the
 ## first caller in this file, which the parser refused where the client's had not.
+##
+## [b]Wrapped, two lines at most, and narrower than the gap between the right-hand column
+## and the middle.[/b] It was one unbounded line: the server's "Vote: Smash Copter, Hide &
+## Seek, …" as a ballot opened ran off the right edge of a 1280-wide frame, behind the drawn
+## ballot the client shell puts down the right-hand side (360 px wide, 16 px in). Centred,
+## the line clears that column only when its half-width is under the distance from the
+## middle to the column, so the width follows the frame: `notice_width`.
 func notice(text: String) -> void:
 	if notice_label == null:
 		# Under the portraits, clear of the strip, the row and the objective line.
 		notice_label = _make_label("Notice", Control.PRESET_CENTER_TOP, Vector2(0.0, 182.0))
 		notice_label.add_theme_font_size_override(&"font_size", 20)
+		notice_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		notice_label.max_lines_visible = 2
+		notice_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var width := notice_width(size.x)
+	notice_label.offset_left = -width * 0.5
+	notice_label.offset_right = width * 0.5
 	notice_label.text = text
 	notice_label.modulate.a = 1.0
 	_notice_age = 0.0
@@ -467,6 +480,16 @@ func notice(text: String) -> void:
 var notice_label: Label = null
 var _notice_age: float = 0.0
 const NOTICE_SEC := 4.0
+
+## The right-hand column the client shell draws ballots in: 360 px wide and 16 px from the
+## edge, plus a gap. The notice keeps its half-width inside the distance to it.
+const SHELL_COLUMN := 376.0 + 16.0
+
+## The centre notice's width on a frame [param frame_width] wide: clear of the shell's
+## ballot column on both sides, never under 260 px (a phone in landscape has no room
+## beside a 360 px ballot anyway, and two short lines beat four) and never over 640.
+static func notice_width(frame_width: float) -> float:
+	return clampf(frame_width - SHELL_COLUMN * 2.0, 260.0, 640.0)
 
 ## The challenge bar at the top: the achievement the player is nearest to, and how near.
 var challenge_label: Label = null
