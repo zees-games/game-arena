@@ -8,36 +8,34 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 | Read | Before |
 | --- | --- |
-| [docs/README.md](docs/README.md) | the index |
-| [docs/architecture.md](docs/architecture.md) | a join between addons, the player id space, tick order, the map's three representations, delivery |
-| [docs/netcode.md](docs/netcode.md) | the bridge, shared constants, event kinds, RULES, weapons and monsters on the wire, server bots, input copies, the clock, lag compensation |
-| [docs/client.md](docs/client.md) | the client, mouse, keys, camera, presentation and effects, menus, HUD, chat box, avatars, render tools |
-| [docs/modes.md](docs/modes.md) | movement, modes, gun game, objectives, effects, spawn protection, spawning, spectating, criticals, drops, streaks |
-| [docs/maps.md](docs/maps.md) | a built-in map, the catalogue, `change_map`, the director and sync, mode filtering, the survey, the design rules |
-| [docs/imported-maps.md](docs/imported-maps.md) | the combat surf maps: loader, solid, spawns, pits, surf movement, rotation, delivery, mechanics |
-| [docs/horde.md](docs/horde.md) | monsters and the props tools |
-| [docs/weapons.md](docs/weapons.md) | zee-dot-weapons' wiring, the rig, projectiles, loadout slots |
-| [docs/services.md](docs/services.md) | progression, chat, moderation, voice, the relay, admin tools, the vote, the browser, private matches |
+| [docs/README.md](docs/README.md) | the index, with what each file covers |
+| [docs/architecture.md](docs/architecture.md) | a join between addons, ids, tick order, delivery |
+| [docs/netcode.md](docs/netcode.md) | the bridge, RULES, anything on the wire, bots, the clock |
+| [docs/client.md](docs/client.md) | the client, keys, camera, menus, HUD, chat box, render tools |
+| [docs/modes.md](docs/modes.md) | movement, modes, spawning, criticals, streaks |
+| [docs/maps.md](docs/maps.md), [docs/imported-maps.md](docs/imported-maps.md) | a built-in map or the catalogue; the combat surf maps |
+| [docs/horde.md](docs/horde.md), [docs/weapons.md](docs/weapons.md) | monsters and props tools; zee-dot-weapons, projectiles |
+| [docs/services.md](docs/services.md) | progression, chat, moderation, voice, admin tools, the vote |
 | [docs/testing.md](docs/testing.md) | adding a check, or believing a green run |
-| [docs/history.md](docs/history.md) | a bug that "cannot be happening"; what this game found and how it looked |
-| [docs/not-yet.md](docs/not-yet.md) | planning: what is not built yet (dot-game conversion, bots on the nav graph, monster animation, pickups, real audio, …) |
+| [docs/history.md](docs/history.md) | a bug that "cannot be happening" |
+| [docs/not-yet.md](docs/not-yet.md) | planning: what is not built yet |
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `game/` | everything that runs, flat: simulation, modes, horde, server, wire, client (never loaded by a dedicated server), progression, `arena_paths`. File by file: [architecture](docs/architecture.md#where-the-code-is) |
+| `game/` | everything that runs, flat; the client half is never loaded by a dedicated server. File by file: [architecture](docs/architecture.md#where-the-code-is) |
 | `maps/` | the built-in maps as box lists with their survey, paint and lighting; the combat surf maps' loader (copies of g2gfast's); `maps/imported` is the g2gfast-maps link |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art, Kenney's prototype grid and medal icons |
 | `examples/` | the eight suites; `wall_route_driver.gd` drives a map's wall routes |
-| `tools/` | `screenshot.sh` (`--glance` is the whole HUD), `screenshot_menus.sh`, `screenshot_weapons.sh`, `render_wall_moves.sh`, `build_avatar_parts.gd`, `build_weapon_icons.sh`, `audio_probe.sh` |
+| `tools/` | render tools (`screenshot.sh --glance` is the whole HUD), avatar and icon builders, `audio_probe.sh`. [client](docs/client.md#looking-at-it) |
 | `scenes/arena_server.tscn`, `game.yml` | the server scene and the descriptor that travels in the pack |
 
 ## Running and testing
 
-- `./game.sh` plays offline, `online` runs a local server and client, `test` parses everything and runs all eight suites (`test <suite>` one), `help` lists the rest. The addon links come from `.gitignore` through dot-bootstrap; never hand-made.
+- `./game.sh` plays offline; `test` parses everything and runs all eight suites (`test <suite>` one); `help` lists the rest. Addon links come from `.gitignore` via dot-bootstrap, never by hand.
 - **Run the suites after changing any dot-* addon this game links.** That is what this project is for. [testing](docs/testing.md)
-- `headless_presentation` is the only suite with a client in it; `headless_lossy` is the only one with real ENet and real loss (about 50 s, real time). [testing](docs/testing.md#the-suites)
+- `headless_presentation` is the only suite with a client; `headless_lossy` the only one with real ENet and loss. [testing](docs/testing.md#the-suites)
 - Read every suite's stderr even when it exits 0; cap every run with `timeout`. [testing](docs/testing.md#traps-the-suites-have-hit)
 - A suite or tool that builds a presentation or client calls `ArenaPresentation.use_scratch_settings` first: never the player's file. [testing](docs/testing.md#traps-the-suites-have-hit)
 - **Look at it.** No check reaches the screen: the render tools in `tools/` (above), under `xvfb-run`. [client](docs/client.md#looking-at-it)
@@ -64,9 +62,9 @@ Short forms; the reasoning is in the linked file.
 - Event and request kinds are appended, never inserted. No message script preloads itself. [netcode](docs/netcode.md#events-and-requests)
 - Anything a client predicts or draws from a server rule travels in RULES, to a joiner before any JOIN. [netcode](docs/netcode.md#rules-a-client-predicts-with-travel-in-rules)
 - A family cvar a client predicts with (`mp_teammate_passthrough`) is `FLAG_REPLICATED` and followed (`ArenaGame.follow_server_cvars`), not in RULES; re-applied after every map change. [netcode](docs/netcode.md#rules-a-client-predicts-with-travel-in-rules)
-- Ammunition, the carried set and blind are owner-only. A replayed tick fires nothing and emits no movement signal: `_predict` marks the rig and the controller (`begin_replay`). [netcode](docs/netcode.md#weapons-over-the-wire)
+- Ammunition, the carried set and blind are owner-only. A replayed tick fires nothing and emits no movement signal (`begin_replay`). [netcode](docs/netcode.md#weapons-over-the-wire)
 - `INPUT_COPIES` (5) and `link_rtt_ms` are what keep commands on time under loss. [netcode](docs/netcode.md#inputs-and-the-clock-under-real-loss)
-- The local view is `view_now` (`DotFpsSampler.look_now()`) and the eye adds `drawn_offset`; drawing the state's angles freezes the view on frames with no tick. [netcode](docs/netcode.md#drawing-between-ticks)
+- The local view is `view_now` and the eye adds `drawn_offset`; the state's angles freeze the view on frames with no tick. [netcode](docs/netcode.md#drawing-between-ticks)
 
 **Client**
 
@@ -74,14 +72,15 @@ Short forms; the reasoning is in the linked file.
 - The camera is written only in `ArenaPlayer.present`, the wall-run lean included (no `DotFpsView`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
 - A client's own `mode` is never replaced; display reads `displayed_mode()`. [client](docs/client.md#a-client-knows-the-mode-only-for-display)
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
-- The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer (`manage_pointer`). Movable keys are one table, `ArenaBindings`. [client](docs/client.md#escape-the-pointer-and-the-menu)
+- The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer. [client](docs/client.md#escape-the-pointer-and-the-menu)
 - Every key the client reads is an `ArenaBindings` row read through its action, never a keycode; props modes reuse the Launch and Bash keys; no noclip key (V is push to talk). [client](docs/client.md#keys)
 - Wheel rows are named only on a host dot-ui at API level 2 (`ArenaBindings.wheel_named`). [client](docs/client.md#keys)
 - Typing suspends the sampler as well as swallowing input; the console does it as a menu overlay, so it is built after the menu (`build_console(menu)`). [client](docs/client.md#the-chat-box)
-- Full-screen overlays are sized to the viewport. HUD pieces (`ArenaHudGlance`) draw handed values; judge them with `screenshot.sh --glance` at 16:9, 4:3 and a small frame (854x480). [client](docs/client.md#the-hud)
+- Full-screen overlays are sized to the viewport. HUD pieces draw handed values; judge them with `screenshot.sh --glance` at 16:9, 4:3 and 854x480. [client](docs/client.md#the-hud)
 - Below 1280x720 the whole HUD is scaled (`ArenaHud.fit_scale`), never re-laid out; a new piece gets a `footprint()`, which the overlap check reads. [client](docs/client.md#the-hud)
 - Nothing of the HUD on the right edge below 110 px down to a six-row ballot: the shell's column is there (`--glance --ballot`); below that, a piece reads `dot_hud_cover` (`make_room`, `--map-ballot`). [client](docs/client.md#the-hud)
-- The hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD; never from a predicted shot or a client's own count of kills. [client](docs/client.md#kill-feedback)
+- The killstreak meter's words end above a full chat log (y 424 at 1280x720); `headless_presentation` checks it. [client](docs/client.md#kill-feedback)
+- Hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD, never a predicted shot. [client](docs/client.md#kill-feedback)
 - Medal rules live in `ArenaAwards.MedalBook` on the authority; `ArenaAwards.Medal` is a wire index, appended only. [services](docs/services.md#progression)
 - Third person is deliberately not here: one motor to agree about. [client](docs/client.md#avatars)
 
@@ -96,7 +95,7 @@ Short forms; the reasoning is in the linked file.
 - Anything hooked to the combat manager rebinds on `map_changed`. [modes](docs/modes.md#effects)
 - Spawn protection: one duration, three records; it does not break on attack; an admin slay passes. [modes](docs/modes.md#spawn-protection)
 - Body breaking is seeded from victim and killer, never the tick. [modes](docs/modes.md#criticals-and-bodies)
-- A monster brain seeds from `npc.seed` (per spawn), never `npc.instance_id` (an identity whose value moves with every allocation). dot-npc `docs/runtime.md`
+- A monster brain seeds from `npc.seed`, never `npc.instance_id` (moves with every allocation). dot-npc `docs/runtime.md`
 - Take a pickup out of the field as it goes, not at the end of the frame. [modes](docs/modes.md#coins-out-of-a-body)
 
 **Maps**
@@ -105,7 +104,7 @@ Short forms; the reasoning is in the linked file.
 - `setup` is not re-entrant; `change_map` is, and respawns everybody. Rebind, never rebuild, what survives. [maps](docs/maps.md#changing-the-map)
 - A client builds the def it is handed, never `game.map`. [maps](docs/maps.md#reaching-the-players)
 - `dm_pit`'s spawns stay untagged; `restrict_rotation` never empties the order. [maps](docs/maps.md#modes-a-map-can-host)
-- Every map passes the survey: no slot under 0.8 m unless a declared climb, nothing unreached unless declared; a bot that covers ground does not hold jump. [maps](docs/maps.md#every-map-is-surveyed)
+- Every map passes the survey: no slot under 0.8 m and nothing unreached unless declared; a bot that covers ground does not hold jump. [maps](docs/maps.md#every-map-is-surveyed)
 - Stairs are 0.36 treads ending flush; crate gaps 0.5; a new way up is watched from above. [maps](docs/maps.md#design-rules-every-map-follows)
 - A wall route is declared (`add_wall_route`) and driven through the motor in `headless_match`; a run gap drops about 0.7 m and outspans a dash-jump. [maps](docs/maps.md#design-rules-every-map-follows)
 - Colour is derived from a box's role and zone (`arena_map_paint.gd`), never stored in the box list; a repaint is not a `MAP_VERSIONS` bump. [maps](docs/maps.md#colour-and-light)

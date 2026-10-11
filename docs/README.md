@@ -15,3 +15,4 @@ The detail behind [CLAUDE.md](../CLAUDE.md). One subject per file; open the one 
 | [services.md](services.md) | touching progression, chat and its commands, moderation, voice, the website relay, the admin tools, the map vote, the server browser, or private matches |
 | [testing.md](testing.md) | adding a check, or believing a green run |
 | [history.md](history.md) | a bug that "cannot be happening"; what this game found and how it looked |
+| [not-yet.md](not-yet.md) | planning: what is not built yet (the dot-game conversion, bots on the nav graph, monster animation, pickups, real audio, …) |
