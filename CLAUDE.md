@@ -115,6 +115,7 @@ Short forms; the reasoning is in the linked file.
 - The rig drives the player's own `Arsenal`; call newer zee methods through `has_method`. [weapons](docs/weapons.md#the-rig-drives-the-players-own-arsenal)
 - A detonation pins the attacker's origin to the blast. [weapons](docs/weapons.md#projectiles)
 - A projectile passes through a team-mate holding its launch point (dot-combat's `pass_through_sets`, called by name). [weapons](docs/weapons.md#projectiles)
+- `mp_teammate_passthrough` is dot-combat's cvar, bound in `arena_module.gd` by name; at 2 (`pass_through_team_mates`) the projectile sweep keeps every team-mate out for the whole flight. [weapons](docs/weapons.md#projectiles)
 - `DotAchievementStatsLink`, never `recorded.connect`. [services](docs/services.md#progression)
 - One chat path; hook `player_command` too; moderation is built first. [services](docs/services.md#chat)
 - The speaker id comes from the transport, never the payload. [services](docs/services.md#voice)

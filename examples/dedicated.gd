@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 123
+const CHECKS := 124
 
 var _passed := 0
 var _failed := 0
@@ -281,6 +281,16 @@ func _test_module_loaded() -> void:
 			and _server.console.find_cvar("npc_reaction_min") != null,
 		"and the three NPC skill cvars"
 	)
+
+	# Shooting through team-mates, the operator's: dot-combat's cvar on the world's own rules.
+	var through := _server.console.set_cvar("mp_teammate_passthrough", "2")
+	_check(
+		through.ok and _game.combat.rules.pass_through_team_mates
+			and _game.combat.rules.pass_through_team_mate_at_muzzle,
+		"and `mp_teammate_passthrough 2` at the console reaches the damage rules",
+		str(_game.combat.rules.describe())
+	)
+	var _back := _server.console.set_cvar("mp_teammate_passthrough", "1")
 
 	var harder := _server.console.set_cvar("npc_skill", "hard")
 	_check(

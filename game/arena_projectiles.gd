@@ -45,6 +45,9 @@ class Flying extends RefCounted:
 	## Hitbox sets that held the launch point and that it passes through: team-mates the
 	## thrower was standing inside. See [method ArenaProjectiles._passes_at_launch].
 	var passes: Array = []
+	## Every team-mate's body is left out for the whole flight, not only the ones it was
+	## launched inside: the server's `mp_teammate_passthrough 2`. See [method ArenaProjectiles._passes_every_team_mate].
+	var pass_all: bool = false
 
 
 ## How much speed a fused grenade keeps off a bounce, into the surface and along it.
@@ -106,8 +109,25 @@ func launch(spawn: DotWeaponSpawn) -> void:
 	f.velocity = spawn.velocity
 	f.sticks = _sticks(spawn)
 	f.passes = _passes_at_launch(spawn)
+	f.pass_all = _passes_every_team_mate()
 	_live.append(f)
 	launched.emit(spawn)
+
+
+## Whether the rules say a shot passes through every team-mate in its line
+## ([code]DotDamageRules.pass_through_team_mates[/code], `mp_teammate_passthrough 2`). Then
+## [method _passes_at_launch] already holds every team-mate's body, and the sweep keeps them
+## out for the whole flight instead of dropping each once the projectile has left it, so a
+## rocket goes on past a friend down the corridor as a bullet does. Its splash is not a
+## sweep and still reaches team-mates under friendly fire.
+##
+## Read by name, because a host whose dot-combat predates the field must still load this.
+func _passes_every_team_mate() -> bool:
+	if _combat == null or _combat.rules == null:
+		return false
+
+	var everywhere: Variant = _combat.rules.get(&"pass_through_team_mates")
+	return everywhere == true
 
 
 ## The bodies a projectile launched at [param spawn]'s origin passes through: dot-combat's
@@ -306,7 +326,7 @@ func _sweep(f: Flying, step: Vector3) -> DotHitbox.Hit:
 		var set_node = f.passes[i]
 		if not is_instance_valid(set_node):
 			f.passes.remove_at(i)
-		elif f.age_ticks <= grace or set_node.contains_point(f.position):
+		elif f.pass_all or f.age_ticks <= grace or set_node.contains_point(f.position):
 			excluded.append(set_node)
 		else:
 			f.passes.remove_at(i)

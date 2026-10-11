@@ -96,7 +96,10 @@ arena_spawn_mode avoid         // avoid, weighted, furthest or random
 arena_imported_rotation "surf_10x_reloaded_fixed,surf_110b_austinpowers"   // combat surf maps in the rotation: all, none, or ids
 arena_surf 1                   // a combat surf map plays with the surf air control (1) or the arena's own (0)
 arena_surf_airaccelerate 150   // the air acceleration on a combat surf map
+mp_teammate_passthrough 1      // team modes: 0 a team-mate is hit and blocks, 1 shots pass one at the muzzle, 2 every team-mate in the line
 ```
+
+`mp_teammate_passthrough` is the family's shared one from dot-combat, live from the next shot, and covers rockets and grenades in flight too. At 2 a team-mate never stops a shot; a blast still reaches them.
 
 Console commands:
 

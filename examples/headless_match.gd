@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 583
+const CHECKS := 585
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1304,6 +1304,30 @@ func _test_launch_inside_team_mate() -> void:
 			"with DotDamageRules.pass_through_team_mate_at_muzzle off it goes off in the team-mate again",
 			"%.2f m from the muzzle" % at.distance_to(muzzle))
 		rules.set(&"pass_through_team_mate_at_muzzle", true)
+
+	# --- mp_teammate_passthrough 2: a team-mate merely in the line does not stop a rocket
+	# either. At the default (1) it goes off in the friend halfway to the enemy; at 2 the
+	# sweep keeps every team-mate out for the whole flight and it reaches the enemy.
+	if rules != null and "pass_through_team_mates" in rules:
+		var between := Vector3(0.0, floor_y, -4.0)
+		arrange.call({shooter_id: here, mate_id: between, enemy_id: ahead, spare: aside})
+		muzzle = shooter.muzzle_position()
+		var _blocked: DotWeaponSpawn = launch.call(0, ahead + Vector3.UP * 1.2 - muzzle)
+		fly.call()
+		at = gone[0][0] if gone.size() == 1 else Vector3.INF
+		_check(gone.size() == 1 and absf(at.z - between.z) < 1.0,
+			"at the default a team-mate in the line stops a rocket", "went off at %s" % at)
+
+		rules.set(&"pass_through_team_mates", true)
+		arrange.call({shooter_id: here, mate_id: between, enemy_id: ahead, spare: aside})
+		muzzle = shooter.muzzle_position()
+		var _through: DotWeaponSpawn = launch.call(0, ahead + Vector3.UP * 1.2 - muzzle)
+		fly.call()
+		at = gone[0][0] if gone.size() == 1 else Vector3.INF
+		_check(gone.size() == 1 and at.z < between.z - 2.0 and hp.call(enemy_id) < game.combat.health_of(enemy_id).max_health,
+			"with pass_through_team_mates (mp_teammate_passthrough 2) it flies past them to the enemy",
+			"went off at %s, enemy %.1f" % [at, hp.call(enemy_id)])
+		rules.set(&"pass_through_team_mates", false)
 
 	remove_child(game)
 	game.queue_free()

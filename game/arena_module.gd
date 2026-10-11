@@ -159,6 +159,16 @@ func _module_load() -> DotResult:
 	# the module does; NOTIFY, because players should know the monsters just got harder.
 	game.npc_skill.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
 
+	# Whether shots pass through team-mates: `mp_teammate_passthrough` 0 never, 1 a team-mate
+	# holding the muzzle (the default), 2 every team-mate in the line. dot-combat's cvar,
+	# defined there once for every game and live from the next shot; the projectile sweep
+	# reads the same rules. By name, like ArenaProjectiles' pass_through_sets: a host whose
+	# dot-combat predates it loads arena without the cvar.
+	if game.combat != null and game.combat.has_method(&"bind_cvars"):
+		var _passthrough: Variant = game.combat.call(
+			&"bind_cvars", add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+		)
+
 	# A real server keeps what its monsters learn of each map across restarts. Here and
 	# not in ArenaGame, because every suite builds an ArenaGame and only a server loads this.
 	game.persist_npc_heat = true
