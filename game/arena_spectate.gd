@@ -44,7 +44,7 @@ func setup() -> DotResult:
 	# nobody tells anything, and a mirror runs no timers: the death camera it was handed
 	# would never hand over. The client runs the same rules from the same mode over the
 	# players it already draws, and decides nothing the server has to trust; what the
-	# server enforces is what it replicates. See dot-spectate's CLAUDE.md, decision 7.
+	# server enforces is what it replicates. See dot-spectate's docs/design.md, on mirrors.
 	manager.authoritative = true
 	manager.rules = _rules()
 	manager.participants_fn = _participants

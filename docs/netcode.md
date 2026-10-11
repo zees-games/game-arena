@@ -1,6 +1,6 @@
 # Netcode
 
-dot-net's own rules are in [dot-net's CLAUDE.md](../../dot-net/CLAUDE.md); this is what is specific to the arena's bridge.
+dot-net's own rules are in [dot-net's CLAUDE.md](../../dot-net/CLAUDE.md) and its reasoning in [docs/](../../dot-net/docs/README.md); this is what is specific to the arena's bridge.
 
 ## The bridge
 
