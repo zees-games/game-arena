@@ -36,8 +36,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
 | `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the g2gfast-maps link |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art, Kenney's prototype grid and medal icons |
-| `examples/` | the eight suites |
-| `tools/` | `screenshot.sh`, `screenshot_menus.sh`, `screenshot_weapons.sh`, `build_avatar_parts.gd`, `audio_probe.sh` |
+| `examples/` | the eight suites; `wall_route_driver.gd` drives a map's wall routes |
+| `tools/` | `screenshot.sh`, `screenshot_menus.sh`, `screenshot_weapons.sh`, `render_wall_moves.sh`, `build_avatar_parts.gd`, `audio_probe.sh` |
 | `scenes/arena_server.tscn`, `game.yml` | the server scene and the descriptor that travels in the pack |
 
 ## Running and testing
@@ -46,7 +46,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - **Run the suites after changing any dot-* addon this game links.** That is what this project is for. [testing](docs/testing.md)
 - `headless_presentation` is the only suite with a client in it; `headless_lossy` is the only one with real ENet and real loss (about 50 s, real time). [testing](docs/testing.md#the-suites)
 - Read every suite's stderr even when it exits 0; cap every run with `timeout`. [testing](docs/testing.md#traps-the-suites-have-hit)
-- **Look at it.** No check reaches the screen: `tools/screenshot.sh <map> [--view|--admin|--fx|--feel]`, `tools/screenshot_menus.sh`, `tools/screenshot_weapons.sh`, under `xvfb-run`. [client](docs/client.md#looking-at-it)
+- **Look at it.** No check reaches the screen: `tools/screenshot.sh <map> [--view|--admin|--fx|--feel]`, `tools/screenshot_menus.sh`, `tools/screenshot_weapons.sh`, `tools/render_wall_moves.sh` (a move as a frame sequence), under `xvfb-run`. [client](docs/client.md#looking-at-it)
 - Without the `maps/imported` link the three built-in maps play and the imported checks skip; that is supported.
 
 ## Rules that bite
@@ -69,7 +69,7 @@ Short forms; the reasoning is in the linked file.
 - The client predicts with the server's collision (`Mode.HEADLESS`, or the imported map's brushes), never Godot physics of its own. [netcode](docs/netcode.md#the-client-predicts-with-the-servers-collision)
 - Event and request kinds are appended, never inserted. No message script preloads itself. [netcode](docs/netcode.md#events-and-requests)
 - Anything a client predicts or draws from a server rule travels in RULES, to a joiner before any JOIN. [netcode](docs/netcode.md#rules-a-client-predicts-with-travel-in-rules)
-- Ammunition, the carried set and blind are owner-only. A replayed tick fires nothing (`begin_replay`). [netcode](docs/netcode.md#weapons-over-the-wire)
+- Ammunition, the carried set and blind are owner-only. A replayed tick fires nothing and emits no movement signal: `_predict` marks the rig and the controller (`begin_replay`). [netcode](docs/netcode.md#weapons-over-the-wire)
 - `INPUT_COPIES` (5) and `link_rtt_ms` are what keep commands on time under loss. [netcode](docs/netcode.md#inputs-and-the-clock-under-real-loss)
 - The local view is `view_now` (`DotFpsSampler.look_now()`, every frame) and the eye adds `drawn_offset` (`DotNetPredictor.visual_offset`); drawing the state's angles freezes the view on every frame with no tick. [netcode](docs/netcode.md#drawing-between-ticks)
 
@@ -77,7 +77,7 @@ Short forms; the reasoning is in the linked file.
 
 - Adopt the player on `player_added`, never `player_spawned`. Offline, name the player before creating it. [client](docs/client.md#booting-and-adopting-a-player)
 - The client owns the mouse; `manage_mouse` stays off. [client](docs/client.md#the-mouse)
-- The camera is written only in `ArenaPlayer.present`. A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
+- The camera is written only in `ArenaPlayer.present`, the wall-run lean included (`wall_run_roll`; arena does not use `DotFpsView`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
 - A client's own `mode` is never replaced; display reads `displayed_mode()`. [client](docs/client.md#a-client-knows-the-mode-only-for-display)
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - Typing (chat box or console) sets `DotFpsSampler.suspended` as well as swallowing input; the console is `DotConsoleKit`'s, wired to the sampler because there is no DotMenu. [client](docs/client.md#the-chat-box)
@@ -88,6 +88,7 @@ Short forms; the reasoning is in the linked file.
 
 **Modes and the round**
 
+- Wall run, wall jump and wall slide are on (`arena_wall_*`, in RULES); `wall_run_min_speed` stays above `max_speed`, or every jump beside a wall becomes a run. [modes](docs/modes.md#movement-is-a-games-choice)
 - Modes are `ArenaMode` resources; `team_count` and `team_based` must agree; the rules are duplicated before use. [modes](docs/modes.md#modes-are-data)
 - Build the team manager before `add_child(match_node)`; assign `resolver.team_of` after `add_child(combat)`. [modes](docs/modes.md#modes-are-data)
 - Whether there are sides is the mode's answer (`is_team_mode()`), not the team manager's. [modes](docs/modes.md#modes-are-data)
@@ -105,12 +106,13 @@ Short forms; the reasoning is in the linked file.
 - `dm_pit`'s spawns stay untagged; `restrict_rotation` never empties the order. [maps](docs/maps.md#modes-a-map-can-host)
 - Every map passes the survey: no slot under 0.8 m unless a declared climb, nothing unreached unless declared. [maps](docs/maps.md#every-map-is-surveyed)
 - A bot that covers ground does not hold jump. [maps](docs/maps.md#every-map-is-surveyed)
-- Stairs are 0.36 treads ending flush; crate gaps 0.5; a new way up is watched from above. [maps](docs/maps.md#design-rules-every-map-follows)
+- Stairs are 0.36 treads ending flush; crate gaps 0.5; a new way up is watched from above.
+- A wall route is declared (`add_wall_route`) and driven through the motor in `headless_match`; a run gap drops about 0.7 m and outspans a dash-jump. [maps](docs/maps.md#design-rules-every-map-follows) [maps](docs/maps.md#design-rules-every-map-follows)
 - Colour is derived from a box's role and zone (`arena_map_paint.gd`), never stored in the box list; a repaint is not a `MAP_VERSIONS` bump. [maps](docs/maps.md#colour-and-light)
 - A built-in map's light is its `lighting` document (dot-lighting), replaced with the level. Render a look change with `RENDERER=gl_compatibility` too: the shell is Compatibility. [maps](docs/maps.md#colour-and-light)
 - An imported map's solid is in the tree on every machine before any player is bodied; its spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 - Map mechanics run inside the simulated tick on both ends; pushes are stateless; swim and ladder modes are registered on every map. [imported](docs/imported-maps.md#the-maps-own-mechanics)
-- Arena needs a client shell with dot-player-controller v0.1.5 or later. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
+- Arena needs a client shell with dot-player-controller v0.1.5 or later, and with the wall moves (`arena_player.gd` names them). [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 
 **Horde, weapons, services**
 

@@ -67,7 +67,7 @@ const FIRST_SECONDS := 3.0
 
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 14
+const OTHER_CHECKS := 19
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -116,6 +116,11 @@ var _last_sent := 0
 var _last_got := 0
 var _w_seen_up: Dictionary = {}
 
+## A's input tick its wall script starts on, or -1 while A plays its usual pattern; and
+## the tick it went idle at the wall's foot before that. See [method _test_wall_moves].
+var _wall_from := -1
+var _wall_idle := false
+
 
 func _ready() -> void:
 	_verbose = "--verbose" in OS.get_cmdline_user_args()
@@ -132,6 +137,7 @@ func _run() -> void:
 		if await _connect_everyone():
 			for window in WINDOWS:
 				await _play_window(window)
+			await _test_wall_moves()
 			await _test_leave()
 
 	await _teardown()
@@ -461,11 +467,30 @@ func _connect_everyone() -> bool:
 
 ## A runs forward, strafes left and right, and turns: a constant input is not an input.
 func _command_a(tick: int) -> DotFpsCommand:
+	if _wall_idle:
+		return _wall_command(tick - _wall_from if _wall_from >= 0 else -1)
 	var move := DotFpsCommand.new()
 	var strafe := 1.0 if (tick / 24) % 2 == 0 else -1.0
 	move.move = Vector2(strafe * 0.6, 0.8)
 	move.yaw = fmod(float(tick) * 1.4, 360.0)
 	move.pitch = 0.0
+	return move
+
+
+## A's wall script on dm_box's north wall, by ticks into it: run east along the wall, jump,
+## dash in the air (15 m/s along the wall, past `wall_run_min_speed`) and run the wall,
+## jump off it 35 ticks later, then hold still once down. Read off the tick alone, so the
+## server runs exactly the commands A predicted with. Before it starts (negative), stand.
+func _wall_command(k: int) -> DotFpsCommand:
+	var move := DotFpsCommand.new()
+	move.yaw = -90.0
+	if k < 0 or k > 120:
+		return move
+	move.move = Vector2(0.0, 1.0)
+	if k == 12 or k == 50:
+		move.buttons |= DotFpsCommand.BUTTON_JUMP
+	if k == 15:
+		move.buttons |= DotFpsCommand.BUTTON_SPRINT
 	return move
 
 
@@ -982,6 +1007,91 @@ static func _missing(sent: Array, got: Array) -> String:
 			twice.append(item)
 	return "missing %s, twice %s, first %s, last %s" % [lacks, twice,
 		got[0] if not got.is_empty() else "-", got[got.size() - 1] if not got.is_empty() else "-"]
+
+
+# --- Walls -------------------------------------------------------------------
+
+## A wall run and a wall jump through the last window's 20% loss each way.
+##
+## [b]Everything a wall move reads next tick rides in `net_flags`[/b], and under real loss
+## a client replays more ticks than anywhere else: a run predicted on A and not on the
+## server, or a second jump off one wall allowed on one end, is a correction metres long
+## and a player yanked off the wall. So A runs dm_box's north wall and jumps off it, from
+## commands read off the tick alone, and the two ends have to agree: both run, both jump,
+## A's prediction stays within the windows' 5 cm, and the predictor corrects almost
+## nothing. A also has to hear each move exactly once (the signals the sounds hang on are
+## not emitted in a replay).
+func _test_wall_moves() -> void:
+	_section("a wall run and a wall jump through 20% loss")
+
+	var a: Dictionary = _clients["A"]
+	var net: DotNetManager = a["net"]
+	var session := int(a["session"])
+	var server_a := _game.player_for(session)
+	var own: ArenaPlayer = (a["game"] as ArenaGame).player_for(session)
+	if not _check(server_a != null and own != null, "A is on both ends to run a wall with"):
+		_done()
+		return
+
+	# Stand at the foot of the north wall's clear stretch, a hand off its face, and let the
+	# client be told where it is before anything is measured.
+	_wall_idle = true
+	_wall_from = -1
+	# Twice: the commands A sent before it went idle are still arriving for a few ticks after
+	# the first teleport, and carried it up to a metre off the spot (and out of the wall's
+	# reach) one run in two.
+	for _i in range(2):
+		server_a.controller.teleport(Vector3(-7.0, 0.1, -23.6), -90.0, 0.0)
+		await _until(func() -> bool: return false, 0.75)
+
+	var heard := {"runs": 0, "jumps": 0}
+	var on_run := func(running: bool) -> void:
+		if running:
+			heard["runs"] += 1
+	var on_jump := func() -> void: heard["jumps"] += 1
+	own.controller.wall_run_changed.connect(on_run)
+	own.controller.wall_jumped.connect(on_jump)
+	var runs := server_a.controller.motor.wall_runs
+	var jumps := server_a.controller.motor.wall_jumps
+	var replays := int(net.predictor.get("_replays"))
+	var corrections := int(net.predictor.get("_corrections_applied"))
+
+	_wall_from = net.clock.input_tick() + 4
+	await _until(func() -> bool: return false, 2.6)
+
+	runs = server_a.controller.motor.wall_runs - runs
+	jumps = server_a.controller.motor.wall_jumps - jumps
+	replays = int(net.predictor.get("_replays")) - replays
+	corrections = int(net.predictor.get("_corrections_applied")) - corrections
+	own.controller.wall_run_changed.disconnect(on_run)
+	own.controller.wall_jumped.disconnect(on_jump)
+
+	var track: Dictionary = _server_track.get(session, {})
+	var diffs: Array[float] = []
+	for tick in range(_wall_from, _wall_from + 120):
+		if _predicted.has(tick) and track.has(tick):
+			diffs.append((_predicted[tick] as Vector3).distance_to(track[tick]))
+	diffs.sort()
+	var d95 := diffs[int(diffs.size() * 0.95)] if not diffs.is_empty() else -1.0
+	var dmax := diffs[diffs.size() - 1] if not diffs.is_empty() else -1.0
+	print("    the server's A: %d wall runs, %d wall jumps; A heard %d and %d" % [runs, jumps, heard["runs"], heard["jumps"]])
+	print("    A's prediction over the %d ticks of it: p95 %.3f / max %.3f m; %d of %d replays corrected" % [
+		diffs.size(), d95, dmax, corrections, replays])
+
+	_check(runs == 1 and jumps == 1, "the server's A ran the wall once and jumped off it once",
+		"%d runs, %d jumps" % [runs, jumps])
+	_check(heard["runs"] == 1 and heard["jumps"] == 1,
+		"and A predicted both, heard once each, never again from a replay",
+		"%d runs, %d jumps" % [heard["runs"], heard["jumps"]])
+	_check(diffs.size() > 100 and d95 >= 0.0 and d95 <= 0.05 and dmax <= 1.5,
+		"A's prediction of it within 5 cm of the server's for 95% of its ticks",
+		"%d ticks, p95 %.3f, max %.3f" % [diffs.size(), d95, dmax])
+	_check(corrections <= maxi(3, replays / 10),
+		"and corrected in no more than a tenth of the replays (%d of %d)" % [corrections, replays])
+
+	_wall_idle = false
+	_wall_from = -1
+	_done()
 
 
 # --- The end ----------------------------------------------------------------

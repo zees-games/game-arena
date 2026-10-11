@@ -73,6 +73,17 @@ var display_name: String = "dm_box"
 var climbs: Array[Climb] = []
 
 
+## Every route this map builds for the walls: a wall run or a wall jump from one box's top
+## to another's, past what the ordinary movement reaches.
+##
+## `{name, kind, from: AABB, to: AABB, walls: Array[AABB]}`, `kind` `&"run"` (along the
+## one wall in `walls`) or `&"jump"` (off the walls in `walls`, one jump each). Declared,
+## like [member climbs], so the suite can drive each one through the motor rather than
+## believe it, and so the survey can count it as a way from `from` to `to` (one way: a
+## wall route back is a second declaration). Append through [method add_wall_route].
+var wall_routes: Array[Dictionary] = []
+
+
 ## Top faces a player is deliberately never meant to stand on.
 ##
 ## `[gate-sweep-1]`'s second question is whether a map has floor nobody can reach, and
@@ -320,6 +331,17 @@ static func jump_reach(rise: float) -> float:
 ## suite, where failing is useful.
 func add_climb(of_name: String, from_box: AABB, to_box: AABB) -> ArenaMap:
 	climbs.append(Climb.between(of_name, from_box.abs(), to_box.abs()))
+	return self
+
+
+## Declares a route the walls make, from [param from_box]'s top to [param to_box]'s. See
+## [member wall_routes]; [param kind] is `&"run"` or `&"jump"`.
+func add_wall_route(
+	of_name: String, kind: StringName, from_box: AABB, to_box: AABB, walls: Array[AABB]
+) -> ArenaMap:
+	wall_routes.append({
+		"name": of_name, "kind": kind, "from": from_box.abs(), "to": to_box.abs(), "walls": walls,
+	})
 	return self
 
 
@@ -1096,6 +1118,76 @@ static func dm_atrium() -> ArenaMap:
 		))
 
 	map.add_climb("dm_atrium: the rampart onto the perch", rampart, perch_boxes[2])
+
+	# --- The north gallery (1.7.0) -------------------------------------------
+	#
+	# Added 2026-10-10, for the wall run and the wall jump. Two ledges against the north
+	# wall with a 12 m gap between them, and a chimney up onto the first. Both are
+	# shortcuts: each ledge has a walked stair, so the survey (which asks only the
+	# ordinary movement) reaches everything, and the walls only make it faster.
+	#
+	# [b]The gap is crossed by running the north wall and by nothing else.[/b] The high
+	# ledge (2.52) runs east to x -18, the low one (1.80) starts at x -6. Measured with
+	# the motor (`headless_match`'s *the north gallery, run and climbed*): a plain run
+	# and jump lands 3 m short, a slide-jump 5 m short, a dash-jump 1 m short, and a
+	# slide-jump onto the wall lands 2 m onto the low ledge. The 0.72 m drop is what the
+	# run needs: it levels off and sinks slowly (`wall_run_gravity_scale`), so a run
+	# between two ledges of one height arrives below the far top and hits its face.
+	# One-way, east, on purpose: back west is the stairs.
+	#
+	# [b]The chimney is climbed by two wall jumps and by nothing else.[/b] Two arms 2.4 m
+	# apart stand out from the high ledge's south face, at the ledge's height, so their
+	# tops are part of the ledge and nothing new is standable. 2.52 is over the climb
+	# limit (1.125); a jump off one arm and then the other peaks at about 2.9. One jump
+	# off each wall is all `wall_jump_max_per_wall` (1) allows, which is why it is two
+	# walls and not one.
+	#
+	# Watched from above, like every way up here: the rampart (5.86) is 11 m south of
+	# the ledges and the keep roof (5.5) beside the chimney. No spawn was added or moved.
+	const GAL_Z := -30.0
+	const GAL_D := 4.0
+	const GAL_HIGH := 2.52
+	const GAL_LOW := 1.80
+	const GAL_TREAD := 0.75
+
+	var gallery_high := AABB(Vector3(-30.0, 0.0, GAL_Z), Vector3(12.0, GAL_HIGH, GAL_D))
+	var gallery_low := AABB(Vector3(-6.0, 0.0, GAL_Z), Vector3(12.0, GAL_LOW, GAL_D))
+	map.add_box(gallery_high)
+	map.add_box(gallery_low)
+
+	# The high ledge's stair: six treads climbing north along the west wall, the top one
+	# (2.16) flush with the ledge's south face, one walked step under it.
+	for index in range(6):
+		map.add_box(AABB(
+			Vector3(-30.0, 0.0, gallery_high.end.z + float(5 - index) * GAL_TREAD),
+			Vector3(3.0, 0.36 * float(index + 1), GAL_TREAD)
+		))
+
+	# The low ledge's stair: four treads down east along the north wall from its end.
+	for index in range(4):
+		map.add_box(AABB(
+			Vector3(gallery_low.end.x + float(index) * GAL_TREAD, 0.0, GAL_Z),
+			Vector3(GAL_TREAD, 0.36 * float(4 - index), 3.0)
+		))
+
+	# The chimney: the east arm flush with the ledge's east end, so the gap's west face
+	# runs on unbroken; 2.4 m between the arms, 3 m deep.
+	var chimney_west := AABB(Vector3(-22.4, 0.0, gallery_high.end.z), Vector3(1.0, GAL_HIGH, 3.0))
+	var chimney_east := AABB(Vector3(-19.0, 0.0, gallery_high.end.z), Vector3(1.0, GAL_HIGH, 3.0))
+	map.add_box(chimney_west)
+	map.add_box(chimney_east)
+
+	var north_wall := AABB(Vector3(-32.0, 0.0, -32.0), Vector3(64.0, map.wall_height, 2.0))
+	map.add_wall_route("dm_atrium: along the north wall over the gallery gap",
+		&"run", gallery_high, gallery_low, [north_wall])
+	map.add_wall_route("dm_atrium: up the chimney onto the gallery",
+		&"jump", _floor_at(0.0), gallery_high, [chimney_west, chimney_east])
+
+	map.paint_zones.append({
+		"name": "gallery",
+		"region": AABB(Vector3(-30.5, 0.0, -30.5), Vector3(40.0, 4.0, 9.5)),
+		"colour": ArenaMapPaint.AQUA,
+	})
 
 	map.add_perimeter()
 

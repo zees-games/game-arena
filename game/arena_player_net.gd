@@ -215,16 +215,29 @@ func _net_simulate(tick: int, delta: float) -> void:
 ## and kicked its view once per snapshot that covered it, which at 64 ticks and a tenth of
 ## a second of latency is several times per shot. `ZeeWeaponRig.begin_replay` is the
 ## pack's switch for exactly this: the simulation re-runs and the drawing does not.
+##
+## The movement is marked too (`DotFpsController.begin_replay`), and it was not until
+## 2026-10-10: every replayed tick re-emitted the controller's own signals and re-counted
+## its statistics. The wall moves found it, one wall run heard six times and one wall
+## jump seven over 20% loss (`headless_lossy`); the slide's and the dash's signals and the
+## jump count had the same fault with nothing listening closely enough to say.
 func _predict(tick: int, delta: float) -> void:
-	var replaying := tick <= _newest_simulated and player.weapons != null
+	var replaying := tick <= _newest_simulated
+	var controller := player.controller
 
 	if replaying:
-		player.weapons.begin_replay()
+		if player.weapons != null:
+			player.weapons.begin_replay()
+		if controller != null:
+			controller.begin_replay()
 
 	var _outcome := player.simulate_tick(tick, delta, last_move, last_fire)
 
 	if replaying:
-		player.weapons.end_replay()
+		if player.weapons != null:
+			player.weapons.end_replay()
+		if controller != null:
+			controller.end_replay()
 
 	_newest_simulated = maxi(_newest_simulated, tick)
 

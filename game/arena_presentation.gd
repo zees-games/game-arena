@@ -36,6 +36,11 @@ const EXPLOSION := &"explosion"
 ## A hit that killed: the hit marker's heavier sound.
 const KILL_CONFIRMED := &"kill_confirmed"
 
+## The local player's own wall moves: a scuff as a wall run starts, a kick as they jump off
+## a wall. Flat and their own, like the hurt sound: somebody else's run is not news.
+const WALL_RUN_SOUND := &"wall_run"
+const WALL_JUMP_SOUND := &"wall_jump"
+
 ## Seconds between one kill's medal sounds; the HUD's `MedalRow.STAGGER_SEC`.
 const MEDAL_STAGGER_SEC := 0.14
 
@@ -472,6 +477,20 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	ping.pitch_max = 0.5
 	c.add(ping)
 
+	# The wall moves. Pitched up from the voices they borrow, so a wall jump is never heard
+	# as an impact and a run's first step never as somebody else's footstep.
+	for wall in [[WALL_RUN_SOUND, 1.35, 120], [WALL_JUMP_SOUND, 1.5, 90]]:
+		var move := DotAudioDef.new()
+		move.id = wall[0]
+		move.path = "%s/%s.ogg" % [SOUND_DIR, String(wall[0])]
+		move.bus = &"SFX"
+		move.cooldown_ms = wall[2]
+		move.max_concurrent = 1
+		move.priority = 55
+		move.pitch_min = float(wall[1])
+		move.pitch_max = float(wall[1])
+		c.add(move)
+
 	var pickup := DotAudioDef.new()
 	pickup.id = &"pickup"
 	pickup.path = "%s/pickup.ogg" % SOUND_DIR
@@ -523,6 +542,8 @@ static func _base_recipes() -> Dictionary:
 		&"died": DotAudioSynth.Voice.DIE,
 		&"spawned": DotAudioSynth.Voice.SPAWN,
 		&"pickup": DotAudioSynth.Voice.PICKUP,
+		WALL_RUN_SOUND: DotAudioSynth.Voice.STEP,
+		WALL_JUMP_SOUND: DotAudioSynth.Voice.IMPACT,
 		BEACON_SOUND: DotAudioSynth.Voice.BLIP,
 		# Up for a ballot opening, the one upward sweep, because up reads as "on"; a
 		# blip for the warning and a click per second, so a countdown is heard without
@@ -1022,6 +1043,22 @@ func on_beacon(at: Vector3) -> int:
 
 func on_pickup(at: Vector3) -> void:
 	audio.play_at(&"pickup", at)
+
+
+## The local player started or ended a wall run (`DotFpsController.wall_run_changed`,
+## never emitted during a replay). Only the start makes a noise; returns the voice, 0 for
+## none.
+func on_wall_run(running: bool) -> int:
+	if audio == null or not running:
+		return 0
+	return audio.play(WALL_RUN_SOUND)
+
+
+## The local player jumped off a wall (`DotFpsController.wall_jumped`).
+func on_wall_jumped() -> int:
+	if audio == null:
+		return 0
+	return audio.play(WALL_JUMP_SOUND)
 
 
 ## A map changed. Everything drawn for the old one is meaningless now.

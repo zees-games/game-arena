@@ -17,6 +17,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerNet := preload("../game/arena_player_net.gd")
 const ArenaHorde := preload("../game/arena_horde.gd")
 const ArenaNpcs := preload("../game/arena_npcs.gd")
+const WallRouteDriver := preload("wall_route_driver.gd")
 
 ## Two clients, one server, one process, and a lossy wire between them.
 ##
@@ -36,7 +37,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 201
+const CHECKS := 206
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
@@ -49,7 +50,7 @@ var _skipped_checks := 0
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 18
+const SECTIONS := 19
 
 var _passed := 0
 var _failed := 0
@@ -99,6 +100,7 @@ func _run() -> void:
 	# After the weapons: everybody in this harness fires every eighth tick, and this
 	# section's windows spent the magazine the weapons section's fresh shot needs.
 	_test_movement_rules_reach_clients()
+	_test_wall_moves_predicted()
 	# After the weapons for the same reason: it waits out spawn protection, and this
 	# harness fires every eighth tick. Before the disconnect, which takes the killer away.
 	_test_hits_and_medals_reach_clients()
@@ -1404,6 +1406,144 @@ func _test_movement_rules_reach_clients() -> void:
 	server_player.controller.state.velocity = Vector3.ZERO
 	var _back := _flight_window(0, 32, 0)
 	_done()
+
+
+## A wall run and a wall jump, predicted by the client and run by the server, over this
+## harness's one-in-five loss.
+##
+## [b]Every bit of a wall move the next tick reads rides in `net_flags`[/b] (the run's
+## time, the jump counts, the wall's heading), and a client that replays a tick without
+## one of them puts the player somewhere else: off the wall, or allowed a second jump off
+## it. So the north gallery's two wall routes are driven from the client's own predicted
+## state, the way a player would, and both ends have to make the route, agree to within the
+## harness's loss all the way, and end up in the same place.
+func _test_wall_moves_predicted() -> void:
+	print("")
+	_section("[a wall run and a wall jump, predicted]")
+
+	var peer: int = _clients.keys()[0]
+	var entry: Dictionary = _clients[peer]
+	var session := int(entry["session"])
+	var client_game: ArenaGame = entry["game"]
+	var server_player: ArenaPlayer = _server_bridge.behaviour_for(session).player
+	var client_player: ArenaPlayer = (entry["bridge"] as ArenaNetBridge).behaviour_for(session).player
+	var net: DotNetManager = entry["net"]
+
+	_check(
+		_server_game.map.id == &"dm_atrium" and client_game.map.id == &"dm_atrium",
+		"both ends are on dm_atrium, where the gallery is",
+		"%s / %s" % [_server_game.map.id, client_game.map.id]
+	)
+
+	# A map change restarts the match, and its countdown's end respawns everybody: a run
+	# cut off by that is a respawn, not a misprediction. Wait for the round to be live.
+	var waited := 0
+	while not _server_game.match_node.is_live() and waited < 40:
+		var _wait := _flight_window(peer, 32, 0)
+		waited += 1
+
+	for route: Dictionary in _server_game.map.wall_routes:
+		var driver := WallRouteDriver.new(route, &"walls")
+		server_player.controller.teleport(driver.start, driver.yaw, 0.0)
+		var _settle := _flight_window(peer, 40, 0)
+
+		var runs_before := server_player.controller.motor.wall_runs
+		var jumps_before := server_player.controller.motor.wall_jumps
+		var measured := _driven_window(peer, driver, 260)
+		var runs := server_player.controller.motor.wall_runs - runs_before
+		var jumps := server_player.controller.motor.wall_jumps - jumps_before
+		var name: String = route["name"]
+		var landed_apart := float(measured["last_aligned"])
+		print("  measured: %s: %d runs, %d wall jumps on the server; worst gap %.3f m (%s); %.3f m apart once down" % [
+			name, runs, jumps, float(measured["worst_aligned"]), measured["worst_at"], landed_apart])
+
+		_check(
+			driver.made(server_player.controller.state) and driver.made(client_player.controller.state)
+				and (runs >= 1 if route["kind"] == &"run" else jumps >= 2),
+			"%s: the server's player makes it, and so does the client's prediction" % name,
+			"server %s, client %s" % [server_player.controller.state.position, client_player.controller.state.position]
+		)
+		# A hand's width, like the launch above: in this lockstep a lost packet is a tick the
+		# server runs without that tick's command (a real server has its input buffer and
+		# the resent copies; headless_lossy measures that), so a lost crouch press before a
+		# slide-jump puts the two ends a few centimetres of crouch apart until the next
+		# snapshot. What must not happen is the run or the jump itself coming out
+		# differently, which leaves them metres apart and still apart once down.
+		_check(
+			float(measured["worst_aligned"]) < 0.35 and landed_apart < 0.01,
+			"%s: the client predicted it within a hand's width of the server, and lands where it does" % name,
+			"worst %.3f m at %s, %.3f m apart once down" % [float(measured["worst_aligned"]), measured["worst_at"], landed_apart]
+		)
+
+	server_player.controller.teleport(Vector3(0.0, 0.1, 18.0))
+	server_player.controller.state.velocity = Vector3.ZERO
+	var _back := _flight_window(0, 32, 0)
+	_done()
+
+
+## [method _flight_window] with [param peer]'s commands from [param driver], read off the
+## client's own predicted state, until the driver has landed (or [param ticks] run out).
+func _driven_window(peer: int, driver: WallRouteDriver, ticks: int) -> Dictionary:
+	var first := _server_game.current_tick() + 1
+	var worst_aligned := 0.0
+	var worst_at := ""
+	var previous := Vector3.ZERO
+	var has_previous := false
+	var session := int(_clients[peer]["session"])
+	var predicted: ArenaPlayer = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(session).player
+	var actual: ArenaPlayer = _server_bridge.behaviour_for(session).player
+	var after_landing := 0
+	var last_aligned := INF
+
+	for tick in range(first, first + ticks):
+		var commands := {}
+
+		for peer_id in _clients:
+			var pair := _commands_for(peer_id, tick)
+			if peer_id == peer:
+				pair = [driver.next(predicted.controller.state), DotWeaponCommand.new()]
+			commands[peer_id] = pair
+
+			var packet: PackedByteArray = _clients[peer_id]["bridge"].encode_input(
+				tick, pair[0], pair[1]
+			)
+			_drop_up += 1
+			if _drop_up % LOSS_EVERY != 0:
+				_server_bridge.receive_input(peer_id, packet)
+
+		_server_bridge.server_tick(tick)
+
+		for entry_down in _downstream:
+			var target_peer: int = entry_down["peer"]
+			var targets: Array = _clients.keys() if target_peer == 0 else [target_peer]
+			for target in targets:
+				if _clients.has(target):
+					_clients[target]["bridge"].receive_snapshot(entry_down["bytes"])
+		_downstream.clear()
+
+		for peer_id in _clients:
+			var pair2: Array = commands[peer_id]
+			_clients[peer_id]["net"].clock.tick = tick
+			_clients[peer_id]["bridge"].client_tick(tick, pair2[0], pair2[1])
+
+		# The client runs a tick ahead of the server in this lockstep, so its last
+		# position is where the server is now (see _flight_window).
+		if has_previous:
+			var gap := previous.distance_to(actual.controller.state.position)
+			last_aligned = gap
+			if gap > worst_aligned:
+				worst_aligned = gap
+				worst_at = "tick %d client %s server %s" % [tick, previous, actual.controller.state.position]
+		previous = predicted.controller.state.position
+		has_previous = true
+
+		# A dozen ticks standing after the landing, so a late correction is still counted.
+		if driver.finished(predicted.controller.state) and driver.finished(actual.controller.state):
+			after_landing += 1
+			if after_landing > 12:
+				break
+
+	return {"worst_aligned": worst_aligned, "worst_at": worst_at, "last_aligned": last_aligned}
 
 
 ## A spawn point with no map box over it, for a launch to go straight up from. Spawns

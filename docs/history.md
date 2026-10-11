@@ -16,6 +16,7 @@ One line each; the detail is in [bugs-found.md](../../../docs/bugs-found.md) or 
 - **The engine passes `create_server`'s `max_channels` to ENet as the host's incoming bandwidth**, so every dot-server told every ENet client it could take six bytes a second, and the client throttled its commands to 1/32 for its first seconds. Fixed in dot-core's `DotTransportENet` by passing 0. A `throttle_configure` on the client does not help.
 - **dot-player-controller: `DotFpsFlatBody.rest_contact` pushed out along the deepest axis**, exposed when the world extent moved the quantisation step; a client slid 2.8 m along a wall during a straight-up launch. Fixed in v0.1.5, so arena must not run on a client shell older than 20261009-1627.
 - **dot-player-controller's rewind kept the client's own launch cooldown and buttons**; they travel in `net_flags` now.
+- **dot-player-controller: a wall run ended four ticks in over the wire.** Jumping off the gallery's high ledge onto the north wall, the uncrouch after the slide dropped the feet past the ledge's top a hand beyond its end face, and the wall probe took the nearest wall, that face, whose speed "along" was nothing. Offline the driver's timing missed it by centimetres; one lost crouch press in `headless_net` shifted it a tick and both ends agreed on a run that ended. A run now keeps the wall beside its velocity (2026-10-10).
 - **dot-spawn: the spawning player was their own enemy**; a two-argument `enemies_fn` gets the spawning key.
 - **dot-spectate: a mirror held the death camera until the respawn**; it now refuses `on_death` on a mirror, loudly.
 - **The bridge's extra reconcile pass** was found from game-hungario, whose bridge was written from this one and inherited it: `correction_rate()` 0.500 with it, 0.032 without.
@@ -82,6 +83,10 @@ The family's most repeated shape, found here many times:
 - The first spawn-avoidance asked dot-match's team manager whether there were sides and told a free-for-all respawner their old team-mates were friends.
 - **No input was ever resent**: at 20% loss the server had A's command for 80% of its ticks. **The clock's round trip came from a heartbeat that is -1 for eight seconds.**
 - A slay inside spawn protection was refused, for the first second and a half of every life.
+
+## The wire
+
+- **A predicted replay re-emitted every movement signal.** `ArenaPlayerNet._predict` marked a replay for the weapon rig only, never for `DotFpsController`, so the slide's, the dash's and the launch's signals and the jump statistics repeated on every correction, and nothing listened closely enough to say. The wall moves' sounds did: one wall run heard six times and one wall jump seven, over 20% loss (`headless_lossy`, 2026-10-10). The controller is marked now; the rule is in [netcode](netcode.md#weapons-over-the-wire).
 
 ## Feedback the client decided for itself
 

@@ -272,6 +272,7 @@ class _Fill:
 		var edges := {}
 		_drops(comp, edges)
 		_jumps(comp, edges)
+		_wall_routes(comp, edges)
 
 		# Spawn nodes: the standable surface under each spawn.
 		var starts: Array[int] = []
@@ -455,6 +456,42 @@ class _Fill:
 
 					if landing >= 0 and comp[a] != comp[landing]:
 						edges[(comp[a] << 20) | comp[landing]] = true
+
+	## The map's declared wall routes ([member ArenaMap.wall_routes]), one way each: from the
+	## node on `from`'s top nearest the route's walls to the one on `to`'s top nearest them.
+	##
+	## [b]Taken on trust here and proved in the suite[/b], which drives every one through
+	## the motor; this fill only knows walking, falling and jumping.
+	func _wall_routes(comp: PackedInt32Array, edges: Dictionary) -> void:
+		for route: Dictionary in map.wall_routes:
+			var near := Vector2.ZERO
+			for wall: AABB in route["walls"]:
+				near += Vector2(wall.get_center().x, wall.get_center().z)
+			near /= maxf(1.0, float((route["walls"] as Array).size()))
+
+			var a := _node_on(route["from"], near)
+			var b := _node_on(route["to"], near)
+
+			if a >= 0 and b >= 0 and comp[a] != comp[b]:
+				edges[(comp[a] << 20) | comp[b]] = true
+
+	## The node on [param box]'s top nearest [param near], or -1.
+	func _node_on(box: AABB, near: Vector2) -> int:
+		var best := -1
+		var best_d := INF
+
+		for index in range(node_h.size()):
+			if absf(node_h[index] - box.end.y) > _EPS:
+				continue
+			var at := _centre(node_cell[index])
+			if at.x < box.position.x or at.x > box.end.x or at.y < box.position.z or at.y > box.end.z:
+				continue
+			var d := at.distance_squared_to(near)
+			if d < best_d:
+				best_d = d
+				best = index
+
+		return best
 
 	## Jumps, from and to nodes on the edge of their walk component.
 	##

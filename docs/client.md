@@ -27,6 +27,8 @@ E launches (dot-player-controller's launch, the movement command's first user bi
 
 `field_of_view` is why dot-settings has `SERVER_CLAMPED`: a server may cap it (a wide view is a competitive advantage) but never reads it, because a server reading the field of view, the sensitivity, the bindings or the audio device would be assembling a fingerprint that survives a new account and every ban. A clamp is a bound: a player who prefers 90 keeps 90 under a cap of 100.
 
+**The wall-run lean is arena's own.** `DotFpsView` is the addon's camera and this game does not use it, so `ArenaPlayer.wall_run_roll` (6 degrees) and `wall_run_roll_response` (6 per second) are its two numbers, applied in `present` once a frame from the drawn state: away from the wall, scaled by how square the view is to it, eased exponentially in and out. `tools/render_wall_moves.sh` is how it was checked ([looking at it](#looking-at-it)).
+
 The death camera is driven once a frame, not once a tick ([modes](modes.md#spectating)).
 
 ## The presentation layer
@@ -37,6 +39,8 @@ The death camera is driven once a frame, not once a tick ([modes](modes.md#spect
 - `max_concurrent` is 3 on a rifle. Twelve in one tick is one gunshot twelve times as loud, with comb filtering.
 - The shot is predicted on the client that fired it. Safe because a sound never changes the simulation: a shot the server later refuses cost a noise.
 - **No audio files ship.** The catalogue names paths in `audio/` that do not exist; `sound_recipes()` maps each id to a `DotAudioSynth` voice and `DotAudioSinkGodot` falls through to that bank. Weapons get different voices on purpose: hearing somebody's shot is knowing what they hold. Dropping in real files switches the stand-ins off one id at a time. zee-dot-weapons brings its own baked reports; these are only what a client shell too old to carry `ZeeShotFx` falls back to.
+
+- The local player's wall moves have their own stand-ins, flat and theirs only: `wall_run` (a step, pitched up) as a run starts and `wall_jump` (an impact, pitched up) on a kick off a wall, from `DotFpsController.wall_run_changed` / `wall_jumped`, which a replay does not emit ([netcode](netcode.md#weapons-over-the-wire)).
 
 **dot-effects and dot-fx are different things and this game has both.** `ArenaEffects` is burning, slows, invulnerability: things that change the simulation. `ArenaPresentation` is what they look like, and never changes the simulation, which is what lets a frame budget drop one.
 
@@ -115,6 +119,7 @@ No assertion sees the screen. Render and look after any change to the client, a 
 - `tools/screenshot.sh <map>` renders a map from three angles into `screenshots/`, a built-in map under its own lighting document exactly as the client draws it; `RENDERER=gl_compatibility` renders what the client shell draws ([maps](maps.md#colour-and-light)); `--view <name> <from> <at>` adds a frame, `--admin` the beacon and blind, `--fx <eye> <aim>` six shots and a death, `--feel` the HUD, scope, drops, body breaking and `<map>_feel_kill` (medals, "+points", the streak meter, the hit marker and two damage numbers in one frame; the HUD animates in real time and a frame takes about 70 ms, so a shot's `late` stages put each piece up a few frames before the grab). On an imported map it plays a short deathmatch first and adds player, ramp, water and booster frames.
 - `tools/screenshot_menus.sh` renders the pause menu, the interface screen, the rebinder, the scoreboard, the HUD with the chat box, and the console open (`hud_console.png`). The chat box sits at `margin_bottom = 110` to clear health and armour, and only the picture can say whether 110 is right. It refuses to save a grey rectangle when a `push` fails.
 - `tools/screenshot_weapons.sh` plays the offline client through its own input path.
+- `tools/render_wall_moves.sh [run|runjump|chimney]` draws dm_atrium's wall routes from first person through `ArenaPlayer.present` at three frames a tick (`--fixed-fps 192`), saves a frame every two ticks and a sheet per route into `screenshots/wall_moves/`, logs every frame's eye and roll to a CSV, and prints the largest change of eye step, of vertical step and of roll per frame, and the roll's reversals. A step that changes only on the tick a velocity does (a slide's boost, a kick, a landing), and a roll with no reversals and no step over about 0.2 degrees a frame, is a smooth run.
 - `~/stack/game-dev/tools/screenshot.sh game-arena out.png --wait 35 -- --offline` is the real offline client. Arena starts in warmup, so an early frame lies.
 
 All need `xvfb-run`: under `--headless` every saved frame is empty, which looks like a screenshot.

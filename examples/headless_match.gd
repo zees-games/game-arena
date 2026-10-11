@@ -17,12 +17,14 @@ const ArenaMapSurvey := preload("../maps/arena_map_survey.gd")
 const ArenaMenus := preload("../game/arena_menus.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaModes := preload("../game/arena_modes.gd")
+const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNpcs := preload("../game/arena_npcs.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaProjectiles := preload("../game/arena_projectiles.gd")
 const ArenaProps := preload("../game/arena_props.gd")
 const ArenaStats := preload("../game/arena_stats.gd")
 const ArenaVote := preload("../game/arena_vote.gd")
+const WallRouteDriver := preload("wall_route_driver.gd")
 
 ## A whole deathmatch, played out headlessly, with nothing called by hand.
 ##
@@ -55,13 +57,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 560
+const CHECKS := 577
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 36
+const SECTIONS := 38
 
 var _passed := 0
 var _failed := 0
@@ -104,6 +106,7 @@ func _run() -> void:
 	_test_reach()
 	_test_survey()
 	await _test_crate_climb()
+	_test_wall_routes()
 	await _test_box_upper()
 	_test_modes()
 	await _test_team_deathmatch()
@@ -112,6 +115,7 @@ func _run() -> void:
 	await _build()
 	_build_vote()
 	_test_players_exist()
+	_test_wall_rules()
 	await _play()
 	_test_outcome()
 	_test_score_vote()
@@ -1949,6 +1953,10 @@ func _test_map_look() -> void:
 		ArenaMapPaint.zone_colour(Vector3(-15.0, 2.0, -12.0), atrium.paint_zones, atrium.extent) == ArenaMapPaint.LAVENDER,
 		"dm_atrium's keep is its own named zone"
 	)
+	_check(
+		ArenaMapPaint.zone_colour(Vector3(-20.0, 1.0, -27.0), atrium.paint_zones, atrium.extent) == ArenaMapPaint.AQUA,
+		"and so is its north gallery, the wall-run ledges"
+	)
 
 	var lit := ArenaMapLighting.build(atrium)
 	var env: Environment = null
@@ -3363,6 +3371,152 @@ func _test_box_upper() -> void:
 ## hold jump, because `max_air_wish_speed` is 1.2 and a bot cannot strafe. This bot has
 ## to gain height rather than ground, `auto_hop` is on, and eighteen metres is short
 ## enough that bleeding to the air cap does not stop it arriving.
+## The walls' routes on every map, driven through the motor rather than believed.
+##
+## [b]A wall route is two claims, and both are checked.[/b] It is made: the intended
+## approach (a slide-jump onto the wall, or a jump off each chimney wall) lands on the
+## route's end. And it is a WALL route: the same inputs with the wall moves off fall short,
+## and so does every other way across a run's gap (a run and a jump, a slide-jump, a dash
+## either side of the jump). Without the second half a gallery gap a dash crosses would be
+## a gap, not a wall run. And it is smooth, measured the way a jolt is: the speed along
+## the wall never moves, and the vertical arriving with the jump is eased away (each tick's
+## change no larger than the one before, give or take a tick of gravity), never set. The
+## motor's own suite asks "under a tick of gravity" of a run entered at 1 m/s up; a
+## slide-jump arrives at 7, and easing 7 m/s away at `wall_run_vertical_damping` 8 is 0.9
+## m/s on the first tick, shrinking every tick after.
+func _test_wall_routes() -> void:
+	_section("every map: the wall routes, run and climbed")
+
+	var routes := 0
+	for id in ArenaMap.ids():
+		var map := ArenaMap.by_id(id)
+		var body := map.to_fps_body()
+
+		for route: Dictionary in map.wall_routes:
+			routes += 1
+			var name: String = route["name"]
+			var made := _drive_route(map, body, route, &"walls", true)
+			var wall_move: int = made["runs"] if route["kind"] == &"run" else made["jumps"]
+			_check(made["made"] and wall_move >= (1 if route["kind"] == &"run" else 2),
+				"%s: made, the intended way" % name,
+				"at %s, %d runs, %d wall jumps" % [made["at"], made["runs"], made["jumps"]])
+			var without := _drive_route(map, body, route, &"walls", false)
+			_check(not without["made"], "%s: and not with the wall moves off" % name, "at %s" % without["at"])
+
+			if route["kind"] == &"run":
+				var crossed := PackedStringArray()
+				for how in [&"plain", &"slide", &"dash", &"jumpdash"]:
+					var tried := _drive_route(map, body, route, how, false)
+					if tried["made"]:
+						crossed.append(String(how))
+				_check(crossed.is_empty(), "%s: nothing but the wall crosses it" % name,
+					"crossed by %s" % ", ".join(crossed))
+				var gravity_tick := ArenaPlayer.arena_tunables().gravity / float(TICK_RATE)
+				_check(float(made["along_moved"]) < 0.01,
+					"%s: the run never touches the speed along the wall" % name,
+					"moved %.3f m/s" % made["along_moved"])
+				_check(float(made["entry_excess"]) <= 0.0 and float(made["jolt"]) <= gravity_tick * 1.05,
+					"%s: the vertical is eased, never set: no tick's change grows on the last by over a tick of gravity" % name,
+					"entry %.3f over the ease, worst growth %.3f m/s against %.3f" % [made["entry_excess"], made["jolt"], gravity_tick])
+
+	_check(routes >= 2, "the maps declare wall routes (%d)" % routes)
+
+	# The trade every way up on dm_atrium makes: the gallery is watched from higher. From
+	# the rampart (5.86) a chest every 3 m along both ledges, and from the keep roof's
+	# north-west corner (5.5) a chest at the chimney's top.
+	var atrium := ArenaMap.dm_atrium()
+	var trace := atrium.shot_trace()
+	var hidden := PackedStringArray()
+	var rampart_eye := Vector3(-4.0, 5.86 + 1.6, -13.5)
+	for route: Dictionary in atrium.wall_routes:
+		if route["kind"] != &"run":
+			continue
+		for ledge: AABB in [route["from"], route["to"]]:
+			var x := ledge.position.x + 1.0
+			while x < ledge.end.x:
+				var chest := Vector3(x, ledge.end.y + 1.2, ledge.get_center().z)
+				var line := chest - rampart_eye
+				var hit := trace.ray(rampart_eye, line.normalized(), line.length() - 0.05)
+				if hit.ok() and hit.blocked:
+					hidden.append("ledge at x %.1f" % x)
+				x += 3.0
+		for climb: Dictionary in atrium.wall_routes:
+			if climb["kind"] != &"jump":
+				continue
+			var walls: Array = climb["walls"]
+			var top := Vector3(
+				((walls[0] as AABB).get_center().x + (walls[1] as AABB).get_center().x) * 0.5,
+				(climb["to"] as AABB).end.y + 1.2, (walls[0] as AABB).get_center().z
+			)
+			var keep_eye := Vector3(-18.0, 5.5 + 1.6, -17.6)
+			var line := top - keep_eye
+			var hit := trace.ray(keep_eye, line.normalized(), line.length() - 0.05)
+			if hit.ok() and hit.blocked:
+				hidden.append("the chimney's top")
+	_check(hidden.is_empty(), "dm_atrium: the rampart sees all of the gallery, and the keep roof the chimney's top",
+		", ".join(hidden))
+	_done()
+
+
+## Drives [param route] through a bare motor on [param body]: `made`, `at`, `runs`,
+## `jumps`, and `worst_on_wall`, the largest tick-to-tick change of velocity from the first
+## tick on a wall to the end of the run.
+func _drive_route(map: ArenaMap, body: DotFpsBody, route: Dictionary, how: StringName, walls: bool) -> Dictionary:
+	var t := ArenaPlayer.arena_tunables()
+	if not walls:
+		t.wall_run_enabled = false
+		t.wall_jump_enabled = false
+		t.wall_slide_speed = 0.0
+	var motor := DotFpsMotor.new(t, body)
+	var driver := WallRouteDriver.new(route, how)
+	var state := DotFpsState.new()
+	state.position = driver.start
+	state.yaw = driver.yaw
+	state.mode = DotFpsState.Mode.AIR
+	var step := 1.0 / float(TICK_RATE)
+
+	# Settle onto the start, standing still.
+	for _i in range(16):
+		var idle := DotFpsCommand.new()
+		idle.yaw = driver.yaw
+		motor.simulate(state, idle, step)
+
+	# How the run treats the velocity: what the entry tick changed against what easing the
+	# arriving vertical speed allows, the largest rise from one tick's change to the next
+	# (a jolt; an ease only ever shrinks them), and the most the speed along the wall moved.
+	var dt := step
+	var entry_excess := -INF
+	var jolt := 0.0
+	var along_moved := 0.0
+	var along := -1.0
+	var previous_change := INF
+	var was_running := false
+	var before := state.velocity
+	var ticks := 0
+	while ticks < 400 and not driver.finished(state):
+		motor.simulate(state, driver.next(state), step)
+		ticks += 1
+		var running := state.is_wall_running()
+		var change := (state.velocity - before).length()
+		if running and not was_running:
+			entry_excess = change - (absf(before.y) * t.wall_run_vertical_damping * dt + t.gravity * dt) * 1.05
+			along = state.horizontal_speed()
+		elif (running or was_running) and not state.is_grounded():
+			# The tick a run ends counts, unless it ends on the floor: a landing is the floor's.
+			jolt = maxf(jolt, change - previous_change)
+		if running:
+			along_moved = maxf(along_moved, absf(state.horizontal_speed() - along))
+		previous_change = change
+		was_running = running
+		before = state.velocity
+
+	return {
+		"made": driver.made(state), "at": state.position, "runs": motor.wall_runs,
+		"jumps": motor.wall_jumps, "entry_excess": entry_excess, "jolt": jolt,
+		"along_moved": along_moved,
+	}
+
+
 func _test_crate_climb() -> void:
 	_section("dm_atrium: the crates, climbed")
 
@@ -3525,6 +3679,97 @@ func _build() -> void:
 	_game.tick({})
 	await get_tree().process_frame
 	_done()
+
+
+## The wall moves arena turns on, the cvar for each, and what "off" means.
+##
+## [b]Off has to mean exactly what the game did before walls existed[/b], because a server
+## owner who turns them off is asking for the old game, not a near relative of it. So the
+## same 400 ticks of a slide-jump into the north gallery's wall and a scramble up its
+## chimney are hashed twice: with arena's three wall cvars at 0, and with the tunables'
+## own pre-wall defaults. dot-player-controller's own suite proves its defaults simulate
+## what the motor did before; this proves arena's "off" is those defaults.
+func _test_wall_rules() -> void:
+	_section("wall movement: on in the arena, a cvar each, and off is what it was")
+
+	var t := ArenaPlayer.arena_tunables()
+	_check(t.wall_run_enabled and t.wall_jump_enabled and is_equal_approx(t.wall_slide_speed, 2.5),
+		"the arena wall-runs, wall-jumps and wall-slides by default")
+	_check(t.wall_run_min_speed > t.max_speed,
+		"a run needs more than the plain run along the wall (%.1f over %.1f m/s)" % [t.wall_run_min_speed, t.max_speed],
+		"at or under it, every jump beside a wall would become a run")
+
+	var unbacked := PackedStringArray()
+	var walls_cvars := 0
+	for cvar: String in ArenaModule.MOVEMENT_CVARS:
+		if not cvar.begins_with("arena_wall"):
+			continue
+		walls_cvars += 1
+		var key: String = ArenaModule.MOVEMENT_CVARS[cvar][0]
+		if not ArenaPlayer.MOVEMENT_RULES.has(key) or t.get(key) == null:
+			unbacked.append(cvar)
+	_check(walls_cvars >= 3 and unbacked.is_empty(),
+		"every arena_wall_* cvar sets a tunable RULES carries (%d)" % walls_cvars, ", ".join(unbacked))
+
+	var off := {"wall_run_enabled": 0.0, "wall_jump_enabled": 0.0, "wall_slide_speed": 0.0,
+		"wall_jump_max_per_air": 2.0}
+	_game.set_movement_rules(off)
+	var all_off := true
+	for player in _game.players():
+		var pt := player.controller.tunables
+		all_off = all_off and not pt.wall_run_enabled and not pt.wall_jump_enabled \
+			and pt.wall_slide_speed == 0.0 and typeof(pt.get("wall_jump_max_per_air")) == TYPE_INT \
+			and pt.wall_jump_max_per_air == 2
+	_check(all_off, "the rules reach every player's movement, a count as a count")
+	var on := {"wall_run_enabled": 1.0, "wall_jump_enabled": 1.0, "wall_slide_speed": 2.5,
+		"wall_jump_max_per_air": 3.0}
+	_game.set_movement_rules(on)
+	var back := _game.players()[0].controller.tunables
+	_check(back.wall_run_enabled and back.wall_jump_enabled and back.wall_slide_speed == t.wall_slide_speed
+			and back.wall_jump_max_per_air == t.wall_jump_max_per_air,
+		"and back on, a player has the arena's wall numbers again")
+
+	# Off, through the same path a cvar takes, against the motor's own pre-wall defaults.
+	var ruled_off := ArenaPlayer.arena_tunables()
+	for key in off:
+		ArenaPlayer._set_rule(ruled_off, key, off[key])
+	var before := ArenaPlayer.arena_tunables()
+	var stock := DotFpsTunables.new()
+	for property in before.get_property_list():
+		var name := String(property["name"])
+		if name.begins_with("wall_"):
+			before.set(name, stock.get(name))
+
+	var map := ArenaMap.dm_atrium()
+	var off_hash := _wall_trace(map, ruled_off)
+	var before_hash := _wall_trace(map, before)
+	var on_hash := _wall_trace(map, ArenaPlayer.arena_tunables())
+	_check(off_hash == before_hash, "with the wall cvars at 0 the motor moves byte for byte as it did before walls",
+		"%d against %d" % [off_hash, before_hash])
+	_check(on_hash != before_hash, "and the same ticks with them on do not, so the trace reaches a wall",
+		"if this fails, the comparison above proves nothing")
+	_done()
+
+
+## Every position and velocity of the north gallery's two wall routes, driven the
+## intended way, as one hash.
+func _wall_trace(map: ArenaMap, tunables: DotFpsTunables) -> int:
+	var numbers := PackedFloat64Array()
+	var body := map.to_fps_body()
+
+	for route in map.wall_routes:
+		var motor := DotFpsMotor.new(tunables, body)
+		var driver := WallRouteDriver.new(route, &"walls")
+		var state := DotFpsState.new()
+		state.position = driver.start
+		state.yaw = driver.yaw
+		state.mode = DotFpsState.Mode.AIR
+		for _i in range(200):
+			motor.simulate(state, driver.next(state), 1.0 / float(TICK_RATE))
+			for v in [state.position, state.velocity]:
+				numbers.append_array([v.x, v.y, v.z])
+
+	return hash(numbers)
 
 
 func _test_players_exist() -> void:
@@ -5614,7 +5859,7 @@ func _test_atrium() -> void:
 	# separate maps. dm_box reached 1.4.0 by its own four steps — the crates on
 	# 2026-09-22, the gantries and nests on 2026-09-24, the nest stairs on 2026-09-29,
 	# the corner stairs on 2026-10-02.
-	var expected := {&"dm_atrium": "1.6.0", &"dm_pit": "1.5.0", &"dm_box": "1.4.0"}
+	var expected := {&"dm_atrium": "1.7.0", &"dm_pit": "1.5.0", &"dm_box": "1.4.0"}
 	var wrong := PackedStringArray()
 
 	for id: StringName in expected:

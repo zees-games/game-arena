@@ -1655,6 +1655,14 @@ func _hear_the_local_player() -> void:
 		player.health.damaged.connect(_on_local_damaged)
 		player.health.died.connect(_on_local_died)
 
+	# The wall moves, predicted like the shot below and for the same reason: a sound never
+	# changes the simulation. The controller does not emit either during a replay, so a
+	# corrected tick is never heard twice.
+	var controller := player.controller
+	if controller != null and not controller.wall_run_changed.is_connected(_on_local_wall_run):
+		controller.wall_run_changed.connect(_on_local_wall_run)
+		controller.wall_jumped.connect(_on_local_wall_jumped)
+
 	if not player.used.is_connected(_on_local_used):
 		# The PREDICTED use, on the client that made it. Waiting for the server's
 		# confirmation would put the bang a round trip after the click, which is the one
@@ -1695,6 +1703,16 @@ func _on_local_used(outcome: DotWeaponOutcome) -> void:
 		return
 
 	presentation.on_used(outcome, weapon_draws_shots())
+
+
+func _on_local_wall_run(running: bool) -> void:
+	if presentation != null:
+		var _voice := presentation.on_wall_run(running)
+
+
+func _on_local_wall_jumped() -> void:
+	if presentation != null:
+		var _voice := presentation.on_wall_jumped()
 
 
 func _on_local_damaged(damage: DotDamage) -> void:

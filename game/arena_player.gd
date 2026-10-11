@@ -157,6 +157,18 @@ var _base_fov: float = 75.0
 var camera_offset: Vector3 = Vector3.ZERO
 var camera_roll: float = 0.0
 
+## Degrees the camera leans away from a wall being run along, toward the open side, and
+## how fast that eases in and out per second. `DotFpsView.wall_run_roll` and
+## `wall_run_roll_response`, which this game does not use (the camera is written in
+## [method present] and nowhere else), so the same two numbers and the same arithmetic
+## live here. Exponential, so a run starts and ends without a snap; scaled by how square
+## the view is to the wall, so looking away from it blends toward none rather than flipping.
+var wall_run_roll: float = 6.0
+var wall_run_roll_response: float = 6.0
+
+## The wall-run lean as drawn this frame, degrees. See [method wall_roll].
+var _wall_roll: float = 0.0
+
 ## What a remote player is drawn as. Null on the local player, who sees their own eyes.
 var body_mesh: Node3D = null
 
@@ -371,6 +383,16 @@ static func arena_tunables() -> DotFpsTunables:
 	tunables.dash_speed = 15.0
 	tunables.dash_lift = 2.5
 	tunables.dash_cooldown = 3.0
+	# Walls: run a few steps along one, jump off it, ride it down. dot-player-controller's
+	# defaults for everything but these four (docs/wall-movement.md there, docs/modes.md here).
+	# The run needs MORE than the 9 m/s plain run along the wall, so a run is something a
+	# player does on purpose (a slide, a dash or a strafe into it): at 9 or under, every jump
+	# taken beside a wall would become a run and peak about 40% lower than the player meant.
+	# The wall jump needs no speed at all, and the slide catches a fall against a wall.
+	tunables.wall_run_enabled = true
+	tunables.wall_run_min_speed = 9.5
+	tunables.wall_jump_enabled = true
+	tunables.wall_slide_speed = 2.5
 	return tunables
 
 
@@ -381,6 +403,9 @@ const MOVEMENT_RULES: PackedStringArray = [
 	"slide_friction", "slide_duration", "slide_cooldown",
 	"launch_enabled", "launch_velocity", "launch_forward", "launch_cooldown",
 	"dash_enabled", "dash_speed", "dash_lift", "dash_cooldown",
+	"wall_run_enabled", "wall_run_min_speed", "wall_run_max_time", "wall_run_gravity_scale",
+	"wall_jump_enabled", "wall_jump_push_speed", "wall_jump_up_speed", "wall_jump_max_per_air",
+	"wall_slide_speed",
 ]
 
 
@@ -529,6 +554,9 @@ func apply_movement_rules(rules: Dictionary) -> void:
 static func _set_rule(tunables: DotFpsTunables, key: String, value: Variant) -> void:
 	if key.ends_with("_enabled"):
 		tunables.set(key, float(value) != 0.0)
+	elif typeof(tunables.get(key)) == TYPE_INT:
+		# RULES carries every value as a float32; a count (wall_jump_max_per_air) is an int.
+		tunables.set(key, roundi(float(value)))
 	else:
 		tunables.set(key, float(value))
 
@@ -1102,9 +1130,12 @@ func present(delta: float) -> void:
 
 		var punch := _present_view_model(drawn)
 
+		_ease_wall_roll(drawn, delta)
+
 		camera.global_position = view.global_position + camera_offset
 		camera.global_rotation = Vector3(
-			deg_to_rad(drawn.pitch + punch.x), deg_to_rad(drawn.yaw + punch.y), camera_roll
+			deg_to_rad(drawn.pitch + punch.x), deg_to_rad(drawn.yaw + punch.y),
+			camera_roll + deg_to_rad(_wall_roll)
 		)
 	elif body_mesh != null:
 		# A remote player. Its node is moved by `_net_interpolated`, so all that is
@@ -1115,6 +1146,25 @@ func present(delta: float) -> void:
 
 	_present_beacon(delta, drawn.position)
 	_mend_body()
+
+
+## Eases [member _wall_roll] toward the lean [param drawn] asks for: away from the wall
+## while running along it, nothing otherwise. Once a frame, from the drawn state, so it
+## moves at the frame rate and never steps at a tick.
+func _ease_wall_roll(drawn: DotFpsState, delta: float) -> void:
+	var target := 0.0
+
+	if wall_run_roll > 0.0 and drawn.is_wall_running() and drawn.wall_normal != Vector3.ZERO:
+		var right := DotFpsMotor.forward_for(drawn.yaw).cross(Vector3.UP)
+		target = -drawn.wall_normal.dot(right) * wall_run_roll
+
+	_wall_roll = lerpf(_wall_roll, target, 1.0 - exp(-wall_run_roll_response * delta))
+
+
+## The wall-run lean as drawn this frame, in degrees (positive leans left). For a check
+## and for the frame-sequence render.
+func wall_roll() -> float:
+	return _wall_roll
 
 
 ## Sway, bob and the recoil's camera half, for the hands under the camera. Returns the

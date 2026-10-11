@@ -8,8 +8,8 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 
 | Suite | What it drives |
 | --- | --- |
-| `headless_match` | an `ArenaGame` directly, no socket, no rendering. Bots aim at the nearest player and hold the trigger. Modes, maps and the survey, map changes, the horde, objectives, effects, progression, weapons, drops, gun game, lag compensation, every medal rule beside its near miss |
-| `headless_net` | a server and a client in one process over a loopback that drops packets: the wire, mirroring, prediction, config agreement, the death camera on a client, weapons and projectiles, movement rules, admin flags, an imported map |
+| `headless_match` | an `ArenaGame` directly, no socket, no rendering. Bots aim at the nearest player and hold the trigger. Modes, maps and the survey, map changes, the horde, objectives, effects, progression, weapons, drops, gun game, lag compensation, every medal rule beside its near miss, the wall cvars and "off is what it was", every map's wall routes driven through the motor |
+| `headless_net` | a server and a client in one process over a loopback that drops packets: the wire, mirroring, prediction, config agreement, the death camera on a client, weapons and projectiles, movement rules, a wall run and a chimney climb predicted from the client's own state, admin flags, an imported map |
 | `headless_lossy` | real ENet through real loss (below) |
 | `headless_presentation` | the client's presentation layer, effects, HUD pieces (HIT and AWARD read off the wire into the hit marker, numbers, medals and points), the private match over HTTP |
 | `headless_stack` | the player stack: spawning, sides, protection |
@@ -25,7 +25,7 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 
 Servers listen on ENet as well as WebSocket, and over WebSocket "unreliable" is TCP. `headless_net`'s loss is its own loopback dropping packets in order and instantly. `examples/headless_lossy` puts dot-net's lossy UDP relay (`res://addons/dot_net/testing/dot_net_udp_relay.gd`, by path; see [dot-net's testing.md](../../dot-net/docs/testing.md)) between a real `DotClientLink` on ENet and a real dual-stack `DotServer` running `ArenaModule`. Client A goes through the relay and runs, strafes and turns every tick; client B connects straight and runs a circle, the smooth reference A's drawing is held to; a dummy is slain every 1.2 s for the kill feed. Each end has its own `MultiplayerAPI` (`SceneTree.set_multiplayer`), so one process holds all three.
 
-It measures A's first three seconds, then a steady 55 ms window and 5% and 20% loss with 30-80 ms of uniform delay (so packets reorder): connection, injected loss, clock settling, the share of server ticks with A's command, B drawn every frame without freezes or jumps and close to where the server had him at render time, render-timeline steps back, extrapolation, A's prediction against the server tick for tick, `DotNetStats.loss_rate()` against the relay, and every numbered notice, kill and chat line exactly once and in order. It plays in real time (about 50 seconds). `--verbose` prints the diagnostics. It is in `./game.sh test`; it was out while it failed one run in four, and the remaining heavy-loss stalls are queued ([netcode](netcode.md#still-open)).
+It measures A's first three seconds, then a steady 55 ms window and 5% and 20% loss with 30-80 ms of uniform delay (so packets reorder): connection, injected loss, clock settling, the share of server ticks with A's command, B drawn every frame without freezes or jumps and close to where the server had him at render time, render-timeline steps back, extrapolation, A's prediction against the server tick for tick, `DotNetStats.loss_rate()` against the relay, and every numbered notice, kill and chat line exactly once and in order. After the windows, A runs dm_box's north wall and kicks off it through the 20% loss: both ends run and jump once, A hears each once, and its prediction stays within the windows' 5 cm. It plays in real time (about 50 seconds). `--verbose` prints the diagnostics. It is in `./game.sh test`; it was out while it failed one run in four, and the remaining heavy-loss stalls are queued ([netcode](netcode.md#still-open)).
 
 ## Traps the suites have hit
 
@@ -36,6 +36,7 @@ It measures A's first three seconds, then a steady 55 ms window and 5% and 20% l
 - **Every position check starts on a spawn point**: `dm_box` has a platform at the origin and a body teleported there is pushed out.
 - **A map check drives a walking bot** ([maps](maps.md#every-map-is-surveyed)).
 - **A check that depends on how an earlier section ended is not a check.** The horde gunner check chooses a spot with line of sight and strips spawn protection from its target; the movement-rules section runs after the weapons section because this harness fires every eighth tick and spent the magazine.
+- **`headless_net` has no input lead**: a lost packet is a tick the server runs on the previous command, so a check of a predicted move there allows a hand's width mid-move and asks for agreement once down. `headless_lossy` has the real buffer and holds 5 cm.
 - **Arm every new check**: put the bug back and watch it fail. A check that has never failed may be asserting the bug (the effect-scene check once asserted a gib was refused "for the missing file").
 
 ## The detector for methods nothing calls

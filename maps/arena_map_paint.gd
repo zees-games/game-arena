@@ -30,6 +30,10 @@ const MINT := Color(0.58, 0.96, 0.78)
 const PINK := Color(1.00, 0.66, 0.84)
 const BUTTER := Color(1.00, 0.92, 0.52)
 const SKY := Color(0.60, 0.82, 1.00)
+## A zone that is not a compass side: dm_atrium's north gallery, the wall-run ledges. Cool on
+## purpose: it lies in the north wall's shade, and the warm pastels tried there (a peach, a
+## coral) went brown under the cool ambient in both renderers, where this stays a pastel.
+const AQUA := Color(0.48, 0.90, 0.90)
 
 ## Cover. Saturated where the zones are soft, and never one of them.
 const ACCENT := Color(1.00, 0.78, 0.22)
