@@ -52,6 +52,7 @@ Relayed commands are off by default and audited either way: a line typed on a we
 - **Cues reach the client**: `ArenaVote.cue_due` → `VOTE` event → `ArenaPresentation`'s catalogue (`ArenaVote.CUE_*`, synthesised stand-ins) and the HUD's notice line.
 - **The ballot is drawn by the client shell.** The vote owns a `DotVoteBallotFeed`; the module points its `ballot_fn` at `server.send_notice`, one copy per playing session with that session's voter id, topic `map_ballot`. dot-server-deploy's shell draws it as a `DotBallotPanel`; a click goes back as the same command a player could type. Standalone, chat still carries the ballot.
 - Defaults follow dot-vote's: a 45-minute map clock (`duration_sec` 2700, and the director's fallback `map_seconds`), the ballot 150 s before it, `round_based` on.
+- **`time_up: finish_round` waits only for a live round.** `ArenaVote.round_in_progress` (the match is live; no match is "cannot tell") is handed to dot-vote's `round_in_progress_fn`, so a limit that runs out in warmup or between rounds changes at once instead of holding for `finish_round_max_sec`. Set by name behind `"round_in_progress_fn" in director`, because a delivered pack runs on the shell's dot-vote and one before API 3 has no such field; there it holds as before. `dedicated` checks warmup, a live round and the round's end on a director of its own.
 
 ## The server browser
 

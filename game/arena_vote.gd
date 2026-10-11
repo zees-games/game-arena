@@ -230,6 +230,13 @@ func setup() -> DotResult:
 	# This game reports every round's end (see note_round_end), so a time limit can wait
 	# for the round in progress under `time_up: finish_round`.
 	director.round_based = true
+	# [b]Whether a round is being played, for `time_up: finish_round`.[/b] Warmup and the gap
+	# between rounds have nothing to play out, so a limit that runs out there changes at once
+	# instead of holding for `finish_round_max_sec`. Set by name and only where it exists: a
+	# delivered pack runs on the shell's dot-vote, and one older than API 3 has no such field
+	# (naming it would fail the pack's parse); there it holds, as it did before.
+	if "round_in_progress_fn" in director:
+		director.set(&"round_in_progress_fn", round_in_progress)
 
 	feed = DotVoteBallotFeed.of(director, func(state: Dictionary) -> void:
 		if ballot_fn.is_valid():
@@ -420,6 +427,14 @@ func _bind_match() -> void:
 
 	if _match != null:
 		_match.round_ended.connect(_on_round_ended)
+
+
+## Whether a round is live right now: not warmup, not between rounds. Read through `game` on
+## every call, because a map change builds the match anew. No match is "cannot tell", which
+## holds a finish_round change as dot-vote always did.
+func round_in_progress() -> bool:
+	var node: DotMatch = game.match_node if game != null else null
+	return node == null or node.is_live()
 
 
 func _on_round_ended(_round: int, _winner: int, _outcome: DotMatchRules.Outcome) -> void:
