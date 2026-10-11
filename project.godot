@@ -11,12 +11,18 @@ config_version=5
 [application]
 
 config/name="game-arena"
-config/features=PackedStringArray("4.7")
 run/main_scene="res://game/arena.tscn"
+config/features=PackedStringArray("4.7")
 
 [audio]
 
 driver/enable_input=true
+
+[importer_defaults]
+
+texture={
+"detect_3d/compress_to": 0
+}
 
 [rendering]
 
