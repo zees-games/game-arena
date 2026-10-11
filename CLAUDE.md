@@ -80,7 +80,7 @@ Short forms; the reasoning is in the linked file.
 - The camera is written only in `ArenaPlayer.present`. A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
 - A client's own `mode` is never replaced; display reads `displayed_mode()`. [client](docs/client.md#a-client-knows-the-mode-only-for-display)
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
-- Typing sets `DotFpsSampler.suspended` as well as swallowing input. [client](docs/client.md#the-chat-box)
+- Typing (chat box or console) sets `DotFpsSampler.suspended` as well as swallowing input; the console is `DotConsoleKit`'s, wired to the sampler because there is no DotMenu. [client](docs/client.md#the-chat-box)
 - Full-screen overlays are sized to the viewport, not the HUD. [client](docs/client.md#the-hud)
 - Third person is deliberately not here: one motor to agree about. [client](docs/client.md#avatars)
 

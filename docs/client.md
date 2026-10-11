@@ -74,6 +74,7 @@ A chat box is a HUD widget, not a `DotScreen`: a screen is modal and takes the d
 - `chat_window` (`auto` / `on` / `off`), `chat_open_key` (Y) and `chat_team_key` (U), all ACCOUNT-scoped. Off never means out of the conversation: the log keeps drawing; the setting decides whether there is anywhere to type.
 - `auto` is answered by the server: `ArenaServices` points `DotChatManager.watch_relay` at its relay, dot-server tells each joining client, and `ArenaClientExtras` turns that into `chat_relay_changed`. A client cannot know on its own whether its room also exists on a web page.
 - **`ArenaPresentation.swallows_input()` covers the box as well as the console**, or typing walks the player.
+- **The console is dot-console's `DotConsoleKit`**, with `quit`, `audio`, `fx` and `where` added before the server's console. The kit would register it with a `DotMenu`; arena has none, so `ArenaClient._wire_console` suspends the sampler on the console's `visibility_changed`, through the same `_refresh_suspended` as the chat box (`headless_presentation` holds a key down to prove it).
 - **`DotFpsSampler.suspended` is set on `opened` and cleared on `closed`.** Movement is polled every physics frame regardless of what consumed an event, so `swallows_input` alone is not enough.
 - A line reaches the client on `DotClientLink.chat_received` (dot-server's wire), and `ArenaClientExtras.receive_wire` hands it to `DotChatClient`, which refuses a dictionary with no `m` so the fallback draws it.
 
@@ -98,7 +99,7 @@ game-g2gfast has its own copy of the generator with its own numbers (a 72-unit h
 No assertion sees the screen. Render and look after any change to the client, a menu or a map:
 
 - `tools/screenshot.sh <map>` renders a map from three angles into `screenshots/`; `--view <name> <from> <at>` adds a frame, `--admin` the beacon and blind, `--fx <eye> <aim>` six shots and a death, `--feel` the HUD, scope, drops and body breaking. On an imported map it plays a short deathmatch first and adds player, ramp, water and booster frames.
-- `tools/screenshot_menus.sh` renders the pause menu, the interface screen, the rebinder, the scoreboard and the HUD with the chat box. The chat box sits at `margin_bottom = 110` to clear health and armour, and only the picture can say whether 110 is right. It refuses to save a grey rectangle when a `push` fails.
+- `tools/screenshot_menus.sh` renders the pause menu, the interface screen, the rebinder, the scoreboard, the HUD with the chat box, and the console open (`hud_console.png`). The chat box sits at `margin_bottom = 110` to clear health and armour, and only the picture can say whether 110 is right. It refuses to save a grey rectangle when a `push` fails.
 - `tools/screenshot_weapons.sh` plays the offline client through its own input path.
 - `~/stack/game-dev/tools/screenshot.sh game-arena out.png --wait 35 -- --offline` is the real offline client. Arena starts in warmup, so an early frame lies.
 

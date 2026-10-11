@@ -60,6 +60,7 @@ var settings: DotSettingsManager = null
 var net_stat: DotMenuNetStat = null
 var audio: DotAudioManager = null
 var fx: DotFxManager = null
+## The player's console. See [method DotConsoleKit.build] and [method _build_console].
 var console: DotConsoleController = null
 var console_panel: DotConsolePanel = null
 
@@ -69,7 +70,6 @@ var chat_window: DotChatWindow = null
 ## The client, for the commands that ask it questions.
 var client: Node = null
 
-var _layer: CanvasLayer = null
 var _chat_layer: CanvasLayer = null
 
 ## What the look settings are written onto: the tunables the client's sampler reads.
@@ -630,33 +630,27 @@ func _build_fx() -> DotResult:
 
 # --- Console ----------------------------------------------------------------
 
+## dot-console's kit: `help`, `clear`, `settings`, every setting by its own name, the
+## in-process server's console, and the panel on layer 128. This game adds its own four.
+##
+## [b]Between the kit's commands and the server's.[/b] The kit adds the server's console
+## unprefixed and last, so it catches whatever the client did not claim; this game's
+## `quit` has to be claimed before a listen server's own `quit` would shut the server down.
+##
+## [b]No menu to register with.[/b] The kit makes the panel one of a [DotMenu]'s overlays,
+## and this game has no DotMenu: [ArenaClient] suspends its sampler on the console's
+## `visibility_changed` instead, the way it does for the chat box. See [method swallows_input].
 func _build_console() -> DotResult:
-	console = DotConsoleController.new()
-	console.name = "Console"
-	console.config = DotConsoleConfig.new()
-	console.config.mirror_log = true
-	console.config.mirror_from = DotLog.Level.INFO
-	add_child(console)
+	console = DotConsoleKit.build(self, settings)
 
-	var res := console.setup()
-	if not res.ok:
-		return res.wrap("the arena's console")
-
+	var server_sources := console.sources().slice(1)
+	for s in server_sources:
+		console.remove_source(s)
 	console.add_source(_local_commands())
+	for s in server_sources:
+		console.add_source(s)
 
-	var server: Object = DotRegistry.get_service(&"dot_server")
-	if server != null and server.get("console") != null:
-		console.add_source(DotConsoleBridge.wrap(server.get("console"), "server"))
-
-	_layer = CanvasLayer.new()
-	_layer.name = "ConsoleLayer"
-	_layer.layer = 128
-	add_child(_layer)
-
-	console_panel = DotConsolePanel.new()
-	console_panel.name = "ConsolePanel"
-	console_panel.controller = console
-	_layer.add_child(console_panel)
+	console_panel = get_node_or_null(^"ConsoleLayer/ConsolePanel") as DotConsolePanel
 	return DotResult.success(null)
 
 
@@ -755,31 +749,19 @@ func _apply_chat_visibility() -> void:
 			chat_window.enabled = not _chat_relayed
 
 
+## This game's own commands; the kit has `help`, `clear`, `settings` and every setting.
 func _local_commands() -> DotConsoleLocal:
 	var local := DotConsoleLocal.new()
 
-	local.add_command(&"help", "List what this client can do", func(_a: PackedStringArray) -> Variant:
-		var lines := PackedStringArray(["Client commands:"])
-		for n in console.all_names():
-			lines.append("  %-20s %s" % [n, console.help_for(n)])
-		return lines
-	)
 	local.add_command(&"quit", "Leave the match", func(_a: PackedStringArray) -> Variant:
 		get_tree().quit()
 		return null
-	)
-	local.add_command(&"settings", "Show every setting", func(_a: PackedStringArray) -> Variant:
-		return settings.describe_lines()
 	)
 	local.add_command(&"audio", "Show the audio system", func(_a: PackedStringArray) -> Variant:
 		return audio.describe_lines()
 	)
 	local.add_command(&"fx", "Show the effects system", func(_a: PackedStringArray) -> Variant:
 		return fx.describe_lines()
-	)
-	local.add_command(&"clear", "Empty the scrollback", func(_a: PackedStringArray) -> Variant:
-		console.buffer.clear()
-		return null
 	)
 	local.add_command(&"where", "Where this client thinks it is", func(_a: PackedStringArray) -> Variant:
 		# The one thing no assertion and no screenshot can give you, and the reason
@@ -790,10 +772,6 @@ func _local_commands() -> DotConsoleLocal:
 			return "no client"
 		return client.call("describe_position")
 	)
-
-	for key in settings.schema.keys():
-		var def := settings.schema.find(key)
-		local.bind_setting(key, settings, def.description if def != null else "")
 
 	return local
 
@@ -827,7 +805,12 @@ func camera_roll() -> float:
 ## walks the player forward" is the single most reported bug in every game that ships a
 ## console and forgets this line. Chat is the same bug with a much wider audience: the
 ## console is a thing a few people open, and chat is a thing everybody uses.
+##
+## [b]Open, not focused.[/b] A click inside an open console can take focus off its line,
+## and the console is still in front of the game; [ArenaClient] suspends its sampler on this.
 func swallows_input() -> bool:
+	if console != null and console.is_open():
+		return true
 	if console_panel != null and console_panel.has_keyboard_focus():
 		return true
 

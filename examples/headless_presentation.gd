@@ -25,7 +25,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 138
+const CHECKS := 143
 
 var _passed := 0
 var _failed := 0
@@ -51,6 +51,7 @@ func _run() -> void:
 	_test_a_shot_is_drawn()
 	_test_shake_is_computed_not_applied()
 	_test_console()
+	_test_console_stops_movement()
 	_test_party_is_sandboxed()
 	await _test_party_over_http()
 	_test_chat_box()
@@ -467,6 +468,49 @@ func _test_console() -> void:
 		"while the player's own choice is what is remembered, so leaving does not edit it"
 	)
 
+	p.queue_free()
+	_done()
+
+
+## Typing at the console must not walk the player. `DotFpsSampler` polls the keys every
+## tick, and a focused line edit does not stop `Input.is_action_pressed`; what stops it is
+## the client suspending the sampler while the console is open. Driven through the real
+## wiring ([method ArenaClient._wire_console]) with the key held down.
+func _test_console_stops_movement() -> void:
+	_section("A held movement key does not move the player while the console is open")
+
+	var p := _make()
+	var client := ArenaClient.new()
+	client.presentation = p
+	client._sampler = DotFpsSampler.new(DotFpsTunables.new())
+	var _missing := DotFpsSampler.register_default_actions(client._sampler)
+	client._wire_chat_window()
+	client._wire_console()
+
+	var forward: StringName = client._sampler.actions["forward"]
+	Input.action_press(forward)
+
+	_check(client._sampler.sample(1.0 / 64.0).move.y > 0.5,
+		"with nothing open, the held key walks (the control)")
+
+	p.console.open()
+	_check(client._sampler.sample(1.0 / 64.0).move == Vector2.ZERO,
+		"with the console open, the held key does not move the player")
+
+	p.chat_window.open()
+	p.console.close()
+	_check(client._sampler.sample(1.0 / 64.0).move == Vector2.ZERO,
+		"closing the console while the chat box is still open keeps the player still")
+
+	p.chat_window.close()
+	_check(client._sampler.sample(1.0 / 64.0).move.y > 0.5,
+		"and with both closed the key walks again")
+
+	Input.action_release(forward)
+	_check(not client._sampler.suspended, "nothing is left suspended")
+
+	client.presentation = null
+	client.free()
 	p.queue_free()
 	_done()
 

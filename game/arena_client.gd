@@ -526,15 +526,24 @@ func _wire_chat_window() -> void:
 
 	window.submitted.connect(_on_chat_submitted)
 
-	window.opened.connect(func(_channel: StringName) -> void:
-		if _sampler != null:
-			_sampler.suspended = true
-	)
+	window.opened.connect(func(_channel: StringName) -> void: _refresh_suspended())
+	window.closed.connect(func() -> void: _refresh_suspended())
 
-	window.closed.connect(func() -> void:
-		if _sampler != null:
-			_sampler.suspended = false
-	)
+
+## The console is the chat box's bug again: built by [DotConsoleKit], which would register
+## it with a [DotMenu] so the menu's "something is open" stops the player. This game has no
+## DotMenu, so the console's own open and close drive the sampler here instead.
+func _wire_console() -> void:
+	if presentation == null or presentation.console == null:
+		return
+	presentation.console.visibility_changed.connect(func(_open: bool) -> void: _refresh_suspended())
+
+
+## Movement stops while the chat box or the console has the keyboard, and only resumes
+## when neither does: one closing while the other is still open must not walk the player.
+func _refresh_suspended() -> void:
+	if _sampler != null:
+		_sampler.suspended = presentation != null and presentation.swallows_input()
 
 
 ## What a player typed, on its way to the server.
@@ -891,6 +900,7 @@ func _build_presentation() -> void:
 	DotLog.result(CHANNEL, "the presentation layer", presentation.setup())
 
 	_wire_chat_window()
+	_wire_console()
 
 	presentation.settings.changed.connect(func(key: StringName, _v: Variant, _w: StringName) -> void:
 		# The field of view is the one setting that has to reach something already built.

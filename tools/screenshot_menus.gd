@@ -2,6 +2,7 @@ extends SceneTree
 
 const ArenaHud := preload("../game/arena_hud.gd")
 const ArenaMenus := preload("../game/arena_menus.gd")
+const ArenaPresentation := preload("../game/arena_presentation.gd")
 
 ## Renders this game's own screens to `screenshots/` so a person can look at them.
 ##
@@ -24,6 +25,7 @@ const SETTLE := 3
 var _stack: DotScreenStack = null
 var _hud: ArenaHud = null
 var _chat: DotChatWindow = null
+var _presentation: ArenaPresentation = null
 var _shots: Array[Dictionary] = []
 var _at := 0
 var _wait := SETTLE
@@ -120,6 +122,9 @@ func _initialize() -> void:
 		# is about where they are relative to EACH OTHER: the box sits in the same corner
 		# as health and armour, and at the default inset it draws its log through both.
 		{"id": &"", "file": "hud_chat.png"},
+		# The console, open over the HUD: the real `ArenaPresentation`, so the panel is the
+		# one `DotConsoleKit` builds and on the layer it puts it on.
+		{"id": &"console", "file": "hud_console.png"},
 	]
 
 
@@ -159,6 +164,20 @@ func _build_hud() -> void:
 	_chat.open(&"team")
 
 
+## Built when its shot comes round rather than in `_initialize`, where nothing is in the
+## tree yet and the presentation's settings, audio and console would set up outside it.
+func _open_console() -> void:
+	if _presentation == null:
+		_presentation = ArenaPresentation.new()
+		_presentation.name = "Presentation"
+		root.add_child(_presentation)
+		DotLog.result("screenshot", "the presentation", _presentation.setup())
+	# No setting typed: it would be written to this machine's own settings file.
+	for line in ["help", "where"]:
+		var _ran := _presentation.console.submit(line)
+	var _opened := _presentation.console.open()
+
+
 func _process(_delta: float) -> bool:
 	if _done:
 		return true
@@ -171,6 +190,11 @@ func _process(_delta: float) -> bool:
 
 	if _wait == SETTLE:
 		_stack.clear()
+
+		if shot["id"] == &"console":
+			_open_console()
+			_wait -= 1
+			return false
 
 		if str(shot["id"]) == "":
 			# The HUD frame: nothing on the stack, so the HUD below it is what draws.
