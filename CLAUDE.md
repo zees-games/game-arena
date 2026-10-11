@@ -80,7 +80,7 @@ Short forms; the reasoning is in the linked file.
 - Typing suspends the sampler as well as swallowing input; the console does it as a menu overlay, so it is built after the menu (`build_console(menu)`). [client](docs/client.md#the-chat-box)
 - Full-screen overlays are sized to the viewport. HUD pieces (`ArenaHudGlance`) draw handed values; judge them with `screenshot.sh --glance` at 16:9, 4:3 and a small frame (854x480). [client](docs/client.md#the-hud)
 - Below 1280x720 the whole HUD is scaled (`ArenaHud.fit_scale`), never re-laid out; a new piece gets a `footprint()`, which the overlap check reads. [client](docs/client.md#the-hud)
-- Nothing of the HUD on the right edge below 110 px down to a six-row ballot: the shell's column is there (`--glance --ballot`). [client](docs/client.md#the-hud)
+- Nothing of the HUD on the right edge below 110 px down to a six-row ballot: the shell's column is there (`--glance --ballot`); below that, a piece reads `dot_hud_cover` (`make_room`, `--map-ballot`). [client](docs/client.md#the-hud)
 - The hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD; never from a predicted shot or a client's own count of kills. [client](docs/client.md#kill-feedback)
 - Medal rules live in `ArenaAwards.MedalBook` on the authority; `ArenaAwards.Medal` is a wire index, appended only. [services](docs/services.md#progression)
 - Third person is deliberately not here: one motor to agree about. [client](docs/client.md#avatars)

@@ -437,11 +437,26 @@ class AmmoCounter extends Control:
 ## The one in hand is bright and larger; the rest wait dimmed.
 class WeaponSlots extends Control:
 	const ROW_H := 40.0
+	## The tightest pitch a row is drawn at under a ballot: a 24 px plate, which the 22 px
+	## keycap and the 24 px current-weapon icon still fit in.
+	const MIN_ROW_H := 30.0
+	## Between a row's plate and the next one, at every pitch.
+	const PLATE_GAP := 6.0
+	## Between the top plate and whatever covers the box above it.
+	const COVER_GAP := 6.0
 
 	## `{slot, id, name, key}` per carried slot, in slot order; `key` is the key it is bound
 	## to (the slot's number when absent).
 	var rows: Array[Dictionary] = []
 	var current: int = 0
+
+	## [b]Where something on top of this box ends[/b], in this box's own coordinates: the
+	## client shell's ballot down the right edge, which a seven-row map ballot carries over
+	## the top slots at 1280x720. -INF while nothing covers it. Written by
+	## [method ArenaHud.make_room] every frame; the rows tighten from [constant ROW_H] towards
+	## [constant MIN_ROW_H] to stay under it, and past that only the rows around the current
+	## one are drawn, which is the one a player is looking for.
+	var cover_bottom: float = -INF
 
 	func show_slots(p_rows: Array[Dictionary], p_current: int) -> void:
 		if p_current != current or p_rows.size() != rows.size() or str(p_rows) != str(rows):
@@ -449,21 +464,59 @@ class WeaponSlots extends Control:
 			current = p_current
 			queue_redraw()
 
-	## Every slot's plate, from the bottom up.
+	## Moves the top of the room the rows have; a redraw only on a change.
+	func set_cover_bottom(y: float) -> void:
+		if not is_equal_approx(y, cover_bottom) and not (is_inf(y) and is_inf(cover_bottom)):
+			cover_bottom = y
+			queue_redraw()
+
+	## `{rows, pitch}`: the rows drawn, bottom-most last, and the pitch they are drawn at. All
+	## of them at [constant ROW_H] while nothing covers the box; the bottom row's centre never
+	## moves (it sits on the ammunition counter).
+	func layout() -> Dictionary:
+		var count := rows.size()
+		if count == 0 or is_inf(cover_bottom):
+			return {"rows": rows, "pitch": ROW_H}
+		# The top plate (pitch - PLATE_GAP tall) has to end above the bottom row's centre by
+		# no more than `room`: (count - 1) * pitch + (pitch - PLATE_GAP) / 2 <= room.
+		var room := (size.y - ROW_H * 0.5) - (cover_bottom + COVER_GAP)
+		var pitch := minf(ROW_H, (room + PLATE_GAP * 0.5) / (float(count) - 0.5))
+		if pitch >= MIN_ROW_H:
+			return {"rows": rows, "pitch": pitch}
+		# Not even at the tightest pitch: the run of rows that fits, with the current one in it.
+		var fit := mini(int(floor((room + PLATE_GAP * 0.5) / MIN_ROW_H + 0.5)), count)
+		if fit <= 0:
+			return {"rows": [] as Array[Dictionary], "pitch": MIN_ROW_H}
+		var at := 0
+		for i in count:
+			if int(rows[i]["slot"]) == current:
+				at = i
+		var first := clampi(at - int(float(fit) / 2.0), 0, count - fit)
+		return {"rows": rows.slice(first, first + fit), "pitch": MIN_ROW_H}
+
+	## Every slot's plate drawn, from the bottom up.
 	func footprint() -> Rect2:
-		if rows.is_empty():
+		var laid := layout()
+		var shown: Array = laid["rows"]
+		if shown.is_empty():
 			return Rect2()
+		var pitch: float = laid["pitch"]
+		var plate_h := pitch - PLATE_GAP
 		var left := size.x
-		for r in rows:
+		for r in shown:
 			left = minf(left, size.x - Ink.keycap_width(str(r.get("key", r["slot"])), 12) - 112.0)
-		var top := size.y - float(rows.size()) * ROW_H + ROW_H * 0.5 - 17.0
-		return Rect2(left, top, size.x + 4.0 - left, float(rows.size() - 1) * ROW_H + 34.0)
+		var top := size.y - ROW_H * 0.5 - float(shown.size() - 1) * pitch - plate_h * 0.5
+		return Rect2(left, top, size.x + 4.0 - left, float(shown.size() - 1) * pitch + plate_h)
 
 	func _draw() -> void:
 		# From the bottom up, so the carried guns sit on the ammunition counter however few
 		# there are, and the top of the box is the one that stays clear of the shell's column.
-		var y := size.y - float(rows.size()) * ROW_H + ROW_H * 0.5
-		for r in rows:
+		var laid := layout()
+		var shown: Array = laid["rows"]
+		var pitch: float = laid["pitch"]
+		var plate_h := pitch - PLATE_GAP
+		var y := size.y - ROW_H * 0.5 - float(shown.size() - 1) * pitch
+		for r in shown:
 			var on := int(r["slot"]) == current
 			var alpha := 1.0 if on else 0.72
 			var key := str(r.get("key", r["slot"]))
@@ -471,11 +524,11 @@ class WeaponSlots extends Control:
 			var cap_x := size.x - cap_w
 			# A plate per weapon: a white silhouette on a pale wall is no silhouette at all.
 			var plate_x := cap_x - 112.0
-			Ink.plate(self, Rect2(plate_x, y - 17.0, size.x - plate_x + 4.0, 34.0),
+			Ink.plate(self, Rect2(plate_x, y - plate_h * 0.5, size.x - plate_x + 4.0, plate_h),
 				Color(PLATE, 0.8 if on else 0.6), 7, Color(GOLD, 0.85) if on else Color(PLATE_EDGE, 0.1), 2 if on else 1)
 			var _w := Ink.keycap(self, Vector2(cap_x, y), key, 12, alpha)
 			var tex := Ink.weapon_icon(r["id"])
-			var h := 24.0 if on else 18.0
+			var h := minf(24.0 if on else 18.0, plate_h - 2.0)
 			if tex != null:
 				var s := tex.get_size()
 				var w := minf(s.x * h / maxf(s.y, 1.0), 90.0)
@@ -485,7 +538,7 @@ class WeaponSlots extends Control:
 				var _d := Ink.icon(self, tex, at, h, Color(1, 1, 1, alpha), 90.0)
 			else:
 				Ink.text(self, Vector2(0.0, y + 5.0), str(r["name"]), 13, Color(TEXT, alpha), HORIZONTAL_ALIGNMENT_RIGHT, cap_x - 10.0, 4)
-			y += ROW_H
+			y += pitch
 
 
 ## Bottom centre: one button per movement ability, its key under it. A charging one is

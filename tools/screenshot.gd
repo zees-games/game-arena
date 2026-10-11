@@ -94,7 +94,8 @@ func _initialize() -> void:
 		root.add_child(_glance_game)
 		_staged_map = map
 		_staged_id = id
-		_glance_ballot = args.has("--ballot")
+		_glance_ballot = args.has("--ballot") or args.has("--map-ballot")
+		_glance_map_ballot = args.has("--map-ballot")
 		return
 
 	if map.is_imported():
@@ -257,6 +258,10 @@ var _glance_game: ArenaGame = null
 ## shows it. See [method _stage_shell_ballot].
 var _glance_ballot := false
 
+## `--glance --map-ballot`: the tallest ballot this game puts up, its own map vote (six maps and
+## Extend, seven rows), which reaches further down the right edge than the game vote's six.
+var _glance_map_ballot := false
+
 const GLANCE_NAMES := ["You", "gamemann", "a_very_long_display_name", "bo", "quiet_one", "newcomer", "Rocket", "Viper"]
 
 
@@ -336,11 +341,13 @@ func _play_glance() -> void:
 		_stage_shell_ballot()
 		# What the server says in chat as the ballot opens, which this client centre-prints
 		# (`ArenaClient._on_said`, a system line). Staged late: the notice fades in 4 s.
-		late.append([10, func() -> void:
-			_hud.notice("Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)")])
+		# dot-vote's opening line for this game's own map vote, the same shape.
+		var said := "Vote: Box, Atrium, Pit, Foundry, Canals, Spire (20s)" if _glance_map_ballot \
+			else "Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)"
+		late.append([10, func() -> void: _hud.notice(said)])
 
 	_shots = [{
-		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), "_ballot" if _glance_ballot else ""],
+		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""],
 		"local": true,
 		"late": [
 			[12, func() -> void:
@@ -398,6 +405,15 @@ func _stage_shell_ballot() -> void:
 	ballot.ui_theme = DotUiTheme.space()
 	ballot.panel_width = width
 	column.add_child(ballot)
+	if _glance_map_ballot:
+		var maps: Array = []
+		for label: String in ["Box", "Atrium", "Pit", "Foundry", "Canals", "Spire", "Extend"]:
+			maps.append({"id": label.to_lower(), "label": label, "votes": 0.0})
+		ballot.show_state({
+			"open": true, "title": "Vote for the next map", "command": "vote",
+			"seconds": 19.0, "input": "both", "options": maps, "voters": {}, "people": {},
+		})
+		return
 	ballot.show_state({
 		"open": true, "title": "Vote for the next game", "command": "game_vote",
 		"seconds": 19.0, "input": "both",

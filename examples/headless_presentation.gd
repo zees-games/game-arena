@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 208
+const CHECKS := 216
 
 var _passed := 0
 var _failed := 0
@@ -83,6 +83,7 @@ func _run() -> void:
 	_test_feedback_from_the_wire()
 	_test_stock_avatars_differ()
 	await _test_hud_fits_the_frame()
+	_test_hud_makes_room_for_a_ballot()
 
 	print("")
 	_check(
@@ -1538,6 +1539,96 @@ func _test_hud_fits_the_frame() -> void:
 			and ArenaHud.fit_scale(Vector2(200, 100)) == ArenaHud.FIT_MIN,
 		"below it, it is scaled by the short side's share of 1280x720, never under half")
 
+	hud.queue_free()
+	_done()
+
+
+# --- The HUD under a ballot ----------------------------------------------------
+
+## The weapon slots under a ballot: this game's own map vote is seven rows (six maps and
+## Extend), and the client shell draws it down the right-hand side to y 437 at 1280x720, over
+## slots 1 and 2 of five. Anything in dot-ui's `dot_hud_cover` group is on top of the HUD;
+## `make_room` tightens the slots under it, then shows only the rows around the current one,
+## and drops the vote's centre line the ballot duplicates. How it looks is
+## `screenshot.sh dm_box --glance --map-ballot`; this is the arithmetic.
+func _test_hud_makes_room_for_a_ballot() -> void:
+	_section("The weapon slots and the centre line make room for a ballot")
+
+	var hud := ArenaHud.new()
+	hud.config = DotUiConfig.new()
+	add_child(hud)
+	hud.build(null)
+	hud.set_process(false)
+	hud.fit_to_frame(Vector2(1280, 720))
+	var carried: Array[Dictionary] = []
+	for slot in range(1, 6):
+		carried.append({"slot": slot, "id": &"", "name": "Gun %d" % slot, "key": str(slot)})
+	hud.slots.show_slots(carried, 3)
+	hud.make_room()
+	var free_top: float = hud.footprints()["slots"].position.y
+
+	# Where the shell puts a seven-row ballot at 1280 wide, on a layer of its own.
+	var layer := CanvasLayer.new()
+	layer.layer = 20
+	add_child(layer)
+	var ballot := Control.new()
+	ballot.add_to_group(&"dot_hud_cover")
+	ballot.position = Vector2(904.0, 110.0)
+	ballot.size = Vector2(360.0, 327.0)
+	layer.add_child(ballot)
+	var cover := Rect2(ballot.position, ballot.size)
+
+	hud.make_room()
+	var under: Rect2 = hud.footprints()["slots"]
+	var laid: Dictionary = hud.slots.layout()
+	_check(free_top < cover.end.y and under.position.y >= cover.end.y and not under.intersects(cover)
+			and (laid["rows"] as Array).size() == 5,
+		"all five slots end below a seven-row ballot, where they reached under it",
+		"top %.0f free, %.0f under a ballot to %.0f, %d rows" % [free_top, under.position.y, cover.end.y, (laid["rows"] as Array).size()])
+	_check(float(laid["pitch"]) < ArenaHud.ArenaHudGlance.WeaponSlots.ROW_H
+			and float(laid["pitch"]) >= ArenaHud.ArenaHudGlance.WeaponSlots.MIN_ROW_H,
+		"by drawing the rows closer, never under the tightest pitch", "pitch %.1f" % float(laid["pitch"]))
+
+	var many: Array[Dictionary] = []
+	for slot in range(1, 9):
+		many.append({"slot": slot, "id": &"", "name": "Gun %d" % slot, "key": str(slot)})
+	hud.slots.show_slots(many, 7)
+	hud.make_room()
+	laid = hud.slots.layout()
+	var shown := (laid["rows"] as Array).map(func(r: Dictionary) -> int: return int(r["slot"]))
+	under = hud.footprints()["slots"]
+	_check(shown.size() < 8 and shown.size() >= 3 and shown.has(7) and under.position.y >= cover.end.y,
+		"eight that cannot fit even close together show the run around the current one",
+		"%s, top %.0f" % [shown, under.position.y])
+
+	ballot.visible = false
+	hud.make_room()
+	laid = hud.slots.layout()
+	_check((laid["rows"] as Array).size() == 8 and float(laid["pitch"]) == ArenaHud.ArenaHudGlance.WeaponSlots.ROW_H,
+		"and every row comes back at its own pitch the frame the ballot goes")
+	ballot.visible = true
+
+	var opening := "Vote: Box, Atrium, Pit, Foundry, Canals, Spire (20s)"
+	var yes_no := "Vote: Kick quiet_one?  —  type !yes or !no (20s)"
+	_check(ArenaHud.is_ballot_line(opening) and not ArenaHud.is_ballot_line(yes_no)
+			and not ArenaHud.is_ballot_line("Changing map to Box…") and not ArenaHud.is_ballot_line("Vote: Box (soon)"),
+		"a vote's opening list is told from the yes/no vote's line and every other system line")
+	hud.notice(opening)
+	_check(hud.notice_label == null or hud.notice_label.text != opening,
+		"with a ballot on screen its opening list is not centre-printed as well")
+	hud.notice(yes_no)
+	_check(hud.notice_label != null and hud.notice_label.text == yes_no,
+		"but the yes/no vote's line, which says how to answer, still is")
+
+	# A line that arrived the frame before its ballot did goes when the ballot does arrive.
+	ballot.visible = false
+	hud.notice(opening)
+	ballot.visible = true
+	hud.make_room()
+	_check(hud.notice_label.text == "", "and a list printed before its ballot appeared is taken down",
+		hud.notice_label.text)
+
+	layer.queue_free()
 	hud.queue_free()
 	_done()
 

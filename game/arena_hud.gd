@@ -487,6 +487,9 @@ class MedalRow extends Control:
 ## the line clears that column only when its half-width is under the distance from the
 ## middle to the column, so the width follows the frame: `notice_width`.
 func notice(text: String) -> void:
+	# The ballot already says it, with the time left and the counts: see `is_ballot_line`.
+	if is_ballot_line(text) and covered_rect().has_area():
+		return
 	if notice_label == null:
 		# Under the portraits and the medal row: `notice_top`.
 		notice_label = _make_label("Notice", Control.PRESET_CENTER_TOP, Vector2(0.0, 182.0))
@@ -504,6 +507,61 @@ func notice(text: String) -> void:
 
 var notice_label: Label = null
 var _notice_age: float = 0.0
+
+
+## [b]A vote's opening line, which a drawn ballot makes a duplicate.[/b] dot-vote says
+## "Vote: Box, Atrium, … (20s)" in chat as its ballot opens, and `ArenaClient._on_said` centre
+## prints every system line, so while the shell's ballot was on screen the same list was in
+## the middle of it as well, two lines deep, over the medals' row. Only that shape: dot-server's
+## yes/no vote ("Vote: <question> — type !yes or !no (20s)") stays, because "!yes" is how to
+## answer it and a ballot is not always drawn for one.
+static func is_ballot_line(text: String) -> bool:
+	if not text.begins_with("Vote: ") or text.contains("!yes"):
+		return false
+	var open := text.rfind(" (")
+	return open > 0 and text.ends_with("s)") and text.substr(open + 2, text.length() - open - 4).is_valid_int()
+
+
+## [b]Something on top of this HUD: the client shell's ballots.[/b] The shell draws every
+## ballot down the right-hand side, over whatever the game drew, and cannot reach into a
+## delivered game, so the game looks: every visible Control in dot-ui's `dot_hud_cover` group,
+## merged, in this HUD's own coordinates. Named by its string, never dot-ui's constant, so the
+## pack still loads on a shell whose dot-ui predates the group (a missing group is nothing to
+## avoid; a missing constant is a parse error). Empty when nothing covers it.
+const COVER_GROUP := "dot_hud_cover"
+
+
+func covered_rect() -> Rect2:
+	if not is_inside_tree():
+		return Rect2()
+	var to_me := get_global_transform_with_canvas().affine_inverse()
+	var out := Rect2()
+	for node in get_tree().get_nodes_in_group(COVER_GROUP):
+		var other := node as Control
+		if other == null or not other.is_visible_in_tree() or other == self or is_ancestor_of(other):
+			continue
+		var rect := to_me * (other.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, other.size))
+		if rect.has_area():
+			out = rect if not out.has_area() else out.merge(rect)
+	return out
+
+
+## Keeps the HUD out from under [method covered_rect], every frame. The weapon slots up the
+## right edge tighten, then show only the rows around the current one, to end above a ballot
+## that comes down over them (a seven-row map ballot reaches slot 1 at 1280x720); and the
+## vote's centre line goes while its ballot is drawn.
+func make_room() -> void:
+	var cover := covered_rect()
+	if slots != null:
+		var bottom := -INF
+		if cover.has_area():
+			# In the slots' own coordinates, and only where the cover is over their column.
+			var local := slots.get_transform() * Rect2(Vector2.ZERO, slots.size)
+			if cover.position.x < local.end.x and cover.end.x > local.position.x and cover.position.y < local.end.y:
+				bottom = cover.end.y - local.position.y
+		slots.set_cover_bottom(bottom)
+	if cover.has_area() and notice_label != null and notice_label.text != "" and is_ballot_line(notice_label.text):
+		notice_label.text = ""
 const NOTICE_SEC := 4.0
 
 ## The right-hand column the client shell draws ballots in: 360 px wide and 16 px from the
@@ -1177,6 +1235,7 @@ func _process(delta: float) -> void:
 	if feed != null:
 		feed.advance(delta)
 	present_gear()
+	make_room()
 
 	if game == null or strip == null:
 		return
