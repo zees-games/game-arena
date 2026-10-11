@@ -58,13 +58,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 573
+const CHECKS := 583
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 38
+const SECTIONS := 39
 
 var _passed := 0
 var _failed := 0
@@ -135,6 +135,7 @@ func _run() -> void:
 	await _test_drops()
 	await _test_weapon_modes()
 	await _test_lag_compensation()
+	await _test_launch_inside_team_mate()
 	await _test_streaks()
 	_test_medal_rules()
 	await _test_medals_from_a_game()
@@ -1142,6 +1143,168 @@ func _test_lag_compensation() -> void:
 	_check(not fire_at.call(float(now - back)),
 		"nor past the limit: 50 ms is 3 ticks, and %d were asked for" % back)
 	game.max_unlag_ms = 500.0
+	remove_child(game)
+	game.queue_free()
+	_done()
+
+
+## A rocket or grenade launched from inside a team-mate goes on to where it was aimed.
+##
+## Team-mates do not collide here, so two can stand in one place, and the muzzle is then
+## inside the friend's hitboxes. dot-combat leaves such a team-mate out of a gun's trace
+## (`DotCombatManager.pass_through_sets`, the rule on `DotDamageRules`); the projectile
+## layer sweeps flight with its own trace and used to exclude only the shooter, so the
+## rocket met the friend at 0 m and went off at the muzzle, and its splash came back on
+## the shooter. Armed: without the fix in `ArenaProjectiles._sweep`, the team-mate checks
+## here fail; an enemy at the muzzle is still a point-blank hit either way.
+func _test_launch_inside_team_mate() -> void:
+	_section("a launch from inside a team-mate")
+	var ids := [950, 951, 952, 953]
+	var game := _weapon_mode_game(ArenaMode.team_deathmatch(), ids)
+	if not _check(game != null, "a team game sets up"):
+		return
+	for _i in range(4):
+		await get_tree().process_frame
+	# Out of the spawn window: protection refuses every hit, and the splash checks would
+	# then measure it instead of where the blast went.
+	for _protect in range(game.match_node.spawn_protection_ticks() + 2):
+		game.tick({})
+
+	var shooter_id := 950
+	var mate_id := 0
+	var enemy_id := 0
+	for id in ids:
+		if id == shooter_id:
+			continue
+		if game.team_of(id) == game.team_of(shooter_id) and mate_id == 0:
+			mate_id = id
+		elif game.team_of(id) != game.team_of(shooter_id) and enemy_id == 0:
+			enemy_id = id
+	if not _check(mate_id > 0 and enemy_id > 0, "a team-mate and an enemy",
+			"%d %d" % [mate_id, enemy_id]):
+		remove_child(game)
+		game.queue_free()
+		return
+
+	var shooter := game.player_for(shooter_id)
+	var floor_y := shooter.controller.state.position.y
+	var here := Vector3(0.0, floor_y, 0.0)
+	var ahead := Vector3(0.0, floor_y, -8.0)
+	var aside := Vector3(4.0, floor_y, 6.0)
+	var spare := 0
+	for id in ids:
+		if id != shooter_id and id != mate_id and id != enemy_id:
+			spare = id
+
+	var gone: Array = []
+	game.projectiles.detonated.connect(func(at: Vector3, s: DotWeaponSpawn) -> void:
+		gone.append([at, s])
+	)
+
+	# Everybody where the case wants them, unhurt and unprotected, for a few ticks so
+	# the hitboxes are where the bodies are.
+	var arrange := func(placed: Dictionary) -> void:
+		for _k in range(3):
+			for id in placed:
+				_stand(game, id, placed[id])
+			game.tick({})
+		for id in ids:
+			_revive(game, id)
+			var h := game.combat.health_of(id)
+			h.invulnerable_until_tick = -1
+			h.invulnerable = false
+			h.health = h.max_health
+			h.armour = 0.0
+		game.projectiles.clear()
+		gone.clear()
+
+	var launch := func(fuse: int, toward: Vector3 = Vector3.FORWARD) -> DotWeaponSpawn:
+		var s := DotWeaponSpawn.new()
+		s.id = ZeeWeaponIds.LAUNCHER if fuse <= 0 else ZeeWeaponIds.FRAG
+		s.origin = shooter.muzzle_position()
+		s.velocity = toward.normalized() * (44.0 if fuse <= 0 else 14.0)
+		s.gravity_scale = 0.0 if fuse <= 0 else 1.0
+		s.radius = 0.1
+		s.fuse_ticks = fuse
+		s.life_ticks = TICK_RATE * 4
+		s.damage_type = game.combat.damage_type(ZeeWeaponIds.DAMAGE_BLAST)
+		s.splash_radius = 3.0
+		s.splash_damage = 60.0
+		s.owner_entity = shooter_id
+		s.tick = game.current_tick()
+		s.meta = {&"sticks": false}
+		game.projectiles.launch(s)
+		return s
+
+	var fly := func() -> void:
+		for _k in range(TICK_RATE * 2):
+			if not gone.is_empty():
+				break
+			game.tick({})
+
+	var hp := func(id: int) -> float:
+		return game.combat.health_of(id).health
+
+	# --- A rocket from inside a team-mate.
+	arrange.call({shooter_id: here, mate_id: here, enemy_id: ahead, spare: aside})
+	var muzzle := shooter.muzzle_position()
+	var mate_set := game.combat.hitboxes_of(mate_id)
+	if mate_set != null and mate_set.has_method(&"contains_point"):
+		_check(bool(mate_set.call(&"contains_point", muzzle)),
+			"the muzzle is inside the team-mate's hitboxes (the case under test)")
+	# At the enemy's chest, eight metres on.
+	var _rocket: DotWeaponSpawn = launch.call(0, ahead + Vector3.UP * 1.2 - muzzle)
+	fly.call()
+	var at: Vector3 = gone[0][0] if gone.size() == 1 else muzzle
+	_check(gone.size() == 1 and at.distance_to(muzzle) > 5.0,
+		"a rocket fired from inside a team-mate flies on instead of going off in them",
+		"went off %.2f m from the muzzle" % at.distance_to(muzzle))
+	_check(is_equal_approx(hp.call(shooter_id), game.combat.health_of(shooter_id).max_health),
+		"and its blast does not come back on the shooter", "%.1f" % hp.call(shooter_id))
+	_check(hp.call(enemy_id) < game.combat.health_of(enemy_id).max_health,
+		"it reaches the enemy it was aimed at",
+		"%.1f, went off at %s" % [hp.call(enemy_id), at])
+
+	# --- A grenade from inside a team-mate: it is thrown, not bounced back off the friend.
+	arrange.call({shooter_id: here, mate_id: here, enemy_id: aside, spare: aside + Vector3(2, 0, 0)})
+	muzzle = shooter.muzzle_position()
+	var _frag: DotWeaponSpawn = launch.call(TICK_RATE * 2)
+	for _k in range(6):
+		game.tick({})
+	var frag: ArenaProjectiles.Flying = (
+		game.projectiles.flying()[0] if game.projectiles.live_count() == 1 else null
+	)
+	_check(frag != null and frag.bounces == 0 and frag.position.z < muzzle.z - 1.0,
+		"a grenade thrown from inside a team-mate leaves them rather than bouncing off them",
+		str([frag.bounces, frag.position, muzzle]) if frag != null else "none in flight")
+	game.projectiles.clear()
+
+	# --- An enemy holding the muzzle is still a point-blank hit.
+	arrange.call({shooter_id: here, enemy_id: here, mate_id: aside, spare: aside + Vector3(2, 0, 0)})
+	muzzle = shooter.muzzle_position()
+	var _point_blank: DotWeaponSpawn = launch.call(0)
+	fly.call()
+	at = gone[0][0] if gone.size() == 1 else Vector3.INF
+	_check(gone.size() == 1 and at.distance_to(muzzle) < 0.5,
+		"a rocket fired from inside an enemy goes off at the muzzle",
+		"%.2f m from it" % at.distance_to(muzzle))
+	_check(hp.call(enemy_id) < game.combat.health_of(enemy_id).max_health,
+		"and the enemy takes it", "%.1f" % hp.call(enemy_id))
+
+	# --- The policy is dot-combat's, in one place: with the rule off, the old geometry.
+	var rules := game.combat.rules
+	if rules != null and "pass_through_team_mate_at_muzzle" in rules:
+		rules.set(&"pass_through_team_mate_at_muzzle", false)
+		arrange.call({shooter_id: here, mate_id: here, enemy_id: ahead, spare: aside})
+		muzzle = shooter.muzzle_position()
+		var _off: DotWeaponSpawn = launch.call(0)
+		fly.call()
+		at = gone[0][0] if gone.size() == 1 else Vector3.INF
+		_check(gone.size() == 1 and at.distance_to(muzzle) < 0.5,
+			"with DotDamageRules.pass_through_team_mate_at_muzzle off it goes off in the team-mate again",
+			"%.2f m from the muzzle" % at.distance_to(muzzle))
+		rules.set(&"pass_through_team_mate_at_muzzle", true)
+
 	remove_child(game)
 	game.queue_free()
 	_done()

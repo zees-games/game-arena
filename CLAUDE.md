@@ -114,6 +114,7 @@ Short forms; the reasoning is in the linked file.
 - `DotPhysGun.hold` every tick; the prop tool is an intent. [horde](docs/horde.md#props)
 - The rig drives the player's own `Arsenal`; call newer zee methods through `has_method`. [weapons](docs/weapons.md#the-rig-drives-the-players-own-arsenal)
 - A detonation pins the attacker's origin to the blast. [weapons](docs/weapons.md#projectiles)
+- A projectile passes through a team-mate holding its launch point (dot-combat's `pass_through_sets`, called by name). [weapons](docs/weapons.md#projectiles)
 - `DotAchievementStatsLink`, never `recorded.connect`. [services](docs/services.md#progression)
 - One chat path; hook `player_command` too; moderation is built first. [services](docs/services.md#chat)
 - The speaker id comes from the transport, never the payload. [services](docs/services.md#voice)

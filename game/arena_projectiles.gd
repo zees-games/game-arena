@@ -42,6 +42,9 @@ class Flying extends RefCounted:
 	var stuck_to: Node3D = null
 	var stuck_offset: Vector3 = Vector3.ZERO
 	var bounces: int = 0
+	## Hitbox sets that held the launch point and that it passes through: team-mates the
+	## thrower was standing inside. See [method ArenaProjectiles._passes_at_launch].
+	var passes: Array = []
 
 
 ## How much speed a fused grenade keeps off a bounce, into the surface and along it.
@@ -102,8 +105,33 @@ func launch(spawn: DotWeaponSpawn) -> void:
 	f.position = spawn.origin
 	f.velocity = spawn.velocity
 	f.sticks = _sticks(spawn)
+	f.passes = _passes_at_launch(spawn)
 	_live.append(f)
 	launched.emit(spawn)
+
+
+## The bodies a projectile launched at [param spawn]'s origin passes through: dot-combat's
+## answer for a shot from the same muzzle, so the policy is written once.
+##
+## [b]Why.[/b] Team-mates do not collide in this game, so two of them can stand in one
+## place, and the launch point is then inside the friend's hitboxes. A ray that starts
+## inside a hitbox hits it at 0 m: every rocket fired from there went off in the friend at
+## the muzzle, with its splash back on the shooter, and a grenade bounced off them. dot-combat
+## leaves such a team-mate out of a gun's trace ([code]DotCombatManager.pass_through_sets[/code],
+## governed by [code]DotDamageRules.pass_through_team_mate_at_muzzle[/code] and
+## [code]pass_through_fn[/code]); the flight sweep below is a trace of its own and has to ask
+## the same question. An enemy holding the launch point is not in the answer, so it is
+## still hit at 0 m.
+##
+## Called by name because a delivered pack runs on the host's dot-combat, and one older
+## than the method must still load this file; there it is the old behaviour.
+func _passes_at_launch(spawn: DotWeaponSpawn) -> Array:
+	if _combat == null or not _combat.has_method(&"pass_through_sets"):
+		return []
+
+	var shot := DotShot.make(spawn.id, spawn.owner_entity, spawn.tick, 0)
+	shot.origin = spawn.origin
+	return Array(_combat.call(&"pass_through_sets", shot))
 
 
 func _sticks(spawn: DotWeaponSpawn) -> bool:
@@ -269,7 +297,21 @@ func _sweep(f: Flying, step: Vector3) -> DotHitbox.Hit:
 	# Not the person who fired it, at first, or every rocket detonates in the shooter's
 	# face. After that it may.
 	var grace := 1 if f.spawn.fuse_ticks <= 0 else THROWER_GRACE_TICKS
-	_combat.trace.exclude = [shooter] if shooter != null and f.age_ticks <= grace else []
+	var excluded: Array = [shooter] if shooter != null and f.age_ticks <= grace else []
+
+	# Team-mates it was launched inside, for the same grace and then for as long as it is
+	# still inside them: a rocket aimed down through a friend's chest is in their boxes for
+	# more than one step. Once out, a body is dropped for good and may be hit like any other.
+	for i in range(f.passes.size() - 1, -1, -1):
+		var set_node = f.passes[i]
+		if not is_instance_valid(set_node):
+			f.passes.remove_at(i)
+		elif f.age_ticks <= grace or set_node.contains_point(f.position):
+			excluded.append(set_node)
+		else:
+			f.passes.remove_at(i)
+
+	_combat.trace.exclude = excluded
 
 	var hit := _combat.trace.ray(
 		f.position, step / distance, distance, _combat.hitbox_sets()
