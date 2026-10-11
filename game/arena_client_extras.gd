@@ -121,7 +121,7 @@ func _build_chat() -> void:
 			# A dot-chat line's kind is "say" on every channel; the channel is what makes
 			# it a team line, and "team" is what the chat box colours.
 			var kind := "team" if message.channel == ArenaServices.CH_TEAM else message.kind_name()
-			said.emit(message.sender_name, message.text, kind)
+			said.emit(speaker_of(message), text_of(message), kind)
 			line_received.emit(message.describe())
 	)
 
@@ -175,6 +175,28 @@ func receive_wire(payload: Dictionary) -> void:
 
 	said.emit(speaker, text, str(payload.get("kind", "all")))
 	line_received.emit(text if speaker == "" else "%s: %s" % [speaker, text])
+
+
+## Who a dot-chat line is drawn as said by: nobody, for a join or leave notice.
+##
+## [b]A join or leave notice is the server's line about a player, not the player's line.[/b]
+## It carries the player's name as its sender and no text at all (dot-chat's `_presence`),
+## so drawing it as `sender: text` put a bare "Guest 435:" in the chat box on every join,
+## which read as a chat command echoed with its text stripped. It is drawn as a plain line,
+## worded by [method DotChatMessage.describe]. Only those two kinds: an ADMIN line's sender
+## is the admin, and `describe()` would drop the name.
+static func speaker_of(message: DotChatMessage) -> String:
+	return "" if is_presence(message) else message.sender_name
+
+
+## The text a dot-chat line is drawn with. See [method speaker_of].
+static func text_of(message: DotChatMessage) -> String:
+	return message.describe() if is_presence(message) else message.text
+
+
+## A join or leave notice: a name and no text.
+static func is_presence(message: DotChatMessage) -> bool:
+	return message.kind in [DotChatMessage.Kind.JOIN, DotChatMessage.Kind.LEAVE]
 
 
 # --- Voice -----------------------------------------------------------------

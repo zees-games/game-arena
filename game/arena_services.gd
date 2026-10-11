@@ -429,6 +429,12 @@ func _build_chat() -> DotResult:
 	# broadcasts; cancelling the event stops the broadcast and leaves everything before
 	# it — which is the half that is genuinely dot-server's job, because it holds the
 	# session.
+	# dot-chat makes the join and leave notices (`join_notice` in add_peer), so dot-server's
+	# would be a second one on a second path. hungario and playground do the same; while
+	# the client drew dot-chat's notice as a bare name the duplicate went unnoticed.
+	if server.chat != null:
+		server.chat.announce_joins = false
+
 	if server.events != null:
 		server.events.hook_pre("player_chat", _on_player_chat)
 

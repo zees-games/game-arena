@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 218
+const CHECKS := 219
 
 var _passed := 0
 var _failed := 0
@@ -1169,6 +1169,26 @@ func _test_chat_box() -> void:
 	_check(p.swallows_input(), "an open one does")
 	window.close()
 	_check(not p.swallows_input(), "and gives it back when it closes")
+
+	# A join notice is a name and NO text (dot-chat's `_presence`). Drawn as name and text
+	# it was a bare "Guest 435:" in the box, which read as a chat command echoed with its
+	# text stripped. The client is never added to the tree; only `_on_said` is used, fed
+	# exactly what the extras' `message_received` handler hands it.
+	var extras_script := preload("../game/arena_client_extras.gd")
+	var join := DotChatMessage.make(DotChatMessage.Kind.JOIN, &"all", "k2", "Guest 435", "")
+	var said_client := ArenaClient.new()
+	said_client.presentation = p
+	said_client._on_said(extras_script.speaker_of(join), extras_script.text_of(join), join.kind_name())
+	var said_rows := window.history()
+	var said_line := ""
+	for part in (said_rows[said_rows.size() - 1] if not said_rows.is_empty() else []):
+		said_line += str((part as Dictionary).get("text", ""))
+	_check(
+		said_line.contains("Guest 435 joined") and not said_line.contains(":"),
+		"a join notice is drawn as a sentence, not as a bare name",
+		"'%s'" % said_line
+	)
+	said_client.free()
 
 	p.settings.reset_value(&"chat_open_key")
 	p.settings.reset_value(&"chat_window")
