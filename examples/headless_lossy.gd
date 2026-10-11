@@ -677,6 +677,10 @@ func _sample_clock(server_tick: int) -> void:
 
 	var target := clock.server_tick() + int(clock.call("_target_lead"))
 	var error := target - clock.tick
+	# Against what the clock steers to: the server's input-lead report once it has one, which
+	# the round trip's lead above is not any more (dot-net's `lead_error`).
+	if clock.has_method(&"lead_error"):
+		error = roundi(float(clock.call(&"lead_error")))
 	var lead := clock.input_tick() - server_tick
 	var t := float(Time.get_ticks_msec() - int(_w["started_ms"])) / 1000.0
 
