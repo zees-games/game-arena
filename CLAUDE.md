@@ -27,15 +27,15 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | `game/` | everything that runs, flat; the client half is never loaded by a dedicated server. File by file: [architecture](docs/architecture.md#where-the-code-is) |
 | `maps/` | the built-in maps as box lists with their survey, paint and lighting; the combat surf maps' loader (copies of g2gfast's); `maps/imported` is the g2gfast-maps link |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art, Kenney's prototype grid and medal icons |
-| `examples/` | the eight suites; `wall_route_driver.gd` drives a map's wall routes |
+| `examples/` | the nine suites; `wall_route_driver.gd` drives a map's wall routes |
 | `tools/` | render tools (`screenshot.sh --glance` is the whole HUD), avatar and icon builders, `audio_probe.sh`. [client](docs/client.md#looking-at-it) |
 | `scenes/arena_server.tscn`, `game.yml` | the server scene and the descriptor that travels in the pack |
 
 ## Running and testing
 
-- `./game.sh` plays offline; `test` parses everything and runs all eight suites (`test <suite>` one); `help` lists the rest. Addon links come from `.gitignore` via dot-bootstrap, never by hand.
+- `./game.sh` plays offline; `test` parses everything and runs all nine suites (`test <suite>` one); `help` lists the rest. Addon links come from `.gitignore` via dot-bootstrap, never by hand.
 - **Run the suites after changing any dot-* addon this game links.** That is what this project is for. [testing](docs/testing.md)
-- `headless_presentation` is the only suite with a client; `headless_lossy` the only one with real ENet and loss. [testing](docs/testing.md#the-suites)
+- `headless_presentation` and `headless_feel` have a client; `headless_lossy` and `headless_feel` real ENet and loss; only `headless_feel` judges frames. [testing](docs/testing.md#the-suites)
 - Read every suite's stderr even when it exits 0; cap every run with `timeout`. [testing](docs/testing.md#traps-the-suites-have-hit)
 - A suite or tool that builds a presentation or client calls `ArenaPresentation.use_scratch_settings` first: never the player's file. [testing](docs/testing.md#traps-the-suites-have-hit)
 - **Look at it.** No check reaches the screen: the render tools in `tools/` (above), under `xvfb-run`. [client](docs/client.md#looking-at-it)
@@ -64,12 +64,12 @@ Short forms; the reasoning is in the linked file.
 - A family cvar a client predicts with (`mp_teammate_passthrough`) is `FLAG_REPLICATED` and followed (`ArenaGame.follow_server_cvars`), not in RULES; re-applied after every map change. [netcode](docs/netcode.md#rules-a-client-predicts-with-travel-in-rules)
 - Ammunition, the carried set and blind are owner-only. A replayed tick fires nothing and emits no movement signal (`begin_replay`). [netcode](docs/netcode.md#weapons-over-the-wire)
 - `INPUT_COPIES` (5) and `link_rtt_ms` are what keep commands on time under loss. [netcode](docs/netcode.md#inputs-and-the-clock-under-real-loss)
-- The local view is `view_now` and the eye adds `drawn_offset`; the state's angles freeze the view on frames with no tick. [netcode](docs/netcode.md#drawing-between-ticks)
+- The local view is `view_now`, the eye adds `drawn_offset` and is drawn at `drawn_alpha` (the clock's render alpha, -1..2 after a slip), never the engine's fraction. [netcode](docs/netcode.md#drawing-between-ticks)
 
 **Client**
 
 - Adopt the player on `player_added`, never `player_spawned`. Offline, name the player before creating it. [client](docs/client.md#booting-and-adopting-a-player)
-- The camera is written only in `ArenaPlayer.present`, the wall-run lean included (no `DotFpsView`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
+- The camera is written only in `ArenaPlayer.present`, the wall-run lean and stair easing included (no `DotFpsView`); an offline bot's body is drawn between ticks there (`interpolate_body`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
 - A client's own `mode` is never replaced; display reads `displayed_mode()`. [client](docs/client.md#a-client-knows-the-mode-only-for-display)
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer. [client](docs/client.md#escape-the-pointer-and-the-menu)

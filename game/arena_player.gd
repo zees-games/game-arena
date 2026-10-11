@@ -113,6 +113,39 @@ var view_now: Variant = null
 ## that eases it over a tenth of a second, and nothing read it.
 var drawn_offset: Vector3 = Vector3.ZERO
 
+## How far through the current tick this frame is drawn (usually 0..1, -1 to 2 just after a
+## slip), or NAN for the engine's physics fraction. Set every frame by a connected client from
+## dot-net's `DotNetClock.render_alpha`.
+##
+## [b]Because a connected client's ticks are the clock's, not the engine's.[/b] The clock
+## stretches or shrinks its ticks while it settles on the server (drift), so now and then a
+## physics frame runs no tick and a later one two. Drawn at the engine's fraction, the frame
+## with none goes back over the stretch it just drew and the eye stands still, and the frame
+## with two moves it double: `headless_feel` measured 8 frames in 5 s 10 to 15 cm off at a
+## 60 Hz display, every one on a physics frame that ran 0 or 2 ticks. Offline every physics
+## frame is one tick and the engine's fraction is exact.
+var drawn_alpha: float = NAN
+
+## Whether [method present] draws this body between its ticks: a player this machine
+## simulates and somebody else watches -- an offline bot. Set by the client.
+##
+## [b]A bot offline was drawn where its last tick left it[/b], because the tick moves this
+## node and nothing else moved the body: at 144 Hz against 64 ticks a bot stood still on
+## more than half the frames and jumped on the rest, every frame 6 to 8 cm off its motion
+## (`headless_feel`). A mirrored player is never this: dot-net's interpolator moves its node
+## once a frame (`ArenaPlayerNet._net_interpolated`), and its controller is never ticked here,
+## so the controller's last-tick state it would blend from is not its own.
+var interpolate_body: bool = false
+
+## The yaw this player started its last tick with, for [member interpolate_body]: the
+## controller's render state blends the position and leaves the angles at the tick's.
+var _yaw_before_tick: float = 0.0
+
+## Where this player was two ticks back, for a frame drawn before the controller's previous
+## tick (a [member drawn_alpha] below 0, after a physics frame that ran two ticks). The
+## controller keeps only its last two states. NAN until a tick has run since the last spawn.
+var _position_two_back: Vector3 = Vector3(NAN, NAN, NAN)
+
 ## Whether this player is holding the aim (right mouse). Client side, presentation only:
 ## the view model eases the weapon up and the camera zooms; nothing the server simulates.
 var aim_held: bool = false
@@ -479,6 +512,12 @@ func _follow_map_volumes() -> void:
 	if feet.y < _map.bounds.position.y - FALL_OUT_DEPTH and not _map.spawns.is_empty():
 		var at: Transform3D = _map.spawns[0]
 		controller.teleport(at.origin, rad_to_deg(at.basis.get_euler().y), 0.0)
+	_yaw_before_tick = controller.state.yaw
+	_position_two_back = Vector3(NAN, NAN, NAN)
+	_step_offset = 0.0
+	_step_rise = 0.0
+	_step_drawn = 0.0
+	_step_tick = controller.state.tick
 
 
 ## How far under an imported map's bounds a player is counted as out of it, metres.
@@ -904,7 +943,9 @@ func _present_health_tag(delta: float) -> void:
 		_health_tag.add_child(_health_fill)
 
 	_health_tag.visible = true
-	_health_tag.global_position = global_position + Vector3(0.0, 2.25, 0.0)
+	# Over the body as drawn, which an offline bot's is between ticks (`interpolate_body`).
+	var over := body_mesh.global_position if body_mesh != null else global_position
+	_health_tag.global_position = over + Vector3(0.0, 2.25, 0.0)
 	var eye := get_viewport().get_camera_3d()
 	if eye != null:
 		# The whole tag turns to the camera, so the fill stays on its background.
@@ -1046,6 +1087,9 @@ func simulate_tick(
 	# Where the tick starts, for the pushes: "was this player in a booster last tick" is
 	# asked of this position rather than remembered. See `arena_map_mechanics.gd`.
 	var start := controller.state.position
+	_yaw_before_tick = controller.state.yaw
+	# The previous state's position before this tick replaces it: two ticks back after it.
+	_position_two_back = controller.render_state(0.0).position
 	ladder.now = tick
 	controller.apply_command(movement_command)
 	controller.simulate_tick(tick, delta)
@@ -1106,7 +1150,10 @@ func present(delta: float) -> void:
 	if controller == null:
 		return
 
-	var drawn := controller.render_state() if camera != null else controller.state
+	var drawn := (
+		_render_state(drawn_alpha) if camera != null or interpolate_body
+		else controller.state
+	)
 
 	if camera != null:
 		# This frame's view and what is left of the last corrections, from the client. A
@@ -1126,7 +1173,7 @@ func present(delta: float) -> void:
 				controller.motor.eye_position(drawn)
 				if controller.motor != null
 				else drawn.position + Vector3(0.0, 1.6, 0.0)
-			)
+			) - Vector3(0.0, _absorb_step(drawn_alpha, delta), 0.0)
 
 		var punch := _present_view_model(drawn)
 
@@ -1139,13 +1186,100 @@ func present(delta: float) -> void:
 		)
 	elif body_mesh != null:
 		# A remote player. Its node is moved by `_net_interpolated`, so all that is
-		# left is to face it the way its yaw says.
-		body_mesh.global_rotation = Vector3(0.0, deg_to_rad(drawn.yaw), 0.0)
+		# left is to face it the way its yaw says -- unless this machine ticks it, when
+		# the body is drawn between ticks here (see `interpolate_body`). The node stays
+		# where the tick put it: the hitboxes hang off it and are the simulation's.
+		var yaw := drawn.yaw
+		if interpolate_body:
+			body_mesh.global_position = drawn.position
+			var alpha := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
+			yaw = rad_to_deg(lerp_angle(deg_to_rad(_yaw_before_tick), deg_to_rad(drawn.yaw), alpha))
+		body_mesh.global_rotation = Vector3(0.0, deg_to_rad(yaw), 0.0)
 		_present_held()
 		_present_health_tag(delta)
 
 	_present_beacon(delta, drawn.position)
 	_mend_body()
+
+
+## The controller's state as drawn at [param alpha] through its last tick, from -1 to 2.
+##
+## `DotFpsController.render_state` blends the last two ticks, 0 to 1. A connected client's
+## alpha leaves that range for a fifth of a second after a physics frame that ran no tick or
+## two (`DotNetClock.render_alpha` keeps the drawing where it was and takes the slip up
+## slowly), and clamped there the eye stood still or jumped a tick, which is what the slip
+## handling is for. Past 1 it goes on along the last tick's step; below 0 it is between the
+## two ticks before, from [member _position_two_back].
+func _render_state(alpha: float) -> DotFpsState:
+	if is_nan(alpha):
+		return controller.render_state()
+	if alpha >= 0.0 and alpha <= 1.0:
+		return controller.render_state(alpha)
+	var drawn := controller.render_state(1.0 if alpha > 1.0 else 0.0)
+	if drawn == controller.state:
+		# A controller that does not blend hands back its state itself; never move that.
+		return drawn
+	if alpha > 1.0:
+		var before := controller.render_state(0.0)
+		drawn.position += (drawn.position - before.position) * minf(alpha - 1.0, 1.0)
+	elif _position_two_back.is_finite():
+		drawn.position = _position_two_back.lerp(drawn.position, maxf(alpha + 1.0, 0.0))
+	return drawn
+
+
+## How a stair tread's rise reaches the eye: the time constant of an exponential, seconds.
+## The step is the simulation's at once; only the view eases.
+##
+## [b]The camera stepped up each tread in one tick.[/b] A grounded tick that climbs a 0.36 m
+## tread moves the player 0.36 m up, and the eye between that tick and the last rose with it,
+## 16 cm in one frame at 144 Hz, ten times a second up dm_box's stair at a run, where a ramp
+## of the same height is a steady 2.5 cm a frame. dot-player-controller's own camera
+## (`DotFpsView.smooth_step_up`) has always eased it; this game writes its camera itself
+## (`present`) and had none of it. `headless_feel` measures a run up the stair.
+var step_smooth_time: float = 0.05
+
+## The part of recent stair steps not yet shown, metres: subtracted from the eye, easing to 0.
+var _step_offset: float = 0.0
+## The tick whose step is being drawn, its rise if it was a stair step (else 0), and how much
+## of that rise this frame's interpolation has already drawn.
+var _step_tick: int = -1
+var _step_rise: float = 0.0
+var _step_drawn: float = 0.0
+
+
+## What to take off the drawn eye this frame for stair steps: the step's share of the
+## interpolated rise is moved into [member _step_offset], which eases out. A tick is a step
+## when it is grounded and rose more than the steepest walkable floor allows for the ground it
+## crossed, and no more than a step: a ramp's rise is steady and is drawn as it is.
+func _absorb_step(alpha: float, delta: float) -> float:
+	if step_smooth_time <= 0.0 or controller.tunables == null:
+		return 0.0
+	var state := controller.state
+	if state.tick != _step_tick:
+		# Moving on to a new tick drew whatever of the last tick's step was left.
+		_step_offset += _step_rise - _step_drawn
+		_step_tick = state.tick
+		_step_rise = 0.0
+		_step_drawn = 0.0
+		var before := controller.render_state(0.0).position
+		var rise := state.position.y - before.y
+		var across := Vector2(state.position.x - before.x, state.position.z - before.z).length()
+		var tunables := controller.tunables
+		if (
+			state.is_grounded()
+			and rise > across * tan(tunables.max_slope_radians()) + 0.01
+			and rise <= tunables.step_height + 0.01
+		):
+			_step_rise = rise
+	var through := clampf(
+		alpha if not is_nan(alpha) else Engine.get_physics_interpolation_fraction(), 0.0, 1.0
+	)
+	_step_offset += through * _step_rise - _step_drawn
+	_step_drawn = through * _step_rise
+	_step_offset *= exp(-delta / step_smooth_time)
+	if absf(_step_offset) < 0.0005:
+		_step_offset = 0.0
+	return _step_offset
 
 
 ## Eases [member _wall_roll] toward the lean [param drawn] asks for: away from the wall

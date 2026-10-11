@@ -11,3 +11,5 @@ What this game does not do yet, each with where the detail is. Each is unfinishe
 - **Joining from the browser** is deliberately not done: Join notes the visit and says where to go, because reconnecting elsewhere is the launcher's job and this game is loaded by one.
 - **Real audio files**: synthesised stand-ins for every id. [client](client.md#the-presentation-layer)
 - **Heavy-loss stalls** and the other games' bridges lacking input copies. [netcode](netcode.md#still-open)
+- **A link that slows** mispredicts for seconds until the round-trip estimate catches up (`dot-net-input-lead-1`). [netcode](netcode.md#still-open)
+- **The camera's feel past smoothness**: no landing dip, strafe roll or speed widening, which dot-player-controller's own camera has (`arena-camera-feel-1`). [client](client.md#the-camera-is-written-in-exactly-one-place)

@@ -699,9 +699,15 @@ func _sample_render() -> void:
 		return
 
 	var drawn := seen.global_position
-	# Exactly what `DotNetManager.interpolate_frame` hands the interpolator.
-	var render_tick := float(net.clock.received_tick()) \
-		+ clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0) \
+	# Exactly what `DotNetManager.interpolate_frame` hands the interpolator: the clock's
+	# render alpha and what the receive timeline moved by re-anchoring that the drawing has
+	# not followed yet, on a dot-net that has them (headless_feel says why).
+	var alpha := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
+	var slip := 0.0
+	if net.clock.has_method(&"render_alpha"):
+		alpha = clampf(float(net.clock.call(&"render_alpha")), -1.0, 2.0)
+		slip = float(net.clock.call(&"receive_slip"))
+	var render_tick := float(net.clock.received_tick()) + alpha + slip \
 		- net.interpolator.delay_ticks()
 	var truth: Variant = _truth_at(track, render_tick)
 	var now_ms := Time.get_ticks_msec()

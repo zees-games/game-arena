@@ -107,6 +107,10 @@ The family's most repeated shape, found here many times:
 - The HUD's health, ammunition and key hints all but invisible over the pale prototype floors: regular-weight text, no outline, no plate (`dm_box_feel_kill_compat.png`, 2026-10-10). Rebuilt as `ArenaHudGlance`, bold and outlined on plates.
 - The first portraits were the back of each head: the character kit faces -Z here and the camera had been put on +Z. Weapon silhouettes drawn from 600-pixel renders broke into dashes until they were saved at 48 px and mipmapped.
 
+## Frames, not ticks (2026-10-11)
+
+Measured by `headless_feel`, the first suite to judge what a frame shows rather than what a tick computed, and invisible to the other eight: offline bots drawn where their last tick left them (every frame 6 to 8 cm off at 144 Hz); the view model bobbing ten footfalls a second at a run (zee-dot-weapons, now a cadence); the eye stepping up each stair tread in one tick; the connected eye standing still and then moving double after every physics frame the drifting clock ran no tick or two (dot-net `render_alpha`); remote players jumping a tick when the receive timeline re-anchored, and snapping back after every extrapolation (dot-net `receive_slip`, the interpolator's resume easing). The first fix tried for the slips drew at the clock's own accumulator, which is continuous but sits up to a tick past the newest tick all the time and extrapolated through every wall: 474 of 719 frames off at 144 Hz, worse than before. Measured against the state's velocity, every wall a runner touched read as a stutter, so the runners run circles on open floor and corners are not judged.
+
 ## Still open, unexplained
 
 - `dedicated` exited with 23 ObjectDB instances and 6 resources leaked (2026-09-23), as many before the message self-preloads were removed as after: too few to be the whole script graph, so a different shape from the one mg-buses-from-hell had. Not re-measured since.

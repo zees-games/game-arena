@@ -1007,6 +1007,12 @@ func _on_player_added(added: ArenaPlayer) -> void:
 		_adopt(added)
 		return
 
+	# Offline this game ticks everybody, and nothing but a tick moves a bot's node: its body
+	# is drawn between ticks by the player itself (`ArenaPlayer.interpolate_body`). A mirror's
+	# node is moved once a frame by dot-net's interpolator instead.
+	if added != player:
+		added.interpolate_body = _offline
+
 	if added != player and added.body_mesh == null:
 		# A stock avatar until the server says otherwise. It is a real document over
 		# the same schema and deterministic in the player's storage key, so a remote
@@ -1324,6 +1330,7 @@ func _process(delta: float) -> void:
 
 	_fold_look()
 	_fold_correction()
+	_fold_alpha()
 
 	# Your own body when you look down, if the server's `fp_body` rule is on.
 	if player != null and game != null and player.controller != null:
@@ -1404,6 +1411,20 @@ func _fold_correction() -> void:
 	var mine := bridge.behaviour_for(player.player_id)
 	if mine != null and mine.identity != null and mine.identity.is_predicted():
 		player.drawn_offset = net.predictor.visual_offset(mine.identity.net_id)
+
+
+## Hands the local player how far through the clock's current tick this frame is, which
+## a connected client's ticks are counted on. See [member ArenaPlayer.drawn_alpha].
+##
+## By name: a pack runs on whatever dot-net the client shell carries, and one older than
+## `render_alpha` draws at the engine's fraction, as before.
+func _fold_alpha() -> void:
+	if player == null:
+		return
+	player.drawn_alpha = NAN
+	if _offline or net == null or net.clock == null or not net.clock.has_method(&"render_alpha"):
+		return
+	player.drawn_alpha = float(net.clock.call(&"render_alpha"))
 
 
 ## Points the drawing and the explosions at whichever projectile layer the game has now.
