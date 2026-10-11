@@ -1,6 +1,6 @@
 This is a game to demonstrate the capabilities of the [**Dot collection**](https://moddingcommunity.com/co/4-dot-assets) built on-top of [Godot 4](https://godotengine.org/) and [TMC's gaming platform](https://moddingcommunity.com/play). In this 3D game, players engage in an arena with different objectives, such as deathmatch, free-for-all, gungame, and more.
 
-![Preview](https://github.com/gamemann/game-arena/blob/main/images/preview.gif?raw=true)
+![Preview](https://github.com/zees-games/game-arena/blob/main/images/preview.gif?raw=true)
 
 *Play on my test server [here](https://moddingcommunity.com/arena/s/arena01/play)!*
 
@@ -14,7 +14,7 @@ This project, along with every asset it is built on, was built initially with **
 I intend on reviewing code, testing, and editing documentation regularly. If you're interested in helping out, please let me know!
 
 ## How it plays
-Arena is a fast first-person shooter on three dev-textured maps (`dm_atrium`, `dm_pit` and `dm_box`) and ten combat surf maps: small surf maps built for fighting rather than for a timer, imported by [game-g2gfast](https://github.com/gamemann/game-g2gfast) and kept in [g2gfast-maps](https://github.com/gamemann/g2gfast-maps). Two of them are in the rotation by default (`surf_10x_reloaded_fixed` and `surf_110b_austinpowers`); the rest are installed and can be played with `arena_map <id>`. On a surf map the air control is the surf genre's, so you can ride the ramps; on the arena's own maps it goes back to the arena's. It is also the reference game for the Dot collection: when a new game is started, this is the one it is copied from.
+Arena is a fast first-person shooter on three dev-textured maps (`dm_atrium`, `dm_pit` and `dm_box`) and ten combat surf maps: small surf maps built for fighting rather than for a timer, imported by [game-g2gfast](https://github.com/zees-games/game-g2gfast) and kept in [g2gfast-maps](https://github.com/zees-games/g2gfast-maps). Two of them are in the rotation by default (`surf_10x_reloaded_fixed` and `surf_110b_austinpowers`); the rest are installed and can be played with `arena_map <id>`. On a surf map the air control is the surf genre's, so you can ride the ramps; on the arena's own maps it goes back to the arena's. It is also the reference game for the Dot collection: when a new game is started, this is the one it is copied from.
 
 There are seven modes:
 
@@ -28,7 +28,7 @@ There are seven modes:
 | Gun Game | Every kill gives you a different gun. First through the list wins. |
 | Only Snipers | A random sniper on every spawn. First to 25. |
 
-The weapons are all twenty-seven from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons): melee weapons, sidearms, rifles, heavies and grenades, each with a view model, a world model, sounds and recoil. A loadout is a melee weapon, a sidearm, a primary, a grenade and armour on a seven-point budget. A headshot kill drops coins and a health pack, and kill streaks earn rewards. Every hit and kill is confirmed by the server and felt on screen: a hit marker, damage numbers, medals (First Blood, Headshot, Double, Triple and Multi Kill, Revenge, Shutdown, Point Blank, No Scope, Long Shot, Nemesis) with a sound each, a killstreak meter, and the points for each kill beside the victim's name.
+The weapons are all twenty-seven from [zee-dot-weapons](https://github.com/zees-games/zee-dot-weapons): melee weapons, sidearms, rifles, heavies and grenades, each with a view model, a world model, sounds and recoil. A loadout is a melee weapon, a sidearm, a primary, a grenade and armour on a seven-point budget. A headshot kill drops coins and a health pack, and kill streaks earn rewards. Every hit and kill is confirmed by the server and felt on screen: a hit marker, damage numbers, medals (First Blood, Headshot, Double, Triple and Multi Kill, Revenge, Shutdown, Point Blank, No Scope, Long Shot, Nemesis) with a sound each, a killstreak meter, and the points for each kill beside the victim's name.
 
 A match starts in warmup, then counts down, then goes live. Nobody spawns until it is live (about thirteen seconds on the default rules), so an empty room at the start is normal.
 
@@ -161,9 +161,9 @@ The vote for the next map is [dot-vote](https://github.com/modcommunity/dot-vote
 [`CLAUDE.md`](CLAUDE.md) has the reasoning behind each of these.
 
 ## Credits
-The characters are from Kenney's character kits, the built-in maps' grid is Kenney's [Prototype Textures](https://kenney.nl/assets/prototype-textures) (`assets/prototype/`), the medal icons are from Kenney's [Board Game Icons](https://kenney.nl/assets/board-game-icons) and [Game Icons](https://kenney.nl/assets/game-icons) (`assets/medals/`), the HUD's ability icons from Kenney's [Game Icons](https://kenney.nl/assets/game-icons) and [Mobile Controls](https://kenney.nl/assets/mobile-controls) (`assets/hud_icons/`), the weapon silhouettes are rendered from the weapons' Kenney models by `tools/build_weapon_icons.sh` (`assets/weapon_icons/`), and the weapons are from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons), which credits its own art. Kenney's assets are CC0.
+The characters are from Kenney's character kits, the built-in maps' grid is Kenney's [Prototype Textures](https://kenney.nl/assets/prototype-textures) (`assets/prototype/`), the medal icons are from Kenney's [Board Game Icons](https://kenney.nl/assets/board-game-icons) and [Game Icons](https://kenney.nl/assets/game-icons) (`assets/medals/`), the HUD's ability icons from Kenney's [Game Icons](https://kenney.nl/assets/game-icons) and [Mobile Controls](https://kenney.nl/assets/mobile-controls) (`assets/hud_icons/`), the weapon silhouettes are rendered from the weapons' Kenney models by `tools/build_weapon_icons.sh` (`assets/weapon_icons/`), and the weapons are from [zee-dot-weapons](https://github.com/zees-games/zee-dot-weapons), which credits its own art. Kenney's assets are CC0.
 
-The combat surf maps are other people's work, imported by game-g2gfast. [g2gfast-maps](https://github.com/gamemann/g2gfast-maps) credits each one's author and where it came from (`maps.json`), and `arena_maps` names the author beside each one.
+The combat surf maps are other people's work, imported by game-g2gfast. [g2gfast-maps](https://github.com/zees-games/g2gfast-maps) credits each one's author and where it came from (`maps.json`), and `arena_maps` names the author beside each one.
 
 ## License
 MIT. See [LICENSE](LICENSE).
