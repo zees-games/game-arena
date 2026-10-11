@@ -69,7 +69,7 @@ A lethal critical drops coins and a health pack. `ArenaDrops` is one `Node3D` on
 
 ## Kill streaks
 
-Counted on the server for rewards (`ArenaGame.streaks`) and on each client for the meter (`ArenaHud.streaks`, from KILL events), so the meter needs nothing new on the wire. `arena_streak_rewards` is `streak:reward` pairs (`heal`, `armour`, `haste`, `empowered`), default `3:heal,5:haste,7:empowered`.
+Counted on the server for rewards (`ArenaGame.streaks`). The meter reads the killer's streak from the server's AWARD and ends a victim's on their KILL (`ArenaHud.streaks`); a shutdown is judged on the streak the victim died with, before it is reset ([client](client.md#kill-feedback)). `arena_streak_rewards` is `streak:reward` pairs (`heal`, `armour`, `haste`, `empowered`), default `3:heal,5:haste,7:empowered`.
 
 ## The end of a match
 

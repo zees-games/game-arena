@@ -1,6 +1,7 @@
 extends SceneTree
 
 const ArenaAvatars := preload("../game/arena_avatars.gd")
+const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaDrops := preload("../game/arena_drops.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
@@ -196,6 +197,14 @@ func _process(delta: float) -> bool:
 
 	if _wait > 0:
 		_wait -= 1
+		# `late`: [frames before the grab, Callable] pairs, for what must still be on screen
+		# when the frame is taken. The HUD animates in real time and a frame here takes
+		# about 70 ms, so a hit marker (0.6 s) staged with the shot was gone by the grab.
+		var current: Dictionary = _shots[_index]
+		if _armed and current.has("late"):
+			for stage: Array in current["late"]:
+				if _wait == int(stage[0]):
+					(stage[1] as Callable).call()
 		return false
 
 	if not _armed:
@@ -658,6 +667,32 @@ func _stage_feel(map: ArenaMap, id: StringName) -> void:
 				_local.challenge = 1
 				_local.challenge_value = 11,
 			"wait": 30,
+		},
+		{
+			# Kill feedback: medals from the server's AWARD, "+points  Victim", the streak
+			# meter, and, staged late so they are still up, the hit marker and the numbers.
+			"name": "%s_feel_kill" % String(id),
+			"local": true,
+			"arm": func() -> void:
+				_local.health.health = _local.health.max_health
+				_local.controller.state.launch_cooldown_left = 0.0
+				_local.controller.state.slide_time = -1.0
+				_hud.notice("")
+				_local.challenge = -1,
+			"late": [
+				[12, func() -> void:
+					var medals := [ArenaAwards.Medal.FIRST_BLOOD, ArenaAwards.Medal.HEADSHOT, ArenaAwards.Medal.DOUBLE_KILL]
+					_hud.note_kill({"killer_id": 112, "victim_id": 111, "headshot": true, "weapon": "rifle"}, 112, "You")
+					_hud.note_award(
+						{"killer_id": 112, "victim_id": 111, "medals": medals,
+							"points": ArenaAwards.points_for(medals), "streak": 4},
+						112, "Victim", "You"
+					)],
+				[4, func() -> void:
+					_hud.note_hit(113, 47.0, hurt.global_position + Vector3(0.0, 1.5, 0.0), false, false)
+					_hud.note_hit(111, 100.0, victim.global_position + Vector3(0.0, 1.7, 0.0), true, true)],
+			],
+			"wait": 34,
 		},
 		{
 			"name": "%s_feel_break" % String(id),

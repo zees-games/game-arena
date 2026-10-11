@@ -15,6 +15,7 @@ const ArenaProjectiles := preload("arena_projectiles.gd")
 const ArenaDrops := preload("arena_drops.gd")
 const ArenaProps := preload("arena_props.gd")
 const ArenaSpectate := preload("arena_spectate.gd")
+const ArenaAwards := preload("arena_awards.gd")
 
 ## The deathmatch itself: a match, a combat manager, a map, and some players.
 ##
@@ -190,6 +191,23 @@ var streak_rewards: Dictionary = {3: "heal", 5: "haste", 7: "empowered"}
 
 ## Somebody reached a streak with a reward. Server side; the module announces it.
 signal streak_reward(player_id: int, streak: int, reward: String)
+
+## A player's damage landed on something: a player or a monster. Authority side, once per
+## damage event (a shotgun's pellets are several); the bridge sums a tick's into one HIT
+## for the attacker, and an offline client draws it straight from here. [param point] is
+## where it landed, [param amount] what it took off health and armour together.
+##
+## [b]The hit marker is drawn from this and nothing else.[/b] A client that flashed on
+## its own predicted shot drew hits the server then refused (a lag-compensated miss, a
+## protected spawn); the marker would say "hit" about a shot that did nothing.
+signal hit_confirmed(attacker: int, victim: int, amount: float, point: Vector3, headshot: bool, lethal: bool)
+
+## What one kill earned: its medals ([enum ArenaAwards.Medal]), its points, and the
+## killer's streak now. Authority side, after [signal player_killed] for the same kill.
+signal medals_awarded(killer: int, victim: int, medals: Array, points: int, streak: int)
+
+## The medal rules' memory. Authority side; reset at each round's start.
+var medals := ArenaAwards.MedalBook.new()
 
 ## The server owner's drop rules (`arena_drop_*`), applied to every drops layer built.
 var drop_rules := {
@@ -1154,6 +1172,7 @@ func add_player(
 
 func remove_player(id: int) -> void:
 	_unlag.erase(id)
+	medals.forget(id)
 	var player := player_for(id)
 
 	if player == null:
@@ -1652,6 +1671,17 @@ func _on_entity_killed(entity_id: int, damage: DotDamage) -> void:
 	# lethal critical happened, which is what breaks a body and what a reward hangs on.
 	entry.set_meta(&"critical", damage.critical)
 
+	# The medals, before the streaks move: a shutdown is judged on the streak the victim
+	# died with. Emitted after `player_killed`, so a client hears the kill first.
+	var awarded: Array[int] = []
+	var judged := false
+	if is_authority:
+		judged = true
+		if damage.attacker == 0 or damage.attacker == entity_id or player_for(damage.attacker) == null:
+			medals.note_death(entity_id)
+		else:
+			awarded = medals.judge(_kill_facts(damage, victim, entry))
+
 	# The streaks: the victim's ends, the killer's grows, and a reward lands on the kill
 	# that reaches it.
 	streaks[entity_id] = 0
@@ -1675,6 +1705,37 @@ func _on_entity_killed(entity_id: int, damage: DotDamage) -> void:
 		)
 
 	player_killed.emit(entry)
+
+	if judged and damage.attacker != 0 and damage.attacker != entity_id and player_for(damage.attacker) != null:
+		medals_awarded.emit(
+			damage.attacker, entity_id, awarded, ArenaAwards.points_for(awarded),
+			int(streaks.get(damage.attacker, 0))
+		)
+
+
+## What the medal rules are told about a kill: all of it read off the simulation.
+func _kill_facts(damage: DotDamage, victim: ArenaPlayer, entry: DotKillFeed.Entry) -> ArenaAwards.KillFacts:
+	var killer := player_for(damage.attacker)
+	var k := ArenaAwards.KillFacts.new()
+	k.killer = damage.attacker
+	k.victim = victim.player_id
+	k.tick = _tick
+	k.tick_rate = tick_rate
+	k.headshot = damage.is_headshot()
+	k.victim_streak = int(streaks.get(victim.player_id, 0))
+	k.team_kill = entry.team_kill
+	# Eye to eye from the simulated states, never `damage.distance`: a detonation pins the
+	# attacker's origin to the blast, so a rocket's distance is the blast's, not the throw's.
+	k.distance = killer.controller.state.position.distance_to(victim.controller.state.position)
+	k.aiming = killer.aiming
+	var weapon := damage.weapon_id
+	var def := ArenaPlayer.weapon_catalogue().get_def(weapon) if weapon != &"" else null
+	if def != null:
+		k.tags = Array(def.tags)
+	elif weapon == &"":
+		# Not a weapon at all (a world hazard pushed by somebody): no range medals.
+		k.tags = [ZeeWeaponIds.TAG_THROWN]
+	return k
 
 
 ## Gun game: a melee kill costs the victim a gun ([member ArenaMode.gun_game_melee_demotes]).
@@ -1703,6 +1764,24 @@ func _demote_for_melee(damage: DotDamage, killer: ArenaPlayer) -> void:
 
 
 func _on_damage_applied(damage: DotDamage) -> void:
+	# The hit marker's source, for anything a player hurt that is not themselves. Before
+	# the scoreboard's filter, because a monster hit is a hit too.
+	if (
+		is_authority and damage.attacker != 0 and damage.attacker != damage.victim
+		and player_for(damage.attacker) != null
+	):
+		var taken := damage.health_lost + damage.armour_absorbed
+		if taken > 0.0:
+			# Damage applied without a trace (a blast, a hazard) has no point; a player's
+			# chest is where its number rises from then.
+			var at := damage.point
+			var hurt := player_for(damage.victim)
+			if at == Vector3.ZERO and hurt != null:
+				at = hurt.controller.state.position + Vector3(0.0, 1.3, 0.0)
+			hit_confirmed.emit(
+				damage.attacker, damage.victim, taken, at, damage.is_headshot(), damage.lethal
+			)
+
 	# Only players are on the scoreboard. Damage to or from anything else a game
 	# layer registered with dot-combat — a monster, a breakable — would otherwise
 	# create a record keyed on an id no player has, for the same reason
@@ -1819,6 +1898,9 @@ func _apply_loadout_deferred(id: int) -> void:
 
 
 func _on_match_state_changed(from: DotMatch.State, to: DotMatch.State) -> void:
+	# A new round has its own first blood, and nobody's revenge carries over from warmup.
+	if to == DotMatch.State.LIVE:
+		medals.reset_round()
 	match_state_changed.emit(from, to)
 
 

@@ -373,6 +373,37 @@ static func _startup_map() -> ArenaMap:
 func _start_offline() -> void:
 	game.start(0)
 
+	# Offline this game is the authority, so the confirmations come off it directly; the
+	# same handlers a server's HIT, AWARD and KILL reach. The feed is the HUD's own
+	# `player_killed` connection, so this one leaves the feed alone.
+	game.hit_confirmed.connect(
+		func(attacker: int, victim: int, amount: float, point: Vector3, headshot: bool, lethal: bool) -> void:
+			if player != null and attacker == player.player_id:
+				_on_hit({
+					"victim_id": victim, "amount": amount, "point": point,
+					"headshot": headshot, "lethal": lethal,
+				})
+	)
+	game.medals_awarded.connect(
+		func(killer: int, victim: int, medals: Array, points: int, streak: int) -> void:
+			_on_award({
+				"killer_id": killer, "victim_id": victim, "medals": medals,
+				"points": points, "streak": streak,
+			})
+	)
+	game.player_killed.connect(func(entry: DotKillFeed.Entry) -> void:
+		if hud != null:
+			hud.note_kill(
+				{
+					"killer_id": int(entry.killer_key) if entry.killer_key.is_valid_int() else 0,
+					"victim_id": int(entry.victim_key) if entry.victim_key.is_valid_int() else 0,
+					"weapon": ArenaHud.cause_label(entry.cause),
+				},
+				player.player_id if player != null else 0,
+				entry.killer_name
+			)
+	)
+
 	# [b]Named as ours BEFORE it exists.[/b] `add_player` emits `player_added`
 	# synchronously, and `_on_player_added` gives every player it does not recognise as
 	# ours a body to be seen as. With `_watch_id` still -1 that was this one: the local
@@ -477,6 +508,8 @@ func _build_netcode() -> DotResult:
 	bridge.notice_received.connect(_on_notice)
 	bridge.vote_received.connect(_on_vote)
 	bridge.kill_received.connect(_on_kill)
+	bridge.hit_received.connect(_on_hit)
+	bridge.award_received.connect(_on_award)
 	bridge.match_received.connect(_on_match)
 
 	# The one thing that writes an RTT sample. dot-net never touches a transport, so
@@ -838,6 +871,41 @@ func _on_kill(info: Dictionary) -> void:
 			int(info["victim_id"]) * 7919 + int(info["killer_id"]),
 			bool(info.get("critical", false))
 		)
+
+
+## The server confirmed this player's damage landed. The hit marker, the number and the
+## sound; nothing about a hit is drawn from the client's own prediction of its shot.
+func _on_hit(info: Dictionary) -> void:
+	if hud == null:
+		return
+	var point: Vector3 = info.get("point", Vector3.ZERO)
+	var victim := game.player_for(int(info.get("victim_id", 0))) if game != null else null
+	# Near zero rather than zero: the wire quantises, and "no point" comes back as a few
+	# millimetres off the origin.
+	if point.length() < 0.05 and victim != null:
+		# A hit with no point (world damage passed on): the chest of who took it.
+		point = victim.global_position + Vector3(0.0, 1.3, 0.0)
+	var lethal := bool(info.get("lethal", false))
+	hud.note_hit(int(info.get("victim_id", 0)), float(info.get("amount", 0.0)), point, bool(info.get("headshot", false)), lethal)
+	if presentation != null:
+		presentation.on_hit_confirmed(lethal)
+
+
+## A kill's medals and points, as the server judged them. Every client hears every
+## award; the HUD draws only the followed player's own and the nemesis line on their death.
+func _on_award(info: Dictionary) -> void:
+	if hud == null or game == null:
+		return
+	var own := player.player_id if player != null else 0
+	var killer := game.player_for(int(info.get("killer_id", 0)))
+	var victim := game.player_for(int(info.get("victim_id", 0)))
+	hud.note_award(
+		info, own,
+		victim.display_name if victim != null else "?",
+		killer.display_name if killer != null else "?"
+	)
+	if presentation != null and int(info.get("killer_id", 0)) == own and own != 0:
+		presentation.on_medals(info.get("medals", []))
 
 
 ## The scoreboard up, and the MVP named: best score, then kills. Client side.
@@ -1349,6 +1417,8 @@ func _read_fire(move: DotFpsCommand) -> void:
 	_fire.set_button(DotWeaponCommand.BUTTON_ALT, bash)
 	if player != null:
 		player.aim_held = right and aims
+	# On the wire as well, for the server's No Scope medal; nothing simulated reads it.
+	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
 	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, Input.is_key_pressed(KEY_R))
 	_note_held_slot()
 	_fire.yaw = move.yaw

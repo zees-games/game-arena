@@ -28,7 +28,7 @@ There are seven modes:
 | Gun Game | Every kill gives you a different gun. First through the list wins. |
 | Only Snipers | A random sniper on every spawn. First to 25. |
 
-The weapons are all twenty-seven from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons): melee weapons, sidearms, rifles, heavies and grenades, each with a view model, a world model, sounds and recoil. A loadout is a melee weapon, a sidearm, a primary, a grenade and armour on a seven-point budget. A headshot kill drops coins and a health pack, and kill streaks earn rewards.
+The weapons are all twenty-seven from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons): melee weapons, sidearms, rifles, heavies and grenades, each with a view model, a world model, sounds and recoil. A loadout is a melee weapon, a sidearm, a primary, a grenade and armour on a seven-point budget. A headshot kill drops coins and a health pack, and kill streaks earn rewards. Every hit and kill is confirmed by the server and felt on screen: a hit marker, damage numbers, medals (First Blood, Headshot, Double, Triple and Multi Kill, Revenge, Shutdown, Point Blank, No Scope, Long Shot, Nemesis) with a sound each, a killstreak meter, and the points for each kill beside the victim's name.
 
 A match starts in warmup, then counts down, then goes live. Nobody spawns until it is live (about thirteen seconds on the default rules), so an empty room at the start is normal.
 
@@ -161,7 +161,7 @@ The vote for the next map is [dot-vote](https://github.com/modcommunity/dot-vote
 [`CLAUDE.md`](CLAUDE.md) has the reasoning behind each of these.
 
 ## Credits
-The characters are from Kenney's character kits, the built-in maps' grid is Kenney's [Prototype Textures](https://kenney.nl/assets/prototype-textures) (`assets/prototype/`), and the weapons are from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons), which credits its own art. Kenney's assets are CC0.
+The characters are from Kenney's character kits, the built-in maps' grid is Kenney's [Prototype Textures](https://kenney.nl/assets/prototype-textures) (`assets/prototype/`), the medal icons are from Kenney's [Board Game Icons](https://kenney.nl/assets/board-game-icons) and [Game Icons](https://kenney.nl/assets/game-icons) (`assets/medals/`), and the weapons are from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons), which credits its own art. Kenney's assets are CC0.
 
 The combat surf maps are other people's work, imported by game-g2gfast. [g2gfast-maps](https://github.com/gamemann/g2gfast-maps) credits each one's author and where it came from (`maps.json`), and `arena_maps` names the author beside each one.
 

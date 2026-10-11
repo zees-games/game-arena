@@ -33,9 +33,10 @@ An imported map gives every player a `DotFpsPhysicsBody` bound to the map's brus
 
 ## Events and requests
 
-`ArenaEvents.Kind` and the request kinds are indexes on the wire: **append, never insert or reorder.** After the original seven they run `VOTE`, `NPC`, `NPC_GONE`, `LAUNCH`, `RULES`, `DROP`, `TAKEN`, each appended in its turn.
+`ArenaEvents.Kind` and the request kinds are indexes on the wire: **append, never insert or reorder.** After the original seven they run `VOTE`, `NPC`, `NPC_GONE`, `LAUNCH`, `RULES`, `DROP`, `TAKEN`, `HIT`, `AWARD`, each appended in its turn. `ArenaAwards.Medal` is an index on the wire inside AWARD and follows the same rule.
 
 - **No message script preloads itself.** `arena_event.gd` and `arena_request.gd` are built with `new(kind, body)`, with an `_init` whose arguments default because dot-net's registry decodes with a bare `new()`. A self-preload in a `DotNetMessage` script loaded by a module inside a running `DotServer` was measured in mg-buses-from-hell as leaking the whole script graph at exit. `dedicated`'s last section reads every message script under `game/` as text and fails on one, because the leak is printed after `quit()` where no assertion can reach.
+- **HIT goes to the attacker alone, AWARD to everybody.** `ArenaNetBridge._on_hit_confirmed` sums a tick's damage events per attacker and victim (a shotgun's pellets are one number), and `_flush_hits` sends them after the tick to `peer_for_session(attacker)`; a bot has no peer and is told nothing. AWARD is sent the moment the kill is judged, after its KILL, because the victim's screen names a nemesis from it ([client](client.md#kill-feedback)).
 - **The KILL event carries an optional trailing critical bit** (`ArenaEvents.write_kill(..., critical)`); an older server's kill reads as none.
 
 ## Rules a client predicts with travel in RULES

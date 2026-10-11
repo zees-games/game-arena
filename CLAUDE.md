@@ -35,7 +35,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | `game/arena_paths.gd` | `rebase` for every `res://` path (pack delivery) |
 | `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
 | `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the g2gfast-maps link |
-| `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art and Kenney's prototype grid |
+| `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art, Kenney's prototype grid and medal icons |
 | `examples/` | the eight suites |
 | `tools/` | `screenshot.sh`, `screenshot_menus.sh`, `screenshot_weapons.sh`, `build_avatar_parts.gd`, `audio_probe.sh` |
 | `scenes/arena_server.tscn`, `game.yml` | the server scene and the descriptor that travels in the pack |
@@ -82,6 +82,8 @@ Short forms; the reasoning is in the linked file.
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - Typing (chat box or console) sets `DotFpsSampler.suspended` as well as swallowing input; the console is `DotConsoleKit`'s, wired to the sampler because there is no DotMenu. [client](docs/client.md#the-chat-box)
 - Full-screen overlays are sized to the viewport, not the HUD. [client](docs/client.md#the-hud)
+- The hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD; never from a predicted shot or a client's own count of kills. [client](docs/client.md#kill-feedback)
+- Medal rules live in `ArenaAwards.MedalBook` on the authority; `ArenaAwards.Medal` is a wire index, appended only. [services](docs/services.md#progression)
 - Third person is deliberately not here: one motor to agree about. [client](docs/client.md#avatars)
 
 **Modes and the round**

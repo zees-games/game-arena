@@ -8,10 +8,10 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 
 | Suite | What it drives |
 | --- | --- |
-| `headless_match` | an `ArenaGame` directly, no socket, no rendering. Bots aim at the nearest player and hold the trigger. Modes, maps and the survey, map changes, the horde, objectives, effects, progression, weapons, drops, gun game, lag compensation |
+| `headless_match` | an `ArenaGame` directly, no socket, no rendering. Bots aim at the nearest player and hold the trigger. Modes, maps and the survey, map changes, the horde, objectives, effects, progression, weapons, drops, gun game, lag compensation, every medal rule beside its near miss |
 | `headless_net` | a server and a client in one process over a loopback that drops packets: the wire, mirroring, prediction, config agreement, the death camera on a client, weapons and projectiles, movement rules, admin flags, an imported map |
 | `headless_lossy` | real ENet through real loss (below) |
-| `headless_presentation` | the client's presentation layer, effects, HUD pieces, the private match over HTTP |
+| `headless_presentation` | the client's presentation layer, effects, HUD pieces (HIT and AWARD read off the wire into the hit marker, numbers, medals and points), the private match over HTTP |
 | `headless_stack` | the player stack: spawning, sides, protection |
 | `headless_admin` | the admin tools on a real `DotServer` with the module loaded by path |
 | `headless_imported` | a deathmatch on a combat surf map: catalogue, spawns, floors, ramps, pits, surf air control, mechanics, delivery from a fake mount. Skips, and says so, without the g2gfast-maps link |

@@ -2,6 +2,7 @@ extends Node
 
 const ArenaPaths := preload("arena_paths.gd")
 const ArenaVote := preload("arena_vote.gd")
+const ArenaAwards := preload("arena_awards.gd")
 
 ## Settings, audio, effects and a console, on the client.
 ##
@@ -31,6 +32,29 @@ const BEACON_SOUND := &"beacon"
 
 ## A rocket or a grenade going off: one id for the sound and the effect.
 const EXPLOSION := &"explosion"
+
+## A hit that killed: the hit marker's heavier sound.
+const KILL_CONFIRMED := &"kill_confirmed"
+
+## Seconds between one kill's medal sounds; the HUD's `MedalRow.STAGGER_SEC`.
+const MEDAL_STAGGER_SEC := 0.14
+
+## Each medal's stand-in: a voice and a pitch, so eleven medals are eleven sounds until
+## real recordings land. Up is good news, so most are the upward sweep at a pitch that
+## climbs with how rare the medal is; Nemesis is the low one.
+const MEDAL_VOICES := {
+	&"medal_first_blood": [DotAudioSynth.Voice.SPAWN, 0.8],
+	&"medal_headshot": [DotAudioSynth.Voice.PICKUP, 1.25],
+	&"medal_double_kill": [DotAudioSynth.Voice.SPAWN, 1.0],
+	&"medal_triple_kill": [DotAudioSynth.Voice.SPAWN, 1.2],
+	&"medal_multi_kill": [DotAudioSynth.Voice.SPAWN, 1.45],
+	&"medal_revenge": [DotAudioSynth.Voice.PICKUP, 0.8],
+	&"medal_shutdown": [DotAudioSynth.Voice.PICKUP, 0.65],
+	&"medal_point_blank": [DotAudioSynth.Voice.IMPACT, 1.2],
+	&"medal_no_scope": [DotAudioSynth.Voice.SHOT_TIGHT, 1.3],
+	&"medal_long_shot": [DotAudioSynth.Voice.SHOT_TIGHT, 0.85],
+	&"medal_nemesis": [DotAudioSynth.Voice.DENY, 0.7],
+}
 
 ## How far an explosion shakes the camera, and how hard at its centre.
 const EXPLOSION_SHAKE_RANGE := 18.0
@@ -369,6 +393,30 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	hit.priority = 95
 	c.add(hit)
 
+	# A hit that killed: the same flat information, lower and longer than the tick.
+	var killed := DotAudioDef.new()
+	killed.id = KILL_CONFIRMED
+	killed.path = "%s/kill_confirmed.ogg" % SOUND_DIR
+	killed.bus = &"UI"
+	killed.max_concurrent = 1
+	killed.priority = 96
+	killed.pitch_min = 0.62
+	killed.pitch_max = 0.62
+	c.add(killed)
+
+	# The medals: flat, on the interface bus, one at a time each. Information about your
+	# own kill, like the hit marker; louder than the world so a medal is never lost in it.
+	for id in MEDAL_VOICES:
+		var medal := DotAudioDef.new()
+		medal.id = id
+		medal.path = "%s/%s.ogg" % [SOUND_DIR, String(id)]
+		medal.bus = &"UI"
+		medal.max_concurrent = 1
+		medal.priority = 92
+		medal.pitch_min = float(MEDAL_VOICES[id][1])
+		medal.pitch_max = float(MEDAL_VOICES[id][1])
+		c.add(medal)
+
 	var hurt := DotAudioDef.new()
 	hurt.id = &"hurt"
 	hurt.path = "%s/hurt.ogg" % SOUND_DIR
@@ -456,6 +504,14 @@ static func sound_catalogue() -> DotAudioCatalogue:
 ## rifle is the one thing weapon audio must not be: the point of hearing somebody else's
 ## shot is knowing what they are holding before you come round the corner.
 static func sound_recipes() -> Dictionary:
+	var out := _base_recipes()
+	out[KILL_CONFIRMED] = DotAudioSynth.Voice.BLIP
+	for id in MEDAL_VOICES:
+		out[id] = MEDAL_VOICES[id][0]
+	return out
+
+
+static func _base_recipes() -> Dictionary:
 	return {
 		&"fire_rifle": DotAudioSynth.Voice.SHOT,
 		&"fire_shotgun": DotAudioSynth.Voice.SHOT_HEAVY,
@@ -870,8 +926,9 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 			else:
 				on_impact(facing(at, shot.direction), false)
 
-		if not shot.damages.is_empty():
-			on_hit_confirmed()
+		# No hit marker here. `shot.damages` is this client's PREDICTION of what its shot
+		# did, and the server may refuse it (a lag-compensated miss, a protected spawn);
+		# the marker and its sound wait for the server's HIT ([method on_hit_confirmed]).
 
 
 func on_fired(weapon_id: StringName, muzzle: Transform3D, mine: bool) -> void:
@@ -914,8 +971,25 @@ func on_vote_cue(id: StringName) -> int:
 	return audio.play(id)
 
 
-func on_hit_confirmed() -> void:
-	audio.play(&"hit_marker")
+## The server confirmed a hit: the tick, or the heavier kill sound when it was lethal.
+func on_hit_confirmed(lethal: bool = false) -> void:
+	if audio == null:
+		return
+	var _v := audio.play(KILL_CONFIRMED if lethal else &"hit_marker")
+
+
+## A kill's medals, each its own sound, staggered as the HUD staggers their popups.
+func on_medals(medals: Array) -> void:
+	if audio == null:
+		return
+	for i in range(medals.size()):
+		var id := ArenaAwards.medal_sound(int(medals[i]))
+		if i == 0 or not is_inside_tree():
+			var _v := audio.play(id)
+		else:
+			get_tree().create_timer(MEDAL_STAGGER_SEC * float(i)).timeout.connect(
+				func() -> void: if audio != null: audio.play(id)
+			)
 
 
 func on_hurt(_amount: float) -> void:

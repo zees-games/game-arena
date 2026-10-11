@@ -4,6 +4,7 @@ extends DotHud
 const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaAwards := preload("arena_awards.gd")
+const ArenaPaths := preload("arena_paths.gd")
 
 ## The in-game display: crosshair, health, armour, ammo, kill feed, round timer.
 ##
@@ -80,56 +81,340 @@ var coins_label: Label = null
 ## the meter needs nothing new on the wire. See [method note_kill].
 var streaks: Dictionary = {}
 
-## How many times each player has killed the one this HUD follows. Three is a nemesis.
-var deaths_to: Dictionary = {}
-const NEMESIS_AT := 3
-
-## Who last killed the followed player, for "Revenge!" when they are killed back.
-var last_killer: int = 0
+## Players the server named as the followed player's nemesis (an AWARD with
+## [constant ArenaAwards.Medal].NEMESIS for a kill of them), until they are killed back.
+## Only ever written from AWARD: the HUD counts nothing about who killed whom itself.
+var nemeses: Dictionary = {}
 
 ## The streak meter on the left: a bar that fills toward [constant STREAK_FULL] and a count.
 var streak_meter: StreakMeter = null
 const STREAK_FULL := 10
 
-## The cross the crosshair flashes on a kill you made, fading over [constant MARK_SEC].
-var kill_mark: KillMark = null
-const MARK_SEC := 0.6
+## The hit marker: four ticks round the crosshair on every hit the server confirmed, red
+## on a kill. See [method note_hit].
+var hit_marker: HitMarker = null
+
+## Numbers rising off whatever was hit, gold for a headshot.
+var damage_numbers: DamageNumbers = null
+
+## The medals of the followed player's last kills: icon, name, scale in, hold, fade.
+var medal_row: MedalRow = null
 
 ## "Killed by NAME (weapon)", and the nemesis line, while the followed player is dead.
 var death_label: Label = null
 var _death_text: String = ""
 
 
-## A vertical meter, drawn: no art.
+## The feedback's gold: the streak, the points, a headshot's number.
+const GOLD := Color(1.0, 0.8, 0.22)
+
+## A kill's red: the hit marker on a lethal hit.
+const KILL_RED := Color(1.0, 0.22, 0.2)
+
+## How the feedback is drawn: fonts, icons, colours, outlined text. An inner class so the
+## widgets below can call it (an inner class cannot call its outer script's functions).
+class Look:
+	extends RefCounted
+
+	## Where the medal icons are (Kenney's CC0 icons, `assets/medals/`), through the rebase.
+	const MEDAL_ICON_DIR := "res://assets/medals"
+
+	static var _icons: Dictionary = {}
+	static var _fonts: Dictionary = {}
+
+
+	## The fallback font, bold, and slanted when [param italic]: what every feedback line is
+	## drawn in. The genre's medal names and streak count are bold italic, and the theme's
+	## regular weight read as a debug overlay beside them (first render).
+	static func feedback_font(italic: bool = false) -> Font:
+		if not _fonts.has(italic):
+			var font := FontVariation.new()
+			font.base_font = ThemeDB.fallback_font
+			font.variation_embolden = 0.9
+			if italic:
+				font.variation_transform = Transform2D(Vector2(1.0, 0.0), Vector2(-0.22, 1.0), Vector2.ZERO)
+			_fonts[italic] = font
+		return _fonts[italic]
+
+
+	## A medal icon by file name, or null when the art is missing: the badge still draws.
+	static func medal_icon(file: String) -> Texture2D:
+		if not _icons.has(file):
+			var at := ArenaPaths.rebase("%s/%s.png" % [MEDAL_ICON_DIR, file])
+			_icons[file] = load(at) as Texture2D if ResourceLoader.exists(at) else null
+		return _icons[file]
+
+
+	## What each medal looks like: an icon file and a colour. The server's [ArenaAwards] says
+	## what a medal is called and what it is worth; this is only how it is drawn.
+	static func medal_look(medal: int) -> Array:
+		match medal:
+			ArenaAwards.Medal.FIRST_BLOOD: return ["splat", Color(0.86, 0.12, 0.18)]
+			ArenaAwards.Medal.HEADSHOT: return ["target", Color(1.0, 0.33, 0.2)]
+			ArenaAwards.Medal.DOUBLE_KILL: return ["skull", Color(1.0, 0.62, 0.1)]
+			ArenaAwards.Medal.TRIPLE_KILL: return ["skull", Color(1.0, 0.45, 0.1)]
+			ArenaAwards.Medal.MULTI_KILL: return ["skull", Color(0.95, 0.25, 0.55)]
+			ArenaAwards.Medal.REVENGE: return ["sword", Color(0.78, 0.1, 0.32)]
+			ArenaAwards.Medal.SHUTDOWN: return ["fire", Color(0.2, 0.52, 1.0)]
+			ArenaAwards.Medal.POINT_BLANK: return ["arrows", Color(0.55, 0.36, 1.0)]
+			ArenaAwards.Medal.NO_SCOPE: return ["zoom_out", Color(0.0, 0.7, 0.62)]
+			ArenaAwards.Medal.LONG_SHOT: return ["arrow", Color(0.16, 0.7, 0.96)]
+			ArenaAwards.Medal.NEMESIS: return ["skull_tile", Color(0.42, 0.12, 0.6)]
+		return ["", Color(0.5, 0.5, 0.5)]
+
+
+	## Text with a dark outline, the way every piece of feedback is drawn over a bright map.
+	static func draw_outlined(
+		canvas: CanvasItem, font: Font, at: Vector2, text: String, font_size: int, colour: Color,
+		outline: int = 6, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT, width: float = -1.0
+	) -> void:
+		canvas.draw_string_outline(
+			font, at, text, align, width, font_size, outline, Color(0.05, 0.03, 0.08, colour.a * 0.85)
+		)
+		canvas.draw_string(font, at, text, align, width, font_size, colour)
+
+
+## The killstreak meter: a thin rounded bar up the left edge, a flame over it, and
+## "Killstreak xN" under it, all gold. Drawn, with the flame from `assets/medals/`.
 class StreakMeter extends Control:
 	var fraction: float = 0.0
 	var count: int = 0
+	## Seconds since the count last went up, for the flame's pulse.
+	var _since: float = 99.0
+	var _shown: float = 0.0
+
+	func set_count(value: int, full: int) -> void:
+		if value > count:
+			_since = 0.0
+		count = value
+		fraction = float(value) / float(maxi(1, full))
+
+	func advance(delta: float) -> void:
+		_since += delta
+		# The fill eases toward the count rather than jumping, so a kill reads as a rise.
+		_shown = move_toward(_shown, clampf(fraction, 0.0, 1.0), delta * 2.5)
+		queue_redraw()
 
 	func _draw() -> void:
-		var bar := Rect2(0.0, 0.0, 10.0, size.y)
-		draw_rect(bar, Color(0.0, 0.0, 0.0, 0.45))
-		var fill := bar.size.y * clampf(fraction, 0.0, 1.0)
-		draw_rect(Rect2(0.0, bar.size.y - fill, 10.0, fill), Color(1.0, 0.72, 0.15, 0.95))
-		if count > 0:
-			draw_string(
-				ThemeDB.fallback_font, Vector2(-6.0, size.y + 18.0), "Killstreak x%d" % count,
-				HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14, Color(1.0, 0.82, 0.3)
-			)
+		var width := 10.0
+		var track := Rect2(0.0, 0.0, width, size.y)
+		var back := StyleBoxFlat.new()
+		back.bg_color = Color(0.05, 0.04, 0.1, 0.5)
+		back.set_corner_radius_all(4)
+		back.border_color = Color(1.0, 1.0, 1.0, 0.25)
+		back.set_border_width_all(1)
+		draw_style_box(back, track.grow(1.0))
+		var fill := track.size.y * _shown
+		if fill > 0.5:
+			var bar := StyleBoxFlat.new()
+			bar.bg_color = GOLD
+			bar.set_corner_radius_all(4)
+			draw_style_box(bar, Rect2(0.0, track.size.y - fill, width, fill))
+			draw_rect(Rect2(1.5, track.size.y - fill + 2.0, 2.0, maxf(0.0, fill - 4.0)), Color(1.0, 0.95, 0.7, 0.7))
+
+		var pulse := 1.0 + 0.35 * maxf(0.0, 1.0 - _since / 0.3)
+		var icon := Look.medal_icon("fire")
+		var side := 26.0 * pulse
+		var at := Rect2(Vector2(width * 0.5 - side * 0.5, -side - 8.0), Vector2(side, side))
+		if icon != null:
+			draw_texture_rect(icon, at.grow(2.0), false, Color(0.1, 0.05, 0.0, 0.6))
+			draw_texture_rect(icon, at, false, GOLD if count > 0 else Color(1.0, 1.0, 1.0, 0.45))
+		Look.draw_outlined(
+			self, Look.feedback_font(true), Vector2(-14.0, size.y + 26.0), "Killstreak x%d" % count,
+			17, GOLD if count > 0 else Color(1.0, 1.0, 1.0, 0.6), 6
+		)
 
 
-## A cross at the screen's centre, red for a headshot.
-class KillMark extends Control:
-	var alpha: float = 0.0
-	var colour: Color = Color.WHITE
+## Four ticks round the crosshair: white on a hit, larger and red on a kill, with a short
+## pop outward as it appears and a fade. Only ever flashed by a hit the server confirmed.
+class HitMarker extends Control:
+	const HIT_SEC := 0.28
+	const KILL_SEC := 0.6
+	var age: float = 99.0
+	var life: float = HIT_SEC
+	var kill: bool = false
+	var headshot: bool = false
+
+	## 1 when it has just flashed, 0 when it is gone.
+	var alpha: float:
+		get:
+			return clampf(1.0 - age / life, 0.0, 1.0)
+
+	func flash(p_kill: bool, p_headshot: bool) -> void:
+		# A pellet landing after the lethal one in the same burst must not turn red white.
+		if kill and not p_kill and age < life * 0.5:
+			return
+		kill = p_kill
+		headshot = p_headshot
+		age = 0.0
+		life = KILL_SEC if p_kill else HIT_SEC
+		queue_redraw()
+
+	func advance(delta: float) -> void:
+		age += delta
+		queue_redraw()
 
 	func _draw() -> void:
-		if alpha <= 0.0:
+		var a := alpha
+		if a <= 0.0:
 			return
 		var c := size * 0.5
-		var tint := Color(colour, alpha)
-		for d in [Vector2(1, 1), Vector2(1, -1)]:
-			draw_line(c + d * 6.0, c + d * 16.0, tint, 3.0)
-			draw_line(c - d * 6.0, c - d * 16.0, tint, 3.0)
+		var pop := 1.0 + 0.5 * maxf(0.0, 1.0 - age / 0.08)
+		var gap := (9.0 if kill else 7.0) * pop
+		var reach := gap + (16.0 if kill else 10.0) * pop
+		var thick := 4.0 if kill else 2.5
+		var colour := KILL_RED if kill else (Color(1.0, 0.9, 0.6) if headshot else Color.WHITE)
+		for d in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
+			var v: Vector2 = (d as Vector2).normalized()
+			draw_line(c + v * (gap - 1.0), c + v * (reach + 1.0), Color(0.0, 0.0, 0.0, 0.55 * a), thick + 2.5, true)
+			draw_line(c + v * gap, c + v * reach, Color(colour, a), thick, true)
+
+
+## Damage numbers: each rises off the point the server said it landed, projected through
+## the camera every frame, so it stays on the body while the view moves. Hits on one victim
+## within [constant MERGE_SEC] add up into one number, the way a burst reads as one hit.
+class DamageNumbers extends Control:
+	const LIFE_SEC := 0.9
+	const MERGE_SEC := 0.35
+	const RISE_PX := 70.0
+	var entries: Array[Dictionary] = []
+	var _seed: int = 0
+
+	func add(victim: int, amount: float, point: Vector3, headshot: bool) -> void:
+		for e in entries:
+			if int(e["victim"]) == victim and float(e["age"]) < MERGE_SEC:
+				e["amount"] = float(e["amount"]) + amount
+				e["headshot"] = bool(e["headshot"]) or headshot
+				e["age"] = 0.0
+				return
+		_seed += 1
+		# A small sideways scatter, deterministic, so two numbers on one body do not stack.
+		var drift := float((_seed * 37) % 7 - 3) * 9.0
+		entries.append({
+			"victim": victim, "amount": amount, "point": point, "headshot": headshot,
+			"age": 0.0, "drift": drift,
+		})
+
+	func advance(delta: float) -> void:
+		for i in range(entries.size() - 1, -1, -1):
+			entries[i]["age"] = float(entries[i]["age"]) + delta
+			if float(entries[i]["age"]) >= LIFE_SEC:
+				entries.remove_at(i)
+		queue_redraw()
+
+	func _draw() -> void:
+		var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+		if camera == null:
+			return
+		var to_local := get_global_transform().affine_inverse()
+		var font := Look.feedback_font(true)
+		for e in entries:
+			var point: Vector3 = e["point"]
+			if camera.is_position_behind(point):
+				continue
+			var t := float(e["age"]) / LIFE_SEC
+			var head := bool(e["headshot"])
+			var at: Vector2 = to_local * camera.unproject_position(point)
+			at += Vector2(float(e["drift"]), -RISE_PX * (1.0 - pow(1.0 - t, 2.0)))
+			var pop := 1.0 + 0.6 * maxf(0.0, 1.0 - float(e["age"]) / 0.1)
+			var font_size := int(round((30.0 if head else 24.0) * pop))
+			var colour := GOLD if head else Color.WHITE
+			colour.a = clampf((1.0 - t) / 0.4, 0.0, 1.0)
+			var text := str(int(roundf(float(e["amount"]))))
+			Look.draw_outlined(self, font, at + Vector2(-60.0, 0.0), text, font_size, colour, 7, HORIZONTAL_ALIGNMENT_CENTER, 120.0)
+
+
+## The medals of the followed player's kills: a row above the crosshair, each a coloured
+## badge with a white icon and its name under it. Each scales in with an overshoot, holds,
+## and fades; several from one kill come in one after another, and the row re-centres as
+## they come and go.
+class MedalRow extends Control:
+	const IN_SEC := 0.22
+	const HOLD_SEC := 2.4
+	const OUT_SEC := 0.5
+	const STAGGER_SEC := 0.14
+	const SPACING := 134.0
+	const RADIUS := 30.0
+	const MAX_SHOWN := 6
+	var shown: Array[Dictionary] = []
+
+	func add(medal: int, label: String, delay: float = 0.0) -> void:
+		var look := Look.medal_look(medal)
+		shown.append({
+			"medal": medal, "label": label, "icon": Look.medal_icon(String(look[0])),
+			"colour": look[1], "age": -delay, "x": NAN,
+		})
+		while shown.size() > MAX_SHOWN:
+			shown.remove_at(0)
+
+	## Every medal still on screen, in order: what a check reads.
+	func labels() -> PackedStringArray:
+		var out := PackedStringArray()
+		for m in shown:
+			out.append(String(m["label"]))
+		return out
+
+	func advance(delta: float) -> void:
+		var life := IN_SEC + HOLD_SEC + OUT_SEC
+		for i in range(shown.size() - 1, -1, -1):
+			shown[i]["age"] = float(shown[i]["age"]) + delta
+			if float(shown[i]["age"]) >= life:
+				shown.remove_at(i)
+		# Slots for the ones that have appeared; each slides to its own.
+		var visible_now: Array[Dictionary] = []
+		for m in shown:
+			if float(m["age"]) >= 0.0:
+				visible_now.append(m)
+		for i in range(visible_now.size()):
+			var target := (float(i) - float(visible_now.size() - 1) * 0.5) * SPACING
+			var m := visible_now[i]
+			m["x"] = target if is_nan(float(m["x"])) else lerpf(float(m["x"]), target, minf(1.0, delta * 12.0))
+		queue_redraw()
+
+	func _draw() -> void:
+		var centre := Vector2(size.x * 0.5, size.y * 0.27)
+		var font := Look.feedback_font(true)
+		for m in shown:
+			var age := float(m["age"])
+			if age < 0.0 or is_nan(float(m["x"])):
+				continue
+			var grow: float
+			if age < IN_SEC:
+				# Overshoot: in from nothing past full size and back, the genre's pop.
+				var t := age / IN_SEC
+				grow = lerpf(0.2, 1.3, t / 0.6) if t < 0.6 else lerpf(1.3, 1.0, (t - 0.6) / 0.4)
+			else:
+				grow = 1.0
+			var fade := clampf((IN_SEC + HOLD_SEC + OUT_SEC - age) / OUT_SEC, 0.0, 1.0)
+			var at := centre + Vector2(float(m["x"]), 0.0)
+			var r := RADIUS * grow
+			var colour: Color = m["colour"]
+			draw_circle(at + Vector2(0.0, 3.0), r + 4.0, Color(0.0, 0.0, 0.0, 0.35 * fade))
+			draw_circle(at, r + 3.5, Color(1.0, 1.0, 1.0, 0.92 * fade))
+			draw_circle(at, r, Color(colour.darkened(0.25), fade))
+			draw_circle(at - Vector2(0.0, r * 0.12), r * 0.86, Color(colour, fade))
+			var icon: Texture2D = m["icon"]
+			if icon != null:
+				var side := r * 1.4
+				draw_texture_rect(icon, Rect2(at - Vector2(side, side) * 0.5, Vector2(side, side)), false, Color(1.0, 1.0, 1.0, fade))
+			var medal := int(m["medal"])
+			var tally := (
+				"2" if medal == ArenaAwards.Medal.DOUBLE_KILL
+				else "3" if medal == ArenaAwards.Medal.TRIPLE_KILL
+				else "4+" if medal == ArenaAwards.Medal.MULTI_KILL else ""
+			)
+			if tally != "":
+				var badge := at + Vector2(r * 0.72, r * 0.62)
+				draw_circle(badge, 12.0 * grow, Color(1.0, 1.0, 1.0, fade))
+				draw_circle(badge, 10.0 * grow, Color(colour.darkened(0.35), fade))
+				draw_string(
+					Look.feedback_font(), badge + Vector2(-20.0, 5.0 * grow), tally, HORIZONTAL_ALIGNMENT_CENTER,
+					40.0, int(14.0 * grow), Color(1.0, 1.0, 1.0, fade)
+				)
+			Look.draw_outlined(
+				self, font, at + Vector2(-90.0, r + 26.0), "%s!" % String(m["label"]),
+				int(20.0 * minf(grow, 1.15)), Color(1.0, 1.0, 1.0, fade), 6, HORIZONTAL_ALIGNMENT_CENTER, 180.0
+			)
 
 
 ## A line for everybody to read: a chat line, a map change, "REVENGE!". Held for
@@ -195,6 +480,10 @@ func present_challenge(live: bool) -> void:
 ## Seconds a "+N" popup rises and fades over.
 const POPUP_SEC := 1.3
 
+## A kill's "+points  Victim" stays longer: it is the line the genre holds while the
+## medals play.
+const KILL_POPUP_SEC := 2.6
+
 ## Rising "+1" / "+3 COINS" lines beside the crosshair: [Label, age].
 var _popups: Array = []
 
@@ -203,30 +492,45 @@ var _coins_seen: int = -1
 
 
 ## A "+N" beside the crosshair that rises and fades: the genre's way of saying a kill or a
-## pickup counted. Several stack upward rather than overwriting each other.
-func popup(text: String, colour: Color = Color(1.0, 0.95, 0.6)) -> void:
-	var label := Label.new()
-	label.text = text
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override(&"font_size", 22)
-	label.add_theme_color_override(&"font_color", colour)
-	label.add_theme_color_override(&"font_outline_color", Color(0, 0, 0, 0.85))
-	label.add_theme_constant_override(&"outline_size", 5)
-	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	label.offset_left = 40.0
-	label.offset_right = 340.0
-	label.offset_top = -10.0 - 26.0 * float(_popups.size())
-	label.offset_bottom = label.offset_top + 30.0
-	add_child(label)
-	_popups.append([label, 0.0])
+## pickup counted. Several stack upward rather than overwriting each other. [param tail]
+## follows in [param tail_colour]: the victim's name after a kill's points.
+func popup(
+	text: String, colour: Color = GOLD, tail: String = "", tail_colour: Color = Color.WHITE,
+	life: float = POPUP_SEC
+) -> void:
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override(&"separation", 10)
+	row.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	# Level with the crosshair and right of it, clear of the hit marker: the damage number
+	# of the shot that killed rises from about where the crosshair is, so a line above it
+	# was drawn over that number in the first render.
+	row.offset_left = 64.0
+	row.offset_right = 528.0
+	row.offset_top = -16.0 - 30.0 * float(_popups.size())
+	row.offset_bottom = row.offset_top + 32.0
+	for part in [[text, colour], [tail, tail_colour]]:
+		if String(part[0]) == "":
+			continue
+		var label := Label.new()
+		label.text = String(part[0])
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.add_theme_font_override(&"font", Look.feedback_font(true))
+		label.add_theme_font_size_override(&"font_size", 22)
+		label.add_theme_color_override(&"font_color", part[1])
+		label.add_theme_color_override(&"font_outline_color", Color(0.05, 0.03, 0.08, 0.85))
+		label.add_theme_constant_override(&"outline_size", 7)
+		row.add_child(label)
+	add_child(row)
+	_popups.append([row, 0.0, life])
 
 
 func _advance_popups(delta: float) -> void:
 	for i in range(_popups.size() - 1, -1, -1):
 		var entry: Array = _popups[i]
-		var label: Label = entry[0]
+		var label: Control = entry[0]
 		entry[1] = float(entry[1]) + delta
-		var t := float(entry[1]) / POPUP_SEC
+		var t := float(entry[1]) / float(entry[2])
 
 		if t >= 1.0 or not is_instance_valid(label):
 			if is_instance_valid(label):
@@ -234,11 +538,14 @@ func _advance_popups(delta: float) -> void:
 			_popups.remove_at(i)
 			continue
 
-		label.position.y -= delta * 40.0
+		# A slow drift: a kill's line is read, not glanced at, and the first renders at
+		# 40 px a second had it halfway to the medals before it could be.
+		label.position.y -= delta * 14.0
 		label.modulate.a = clampf((1.0 - t) / 0.35, 0.0, 1.0)
 
 
-## A kill, as every client hears it. Keeps the streaks, the nemesis count and the marks.
+## A kill, as every client hears it: the streaks and the death panel. The points, the
+## medals and the nemesis are [method note_award]'s, from the server's AWARD.
 func note_kill(info: Dictionary, own_id: int, killer_name: String) -> void:
 	var killer := int(info.get("killer_id", 0))
 	var victim := int(info.get("victim_id", 0))
@@ -246,26 +553,76 @@ func note_kill(info: Dictionary, own_id: int, killer_name: String) -> void:
 	if killer != 0 and killer != victim:
 		streaks[killer] = int(streaks.get(killer, 0)) + 1
 
-	if killer == own_id and killer != victim:
-		var tags := PackedStringArray()
-		if bool(info.get("headshot", false)):
-			tags.append("HEADSHOT")
-		if bool(info.get("critical", false)):
-			tags.append("CRITICAL")
-		popup("+1  %s" % " ".join(tags) if not tags.is_empty() else "+1", Color(1.0, 0.4, 0.3) if not tags.is_empty() else Color(1.0, 0.95, 0.6))
-		if kill_mark != null:
-			kill_mark.alpha = 1.0
-			kill_mark.colour = Color(1.0, 0.25, 0.2) if bool(info.get("headshot", false)) else Color.WHITE
-		if victim == last_killer and last_killer != 0:
-			notice("REVENGE!")
-			last_killer = 0
-
 	if victim == own_id and killer != 0 and killer != victim:
-		last_killer = killer
-		deaths_to[killer] = int(deaths_to.get(killer, 0)) + 1
 		_death_text = "Killed by %s  (%s)" % [killer_name, String(info.get("weapon", ""))]
-		if int(deaths_to[killer]) >= NEMESIS_AT:
+		if nemeses.has(killer):
 			_death_text += "\n%s is your NEMESIS" % killer_name
+
+
+## Your damage landed, as the server confirmed it ([constant ArenaEvents.Kind].HIT, or
+## [signal ArenaGame.hit_confirmed] offline): the hit marker flashes, red if it killed, and
+## a number rises from [param point]. Nothing here is predicted.
+func note_hit(victim: int, amount: float, point: Vector3, headshot: bool, lethal: bool) -> void:
+	_build_feedback()
+	hit_marker.flash(lethal, headshot)
+	damage_numbers.add(victim, amount, point, headshot)
+
+
+## A kill's award, as every client hears it. For the followed player's own kill: the
+## medals, "+points  Victim", and the server's streak. For their death: the nemesis line.
+func note_award(info: Dictionary, own_id: int, victim_name: String, killer_name: String) -> void:
+	_build_feedback()
+	var killer := int(info.get("killer_id", 0))
+	var victim := int(info.get("victim_id", 0))
+	var medals: Array = info.get("medals", [])
+
+	if killer == own_id and own_id != 0:
+		# The server's count, which the KILL-counted one agrees with unless an event was
+		# missed; the server's wins.
+		streaks[killer] = int(info.get("streak", streaks.get(killer, 0)))
+		nemeses.erase(victim)
+		popup("+%d" % int(info.get("points", ArenaAwards.KILL_POINTS)), GOLD, victim_name, Color.WHITE, KILL_POPUP_SEC)
+		for i in range(medals.size()):
+			medal_row.add(int(medals[i]), ArenaAwards.medal_name(int(medals[i])), MedalRow.STAGGER_SEC * float(i))
+
+	if victim == own_id and medals.has(ArenaAwards.Medal.NEMESIS):
+		nemeses[killer] = true
+		var line := "%s is your NEMESIS" % killer_name
+		if not _death_text.contains(line):
+			_death_text += "\n" + line
+
+
+## The streak meter, the hit marker, the damage numbers and the medal row. Built once, on
+## first need, over everything else on the HUD.
+func _build_feedback() -> void:
+	if streak_meter != null:
+		return
+	streak_meter = StreakMeter.new()
+	streak_meter.name = "Streak"
+	streak_meter.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	streak_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	streak_meter.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	streak_meter.position = Vector2(34.0, -150.0)
+	streak_meter.size = Vector2(10.0, 250.0)
+	add_child(streak_meter)
+	damage_numbers = DamageNumbers.new()
+	damage_numbers.name = "DamageNumbers"
+	damage_numbers.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	damage_numbers.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(damage_numbers)
+	hit_marker = HitMarker.new()
+	hit_marker.name = "HitMarker"
+	hit_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hit_marker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(hit_marker)
+	medal_row = MedalRow.new()
+	medal_row.name = "Medals"
+	# 128 px icons drawn at about 40: without mipmaps the edges shimmer.
+	medal_row.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	medal_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	medal_row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(medal_row)
+
 
 ## Seconds a blind takes to come down and to lift. Short, so it is unmistakably on, and
 ## not instant, so it reads as something done to the screen rather than a frame dropped.
@@ -687,33 +1044,22 @@ func present_body() -> void:
 	slide_label.visible = live and state != null and state.is_sliding()
 	slide_label.text = "C  Cancel slide"
 
-	if streak_meter == null:
-		streak_meter = StreakMeter.new()
-		streak_meter.name = "Streak"
-		streak_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		streak_meter.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-		streak_meter.position = Vector2(28.0, -110.0)
-		streak_meter.size = Vector2(12.0, 220.0)
-		add_child(streak_meter)
-		kill_mark = KillMark.new()
-		kill_mark.name = "KillMark"
-		kill_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		kill_mark.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		add_child(kill_mark)
+	_build_feedback()
+	if death_label == null:
 		death_label = _make_label("Death", Control.PRESET_CENTER_TOP, Vector2(0.0, 150.0))
 
+	var delta := get_process_delta_time()
 	var streak := int(streaks.get(player.player_id, 0)) if player != null else 0
 	streak_meter.visible = live
-	streak_meter.count = streak
-	streak_meter.fraction = float(streak) / float(STREAK_FULL)
-	streak_meter.queue_redraw()
-
-	kill_mark.alpha = maxf(kill_mark.alpha - get_process_delta_time() / MARK_SEC, 0.0)
+	streak_meter.set_count(streak, STREAK_FULL)
+	streak_meter.advance(delta)
+	hit_marker.advance(delta)
+	damage_numbers.advance(delta)
+	medal_row.advance(delta)
 
 	if notice_label != null:
-		_notice_age += get_process_delta_time()
+		_notice_age += delta
 		notice_label.modulate.a = clampf((NOTICE_SEC - _notice_age) / 0.5, 0.0, 1.0)
-	kill_mark.queue_redraw()
 
 	death_label.visible = player != null and not player.is_alive() and _death_text != ""
 	death_label.text = _death_text

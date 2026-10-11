@@ -8,6 +8,7 @@
 
 - **dot-stats to dot-achievements is `DotAchievementStatsLink`, never `stats.recorded.connect(...)`.** `recorded` carries the session total; an achievement is about a lifetime. Wired straight through, the running total is added to the lifetime total on every kill (5,050 after a hundred). `headless_match` asserts lifetime kills equal session kills, the smallest check that tells the two wirings apart.
 - **A board is written when a player leaves, not when they score.** A submission reads, compares, writes and re-sorts; a session is when a player's totals stop moving.
+- **Medals are the server's.** `ArenaAwards.MedalBook` (one per game, reset when a round goes live, `forget` on leave) judges each player-on-player kill from `ArenaAwards.KillFacts`, all read off the simulation: First Blood, Headshot, Double/Triple/Multi Kill (4 s chain, ended by dying), Revenge (your last killer, once), Shutdown (a streak of 5+), Point Blank (< 3 m eye to eye) and Long Shot (30 m+), neither for a knife or anything thrown or explosive, No Scope (a `scoped` weapon without the aim held), Nemesis (the third kill of one player without them killing you back). Team kills, suicides and the world earn nothing. A kill is worth `KILL_POINTS` (100) plus each medal's points; the points are shown, not filed as a stat. Distances are from the simulated states, never `DotDamage.distance`, which a detonation pins to the blast.
 - **Accuracy and kill/death are derived, never stored.** A stored quotient is a third number that can disagree with the two it came from.
 
 ## Chat

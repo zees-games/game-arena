@@ -1,6 +1,8 @@
 extends Node
 
 const ArenaAvatars := preload("../game/arena_avatars.gd")
+const ArenaAwards := preload("../game/arena_awards.gd")
+const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaClient := preload("../game/arena_client.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
@@ -25,7 +27,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 143
+const CHECKS := 155
 
 var _passed := 0
 var _failed := 0
@@ -62,6 +64,7 @@ func _run() -> void:
 	_test_a_respawn_faces_its_spawn()
 	_test_the_view_turns_every_frame()
 	_test_criticals_and_the_body()
+	_test_feedback_from_the_wire()
 
 	print("")
 	_check(
@@ -1255,17 +1258,14 @@ func _test_criticals_and_the_body() -> void:
 	_check(hud.slide_label.visible, "sliding, it says how to stop")
 	player.controller.state.slide_time = -1.0
 
-	# The streak meter and the kill mark count from KILL events, as a client hears them.
+	# The streak meter counts from KILL events, as a client hears them. The points, the
+	# hit marker and the medals do not: those come from the server's HIT and AWARD.
 	for v in [7, 8, 9]:
 		hud.note_kill({"killer_id": 6, "victim_id": v, "headshot": v == 9, "weapon": "rifle"}, 6, "Broken")
 	hud.present_body()
-	_check(hud.streak_meter.count == 3 and hud.kill_mark.alpha > 0.5,
-		"three kills fill the streak meter to three and flash the kill mark")
-	var popped: Array = hud._popups.map(func(e: Array) -> String: return (e[0] as Label).text)
-	_check(popped.size() == 3 and popped.has("+1  HEADSHOT"), "each one rises as a +1 beside the crosshair, a headshot named (%s)" % [popped])
-	for _i in range(4):
-		hud._advance_popups(0.5)
-	_check(hud._popups.is_empty(), "and they are gone in a second and a half")
+	_check(hud.streak_meter.count == 3, "three kills fill the streak meter to three")
+	_check(hud._popups.is_empty() and hud.hit_marker.alpha == 0.0 and hud.medal_row.shown.is_empty(),
+		"and a KILL alone draws no points, no hit marker and no medal: the client decides none of them")
 
 	# The challenge bar: the achievement this player is nearest to.
 	var awards: DotAchievementCatalogue = load("res://game/arena_awards.gd").catalogue()
@@ -1286,16 +1286,20 @@ func _test_criticals_and_the_body() -> void:
 
 	for i in range(3):
 		hud.note_kill({"killer_id": 7, "victim_id": 6, "weapon": "sniper"}, 6, "Sniper")
-	_check(hud.streaks.get(6, -1) == 0 and hud._death_text.contains("NEMESIS"),
-		"dying ends the streak, and a third death to one player names a nemesis")
+	_check(hud.streaks.get(6, -1) == 0 and not hud._death_text.contains("NEMESIS"),
+		"dying ends the streak, and three deaths alone name nobody: that is the server's call")
+	hud.note_award({"killer_id": 7, "victim_id": 6, "medals": [ArenaAwards.Medal.NEMESIS], "points": 125, "streak": 3}, 6, "Broken", "Sniper")
+	_check(hud._death_text.contains("Sniper is your NEMESIS"), "the server's Nemesis medal for a kill of you names them")
 	player.make_dead()
 	hud.present_body()
 	_check(hud.death_label.visible and hud.death_label.text.contains("Killed by Sniper"),
 		"dead, it says who did it and with what")
 
 	hud.note_kill({"killer_id": 6, "victim_id": 7, "weapon": "rifle"}, 6, "Broken")
-	_check(hud.notice_label != null and hud.notice_label.text == "REVENGE!",
-		"killing them back says so")
+	hud.note_award({"killer_id": 6, "victim_id": 7, "medals": [ArenaAwards.Medal.REVENGE], "points": 150, "streak": 1}, 6, "Sniper", "Broken")
+	hud.medal_row.advance(0.05)
+	_check(hud.medal_row.labels().has("Revenge") and not hud.nemeses.has(7),
+		"killing them back is the server's Revenge medal, and they are nobody's nemesis now")
 	hud.notice("hello")
 	_check(hud.notice_label.text == "hello", "and notice() exists, which the client had called for a month")
 
@@ -1319,6 +1323,86 @@ func _test_criticals_and_the_body() -> void:
 
 	hud.queue_free()
 	player.queue_free()
+	_done()
+
+
+## A client turns the server's HIT and AWARD into the hit marker, a damage number, the
+## medals and "+points  Victim", read back off the wire exactly as a link delivers them.
+func _test_feedback_from_the_wire() -> void:
+	_section("The server's hits and medals become a hit marker, numbers, medals and points")
+	var M := ArenaAwards.Medal
+
+	var g := ArenaGame.new()
+	g.is_authority = true
+	g.headless = true
+	g.register_service = false
+	add_child(g)
+	var _set := g.setup(ArenaMap.dm_box())
+	var me: ArenaPlayer = g.add_player(6, "Broken").value
+	var them: ArenaPlayer = g.add_player(7, "Victim").value
+
+	var hud := ArenaHud.new()
+	hud.config = DotUiConfig.new()
+	add_child(hud)
+	hud.build(null)
+	hud.follow(me)
+
+	var client := ArenaClient.new()
+	client.game = g
+	client.player = me
+	client.hud = hud
+
+	var at := them.global_position + Vector3(0.0, 1.4, 0.0)
+	client._on_hit(ArenaEvents.read_hit(DotNetReader.new(ArenaEvents.write_hit(7, 34.0, at, false, false))))
+	_check(hud.hit_marker.alpha > 0.9 and not hud.hit_marker.kill, "a HIT flashes the hit marker, white")
+	_check(hud.damage_numbers.entries.size() == 1 and int(hud.damage_numbers.entries[0]["amount"]) == 34,
+		"and a number rises from where it landed, saying what it took")
+	client._on_hit(ArenaEvents.read_hit(DotNetReader.new(ArenaEvents.write_hit(7, 20.0, at, false, false))))
+	_check(hud.damage_numbers.entries.size() == 1 and int(hud.damage_numbers.entries[0]["amount"]) == 54,
+		"a second hit on them straight after adds into the same number (%s)" % [hud.damage_numbers.entries.map(func(e: Dictionary) -> int: return int(e["amount"]))])
+	client._on_hit(ArenaEvents.read_hit(DotNetReader.new(ArenaEvents.write_hit(7, 80.0, at, true, true))))
+	_check(hud.hit_marker.kill and bool(hud.damage_numbers.entries[0]["headshot"]),
+		"a lethal hit to the head turns the marker red and the number gold")
+	hud.hit_marker.advance(1.0)
+	hud.damage_numbers.advance(1.0)
+	_check(hud.hit_marker.alpha == 0.0 and hud.damage_numbers.entries.is_empty(), "and both are gone within a second")
+
+	var award := ArenaEvents.read_award(DotNetReader.new(
+		ArenaEvents.write_award(6, 7, ArenaAwards.points_for([M.FIRST_BLOOD, M.HEADSHOT]), 4, [M.FIRST_BLOOD, M.HEADSHOT])
+	))
+	client._on_award(award)
+	var texts: Array = []
+	for entry in hud._popups:
+		for label in (entry[0] as Control).get_children():
+			texts.append((label as Label).text)
+	_check(texts == ["+175", "Victim"], "an AWARD for your kill puts \"+points  Victim\" by the crosshair (%s)" % [texts])
+	_check(hud.medal_row.shown.size() == 2 and float(hud.medal_row.shown[1]["age"]) < 0.0,
+		"and its medals, the second waiting its turn")
+	hud.medal_row.advance(0.3)
+	_check(hud.medal_row.labels() == PackedStringArray(["First Blood", "Headshot"]) and float(hud.medal_row.shown[1]["age"]) > 0.0,
+		"then both, by name, in the order the server sent them")
+	hud.present_body()
+	_check(hud.streak_meter.count == 4, "the streak meter takes the server's streak (%d)" % hud.streak_meter.count)
+	hud.medal_row.advance(3.5)
+	_check(hud.medal_row.shown.is_empty(), "and the medals fade out after a couple of seconds")
+
+	client._on_award({"killer_id": 7, "victim_id": 6, "medals": [M.HEADSHOT], "points": 125, "streak": 1})
+	hud.medal_row.advance(0.3)
+	_check(hud.medal_row.shown.is_empty() and hud._popups.size() == 1, "somebody else's medals are not drawn on your screen")
+
+	var catalogue := ArenaPresentation.sound_catalogue()
+	var recipes := ArenaPresentation.sound_recipes()
+	var unheard: Array = []
+	for medal in ArenaAwards.MEDALS:
+		var id := ArenaAwards.medal_sound(int(medal))
+		if catalogue.find(id) == null or not recipes.has(id):
+			unheard.append(String(id))
+	_check(unheard.is_empty() and catalogue.find(ArenaPresentation.KILL_CONFIRMED) != null,
+		"every medal and the kill confirmation is a sound with a stand-in (%s)" % [unheard])
+
+	client.free()
+	hud.queue_free()
+	g.queue_free()
 	_done()
 
 

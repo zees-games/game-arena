@@ -1,5 +1,6 @@
 extends Node
 
+const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaBoards := preload("../game/arena_boards.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaEffects := preload("../game/arena_effects.gd")
@@ -54,13 +55,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 523
+const CHECKS := 560
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 34
+const SECTIONS := 36
 
 var _passed := 0
 var _failed := 0
@@ -130,6 +131,8 @@ func _run() -> void:
 	await _test_weapon_modes()
 	await _test_lag_compensation()
 	await _test_streaks()
+	_test_medal_rules()
+	await _test_medals_from_a_game()
 
 	# Last, and it has to be. It replaces the combat manager, the match node and the
 	# map, so everything above that reads any of them — the kill feed a HUD catches
@@ -863,6 +866,184 @@ func _test_streaks() -> void:
 	game.player_for(941).hitboxes.enabled = true
 	_kill_through_combat(game, 941, 940)
 	_check(int(game.streaks.get(940, -1)) == 0, "and dying ends it")
+
+	remove_child(game)
+	game.queue_free()
+	await get_tree().process_frame
+	_done()
+
+
+# --- Medals ------------------------------------------------------------------
+
+## One kill's facts for the medal rules, at [param tick] on a 64-tick server.
+func _facts(killer: int, victim: int, tick: int, extra: Dictionary = {}) -> ArenaAwards.KillFacts:
+	var k := ArenaAwards.KillFacts.new()
+	k.killer = killer
+	k.victim = victim
+	k.tick = tick
+	k.tick_rate = 64
+	k.distance = float(extra.get("distance", 10.0))
+	k.headshot = bool(extra.get("headshot", false))
+	k.victim_streak = int(extra.get("victim_streak", 0))
+	k.aiming = bool(extra.get("aiming", true))
+	k.tags = extra.get("tags", [ZeeWeaponIds.TAG_PRIMARY])
+	k.team_kill = bool(extra.get("team_kill", false))
+	return k
+
+
+## Every medal rule, each with the case beside it that must NOT earn it. The rules are the
+## server's (`ArenaAwards.MedalBook`); a client only draws what they decide.
+func _test_medal_rules() -> void:
+	_section("medals: each rule, and its near miss")
+	var M := ArenaAwards.Medal
+	var book := ArenaAwards.MedalBook.new()
+
+	var first := book.judge(_facts(1, 2, 100))
+	_check(first.has(M.FIRST_BLOOD), "the round's first kill is First Blood (%s)" % [first])
+	_check(not book.judge(_facts(3, 4, 900)).has(M.FIRST_BLOOD), "and the second is not")
+	book.reset_round()
+	_check(book.judge(_facts(3, 4, 2000)).has(M.FIRST_BLOOD), "a new round has its own")
+
+	book.reset_round()
+	_check(book.judge(_facts(1, 2, 10, {"headshot": true})).has(M.HEADSHOT), "a kill to the head is a Headshot")
+	_check(not book.judge(_facts(1, 3, 1000)).has(M.HEADSHOT), "and one to the body is not")
+
+	# The chain: four seconds is 256 ticks at 64.
+	book.reset_round()
+	var one := book.judge(_facts(5, 6, 1000))
+	var two := book.judge(_facts(5, 7, 1100))
+	var three := book.judge(_facts(5, 8, 1300))
+	var four := book.judge(_facts(5, 9, 1500))
+	_check(not one.has(M.DOUBLE_KILL) and two.has(M.DOUBLE_KILL), "a second kill inside four seconds is a Double Kill")
+	_check(three.has(M.TRIPLE_KILL) and not three.has(M.DOUBLE_KILL), "a third is a Triple Kill, and only that")
+	_check(four.has(M.MULTI_KILL), "a fourth is a Multi Kill")
+	var late := book.judge(_facts(5, 10, 1500 + 257))
+	_check(not late.has(M.DOUBLE_KILL) and not late.has(M.MULTI_KILL), "a kill just past the window starts again (%s)" % [late])
+	var _died := book.judge(_facts(11, 5, 1760))
+	var after_death := book.judge(_facts(5, 12, 1770))
+	_check(not after_death.has(M.DOUBLE_KILL), "and dying ends a chain however quick the next kill")
+
+	book.reset_round()
+	var _b := book.judge(_facts(21, 20, 10))
+	_check(book.judge(_facts(20, 21, 900)).has(M.REVENGE), "killing your last killer is Revenge")
+	_check(not book.judge(_facts(20, 21, 1900)).has(M.REVENGE), "once: the next kill of them is not")
+	_check(not book.judge(_facts(20, 22, 2900)).has(M.REVENGE), "and nor is killing anybody else")
+
+	book.reset_round()
+	_check(book.judge(_facts(30, 31, 10, {"victim_streak": ArenaAwards.SHUTDOWN_AT})).has(M.SHUTDOWN),
+		"ending a streak of %d is a Shutdown" % ArenaAwards.SHUTDOWN_AT)
+	_check(not book.judge(_facts(30, 32, 900, {"victim_streak": ArenaAwards.SHUTDOWN_AT - 1})).has(M.SHUTDOWN),
+		"one shorter is not")
+
+	book.reset_round()
+	_check(book.judge(_facts(40, 41, 10, {"distance": 2.0})).has(M.POINT_BLANK), "a kill from 2 m is Point Blank")
+	_check(not book.judge(_facts(40, 42, 900, {"distance": 3.5})).has(M.POINT_BLANK), "from 3.5 m it is not")
+	_check(not book.judge(_facts(40, 43, 1800, {"distance": 1.0, "tags": [ZeeWeaponIds.TAG_MELEE]})).has(M.POINT_BLANK),
+		"and a knife is always close, so never")
+
+	book.reset_round()
+	var scoped := [ZeeWeaponIds.TAG_HEAVY, ZeeWeaponIds.TAG_SCOPED]
+	_check(book.judge(_facts(50, 51, 10, {"tags": scoped, "aiming": false})).has(M.NO_SCOPE),
+		"a scoped weapon's kill without aiming is No Scope")
+	_check(not book.judge(_facts(50, 52, 900, {"tags": scoped, "aiming": true})).has(M.NO_SCOPE),
+		"aimed, it is not")
+	_check(not book.judge(_facts(50, 53, 1800, {"aiming": false})).has(M.NO_SCOPE),
+		"and a weapon with no scope never is")
+
+	book.reset_round()
+	_check(book.judge(_facts(60, 61, 10, {"distance": ArenaAwards.LONG_SHOT_M + 5.0})).has(M.LONG_SHOT),
+		"a kill from %d m is a Long Shot" % int(ArenaAwards.LONG_SHOT_M + 5.0))
+	_check(not book.judge(_facts(60, 62, 900, {"distance": ArenaAwards.LONG_SHOT_M - 5.0})).has(M.LONG_SHOT),
+		"from %d m it is not" % int(ArenaAwards.LONG_SHOT_M - 5.0))
+	_check(not book.judge(_facts(60, 63, 1800, {"distance": 50.0, "tags": [ZeeWeaponIds.TAG_EXPLOSIVE]})).has(M.LONG_SHOT),
+		"and a rocket lands where it lands, so never")
+
+	book.reset_round()
+	var runs: Array = []
+	for i in range(4):
+		runs.append(book.judge(_facts(70, 71, 10 + 1000 * i)).has(M.NEMESIS))
+	_check(runs == [false, false, true, false], "the third kill of one player unanswered is Nemesis, and only the third (%s)" % [runs])
+	var _back := book.judge(_facts(71, 70, 9000))
+	var again: Array = []
+	for i in range(3):
+		again.append(book.judge(_facts(70, 71, 10000 + 1000 * i)).has(M.NEMESIS))
+	_check(again == [false, false, true], "a kill back starts the count again (%s)" % [again])
+
+	book.reset_round()
+	_check(book.judge(_facts(80, 81, 10, {"team_kill": true, "headshot": true})).is_empty(), "a team kill earns nothing")
+	_check(book.judge(_facts(82, 82, 20)).is_empty(), "and nor does killing yourself")
+
+	_check(
+		ArenaAwards.points_for([M.HEADSHOT, M.FIRST_BLOOD]) == ArenaAwards.KILL_POINTS + 25 + 50,
+		"a kill's points are the kill's and each medal's"
+	)
+	_check(ArenaAwards.medal_name(M.NO_SCOPE) == "No Scope" and ArenaAwards.medal_sound(M.NO_SCOPE) == &"medal_no_scope",
+		"every medal has a name and a sound id")
+	_done()
+
+
+## The same rules reached the way a real kill reaches them: through dot-combat, on an
+## authoritative game, with the hit confirmed for the attacker and the medals after the kill.
+func _test_medals_from_a_game() -> void:
+	_section("medals: a game judges its own kills, and confirms the hits")
+	var game := _weapon_mode_game(ArenaMode.free_for_all(50), [950, 951])
+	if game == null:
+		_check(false, "a medal game sets up")
+		return
+	var order: Array[String] = []
+	var hits: Array[Dictionary] = []
+	var awards: Array[Dictionary] = []
+	game.player_killed.connect(func(_e: DotKillFeed.Entry) -> void: order.append("kill"))
+	game.hit_confirmed.connect(func(a: int, v: int, amount: float, at: Vector3, head: bool, lethal: bool) -> void:
+		hits.append({"a": a, "v": v, "amount": amount, "head": head, "lethal": lethal}))
+	game.medals_awarded.connect(func(k: int, v: int, medals: Array, points: int, streak: int) -> void:
+		order.append("award")
+		awards.append({"k": k, "v": v, "medals": medals, "points": points, "streak": streak}))
+
+	# Past spawn protection, which is three records and not only the health's window.
+	for _t in range(int(game.match_node.rules.spawn_protection_sec * TICK_RATE) + TICK_RATE):
+		game.tick({})
+	var health := game.combat.health_of(951)
+	health.invulnerable_until_tick = -1
+	var type := game.combat.damage_type(&"bullet")
+	var chip := DotDamage.make(950, 951, 20.0, type)
+	chip.tick = game.current_tick()
+	chip.weapon_id = ZeeWeaponIds.RIFLE
+	var _c := game.combat.apply_damage(chip)
+	_check(hits.size() == 1 and int(hits[0]["a"]) == 950 and is_equal_approx(float(hits[0]["amount"]), 20.0) and not bool(hits[0]["lethal"]),
+		"a hit that lands is confirmed to its attacker with what it took (%s)" % [hits])
+
+	# Lethal, to the head, with a scoped weapon and the aim not held.
+	var killer := game.player_for(950)
+	killer.aiming = false
+	var shot := DotDamage.make(950, 951, 500.0, type)
+	shot.tick = game.current_tick()
+	shot.hit_group = DotHitGroup.HEAD
+	shot.weapon_id = ZeeWeaponIds.SNIPER
+	var _k := game.combat.apply_damage(shot)
+	_check(hits.size() == 2 and bool(hits[1]["lethal"]) and bool(hits[1]["head"]), "the killing hit is confirmed as lethal and to the head")
+	var got: Array = awards[0]["medals"] if not awards.is_empty() else []
+	var M := ArenaAwards.Medal
+	_check(got.has(M.FIRST_BLOOD) and got.has(M.HEADSHOT) and got.has(M.NO_SCOPE),
+		"and the kill earns First Blood, Headshot and No Scope (%s)" % [got.map(func(m: int) -> String: return ArenaAwards.medal_name(m))])
+	_check(order == ["kill", "award"], "after the kill itself, so a client hears the KILL first (%s)" % [order])
+	_check(not awards.is_empty() and int(awards[0]["points"]) == ArenaAwards.points_for(got) and int(awards[0]["streak"]) == 1,
+		"with the kill's points and the killer's streak")
+
+	# The aim bit: the weapon command carries it, the simulation records it.
+	var ask := DotWeaponCommand.new()
+	ask.set_button(ArenaPlayer.BUTTON_AIM, true)
+	var _o := killer.simulate_tick(game.current_tick() + 1, 1.0 / 64.0, DotFpsCommand.new(), ask)
+	_check(killer.aiming, "a command with the aim held is a player aiming, on the server")
+
+	# A world death is no medal and no hit confirmed to anybody.
+	var before := hits.size()
+	var awarded_before := awards.size()
+	var world := game.combat.health_of(950)
+	var fall := DotDamage.make(0, 950, 500.0, type)
+	fall.tick = game.current_tick()
+	var _f := game.combat.apply_damage(fall)
+	_check(hits.size() == before and awards.size() == awarded_before, "the world killing somebody confirms no hit and awards nothing")
 
 	remove_child(game)
 	game.queue_free()

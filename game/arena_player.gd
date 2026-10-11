@@ -117,6 +117,16 @@ var drawn_offset: Vector3 = Vector3.ZERO
 ## the view model eases the weapon up and the camera zooms; nothing the server simulates.
 var aim_held: bool = false
 
+## The aim, as the weapon command carries it to the server: [constant DotWeaponCommand.BUTTON_USER_0],
+## which no addon reads. The client sets it beside [member aim_held]; it changes nothing
+## the simulation does and exists for one medal, No Scope ([member aiming]).
+const BUTTON_AIM := DotWeaponCommand.BUTTON_USER_0
+
+## Whether the command this player last simulated held the aim. Both ends; the server's
+## is what [code]ArenaAwards[/code] reads. A claim, like every button: a client can say
+## it was not aiming when it was, which earns a medal and nothing else (docs/client.md).
+var aiming: bool = false
+
 ## A bar over somebody else's head for a few seconds after they are hurt, the way the
 ## genre shows that a shot landed. Client side; built on first need.
 var _health_tag: Node3D = null
@@ -1022,6 +1032,7 @@ func simulate_tick(
 	_command = combat_command.duplicate_command()
 	_command.yaw = state.yaw
 	_command.pitch = state.pitch
+	aiming = _command.is_pressed(BUTTON_AIM)
 
 	health.tick(tick, delta)
 

@@ -57,6 +57,15 @@ enum Kind {
 	DROP,
 	## A drop is gone: taken by a player, or by nobody (0) when it expired.
 	TAKEN,
+	## Your damage landed: on whom, how much, where, whether a headshot and whether it
+	## killed. To the attacker alone, one per victim per tick (a shotgun's pellets summed).
+	## The hit marker and the damage numbers are drawn from this and from nothing the
+	## client predicted.
+	HIT,
+	## What a kill earned: the killer, the victim, its points, the killer's streak and its
+	## medals ([enum ArenaAwards.Medal]). To everybody, straight after the KILL it belongs to,
+	## because the victim's screen names a nemesis from it.
+	AWARD,
 }
 
 enum Ask {
@@ -498,3 +507,78 @@ static func spawn_from_launch(launch: Dictionary, id: StringName) -> DotWeaponSp
 	spawn.life_ticks = int(launch["life"])
 	spawn.tick = int(launch["tick"])
 	return spawn
+
+
+# --- HIT -------------------------------------------------------------------
+
+## Hit points a HIT can carry. A rocket is 400 at most (`DotDamageRules.maximum`).
+const HIT_MAX := 4095
+
+## One victim's share of a tick's damage, for the player who dealt it.
+##
+## The point is quantised like a monster's, coarser: it places a number that rises off a
+## body, and a centimetre is more than that needs.
+static func write_hit(
+	victim_id: int, amount: float, point: Vector3, headshot: bool, lethal: bool
+) -> PackedByteArray:
+	var writer := _w()
+	writer.write_varint(maxi(0, victim_id))
+	writer.write_uint(clampi(int(roundf(amount)), 0, HIT_MAX), 12)
+	writer.write_vector3_range(point, -NPC_EXTENT, NPC_EXTENT, 20)
+	writer.write_bool(headshot)
+	writer.write_bool(lethal)
+	return writer.to_bytes()
+
+
+static func read_hit(reader: DotNetReader) -> Dictionary:
+	var out := {
+		"victim_id": reader.read_varint(),
+		"amount": reader.read_uint(12),
+		"point": reader.read_vector3_range(-NPC_EXTENT, NPC_EXTENT, 20),
+		"headshot": reader.read_bool(),
+		"lethal": reader.read_bool(),
+	}
+	out["ok"] = reader.ok()
+	return out
+
+
+# --- AWARD -----------------------------------------------------------------
+
+## Bits a medal index occupies. Five is thirty-two medals; there are eleven.
+const MEDAL_BITS := 5
+
+## At most this many medals on one kill. The rules can give eight at once (a first-blood
+## no-scope headshot long-shot revenge shutdown triple kill that made a nemesis); a reader
+## that met more would be reading something that is not an AWARD.
+const MEDALS_MAX := 12
+
+
+static func write_award(
+	killer_id: int, victim_id: int, points: int, streak: int, medals: Array
+) -> PackedByteArray:
+	var writer := _w()
+	writer.write_varint(maxi(0, killer_id))
+	writer.write_varint(maxi(0, victim_id))
+	writer.write_uint(clampi(points, 0, 65535), 16)
+	writer.write_uint(clampi(streak, 0, 255), 8)
+	var count := mini(medals.size(), MEDALS_MAX)
+	writer.write_uint(count, 4)
+	for i in range(count):
+		writer.write_uint(clampi(int(medals[i]), 0, (1 << MEDAL_BITS) - 1), MEDAL_BITS)
+	return writer.to_bytes()
+
+
+static func read_award(reader: DotNetReader) -> Dictionary:
+	var out := {
+		"killer_id": reader.read_varint(),
+		"victim_id": reader.read_varint(),
+		"points": reader.read_uint(16),
+		"streak": reader.read_uint(8),
+	}
+	var medals: Array[int] = []
+	var count := mini(reader.read_uint(4), MEDALS_MAX)
+	for _i in range(count):
+		medals.append(reader.read_uint(MEDAL_BITS))
+	out["medals"] = medals
+	out["ok"] = reader.ok()
+	return out

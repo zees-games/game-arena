@@ -1,5 +1,6 @@
 extends Node
 
+const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaEvent := preload("../game/arena_event.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
@@ -35,7 +36,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 195
+const CHECKS := 201
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
@@ -48,7 +49,7 @@ var _skipped_checks := 0
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 17
+const SECTIONS := 18
 
 var _passed := 0
 var _failed := 0
@@ -98,6 +99,9 @@ func _run() -> void:
 	# After the weapons: everybody in this harness fires every eighth tick, and this
 	# section's windows spent the magazine the weapons section's fresh shot needs.
 	_test_movement_rules_reach_clients()
+	# After the weapons for the same reason: it waits out spawn protection, and this
+	# harness fires every eighth tick. Before the disconnect, which takes the killer away.
+	_test_hits_and_medals_reach_clients()
 	_test_disconnect()
 	_test_monsters_reach_a_client()
 
@@ -1051,6 +1055,89 @@ func _test_client_death_camera() -> void:
 	_done()
 
 
+## A real kill on the server: the hit goes to the attacker's client alone and the medals
+## to everybody, and a client's bridge hands each to whoever draws it.
+func _test_hits_and_medals_reach_clients() -> void:
+	print("")
+	_section("[hits and medals reach the right clients]")
+
+	var killer := 12
+	var victim := 11
+	var killer_peer := 3
+	var sent: Array = []
+	var previous := _server_bridge.link
+	var link := ArenaNetLink.new()
+	link.bridge = _server_bridge
+	link.is_server = true
+	link.loopback = func(method: StringName, peer: int, payload: PackedByteArray) -> void:
+		if method == &"event":
+			sent.append([peer, payload])
+	_server_bridge.link = link
+	for peer in _clients:
+		if not _server_bridge._ready_peers.has(peer):
+			_server_bridge.mark_ready(peer)
+	sent.clear()
+
+	var heard := {}
+	for peer in _clients:
+		heard[peer] = {"hits": [], "awards": []}
+		var bridge: ArenaNetBridge = _clients[peer]["bridge"]
+		var mine: Dictionary = heard[peer]
+		bridge.hit_received.connect(func(info: Dictionary) -> void: (mine["hits"] as Array).append(info))
+		bridge.award_received.connect(func(info: Dictionary) -> void: (mine["awards"] as Array).append(info))
+
+	_server_game.medals.reset_round()
+	var target := _server_game.player_for(victim)
+	if not target.is_alive():
+		target.spawn(_server_game.map.spawns[0], _server_game.current_tick())
+	# Past spawn protection, which is three records and not only the health's window.
+	_pump(int(_server_game.match_node.rules.spawn_protection_sec * TICK_RATE) + 4)
+	var health := _server_game.combat.health_of(victim)
+	health.invulnerable_until_tick = -1
+	var type := _server_game.combat.damage_type(&"")
+	for amount in [10.0, 12.0]:
+		var pellet := DotDamage.make(killer, victim, amount, type)
+		pellet.tick = _server_game.current_tick()
+		var _p := _server_game.combat.apply_damage(pellet)
+	var shot := DotDamage.make(killer, victim, 500.0, type)
+	shot.tick = _server_game.current_tick()
+	shot.hit_group = DotHitGroup.HEAD
+	var _s := _server_game.combat.apply_damage(shot)
+	_server_bridge.server_tick(_server_game.current_tick() + 1)
+
+	# Deliver what the server put on the link, to whom it addressed it.
+	for item in sent:
+		var targets: Array = _clients.keys() if int(item[0]) == 0 else [int(item[0])]
+		for peer in targets:
+			if _clients.has(peer):
+				var _r: DotResult = _clients[peer]["bridge"].receive_event(item[1])
+
+	var to_killer: Array = heard[killer_peer]["hits"]
+	var to_victim: Array = heard[2]["hits"]
+	_check(
+		to_killer.size() == 1 and int(to_killer[0]["victim_id"]) == victim and bool(to_killer[0]["lethal"])
+			and bool(to_killer[0]["headshot"]) and int(to_killer[0]["amount"]) > 22,
+		"one tick's hits reach the attacker as one HIT, summed, lethal and to the head",
+		str(to_killer)
+	)
+	_check(to_victim.is_empty(), "and nobody else hears about them", str(to_victim))
+	var award_killer: Array = heard[killer_peer]["awards"]
+	var award_victim: Array = heard[2]["awards"]
+	_check(
+		award_killer.size() == 1 and award_victim.size() == 1
+			and (award_killer[0]["medals"] as Array).has(ArenaAwards.Medal.FIRST_BLOOD)
+			and (award_killer[0]["medals"] as Array).has(ArenaAwards.Medal.HEADSHOT),
+		"the AWARD reaches every client, with the server's First Blood and Headshot",
+		"%s / %s" % [award_killer, award_victim]
+	)
+
+	_server_bridge.link = previous
+	link.free()
+	target.spawn(_server_game.map.spawns[0], _server_game.current_tick())
+	_pump(2)
+	_done()
+
+
 func _test_disconnect() -> void:
 	print("")
 	_section("[disconnect]")
@@ -1755,6 +1842,29 @@ func _test_event_wire() -> void:
 	_check(
 		ArenaEvent.new(ArenaEvents.Kind.VOTE, PackedByteArray()).validate().ok,
 		"and VOTE is a kind the message validates"
+	)
+
+	var hit := ArenaEvents.read_hit(DotNetReader.new(
+		ArenaEvents.write_hit(12, 87.4, Vector3(12.5, 1.4, -30.25), true, false)
+	))
+	_check(
+		bool(hit["ok"]) and int(hit["victim_id"]) == 12 and int(hit["amount"]) == 87
+			and (hit["point"] as Vector3).distance_to(Vector3(12.5, 1.4, -30.25)) < 0.02
+			and bool(hit["headshot"]) and not bool(hit["lethal"]),
+		"a HIT round-trips: victim, whole hit points, where, head, not lethal", str(hit)
+	)
+	var award := ArenaEvents.read_award(DotNetReader.new(
+		ArenaEvents.write_award(11, 12, 225, 6, [0, 1, 10])
+	))
+	_check(
+		bool(award["ok"]) and int(award["killer_id"]) == 11 and int(award["victim_id"]) == 12
+			and int(award["points"]) == 225 and int(award["streak"]) == 6
+			and award["medals"] == [0, 1, 10],
+		"an AWARD round-trips: both players, points, streak and the medals in order", str(award)
+	)
+	_check(
+		ArenaEvents.Kind.HIT == ArenaEvents.Kind.TAKEN + 1 and ArenaEvents.Kind.AWARD == ArenaEvents.Kind.HIT + 1,
+		"and both were appended after TAKEN, so no older kind moved"
 	)
 
 	var score := ArenaEvents.read_score(DotNetReader.new(ArenaEvents.write_score(11, 7, 3)))

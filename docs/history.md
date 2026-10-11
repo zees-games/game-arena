@@ -83,6 +83,10 @@ The family's most repeated shape, found here many times:
 - **No input was ever resent**: at 20% loss the server had A's command for 80% of its ticks. **The clock's round trip came from a heartbeat that is -1 for eight seconds.**
 - A slay inside spawn protection was refused, for the first second and a half of every life.
 
+## Feedback the client decided for itself
+
+- **The hit marker sounded on the client's own prediction** (`ArenaPresentation.on_used`, `shot.damages`), so a shot the server refused still said "hit". And revenge and the nemesis line were counted on each client from the kill feed: a client that joined late or missed one KILL disagreed with the server about who was whose nemesis. Both moved to the server on 2026-10-10 (`HIT`, `AWARD`); the rule is in [client](client.md#kill-feedback).
+
 ## Seen only by rendering
 
 - The Kenney characters at 2.70 m against a 1.8 m capsule, limbs drifting from a double-scaled origin, and capsules floating above their mount point.

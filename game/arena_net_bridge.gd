@@ -189,6 +189,16 @@ signal kill_received(info: Dictionary)
 ## Emitted on a client when the match state or clock changes.
 signal match_received(info: Dictionary)
 
+## Emitted on a client when its own damage landed: [method ArenaEvents.read_hit].
+signal hit_received(info: Dictionary)
+
+## Emitted on a client for every kill's medals and points: [method ArenaEvents.read_award].
+signal award_received(info: Dictionary)
+
+## This tick's confirmed hits, summed: attacker -> victim -> [amount, point, headshot,
+## lethal]. Server side; sent and cleared after the tick ([method _flush_hits]).
+var _pending_hits: Dictionary = {}
+
 
 ## Binds a game and a manager to each other.
 func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
@@ -245,6 +255,8 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 		game.player_killed.connect(_on_player_killed)
 		game.match_state_changed.connect(_on_match_state_changed)
 		game.movement_rules_changed.connect(_on_movement_rules_changed)
+		game.hit_confirmed.connect(_on_hit_confirmed)
+		game.medals_awarded.connect(_on_medals_awarded)
 
 	return DotResult.success(self)
 
@@ -483,6 +495,7 @@ func server_tick(tick: int) -> void:
 		net.server_tick(tick)
 
 	ensure_game_ticked(tick)
+	_flush_hits()
 
 
 ## Runs the whole game for a tick, at most once.
@@ -1221,6 +1234,51 @@ func _on_player_killed(entry: DotKillFeed.Entry) -> void:
 	))
 
 
+## A player's damage landed. Summed per victim until the tick ends, so a shotgun's nine
+## pellets are one number and one marker rather than nine events.
+func _on_hit_confirmed(
+	attacker: int, victim: int, amount: float, point: Vector3, headshot: bool, lethal: bool
+) -> void:
+	if net == null or not net.is_server:
+		return
+	var mine: Dictionary = _pending_hits.get(attacker, {})
+	var was: Array = mine.get(victim, [0.0, point, false, false])
+	# The headshot's point when there is one: that is where the number should rise from.
+	var at: Vector3 = point if headshot or not bool(was[2]) else was[1]
+	mine[victim] = [float(was[0]) + amount, at, bool(was[2]) or headshot, bool(was[3]) or lethal]
+	_pending_hits[attacker] = mine
+
+
+## Sends this tick's hits, each to the player who dealt it. A bot has no peer and is told
+## nothing.
+func _flush_hits() -> void:
+	if _pending_hits.is_empty():
+		return
+	for attacker in _pending_hits:
+		var peer := peer_for_session(int(attacker))
+		if peer == 0:
+			continue
+		var mine: Dictionary = _pending_hits[attacker]
+		for victim in mine:
+			var hit: Array = mine[victim]
+			send_event(peer, ArenaEvents.Kind.HIT, ArenaEvents.write_hit(
+				int(victim), float(hit[0]), hit[1], bool(hit[2]), bool(hit[3])
+			))
+	_pending_hits.clear()
+
+
+## The peer a session plays from, or 0 for a bot or somebody gone.
+func peer_for_session(session_id: int) -> int:
+	for peer in _players_by_peer:
+		if int(_players_by_peer[peer]) == session_id:
+			return int(peer)
+	return 0
+
+
+func _on_medals_awarded(killer: int, victim: int, medals: Array, points: int, streak: int) -> void:
+	send_event(0, ArenaEvents.Kind.AWARD, ArenaEvents.write_award(killer, victim, points, streak, medals))
+
+
 ## An event arrived. Client side.
 ##
 ## Through `DotNetManager.receive` rather than straight to the registry: that is where
@@ -1359,6 +1417,14 @@ func _on_event(message: DotNetMessage) -> void:
 			var rules := ArenaEvents.read_rules(reader)
 			if bool(rules["ok"]) and game != null:
 				game.set_movement_rules(rules["rules"])
+		ArenaEvents.Kind.HIT:
+			var hit := ArenaEvents.read_hit(reader)
+			if bool(hit["ok"]):
+				hit_received.emit(hit)
+		ArenaEvents.Kind.AWARD:
+			var award := ArenaEvents.read_award(reader)
+			if bool(award["ok"]):
+				award_received.emit(award)
 		_:
 			pass
 
