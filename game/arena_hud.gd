@@ -464,7 +464,7 @@ class MedalRow extends Control:
 ## middle to the column, so the width follows the frame: `notice_width`.
 func notice(text: String) -> void:
 	if notice_label == null:
-		# Under the portraits, clear of the strip, the row and the objective line.
+		# Under the portraits and the medal row: `notice_top`.
 		notice_label = _make_label("Notice", Control.PRESET_CENTER_TOP, Vector2(0.0, 182.0))
 		notice_label.add_theme_font_size_override(&"font_size", 20)
 		notice_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -473,6 +473,7 @@ func notice(text: String) -> void:
 	var width := notice_width(size.x)
 	notice_label.offset_left = -width * 0.5
 	notice_label.offset_right = width * 0.5
+	notice_label.offset_top = notice_top(size.y)
 	notice_label.text = text
 	notice_label.modulate.a = 1.0
 	_notice_age = 0.0
@@ -490,6 +491,15 @@ const SHELL_COLUMN := 376.0 + 16.0
 ## beside a 360 px ballot anyway, and two short lines beat four) and never over 640.
 static func notice_width(frame_width: float) -> float:
 	return clampf(frame_width - SHELL_COLUMN * 2.0, 260.0, 640.0)
+
+
+## Where the centre notice starts on a frame [param frame_height] tall: under the medal
+## row's labels (the row is centred at 27 % of the height and its names end about 65 px
+## below that), so a system line arriving with a kill is not printed through "Headshot!",
+## which a fixed 182 px was on any frame over about 600 tall. Never lower than 70 px above
+## the middle, where the crosshair is: on a short frame the medals give way, not the aim.
+static func notice_top(frame_height: float) -> float:
+	return minf(maxf(182.0, frame_height * 0.27 + 70.0), frame_height * 0.5 - 70.0)
 
 ## The challenge bar at the top: the achievement the player is nearest to, and how near.
 var challenge_label: Label = null
