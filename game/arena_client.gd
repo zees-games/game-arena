@@ -1176,7 +1176,9 @@ func _drive_bots() -> void:
 	for id in _bots:
 		var bot: ArenaPlayer = _bots[id]
 
-		if not bot.is_alive():
+		# A tool that stages a bot (tools/screenshot_weapons.gd) writes its `bot_move` and
+		# `bot_fire` itself; driving it here as well would overwrite them every tick.
+		if not bot.is_alive() or bot.get_meta(&"bot_scripted", false):
 			continue
 
 		var nearest: ArenaPlayer = null
