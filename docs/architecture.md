@@ -89,3 +89,20 @@ An imported combat surf map has no box list and is the one exception; it keeps t
 ## Where it runs
 
 `game.yml` (`content_id: gamemann/game-arena`, `kind: pack`) is the descriptor that travels in the signed dot-cloud pack: `scenes/arena_server.tscn` on the server, `game/arena.tscn` on the client, `game/arena_module.gd` as the module. dot-server-deploy publishes it and runs it as one of its demo servers (`demo.sh`, server 5, at 64 ticks). Because it is delivered as a pack, nothing here declares a `class_name` ([family rule](../../../CLAUDE.md)): scripts preload each other by relative path and `res://` strings go through `ArenaPaths.rebase`.
+
+## Where the code is
+
+Everything is flat under `game/` and `maps/`, grouped here by what it is for.
+
+| Path | What |
+| --- | --- |
+| `game/arena_game.gd`, `arena_player.gd`, `arena_player_stack.gd` | the simulation: the game and its tick, the player (movement, weapons, health, hitboxes), the roster and spawning |
+| `game/arena_mode.gd`, `arena_modes.gd`, `arena_objectives.gd`, `arena_effects.gd`, `arena_spectate.gd`, `arena_drops.gd` | modes as data and the round's layers |
+| `game/arena_horde.gd`, `arena_npcs.gd`, `arena_npc_brain.gd`, `arena_props.gd`, `arena_projectiles.gd`, `arena_content.gd` | monsters, props, projectiles, weapons and the damage table |
+| `game/arena_module.gd`, `arena_services.gd`, `arena_mod_tools.gd`, `arena_vote*.gd`, `arena_map_director.gd`, `arena_map_session.gd`, `arena_maps.gd`, `arena_bots.gd`, `arena_server.gd` | the server: the dot-server module and its cvars, chat/voice/moderation, admin tools, the vote, maps, bots |
+| `game/arena_net_*.gd`, `arena_player_net.gd`, `arena_npc_net.gd`, `arena_events.gd`, `arena_event.gd`, `arena_request.gd` | the dot-net bridge, link, commands, per-entity net state, events and requests |
+| `game/arena_client.gd`, `arena_client_extras.gd`, `arena_hud.gd`, `arena_menus.gd`, `arena_bindings.gd`, `arena_presentation.gd`, `arena_browser.gd`, `arena_party.gd`, `arena_avatars.gd`, `arena_beacon.gd`, `arena_projectile_view.gd`, `arena.tscn` | the client: never loaded by a dedicated server |
+| `game/arena_stats.gd`, `arena_awards.gd`, `arena_boards.gd`, `arena_progress.gd`, `arena_identity.gd` | progression and identity |
+| `game/arena_paths.gd` | `rebase` for every `res://` path (pack delivery) |
+| `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
+| `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the g2gfast-maps link |

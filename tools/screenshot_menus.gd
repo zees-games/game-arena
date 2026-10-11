@@ -1,5 +1,6 @@
 extends SceneTree
 
+const ArenaBrowser := preload("../game/arena_browser.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
 const ArenaMenus := preload("../game/arena_menus.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
@@ -10,10 +11,8 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 ## a world and a menu wants a viewport-sized stack with nothing behind it; one script that
 ## did both would spend most of itself deciding which it was doing.
 ##
-## The screens here are the ones dot-ui does NOT own: this game's pause menu, its controls
-## rebinder and its scoreboard. dot-ui's own `tools/screenshot.sh` covers `DotPauseScreen`
-## and `DotSettingsScreen`, and rendering those again here would be a second picture of the
-## same code.
+## The menu here is dot-menu's with this game's pages on it, so every page is rendered:
+## dot-menu's own `tools/screenshot.sh` draws its demo's pages, not these rows.
 ##
 ## Run through `tools/screenshot_menus.sh`. [b]Not `--headless`[/b]: that gives a null
 ## renderer, a 64 x 64 viewport, and every frame it saves is empty — which is worse than no
@@ -22,7 +21,9 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 const OUT_DIR := "res://screenshots"
 const SETTLE := 3
 
-var _stack: DotScreenStack = null
+var _menu: DotMenu = null
+var _board: ArenaMenus.Board = null
+var _browser: ArenaBrowser = null
 var _hud: ArenaHud = null
 var _chat: DotChatWindow = null
 var _presentation: ArenaPresentation = null
@@ -35,97 +36,76 @@ var _done := false
 func _initialize() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
+	_shots = [
+		{"id": &"menu", "page": &"general", "file": "menu_general.png"},
+		{"id": &"menu", "page": &"interface", "file": "menu_interface.png"},
+		{"id": &"menu", "page": &"video", "file": "menu_video.png"},
+		{"id": &"menu", "page": &"audio", "file": "menu_audio.png"},
+		{"id": &"menu", "page": &"controls", "file": "menu_controls.png"},
+		{"id": &"menu", "page": &"servers", "file": "menu_servers.png"},
+		{"id": &"help", "file": "menu_help.png"},
+		{"id": &"board", "file": "menu_scoreboard.png"},
+		# Nothing open, so what is drawn is the HUD and the chat box over it. This one is
+		# about where they are relative to EACH OTHER: the box sits in the same corner as
+		# health and armour, and at the default inset it draws its log through both.
+		{"id": &"", "file": "hud_chat.png"},
+		# The console, open over the HUD: the real `ArenaPresentation`, so the panel is the
+		# one `DotConsoleKit` builds, registered with the menu as the client registers it.
+		{"id": &"console", "file": "hud_console.png"},
+	]
 
-	_stack = DotScreenStack.new()
-	_stack.name = "Stack"
-	_stack.register_service = false
-	_stack.manage_mouse = false
-	_stack.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_child(_stack)
-	_stack.setup()
 
-	# The movement actions, because the Controls screen filters the InputMap on `dot_fps_`
-	# and an empty InputMap draws an empty rebinder -- which is indistinguishable in a
-	# picture from the bug this tool found, where the filter named a prefix nothing used.
-	# `ArenaClient` calls the same function; this is the same state a player is in.
-	DotFpsSampler.register_default_actions()
+## Built on the first frame rather than in `_initialize`, where nothing is in the tree yet
+## and the presentation's settings, audio and console would set up outside it.
+func _build() -> void:
+	_build_hud()
 
-	# And this game's own two, which `ArenaPresentation._build_chat` creates in a real
-	# session. The Controls screen filters on `dot_fps_` AND `arena_`, so a fixture that
-	# registered only the movement would draw a rebinder that is missing exactly the
-	# actions the second prefix was added for.
-	DotInputBinding.ensure_action(&"arena_chat", "Y")
-	DotInputBinding.ensure_action(&"arena_chat_team", "U")
+	_presentation = ArenaPresentation.new()
+	_presentation.name = "Presentation"
+	root.add_child(_presentation)
+	DotLog.result("screenshot", "the presentation", _presentation.setup())
 
-	var ui_config := DotUiConfig.new()
-
-	var pause := DotPauseScreen.new()
-	pause.name = "Pause"
-	pause.half_size = Vector2(160.0, 160.0)
-	pause.build(PackedStringArray(ArenaMenus.PAUSE_BUTTONS))
-	_stack.register(pause)
-
-	var controls := ArenaMenus.ControlsScreen.new()
-	controls.name = "Controls"
-	controls.build(ui_config)
-	_stack.register(controls)
+	# The menu the client builds (dot-menu's, through ArenaMenus), over this game's own
+	# settings document and key table, with a browser holding two servers as a list
+	# would after a refresh.
+	_browser = ArenaBrowser.new()
+	_browser.name = "Browser"
+	root.add_child(_browser)
+	var _listed := _browser.setup()
+	# Two servers as a refresh would leave them: answered, named, with a map and a ping.
+	# Written by hand because nothing answers a query in a render tool; what this frame is
+	# for is the page's layout.
+	var fixtures := [
+		["play.example.com:27015", "Arena  |  deathmatch all day", "dm_atrium", 9, 16, 34],
+		["eu.example.net:27016", "a server with a long name that has to fit on one line", "dm_box", 2, 12, 88],
+	]
+	for f in fixtures:
+		var added := _browser.add(str(f[0]))
+		if added.ok:
+			var entry := added.value as DotBrowserEntry
+			entry.status = DotBrowserEntry.Status.ONLINE
+			entry.name = str(f[1])
+			entry.map = str(f[2])
+			entry.players = int(f[3])
+			entry.max_players = int(f[4])
+			entry.ping_ms = int(f[5])
+	_menu = ArenaMenus.build(root, _presentation, _browser)
 
 	# A scoreboard with names of the length a real one has, and a row that is the local
 	# player, because a highlight that reads at "bo" and not at a real handle is the kind
 	# of thing only a picture shows.
-	var board := DotScoreboard.new()
-	var names := [
-		"gamemann", "a_very_long_display_name", "bo", "quiet_one", "newcomer",
-	]
-
+	var records := DotScoreboard.new()
+	var names := ["gamemann", "a_very_long_display_name", "bo", "quiet_one", "newcomer"]
 	for i in names.size():
 		var key := "p%d" % (i + 1)
-		board.join(key, names[i])
-
+		records.join(key, names[i])
 		# Through the real scoring calls rather than by writing the fields, because a
-		# picture of numbers assigned by hand is a picture of an assignment. Each player
-		# kills the one below them a few times and dies to the one above.
+		# picture of numbers assigned by hand is a picture of an assignment.
 		for _k in range((names.size() - i) * 2):
-			board.note_kill(key, "p%d" % (i + 2), 0)
-
-		board.note_assist(key, 0, 0)
-
-	var scoreboard := ArenaMenus.ScoreboardScreen.new()
-	scoreboard.name = "Scoreboard"
-	scoreboard.build(board)
-	scoreboard.set("_me", "p1")
-	_stack.register(scoreboard)
-
-	_build_hud()
-
-	# [b]The interface screen was not in this list and is the one that most needed to be.[/b]
-	# It is generated from a document rather than laid out, so the only thing that can be
-	# wrong with it is its SHAPE -- and the shape is what no assertion reaches. dot-ui's own
-	# screenshot found the case: a panel as tall as somebody's `@export` list grows past the
-	# bottom of the window and takes Apply, Revert and Back with it, with every property
-	# correct throughout. `DotUiConfig` is eleven rows across four groups, which is the
-	# longest document any screen in this family binds.
-	var interface_screen := DotSettingsScreen.new()
-	interface_screen.name = "Interface"
-	interface_screen.id_override = &"interface"
-	interface_screen.title_text = "Interface"
-	interface_screen.half_size = Vector2(280.0, 220.0)
-	interface_screen.build(ui_config)
-	_stack.register(interface_screen)
-
-	_shots = [
-		{"id": &"pause", "file": "menu_pause.png"},
-		{"id": &"interface", "file": "menu_interface.png"},
-		{"id": &"controls", "file": "menu_controls.png"},
-		{"id": &"scoreboard", "file": "menu_scoreboard.png"},
-		# Nothing pushed, so what is drawn is the HUD and the chat box over it. This one
-		# is about where they are relative to EACH OTHER: the box sits in the same corner
-		# as health and armour, and at the default inset it draws its log through both.
-		{"id": &"", "file": "hud_chat.png"},
-		# The console, open over the HUD: the real `ArenaPresentation`, so the panel is the
-		# one `DotConsoleKit` builds and on the layer it puts it on.
-		{"id": &"console", "file": "hud_console.png"},
-	]
+			records.note_kill(key, "p%d" % (i + 2), 0)
+		records.note_assist(key, 0, 0)
+	_board = ArenaMenus.Board.new(_menu.scoreboard, records)
+	_board.follow("p1")
 
 
 ## This game's own HUD, with the chat box over it, both at the real offsets.
@@ -164,23 +144,13 @@ func _build_hud() -> void:
 	_chat.open(&"team")
 
 
-## Built when its shot comes round rather than in `_initialize`, where nothing is in the
-## tree yet and the presentation's settings, audio and console would set up outside it.
-func _open_console() -> void:
-	if _presentation == null:
-		_presentation = ArenaPresentation.new()
-		_presentation.name = "Presentation"
-		root.add_child(_presentation)
-		DotLog.result("screenshot", "the presentation", _presentation.setup())
-	# No setting typed: it would be written to this machine's own settings file.
-	for line in ["help", "where"]:
-		var _ran := _presentation.console.submit(line)
-	var _opened := _presentation.console.open()
-
-
 func _process(_delta: float) -> bool:
 	if _done:
 		return true
+
+	if _menu == null:
+		_build()
+		return false
 
 	if _at >= _shots.size():
 		_done = true
@@ -189,28 +159,20 @@ func _process(_delta: float) -> bool:
 	var shot: Dictionary = _shots[_at]
 
 	if _wait == SETTLE:
-		_stack.clear()
-
-		if shot["id"] == &"console":
-			_open_console()
-			_wait -= 1
-			return false
-
-		if str(shot["id"]) == "":
-			# The HUD frame: nothing on the stack, so the HUD below it is what draws.
-			_wait -= 1
-			return false
-
-		var opened := _stack.push(StringName(shot["id"]))
-
-		if not opened.ok:
-			# Said out loud rather than saved as a grey rectangle. A screen registered
-			# under a name nothing pushes is exactly the bug this tool found in dot-ui,
-			# and a picture of an empty viewport is indistinguishable from a renderer
-			# that is not working.
-			push_error("could not open '%s': %s" % [shot["id"], opened.error.message])
-			_at += 1
-			return false
+		_menu.close_all()
+		_menu.scoreboard.close()
+		match StringName(shot["id"]):
+			&"menu":
+				_menu.open(StringName(shot["page"]))
+			&"help":
+				_menu.open_help()
+			&"board":
+				_menu.scoreboard.open()
+			&"console":
+				# No setting typed: it would be written to the settings file.
+				for line in ["help", "where"]:
+					var _ran := _presentation.console.submit(line)
+				var _opened := _presentation.console.open()
 
 	if _wait > 0:
 		_wait -= 1

@@ -64,6 +64,7 @@ The family's most repeated shape, found here many times:
 - `ArenaHud.notice` did not exist; the client had called it for chat lines and map-change notices since it was written. Found because the parser refused the same call inside the HUD's own file.
 - `DotFpsSampler.suspended` was documented "for a chat box" and never set, so typing walked the player.
 - `ArenaGame.mode_id` was read once at setup: a game with five modes and one of them.
+- The Interface screen (dot-ui's `DotSettingsScreen` over a `DotUiConfig`) edited an object nothing saved and nothing read again after the HUD was built: scale, safe area, transition time and line counts all moved a slider and changed nothing. Found converting to dot-menu (2026-10-10); `hud_safe_area` is the one kept, as a real setting.
 
 ## Wiring the horde
 

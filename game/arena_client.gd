@@ -32,12 +32,12 @@ const ArenaPresentation := preload("arena_presentation.gd")
 ## WASD          move                Space   jump (hold; auto-hop is on)
 ## Ctrl          crouch              Mouse1  fire
 ## R             reload              1..4    weapon slots  (wheel cycles)
-## Tab (hold)    scoreboard          Esc     pause menu / release the mouse
+## Tab (hold)    scoreboard          Esc     release the mouse, then the menu
 ## [/codeblock]
 
 const CHANNEL := "arena.client"
 
-## The player pressed Leave on the pause menu.
+## The player pressed Leave on the Escape menu.
 ##
 ## [b]Announced rather than acted on, and it used to be neither.[/b] What "leave" means
 ## belongs to whatever loaded this client — the shell goes back to its own menu, an embedded
@@ -56,7 +56,13 @@ const FIELD_OF_VIEW := 100.0
 var game: ArenaGame = null
 var player: ArenaPlayer = null
 var hud: ArenaHud = null
-var menus: DotScreenStack = null
+## The Escape menu, its pages and the Tab board: dot-menu's ([ArenaMenus]).
+var game_menu: DotMenu = null
+## The Tab board's rows from dot-match. See [ArenaMenus.Board].
+var board: ArenaMenus.Board = null
+## Applies dot-menu's stock settings this game does not apply itself: the window, V-Sync,
+## the frame cap and render scale.
+var applier: DotMenuApplier = null
 var net: DotNetManager = null
 var bridge: ArenaNetBridge = null
 var link: Node = null
@@ -108,9 +114,6 @@ var _watch_id: int = -1
 
 ## Bots this client drives, offline only. Session id -> a simple aim-and-hold brain.
 var _bots: Dictionary = {}
-
-## The settings and bindings the menus are generated from.
-var _ui_config: DotUiConfig = null
 
 ## The meshes of the map currently drawn. Replaced on a map change.
 var _level: Node3D = null
@@ -227,9 +230,8 @@ func _ready() -> void:
 
 	_sampler = DotFpsSampler.new(ArenaPlayer.arena_tunables())
 	DotFpsSampler.register_default_actions(_sampler)
-	# C slides as well as crouches (a slide IS a crouch at a run), beside Ctrl. Added to
-	# the action rather than replacing it, so a player's own binding still works.
-	_add_key(_sampler.actions.get("crouch", &""), KEY_C)
+	# C slides as well as Duck: added once the key table has been applied, in
+	# `_build_interface` (`_add_slide_key`), or applying it would take C off again.
 
 	# Before the interface, because the field of view and the crosshair come out of the
 	# settings document and a screen built first would have laid itself out from the
@@ -281,68 +283,65 @@ func _build_interface() -> void:
 	add_child(hud)
 	hud.build(game)
 
-	menus = DotScreenStack.new()
-	menus.name = "Menus"
-	menus.register_service = false
-	# [b]The stack does NOT own the mouse here, and that is the one place this client
-	# departs from dot-ui's default.[/b] `DotScreenStack.manage_mouse` forces CAPTURED
-	# whenever nothing is open, which is right on a desktop and impossible in a
-	# browser: pointer lock needs transient user activation, a browser refuses it
-	# *silently*, and `Input.mouse_mode` then reads back as CAPTURED while the cursor
-	# sits on top of the game. Two owners fighting over it is a cursor that flickers —
-	# dot-ui's own documentation says so — so there is exactly one, and it is
-	# [method _apply_mouse] below, which knows about the click.
-	menus.manage_mouse = false
-	add_child(menus)
-
-	_ui_config = DotUiConfig.new()
-	var pause := ArenaMenus.install(
-		menus,
-		game,
-		_ui_config,
-		presentation.settings if presentation != null else null,
-		link if not _offline else null
-	)
-
-	# The server browser, which is the only screen here that is about something other
-	# than this game. Built whether or not this client is connected: looking for a
-	# server is what you do when you are not on one.
+	# The server browser: the one page that is about something other than this game. Built
+	# whether or not this client is connected, because looking for a server is what you do
+	# when you are not on one. A list that did not come up leaves the page out.
 	browser = ArenaBrowser.new()
 	browser.name = "Browser"
 	add_child(browser)
-
 	var listed := browser.setup()
 	DotLog.result(CHANNEL, "the server browser", listed)
+	browser.join_requested.connect(_on_join_requested)
 
-	if listed.ok:
-		var screen := ArenaBrowser.BrowserScreen.new()
-		screen.name = "Servers"
-		screen.build(browser)
-		menus.register(screen)
-
-		browser.listing_changed.connect(screen.redraw)
-		screen.join_pressed.connect(_on_join_requested)
-
-		# [b]And now something opens it.[/b] The browser screen was registered under
-		# `&"servers"` and **nothing anywhere pushed it** — a whole server list, with
-		# sources, a filter, favourites and a join, built on every launch and unreachable.
-		# The pause menu has a Servers button now and this is the line that lights it up,
-		# which has to happen here rather than in `install` because the browser is built
-		# after the menus and only when its list came up.
-		ArenaMenus.note_screens(menus, pause)
-
-	# Leave was wired to nothing at all. `var _unused := pause` is what stood here, so the
-	# button was drawn, pressed, and answered by nobody.
-	pause.chosen.connect(func(id: StringName) -> void:
+	# [b]dot-menu's menu, and the client still owns the pointer.[/b] The menu is told not
+	# to manage it: pointer lock needs a click in a browser, which only this client knows
+	# about ([method _apply_mouse]), and two owners fighting is a cursor that flickers.
+	game_menu = ArenaMenus.build(self, presentation, browser if listed.ok else null)
+	game_menu.action_requested.connect(func(id: StringName) -> void:
 		if id != ArenaMenus.LEAVE:
 			return
+		# Closed first, so a client that cannot actually leave (an embedded one, a
+		# single-process test) is not left showing a menu over a game that carried on.
+		game_menu.close()
+		leave_requested.emit())
+	# The menu, its help or the console opening or closing: the pointer and the sampler.
+	game_menu.overlays_changed.connect(func(_open: bool) -> void:
+		_apply_mouse()
+		_refresh_suspended())
 
-		# Closed first, so a client that cannot actually leave — an embedded one, a
-		# single-process test — is not left staring at a pause menu over a game that
-		# carried on running behind it.
-		menus.pop(&"pause")
-		leave_requested.emit()
+	board = ArenaMenus.Board.new(
+		game_menu.scoreboard, game.match_node.scoreboard,
+		link if not _offline else null, game.match_node.teams
 	)
+
+	if presentation != null:
+		applier = DotMenuApplier.new()
+		applier.name = "Applier"
+		applier.settings = presentation.settings
+		add_child(applier)
+		applier.bind_audio(presentation.audio)
+		applier.bind_fx(presentation.fx)
+		DotLog.result(CHANNEL, "the settings applier", applier.setup())
+		presentation.settings.changed.connect(func(key: StringName, value: Variant, _w: StringName) -> void:
+			if key == &"hud_safe_area" and hud != null:
+				hud.set_safe_area(float(value))
+			elif key == &"bind_duck":
+				_add_slide_key.call_deferred())
+		hud.set_safe_area(presentation.settings.get_float(&"hud_safe_area", 16.0))
+	_add_slide_key()
+
+
+## C slides as well as Duck, while Duck is on its default key. A slide IS a duck at a run,
+## and C is where the genre puts it. Deferred after a rebind: the table applies the row
+## after the setting changes, and that apply would take C off again.
+func _add_slide_key() -> void:
+	if _sampler == null:
+		return
+	var duck := _sampler.actions.get("crouch", &"") as StringName
+	var stored := presentation.settings.get_string(&"bind_duck", "Ctrl") \
+		if presentation != null and presentation.settings != null else "Ctrl"
+	if stored == "" or stored == "Ctrl":
+		_add_key(duck, KEY_C)
 
 
 # --- Offline ---------------------------------------------------------------
@@ -563,20 +562,20 @@ func _wire_chat_window() -> void:
 	window.closed.connect(func() -> void: _refresh_suspended())
 
 
-## The console is the chat box's bug again: built by [DotConsoleKit], which would register
-## it with a [DotMenu] so the menu's "something is open" stops the player. This game has no
-## DotMenu, so the console's own open and close drive the sampler here instead.
-func _wire_console() -> void:
-	if presentation == null or presentation.console == null:
-		return
-	presentation.console.visibility_changed.connect(func(_open: bool) -> void: _refresh_suspended())
-
-
-## Movement stops while the chat box or the console has the keyboard, and only resumes
-## when neither does: one closing while the other is still open must not walk the player.
+## Movement stops while anything has the keyboard or the screen: the chat box, the
+## console, or dot-menu's menu. Only when none does is it given back, so the console
+## closing while the chat box is still open does not walk the player. The console reaches
+## this as one of the menu's overlays (`overlays_changed`); the chat box is not one, so its
+## own open and close call this too ([method _wire_chat_window]).
 func _refresh_suspended() -> void:
 	if _sampler != null:
-		_sampler.suspended = presentation != null and presentation.swallows_input()
+		_sampler.suspended = (presentation != null and presentation.swallows_input()) \
+			or (game_menu != null and game_menu.any_open())
+
+
+## Whether the menu, its help or the console is up, in which case the mouse is a pointer.
+func _menu_open() -> bool:
+	return game_menu != null and game_menu.any_open()
 
 
 ## What a player typed, on its way to the server.
@@ -916,8 +915,8 @@ func _show_match_summary() -> void:
 		hud.notice("MVP: %s  -  %d kills, %d deaths, %d assists" % [
 			best.display_name, best.kills, best.deaths, best.assists
 		])
-	if menus != null and menus.top_id() != &"scoreboard":
-		var _shown := menus.push(&"scoreboard")
+	if game_menu != null and not game_menu.any_open():
+		game_menu.scoreboard.open()
 
 
 # --- Following the local player --------------------------------------------
@@ -969,7 +968,6 @@ func _build_presentation() -> void:
 	DotLog.result(CHANNEL, "the presentation layer", presentation.setup())
 
 	_wire_chat_window()
-	_wire_console()
 
 	presentation.settings.changed.connect(func(key: StringName, _v: Variant, _w: StringName) -> void:
 		# The field of view is the one setting that has to reach something already built.
@@ -994,9 +992,8 @@ func _adopt(candidate: ArenaPlayer) -> void:
 
 	if hud != null:
 		hud.follow(player)
-		var board_screen := menus.screen(&"scoreboard") as ArenaMenus.ScoreboardScreen if menus != null else null
-		if board_screen != null:
-			board_screen.follow(str(player.player_id) if "player_id" in player else "")
+		if board != null:
+			board.follow(str(player.player_id) if "player_id" in player else "")
 
 	if _sampler != null:
 		_sampler.tunables = player.controller.tunables
@@ -1536,7 +1533,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# a player is a click that never captures anything — after which the only
 	# affordance the game offers is one it has already ignored.
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
-		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and menus.top() == null:
+		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not _menu_open():
 			_awaiting_click = false
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -1544,6 +1541,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				hud.notice("")
 
 			return
+
+	# The menu is up: every key is its own (dot-menu closes on Escape), and nothing below
+	# may act on the world behind it.
+	if _menu_open():
+		return
 
 	if event.is_action_pressed(&"ui_cancel"):
 		# Escape RELEASES and does not toggle. Escape is how a browser itself exits
@@ -1553,9 +1555,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		# every platform.
 		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		else:
-			menus.toggle(&"pause")
-			_apply_mouse()
+			if hud != null:
+				hud.notice("Click to play. Escape again for the menu.")
+		elif game_menu != null:
+			game_menu.open()
 		return
 
 	if player == null:
@@ -1617,8 +1620,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_Q:
 			# The last weapon, which is the switch players make most.
 			_wanted_slot = _last_slot
-		KEY_TAB:
-			menus.toggle(&"scoreboard")
 		_:
 			pass
 
@@ -1628,7 +1629,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## A screen that wants the mouse gets it; otherwise the game does, subject to the
 ## browser having been clicked at least once.
 func _apply_mouse() -> void:
-	if menus != null and menus.top() != null:
+	if _menu_open():
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		return
 

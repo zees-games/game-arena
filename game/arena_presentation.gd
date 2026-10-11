@@ -3,6 +3,7 @@ extends Node
 const ArenaPaths := preload("arena_paths.gd")
 const ArenaVote := preload("arena_vote.gd")
 const ArenaAwards := preload("arena_awards.gd")
+const ArenaBindings := preload("arena_bindings.gd")
 
 ## Settings, audio, effects and a console, on the client.
 ##
@@ -85,11 +86,15 @@ static var FX_DIR := ArenaPaths.rebase("res://scenes/fx")
 
 var settings: DotSettingsManager = null
 
+## Every key a player can move: the InputMap, the settings document, the menu's Controls
+## page and its help screen read this one table. See [ArenaBindings].
+var bindings: DotMenuBindings = ArenaBindings.make()
+
 ## The connection overlay (`net_stat` at the console). See [method DotMenuNetStat.follow].
 var net_stat: DotMenuNetStat = null
 var audio: DotAudioManager = null
 var fx: DotFxManager = null
-## The player's console. See [method DotConsoleKit.build] and [method _build_console].
+## The player's console, built by [method build_console] once the client has a menu.
 var console: DotConsoleController = null
 var console_panel: DotConsolePanel = null
 
@@ -123,9 +128,6 @@ func setup() -> DotResult:
 	var drawn := _build_fx()
 	if not drawn.ok:
 		return drawn
-	var consoled := _build_console()
-	if not consoled.ok:
-		return consoled
 	_build_chat()
 	net_stat = DotMenuNetStat.follow(self, settings)
 
@@ -212,10 +214,21 @@ static func schema() -> DotSettingsSchema:
 	s.add(DotSettingsDef.boolean(&"allow_flashes", true, &"accessibility")
 		.with_description("Off draws no full-screen flashes at all."))
 
-	# net_stat, net_stat_height, net_stat_position: dot-menu's, so they are the same keys,
-	# defaults and ranges as in every game on its menu, and the console below binds them
-	# by name like every other setting here.
-	return DotMenuStock.declare_net_stat(s)
+	# How far the HUD sits in from the edge of the screen, for a television's overscan or a
+	# phone's notch. DEVICE: it is about this screen. Applied live by `ArenaClient`.
+	s.add(DotSettingsDef.integer(&"hud_safe_area", 16, 0, 120, &"hud")
+		.with_description("Pixels between the HUD and the edge of the screen."))
+
+	# One binding setting per key in the table. The two chat keys are declared above with
+	# their ACCOUNT scope, which the table leaves alone.
+	ArenaBindings.make().add_to_schema(s)
+
+	# dot-menu's stock video and interface settings: the window, V-Sync, the frame cap,
+	# render scale, the theme, the frame-rate counter and net_stat. Keys already declared
+	# above keep this game's default (a field of view of 100, horizontal at 4:3).
+	# Applied by the client's DotMenuApplier and DotMenu; the console binds them by name.
+	return DotMenuStock.declare(s, [DotMenuStock.GROUP_VIDEO, DotMenuStock.GROUP_INTERFACE] as Array[StringName])
+
 
 
 func _build_settings() -> DotResult:
@@ -262,7 +275,10 @@ func _on_setting_changed(key: StringName, value: Variant, _why: StringName) -> v
 		&"crosshair":
 			_apply_crosshair()
 		_:
-			pass
+			# A key binding (`bind_forward`, `bind_dash`, ...) onto the InputMap. The chat
+			# keys are answered above, so an empty one keeps its key rather than going back
+			# to the default.
+			var _bound := bindings.apply_setting(key, value)
 
 
 ## Points the look settings at the tunables the client's sampler reads, and applies them.
@@ -708,17 +724,20 @@ func _build_fx() -> DotResult:
 # --- Console ----------------------------------------------------------------
 
 ## dot-console's kit: `help`, `clear`, `settings`, every setting by its own name, the
-## in-process server's console, and the panel on layer 128. This game adds its own four.
+## in-process server's console, and the panel on layer 128, registered with [param menu].
+## This game adds its own four.
 ##
 ## [b]Between the kit's commands and the server's.[/b] The kit adds the server's console
 ## unprefixed and last, so it catches whatever the client did not claim; this game's
 ## `quit` has to be claimed before a listen server's own `quit` would shut the server down.
 ##
-## [b]No menu to register with.[/b] The kit makes the panel one of a [DotMenu]'s overlays,
-## and this game has no DotMenu: [ArenaClient] suspends its sampler on the console's
-## `visibility_changed` instead, the way it does for the chat box. See [method swallows_input].
-func _build_console() -> DotResult:
-	console = DotConsoleKit.build(self, settings)
+## [b]Called by [ArenaClient] after its [DotMenu] exists, not from [method setup].[/b] The
+## kit makes the console one of the menu's overlays, so opening it frees the pointer and
+## raises `overlays_changed`, which is what suspends the sampler. Before dot-menu this game
+## wired the console's `visibility_changed` to the sampler by hand. A suite calls it with
+## no menu.
+func build_console(menu: Object = null) -> DotResult:
+	console = DotConsoleKit.build(self, settings, menu)
 
 	var server_sources := console.sources().slice(1)
 	for s in server_sources:

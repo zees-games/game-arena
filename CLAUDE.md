@@ -25,16 +25,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 | Path | What |
 | --- | --- |
-| `game/arena_game.gd`, `arena_player.gd`, `arena_player_stack.gd` | the simulation: the game and its tick, the player (movement, weapons, health, hitboxes), the roster and spawning |
-| `game/arena_mode.gd`, `arena_modes.gd`, `arena_objectives.gd`, `arena_effects.gd`, `arena_spectate.gd`, `arena_drops.gd` | modes as data and the round's layers |
-| `game/arena_horde.gd`, `arena_npcs.gd`, `arena_npc_brain.gd`, `arena_props.gd`, `arena_projectiles.gd`, `arena_content.gd` | monsters, props, projectiles, weapons and the damage table |
-| `game/arena_module.gd`, `arena_services.gd`, `arena_mod_tools.gd`, `arena_vote*.gd`, `arena_map_director.gd`, `arena_map_session.gd`, `arena_maps.gd`, `arena_bots.gd`, `arena_server.gd` | the server: the dot-server module and its cvars, chat/voice/moderation, admin tools, the vote, maps, bots |
-| `game/arena_net_*.gd`, `arena_player_net.gd`, `arena_npc_net.gd`, `arena_events.gd`, `arena_event.gd`, `arena_request.gd` | the dot-net bridge, link, commands, per-entity net state, events and requests |
-| `game/arena_client.gd`, `arena_client_extras.gd`, `arena_hud.gd`, `arena_menus.gd`, `arena_presentation.gd`, `arena_browser.gd`, `arena_party.gd`, `arena_avatars.gd`, `arena_beacon.gd`, `arena_projectile_view.gd`, `arena.tscn` | the client: never loaded by a dedicated server |
-| `game/arena_stats.gd`, `arena_awards.gd`, `arena_boards.gd`, `arena_progress.gd`, `arena_identity.gd` | progression and identity |
-| `game/arena_paths.gd` | `rebase` for every `res://` path (pack delivery) |
-| `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
-| `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the g2gfast-maps link |
+| `game/` | everything that runs, flat: the simulation (`arena_game`, `arena_player*`), modes and the round's layers, the horde and props, the server (`arena_module`, `arena_services`, maps, vote, bots), the wire (`arena_net_*`, events, requests), the client (`arena_client`, `arena_hud`, `arena_menus`, `arena_bindings`, `arena_presentation`, browser, avatars; never loaded by a dedicated server), progression, `arena_paths` (pack rebasing). File by file: [architecture](docs/architecture.md#where-the-code-is) |
+| `maps/` | the built-in maps as box lists with their survey, paint and lighting; the combat surf maps' loader (copies of g2gfast's); `maps/imported` is the g2gfast-maps link |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art, Kenney's prototype grid and medal icons |
 | `examples/` | the eight suites; `wall_route_driver.gd` drives a map's wall routes |
 | `tools/` | `screenshot.sh`, `screenshot_menus.sh`, `screenshot_weapons.sh`, `render_wall_moves.sh`, `build_avatar_parts.gd`, `audio_probe.sh` |
@@ -76,11 +68,11 @@ Short forms; the reasoning is in the linked file.
 **Client**
 
 - Adopt the player on `player_added`, never `player_spawned`. Offline, name the player before creating it. [client](docs/client.md#booting-and-adopting-a-player)
-- The client owns the mouse; `manage_mouse` stays off. [client](docs/client.md#the-mouse)
 - The camera is written only in `ArenaPlayer.present`, the wall-run lean included (`wall_run_roll`; arena does not use `DotFpsView`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
 - A client's own `mode` is never replaced; display reads `displayed_mode()`. [client](docs/client.md#a-client-knows-the-mode-only-for-display)
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
-- Typing (chat box or console) sets `DotFpsSampler.suspended` as well as swallowing input; the console is `DotConsoleKit`'s, wired to the sampler because there is no DotMenu. [client](docs/client.md#the-chat-box)
+- The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer (`manage_pointer`, `manage_mouse` off). Movable keys are one table, `ArenaBindings`. [client](docs/client.md#escape-the-pointer-and-the-menu)
+- Typing suspends the sampler as well as swallowing input; the console does it as a menu overlay, so it is built after the menu (`build_console(menu)`). [client](docs/client.md#the-chat-box)
 - Full-screen overlays are sized to the viewport, not the HUD. [client](docs/client.md#the-hud)
 - The hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD; never from a predicted shot or a client's own count of kills. [client](docs/client.md#kill-feedback)
 - Medal rules live in `ArenaAwards.MedalBook` on the authority; `ArenaAwards.Medal` is a wire index, appended only. [services](docs/services.md#progression)
@@ -107,7 +99,7 @@ Short forms; the reasoning is in the linked file.
 - Every map passes the survey: no slot under 0.8 m unless a declared climb, nothing unreached unless declared. [maps](docs/maps.md#every-map-is-surveyed)
 - A bot that covers ground does not hold jump. [maps](docs/maps.md#every-map-is-surveyed)
 - Stairs are 0.36 treads ending flush; crate gaps 0.5; a new way up is watched from above.
-- A wall route is declared (`add_wall_route`) and driven through the motor in `headless_match`; a run gap drops about 0.7 m and outspans a dash-jump. [maps](docs/maps.md#design-rules-every-map-follows) [maps](docs/maps.md#design-rules-every-map-follows)
+- A wall route is declared (`add_wall_route`) and driven through the motor in `headless_match`; a run gap drops about 0.7 m and outspans a dash-jump. [maps](docs/maps.md#design-rules-every-map-follows)
 - Colour is derived from a box's role and zone (`arena_map_paint.gd`), never stored in the box list; a repaint is not a `MAP_VERSIONS` bump. [maps](docs/maps.md#colour-and-light)
 - A built-in map's light is its `lighting` document (dot-lighting), replaced with the level. Render a look change with `RENDERER=gl_compatibility` too: the shell is Compatibility. [maps](docs/maps.md#colour-and-light)
 - An imported map's solid is in the tree on every machine before any player is bodied; its spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
@@ -130,7 +122,7 @@ Short forms; the reasoning is in the linked file.
 
 ## Not here yet
 
-- **The Escape (pause) menu and settings screens are not converted to dot-menu yet.** Every other game uses dot-menu's Escape menu; arena is still on dot-ui's `DotPauseScreen` (`ArenaMenus`). No reason is recorded, and the one game-hungario gives (a `DotConfig`) does not apply, since arena's settings are already dot-settings. Unfinished; queued as `arena-dot-menu-1`. Only the Tab scoreboard is dot-menu's. [client](docs/client.md#screens)
+- **Fire, aim, reload, the slots, the launch, the bash, the prop keys and push to talk cannot be rebound**: they are keycodes in `ArenaClient._unhandled_input`, not actions, so the Controls page lists them as fixed. Unfinished; queued as `arena-bindable-keys-1`. [client](docs/client.md#keys)
 - **dot-game.** The module extends `DotModule` and `ArenaServices` is its own, not `DotGameModule` / `DotGameServices`. Not yet converted; dot-game's CLAUDE.md names arena as the one to convert first.
 - **Delivering the combat surf maps.** The code is done; the maps still need publishing as packs from g2gfast-maps, each author's permission for redistribution confirming, and the keys naming in a deployment's `cfg/content.yml`. [imported](docs/imported-maps.md#delivered-maps)
 - **Server bots** do not use the horde's navigation graph (on a map with corners they walk into walls between spawns until they see somebody), buy or choose nothing, and are not a separate count in the query answer. [netcode](docs/netcode.md#server-bots)

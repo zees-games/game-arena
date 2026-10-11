@@ -5,7 +5,10 @@ const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaClient := preload("../game/arena_client.gd")
 const ArenaGame := preload("../game/arena_game.gd")
+const ArenaBindings := preload("../game/arena_bindings.gd")
+const ArenaBrowser := preload("../game/arena_browser.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
+const ArenaMenus := preload("../game/arena_menus.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaParty := preload("../game/arena_party.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
@@ -27,7 +30,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 155
+const CHECKS := 170
 
 var _passed := 0
 var _failed := 0
@@ -54,6 +57,7 @@ func _run() -> void:
 	_test_shake_is_computed_not_applied()
 	_test_console()
 	_test_console_stops_movement()
+	_test_the_escape_menu()
 	_test_party_is_sandboxed()
 	await _test_party_over_http()
 	_test_chat_box()
@@ -88,11 +92,16 @@ func _run() -> void:
 	get_tree().quit(1 if _failed > 0 else 0)
 
 
-func _make() -> ArenaPresentation:
+## A presentation layer, set up. [param console] builds its console with no menu, which is
+## what a suite that wants the console alone needs; the client builds it after its menu
+## ([method ArenaPresentation.build_console]).
+func _make(console: bool = true) -> ArenaPresentation:
 	var p := ArenaPresentation.new()
 	p.name = "P%d" % _entered
 	add_child(p)
 	p.setup()
+	if console:
+		var _built := p.build_console()
 	return p
 
 
@@ -478,17 +487,20 @@ func _test_console() -> void:
 ## Typing at the console must not walk the player. `DotFpsSampler` polls the keys every
 ## tick, and a focused line edit does not stop `Input.is_action_pressed`; what stops it is
 ## the client suspending the sampler while the console is open. Driven through the real
-## wiring ([method ArenaClient._wire_console]) with the key held down.
+## wiring with the key held down: the console is one of dot-menu's overlays
+## ([method ArenaMenus.build]), and the menu's `overlays_changed` is what the client
+## suspends on, through the same `_refresh_suspended` as the chat box.
 func _test_console_stops_movement() -> void:
 	_section("A held movement key does not move the player while the console is open")
 
-	var p := _make()
+	var p := _make(false)
 	var client := ArenaClient.new()
 	client.presentation = p
 	client._sampler = DotFpsSampler.new(DotFpsTunables.new())
 	var _missing := DotFpsSampler.register_default_actions(client._sampler)
 	client._wire_chat_window()
-	client._wire_console()
+	client.game_menu = ArenaMenus.build(self, p)
+	client.game_menu.overlays_changed.connect(func(_open: bool) -> void: client._refresh_suspended())
 
 	var forward: StringName = client._sampler.actions["forward"]
 	Input.action_press(forward)
@@ -512,8 +524,90 @@ func _test_console_stops_movement() -> void:
 	Input.action_release(forward)
 	_check(not client._sampler.suspended, "nothing is left suspended")
 
+	client.game_menu.queue_free()
 	client.presentation = null
 	client.free()
+	p.queue_free()
+	_done()
+
+
+## The Escape menu is dot-menu's, over this game's settings document and key table, with
+## this game's pages on it. What no picture says: a row written from the menu reaches the
+## thing it is about, and a key rebound on the Controls page moves the InputMap.
+func _test_the_escape_menu() -> void:
+	_section("The Escape menu is dot-menu's, and its rows reach what they are about")
+
+	var p := _make(false)
+	var browser := ArenaBrowser.new()
+	browser.name = "Browser"
+	add_child(browser)
+	var _listed := browser.setup()
+	var menu := ArenaMenus.build(self, p, browser)
+
+	var ids: Array[StringName] = []
+	for page in menu.pages:
+		ids.append(page.id)
+	_check(
+		ids == ([&"general", &"interface", &"video", &"audio", &"controls", &"servers", &"advanced"] as Array[StringName]),
+		"the stock pages, Interface and Servers", str(ids)
+	)
+	_check(p.console != null and p.console_panel != null, "the console is built with the menu")
+	p.console.open()
+	_check(menu.any_open(), "and is one of its overlays: open, the menu counts it")
+	p.console.close()
+	_check(not menu.any_open(), "and closed, it does not")
+
+	# The settings round trip, through the slider the page draws: no Apply, and the value
+	# lands in the document AND the mixer.
+	menu.open(&"audio")
+	var row := menu.screen.find_child("Row_master_volume", true, false)
+	var slider := row.find_child("Slider", true, false) as HSlider if row != null else null
+	_check(slider != null, "the Audio page draws the master volume")
+	if slider != null:
+		slider.value = 0.25
+	_check(is_equal_approx(p.settings.get_float(&"master_volume"), 0.25), "moving it writes the document")
+	_check(is_equal_approx(p.audio.mixer.master, 0.25), "and the mixer, with no Apply")
+
+	menu.open(&"interface")
+	_check(
+		menu.screen.find_child("Row_crosshair", true, false) != null
+			and menu.screen.find_child("Row_hud_safe_area", true, false) != null
+			and menu.screen.find_child("Row_ui_theme", true, false) != null,
+		"the Interface page has the crosshair, the HUD margin and the theme"
+	)
+
+	menu.open(&"controls")
+	var dash := menu.screen.find_child("Row_bind_dash", true, false)
+	_check(dash != null and menu.screen.find_child("Row_invert_pitch", true, false) != null,
+		"the Controls page draws a key for the dash and this game's invert")
+	_check(
+		menu.page(&"controls").find_section(&"fixed").rows.size() == ArenaBindings.FIXED_KEYS.size() + 1,
+		"and lists the keys that are not actions yet"
+	)
+	if dash != null:
+		dash.emit_signal(&"captured", "B")
+	_check(DotInputBinding.describe_action(&"dot_fps_sprint") == "B", "a key captured there moves the action")
+	_check(p.settings.get_string(&"bind_dash") == "B", "and is stored in the document")
+	dash = menu.screen.find_child("Row_bind_dash", true, false)
+	if dash != null:
+		dash.emit_signal(&"captured", "Space")
+	_check(
+		DotInputBinding.describe_action(&"dot_fps_sprint") == "Space"
+			and DotInputBinding.describe_action(&"dot_fps_jump") == "B",
+		"a taken key swaps rather than leaving jump on nothing"
+	)
+	p.bindings.reset_all(p.settings)
+	_check(
+		DotInputBinding.describe_action(&"dot_fps_jump") == "Space"
+			and DotInputBinding.describe_action(&"dot_fps_sprint") == "Shift",
+		"and Reset puts both back"
+	)
+	_check(menu.help.extra_keys.has("Weapons"), "the help screen lists the fixed keys too")
+	menu.close()
+
+	p.settings.reset_value(&"master_volume")
+	menu.queue_free()
+	browser.queue_free()
 	p.queue_free()
 	_done()
 

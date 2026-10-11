@@ -57,7 +57,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 577
+const CHECKS := 567
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -4096,30 +4096,19 @@ func _test_outcome() -> void:
 ##
 ## Nothing is rendered — there is no display — and nothing here needs to be. What is
 ## checked is the wiring: that a widget bound to a game value reads the right one, that
-## the scoreboard screen fills from the match that just finished, and that the screen
-## stack keeps its four invariants straight when a scoreboard is held down over a pause
-## menu.
+## the Tab board fills from the match that just finished, and that the Escape menu has
+## this game's pages and drops a held board when it opens over it.
 func _test_interface() -> void:
 	_section("the interface")
 
 	var ui_config := DotUiConfig.new()
 	ui_config.allow_pause = false
 
-	var stack := DotScreenStack.new()
-	stack.name = "Screens"
-	stack.register_service = false
-	# Nothing owns a cursor in a headless run, and fighting over Input.mouse_mode in a
-	# test is a way to make it depend on the environment.
-	stack.manage_mouse = false
-	stack.config = ui_config
-	add_child(stack)
-
 	var hud := ArenaHud.new()
 	hud.name = "Hud"
 	hud.config = ui_config
 	add_child(hud)
 	hud.build(_game)
-	hud.bind_stack(stack)
 
 	var subject := _game.players()[0]
 	hud.follow(subject)
@@ -4238,90 +4227,45 @@ func _test_interface() -> void:
 		"which is what it then shows"
 	)
 
-	var pause := ArenaMenus.install(stack, _game, ui_config)
-	_check(pause != null, "the menus install")
-	_check(stack.registered_ids().size() == 4, "all four screens register",
-		str(stack.registered_ids()))
-	# [b]The browser screen was registered and nothing ever pushed it.[/b] A whole server
-	# list — sources, a filter, favourites and a join — built on every launch of the client
-	# and unreachable from anywhere. There is a Servers button now, and it is greyed here
-	# because this fixture has no browser, which is the same rule the Settings button
-	# follows. `ArenaClient` calls `note_screens` once its list has come up.
-	var servers_button := pause.button(&"servers")
-	_check(servers_button != null, "the pause menu has a Servers button")
+	# The Escape menu and the Tab board are dot-menu's (since 2026-10-10), built with no
+	# presentation layer here: no settings document, so only rows that need none draw.
+	var menu := ArenaMenus.build(self, null)
+	_check(menu != null and menu.screen != null, "the menu builds without a settings document")
+	var page_ids: Array[StringName] = []
+	for page in menu.pages:
+		page_ids.append(page.id)
 	_check(
-		servers_button != null and servers_button.disabled,
-		"greyed where there is no browser, rather than opening nothing"
+		page_ids == ([&"general", &"interface", &"video", &"audio", &"controls", &"advanced"] as Array[StringName]),
+		"the stock pages and this game's Interface page, in order", str(page_ids)
+	)
+	# The Servers page is there only with a browser behind it; a page that opened nothing
+	# would be the dot-ui menu's greyed button again.
+	_check(menu.page(&"servers") == null, "no Servers page where there is no browser")
+	_check(
+		menu.bindings != null and menu.bindings.row_for_action(&"arena_scoreboard").get("default", "") == "Tab",
+		"the key table holds the board's Tab"
 	)
 
-	stack.push(&"scoreboard")
-	var scoreboard := stack.screen(&"scoreboard") as ArenaMenus.ScoreboardScreen
+	var board := ArenaMenus.Board.new(menu.scoreboard, _game.match_node.scoreboard, null, _game.match_node.teams)
+	menu.scoreboard.open()
 	_check(
-		scoreboard.board.is_open() and scoreboard.board.rows().size() == BOTS,
-		"the scoreboard fills from the match that just ended",
-		"%d rows" % scoreboard.board.rows().size()
+		menu.scoreboard.is_open() and menu.scoreboard.rows().size() == BOTS,
+		"the board fills from the match that just ended",
+		"%d rows" % menu.scoreboard.rows().size()
 	)
+	# Held, never one of the menu's overlays: holding Tab must not stop the player or take
+	# the pointer, which is what `any_open()` drives in the client.
+	_check(not menu.any_open(), "a held board is not an open menu")
+	menu.open(&"controls")
+	_check(menu.any_open() and not menu.scoreboard.is_open(), "the menu opened over the board drops the board")
+	menu.close()
+	_check(not menu.any_open(), "and closes")
+	board.follow("")
 
-	# The distinction dot-ui exists to keep straight: a scoreboard held down during a
-	# live game must not stop the player moving, and must not hide the game.
-	_check(hud.visible, "a scoreboard does not take the HUD down")
-	_check(
-		not scoreboard.blocks_input,
-		"and does not block input"
-	)
-
-	stack.push(&"pause")
-	_check(not hud.visible, "an opaque pause menu does take it down")
-	_check(stack.depth() == 2, "and stacks over the scoreboard")
-
-	# `interface`, not `settings`. The screen built from `DotUiConfig` offers the scale,
-	# the safe area and how many chat lines the HUD keeps -- real settings, and not one of
-	# them is what a player means by the word. `settings` is the player's own document now,
-	# and a player who opened this menu to turn the game down used to find a slider for the
-	# interface scale.
-	stack.push(&"interface")
-	_check(stack.top_id() == &"interface", "the interface screen opens over the pause menu")
-	var settings := stack.screen(&"interface") as DotSettingsScreen
-	_check(
-		settings != null and settings.panel.editor_for("scale") != null,
-		"and generated a control for the UI scale"
-	)
-	_check(
-		stack.screen(&"settings") == null,
-		"while `settings` is the player's own, which this fixture has no manager for"
-	)
-	var settings_button := pause.button(&"settings")
-	_check(
-		settings_button != null and settings_button.disabled,
-		"so its button is greyed out rather than opening nothing"
-	)
-
-	# dot-ui's screens rather than copies of them. This game carried its own pause menu and
-	# its own settings screen for as long as `DotPauseScreen` and `DotSettingsScreen` have
-	# existed, which is the duplication that addon was written to end -- and it is also the
-	# only client in the family with TWO settings screens in one stack, which is exactly the
-	# case `id_override` exists for.
-	_check(pause is DotPauseScreen, "the pause screen is the shared one")
-	_check(
-		pause.ids() == ([&"resume", &"settings", &"interface", &"controls", &"servers",
-			ArenaMenus.LEAVE] as Array[StringName]),
-		"and its ids come from its labels (%s)" % [pause.ids()]
-	)
-	_check(
-		settings != null and settings.title_text == "Interface",
-		"the interface screen says Interface on it, not Settings"
-	)
-
-	stack.pop()
-	_check(stack.top_id() == &"pause", "closing it reveals the pause menu")
-
-	stack.clear()
-	_check(hud.visible, "and clearing everything brings the HUD back")
-
+	menu.queue_free()
+	remove_child(menu)
 	hud.queue_free()
 	remove_child(hud)
-	stack.queue_free()
-	remove_child(stack)
 	_done()
 
 

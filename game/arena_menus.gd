@@ -1,142 +1,204 @@
 extends RefCounted
 
-const ArenaGame := preload("arena_game.gd")
+const ArenaBindings := preload("arena_bindings.gd")
+const ArenaBrowser := preload("arena_browser.gd")
 
-## The in-game menus: pause, settings, controls, scoreboard.
+## The Escape menu and the Tab board: dot-menu's, with this game's pages on it.
 ##
-## [b]Four screens and about a hundred lines, because dot-ui does the hard part.[/b]
-## The stack owns z-order, input blocking, mouse mode and the back key; the settings
-## panel builds itself from a `DotConfig`; the rebinder handles conflicts and
-## persistence. What is left is deciding which screens exist and what is on them,
-## which is the part that is a game's own.
+## [b]dot-menu's since 2026-10-10, like every other game here.[/b] It was dot-ui's
+## `DotPauseScreen` (Resume, Settings, Interface, Controls, Servers, Leave) over two generated
+## `DotSettingsScreen`s, a `DotBindingsPanel` rebinder and a browser screen, each a different
+## look. Now it is the one menu: dot-menu's stock General, Video, Audio, Controls and
+## Advanced pages as views of this game's settings document ([ArenaPresentation]), plus
+## this game's own:
+##
+## - **Interface**: the theme, the frame-rate counter, the crosshair and the HUD's margin.
+## - **Controls**: the stock mouse card, this game's look switches, the keys from
+##   [ArenaBindings] (rebindable, swapping on a conflict) and the keys that are not
+##   actions yet ([constant ArenaBindings.FIXED_KEYS]).
+## - **Servers**: dot-browser's list, drawn as a page ([method _servers_page]).
+##
+## What a press of Leave means stays the client's: [signal DotMenu.action_requested].
 
 const CHANNEL := "arena.menus"
 
-## What is on the pause menu, top to bottom.
-##
-## A list of LABELS and no list of ids beside it: [DotPauseScreen] derives the id from the
-## label, because two parallel lists are the shape this tree has paid for more than any
-## other. `"Interface"` is `&"interface"`, which is the id that screen registers under.
-##
-## (`const` rather than a `PackedStringArray(...)` call, which is not a constant expression
-## in GDScript. It is converted at the one place it is handed over.)
-const PAUSE_BUTTONS: Array[String] = [
-	"Resume", "Settings", "Interface", "Controls", "Servers", "Leave",
-]
-
-## The id of the button the client acts on itself. See [method install].
+## The action id Leave sends.
 const LEAVE := &"leave"
 
 
-## Key bindings, with conflict detection and a file that survives a restart.
-class ControlsScreen extends DotScreen:
-	var panel: DotBindingsPanel = null
+## Builds the menu under [param host], with its pages, and the console as one of its
+## overlays. [param browser] null leaves the Servers page out of the sidebar.
+static func build(host: Node, presentation: Node, browser: ArenaBrowser = null) -> DotMenu:
+	var settings: DotSettingsManager = presentation.settings if presentation != null else null
 
-	func _screen_id() -> StringName:
-		return &"controls"
+	var menu := DotMenu.new()
+	menu.name = "GameMenu"
+	menu.settings = settings
+	menu.bindings = presentation.bindings if presentation != null else ArenaBindings.make()
+	var config := DotMenuConfig.new()
+	config.brand_name = "Arena"
+	var _layered := config.load_layered()
+	menu.config = config
+	# Escape keeps its two steps here (the first releases the pointer, the second opens the
+	# menu; see `ArenaClient._unhandled_input`), and the client is the one owner of the
+	# pointer. Escape still closes the menu.
+	menu.open_on_escape = false
+	menu.manage_pointer = false
+	menu.scoreboard_action = ArenaBindings.SCOREBOARD
+	# The chat box or the console has the keyboard: Tab is a letter then, not the board.
+	if presentation != null:
+		menu.busy = func() -> bool: return presentation.swallows_input()
+	host.add_child(menu)
+	DotLog.result(CHANNEL, "the menu", menu.setup())
 
-	func build(config: DotUiConfig) -> void:
-		blocks_input = true
+	add_pages(menu, browser)
+	# The keys that are not actions, on the help screen beside the ones that are.
+	menu.help.extra_keys["Weapons"] = ArenaBindings.FIXED_KEYS
 
-		var container := PanelContainer.new()
-		container.set_anchors_preset(Control.PRESET_CENTER)
-		container.offset_left = -260.0
-		container.offset_right = 260.0
-		container.offset_top = -220.0
-		container.offset_bottom = 220.0
-		add_child(container)
-
-		var column := VBoxContainer.new()
-		container.add_child(column)
-
-		var title := Label.new()
-		title.text = "Controls"
-		title.theme_type_variation = &"DotHeading"
-		column.add_child(title)
-
-		panel = DotBindingsPanel.new()
-		panel.config = config
-		# `dot_fps_` FIRST, and `arena_` beside it, and the pair is the whole screen.
-		#
-		# `prefix` filters the InputMap, and for the whole life of this screen it was set
-		# to `arena_` when there was no `arena_` action at all. This game's movement is
-		# registered by `DotFpsSampler.register_default_actions` in
-		# `ArenaClient._build_interface` and is therefore named `dot_fps_forward`,
-		# `dot_fps_jump` and so on; fire, reload and the scoreboard are matched on a
-		# keycode in `_unhandled_input` and are not actions at all. So the rebinder listed
-		# nothing: a Controls menu with a title, a Defaults button, a Back button and no
-		# controls. Nothing errored, because a filter that matches nothing is a legitimate
-		# filter and an empty list is a legitimate list. A rendered frame is what showed it.
-		#
-		# `arena_` is real now -- `ArenaPresentation._build_chat` creates `arena_chat` and
-		# `arena_chat_team` -- and a panel that could filter on only one prefix would show
-		# the movement and silently drop the chat keys, which is the same bug one namespace
-		# along: a binding a player cannot find on any screen. `also_prefixed` is what lets
-		# one panel carry both.
-		#
-		# game-hungario needs no second prefix: everything it binds, chat included, is
-		# already `hungry_`.
-		panel.prefix = "dot_fps_"
-		panel.also_prefixed = PackedStringArray(["arena_"])
-		column.add_child(panel)
-		panel.build()
-		panel.load_saved()
-
-		# Saving on every change rather than on Back: a player who rebinds and then
-		# alt-F4s should not lose it, and there is nothing to batch.
-		panel.binding_changed.connect(func(_a: StringName, _e: InputEvent) -> void:
-			panel.save()
-		)
-
-		var buttons := HBoxContainer.new()
-		column.add_child(buttons)
-
-		var reset := Button.new()
-		reset.text = "Defaults"
-		reset.pressed.connect(func() -> void:
-			panel.reset_all()
-			panel.save()
-		)
-		buttons.add_child(reset)
-
-		var back := Button.new()
-		back.text = "Back"
-		back.pressed.connect(close)
-		buttons.add_child(back)
+	# The console after the menu, so DotConsoleKit registers it as one of the menu's
+	# overlays: opening it frees the pointer and stops the player through
+	# `overlays_changed`, which the client listens to.
+	if presentation != null and presentation.has_method(&"build_console"):
+		DotLog.result(CHANNEL, "the console", presentation.build_console(menu))
+	return menu
 
 
-## The scoreboard. Transparent, and does not block input.
+## This game's rows and pages onto [param menu]'s stock ones. Public so a suite can build
+## a menu without a client.
+static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
+	# Interface: the look of the screen. The theme and the counter move here from General.
+	var general := menu.page(&"general")
+	var interface := DotMenuPage.make(&"interface", "Interface", "The crosshair, the HUD and the colours of the menus.")
+	var look := interface.section("Look")
+	if general != null:
+		for id in [&"ui_theme", &"show_fps"]:
+			var row := general.take_row(id)
+			if row != null:
+				look.add(row)
+		var _gone := general.remove_section(&"interface")
+		general.blurb = "Comfort, and whether there is a chat box."
+	var theme_row := interface.find_row(&"ui_theme")
+	if theme_row != null:
+		theme_row.described("The colours of the menus and the scoreboard.")
+	interface.section("HUD") \
+		.add(DotMenuRow.select(&"crosshair", "Crosshair", "Circle draws the cross for now.",
+			[[&"cross", "Cross"], [&"dot", "Dot"], [&"circle", "Circle"], [&"none", "None"]])) \
+		.add(DotMenuRow.slider(&"hud_safe_area", "Edge margin", "Room between the HUD and the edge of the screen, for a television or a notch.")
+			.formatted(func(v: float) -> String: return "%d px" % roundi(v)))
+	menu.add_page(interface, &"video")
+
+	var video := menu.page(&"video")
+	if video != null:
+		video.section("Image").add(DotMenuRow.toggle(&"view_model", "Weapon in view", "Your hands and gun. A server may turn them off."))
+
+	var audio := menu.page(&"audio")
+	if audio != null:
+		audio.section("Voice").add(DotMenuRow.toggle(&"push_to_talk", "Push to talk", "Hold V to talk. Off: an open microphone."))
+
+	var controls := menu.page(&"controls")
+	if controls != null:
+		# This game's invert is `invert_pitch`, stored before dot-menu's `invert_mouse`
+		# existed; the stock row for the stock key is not drawn, because it is not declared.
+		controls.section("Mouse") \
+			.add(DotMenuRow.toggle(&"invert_pitch", "Invert vertical look")) \
+			.add(DotMenuRow.toggle(&"right_mouse_aims", "Right mouse aims", "Off: right mouse bashes with the weapon, and F aims."))
+		var fixed := controls.section("Weapons", &"fixed")
+		for pair in ArenaBindings.FIXED_KEYS:
+			var key_text := str(pair[0])
+			fixed.add(DotMenuRow.custom(str(pair[1]), "", func(kit: DotMenuKit) -> Control: return kit.keycap(key_text)))
+		fixed.add(DotMenuRow.note("These keys cannot be moved yet."))
+
+	if browser != null:
+		menu.add_page(_servers_page(menu, browser), &"advanced")
+
+
+## dot-browser's list as a page: a card of servers, each with a Join, and a Refresh.
 ##
-## Both matter: it is held down during a live game, so it must not stop the player
-## moving and must not hide what they are looking at. That is the distinction between
-## `blocks_input` and `hides_below` that dot-ui exists to keep straight.
+## [b]A page rather than a screen of its own[/b], so it is in the menu's sidebar, theme and
+## pointer handling like everything else. It is drawn fresh each time it is shown, which is
+## what a page is; the listing it draws is the browser's, so nothing is kept between draws.
+static func _servers_page(menu: DotMenu, browser: ArenaBrowser) -> DotMenuPage:
+	var page := DotMenuPage.make(&"servers", "Servers", "Other servers running this game. Join says where to go.")
+	# What the last refresh said, kept across draws: empty once it finished cleanly.
+	var state := {"status": ""}
+	browser.listing_changed.connect(func() -> void:
+		if menu.is_open() and menu.screen.current_page() == &"servers":
+			menu.screen.refresh())
+	page.build = func(kit: DotMenuKit, body: VBoxContainer) -> void:
+		var top := HBoxContainer.new()
+		top.add_theme_constant_override(&"separation", 12)
+		var status := kit.paragraph(str(state["status"]), kit.size_small, kit.palette.dim)
+		status.name = "Status"
+		status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		top.add_child(status)
+		var refresh := Button.new()
+		refresh.name = "Refresh"
+		refresh.text = "Refresh"
+		refresh.pressed.connect(func() -> void:
+			state["status"] = "Looking..."
+			status.text = state["status"]
+			var done: DotResult = await browser.refresh()
+			state["status"] = "" if done.ok else done.error.message
+			if menu.is_open():
+				menu.screen.refresh())
+		top.add_child(refresh)
+		body.add_child(top)
+
+		var listing := browser.listing()
+		if listing.is_empty():
+			if str(state["status"]) == "":
+				status.text = "Nothing listed yet. Refresh to ask the servers this game knows."
+			return
+		var card := kit.card()
+		card.name = "List"
+		var rows := VBoxContainer.new()
+		card.add_child(rows)
+		for entry in listing:
+			if rows.get_child_count() > 0:
+				rows.add_child(HSeparator.new())
+			var line := HBoxContainer.new()
+			line.add_theme_constant_override(&"separation", 18)
+			line.custom_minimum_size = Vector2(0, 52)
+			var words := VBoxContainer.new()
+			words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			words.alignment = BoxContainer.ALIGNMENT_CENTER
+			words.add_child(kit.label(entry.name, kit.size_body, kit.palette.text))
+			words.add_child(kit.label("%s  ·  %d/%d players  ·  %s" % [
+				ArenaBrowser.game_field(entry, "map", entry.map),
+				entry.players, entry.max_players,
+				("%d ms" % entry.ping_ms) if entry.is_online() else "no answer",
+			], kit.size_small, kit.palette.dim))
+			line.add_child(words)
+			var join := Button.new()
+			join.text = "Join"
+			join.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			var chosen := entry
+			join.pressed.connect(func() -> void:
+				menu.close()
+				browser.join_requested.emit(chosen))
+			line.add_child(join)
+			rows.add_child(line)
+		body.add_child(card)
+	return page
+
+
+## The Tab board's rows from dot-match, with the server's roster merged in by key for what
+## only the server knows (time connected and ping).
 ##
-## [b]Drawn by dot-menu's `DotMenuScoreboard` since 2026-10-09.[/b] The rows are dot-match's
-## records (kills, deaths, assists, score), with the server's roster merged in by key for
-## what only the server knows: how long each player has been on and their ping. The ping
-## column was a literal 0 before, for as long as this screen existed. Sides are the board's
-## teams when the match has more than one.
-class ScoreboardScreen extends DotScreen:
+## [b]dot-menu's `DotMenuScoreboard` since 2026-10-09[/b]; it hung off a dot-ui screen until
+## the Escape menu moved, and is the menu's own `scoreboard` now. Held on Tab
+## ([constant ArenaBindings.SCOREBOARD]), never one of the menu's overlays, so holding it
+## stops nobody moving.
+class Board extends RefCounted:
 	var board: DotMenuScoreboard = null
-
 	var _records: DotScoreboard = null
 	var _teams: DotTeamManager = null
 	var _me: String = ""
 
-	func _screen_id() -> StringName:
-		return &"scoreboard"
-
-	func build(records: DotScoreboard, link: Object = null, teams: DotTeamManager = null) -> void:
+	func _init(p_board: DotMenuScoreboard, records: DotScoreboard, link: Object = null, teams: DotTeamManager = null) -> void:
+		board = p_board
 		_records = records
 		_teams = teams
-		blocks_input = false
-		hides_below = false
-		closable = true
-		mouse_mode = DotScreen.Mouse.INHERIT
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		board = DotMenuScoreboard.new()
-		board.name = "Board"
 		board.title_text = "Arena"
 		board.columns = [
 			{"key": &"name", "title": "Player", "width": 3.0},
@@ -152,25 +214,15 @@ class ScoreboardScreen extends DotScreen:
 		board.prepare = _rows_from_match
 		if link != null and link.has_signal(&"scoreboard_received"):
 			board.feed_from(link)
-		add_child(board)
+		else:
+			# Offline nothing sends a roster; an empty one pulled twice a second keeps the
+			# rows from the match current while the board is held.
+			board.source = func() -> Dictionary: return {}
 
 	## Which record is this client's. The roster says so online; offline nobody else will.
 	func follow(key: String) -> void:
 		_me = key
 
-	func _on_push() -> void:
-		if board != null:
-			board.open()
-
-	func _on_pop() -> void:
-		if board != null:
-			board.close()
-
-	func refresh() -> void:
-		if board != null and board.is_open():
-			board.redraw()
-
-	## The match's records, in the match's order, with the roster's time and ping merged in.
 	func _rows_from_match(snap: Dictionary) -> void:
 		if _records == null:
 			return
@@ -206,124 +258,3 @@ class ScoreboardScreen extends DotScreen:
 			snap["teams"] = listed
 		if not snap.has("server"):
 			snap["server"] = {"name": "Arena"}
-
-
-## Registers all four screens with a stack and wires the buttons that navigate.
-##
-## Returns the pause screen, because that is the one a game opens.
-static func install(
-	stack: DotScreenStack,
-	game: ArenaGame,
-	ui_config: DotUiConfig,
-	player_settings: Object = null,
-	link: Object = null
-) -> DotPauseScreen:
-	# [b]dot-ui's pause screen, and it used to be a copy of it.[/b] That addon grew
-	# `DotPauseScreen` because four clients here had written the same forty lines -- a
-	# centred `PanelContainer`, a heading, a column of `Button`s and a focus path -- and
-	# this file went on being one of them. What is this game's own is the label list above
-	# and what happens when one is pressed.
-	var pause := DotPauseScreen.new()
-	pause.name = "Pause"
-	pause.half_size = Vector2(160.0, 160.0)
-
-	var built_pause := pause.build(PackedStringArray(PAUSE_BUTTONS))
-
-	if not built_pause.ok:
-		DotLog.result(CHANNEL, "the pause screen", built_pause)
-		pause.free()
-		return null
-
-	stack.register(pause)
-
-	# [b]Registered as `interface`, not `settings`, and that distinction is the point.[/b]
-	# This screen offers the scale, the safe area, the transition time and how many chat
-	# lines the HUD keeps -- real settings, and not one of them is what a player means by
-	# the word. The volume, the field of view and the sensitivity are the player's own
-	# document, on the screen below; until `settings` pointed at that, a player who opened
-	# this menu to turn the game down found a slider for the interface scale.
-	#
-	# Also dot-ui's screen rather than a second copy of one, which is what `id_override`
-	# and `title_text` are for: two of these in one stack is exactly the case that made
-	# that setting configurable.
-	var interface_screen := DotSettingsScreen.new()
-	interface_screen.name = "Interface"
-	interface_screen.id_override = &"interface"
-	interface_screen.title_text = "Interface"
-	interface_screen.half_size = Vector2(280.0, 220.0)
-
-	var built_interface := interface_screen.build(ui_config)
-
-	if built_interface.ok:
-		stack.register(interface_screen)
-	else:
-		DotLog.result(CHANNEL, "the interface screen", built_interface)
-		interface_screen.free()
-
-	# The player's own settings, on dot-ui's shared screen rather than a fourth copy of
-	# one. Optional, because a suite that drives the menus without a presentation layer is
-	# a legitimate caller and the menu greys the button rather than opening nothing.
-	if player_settings != null:
-		var player_screen := DotSettingsScreen.new()
-		player_screen.name = "Settings"
-
-		var built := player_screen.build(player_settings)
-
-		if built.ok:
-			stack.register(player_screen)
-		else:
-			DotLog.result(CHANNEL, "the settings screen", built)
-			player_screen.free()
-
-
-	var controls := ControlsScreen.new()
-	controls.name = "Controls"
-	controls.build(ui_config)
-	stack.register(controls)
-
-	var scoreboard := ScoreboardScreen.new()
-	scoreboard.name = "Scoreboard"
-	scoreboard.build(game.match_node.scoreboard, link, game.match_node.teams)
-	stack.register(scoreboard)
-
-	# [b]Greyed rather than removed.[/b] A button that is absent on one build and present
-	# on another is a menu whose shape a player cannot learn; one that is there and dimmed
-	# says this client does not have that thing, which is the truth.
-	note_screens(stack, pause)
-
-	# Every button but Leave is about the stack and nothing else. What LEAVE means belongs
-	# to the client -- an embedded one cannot leave and a single-process test must not --
-	# so that one is left for the caller.
-	pause.chosen.connect(func(id: StringName) -> void:
-		match id:
-			&"resume":
-				stack.pop(&"pause")
-			&"settings", &"interface", &"controls", &"servers":
-				# The button id IS the screen id, which is what the label list buys: a
-				# parallel table of "which button opens which screen" is two lists that can
-				# disagree, and this one cannot. A screen that failed to build is absent
-				# rather than empty, and its button is already greyed.
-				if stack.screen(id) != null:
-					stack.push(id)
-	)
-
-	return pause
-
-
-## Re-checks which buttons have a screen behind them.
-##
-## [b]For `servers`, which is registered after [method install] returns.[/b] The browser is
-## the one screen here that is about something other than this game, so the client builds it
-## itself and only when its list came up -- which is after the menus exist. Without this the
-## button would be greyed on a client that has a perfectly good server browser.
-static func note_screens(stack: DotScreenStack, pause: DotPauseScreen) -> void:
-	if stack == null or pause == null:
-		return
-
-	for id: StringName in pause.ids():
-		var button := pause.button(id)
-
-		if button == null or id in [&"resume", LEAVE]:
-			continue
-
-		button.disabled = stack.screen(id) == null

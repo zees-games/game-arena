@@ -632,6 +632,15 @@ const BLIND_COLOUR := Color(0.01, 0.01, 0.015)
 
 
 ## Builds every widget. Call after adding to the tree.
+## How far in from the screen's edge the HUD sits, in pixels: the `hud_safe_area` setting,
+## applied live. dot-ui's `DotHud` reads its config's margin once, when it enters the tree.
+func set_safe_area(pixels: float) -> void:
+	if config == null:
+		config = DotUiConfig.new()
+	config.safe_area = maxf(pixels, 0.0)
+	_apply_safe_area()
+
+
 func build(p_game: ArenaGame) -> void:
 	game = p_game
 
