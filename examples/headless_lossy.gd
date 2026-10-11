@@ -938,6 +938,8 @@ func _measure_window(
 	print("    clock: settled error within +-%d ticks over %d samples; real lead %d..%d ticks; %d snaps, %d catch-ups; rtt %d ms, jitter %d ms" % [
 		worst_error, settled_errors.size(), min_lead, max_lead, snaps, catch_ups,
 		int(net.clock.rtt_ms()), int(net.clock.jitter_ms())])
+	if net.clock.has_method(&"describe_lead"):
+		print("    input lead: %s" % net.clock.call(&"describe_lead"))
 	print("    server's input buffer for A: %d late, %d starved of %d ticks (%.1f%%)" % [
 		late, starved, ticks_run, 100.0 * float(starved) / float(maxi(1, ticks_run))])
 	print("    before each server tick, A's input for it was: a hole %d times, not there yet %d times" % [

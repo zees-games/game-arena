@@ -56,11 +56,14 @@ const OFFLINE_SECONDS := 5.0
 ## run two ticks or none; and the receive timeline re-anchors a tick at a time. Left to
 ## chance that happens as a link settles or loses packets, which a window may or may not see.
 ##
-## [b]The eye is not judged while the link slows:[/b] until the client's round-trip estimate
-## catches up its commands reach the server after their tick, the server repeats the last
-## one, and the prediction is corrected dozens of times (queue item dot-net-input-lead-1).
-## The eye eases each correction; the numbers are printed. Snapshots arrive late then too, so
-## the bot is extrapolated for a moment and eased back (4 cm, as with loss).
+## [b]The eye is judged while the link slows too.[/b] The server says in each snapshot how
+## early the client's commands reach it (dot-net's input lead, `FEATURE_INPUT_LEAD`), and the
+## clock gains the 30 ms by running its ticks a little short. Before that the lead followed
+## ENet's smoothed round trip for seconds, the commands reached the server after their tick
+## and the prediction was corrected dozens of times, the eye going backwards on 63-85 frames.
+## The window prints how many commands came late and when the last did after the change.
+## Snapshots arrive late then too, so the bot is extrapolated for a moment and eased back
+## (4 cm, as with loss).
 ##
 ## Steady, 2 cm. With loss: a correction is eased, not hidden (3 cm for the eye), and a
 ## stalled snapshot stream is guessed along a line and eased back when it resumes (5.5 cm for
@@ -68,7 +71,7 @@ const OFFLINE_SECONDS := 5.0
 const WINDOWS := [
 	["60 Hz display, steady 40 ms", 60, 0.0, 40.0, 0.0, 5.0, false, 0.0, true, 0.02],
 	["144 Hz display, steady 40 ms, jumping", 144, 0.0, 40.0, 0.0, 5.0, true, 0.0, true, 0.02],
-	["144 Hz display, 40 ms going to 70 ms", 144, 0.0, 40.0, 0.0, 5.0, false, 70.0, false, 0.05],
+	["144 Hz display, 40 ms going to 70 ms", 144, 0.0, 40.0, 0.0, 5.0, false, 70.0, true, 0.05],
 	["144 Hz display, 70 ms going to 40 ms", 144, 0.0, 70.0, 0.0, 5.0, false, 40.0, true, 0.02],
 	["144 Hz display, 5% loss 30..80 ms", 144, 0.05, 55.0, 25.0, 6.0, false, 0.0, true, 0.055],
 	["144 Hz display, 20% loss 30..80 ms", 144, 0.20, 55.0, 25.0, 6.0, false, 0.0, true, 0.10],
@@ -629,6 +632,10 @@ func _late_process(delta: float) -> void:
 			"grounded": st.is_grounded(), "sliding": st.is_sliding(), "pos": st.position})
 	if _w.is_empty() or _client == null:
 		return
+	var server_buffer := _server_buffer()
+	if server_buffer != null and server_buffer.late_count + server_buffer.starved_count > int(_w.get("late_seen", 1 << 30)):
+		_w["late_seen"] = server_buffer.late_count + server_buffer.starved_count
+		_w["last_late_ms"] = Time.get_ticks_msec() - int(_w["started"])
 	var p: ArenaPlayer = _client.get("player")
 	if p == null or p.camera == null or not p.is_alive():
 		_w["last"] = null
@@ -694,6 +701,8 @@ func _begin_window(_unused: float) -> void:
 		var buffer := _server_buffer()
 		_w["late"] = buffer.late_count if buffer != null else 0
 		_w["starved"] = buffer.starved_count if buffer != null else 0
+		_w["late_seen"] = int(_w["late"]) + int(_w["starved"])
+		_w["last_late_ms"] = -1
 		net.interpolator.reset_counts()
 
 
@@ -940,6 +949,11 @@ func _play_window(window: Array) -> void:
 		buffer.starved_count - int(w["starved"]) if buffer != null else -1, int(net.clock.rtt_ms()),
 		net.clock.tick - _game.current_tick(), int(net.clock.get("_snap_count")) - int(w["snaps"]),
 		int(net.clock.get("_catch_up_count")) - int(w["catch_ups"])])
+	# When a command last came late or not at all, from the window's start (the link changes
+	# there): how long the clock took to settle on the new path.
+	print("    input lead: %s; the last late or missing command %s" % [
+		net.clock.call(&"describe_lead") if net.clock.has_method(&"describe_lead") else "from the round trip",
+		"none" if int(w.get("last_late_ms", -1)) < 0 else "%.2f s in" % (float(w["last_late_ms"]) / 1000.0)])
 	if _verbose:
 		print("    interpolator %s; relay %s" % [net.interpolator.describe(), _relay.describe()])
 
