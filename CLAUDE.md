@@ -1,6 +1,6 @@
 # game-arena
 
-The reference game: a 3D dev-textured deathmatch with free-for-all, team, objective, horde (`siege`), props and gun-game modes, three built-in maps plus the combat surf maps from g2gfast-maps, server bots, and zee-dot-weapons for every gun. Networked over dot-net and delivered as a signed dot-cloud pack. It is the deployment shape where most of the family runs in one process, so it is a game and also the only test of the joins between the addons.
+The reference game: a 3D deathmatch (free-for-all, team, objective, horde `siege`, props, gun game) on three built-in maps and g2gfast-maps' combat surf maps, with server bots and zee-dot-weapons, networked over dot-net and delivered as a signed dot-cloud pack. Most of the family runs in one process here, so it is also the only test of the joins between the addons.
 
 Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is specific to this game. **The detail is in [docs/](docs/README.md)**: open the file for what you are touching.
 
@@ -20,12 +20,13 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | [docs/services.md](docs/services.md) | progression, chat, moderation, voice, the relay, admin tools, the vote, the browser, private matches |
 | [docs/testing.md](docs/testing.md) | adding a check, or believing a green run |
 | [docs/history.md](docs/history.md) | a bug that "cannot be happening"; what this game found and how it looked |
+| [docs/not-yet.md](docs/not-yet.md) | planning: what is not built yet (dot-game conversion, bots on the nav graph, monster animation, pickups, real audio, …) |
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `game/` | everything that runs, flat: the simulation (`arena_game`, `arena_player*`), modes and the round's layers, the horde and props, the server (`arena_module`, `arena_services`, maps, vote, bots), the wire (`arena_net_*`, events, requests), the client (`arena_client`, `arena_hud`, `arena_hud_glance`, `arena_menus`, `arena_bindings`, `arena_presentation`, browser, avatars; never loaded by a dedicated server), progression, `arena_paths` (pack rebasing). File by file: [architecture](docs/architecture.md#where-the-code-is) |
+| `game/` | everything that runs, flat: simulation, modes, horde, server, wire, client (never loaded by a dedicated server), progression, `arena_paths`. File by file: [architecture](docs/architecture.md#where-the-code-is) |
 | `maps/` | the built-in maps as box lists with their survey, paint and lighting; the combat surf maps' loader (copies of g2gfast's); `maps/imported` is the g2gfast-maps link |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art, Kenney's prototype grid and medal icons |
 | `examples/` | the eight suites; `wall_route_driver.gd` drives a map's wall routes |
@@ -34,12 +35,12 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 ## Running and testing
 
-- `./game.sh` plays offline; `./game.sh online` runs a local server and client; `./game.sh test` parses everything and runs all eight suites; `./game.sh test <suite>` runs one; `./game.sh help` lists the rest. The addon links come from `.gitignore` through dot-bootstrap; do not hand-make them.
+- `./game.sh` plays offline, `online` runs a local server and client, `test` parses everything and runs all eight suites (`test <suite>` one), `help` lists the rest. The addon links come from `.gitignore` through dot-bootstrap; never hand-made.
 - **Run the suites after changing any dot-* addon this game links.** That is what this project is for. [testing](docs/testing.md)
 - `headless_presentation` is the only suite with a client in it; `headless_lossy` is the only one with real ENet and real loss (about 50 s, real time). [testing](docs/testing.md#the-suites)
 - Read every suite's stderr even when it exits 0; cap every run with `timeout`. [testing](docs/testing.md#traps-the-suites-have-hit)
 - A suite or tool that builds a presentation or client calls `ArenaPresentation.use_scratch_settings` first: never the player's file. [testing](docs/testing.md#traps-the-suites-have-hit)
-- **Look at it.** No check reaches the screen: `tools/screenshot.sh <map> [--view|--admin|--fx|--feel]`, `tools/screenshot_menus.sh`, `tools/screenshot_weapons.sh`, `tools/render_wall_moves.sh` (a move as a frame sequence), under `xvfb-run`. [client](docs/client.md#looking-at-it)
+- **Look at it.** No check reaches the screen: the render tools in `tools/` (above), under `xvfb-run`. [client](docs/client.md#looking-at-it)
 - Without the `maps/imported` link the three built-in maps play and the imported checks skip; that is supported.
 
 ## Rules that bite
@@ -62,22 +63,23 @@ Short forms; the reasoning is in the linked file.
 - The client predicts with the server's collision (`Mode.HEADLESS`, or the imported map's brushes), never Godot physics of its own. [netcode](docs/netcode.md#the-client-predicts-with-the-servers-collision)
 - Event and request kinds are appended, never inserted. No message script preloads itself. [netcode](docs/netcode.md#events-and-requests)
 - Anything a client predicts or draws from a server rule travels in RULES, to a joiner before any JOIN. [netcode](docs/netcode.md#rules-a-client-predicts-with-travel-in-rules)
-- A family cvar a client predicts with (dot-combat's `mp_teammate_passthrough`) is bound `FLAG_REPLICATED` and followed through the link (`ArenaGame.follow_server_cvars`), not put in RULES; the module re-applies it after every map change, which builds a new combat manager. [netcode](docs/netcode.md#rules-a-client-predicts-with-travel-in-rules)
+- A family cvar a client predicts with (`mp_teammate_passthrough`) is `FLAG_REPLICATED` and followed (`ArenaGame.follow_server_cvars`), not in RULES; re-applied after every map change. [netcode](docs/netcode.md#rules-a-client-predicts-with-travel-in-rules)
 - Ammunition, the carried set and blind are owner-only. A replayed tick fires nothing and emits no movement signal: `_predict` marks the rig and the controller (`begin_replay`). [netcode](docs/netcode.md#weapons-over-the-wire)
 - `INPUT_COPIES` (5) and `link_rtt_ms` are what keep commands on time under loss. [netcode](docs/netcode.md#inputs-and-the-clock-under-real-loss)
-- The local view is `view_now` (`DotFpsSampler.look_now()`, every frame) and the eye adds `drawn_offset` (`DotNetPredictor.visual_offset`); drawing the state's angles freezes the view on every frame with no tick. [netcode](docs/netcode.md#drawing-between-ticks)
+- The local view is `view_now` (`DotFpsSampler.look_now()`) and the eye adds `drawn_offset`; drawing the state's angles freezes the view on frames with no tick. [netcode](docs/netcode.md#drawing-between-ticks)
 
 **Client**
 
 - Adopt the player on `player_added`, never `player_spawned`. Offline, name the player before creating it. [client](docs/client.md#booting-and-adopting-a-player)
-- The camera is written only in `ArenaPlayer.present`, the wall-run lean included (`wall_run_roll`; arena does not use `DotFpsView`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
+- The camera is written only in `ArenaPlayer.present`, the wall-run lean included (no `DotFpsView`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
 - A client's own `mode` is never replaced; display reads `displayed_mode()`. [client](docs/client.md#a-client-knows-the-mode-only-for-display)
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
-- The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer (`manage_pointer`, `manage_mouse` off). Movable keys are one table, `ArenaBindings`. [client](docs/client.md#escape-the-pointer-and-the-menu)
+- The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer (`manage_pointer`). Movable keys are one table, `ArenaBindings`. [client](docs/client.md#escape-the-pointer-and-the-menu)
 - Every key the client reads is an `ArenaBindings` row read through its action, never a keycode; props modes reuse the Launch and Bash keys; no noclip key (V is push to talk). [client](docs/client.md#keys)
 - Wheel rows are named only on a host dot-ui at API level 2 (`ArenaBindings.wheel_named`). [client](docs/client.md#keys)
 - Typing suspends the sampler as well as swallowing input; the console does it as a menu overlay, so it is built after the menu (`build_console(menu)`). [client](docs/client.md#the-chat-box)
-- Full-screen overlays are sized to the viewport. HUD pieces (`ArenaHudGlance`) draw handed values; judge them with `screenshot.sh --glance` at 16:9 and 4:3. [client](docs/client.md#the-hud)
+- Full-screen overlays are sized to the viewport. HUD pieces (`ArenaHudGlance`) draw handed values; judge them with `screenshot.sh --glance` at 16:9, 4:3 and a small frame (854x480). [client](docs/client.md#the-hud)
+- Below 1280x720 the whole HUD is scaled (`ArenaHud.fit_scale`), never re-laid out; a new piece gets a `footprint()`, which the overlap check reads. [client](docs/client.md#the-hud)
 - Nothing of the HUD on the right edge below 110 px down to a six-row ballot: the shell's column is there (`--glance --ballot`). [client](docs/client.md#the-hud)
 - The hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD; never from a predicted shot or a client's own count of kills. [client](docs/client.md#kill-feedback)
 - Medal rules live in `ArenaAwards.MedalBook` on the authority; `ArenaAwards.Medal` is a wire index, appended only. [services](docs/services.md#progression)
@@ -90,7 +92,7 @@ Short forms; the reasoning is in the linked file.
 - Build the team manager before `add_child(match_node)`; assign `resolver.team_of` after `add_child(combat)`. [modes](docs/modes.md#modes-are-data)
 - Whether there are sides is the mode's answer (`is_team_mode()`), not the team manager's. [modes](docs/modes.md#modes-are-data)
 - Gun game's level is the match score, and its score limit is the list's length. [modes](docs/modes.md#gun-game-and-weapon-pools)
-- A match cvar (`arena_scorelimit`, `arena_timelimit`, `arena_warmup`, `arena_minplayers`) writes the `ArenaGame` export AND the live match (`apply_match_limits`): one alone is lost at boot or at the next map change. [modes](docs/modes.md#modes-are-data)
+- A match cvar (`arena_scorelimit`, `_timelimit`, `_warmup`, `_minplayers`) writes the `ArenaGame` export AND the live match (`apply_match_limits`), or it is lost at boot or the next map change. [modes](docs/modes.md#modes-are-data)
 - Anything hooked to the combat manager rebinds on `map_changed`. [modes](docs/modes.md#effects)
 - Spawn protection: one duration, three records; it does not break on attack; an admin slay passes. [modes](docs/modes.md#spawn-protection)
 - Body breaking is seeded from victim and killer, never the tick. [modes](docs/modes.md#criticals-and-bodies)
@@ -104,12 +106,12 @@ Short forms; the reasoning is in the linked file.
 - A client builds the def it is handed, never `game.map`. [maps](docs/maps.md#reaching-the-players)
 - `dm_pit`'s spawns stay untagged; `restrict_rotation` never empties the order. [maps](docs/maps.md#modes-a-map-can-host)
 - Every map passes the survey: no slot under 0.8 m unless a declared climb, nothing unreached unless declared; a bot that covers ground does not hold jump. [maps](docs/maps.md#every-map-is-surveyed)
-- Stairs are 0.36 treads ending flush; crate gaps 0.5; a new way up is watched from above.
+- Stairs are 0.36 treads ending flush; crate gaps 0.5; a new way up is watched from above. [maps](docs/maps.md#design-rules-every-map-follows)
 - A wall route is declared (`add_wall_route`) and driven through the motor in `headless_match`; a run gap drops about 0.7 m and outspans a dash-jump. [maps](docs/maps.md#design-rules-every-map-follows)
 - Colour is derived from a box's role and zone (`arena_map_paint.gd`), never stored in the box list; a repaint is not a `MAP_VERSIONS` bump. [maps](docs/maps.md#colour-and-light)
 - A built-in map's light is its `lighting` document (dot-lighting), replaced with the level. Render a look change with `RENDERER=gl_compatibility` too: the shell is Compatibility. [maps](docs/maps.md#colour-and-light)
 - An imported map is lit from its manifest's `lighting`; `sky_top` is repainted only on a dot-lighting below level 2. [imported](docs/imported-maps.md#lit-from-the-manifest)
-- A guard on a host addon's level (`DotAddonApi.build_level`) needs that addon in `requires.floor.json` at the older path's level, or the pack still asks for the built level and an older shell refuses it; drop the entry with the guard. [client](docs/client.md#keys)
+- A guard on a host addon's level (`DotAddonApi.build_level`) needs that addon in `requires.floor.json` at the older path's level, or an older shell refuses the pack. [client](docs/client.md#keys)
 - An imported map's solid is in the tree on every machine before any player is bodied; its spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 - Map mechanics run inside the simulated tick on both ends; pushes are stateless; swim and ladder modes are registered on every map. [imported](docs/imported-maps.md#the-maps-own-mechanics)
 - Arena needs a client shell with dot-player-controller v0.1.5 or later, and with the wall moves (`arena_player.gd` names them). [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
@@ -122,22 +124,10 @@ Short forms; the reasoning is in the linked file.
 - The rig drives the player's own `Arsenal`; call newer zee methods through `has_method`. [weapons](docs/weapons.md#the-rig-drives-the-players-own-arsenal)
 - A detonation pins the attacker's origin to the blast. [weapons](docs/weapons.md#projectiles)
 - A projectile passes through a team-mate holding its launch point (dot-combat's `pass_through_sets`, called by name). [weapons](docs/weapons.md#projectiles)
-- `mp_teammate_passthrough` is dot-combat's cvar, bound in `arena_module.gd` by name; at 2 (`pass_through_team_mates`) the projectile sweep keeps every team-mate out for the whole flight. [weapons](docs/weapons.md#projectiles)
+- At `mp_teammate_passthrough` 2 the projectile sweep keeps every team-mate out for the whole flight (dot-combat's cvar, bound by name). [weapons](docs/weapons.md#projectiles)
 - `DotAchievementStatsLink`, never `recorded.connect`. [services](docs/services.md#progression)
 - One chat path; hook `player_command` too; moderation is built first. [services](docs/services.md#chat)
 - The speaker id comes from the transport, never the payload. [services](docs/services.md#voice)
 - `admin_abilities` on every player, both ends. [services](docs/services.md#an-administrators-live-tools)
 - One vote clock; voters keyed by bare session id. [services](docs/services.md#the-map-vote)
 - A private match reports nothing (`reporting_allowed()`), and does not migrate. [services](docs/services.md#a-private-match-files-nothing)
-
-## Not here yet
-
-- **dot-game.** The module extends `DotModule` and `ArenaServices` is its own, not `DotGameModule` / `DotGameServices`. Not yet converted; dot-game's CLAUDE.md names arena as the one to convert first.
-- **Delivering the combat surf maps**: code done; the packs need publishing from g2gfast-maps, each author's permission confirming, and naming in `cfg/content.yml`. [imported](docs/imported-maps.md#delivered-maps)
-- **Server bots** do not use the horde's navigation graph (on a map with corners they walk into walls between spawns until they see somebody), buy or choose nothing, and are not a separate count in the query answer. [netcode](docs/netcode.md#server-bots)
-- **Monsters do not animate**: the figure stands while the monster moves. [horde](docs/horde.md#figures)
-- **Coins** do not feed the match score or a power-up meter and are not a dot-stats stat. **Challenges** (a dot-achievements progress bar) are not built. [modes](docs/modes.md#coins-out-of-a-body)
-- **Pickups in the world**: the map places none (only what a critical kill drops). A level-design decision, not a wiring one.
-- **Joining from the browser** is deliberately not done: Join notes the visit and says where to go, because reconnecting elsewhere is the launcher's job and this game is loaded by one.
-- **Real audio files**: synthesised stand-ins for every id. [client](docs/client.md#the-presentation-layer)
-- **Heavy-loss stalls** and the other games' bridges lacking input copies. [netcode](docs/netcode.md#still-open)
