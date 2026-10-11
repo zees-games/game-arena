@@ -9,6 +9,7 @@ const ArenaBindings := preload("../game/arena_bindings.gd")
 const ArenaBrowser := preload("../game/arena_browser.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
 const ArenaMenus := preload("../game/arena_menus.gd")
+const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaParty := preload("../game/arena_party.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
@@ -30,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 179
+const CHECKS := 192
 
 var _passed := 0
 var _failed := 0
@@ -68,6 +69,7 @@ func _run() -> void:
 	_test_console()
 	_test_console_stops_movement()
 	_test_the_escape_menu()
+	_test_every_key_is_an_action()
 	_test_party_is_sandboxed()
 	await _test_party_over_http()
 	_test_chat_box()
@@ -523,8 +525,8 @@ func _test_console_stops_movement() -> void:
 	var p := _make(false)
 	var client := ArenaClient.new()
 	client.presentation = p
-	client._sampler = DotFpsSampler.new(DotFpsTunables.new())
-	var _missing := DotFpsSampler.register_default_actions(client._sampler)
+	# The client's own sampler: its actions, and no noclip key (see `ArenaClient.make_sampler`).
+	client._sampler = ArenaClient.make_sampler()
 	client._wire_chat_window()
 	client.game_menu = ArenaMenus.build(self, p)
 	client.game_menu.overlays_changed.connect(func(_open: bool) -> void: client._refresh_suspended())
@@ -607,9 +609,14 @@ func _test_the_escape_menu() -> void:
 	var dash := menu.screen.find_child("Row_bind_dash", true, false)
 	_check(dash != null and menu.screen.find_child("Row_invert_pitch", true, false) != null,
 		"the Controls page draws a key for the dash and this game's invert")
+	var undrawn: Array[String] = []
+	for binding_row in p.bindings.rows:
+		if menu.screen.find_child("Row_%s" % binding_row["setting"], true, false) == null:
+			undrawn.append(str(binding_row["setting"]))
+	_check(undrawn.is_empty(), "and a key button for every row of the table", str(undrawn))
 	_check(
-		menu.page(&"controls").find_section(&"fixed").rows.size() == ArenaBindings.FIXED_KEYS.size() + 1,
-		"and lists the keys that are not actions yet"
+		menu.page(&"controls").find_section(&"fixed") == null,
+		"and no card of fixed keys: every key moves"
 	)
 	if dash != null:
 		dash.emit_signal(&"captured", "B")
@@ -629,7 +636,10 @@ func _test_the_escape_menu() -> void:
 			and DotInputBinding.describe_action(&"dot_fps_sprint") == "Shift",
 		"and Reset puts both back"
 	)
-	_check(menu.help.extra_keys.has("Weapons"), "the help screen lists the fixed keys too")
+	_check(
+		not menu.help.extra_keys.has("Weapons") and p.bindings.groups().has("Weapons"),
+		"the help screen's weapon keys come from the table, not a fixed list"
+	)
 	menu.close()
 
 	p.settings.reset_value(&"master_volume")
@@ -637,6 +647,164 @@ func _test_the_escape_menu() -> void:
 	browser.queue_free()
 	p.queue_free()
 	_done()
+
+
+# --- 5b ---------------------------------------------------------------------
+
+## Every key `ArenaClient` reads is a row in `ArenaBindings`, read through its action: a key
+## rebound on the Controls page moves what the client does, the props-mode remap follows the
+## Launch and Bash keys, and a saved binding is on the InputMap after a restart.
+##
+## [b]The action names are written out here, not taken from the table[/b], so the check
+## fails if a row goes missing rather than shrinking with it. Until 2026-10-11 fire, aim,
+## reload, the slots, the launch, the bash, the prop keys and push to talk were keycodes in
+## `_unhandled_input` and `_read_fire`, listed on the Controls page as fixed.
+func _test_every_key_is_an_action() -> void:
+	_section("Every key the client reads is an action in the table, rebound live and kept")
+
+	var p := _make(false)
+	var expected := {
+		&"arena_fire": "Mouse 1", &"arena_aim": "Mouse 2", &"arena_bash": "F",
+		&"arena_reload": "R", &"arena_slot_1": "1", &"arena_slot_2": "2", &"arena_slot_3": "3",
+		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Mouse 4",
+		&"arena_weapon_next": "Mouse 5", &"arena_weapon_last": "Q", &"arena_launch": "E",
+		&"arena_launch_props": "X", &"arena_punt": "G", &"arena_voice": "V",
+		&"dot_fps_walk": "Alt",
+	}
+	var wrong: Array[String] = []
+	for action: StringName in expected:
+		if p.bindings.row_for_action(action).is_empty() \
+				or DotInputBinding.describe_action(action) != str(expected[action]):
+			wrong.append("%s=%s" % [action, DotInputBinding.describe_action(action)])
+	_check(wrong.is_empty(), "each is a row and on its default key in the InputMap", str(wrong))
+
+	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.
+	var sampler := ArenaClient.make_sampler()
+	_check(
+		str(sampler.actions.get("noclip", &"")) == "" and not InputMap.has_action(&"dot_fps_noclip"),
+		"the sampler has no noclip key, so V is not dot_fps_noclip's",
+		str(sampler.actions.get("noclip"))
+	)
+	var on_v: Array[String] = []
+	for row in p.bindings.rows:
+		if p.bindings.stored(row, p.settings) == "V":
+			on_v.append(str(row["action"]))
+	_check(on_v == ["arena_voice"], "and V is on one row, push to talk", str(on_v))
+
+	# A client with this presentation and a stand-in player, not in the tree (see
+	# `_test_mouse_drives_view`); the pointer counts as captured.
+	var client := ArenaClient.new()
+	var stand_in := ArenaPlayer.new()
+	client.player = stand_in
+	client.presentation = p
+	client._sampler = sampler
+	client.mouse_capture_override = true
+
+	# Fire, moved to K: K fires and Mouse 1 no longer does.
+	var res := p.bindings.rebind(p.bindings.row_for_action(&"arena_fire"), "K", p.settings)
+	_check(res.ok and p.settings.get_string(&"bind_fire") == "K", "Fire rebinds to K and is stored", str(res))
+	_press(DotInputBinding.from_text("K"), true)
+	client._read_fire(DotFpsCommand.new())
+	var k_fires := client._fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK)
+	_press(DotInputBinding.from_text("K"), false)
+	_press(DotInputBinding.from_text("Mouse 1"), true)
+	client._read_fire(DotFpsCommand.new())
+	var mouse_fires := client._fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK)
+	_press(DotInputBinding.from_text("Mouse 1"), false)
+	_check(k_fires and not mouse_fires, "then K pulls the trigger and Mouse 1 does not",
+		"K %s, Mouse 1 %s" % [k_fires, mouse_fires])
+
+	# Reload, through the same polling path.
+	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_reload"), "Z", p.settings)
+	_press(DotInputBinding.from_text("Z"), true)
+	client._read_fire(DotFpsCommand.new())
+	var z_reloads := client._fire.is_pressed(DotWeaponCommand.BUTTON_RELOAD)
+	_press(DotInputBinding.from_text("Z"), false)
+	_check(res.ok and z_reloads, "Reload rebound to Z reloads on Z")
+
+	# A slot, through `_unhandled_input`: J asks for slot 3, and 3 asks for nothing.
+	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_slot_3"), "J", p.settings)
+	client._wanted_slot = 0
+	client._unhandled_input(_key_event("J", true))
+	var j_slot := client._wanted_slot
+	client._wanted_slot = 0
+	client._unhandled_input(_key_event("3", true))
+	_check(res.ok and j_slot == 3 and client._wanted_slot == 0,
+		"Slot 3 rebound to J: J asks for slot 3 and 3 asks for nothing",
+		"J %d, 3 %d" % [j_slot, client._wanted_slot])
+
+	# The props-mode remap: in Siege the Launch key grabs, the Bash key freezes and the
+	# launch moves to its own row; anywhere else the Launch key launches and grabs nothing.
+	var g := ArenaGame.new()
+	client.game = g
+	g.shown_mode = ArenaMode.free_for_all()
+	client.last_prop_asked = -1
+	client._unhandled_input(_key_event("E", true))
+	_check(client.launch_action() == &"arena_launch" and client.last_prop_asked == -1,
+		"outside a props mode E is the launch and asks the prop tool for nothing")
+	g.shown_mode = ArenaMode.siege()
+	client._holding = false
+	client._unhandled_input(_key_event("E", true))
+	var e_grabs := client.last_prop_asked == ArenaEvents.PropAct.GRAB
+	client._unhandled_input(_key_event("F", true))
+	var f_freezes := client.last_prop_asked == ArenaEvents.PropAct.FREEZE
+	client._unhandled_input(_key_event("G", true))
+	var g_punts := client.last_prop_asked == ArenaEvents.PropAct.PUNT
+	_check(e_grabs and f_freezes and g_punts and client.launch_action() == &"arena_launch_props",
+		"in Siege E grabs, F freezes, G punts and the launch is X's",
+		"grab %s freeze %s punt %s launch %s" % [e_grabs, f_freezes, g_punts, client.launch_action()])
+	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_launch"), "T", p.settings)
+	client._holding = false
+	client.last_prop_asked = -1
+	client._unhandled_input(_key_event("E", true))
+	var e_after := client.last_prop_asked
+	client._unhandled_input(_key_event("T", true))
+	_check(res.ok and e_after == -1 and client.last_prop_asked == ArenaEvents.PropAct.GRAB,
+		"and with Launch moved to T, the grab moves with it",
+		"E %d, T %d" % [e_after, client.last_prop_asked])
+	client.game = null
+	g.free()
+
+	# Kept: what was rebound is in the document, and a new presentation reading it puts it
+	# back on the InputMap. The InputMap is put on the default first, so only the load can
+	# have moved it.
+	var flushed := p.settings.flush()
+	DotInputBinding.apply(&"arena_reload", "R")
+	var p2 := _make(false)
+	_check(
+		flushed.ok and p2.settings.get_string(&"bind_reload") == "Z"
+			and DotInputBinding.describe_action(&"arena_reload") == "Z",
+		"a saved binding is read back and applied by the next start",
+		"stored %s, bound %s" % [p2.settings.get_string(&"bind_reload"), DotInputBinding.describe_action(&"arena_reload")]
+	)
+
+	p2.bindings.reset_all(p2.settings)
+	var _flushed := p2.settings.flush()
+	_check(DotInputBinding.describe_action(&"arena_fire") == "Mouse 1", "and Reset puts Fire back on Mouse 1")
+
+	client.player = null
+	client.presentation = null
+	stand_in.free()
+	client.free()
+	p.queue_free()
+	p2.queue_free()
+	_done()
+
+
+## A key or mouse button down or up, through `Input`, so `Input.is_action_pressed` sees it.
+static func _press(event: InputEvent, down: bool) -> void:
+	if event is InputEventKey:
+		(event as InputEventKey).pressed = down
+	elif event is InputEventMouseButton:
+		(event as InputEventMouseButton).pressed = down
+	Input.parse_input_event(event)
+	Input.flush_buffered_events()
+
+
+static func _key_event(text: String, down: bool) -> InputEventKey:
+	var key := DotInputBinding.from_text(text) as InputEventKey
+	key.pressed = down
+	return key
 
 
 # --- 6 ----------------------------------------------------------------------

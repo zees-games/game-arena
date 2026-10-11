@@ -13,9 +13,8 @@ const ArenaBrowser := preload("arena_browser.gd")
 ## this game's own:
 ##
 ## - **Interface**: the theme, the frame-rate counter, the crosshair and the HUD's margin.
-## - **Controls**: the stock mouse card, this game's look switches, the keys from
-##   [ArenaBindings] (rebindable, swapping on a conflict) and the keys that are not
-##   actions yet ([constant ArenaBindings.FIXED_KEYS]).
+## - **Controls**: the stock mouse card, this game's look switches and every key from
+##   [ArenaBindings], each a key button (rebindable, swapping on a conflict).
 ## - **Servers**: dot-browser's list, drawn as a page ([method _servers_page]).
 ##
 ## What a press of Leave means stays the client's: [signal DotMenu.action_requested].
@@ -52,8 +51,6 @@ static func build(host: Node, presentation: Node, browser: ArenaBrowser = null) 
 	DotLog.result(CHANNEL, "the menu", menu.setup())
 
 	add_pages(menu, browser)
-	# The keys that are not actions, on the help screen beside the ones that are.
-	menu.help.extra_keys["Weapons"] = ArenaBindings.FIXED_KEYS
 
 	# The console after the menu, so DotConsoleKit registers it as one of the menu's
 	# overlays: opening it frees the pointer and stops the player through
@@ -93,7 +90,7 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 
 	var audio := menu.page(&"audio")
 	if audio != null:
-		audio.section("Voice").add(DotMenuRow.toggle(&"push_to_talk", "Push to talk", "Hold V to talk. Off: an open microphone."))
+		audio.section("Voice").add(DotMenuRow.toggle(&"push_to_talk", "Push to talk", "Hold the Push to talk key (Controls) to talk. Off: an open microphone."))
 
 	var controls := menu.page(&"controls")
 	if controls != null:
@@ -101,12 +98,7 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 		# existed; the stock row for the stock key is not drawn, because it is not declared.
 		controls.section("Mouse") \
 			.add(DotMenuRow.toggle(&"invert_pitch", "Invert vertical look")) \
-			.add(DotMenuRow.toggle(&"right_mouse_aims", "Right mouse aims", "Off: right mouse bashes with the weapon, and F aims."))
-		var fixed := controls.section("Weapons", &"fixed")
-		for pair in ArenaBindings.FIXED_KEYS:
-			var key_text := str(pair[0])
-			fixed.add(DotMenuRow.custom(str(pair[1]), "", func(kit: DotMenuKit) -> Control: return kit.keycap(key_text)))
-		fixed.add(DotMenuRow.note("These keys cannot be moved yet."))
+			.add(DotMenuRow.toggle(&"right_mouse_aims", "Right mouse aims", "Off: the Aim key (right mouse) bashes with the weapon instead of aiming."))
 
 	if browser != null:
 		menu.add_page(_servers_page(menu, browser), &"advanced")

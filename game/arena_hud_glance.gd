@@ -390,7 +390,8 @@ class AmmoCounter extends Control:
 class WeaponSlots extends Control:
 	const ROW_H := 40.0
 
-	## `{slot, id, name}` per carried slot, in slot order.
+	## `{slot, id, name, key}` per carried slot, in slot order; `key` is the key it is bound
+	## to (the slot's number when absent).
 	var rows: Array[Dictionary] = []
 	var current: int = 0
 
@@ -407,13 +408,14 @@ class WeaponSlots extends Control:
 		for r in rows:
 			var on := int(r["slot"]) == current
 			var alpha := 1.0 if on else 0.72
-			var cap_w := Ink.keycap_width(str(r["slot"]), 12)
+			var key := str(r.get("key", r["slot"]))
+			var cap_w := Ink.keycap_width(key, 12)
 			var cap_x := size.x - cap_w
 			# A plate per weapon: a white silhouette on a pale wall is no silhouette at all.
 			var plate_x := cap_x - 112.0
 			Ink.plate(self, Rect2(plate_x, y - 17.0, size.x - plate_x + 4.0, 34.0),
 				Color(PLATE, 0.8 if on else 0.6), 7, Color(GOLD, 0.85) if on else Color(PLATE_EDGE, 0.1), 2 if on else 1)
-			var _w := Ink.keycap(self, Vector2(cap_x, y), str(r["slot"]), 12, alpha)
+			var _w := Ink.keycap(self, Vector2(cap_x, y), key, 12, alpha)
 			var tex := Ink.weapon_icon(r["id"])
 			var h := 24.0 if on else 18.0
 			if tex != null:

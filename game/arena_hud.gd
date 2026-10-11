@@ -1203,7 +1203,8 @@ func present_gear() -> void:
 			for index in player.arsenal.slots():
 				var held := player.arsenal.slot_at(index)
 				if held != null:
-					rows.append({"slot": index, "id": held.def.id, "name": held.def.display_name})
+					rows.append({"slot": index, "id": held.def.id, "name": held.def.display_name,
+						"key": str(keys.get(StringName("slot_%d" % index), str(index)))})
 		slots.show_slots(rows, player.arsenal.current_slot() if live and player.arsenal != null else 0)
 
 	if hints != null:

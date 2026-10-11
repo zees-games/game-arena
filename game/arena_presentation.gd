@@ -171,8 +171,9 @@ static func schema() -> DotSettingsSchema:
 	s.add(DotSettingsDef.boolean(&"invert_pitch", false, &"controls").with_scope(
 		DotSettingsDef.Scope.ACCOUNT
 	))
-	# Hold right mouse to aim down the sights (and look through a scope), or to bash with
-	# the weapon as the pack's alt-fire does. Aiming by default; F bashes either way.
+	# Hold the Aim key (right mouse) to aim down the sights (and look through a scope), or
+	# to bash with the weapon as the pack's alt-fire does. Aiming by default; the Bash key
+	# (F) bashes either way.
 	s.add(DotSettingsDef.boolean(&"right_mouse_aims", true, &"controls").with_scope(
 		DotSettingsDef.Scope.ACCOUNT
 	).with_description("Off: right mouse bashes with the weapon instead of aiming."))

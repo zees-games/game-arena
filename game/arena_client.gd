@@ -1,6 +1,7 @@
 extends Node
 
 const ArenaAvatars := preload("arena_avatars.gd")
+const ArenaBindings := preload("arena_bindings.gd")
 const ArenaBrowser := preload("arena_browser.gd")
 const ArenaClientExtras := preload("arena_client_extras.gd")
 const ArenaEvents := preload("arena_events.gd")
@@ -137,6 +138,10 @@ var presentation: ArenaPresentation = null
 ## locally would be corrected on every snapshot.
 var _holding: bool = false
 
+## The last `ArenaEvents.PropAct` a key asked the prop tool for, or -1. Noted before the
+## request goes anywhere, so a suite with no server can see which key did what.
+var last_prop_asked: int = -1
+
 ## The local player's hands, under their camera. Built on adoption.
 var view_model: ZeeViewModel = null
 
@@ -228,8 +233,7 @@ func _ready() -> void:
 	projectile_view.name = "Projectiles"
 	add_child(projectile_view)
 
-	_sampler = DotFpsSampler.new(ArenaPlayer.arena_tunables())
-	DotFpsSampler.register_default_actions(_sampler)
+	_sampler = make_sampler()
 	# C slides as well as Duck: added once the key table has been applied, in
 	# `_build_interface` (`_add_slide_key`), or applying it would take C off again.
 
@@ -326,9 +330,9 @@ func _build_interface() -> void:
 			if key == &"hud_safe_area" and hud != null:
 				hud.set_safe_area(float(value))
 			elif presentation.bindings.row_for_setting(key).size() > 0:
-				# Deferred: the table applies a rebound row after the setting changes.
-				if key == &"bind_duck":
-					_add_slide_key.call_deferred()
+				# Deferred: the table applies a rebound row after the setting changes. Any
+				# row, not only Duck's: one given C takes C off the slide.
+				_add_slide_key.call_deferred()
 				_hud_keys.call_deferred())
 		hud.set_safe_area(presentation.settings.get_float(&"hud_safe_area", 16.0))
 	_add_slide_key()
@@ -342,24 +346,59 @@ func _hud_keys() -> void:
 		return
 	var table: DotMenuBindings = presentation.bindings
 	hud.keys[&"jump"] = table.key_for(&"dot_fps_jump")
-	hud.keys[&"dash"] = table.key_for(&"dot_fps_sprint")
-	hud.keys[&"chat"] = table.key_for(&"arena_chat")
-	hud.keys[&"scoreboard"] = table.key_for(&"arena_scoreboard")
-	var duck := table.key_for(&"dot_fps_crouch")
-	hud.keys[&"slide"] = "C" if duck == "Ctrl" else duck
+	hud.keys[&"dash"] = table.key_for(ArenaBindings.DASH)
+	hud.keys[&"chat"] = table.key_for(ArenaBindings.CHAT)
+	hud.keys[&"scoreboard"] = table.key_for(ArenaBindings.SCOREBOARD)
+	hud.keys[&"reload"] = table.key_for(ArenaBindings.RELOAD)
+	hud.keys[&"launch"] = table.key_for(launch_action())
+	for i in range(ArenaBindings.SLOTS.size()):
+		hud.keys[StringName("slot_%d" % (i + 1))] = table.key_for(ArenaBindings.SLOTS[i])
+	hud.keys[&"slide"] = "C" if _slide_on_c() else table.key_for(ArenaBindings.DUCK)
 
 
-## C slides as well as Duck, while Duck is on its default key. A slide IS a duck at a run,
-## and C is where the genre puts it. Deferred after a rebind: the table applies the row
-## after the setting changes, and that apply would take C off again.
+## The movement sampler, with dot-player-controller's default actions registered for any
+## the key table has not made yet.
+##
+## [b]No noclip key.[/b] The addon's default for it is V, which is push to talk here, and
+## arena's noclip is an administrator's modifier (`noclip` at the console or in chat; the
+## motor ignores the bit unless the server granted it). The role is taken off before the
+## defaults are registered, so `dot_fps_noclip` is never created on V and V does one thing.
+static func make_sampler() -> DotFpsSampler:
+	var sampler := DotFpsSampler.new(ArenaPlayer.arena_tunables())
+	sampler.actions["noclip"] = &""
+	var _registered := DotFpsSampler.register_default_actions(sampler)
+	return sampler
+
+
+## C slides as well as Duck, while Duck is on its default key and no other row has been
+## given C. A slide IS a duck at a run, and C is where the genre puts it. Deferred after a
+## rebind: the table applies the row after the setting changes, and that apply would take
+## C off again.
+##
+## [b]Taken off again when another row gets C.[/b] C is not a stored binding, so the
+## table's swap cannot see it: binding Last weapon to C would otherwise have one press
+## switch weapons and slide.
 func _add_slide_key() -> void:
 	if _sampler == null:
 		return
 	var duck := _sampler.actions.get("crouch", &"") as StringName
-	var stored := presentation.settings.get_string(&"bind_duck", "Ctrl") \
-		if presentation != null and presentation.settings != null else "Ctrl"
-	if stored == "" or stored == "Ctrl":
+	if _slide_on_c():
 		_add_key(duck, KEY_C)
+	elif presentation != null and presentation.bindings != null:
+		var row := presentation.bindings.row_for_action(duck)
+		if not row.is_empty():
+			var _bound := presentation.bindings.apply_row(row, presentation.bindings.stored(row, presentation.settings))
+
+
+## Whether C is Duck's second key now: Duck on its default and C on no other row.
+func _slide_on_c() -> bool:
+	if presentation == null or presentation.settings == null or presentation.bindings == null:
+		return true
+	var table: DotMenuBindings = presentation.bindings
+	var duck := table.row_for_action(ArenaBindings.DUCK)
+	if duck.is_empty() or table.stored(duck, presentation.settings) != str(duck["default"]):
+		return false
+	return table.row_using("C", &"bind_duck", presentation.settings).is_empty()
 
 
 # --- Offline ---------------------------------------------------------------
@@ -737,6 +776,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 ## where they were looking between two ticks, so that is the claim, and
 ## `DotPropTool.may_act_on` is what decides whether it reaches.
 func _ask_prop(action: int) -> void:
+	last_prop_asked = action
 	if _offline or bridge == null or player == null:
 		return
 
@@ -1096,9 +1136,16 @@ func right_mouse_aims() -> bool:
 	return bool(presentation.settings.get_value(&"right_mouse_aims"))
 
 
-## The launch's key: E, or X where E is already the prop tool's.
-func launch_key() -> Key:
-	return KEY_X if props_on_e() else KEY_E
+## The launch's action: the Launch row (E), or its own row (X) in a mode where the Launch
+## key is the prop tool's grab.
+func launch_action() -> StringName:
+	return ArenaBindings.LAUNCH_PROPS if props_on_e() else ArenaBindings.LAUNCH
+
+
+## Whether [param action] is held, and false for an action the InputMap does not have (a
+## suite's client, built with no presentation, has applied no table).
+static func _held(action: StringName) -> bool:
+	return InputMap.has_action(action) and Input.is_action_pressed(action)
 
 
 ## Adds [param key] to [param action] if neither is missing and it is not bound already.
@@ -1119,14 +1166,14 @@ static func _add_key(action: StringName, key: Key) -> void:
 
 func _physics_process(delta: float) -> void:
 	var move := _sampler.sample(delta) if _sampler != null else DotFpsCommand.new()
-	if hud != null:
-		hud.launch_key_text = OS.get_keycode_string(launch_key())
+	if hud != null and presentation != null and presentation.bindings != null:
+		hud.launch_key_text = presentation.bindings.key_for(launch_action())
 
-	# E is the launch: the movement command's first user bit, which the motor reads when
-	# the server's rules have the launch on. Same guard as the trigger, so typing in the
-	# chat box does not throw anybody into the air.
+	# The launch: the movement command's first user bit, which the motor reads when the
+	# server's rules have the launch on. Same guard as the trigger, so typing in the chat
+	# box does not throw anybody into the air.
 	move.set_button(
-		DotFpsCommand.BUTTON_USER_0, mouse_drives_view() and Input.is_key_pressed(launch_key())
+		DotFpsCommand.BUTTON_USER_0, mouse_drives_view() and _held(launch_action())
 	)
 	_read_fire(move)
 
@@ -1422,25 +1469,25 @@ func _drive_spectator_camera() -> void:
 ## the movement command's angles rather than sampled again — sampling the mouse twice
 ## gives a shot that leaves at a different angle than the player was looking along.
 func _read_fire(move: DotFpsCommand) -> void:
-	var firing := mouse_drives_view() and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	var firing := mouse_drives_view() and _held(ArenaBindings.FIRE)
 
 	_fire.set_button(DotWeaponCommand.BUTTON_ATTACK, firing)
-	# Right mouse aims down the sights, by default; F is the pack's alt-fire, the bash
-	# ("quick melee"). A player who would rather bash with right mouse turns the
-	# `right_mouse_aims` setting off. Same guard as the trigger, so a right click on a menu
-	# neither zooms nor swings a rifle butt. In a mode where F is the prop tool's freeze,
-	# the bash is right mouse's whatever the setting says.
-	var right := mouse_drives_view() and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
+	# The Aim key (right mouse) aims down the sights, by default; the Bash key (F) is the
+	# pack's alt-fire ("quick melee"). A player who would rather bash with the Aim key turns
+	# the `right_mouse_aims` setting off. Same guard as the trigger, so a right click on a
+	# menu neither zooms nor swings a rifle butt. In a mode where the Bash key is the prop
+	# tool's freeze, the bash is the Aim key's whatever the setting says.
+	var right := mouse_drives_view() and _held(ArenaBindings.AIM)
 	var aims := right_mouse_aims() and not props_on_e()
 	var bash := (right and not aims) or (
-		not props_on_e() and mouse_drives_view() and Input.is_key_pressed(KEY_F)
+		not props_on_e() and mouse_drives_view() and _held(ArenaBindings.BASH)
 	)
 	_fire.set_button(DotWeaponCommand.BUTTON_ALT, bash)
 	if player != null:
 		player.aim_held = right and aims
 	# On the wire as well, for the server's No Scope medal; nothing simulated reads it.
 	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
-	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, Input.is_key_pressed(KEY_R))
+	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and _held(ArenaBindings.RELOAD))
 	_note_held_slot()
 	_fire.yaw = move.yaw
 	_fire.pitch = move.pitch
@@ -1593,59 +1640,78 @@ func _unhandled_input(event: InputEvent) -> void:
 			_sampler.handle_event(event)
 		return
 
-	# The wheel walks the carried slots. A request through the command like the number
-	# keys, for their reason: a client that switched its own arsenal would be predicting a
-	# switch the server never simulated.
-	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
-			and mouse_drives_view():
-		match (event as InputEventMouseButton).button_index:
-			MOUSE_BUTTON_WHEEL_UP:
-				_wanted_slot = _cycled_slot(-1)
-			MOUSE_BUTTON_WHEEL_DOWN:
-				_wanted_slot = _cycled_slot(1)
+	# A talk key's release is read wherever the pointer is: push to talk may be on a mouse
+	# button, and a release dropped below is a microphone that never closes.
+	if _is(event, ArenaBindings.VOICE) and not event.is_pressed():
+		if extras != null:
+			extras.set_talking(false)
 		return
 
-	if not (event is InputEventKey) or event.is_echo():
+	# A mouse button reaching here with the pointer released is aimed at a menu or at
+	# "Click to play" (the click that captures returned above); it acts on nothing.
+	if event is InputEventMouseButton and not mouse_drives_view():
 		return
 
-	# Push to talk, and it is handled BEFORE the "is this a press" filter above,
-	# because a talk key needs the release as much as the press: a key whose release
-	# nobody reads is a microphone that never closes.
-	if (event as InputEventKey).physical_keycode == KEY_V:
+	if not (event is InputEventKey or event is InputEventMouseButton):
+		return
+
+	if event is InputEventKey and event.is_echo():
+		return
+
+	# Every key below is read through its action in `ArenaBindings`, so the Controls page
+	# moves it. Push to talk first, BEFORE the "is this a press" filter, because a talk key
+	# needs the release as much as the press: a key whose release nobody reads is a
+	# microphone that never closes.
+	if _is(event, ArenaBindings.VOICE):
 		if extras != null:
 			extras.set_talking(event.is_pressed())
-
 		return
 
 	if not event.is_pressed():
 		return
 
-	match (event as InputEventKey).physical_keycode:
-		KEY_E when props_on_e():
-			# Grab, or let go of what is already held. One key for both, because a
-			# player who has to remember which of two keys they pressed last is a
-			# player holding a crate they cannot put down.
-			_ask_prop(
-				ArenaEvents.PropAct.RELEASE if _holding
-				else ArenaEvents.PropAct.GRAB
-			)
-			_holding = not _holding
-		KEY_F when props_on_e():
-			_ask_prop(ArenaEvents.PropAct.FREEZE)
-		KEY_G:
-			_ask_prop(ArenaEvents.PropAct.PUNT)
-			_holding = false
-		KEY_1, KEY_2, KEY_3, KEY_4, KEY_5:
-			# Requested through the COMMAND, never by calling the arsenal directly.
-			# A client that switched its own weapon would be predicting a switch the
-			# server never simulated, and the next snapshot would take it back. Five keys
-			# for the pack's five slots: melee, sidearm, primary, heavy, throwable.
-			_wanted_slot = (event as InputEventKey).physical_keycode - KEY_1 + 1
-		KEY_Q:
-			# The last weapon, which is the switch players make most.
-			_wanted_slot = _last_slot
-		_:
-			pass
+	# In a mode where players use props the Launch key is the prop tool's grab and the Bash
+	# key its freeze (the launch moves to its own key, `launch_action`).
+	if props_on_e() and _is(event, ArenaBindings.LAUNCH):
+		# Grab, or let go of what is already held. One key for both, because a player who
+		# has to remember which of two keys they pressed last is a player holding a crate
+		# they cannot put down.
+		_ask_prop(
+			ArenaEvents.PropAct.RELEASE if _holding
+			else ArenaEvents.PropAct.GRAB
+		)
+		_holding = not _holding
+		return
+	if props_on_e() and _is(event, ArenaBindings.BASH):
+		_ask_prop(ArenaEvents.PropAct.FREEZE)
+		return
+	if _is(event, ArenaBindings.PUNT):
+		_ask_prop(ArenaEvents.PropAct.PUNT)
+		_holding = false
+		return
+
+	# The slots: requested through the COMMAND, never by calling the arsenal directly. A
+	# client that switched its own weapon would be predicting a switch the server never
+	# simulated, and the next snapshot would take it back. Five keys for the pack's five
+	# slots: melee, sidearm, primary, heavy, throwable.
+	for i in range(ArenaBindings.SLOTS.size()):
+		if _is(event, ArenaBindings.SLOTS[i]):
+			_wanted_slot = i + 1
+			return
+	# The wheel walks the carried slots, by the same request.
+	if _is(event, ArenaBindings.WEAPON_PREVIOUS):
+		_wanted_slot = _cycled_slot(-1)
+	elif _is(event, ArenaBindings.WEAPON_NEXT):
+		_wanted_slot = _cycled_slot(1)
+	elif _is(event, ArenaBindings.WEAPON_LAST):
+		# The last weapon, which is the switch players make most.
+		_wanted_slot = _last_slot
+
+
+## Whether [param event] is on [param action], pressed or released. False for an action the
+## InputMap does not have, which `InputEvent.is_action` reports as an error.
+static func _is(event: InputEvent, action: StringName) -> bool:
+	return InputMap.has_action(action) and event.is_action(action)
 
 
 ## The cursor, from one place.

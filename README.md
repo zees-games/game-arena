@@ -39,6 +39,7 @@ A match starts in warmup, then counts down, then goes live. Nobody spawns until 
 | **WASD** | Move |
 | **Space** | Jump. Hold it to keep hopping |
 | **Ctrl** | Crouch |
+| **Alt** | Walk |
 | **C** | Slide (Ctrl at a run does too) |
 | **Shift** | Dash |
 | **E** | Launch yourself forward |
@@ -54,6 +55,8 @@ A match starts in warmup, then counts down, then goes live. Nobody spawns until 
 | **Esc** | Menu, and release the mouse |
 
 In Siege, **E** picks up and drops a prop, **F** freezes it, **G** punts it, and launch moves to **X**.
+
+Every key except Esc can be moved under Menu → Controls; the change applies at once and is saved.
 
 ## Getting started
 You need [Godot 4.7](https://godotengine.org/download). The game is built from twenty-six Dot addons, each in its own repository, so the easiest way to get everything is [dot-bootstrap](https://github.com/modcommunity/dot-bootstrap). It clones every project and links the addons into each one:

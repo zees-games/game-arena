@@ -74,6 +74,7 @@ Short forms; the reasoning is in the linked file.
 - A client's own `mode` is never replaced; display reads `displayed_mode()`. [client](docs/client.md#a-client-knows-the-mode-only-for-display)
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer (`manage_pointer`, `manage_mouse` off). Movable keys are one table, `ArenaBindings`. [client](docs/client.md#escape-the-pointer-and-the-menu)
+- Every key the client reads is an `ArenaBindings` row read through its action, never a keycode; props modes reuse the Launch and Bash keys; no noclip key (V is push to talk). [client](docs/client.md#keys)
 - Typing suspends the sampler as well as swallowing input; the console does it as a menu overlay, so it is built after the menu (`build_console(menu)`). [client](docs/client.md#the-chat-box)
 - Full-screen overlays are sized to the viewport. HUD pieces (`ArenaHudGlance`) draw handed values; judge them with `screenshot.sh --glance` at 16:9 and 4:3. [client](docs/client.md#the-hud)
 - Nothing of the HUD on the right edge below 110 px down to a six-row ballot: the shell's column is there (`--glance --ballot`). [client](docs/client.md#the-hud)
@@ -128,7 +129,6 @@ Short forms; the reasoning is in the linked file.
 
 ## Not here yet
 
-- **Fire, aim, reload, the slots, the launch, the bash, the prop keys and push to talk cannot be rebound**: they are keycodes in `ArenaClient._unhandled_input`, not actions, so the Controls page lists them as fixed. Unfinished; queued as `arena-bindable-keys-1`. [client](docs/client.md#keys)
 - **dot-game.** The module extends `DotModule` and `ArenaServices` is its own, not `DotGameModule` / `DotGameServices`. Not yet converted; dot-game's CLAUDE.md names arena as the one to convert first.
 - **Delivering the combat surf maps**: code done; the packs need publishing from g2gfast-maps, each author's permission confirming, and naming in `cfg/content.yml`. [imported](docs/imported-maps.md#delivered-maps)
 - **Server bots** do not use the horde's navigation graph (on a map with corners they walk into walls between spawns until they see somebody), buy or choose nothing, and are not a separate count in the query answer. [netcode](docs/netcode.md#server-bots)

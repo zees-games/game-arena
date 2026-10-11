@@ -46,6 +46,10 @@ func _initialize() -> void:
 		{"id": &"menu", "page": &"video", "file": "menu_video.png"},
 		{"id": &"menu", "page": &"audio", "file": "menu_audio.png"},
 		{"id": &"menu", "page": &"controls", "file": "menu_controls.png"},
+		# Every key is a row, so the page is long: the keys further down, scrolled to.
+		{"id": &"menu", "page": &"controls", "file": "menu_controls_2.png", "scroll": 560},
+		{"id": &"menu", "page": &"controls", "file": "menu_controls_3.png", "scroll": 1120},
+		{"id": &"menu", "page": &"controls", "file": "menu_controls_4.png", "scroll": 1680},
 		{"id": &"menu", "page": &"servers", "file": "menu_servers.png"},
 		{"id": &"help", "file": "menu_help.png"},
 		{"id": &"board", "file": "menu_scoreboard.png"},
@@ -177,6 +181,12 @@ func _process(_delta: float) -> bool:
 				for line in ["help", "where"]:
 					var _ran := _presentation.console.submit(line)
 				var _opened := _presentation.console.open()
+
+	# A scroll is set on every settling frame: the page lays itself out over the first few,
+	# and a scroll set before its content is that tall is clamped to what fits then.
+	if shot.has("scroll") and _menu.screen != null:
+		for found in _menu.screen.find_children("*", "ScrollContainer", true, false):
+			(found as ScrollContainer).scroll_vertical = int(shot["scroll"])
 
 	if _wait > 0:
 		_wait -= 1
