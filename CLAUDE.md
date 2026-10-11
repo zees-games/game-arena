@@ -25,11 +25,11 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 | Path | What |
 | --- | --- |
-| `game/` | everything that runs, flat: the simulation (`arena_game`, `arena_player*`), modes and the round's layers, the horde and props, the server (`arena_module`, `arena_services`, maps, vote, bots), the wire (`arena_net_*`, events, requests), the client (`arena_client`, `arena_hud`, `arena_menus`, `arena_bindings`, `arena_presentation`, browser, avatars; never loaded by a dedicated server), progression, `arena_paths` (pack rebasing). File by file: [architecture](docs/architecture.md#where-the-code-is) |
+| `game/` | everything that runs, flat: the simulation (`arena_game`, `arena_player*`), modes and the round's layers, the horde and props, the server (`arena_module`, `arena_services`, maps, vote, bots), the wire (`arena_net_*`, events, requests), the client (`arena_client`, `arena_hud`, `arena_hud_glance`, `arena_menus`, `arena_bindings`, `arena_presentation`, browser, avatars; never loaded by a dedicated server), progression, `arena_paths` (pack rebasing). File by file: [architecture](docs/architecture.md#where-the-code-is) |
 | `maps/` | the built-in maps as box lists with their survey, paint and lighting; the combat surf maps' loader (copies of g2gfast's); `maps/imported` is the g2gfast-maps link |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art, Kenney's prototype grid and medal icons |
 | `examples/` | the eight suites; `wall_route_driver.gd` drives a map's wall routes |
-| `tools/` | `screenshot.sh`, `screenshot_menus.sh`, `screenshot_weapons.sh`, `render_wall_moves.sh`, `build_avatar_parts.gd`, `audio_probe.sh` |
+| `tools/` | `screenshot.sh` (`--glance` is the whole HUD), `screenshot_menus.sh`, `screenshot_weapons.sh`, `render_wall_moves.sh`, `build_avatar_parts.gd`, `build_weapon_icons.sh`, `audio_probe.sh` |
 | `scenes/arena_server.tscn`, `game.yml` | the server scene and the descriptor that travels in the pack |
 
 ## Running and testing
@@ -74,7 +74,7 @@ Short forms; the reasoning is in the linked file.
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer (`manage_pointer`, `manage_mouse` off). Movable keys are one table, `ArenaBindings`. [client](docs/client.md#escape-the-pointer-and-the-menu)
 - Typing suspends the sampler as well as swallowing input; the console does it as a menu overlay, so it is built after the menu (`build_console(menu)`). [client](docs/client.md#the-chat-box)
-- Full-screen overlays are sized to the viewport, not the HUD. [client](docs/client.md#the-hud)
+- Full-screen overlays are sized to the viewport. HUD pieces (`ArenaHudGlance`) draw handed values; judge them with `screenshot.sh --glance` at 16:9 and 4:3. [client](docs/client.md#the-hud)
 - The hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD; never from a predicted shot or a client's own count of kills. [client](docs/client.md#kill-feedback)
 - Medal rules live in `ArenaAwards.MedalBook` on the authority; `ArenaAwards.Medal` is a wire index, appended only. [services](docs/services.md#progression)
 - Third person is deliberately not here: one motor to agree about. [client](docs/client.md#avatars)
@@ -97,8 +97,7 @@ Short forms; the reasoning is in the linked file.
 - `setup` is not re-entrant; `change_map` is, and respawns everybody. Rebind, never rebuild, what survives. [maps](docs/maps.md#changing-the-map)
 - A client builds the def it is handed, never `game.map`. [maps](docs/maps.md#reaching-the-players)
 - `dm_pit`'s spawns stay untagged; `restrict_rotation` never empties the order. [maps](docs/maps.md#modes-a-map-can-host)
-- Every map passes the survey: no slot under 0.8 m unless a declared climb, nothing unreached unless declared. [maps](docs/maps.md#every-map-is-surveyed)
-- A bot that covers ground does not hold jump. [maps](docs/maps.md#every-map-is-surveyed)
+- Every map passes the survey: no slot under 0.8 m unless a declared climb, nothing unreached unless declared; a bot that covers ground does not hold jump. [maps](docs/maps.md#every-map-is-surveyed)
 - Stairs are 0.36 treads ending flush; crate gaps 0.5; a new way up is watched from above.
 - A wall route is declared (`add_wall_route`) and driven through the motor in `headless_match`; a run gap drops about 0.7 m and outspans a dash-jump. [maps](docs/maps.md#design-rules-every-map-follows)
 - Colour is derived from a box's role and zone (`arena_map_paint.gd`), never stored in the box list; a repaint is not a `MAP_VERSIONS` bump. [maps](docs/maps.md#colour-and-light)
@@ -125,7 +124,7 @@ Short forms; the reasoning is in the linked file.
 
 - **Fire, aim, reload, the slots, the launch, the bash, the prop keys and push to talk cannot be rebound**: they are keycodes in `ArenaClient._unhandled_input`, not actions, so the Controls page lists them as fixed. Unfinished; queued as `arena-bindable-keys-1`. [client](docs/client.md#keys)
 - **dot-game.** The module extends `DotModule` and `ArenaServices` is its own, not `DotGameModule` / `DotGameServices`. Not yet converted; dot-game's CLAUDE.md names arena as the one to convert first.
-- **Delivering the combat surf maps.** The code is done; the maps still need publishing as packs from g2gfast-maps, each author's permission for redistribution confirming, and the keys naming in a deployment's `cfg/content.yml`. [imported](docs/imported-maps.md#delivered-maps)
+- **Delivering the combat surf maps**: code done; the packs need publishing from g2gfast-maps, each author's permission confirming, and naming in `cfg/content.yml`. [imported](docs/imported-maps.md#delivered-maps)
 - **Server bots** do not use the horde's navigation graph (on a map with corners they walk into walls between spawns until they see somebody), buy or choose nothing, and are not a separate count in the query answer. [netcode](docs/netcode.md#server-bots)
 - **Monsters do not animate**: the figure stands while the monster moves. [horde](docs/horde.md#figures)
 - **Coins** do not feed the match score or a power-up meter and are not a dot-stats stat. **Challenges** (a dot-achievements progress bar) are not built. [modes](docs/modes.md#coins-out-of-a-body)

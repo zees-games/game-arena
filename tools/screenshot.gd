@@ -100,6 +100,20 @@ func _initialize() -> void:
 		_stage_feel(map, id)
 		return
 
+	var glance_at := args.find("--glance")
+	if glance_at >= 0:
+		var mode := StringName(args[glance_at + 1]) if glance_at + 1 < args.size() and not args[glance_at + 1].begins_with("--") else &"ffa"
+		_glance_game = ArenaGame.new()
+		_glance_game.name = "Game"
+		_glance_game.headless = true
+		_glance_game.is_authority = true
+		_glance_game.register_service = false
+		_glance_game.mode_id = mode
+		root.add_child(_glance_game)
+		_staged_map = map
+		_staged_id = id
+		return
+
 	if map.is_imported():
 		_stage_imported(map, id)
 		return
@@ -193,6 +207,10 @@ func _process(delta: float) -> bool:
 		_play_imported()
 		return false
 
+	if _glance_game != null and _shots.is_empty():
+		_play_glance()
+		return false
+
 	for body in _players:
 		body.present(delta)
 
@@ -230,13 +248,120 @@ func _process(delta: float) -> bool:
 		return false
 
 	var image := root.get_texture().get_image()
-	var path := OUT_DIR.path_join("%s.png" % _shots[_index]["name"])
+	# SHOT_SUFFIX names a run's frames apart (`_compat`, `_1280x960`) so two runs at two
+	# sizes or in two renderers can be looked at side by side.
+	var suffix := OS.get_environment("SHOT_SUFFIX")
+	var path := OUT_DIR.path_join("%s%s.png" % [_shots[_index]["name"], suffix])
 	image.save_png(path)
 	print("wrote %s (%d x %d)" % [path, image.get_width(), image.get_height()])
 
 	_index += 1
 	_armed = false
 	return false
+
+
+# --- --glance: the whole HUD over a real match -------------------------------
+
+## The HUD as a player sees it mid-match, every piece with something in it: a real
+## [ArenaGame] (free-for-all, or `--glance tdm`) with eight players and a few kills filed
+## through dot-match, so the scores, the clock, the portraits and the kill feed are the
+## match's own; the local player's hands, a weapon with a part-spent magazine, abilities
+## charging, a slide on, and the kill feedback staged late so it is still up at the grab.
+## What `ArenaHud`'s layout is judged by, at 16:9 and 4:3 (`RESOLUTION=1280x960`).
+var _glance_game: ArenaGame = null
+
+const GLANCE_NAMES := ["You", "gamemann", "a_very_long_display_name", "bo", "quiet_one", "newcomer", "Rocket", "Viper"]
+
+
+func _play_glance() -> void:
+	var game := _glance_game
+	var res := game.setup(_staged_map)
+	if not res.ok:
+		push_error("the glance game did not set up: %s" % res.error.message)
+		quit(1)
+		return
+	for i in GLANCE_NAMES.size():
+		var _added := game.add_player(112 + i, GLANCE_NAMES[i])
+	# Live, through the real state machine (headless_match's `_go_live`): in warmup
+	# nobody scores, and the strip would say so.
+	game.match_node.rules.warmup_sec = 0.0
+	game.match_node.rules.countdown_sec = 0.0
+	game.match_node.rules.min_players = 1
+	game.start(game.current_tick())
+	var guard := 0
+	while not game.match_node.is_live() and guard < 64 * 20:
+		game.tick({})
+		guard += 1
+	for _t in range(64 * 23):
+		game.tick({})
+	# Kills filed through dot-match, as the game files them: the scores, the ranks and the
+	# feed all come from these.
+	var kills := [
+		[113, 115, &"rifle", false], [112, 114, &"sniper", true], [116, 112, &"shotgun", false],
+		[113, 117, &"smg", false], [112, 118, &"rifle", true], [119, 113, &"launcher", false],
+		[113, 114, &"marksman", false], [112, 119, &"pistol", false], [117, 116, &"minigun", false],
+		[113, 118, &"knife", false], [112, 116, &"rifle", false], [114, 119, &"beamer", true],
+	]
+	for k in kills:
+		var _entry := game.match_node.report_kill(str(k[0]), str(k[1]), k[2], game.current_tick(), bool(k[3]))
+	for player in game.players():
+		if player.player_id != 112:
+			player.attach_body_mesh(Color.from_hsv(fmod(float(player.player_id) * 0.37, 1.0), 0.55, 0.85),
+				ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(player.player_id))))
+			_players.append(player)
+
+	_local = game.player_for(112)
+	_local.attach_camera(100.0)
+	ZeeModelCache.set_asset_root("res://")
+	var hands := ZeeViewModel.new()
+	hands.name = "Hands"
+	_local.camera.add_child(hands)
+	_local.arm_first_person(hands, true)
+	var _given := _local.weapons.give_everything()
+	var ask := DotWeaponCommand.new()
+	ask.slot = ZeeWeaponIds.SLOT_PRIMARY
+	for tick in range(game.current_tick() + 1, game.current_tick() + 60):
+		var _o := _local.simulate_tick(tick, 1.0 / 64.0, DotFpsCommand.new(), ask)
+		ask = DotWeaponCommand.new()
+	_players.append(_local)
+
+	_hud = ArenaHud.new()
+	_hud.name = "Hud"
+	_hud.config = DotUiConfig.new()
+	_hud.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_hud)
+	_hud.build(game)
+	_hud.follow(_local)
+	var _caught := _hud.catch_up()
+
+	var slot := _local.arsenal.current()
+	if slot != null and slot.def.magazine > 0:
+		slot.magazine = maxi(1, slot.def.magazine / 3)
+	_local.health.health = _local.health.max_health * 0.64
+	_local.health.armour = 35.0
+	_local.controller.state.launch_cooldown_left = 4.2
+	_local.controller.state.dash_cooldown_left = 1.3
+	_local.controller.state.slide_time = 0.3
+	_local.controller.state.wall_jumps_in_air = 1
+
+	_shots = [{
+		"name": "%s_glance_%s" % [String(_staged_id), String(game.mode_id)],
+		"local": true,
+		"late": [
+			[12, func() -> void:
+				var medals := [ArenaAwards.Medal.HEADSHOT, ArenaAwards.Medal.DOUBLE_KILL]
+				_hud.note_award(
+					{"killer_id": 112, "victim_id": 118, "medals": medals,
+						"points": ArenaAwards.points_for(medals), "streak": 3},
+					112, "newcomer", "You"
+				)],
+			[4, func() -> void:
+				var target := game.player_for(117)
+				if target != null:
+					_hud.note_hit(117, 34.0, target.global_position + Vector3(0.0, 1.5, 0.0), false, false)],
+		],
+		"wait": 34,
+	}]
 
 
 # --- An imported map --------------------------------------------------------

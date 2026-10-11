@@ -102,6 +102,8 @@ The family's most repeated shape, found here many times:
 - `--feel` arming in `_init`, before anything was in the tree, so every frame showed empty hands.
 - The first-person body as a grey slab of hip tops.
 - Untextured water: a swimmer standing in an empty pool.
+- The HUD's health, ammunition and key hints all but invisible over the pale prototype floors: regular-weight text, no outline, no plate (`dm_box_feel_kill_compat.png`, 2026-10-10). Rebuilt as `ArenaHudGlance`, bold and outlined on plates.
+- The first portraits were the back of each head: the character kit faces -Z here and the camera had been put on +Z. Weapon silhouettes drawn from 600-pixel renders broke into dashes until they were saved at 48 px and mipmapped.
 
 ## Still open, unexplained
 

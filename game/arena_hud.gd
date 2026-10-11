@@ -5,8 +5,14 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaPaths := preload("arena_paths.gd")
+const ArenaAvatars := preload("arena_avatars.gd")
+const ArenaHudGlance := preload("arena_hud_glance.gd")
 
-## The in-game display: crosshair, health, armour, ammo, kill feed, round timer.
+## The in-game display, laid out for a glance (see [ArenaHudGlance] for where each thing
+## is and why): scores, clock and portraits at the top centre, the kill feed top right,
+## health bottom left, magazine and reserve bottom right with the carried weapons up the
+## right edge, abilities bottom centre, key hints on the right; and the kill feedback
+## (hit marker, damage numbers, medals, the streak meter) over the middle.
 ##
 ## [b]Built here rather than shipped by dot-ui, and that is the division of labour.[/b]
 ## dot-ui knows how to draw a bounded self-expiring list of coloured fragments; it does
@@ -14,8 +20,8 @@ const ArenaPaths := preload("arena_paths.gd")
 ## know what health is. Every widget below is a dot-ui class bound to a game value, and
 ## the binding is the only thing in this file.
 ##
-## No art. The theme is generated, the crosshair is drawn, and the bars are rectangles
-## — which is what the rest of a dev-textured game looks like anyway.
+## Almost no art: the bars and plates are drawn; the weapon silhouettes are rendered from
+## the models (`tools/build_weapon_icons.sh`); the medal and ability icons are Kenney's CC0.
 
 ## The player this HUD is about. Rebound on spawn, because the body is replaced.
 var player: ArenaPlayer = null
@@ -25,17 +31,40 @@ var game: ArenaGame = null
 var crosshair: DotCrosshair = null
 var health_bar: DotStatBar = null
 var armour_bar: DotStatBar = null
-var ammo_bar: DotStatBar = null
 
-## What is in hand and what is behind it: "Rifle  90". Over the ammunition.
-var weapon_label: Label = null
-var feed: DotFeedView = null
-var timer_label: Label = null
+## The numbers by the bars, bottom left.
+var vitals: ArenaHudGlance.Vitals = null
+## `magazine | reserve` under the weapon's name, bottom right.
+var ammo: ArenaHudGlance.AmmoCounter = null
+## The carried weapons up the right edge.
+var slots: ArenaHudGlance.WeaponSlots = null
+## Top right: killer, weapon silhouette, victim.
+var feed: ArenaHudGlance.KillFeed = null
+## Top centre: the two scores and the clock, the target and the mode.
+var strip: ArenaHudGlance.ScoreStrip = null
+## Under the strip: every player ranked, portrait, rank and kills.
+var portraits: ArenaHudGlance.Portraits = null
+var portrait_cache: ArenaHudGlance.PortraitCache = null
+## Bottom centre: slide, launch, dash and the wall jump, with keys and cooldowns.
+var abilities: ArenaHudGlance.AbilityBar = null
+## The right edge: the keys worth knowing.
+var hints: ArenaHudGlance.KeyHints = null
 
 ## Seconds left, when something other than this game's own match knows. NAN means
 ## "ask the match", which is what a server and an offline client do.
 var remaining_override: float = NAN
-var score_label: Label = null
+
+## The key each prompt, hint and button names, as the player has it bound. The client
+## writes these from its key table ([method ArenaClient._hud_keys]); the defaults are the
+## table's.
+var keys: Dictionary = {
+	&"slide": "C", &"launch": "E", &"dash": "Shift", &"jump": "Space",
+	&"scoreboard": "Tab", &"menu": "Esc", &"chat": "Y", &"reload": "R",
+}
+
+## Seconds until the portraits are read again: a ranked row a few times a second is a
+## row that keeps up, and once a frame is ten lookups for nothing.
+var _portraits_in: float = 0.0
 
 ## What the round is about, when it is about something. Empty in a deathmatch.
 ##
@@ -66,13 +95,16 @@ var scope: ZeeScopeOverlay = null
 var hurt_overlay: TextureRect = null
 const HURT_FROM := 0.35
 
-## The launch: "E LAUNCH" when ready, the seconds left when not. The key is the client's
-## to say ([member launch_key_text]), because it is X in a mode where E is the prop tool.
-var ability_label: Label = null
-var launch_key_text: String = "E"
+## The launch's key, which is X in a mode where E is the prop tool: the client's to say.
+var launch_key_text: String:
+	get:
+		return str(keys.get(&"launch", "E"))
+	set(value):
+		keys[&"launch"] = value
 
-## "C  Cancel slide" while sliding, as the prompt the genre shows.
-var slide_label: Label = null
+## The prompt for what can be done now: "Cancel slide [C]" while sliding, "Reload [R]" on
+## an empty magazine.
+var slide_label: ArenaHudGlance.Prompt = null
 
 ## The coins this player has collected this match, from the drops layer.
 var coins_label: Label = null
@@ -425,7 +457,9 @@ class MedalRow extends Control:
 ## first caller in this file, which the parser refused where the client's had not.
 func notice(text: String) -> void:
 	if notice_label == null:
-		notice_label = _make_label("Notice", Control.PRESET_CENTER_TOP, Vector2(0.0, 110.0))
+		# Under the portraits, clear of the strip, the row and the objective line.
+		notice_label = _make_label("Notice", Control.PRESET_CENTER_TOP, Vector2(0.0, 182.0))
+		notice_label.add_theme_font_size_override(&"font_size", 20)
 	notice_label.text = text
 	notice_label.modulate.a = 1.0
 	_notice_age = 0.0
@@ -442,17 +476,21 @@ var _challenges: DotAchievementCatalogue = null
 
 func present_challenge(live: bool) -> void:
 	if challenge_label == null:
-		challenge_label = _make_label("Challenge", Control.PRESET_CENTER_TOP, Vector2(0.0, 62.0))
-		challenge_label.add_theme_font_size_override(&"font_size", 15)
+		# Top left: the top centre is the scores and the portraits now.
+		challenge_label = _make_label("Challenge", Control.PRESET_TOP_LEFT, Vector2(0.0, 2.0))
+		challenge_label.grow_horizontal = Control.GROW_DIRECTION_END
+		challenge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		challenge_label.offset_left = 8.0
+		challenge_label.add_theme_font_size_override(&"font_size", 14)
 		challenge_bar = ProgressBar.new()
 		challenge_bar.name = "ChallengeBar"
 		challenge_bar.show_percentage = false
 		challenge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		challenge_bar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-		challenge_bar.offset_left = -150.0
-		challenge_bar.offset_right = 150.0
-		challenge_bar.offset_top = 88.0
-		challenge_bar.offset_bottom = 94.0
+		challenge_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		challenge_bar.offset_left = 8.0
+		challenge_bar.offset_right = 300.0
+		challenge_bar.offset_top = 28.0
+		challenge_bar.offset_bottom = 34.0
 		var fill := StyleBoxFlat.new()
 		fill.bg_color = Color(1.0, 0.78, 0.25)
 		challenge_bar.add_theme_stylebox_override(&"fill", fill)
@@ -673,7 +711,9 @@ func build(p_game: ArenaGame) -> void:
 	hurt_overlay.texture = radial
 	hurt_overlay.stretch_mode = TextureRect.STRETCH_SCALE
 	hurt_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	hurt_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Top-left anchored and sized to the viewport in `present_body`, like the blind: full-rect
+	# anchors with a size written every frame drew an engine warning per write.
+	hurt_overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	hurt_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hurt_overlay.modulate.a = 0.0
 	add_child(hurt_overlay)
@@ -697,17 +737,30 @@ func build(p_game: ArenaGame) -> void:
 	)
 	add_child(crosshair)
 
-	health_bar = _make_bar("Health", "%d", Vector2(24.0, -96.0), Vector2(220.0, 34.0))
-	health_bar.fill_colour = Color(0.35, 0.80, 0.45)
-	health_bar.low_colour = Color(0.90, 0.30, 0.28)
+	# Bottom left: health as a thick bar with its number at the end, armour as a thin one
+	# under it when there is any. The bars ease; the numbers are `vitals`, on a plate.
+	vitals = ArenaHudGlance.Vitals.new()
+	vitals.name = "Vitals"
+	_place(vitals, Control.PRESET_BOTTOM_LEFT, Rect2(0.0, -84.0, 380.0, 76.0))
+	vitals.bar_end = 300.0
+
+	health_bar = _make_bar("Health", "%d", Vector2(38.0, -70.0), Vector2(262.0, 16.0))
+	health_bar.show_text = false
+	health_bar.bar_height = 16.0
+	health_bar.fill_colour = Color(0.36, 0.86, 0.48)
+	health_bar.low_colour = Color(0.95, 0.3, 0.28)
+	health_bar.track_colour = Color(0.0, 0.0, 0.0, 0.55)
 	health_bar.bind(func() -> Variant:
 		return player.health.health if _live() else 0.0
 	)
 	health_bar.max_source = func() -> Variant:
 		return player.health.max_health if _live() else 100.0
 
-	armour_bar = _make_bar("Armour", "%d", Vector2(24.0, -56.0), Vector2(220.0, 26.0))
-	armour_bar.fill_colour = Color(0.35, 0.62, 0.95)
+	armour_bar = _make_bar("Armour", "%d", Vector2(38.0, -46.0), Vector2(262.0, 7.0))
+	armour_bar.show_text = false
+	armour_bar.bar_height = 7.0
+	armour_bar.fill_colour = Color(0.4, 0.66, 1.0)
+	armour_bar.track_colour = Color(0.0, 0.0, 0.0, 0.45)
 	armour_bar.low_fraction = 0.0
 	armour_bar.bind(func() -> Variant:
 		return player.health.armour if _live() else 0.0
@@ -715,58 +768,53 @@ func build(p_game: ArenaGame) -> void:
 	armour_bar.max_source = func() -> Variant:
 		return player.health.max_armour if _live() else 100.0
 
-	ammo_bar = _make_bar("Ammo", "%d", Vector2(-240.0, -96.0), Vector2(216.0, 34.0))
-	ammo_bar.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	ammo_bar.offset_left = -240.0
-	ammo_bar.offset_top = -96.0
-	ammo_bar.offset_right = -24.0
-	ammo_bar.offset_bottom = -62.0
-	ammo_bar.show_bar = false
-	# The magazine, or the pool for a weapon with none. The beamer feeds straight from
-	# its cells and a grenade is its own round, so a magazine count reads 0 for both
-	# while they are perfectly usable, and a player looking at a zero switches away.
-	ammo_bar.bind(func() -> Variant:
-		return float(rounds_in_hand(player if _live() else null))
-	)
-	ammo_bar.max_source = func() -> Variant:
-		if not _live():
-			return 1.0
-		var slot := player.arsenal.current()
-		return float(maxi(1, slot.def.magazine)) if slot != null else 1.0
+	# Bottom right: the weapon's name, then `magazine | reserve`.
+	ammo = ArenaHudGlance.AmmoCounter.new()
+	ammo.name = "Ammo"
+	_place(ammo, Control.PRESET_BOTTOM_RIGHT, Rect2(-300.0, -84.0, 290.0, 70.0))
 
-	weapon_label = Label.new()
-	weapon_label.name = "Weapon"
-	weapon_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	# Over the counter and aligned with it: the bar draws its number at its left edge, and
-	# a name right-aligned above it read as two unrelated pieces of text.
-	weapon_label.offset_left = -240.0
-	weapon_label.offset_top = -126.0
-	weapon_label.offset_right = 0.0
-	weapon_label.offset_bottom = -100.0
-	weapon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	weapon_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(weapon_label)
+	# The right edge: the keys first, then the weapons carried, under the kill feed.
+	hints = ArenaHudGlance.KeyHints.new()
+	hints.name = "KeyHints"
+	_place(hints, Control.PRESET_CENTER_RIGHT, Rect2(-220.0, -150.0, 210.0, 120.0))
 
-	feed = DotFeedView.new()
+	slots = ArenaHudGlance.WeaponSlots.new()
+	slots.name = "Slots"
+	_place(slots, Control.PRESET_CENTER_RIGHT, Rect2(-170.0, 10.0, 160.0, 210.0))
+
+	# Bottom centre: the abilities, clear of the hands at the bottom right.
+	abilities = ArenaHudGlance.AbilityBar.new()
+	abilities.name = "Abilities"
+	_place(abilities, Control.PRESET_CENTER_BOTTOM, Rect2(-200.0, -98.0, 400.0, 90.0))
+
+	slide_label = ArenaHudGlance.Prompt.new()
+	slide_label.name = "Prompt"
+	_place(slide_label, Control.PRESET_CENTER, Rect2(-330.0, 120.0, 300.0, 36.0))
+	slide_label.visible = false
+
+	feed = ArenaHudGlance.KillFeed.new()
 	feed.name = "KillFeed"
-	feed.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	feed.offset_left = -480.0
-	feed.offset_top = 12.0
-	feed.offset_right = 0.0
-	feed.offset_bottom = 140.0
-	feed.max_lines = config.feed_lines
-	feed.lifetime_sec = config.feed_lifetime_sec
-	feed.alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	add_child(feed)
+	_place(feed, Control.PRESET_TOP_RIGHT, Rect2(-470.0, 0.0, 460.0, 170.0))
+	feed.max_lines = config.feed_lines if config != null else 5
+	feed.lifetime_sec = config.feed_lifetime_sec if config != null else 6.0
 
-	timer_label = _make_label("Timer", Control.PRESET_CENTER_TOP, Vector2(0.0, 8.0))
-	score_label = _make_label("Score", Control.PRESET_CENTER_TOP, Vector2(0.0, 34.0))
-	score_label.theme_type_variation = &"DotDim"
+	strip = ArenaHudGlance.ScoreStrip.new()
+	strip.name = "Scores"
+	_place(strip, Control.PRESET_CENTER_TOP, Rect2(-260.0, 0.0, 520.0, 72.0))
+
+	portraits = ArenaHudGlance.Portraits.new()
+	portraits.name = "Portraits"
+	_place(portraits, Control.PRESET_CENTER_TOP, Rect2(-270.0, 74.0, 540.0, 80.0))
+	portrait_cache = ArenaHudGlance.PortraitCache.new()
+	portrait_cache.name = "PortraitCache"
+	add_child(portrait_cache)
 
 	objective_label = _make_label(
-		"Objective", Control.PRESET_CENTER_TOP, Vector2(0.0, 58.0)
+		"Objective", Control.PRESET_CENTER_TOP, Vector2(0.0, 154.0)
 	)
-	objective_label.theme_type_variation = &"DotDim"
+	# No match, nothing to score: a render tool or a suite building the HUD alone.
+	strip.visible = game != null
+	portraits.visible = game != null
 
 	if game != null:
 		game.player_killed.connect(_on_kill)
@@ -791,6 +839,20 @@ func _make_bar(
 	return bar
 
 
+## Adds [param piece] with [param preset]'s anchors and [param rect] as its offsets from
+## them. Every piece ignores the mouse: a HUD that takes a click eats the shot.
+func _place(piece: Control, preset: Control.LayoutPreset, rect: Rect2) -> void:
+	piece.set_anchors_preset(preset)
+	piece.offset_left = rect.position.x
+	piece.offset_top = rect.position.y
+	piece.offset_right = rect.end.x
+	piece.offset_bottom = rect.end.y
+	piece.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Icons drawn smaller than their files: without mipmaps a silhouette's thin parts break up.
+	piece.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	add_child(piece)
+
+
 func _make_label(
 	node_name: String,
 	preset: Control.LayoutPreset,
@@ -809,6 +871,12 @@ func _make_label(
 	label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Bold and outlined like every other piece: the theme's regular weight with no outline
+	# all but vanished over the pale maps.
+	label.add_theme_font_override(&"font", ArenaHudGlance.Ink.font())
+	label.add_theme_font_size_override(&"font_size", 17)
+	label.add_theme_color_override(&"font_outline_color", Color(0.02, 0.02, 0.05, 0.85))
+	label.add_theme_constant_override(&"outline_size", 6)
 	add_child(label)
 	return label
 
@@ -871,18 +939,37 @@ func _on_kill(entry: DotKillFeed.Entry) -> void:
 	if feed == null:
 		return
 
-	var mine := Color(1.0, 0.85, 0.35)
-	var theirs := Color(0.86, 0.88, 0.92)
 	var me := str(player.player_id) if _live() else ""
 
 	feed.add_kill(
-		entry.killer_name,
-		mine if entry.killer_key == me else theirs,
+		entry.killer_name if entry.killer_key != entry.victim_key else "",
+		_name_colour(entry.killer_key, entry.killer_team, me),
+		entry.cause,
 		cause_label(entry.cause),
 		entry.victim_name,
-		mine if entry.victim_key == me else theirs,
-		entry.headshot
+		_name_colour(entry.victim_key, entry.victim_team, me),
+		entry.headshot,
+		me != "" and (entry.killer_key == me or entry.victim_key == me)
 	)
+
+
+## A name's colour in the feed: gold for you, the side's colour in a team mode, else white.
+func _name_colour(key: String, team: int, me: String) -> Color:
+	if key == me and me != "":
+		return GOLD
+	var side := _team_colour(team)
+	return side.lightened(0.35) if side.a > 0.0 else Color(0.95, 0.96, 0.98)
+
+
+## [param team]'s colour, or transparent when it is no side (a free-for-all, nobody).
+func _team_colour(team: int) -> Color:
+	if team <= 0 or game == null or game.match_node == null or game.match_node.teams == null:
+		return Color(0, 0, 0, 0)
+	var mode := game.displayed_mode()
+	if mode == null or not mode.is_team_mode():
+		return Color(0, 0, 0, 0)
+	var side := game.match_node.teams.team(team)
+	return side.colour if side != null else Color(0, 0, 0, 0)
 
 
 ## Fills the feed from kills that happened before this HUD existed.
@@ -919,12 +1006,26 @@ func _process(delta: float) -> void:
 	present_blind(delta)
 	present_body()
 
-	if weapon_label != null:
-		weapon_label.text = weapon_line(player if _live() else null)
+	if feed != null:
+		feed.advance(delta)
+	present_gear()
 
-	if game == null or timer_label == null:
+	if game == null or strip == null:
 		return
 
+	present_scores()
+	_portraits_in -= delta
+	if _portraits_in <= 0.0:
+		_portraits_in = 0.25
+		present_portraits()
+
+	if objective_label != null:
+		objective_label.text = _objective_line()
+
+
+## The clock, the two scores, the target and the mode, into the strip. Public so a render
+## tool or a suite can put it up without a frame.
+func present_scores() -> void:
 	# The override first, when there is one.
 	#
 	# [b]A networked client's own `DotMatch` never runs.[/b] Nothing ticks it, so
@@ -936,22 +1037,115 @@ func _process(delta: float) -> void:
 		remaining_override if not is_nan(remaining_override)
 		else game.match_node.seconds_remaining()
 	)
-
-	timer_label.text = (
-		DotMatch.State.keys()[game.match_node.state] if remaining < 0.0
+	var clock := (
+		String(DotMatch.State.keys()[game.match_node.state]).capitalize() if remaining < 0.0
 		else "%d:%02d" % [int(remaining) / 60, int(remaining) % 60]
 	)
+	var mode := game.displayed_mode()
+	var limit := game.match_node.rules.score_limit if game.match_node.rules != null else 0
+	strip.show_clock(clock, remaining >= 0.0 and remaining <= 30.0,
+		"First to %d" % limit if limit > 0 else "", mode.display_name if mode != null else "")
 
-	var leader := game.match_node.scoreboard.leader()
-	score_label.text = (
-		"" if leader == null
-		else "%s  %d / %d" % [
-			leader.display_name, leader.score, game.match_node.rules.score_limit
-		]
-	)
+	var board := game.match_node.scoreboard
+	var me := str(player.player_id) if _live() else ""
+	var mine_record: DotPlayerScore = board.find(me) if me != "" else null
+	if mode != null and mode.is_team_mode() and game.match_node.teams != null:
+		# Your side on the left, as the genre has it.
+		var sides: Array[int] = []
+		for id: int in game.match_node.teams.team_ids():
+			var side := game.match_node.teams.team(id)
+			if side != null and not side.is_spectator:
+				sides.append(id)
+		if sides.size() >= 2:
+			var mine := mine_record.team if mine_record != null else sides[0]
+			var left := mine if sides.has(mine) else sides[0]
+			var right := sides[1] if left == sides[0] else sides[0]
+			var l := game.match_node.teams.team(left)
+			var r := game.match_node.teams.team(right)
+			strip.show_scores(board.team_score(left), board.team_score(right),
+				l.display_name.to_upper(), r.display_name.to_upper(), l.colour, r.colour)
+			return
+	# A free-for-all: you, and whoever is ahead of you (behind you, when you lead).
+	var other: DotPlayerScore = null
+	for record in board.ranked():
+		if record.present and record != mine_record:
+			other = record
+			break
+	var leading := mine_record != null and (other == null or mine_record.score >= other.score)
+	strip.show_scores(
+		mine_record.score if mine_record != null else 0, other.score if other != null else 0,
+		"YOU", "%s  %s" % ["2ND" if leading else "1ST", other.display_name.to_upper() if other != null else "-"],
+		ArenaHudGlance.BLUE, ArenaHudGlance.RED)
 
-	if objective_label != null:
-		objective_label.text = _objective_line()
+
+## The ranked row under the strip: a portrait, rank and kill count per player.
+func present_portraits() -> void:
+	var entries: Array[Dictionary] = []
+	var me := str(player.player_id) if _live() else ""
+	var mode := game.displayed_mode()
+	var teams := mode != null and mode.is_team_mode()
+	var ids: Array = []
+	var rank := 1
+	for record in game.match_node.scoreboard.ranked():
+		if not record.present or rank > ArenaHudGlance.Portraits.MAX_SHOWN:
+			continue
+		var id := int(record.key) if record.key.is_valid_int() else 0
+		ids.append(id)
+		var who := game.player_for(id) if id != 0 else null
+		var avatar: DotAvatar = who.avatar if who != null and who.avatar != null \
+			else ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(id)))
+		var side := _team_colour(record.team) if teams else Color(0, 0, 0, 0)
+		entries.append({
+			"name": record.display_name, "rank": rank, "kills": record.kills, "me": record.key == me,
+			"ring": side if side.a > 0.0 else Color(1, 1, 1, 0.85),
+			"colour": Color.from_hsv(fmod(float(id) * 0.37, 1.0), 0.55, 0.85),
+			"texture": portrait_cache.portrait(id, avatar) if portrait_cache != null else null,
+		})
+		rank += 1
+	portraits.show_players(entries)
+	if portrait_cache != null:
+		portrait_cache.keep_only(ids)
+
+
+## Health, ammunition, the carried weapons and the key hints, from the followed player.
+func present_gear() -> void:
+	var live := _live() and player.is_alive()
+	if vitals != null:
+		vitals.visible = _live()
+		if _live() and player.health != null:
+			vitals.show_vitals(player.health.health, player.health.max_health, player.health.armour)
+	if armour_bar != null:
+		armour_bar.visible = _live() and player.health != null and player.health.armour > 0.0
+
+	var slot: DotWeaponSlot = player.arsenal.current() if live and player.arsenal != null else null
+	if ammo != null:
+		if slot == null:
+			ammo.show_ammo("", -1, -1, false)
+		elif slot.def.magazine <= 0 and slot.def.ammo_type == &"":
+			ammo.show_ammo(slot.def.display_name, -1, -1, false)
+		elif slot.def.magazine <= 0:
+			var pool := player.arsenal.ammo().count(slot.def.ammo_type)
+			ammo.show_ammo(slot.def.display_name, pool, -1, pool <= 0)
+		else:
+			var reserve := player.arsenal.ammo().count(slot.def.ammo_type) if slot.def.ammo_type != &"" else -1
+			ammo.show_ammo(slot.def.display_name, slot.magazine, reserve,
+				float(slot.magazine) <= float(slot.def.magazine) * 0.25)
+
+	if slots != null:
+		var rows: Array[Dictionary] = []
+		if live and player.arsenal != null:
+			for index in player.arsenal.slots():
+				var held := player.arsenal.slot_at(index)
+				if held != null:
+					rows.append({"slot": index, "id": held.def.id, "name": held.def.display_name})
+		slots.show_slots(rows, player.arsenal.current_slot() if live and player.arsenal != null else 0)
+
+	if hints != null:
+		hints.visible = live
+		hints.show_hints([
+			["Scoreboard", keys[&"scoreboard"]], ["Menu", keys[&"menu"]],
+			["Chat", keys[&"chat"]], ["Slide", keys[&"slide"]],
+		])
 
 
 ## What the ammunition counter shows for [param who]: the magazine, or for a weapon that
@@ -1026,36 +1220,23 @@ func present_body() -> void:
 			hurt_overlay.position = inverse * Vector2.ZERO
 			hurt_overlay.size = inverse.basis_xform(get_viewport_rect().size)
 
-	if ability_label == null:
-		# Left of centre and above the bars, clear of the hands and the gun in them.
-		ability_label = _make_label("Ability", Control.PRESET_CENTER_BOTTOM, Vector2(0.0, -150.0))
-		ability_label.offset_left = -360.0
-		ability_label.offset_right = -200.0
-		slide_label = _make_label("Slide", Control.PRESET_CENTER, Vector2(0.0, 80.0))
-
 	var state: DotFpsState = player.controller.state if live else null
 	var tunables: DotFpsTunables = player.controller.tunables if live else null
+	present_abilities(state, tunables)
 
-	ability_label.visible = live and tunables != null and (tunables.launch_enabled or tunables.dash_enabled)
-	if ability_label.visible:
-		var lines := PackedStringArray()
-		if tunables.launch_enabled:
-			var left := state.launch_cooldown_left
-			lines.append(
-				"%s  LAUNCH" % launch_key_text if left <= 0.0
-				else "%s  %.1f" % [launch_key_text, left]
-			)
-		if tunables.dash_enabled:
-			var dash_left := state.dash_cooldown_left
-			lines.append("SHIFT  DASH" if dash_left <= 0.0 else "SHIFT  %.1f" % dash_left)
-		ability_label.text = "\n".join(lines)
-
-	slide_label.visible = live and state != null and state.is_sliding()
-	slide_label.text = "C  Cancel slide"
+	# What can be done right now, as the genre prompts it.
+	if slide_label != null:
+		if state != null and state.is_sliding():
+			slide_label.show_prompt("Cancel slide", str(keys[&"slide"]))
+		elif live and player.is_alive() and _needs_reload():
+			slide_label.show_prompt("Reload", str(keys[&"reload"]))
+		else:
+			slide_label.show_prompt("", "")
 
 	_build_feedback()
 	if death_label == null:
-		death_label = _make_label("Death", Control.PRESET_CENTER_TOP, Vector2(0.0, 150.0))
+		death_label = _make_label("Death", Control.PRESET_CENTER_TOP, Vector2(0.0, 222.0))
+		death_label.add_theme_font_size_override(&"font_size", 22)
 
 	var delta := get_process_delta_time()
 	var streak := int(streaks.get(player.player_id, 0)) if player != null else 0
@@ -1074,9 +1255,11 @@ func present_body() -> void:
 	death_label.text = _death_text
 
 	if coins_label == null:
-		coins_label = _make_label("Coins", Control.PRESET_CENTER_BOTTOM, Vector2(0.0, -150.0))
-		coins_label.offset_left = 200.0
-		coins_label.offset_right = 360.0
+		# Top left, under the challenge: a count, not something to watch.
+		coins_label = _make_label("Coins", Control.PRESET_TOP_LEFT, Vector2(0.0, 40.0))
+		coins_label.grow_horizontal = Control.GROW_DIRECTION_END
+		coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		coins_label.offset_left = 8.0
 		coins_label.add_theme_color_override(&"font_color", Color(1.0, 0.82, 0.25))
 	var count := 0
 	if live and game != null and game.drops != null:
@@ -1090,6 +1273,47 @@ func present_body() -> void:
 
 	_advance_popups(get_process_delta_time())
 	present_challenge(live)
+
+
+## The ability buttons from the followed player's movement state: slide, launch and dash
+## with their cooldowns, and the wall jump with its jumps left in the air. Only the ones
+## the server's rules turn on.
+func present_abilities(state: DotFpsState, tunables: DotFpsTunables) -> void:
+	if abilities == null:
+		return
+	var buttons: Array[Dictionary] = []
+	if state != null and tunables != null:
+		if tunables.slide_enabled:
+			buttons.append(_button(&"slide", "Slide", state.slide_cooldown_left, tunables.slide_cooldown, state.is_sliding()))
+		if tunables.launch_enabled:
+			buttons.append(_button(&"launch", "Launch", state.launch_cooldown_left, tunables.launch_cooldown, false))
+		if tunables.dash_enabled:
+			buttons.append(_button(&"dash", "Dash", state.dash_cooldown_left, tunables.dash_cooldown, false))
+		if tunables.wall_jump_enabled:
+			var b := _button(&"wall_jump", "Wall jump", 0.0, 0.0, state.is_wall_running())
+			b["key"] = keys[&"jump"]
+			b["pips_max"] = tunables.wall_jump_max_per_air
+			b["pips"] = maxi(0, tunables.wall_jump_max_per_air - state.wall_jumps_in_air)
+			buttons.append(b)
+	abilities.visible = not buttons.is_empty()
+	abilities.show_buttons(buttons)
+
+
+func _button(id: StringName, label: String, left: float, total: float, active: bool) -> Dictionary:
+	return {
+		"id": id, "label": label, "key": str(keys.get(id, "")), "left": maxf(left, 0.0), "total": total,
+		"active": active, "icon": ArenaHudGlance.Ink.texture("%s/%s.png" % [ArenaHudGlance.HUD_ICON_DIR, String(id)]),
+	}
+
+
+## An empty magazine with rounds in reserve: the moment to say R.
+func _needs_reload() -> bool:
+	if player.arsenal == null:
+		return false
+	var slot := player.arsenal.current()
+	if slot == null or slot.def.magazine <= 0 or slot.magazine > 0 or slot.def.ammo_type == &"":
+		return false
+	return player.arsenal.ammo().count(slot.def.ammo_type) > 0 and not player.arsenal.is_reloading()
 
 
 ## Fades [member blind_overlay] toward whether the followed player is blinded.

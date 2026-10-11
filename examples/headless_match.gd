@@ -14,6 +14,7 @@ const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaMapPaint := preload("../maps/arena_map_paint.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMapSurvey := preload("../maps/arena_map_survey.gd")
+const ArenaHudGlance := preload("../game/arena_hud_glance.gd")
 const ArenaMenus := preload("../game/arena_menus.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaModes := preload("../game/arena_modes.gd")
@@ -57,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 567
+const CHECKS := 571
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -4226,6 +4227,45 @@ func _test_interface() -> void:
 		hud.feed.line_count() == caught,
 		"which is what it then shows"
 	)
+
+	# The glance layout's pieces read the match, not a copy of it: the strip, the ranked
+	# portraits, the ammunition and the carried weapons.
+	hud.present_scores()
+	var mine := _game.match_node.scoreboard.find(str(subject.player_id))
+	_check(
+		mine != null and hud.strip.left_score == mine.score and hud.strip.left_tag == "YOU",
+		"the strip's left score is the followed player's own", "%d" % hud.strip.left_score
+	)
+	hud.present_portraits()
+	var ranked_kills: Array = []
+	for e in hud.portraits.entries:
+		ranked_kills.append(int(e["rank"]))
+	_check(
+		hud.portraits.entries.size() == mini(BOTS, ArenaHudGlance.Portraits.MAX_SHOWN)
+			and ranked_kills == range(1, hud.portraits.entries.size() + 1),
+		"the portraits are every player, ranked 1 to N", str(ranked_kills)
+	)
+	# Somebody alive: a dead player's HUD shows no gear, and the match that ended left
+	# whoever it left.
+	var armed: ArenaPlayer = null
+	for p in _game.players():
+		if p.is_alive() and p.arsenal != null and not p.arsenal.slots().is_empty():
+			armed = p
+			break
+	if armed != null:
+		hud.follow(armed)
+	hud.present_gear()
+	_check(
+		armed != null and hud.slots.rows.size() == armed.arsenal.slots().size() and hud.ammo.weapon_name != "",
+		"the slots are the weapons carried, and the counter names the one in hand",
+		"%d rows" % hud.slots.rows.size()
+	)
+	hud.follow(subject)
+	var no_icon := PackedStringArray()
+	for weapon in ZeeWeaponIds.all():
+		if weapon != ZeeWeaponIds.FISTS and ArenaHudGlance.Ink.weapon_icon(weapon) == null:
+			no_icon.append(String(weapon))
+	_check(no_icon.is_empty(), "every weapon but the fists has a silhouette for the feed and the slots", ", ".join(no_icon))
 
 	# The Escape menu and the Tab board are dot-menu's (since 2026-10-10), built with no
 	# presentation layer here: no settings document, so only rows that need none draw.

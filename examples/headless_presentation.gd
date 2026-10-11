@@ -1367,11 +1367,11 @@ func _test_criticals_and_the_body() -> void:
 	_check(hud.hurt_overlay.modulate.a == 0.0, "and healthy, it does not")
 
 	hud.present_body()
-	_check(hud.ability_label.visible and hud.ability_label.text.contains("LAUNCH"),
-		"the launch reads ready (%s)" % hud.ability_label.text)
+	_check(hud.abilities.visible and hud.abilities.line(&"launch").contains("LAUNCH"),
+		"the launch's button reads ready (%s)" % hud.abilities.line(&"launch"))
 	player.controller.state.launch_cooldown_left = 5.5
 	hud.present_body()
-	_check(hud.ability_label.text.contains("5.5"), "and counts its cooldown down (%s)" % hud.ability_label.text)
+	_check(hud.abilities.line(&"launch").contains("5.5"), "and counts its cooldown down (%s)" % hud.abilities.line(&"launch"))
 
 	player.controller.state.slide_time = 0.2
 	hud.present_body()

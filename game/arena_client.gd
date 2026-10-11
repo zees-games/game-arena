@@ -325,10 +325,28 @@ func _build_interface() -> void:
 		presentation.settings.changed.connect(func(key: StringName, value: Variant, _w: StringName) -> void:
 			if key == &"hud_safe_area" and hud != null:
 				hud.set_safe_area(float(value))
-			elif key == &"bind_duck":
-				_add_slide_key.call_deferred())
+			elif presentation.bindings.row_for_setting(key).size() > 0:
+				# Deferred: the table applies a rebound row after the setting changes.
+				if key == &"bind_duck":
+					_add_slide_key.call_deferred()
+				_hud_keys.call_deferred())
 		hud.set_safe_area(presentation.settings.get_float(&"hud_safe_area", 16.0))
 	_add_slide_key()
+	_hud_keys()
+
+
+## The keys the HUD's buttons, hints and prompts name, from the key table as the player
+## has it bound. Slide says C while Duck is on its default, because that is where C slides.
+func _hud_keys() -> void:
+	if hud == null or presentation == null or presentation.bindings == null:
+		return
+	var table: DotMenuBindings = presentation.bindings
+	hud.keys[&"jump"] = table.key_for(&"dot_fps_jump")
+	hud.keys[&"dash"] = table.key_for(&"dot_fps_sprint")
+	hud.keys[&"chat"] = table.key_for(&"arena_chat")
+	hud.keys[&"scoreboard"] = table.key_for(&"arena_scoreboard")
+	var duck := table.key_for(&"dot_fps_crouch")
+	hud.keys[&"slide"] = "C" if duck == "Ctrl" else duck
 
 
 ## C slides as well as Duck, while Duck is on its default key. A slide IS a duck at a run,
