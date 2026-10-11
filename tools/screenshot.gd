@@ -377,11 +377,13 @@ func _play_glance() -> void:
 	}]
 
 
-## A stand-in for the client shell's notice overlay with the game vote open: its HUD line
-## and its drawn ballot, placed where dot-server-deploy's `client/notice_overlay.gd` places
-## them (a copy, since that project is not an addon this game links; keep the two in step).
-## The shell draws over every game, so whether it covers this HUD is a question only a
-## frame of both together answers.
+## A stand-in for the client shell's notice overlay with the game vote open: its drawn
+## ballot, placed where dot-server-deploy's `client/notice_overlay.gd` places it (a copy,
+## since that project is not an addon this game links; keep the two in step). The shell
+## draws one column down the right-hand side, 110 px down and a third of the frame wide
+## (240..360 px), and does not draw the vote's HUD line while its ballot is open. The shell
+## draws over every game, so whether it covers this HUD is a question only a frame of both
+## together answers.
 func _stage_shell_ballot() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "ShellStandIn"
@@ -393,43 +395,19 @@ func _stage_shell_ballot() -> void:
 	overlay.theme = DotUiTheme.space().build()
 	layer.add_child(overlay)
 
-	# The line: across the top, centred by a container, 56 px down.
-	var top := MarginContainer.new()
-	top.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top.add_theme_constant_override("margin_top", 56)
-	top.add_theme_constant_override("margin_left", 16)
-	top.add_theme_constant_override("margin_right", 16)
-	overlay.add_child(top)
-	var centre := CenterContainer.new()
-	top.add_child(centre)
-	var line := PanelContainer.new()
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.03, 0.04, 0.09, 0.78)
-	style.set_corner_radius_all(10)
-	style.content_margin_left = 16
-	style.content_margin_right = 16
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	line.add_theme_stylebox_override("panel", style)
-	var label := Label.new()
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 20)
-	label.text = "Vote for the next game: !game_vote 1-6  19s"
-	line.add_child(label)
-	centre.add_child(line)
-
-	# The ballots: down the right-hand side, 110 px down, 360 wide.
+	var width := clampf(root.size.x * 0.34, 240.0, 360.0)
 	var column := VBoxContainer.new()
 	column.anchor_left = 1.0
 	column.anchor_right = 1.0
 	column.anchor_bottom = 1.0
-	column.offset_left = -376.0
+	column.offset_left = -16.0 - width
 	column.offset_right = -16.0
 	column.offset_top = 110.0
 	column.offset_bottom = -16.0
 	overlay.add_child(column)
 	var ballot := DotBallotPanel.new()
 	ballot.ui_theme = DotUiTheme.space()
+	ballot.panel_width = width
 	column.add_child(ballot)
 	ballot.show_state({
 		"open": true, "title": "Vote for the next game", "command": "game_vote",
