@@ -32,7 +32,7 @@ It measures A's first three seconds, then a steady 55 ms window and 5% and 20% l
 - **Read a suite's stderr even when it exits 0.** A script error aborts its section, not the run; four freed-object errors in `headless_match` once left every check passing.
 - **Filter `--check-only` for the lines that mean a parse failed** (`SCRIPT ERROR`, `Parse Error`, `Failed to load script`), not against shutdown noise by exact wording, which goes stale when the engine rewords a line.
 - **A scene whose script fails to parse hangs** rather than exiting. Cap every run with `timeout`.
-- **An adopted session has no peer**, so a suite that adopts one points the netcode's `send_fn` at nothing, or every send is an engine RPC error.
+- **An adopted session has no peer**, so a suite that adopts one catches what is sent to it, or every send is "Attempt to call RPC with unknown peer ID" in a green run. Either point the netcode's `send_fn` at nothing (`_test_bots`, `headless_admin`) or set the bridge link's `loopback` and check what it caught (`dedicated`'s `_test_client_spawn`: the join's schema event, then a snapshot per tick to 4242 through four sections). The adoption is what starts the sends, so catch before firing `client_spawn`.
 - **Every position check starts on a spawn point**: `dm_box` has a platform at the origin and a body teleported there is pushed out.
 - **A map check drives a walking bot** ([maps](maps.md#every-map-is-surveyed)).
 - **A check that depends on how an earlier section ended is not a check.** The horde gunner check chooses a spot with line of sight and strips spawn protection from its target; the movement-rules section runs after the weapons section because this harness fires every eighth tick and spent the magazine.

@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 127
+const CHECKS := 129
 
 var _passed := 0
 var _failed := 0
@@ -52,6 +52,11 @@ var _failures := PackedStringArray()
 
 var _server: DotServer = null
 var _game: ArenaGame = null
+
+## What the bridge sent to the sessions this suite adopts with no socket behind them,
+## caught on the link's loopback instead of going out as an `rpc_id`. See
+## [method _test_client_spawn].
+var _caught: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -871,8 +876,27 @@ func _test_client_spawn() -> void:
 	if not _check(_server.adopt_session(session).ok, "a session is adopted"):
 		return
 
+	# 4242 has no socket behind it, so everything the bridge sends it from here on (the
+	# schema announcement on join, then a snapshot every server tick through the services,
+	# maps, query and browser sections) was an `rpc_id` to a peer the multiplayer API has
+	# never heard of, and every green run printed "Attempt to call RPC with unknown peer
+	# ID: 4242" six times. Caught on the link's loopback instead, for the rest of the run
+	# (the module's reload in `_test_unload` builds a new link without it): what was sent
+	# becomes a check, and a real unknown-peer line in this suite's stderr is a real one.
+	# `_test_bots` silences dot-net's own send for the same reason, before its sessions.
+	var link: Variant = module.bridge.link if module.bridge != null else null
+	if link != null:
+		link.loopback = func(method: StringName, peer_id: int, _payload: PackedByteArray) -> void:
+			_caught.append({"method": method, "peer": peer_id})
+
 	# The payload dot-server actually fires: `{"userid", "name"}`. No peer_id.
 	_server.events.fire("client_spawn", {"userid": session.userid, "name": session.display_name})
+
+	_check(
+		link != null and _caught.any(func(c: Dictionary) -> bool: return c["method"] == &"event" and c["peer"] == 4242),
+		"the join is announced to the joiner's PEER (4242), caught on the link's loopback",
+		str(_caught)
+	)
 
 	_check(
 		_game.player_ids().size() == before + 1,
@@ -969,6 +993,18 @@ func _test_bots() -> void:
 
 	_check(_server.console.find_cvar("bot_quota") != null and _server.console.get_string("bot_quota_mode", "") == "fill",
 		"bot_quota is the module's and fill is the default", _server.console.get_string("bot_quota_mode", ""))
+
+	# Everything sent between the client spawning and here went to 4242 alone, and the
+	# snapshots did reach it: the loopback caught them rather than nothing being sent.
+	var peers := {}
+	var snapshots := 0
+	for c: Dictionary in _caught:
+		peers[c["peer"]] = true
+		if c["method"] == &"snapshot":
+			snapshots += 1
+	_check(peers.keys() == [4242] and snapshots > 0,
+		"the adopted session was sent its snapshots, and nobody else was sent anything",
+		"%d snapshots, peers %s" % [snapshots, str(peers.keys())])
 
 	# The sessions this suite adopts have no peer behind them, and seconds of ticking would
 	# send each a snapshot an RPC error at a time; headless_admin does the same.
