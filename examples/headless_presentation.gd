@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 196
+const CHECKS := 208
 
 var _passed := 0
 var _failed := 0
@@ -82,6 +82,7 @@ func _run() -> void:
 	_test_criticals_and_the_body()
 	_test_feedback_from_the_wire()
 	_test_stock_avatars_differ()
+	await _test_hud_fits_the_frame()
 
 	print("")
 	_check(
@@ -1446,6 +1447,99 @@ func _check(condition: bool, what: String, detail: String = "") -> bool:
 		print("  FAIL  %s" % what)
 		_failures.append(what if detail == "" else "%s — %s" % [what, detail])
 	return condition
+
+
+# --- The HUD on a small frame -------------------------------------------------
+
+## Every piece of the HUD put up at once, as `screenshot.sh --glance` stages it, on five
+## frames, and no piece's drawn rect may meet another's. Standalone at 854x480 the
+## challenge ran over the scores, the ability bar and "Cancel slide" over the health, the
+## medals over the portraits; at 960x720 the scores reached the kill feed. A headless frame
+## is 64 px, so the HUD is laid out on each frame by hand (`fit_to_frame`): what is checked
+## is the arithmetic that places things, and the render (`--glance` at those sizes) is
+## still what says they look right.
+func _test_hud_fits_the_frame() -> void:
+	_section("No piece of the HUD lies over another, from a phone to a desktop frame")
+
+	var hud := ArenaHud.new()
+	hud.config = DotUiConfig.new()
+	add_child(hud)
+	hud.build(null)
+	# Nothing reads a player here: the pieces draw what they are handed, and `_process`
+	# would hand them a dead player's nothing.
+	hud.set_process(false)
+	hud._build_feedback()
+
+	hud.strip.visible = true
+	hud.strip.show_scores(4, 4, "YOU", "2ND  GAMEMANN", Color.BLUE, Color.RED)
+	hud.strip.show_clock("9:37", false, "First to 25", "Free-For-All")
+	hud.portraits.visible = true
+	var faces: Array[Dictionary] = []
+	for i in range(8):
+		faces.append({"name": "P%d" % i, "rank": i + 1, "kills": 8 - i, "me": i == 0})
+	hud.portraits.show_players(faces)
+	hud.feed.add_kill("gamemann", Color.WHITE, &"launcher", "launcher", "Rocket", Color.WHITE)
+	hud.feed.add_kill("You", Color.WHITE, &"marksman", "marksman", "quiet_one", Color.WHITE, false, true)
+	hud.feed.add_kill("a_very_long_display_name", Color.WHITE, &"sniper", "sniper", "Viper", Color.WHITE, true)
+	hud.vitals.show_vitals(64.0, 100.0, 35.0)
+	hud.ammo.show_ammo("Marksman rifle", 3, 240, false)
+	var carried: Array[Dictionary] = []
+	for slot in range(1, 6):
+		carried.append({"slot": slot, "id": &"rifle", "name": "Rifle", "key": str(slot)})
+	hud.slots.show_slots(carried, 3)
+	var buttons: Array[Dictionary] = []
+	for b in [["slide", "C"], ["launch", "E"], ["dash", "Shift"], ["walljump", "Space"]]:
+		buttons.append({"id": StringName(b[0]), "label": b[0], "icon": null, "key": b[1],
+			"left": 0.0, "total": 1.0, "active": false, "pips": 2, "pips_max": 3 if b[0] == "walljump" else 0})
+	hud.abilities.show_buttons(buttons)
+	hud.hints.show_hints([["Scoreboard", "Tab"], ["Menu", "Esc"], ["Chat", "Y"], ["Slide", "C"]])
+	hud.slide_label.show_prompt("Cancel slide", "C")
+	hud.streak_meter.set_count(3, ArenaHud.STREAK_FULL)
+	hud.medal_row.add(ArenaAwards.Medal.HEADSHOT, "Headshot")
+	hud.medal_row.add(ArenaAwards.Medal.DOUBLE_KILL, "Double Kill")
+	hud.medal_row.advance(1.0)
+	hud.present_challenge(false)
+	hud.challenge_label.text = "Veteran — Ten hours in the arena  (2/36000)"
+	hud.challenge_label.visible = true
+	hud.challenge_bar.visible = true
+
+	var frames := [Vector2(854, 480), Vector2(960, 720), Vector2(720, 1280), Vector2(1280, 720), Vector2(1600, 900)]
+	for frame: Vector2 in frames:
+		hud.fit_to_frame(frame)
+		hud.notice("Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)")
+		# The labels take their text's size on the next frame.
+		await get_tree().process_frame
+		var rects := hud.footprints()
+		var keys: Array = rects.keys()
+		var met := PackedStringArray()
+		var outside := PackedStringArray()
+		var bounds := Rect2(Vector2.ZERO, frame)
+		for i in range(keys.size()):
+			var a: Rect2 = rects[keys[i]]
+			if not bounds.encloses(a):
+				outside.append("%s %s" % [keys[i], a])
+			for j in range(i + 1, keys.size()):
+				if a.intersects(rects[keys[j]]):
+					met.append("%s/%s" % [keys[i], keys[j]])
+		var size_name := "%dx%d" % [int(frame.x), int(frame.y)]
+		_check(met.is_empty() and keys.size() == 15,
+			"at %s, none of the %d pieces meets another" % [size_name, keys.size()], ", ".join(met))
+		_check(outside.is_empty(), "and every one is inside the frame", ", ".join(outside))
+
+	# 1280x720 and up are laid out exactly as dot-ui's full-rect inset laid them out.
+	var same := true
+	for frame: Vector2 in [Vector2(1280, 720), Vector2(1600, 900), Vector2(1920, 1080)]:
+		hud.fit_to_frame(frame)
+		same = same and hud.scale == Vector2.ONE and hud.position == Vector2(16, 16) and hud.size == frame - Vector2(32, 32)
+	_check(same, "from 1280x720 up the HUD is not scaled, and sits where it always did")
+	_check(is_equal_approx(ArenaHud.fit_scale(Vector2(854, 480)), 480.0 / 720.0)
+			and is_equal_approx(ArenaHud.fit_scale(Vector2(960, 720)), 0.75)
+			and is_equal_approx(ArenaHud.fit_scale(Vector2(720, 1280)), 0.5625)
+			and ArenaHud.fit_scale(Vector2(200, 100)) == ArenaHud.FIT_MIN,
+		"below it, it is scaled by the short side's share of 1280x720, never under half")
+
+	hud.queue_free()
+	_done()
 
 
 # --- The map vote ------------------------------------------------------------

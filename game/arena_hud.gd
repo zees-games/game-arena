@@ -227,6 +227,17 @@ class StreakMeter extends Control:
 		_shown = move_toward(_shown, clampf(fraction, 0.0, 1.0), delta * 2.5)
 		queue_redraw()
 
+	## The bar and the flame over it: a thin column. The words under it are
+	## [method label_footprint], apart, because one box round both would take in the key
+	## hints beside the bar.
+	func footprint() -> Rect2:
+		return Rect2(-10.0, -36.0, 30.0, size.y + 37.0)
+
+	## "Killstreak xN" under the bar.
+	func label_footprint() -> Rect2:
+		var w := Look.feedback_font(true).get_string_size("Killstreak x%d" % count, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17).x
+		return Rect2(-17.0, size.y + 8.0, w + 6.0, 24.0)
+
 	func _draw() -> void:
 		var width := 10.0
 		var track := Rect2(0.0, 0.0, width, size.y)
@@ -402,6 +413,19 @@ class MedalRow extends Control:
 			var m := visible_now[i]
 			m["x"] = target if is_nan(float(m["x"])) else lerpf(float(m["x"]), target, minf(1.0, delta * 12.0))
 		queue_redraw()
+
+	## Every medal on screen at full size, its badge and its name under it.
+	func footprint() -> Rect2:
+		var centre := Vector2(size.x * 0.5, size.y * 0.27)
+		var out := Rect2()
+		for m in shown:
+			if float(m["age"]) < 0.0 or is_nan(float(m["x"])):
+				continue
+			var w := maxf((RADIUS + 4.0) * 2.0,
+				Look.feedback_font(true).get_string_size("%s!" % String(m["label"]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 20).x + 6.0)
+			var one := Rect2(centre.x + float(m["x"]) - w * 0.5, centre.y - RADIUS - 4.0, w, RADIUS * 2.0 + 38.0)
+			out = one if not out.has_area() else out.merge(one)
+		return out
 
 	func _draw() -> void:
 		var centre := Vector2(size.x * 0.5, size.y * 0.27)
@@ -713,6 +737,54 @@ func set_safe_area(pixels: float) -> void:
 	_fit_feed()
 
 
+## The frame the HUD is drawn for: below it the whole HUD is scaled down, never laid out
+## again. [b]On a frame smaller than this its pieces ran into each other[/b]: standalone at
+## 854x480 the challenge ran over the scores, the ability bar over the health, the medals
+## over the portraits and "Cancel slide" over the health; at 960x720 the scores reached the
+## kill feed. The client shell never shows a game a frame like that (its canvas is
+## 1280x720, stretched to the window), so this is the same answer the shell gives, for the
+## game on its own. Never larger: on a bigger frame the pieces keep their size and the map
+## gets the room. 1280x720 and up are drawn exactly as before.
+const DESIGN_FRAME := Vector2(1280.0, 720.0)
+
+## Below half size the words are unreadable anyway; a frame that small gets overlap, not
+## dust.
+const FIT_MIN := 0.5
+
+
+## How much the HUD is scaled on a frame [param frame] pixels: 1 at 1280x720 and up, less
+## when either side is short of it.
+static func fit_scale(frame: Vector2) -> float:
+	return clampf(minf(frame.x / DESIGN_FRAME.x, frame.y / DESIGN_FRAME.y), FIT_MIN, 1.0)
+
+
+## The viewport size the HUD was last fitted to; [method _process] refits when it moves.
+var _seen_frame := Vector2.ZERO
+
+
+## dot-ui's inset, and the fit to the frame: a `DotHud` anchors itself to the whole rect,
+## which cannot scale, so this one is placed by hand. Called by `DotHud._ready` and
+## [method set_safe_area].
+func _apply_safe_area() -> void:
+	_seen_frame = get_viewport_rect().size if is_inside_tree() else DESIGN_FRAME
+	fit_to_frame(_seen_frame)
+
+
+## Lays the HUD out on a frame [param frame] pixels: inset by the safe area, scaled by
+## [method fit_scale], in units that are 1280x720 or more however small the frame. Public so
+## a suite can lay it out on a frame it does not have (a headless one is 64 px).
+func fit_to_frame(frame: Vector2) -> void:
+	if config == null:
+		config = DotUiConfig.new()
+	var fit := fit_scale(frame)
+	# In the HUD's own units, as the feed's rows are (`feed_lines_clear`): scaled with it.
+	var inset := config.safe_area * config.scale
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
+	scale = Vector2(fit, fit)
+	position = Vector2(inset, inset) * fit
+	size = frame / fit - Vector2(inset, inset) * 2.0
+
+
 ## Where the client shell's right-hand column starts, in frame pixels: its game ballot and
 ## its lines are drawn from here down, a third of the frame wide (dot-server-deploy's
 ## `client/notice_overlay.gd`, `COLUMN_TOP`; a copy, keep in step).
@@ -947,6 +1019,33 @@ func _make_label(
 	return label
 
 
+## Where each piece of the HUD draws, in frame pixels: what it puts on screen, not its
+## `Control`'s box (the feed's box is 460 wide; its rows are as wide as their names). Only
+## pieces drawn now. What `headless_presentation` checks for overlap on small frames.
+func footprints() -> Dictionary:
+	var out := {}
+	var pieces := {
+		"scores": strip, "portraits": portraits, "feed": feed, "vitals": vitals,
+		"ammo": ammo, "slots": slots, "abilities": abilities, "hints": hints,
+		"prompt": slide_label, "streak": streak_meter, "medals": medal_row,
+	}
+	for key: String in pieces:
+		var piece: Control = pieces[key]
+		if piece == null or not piece.is_visible_in_tree():
+			continue
+		var local: Rect2 = piece.call(&"footprint")
+		if local.has_area():
+			out[key] = piece.get_global_transform() * local
+	if streak_meter != null and streak_meter.is_visible_in_tree():
+		out["streak_label"] = streak_meter.get_global_transform() * streak_meter.label_footprint()
+	for label: Label in [challenge_label, notice_label, objective_label, death_label, coins_label]:
+		if label != null and label.is_visible_in_tree() and label.text != "":
+			out[String(label.name)] = label.get_global_rect()
+	if challenge_bar != null and challenge_bar.is_visible_in_tree():
+		out["challenge_bar"] = challenge_bar.get_global_rect()
+	return out
+
+
 ## Points the HUD at a player. Called on every spawn.
 ##
 ## The widgets hold a `Callable` that reads `player`, so re-pointing this one field
@@ -1067,6 +1166,9 @@ func catch_up(since_tick: int = -1) -> int:
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
+
+	if is_inside_tree() and get_viewport_rect().size != _seen_frame:
+		_apply_safe_area()
 
 	match_view()
 	present_blind(delta)

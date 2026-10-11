@@ -166,9 +166,18 @@ class ScoreStrip extends Control:
 		Ink.plate(self, clock_rect, Color(0.07, 0.08, 0.13, 0.82), 8, Color(1, 1, 1, 0.22), 1)
 		Ink.text(self, Vector2(clock_rect.position.x, clock_rect.end.y - 12.0), clock, 26,
 			LOW if clock_low else TEXT, HORIZONTAL_ALIGNMENT_CENTER, CLOCK_W, 5)
-		var under := target if mode_name == "" else ("%s   ·   %s" % [target, mode_name] if target != "" else mode_name)
+		var under := _under()
 		if under != "":
 			Ink.text(self, Vector2(0.0, H + 22.0), under, 15, Color(TEXT, 0.92), HORIZONTAL_ALIGNMENT_CENTER, size.x, 5)
+
+	func _under() -> String:
+		return target if mode_name == "" else ("%s   ·   %s" % [target, mode_name] if target != "" else mode_name)
+
+	## What it draws, in its own space: the plates and the clock, and the line under them.
+	## `ArenaHud.footprints` reads every piece's, for the layout check.
+	func footprint() -> Rect2:
+		var w := maxf(PLATE_W * 2.0 + GAP * 2.0 + CLOCK_W, Ink.width(_under(), 15))
+		return Rect2(size.x * 0.5 - w * 0.5, 0.0, w, H + 28.0)
 
 	func _side(rect: Rect2, colour: Color, tag: String, score: int) -> void:
 		Ink.plate(self, rect, Color(colour.darkened(0.15), 0.9), 8, Color(1, 1, 1, 0.35), 1)
@@ -191,6 +200,14 @@ class Portraits extends Control:
 	func show_players(p_entries: Array[Dictionary]) -> void:
 		entries = p_entries.slice(0, MAX_SHOWN)
 		queue_redraw()
+
+	## The rank over the first face to the kills under the last.
+	func footprint() -> Rect2:
+		var count := entries.size()
+		if count == 0:
+			return Rect2()
+		var first := size.x * 0.5 - SPACING * float(count - 1) * 0.5
+		return Rect2(first - 30.0, 0.0, SPACING * float(count - 1) + 60.0, 14.0 + RADIUS * 2.0 + 21.0)
 
 	func _draw() -> void:
 		var count := entries.size()
@@ -277,21 +294,41 @@ class KillFeed extends Control:
 	static func _short(name: String) -> String:
 		return name if name.length() <= NAME_MAX else name.substr(0, NAME_MAX - 1) + "…"
 
-	func _row(e: Dictionary, y: float, fade: float) -> void:
+	## Every row's plate, right-aligned, newest at the top.
+	func footprint() -> Rect2:
+		var out := Rect2()
+		var y := 0.0
+		for e in entries:
+			var w := _inner(e) + PAD * 2.0
+			var row := Rect2(size.x - w, y, w, ROW_H)
+			out = row if not out.has_area() else out.merge(row)
+			y += ROW_H + ROW_GAP
+		return out
+
+	const PAD := 10.0
+
+	## A row's width inside its padding: killer, weapon, headshot mark, victim.
+	static func _inner(e: Dictionary) -> float:
 		var tex := Ink.weapon_icon(e["weapon"])
 		var killer := _short(str(e["killer"]))
-		var victim := _short(str(e["victim"]))
 		var killer_w := Ink.width(killer, NAME_SIZE) if killer != "" else 0.0
-		var victim_w := Ink.width(victim, NAME_SIZE)
+		var victim_w := Ink.width(_short(str(e["victim"])), NAME_SIZE)
 		var icon_w := 0.0
 		if tex != null:
 			icon_w = minf(tex.get_size().x * ICON_H / maxf(tex.get_size().y, 1.0), 64.0)
 		else:
 			icon_w = Ink.width("[%s]" % str(e["weapon_text"]), 13)
-		var head := Ink.texture("res://assets/medals/target.png") if bool(e["headshot"]) else null
 		var head_w := 22.0 if bool(e["headshot"]) else 0.0
-		var pad := 10.0
-		var inner := killer_w + (10.0 if killer != "" else 0.0) + icon_w + head_w + 10.0 + victim_w
+		return killer_w + (10.0 if killer != "" else 0.0) + icon_w + head_w + 10.0 + victim_w
+
+	func _row(e: Dictionary, y: float, fade: float) -> void:
+		var tex := Ink.weapon_icon(e["weapon"])
+		var killer := _short(str(e["killer"]))
+		var victim := _short(str(e["victim"]))
+		var killer_w := Ink.width(killer, NAME_SIZE) if killer != "" else 0.0
+		var head := Ink.texture("res://assets/medals/target.png") if bool(e["headshot"]) else null
+		var pad := PAD
+		var inner := _inner(e)
 		var rect := Rect2(size.x - inner - pad * 2.0, y, inner + pad * 2.0, ROW_H)
 		var involved := bool(e["involved"])
 		Ink.plate(self, rect, Color(PLATE, PLATE.a * fade), 6,
@@ -305,10 +342,10 @@ class KillFeed extends Control:
 			x += Ink.icon(self, tex, Vector2(x, y + ROW_H * 0.5), ICON_H, Color(1, 1, 1, fade), 64.0)
 		else:
 			Ink.text(self, Vector2(x, base), "[%s]" % str(e["weapon_text"]), 13, Color(DIM, fade), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 3)
-			x += icon_w
+			x += Ink.width("[%s]" % str(e["weapon_text"]), 13)
 		if head != null:
 			draw_texture_rect(head, Rect2(x + 4.0, y + ROW_H * 0.5 - 8.0, 16.0, 16.0), false, Color(1.0, 0.45, 0.3, fade))
-			x += head_w
+			x += 22.0
 		x += 10.0
 		Ink.text(self, Vector2(x, base), victim, NAME_SIZE, Color(e["victim_colour"], fade), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 4)
 
@@ -328,6 +365,10 @@ class Vitals extends Control:
 			max_health = p_max
 			armour = p_armour
 			queue_redraw()
+
+	## The plate under the bars and the number.
+	func footprint() -> Rect2:
+		return Rect2(0.0, 0.0, bar_end + 22.0 + Ink.width(str(int(ceilf(health))), 30), 72.0 if armour > 0.0 else 56.0)
 
 	func _draw() -> void:
 		var low := max_health > 0.0 and health / max_health <= 0.25
@@ -363,16 +404,23 @@ class AmmoCounter extends Control:
 			low = p_low
 			queue_redraw()
 
-	func _draw() -> void:
-		if weapon_name == "":
-			return
-		var right := size.x
+	func _plate() -> Rect2:
 		var name_w := Ink.width(weapon_name.to_upper(), 15)
 		var count_w := 0.0
 		if magazine >= 0:
 			count_w = Ink.width(str(magazine), 36) + 10.0 + (Ink.width("| %d" % reserve, 22) if reserve >= 0 else 0.0)
 		var plate_w := maxf(name_w, count_w) + 28.0
-		Ink.plate(self, Rect2(right - plate_w + 14.0, -4.0, plate_w, 70.0 if magazine >= 0 else 32.0), PLATE, 9)
+		return Rect2(size.x - plate_w + 14.0, -4.0, plate_w, 70.0 if magazine >= 0 else 32.0)
+
+	## The plate under the name and the count; nothing with nothing in hand.
+	func footprint() -> Rect2:
+		return _plate() if weapon_name != "" else Rect2()
+
+	func _draw() -> void:
+		if weapon_name == "":
+			return
+		var right := size.x
+		Ink.plate(self, _plate(), PLATE, 9)
 		Ink.text(self, Vector2(0.0, 18.0), weapon_name.to_upper(), 15, Color(TEXT, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, right, 4)
 		if magazine < 0:
 			return
@@ -400,6 +448,16 @@ class WeaponSlots extends Control:
 			rows = p_rows
 			current = p_current
 			queue_redraw()
+
+	## Every slot's plate, from the bottom up.
+	func footprint() -> Rect2:
+		if rows.is_empty():
+			return Rect2()
+		var left := size.x
+		for r in rows:
+			left = minf(left, size.x - Ink.keycap_width(str(r.get("key", r["slot"])), 12) - 112.0)
+		var top := size.y - float(rows.size()) * ROW_H + ROW_H * 0.5 - 17.0
+		return Rect2(left, top, size.x + 4.0 - left, float(rows.size() - 1) * ROW_H + 34.0)
 
 	func _draw() -> void:
 		# From the bottom up, so the carried guns sit on the ammunition counter however few
@@ -457,6 +515,14 @@ class AbilityBar extends Control:
 	func has(id: StringName) -> bool:
 		return line(id) != ""
 
+	## The buttons, the wall jump's pips over them and the keys under them.
+	func footprint() -> Rect2:
+		var count := buttons.size()
+		if count == 0:
+			return Rect2()
+		var total_w := SIDE * float(count) + GAP * float(count - 1)
+		return Rect2(size.x * 0.5 - total_w * 0.5, -14.0, total_w, 14.0 + SIDE + 2.0 + 22.0 + 2.0)
+
 	func _draw() -> void:
 		var count := buttons.size()
 		if count == 0:
@@ -511,6 +577,13 @@ class KeyHints extends Control:
 			rows = p_rows
 			queue_redraw()
 
+	## Each row's key and words, from the left edge.
+	func footprint() -> Rect2:
+		var w := 0.0
+		for r in rows:
+			w = maxf(w, Ink.keycap_width(str(r[1]), 12) + 8.0 + Ink.width(str(r[0]), 16))
+		return Rect2(0.0, 0.0, w, float(rows.size()) * ROW_H) if not rows.is_empty() else Rect2()
+
 	func _draw() -> void:
 		# Key first, then the words, from the left edge: the hints are on the left of the
 		# frame (`ArenaHud.build` says why).
@@ -539,6 +612,13 @@ class Prompt extends Control:
 	var text: String:
 		get:
 			return "%s  %s" % [words, key] if words != "" else ""
+
+	## The plate under the words and the key.
+	func footprint() -> Rect2:
+		if words == "":
+			return Rect2()
+		var total := Ink.width(words, 17) + 10.0 + Ink.keycap_width(key, 13)
+		return Rect2(size.x * 0.5 - total * 0.5 - 12.0, 0.0, total + 24.0, 34.0)
 
 	func _draw() -> void:
 		if words == "":

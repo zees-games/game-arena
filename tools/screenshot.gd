@@ -371,13 +371,20 @@ func _stage_shell_ballot() -> void:
 	layer.name = "ShellStandIn"
 	layer.layer = 20
 	root.add_child(layer)
+	# Below 1280x720 the shell draws on a 1280x720 canvas stretched to the window, its
+	# ballot and the game's HUD alike, so the stand-in is scaled by the HUD's own factor
+	# (`ArenaHud.fit_scale`): a full-size ballot over a scaled HUD is a frame the shell
+	# never draws. 1 from 1280x720 up, where nothing changes.
+	var fit := ArenaHud.fit_scale(Vector2(root.size))
+	var canvas := Vector2(root.size) / fit
 	var overlay := Control.new()
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.theme = DotUiTheme.space().build()
 	layer.add_child(overlay)
+	overlay.scale = Vector2(fit, fit)
+	overlay.size = canvas
 
-	var width := clampf(root.size.x * 0.34, 240.0, 360.0)
+	var width := clampf(canvas.x * 0.34, 240.0, 360.0)
 	var column := VBoxContainer.new()
 	column.anchor_left = 1.0
 	column.anchor_right = 1.0
