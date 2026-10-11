@@ -65,6 +65,15 @@ const WINDOWS := [
 ## How long the first-seconds measurement runs, right after A connects.
 const FIRST_SECONDS := 3.0
 
+## How long anything sent reliably may take to land: ENet's own contract, not a guess. With
+## dot-core's peer timeouts a reliable command either arrives within 30 s or the peer is
+## dropped. ENet doubles a command's resend timeout every time it goes unacknowledged, and a
+## try fails if the data OR its acknowledgement is lost: 36% a try at 20% each way. So the
+## tail is long and real: a wait shorter than this is a wait on the dice, and every one that
+## was written shorter (6 s for the windows' streams, 10 s for B's leave, 5 s for the cvars)
+## flaked on exactly that tail. A wait on it ends the moment the thing arrives.
+const RELIABLE_SECONDS := 35.0
+
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
 const OTHER_CHECKS := 24
@@ -392,23 +401,44 @@ func _test_server_cvars_reach_the_client() -> void:
 		"the join carried the server's level and A's world is on it",
 		str(link.replicated_cvars))
 
+	# Each change is one reliable CVARS message through the link, still at the last window's
+	# 20% loss each way, so each wait is RELIABLE_SECONDS. These were 5 s and failed one run
+	# in 30 (2026-10-11): 60 changes measured 48 ms to 4.2 s (one resend 270 ms, three or
+	# four 1.1-2.1 s), and one 2 took past 5 s with the 0 queued behind it, in order on the
+	# channel, landing 9 s after the 2 was sent. At 35 s, six runs: one 2 at 12.3 s, one
+	# change at 4.7 s; the late 2's 0 landed 100 ms after it, so it was arriving all along. What is checked is that the change arrives
+	# and A's rules follow it, not how fast ENet resends; the time is in the detail.
+	var t0 := Time.get_ticks_msec()
+	# What A's link was told, and when: a late change and a lost one look alike otherwise.
+	var told: Array[String] = []
+	var hear := func(cvar_name: String, value: String) -> void:
+		if cvar_name == "mp_teammate_passthrough":
+			told.append("%s at +%d ms" % [value, Time.get_ticks_msec() - t0])
+	var _hear := link.replicated_cvar_changed.connect(hear)
+	var down_from: int = _relay.down.delivered
 	var _two := _server.console.set_cvar("mp_teammate_passthrough", "2")
-	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 2, 5.0),
+	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 2, RELIABLE_SECONDS),
 		"the server goes to 2 and A's combat rules follow, so its predicted shot passes team-mates too",
-		str(a_game.combat.rules.describe()))
+		"%d ms; told %s; %d datagrams down meanwhile; %s" % [Time.get_ticks_msec() - t0, told,
+			_relay.down.delivered - down_from, a_game.combat.rules.describe()])
 	var _zero := _server.console.set_cvar("mp_teammate_passthrough", "0")
-	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 0, 5.0),
-		"and to 0", str(a_game.combat.rules.describe()))
+	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 0, RELIABLE_SECONDS),
+		"and to 0", "+%d ms; told %s; %s" % [Time.get_ticks_msec() - t0, told, a_game.combat.rules.describe()])
 
-	# A map change builds A's world a new manager: it keeps following.
+	# A map change builds A's world a new manager: it keeps following. Held to what the link
+	# holds, not to 0, so a 0 that never came fails "and to 0" above and not this as well;
+	# the held value must not be the default, or the check could not tell.
+	var held := link.replicated_cvar("mp_teammate_passthrough")
 	var rebuilt := a_game.change_map(a_game.map)
-	_check(rebuilt.ok and a_game.combat.rules.pass_through_level() == 0,
+	_check(rebuilt.ok and held != "1" and a_game.combat.rules.pass_through_level() == int(held),
 		"a manager A's world builds for a new map starts on the server's level, not the default",
-		"level %d" % a_game.combat.rules.pass_through_level())
+		"level %d, the link holds %s" % [a_game.combat.rules.pass_through_level(), held])
 	var _two_again := _server.console.set_cvar("mp_teammate_passthrough", "2")
-	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 2, 5.0),
-		"and the next change reaches it")
+	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 2, RELIABLE_SECONDS),
+		"and the next change reaches it", "+%d ms; told %s" % [Time.get_ticks_msec() - t0, told])
 	var _one := _server.console.set_cvar("mp_teammate_passthrough", "1")
+	# The leave section reuses A's link; a listener left behind would outlive this section.
+	link.replicated_cvar_changed.disconnect(hear)
 	_done()
 
 
@@ -825,11 +855,10 @@ func _play_window(window: Array) -> void:
 				next_slay += 300
 		await get_tree().process_frame
 
-	# Everything sent in the window gets 35 seconds to land; the wait ends the moment it
-	# has. 35 because the contract is ENet's own: with dot-core's peer timeouts a reliable
-	# command either arrives within 30 s or the peer is dropped, and a drop fails "still
-	# connected" above. Twenty failed one run in twenty (2026-10-09). ENet doubles a reliable command's resend timeout every time it goes unacknowledged,
-	# and a resend fails if the data OR its acknowledgement is lost: 36% a try at 20% each
+	# Everything sent in the window gets RELIABLE_SECONDS to land; the wait ends the moment
+	# it has. A drop fails "still connected" above. Twenty failed one run in twenty
+	# (2026-10-09). ENet doubles a reliable command's resend timeout every time it goes
+	# unacknowledged, and a resend fails if the data OR its acknowledgement is lost: 36% a try at 20% each
 	# way, not 20%. Five failures in a row, about one command in a hundred and seventy (a
 	# window sends a few hundred), is 31 resend timeouts of ~230 ms, seven seconds; everything
 	# behind it on the channel waits too, because ENet delivers a channel in order. Six
@@ -840,7 +869,7 @@ func _play_window(window: Array) -> void:
 			and _got_kills.size() - got_kills_from >= _sent_kills.size() - kills_from \
 			and _got_chat.size() - got_chat_from >= _sent_chat.size() - chat_from \
 			and _got_a_chat.size() - got_a_chat_from >= _sent_a_chat.size() - a_chat_from,
-		35.0)
+		RELIABLE_SECONDS)
 
 	_measure_window(title, loss,
 		_sent_notices.slice(notices_from), _got_notices.slice(got_notices_from),
@@ -1142,10 +1171,9 @@ func _test_leave() -> void:
 	var b_net: DotNetManager = b["net"]
 	b_net.stop()
 
-	# 35 s, the windows' contract: the link is still at the last window's 20% loss, and a
-	# reliable message there either lands inside ENet's 30 s or the peer is dropped. Ten
-	# failed a CI release run (v0.1.6) on exactly that tail; the wait ends when A is told.
-	var gone := await _until(func() -> bool: return a_game.player_for(b_session) == null, 35.0)
+	# RELIABLE_SECONDS: the link is still at the last window's 20% loss. Ten failed a CI
+	# release run (v0.1.6) on exactly that tail; the wait ends when A is told.
+	var gone := await _until(func() -> bool: return a_game.player_for(b_session) == null, RELIABLE_SECONDS)
 	_check(gone, "A's B is gone once the server has seen the disconnect",
 		"the server has %d sessions and %s B in its game" % [
 			_server.sessions().size(), "still has" if _game.player_for(b_session) != null else "no longer has"])
