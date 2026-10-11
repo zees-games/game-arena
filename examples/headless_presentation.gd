@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 194
+const CHECKS := 196
 
 var _passed := 0
 var _failed := 0
@@ -689,6 +689,21 @@ func _test_every_key_is_an_action() -> void:
 	_check(
 		str(older["label"]).contains("(wheel up)") and str(older["default"]) == "Mouse 4",
 		"and keep the (wheel up) label on an older dot-ui", str(older)
+	)
+
+	# Both branches only matter if an older shell gets to run them. A pack asks for the
+	# level of every addon it was built against, so requires.floor.json lowers dot-ui and
+	# dot-lighting to 1 for the release's requires.json; dot-core's floor_audit refuses it
+	# once a guard it relies on is gone, here rather than at the release.
+	var floors := DotAddonApi.parse(FileAccess.get_file_as_string("res://" + DotAddonApi.FLOOR_FILE), DotAddonApi.FLOOR_FILE)
+	var derived := DotAddonApi.derive()
+	var unsound := DotAddonApi.floor_audit(floors.value if floors.ok else {}, derived, DotAddonApi.guarded()) \
+		if floors.ok else PackedStringArray([str(floors.error)])
+	_check(unsound.is_empty(), "requires.floor.json is sound: every floor has a guard behind it", str(unsound))
+	var asked := DotAddonApi.apply_floors(derived, floors.value if floors.ok else {})
+	_check(
+		asked.get("dot_ui") == 1 and asked.get("dot_lighting") == 1,
+		"so a pack asks an older shell for dot-ui 1 and dot-lighting 1", str(asked)
 	)
 
 	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.
