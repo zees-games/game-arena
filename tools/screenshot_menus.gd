@@ -35,6 +35,10 @@ var _done := false
 
 func _initialize() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
+	# A scratch settings document, never this machine's real one (see
+	# `ArenaPresentation.use_scratch_settings`): a render must not save into a player's file,
+	# and must draw from the defaults rather than whatever the last run left there.
+	var _scratch := ArenaPresentation.use_scratch_settings("screenshot_menus")
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 	_shots = [
 		{"id": &"menu", "page": &"general", "file": "menu_general.png"},

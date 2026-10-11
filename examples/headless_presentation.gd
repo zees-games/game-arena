@@ -30,7 +30,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 170
+const CHECKS := 172
 
 var _passed := 0
 var _failed := 0
@@ -39,7 +39,17 @@ var _entered := 0
 var _completed := 0
 
 
+## The player's own settings file as it was before this run: its modification time, or -1
+## for none. Checked at the end; see [method ArenaPresentation.use_scratch_settings].
+var _player_file_was: int = -1
+
+
 func _ready() -> void:
+	# Before anything builds a presentation layer: every settings document this suite
+	# writes (`field_of_view 110` at the console, a volume dragged in the menu, a key
+	# rebound) goes to a scratch directory emptied first, never this machine's real one.
+	_player_file_was = _player_file_stamp()
+	var _scratch := ArenaPresentation.use_scratch_settings("headless_presentation")
 	DotLog.set_level(
 		DotLog.Level.DEBUG if "--verbose" in OS.get_cmdline_user_args()
 		else DotLog.Level.ERROR
@@ -72,6 +82,11 @@ func _run() -> void:
 
 	print("")
 	_check(
+		_player_file_stamp() == _player_file_was,
+		"the player's own settings file was not touched",
+		ArenaPresentation.PLAYER_SETTINGS
+	)
+	_check(
 		_completed == _entered,
 		"every section ran to its last line (%d of %d)" % [_completed, _entered],
 		"a section that aborted stops adding checks and the total cannot show it"
@@ -95,6 +110,12 @@ func _run() -> void:
 ## A presentation layer, set up. [param console] builds its console with no menu, which is
 ## what a suite that wants the console alone needs; the client builds it after its menu
 ## ([method ArenaPresentation.build_console]).
+## When the player's own settings document was last written, or -1 when there is none.
+static func _player_file_stamp() -> int:
+	var path := ProjectSettings.globalize_path(ArenaPresentation.PLAYER_SETTINGS).path_join("game_arena.local.json")
+	return FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+
+
 func _make(console: bool = true) -> ArenaPresentation:
 	var p := ArenaPresentation.new()
 	p.name = "P%d" % _entered
@@ -112,6 +133,11 @@ func _test_schema() -> void:
 
 	var s := ArenaPresentation.schema()
 	_check(s.validate().ok, "the schema validates")
+	_check(
+		ArenaPresentation.settings_directory.begins_with("user://scratch/"),
+		"this suite's settings are a scratch document, not the player's",
+		ArenaPresentation.settings_directory
+	)
 
 	var clamped := s.keys_in_scope(DotSettingsDef.Scope.SERVER_CLAMPED)
 	_check(clamped.has(&"field_of_view"), "a server may cap the field of view")

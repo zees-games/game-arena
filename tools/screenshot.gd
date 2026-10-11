@@ -46,6 +46,10 @@ var _hud: ArenaHud = null
 
 
 func _initialize() -> void:
+	# A scratch settings document, never this machine's real one (see
+	# `ArenaPresentation.use_scratch_settings`): a render must not save into a player's file,
+	# and must draw from the defaults rather than whatever the last run left there.
+	var _scratch := ArenaPresentation.use_scratch_settings("screenshot")
 	var args := OS.get_cmdline_user_args()
 	var map_index := args.find("--map")
 	var id := StringName(args[map_index + 1]) if map_index >= 0 and map_index + 1 < args.size() else &"dm_box"

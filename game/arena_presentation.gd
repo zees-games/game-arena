@@ -26,6 +26,13 @@ const CHANNEL := "arena.presentation"
 
 const SCHEMA_VERSION := 1
 
+## Where the player's settings document lives. Only a suite or a render tool changes it,
+## through [method use_scratch_settings]; see that.
+const PLAYER_SETTINGS := "user://arena_settings"
+
+## The directory the next [ArenaPresentation] stores its settings in.
+static var settings_directory: String = PLAYER_SETTINGS
+
 const SOUND_DIR := "res://audio"
 
 ## The ping an administrator's beacon makes. See [method sound_catalogue].
@@ -229,13 +236,32 @@ static func schema() -> DotSettingsSchema:
 	# Applied by the client's DotMenuApplier and DotMenu; the console binds them by name.
 	return DotMenuStock.declare(s, [DotMenuStock.GROUP_VIDEO, DotMenuStock.GROUP_INTERFACE] as Array[StringName])
 
+## Points every [ArenaPresentation] made after this at a fresh, empty settings directory
+## named [param tag], and returns it.
+##
+## [b]For a suite or a render tool, never a player.[/b] `headless_presentation` types
+## `field_of_view 120` at the console and used to leave it in this machine's real
+## `user://arena_settings`, so the next real session, and every screenshot after it, drew
+## at 120. A scratch directory emptied first also makes a run start from the defaults
+## rather than from whatever the last one left.
+static func use_scratch_settings(tag: String) -> String:
+	var dir := "user://scratch/%s" % tag
+	var abs_dir := ProjectSettings.globalize_path(dir)
+	if DirAccess.dir_exists_absolute(abs_dir):
+		for f in DirAccess.get_files_at(abs_dir):
+			var _gone := DirAccess.remove_absolute(abs_dir.path_join(f))
+	else:
+		var _made := DirAccess.make_dir_recursive_absolute(abs_dir)
+	settings_directory = dir
+	return dir
+
 
 
 func _build_settings() -> DotResult:
 	settings = DotSettingsManager.new()
 	settings.name = "Settings"
 	settings.schema = schema()
-	settings.local_store = DotSettingsStoreFile.new("user://arena_settings")
+	settings.local_store = DotSettingsStoreFile.new(settings_directory)
 	settings.app_namespace = &"game_arena"
 	settings.shared_namespace = &"tmc_account"
 	add_child(settings)

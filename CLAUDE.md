@@ -38,6 +38,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - **Run the suites after changing any dot-* addon this game links.** That is what this project is for. [testing](docs/testing.md)
 - `headless_presentation` is the only suite with a client in it; `headless_lossy` is the only one with real ENet and real loss (about 50 s, real time). [testing](docs/testing.md#the-suites)
 - Read every suite's stderr even when it exits 0; cap every run with `timeout`. [testing](docs/testing.md#traps-the-suites-have-hit)
+- A suite or tool that builds a presentation or client calls `ArenaPresentation.use_scratch_settings` first: never the player's file. [testing](docs/testing.md#traps-the-suites-have-hit)
 - **Look at it.** No check reaches the screen: `tools/screenshot.sh <map> [--view|--admin|--fx|--feel]`, `tools/screenshot_menus.sh`, `tools/screenshot_weapons.sh`, `tools/render_wall_moves.sh` (a move as a frame sequence), under `xvfb-run`. [client](docs/client.md#looking-at-it)
 - Without the `maps/imported` link the three built-in maps play and the imported checks skip; that is supported.
 

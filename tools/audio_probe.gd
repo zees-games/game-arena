@@ -47,6 +47,10 @@ var _failed := 0
 
 func _initialize() -> void:
 	DotLog.set_level(DotLog.Level.WARN)
+	# A scratch settings document, never this machine's real one (see
+	# `ArenaPresentation.use_scratch_settings`): a render must not save into a player's file,
+	# and must draw from the defaults rather than whatever the last run left there.
+	var _scratch := ArenaPresentation.use_scratch_settings("audio_probe")
 	print("driver:  %s" % AudioServer.get_driver_name())
 
 

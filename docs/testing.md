@@ -37,6 +37,7 @@ It measures A's first three seconds, then a steady 55 ms window and 5% and 20% l
 - **A map check drives a walking bot** ([maps](maps.md#every-map-is-surveyed)).
 - **A check that depends on how an earlier section ended is not a check.** The horde gunner check chooses a spot with line of sight and strips spawn protection from its target; the movement-rules section runs after the weapons section because this harness fires every eighth tick and spent the magazine.
 - **`headless_net` has no input lead**: a lost packet is a tick the server runs on the previous command, so a check of a predicted move there allows a hand's width mid-move and asks for agreement once down. `headless_lossy` has the real buffer and holds 5 cm.
+- **A suite or render tool never writes the player's settings.** `headless_presentation` typed `field_of_view 120` at the console into this machine's real `user://arena_settings` on every run, and every session and screenshot after it drew at 120. `ArenaPresentation.use_scratch_settings(<tag>)` points every presentation built after it at an emptied `user://scratch/<tag>/`; `headless_presentation` and all four tools that build a presentation or a client call it first, and the suite checks the player's file was not touched.
 - **Arm every new check**: put the bug back and watch it fail. A check that has never failed may be asserting the bug (the effect-scene check once asserted a gib was refused "for the missing file").
 
 ## The detector for methods nothing calls
