@@ -98,7 +98,7 @@ game-g2gfast has its own copy of the generator with its own numbers (a 72-unit h
 
 No assertion sees the screen. Render and look after any change to the client, a menu or a map:
 
-- `tools/screenshot.sh <map>` renders a map from three angles into `screenshots/`; `--view <name> <from> <at>` adds a frame, `--admin` the beacon and blind, `--fx <eye> <aim>` six shots and a death, `--feel` the HUD, scope, drops and body breaking. On an imported map it plays a short deathmatch first and adds player, ramp, water and booster frames.
+- `tools/screenshot.sh <map>` renders a map from three angles into `screenshots/`, a built-in map under its own lighting document exactly as the client draws it; `RENDERER=gl_compatibility` renders what the client shell draws ([maps](maps.md#colour-and-light)); `--view <name> <from> <at>` adds a frame, `--admin` the beacon and blind, `--fx <eye> <aim>` six shots and a death, `--feel` the HUD, scope, drops and body breaking. On an imported map it plays a short deathmatch first and adds player, ramp, water and booster frames.
 - `tools/screenshot_menus.sh` renders the pause menu, the interface screen, the rebinder, the scoreboard, the HUD with the chat box, and the console open (`hud_console.png`). The chat box sits at `margin_bottom = 110` to clear health and armour, and only the picture can say whether 110 is right. It refuses to save a grey rectangle when a `push` fails.
 - `tools/screenshot_weapons.sh` plays the offline client through its own input path.
 - `~/stack/game-dev/tools/screenshot.sh game-arena out.png --wait 35 -- --offline` is the real offline client. Arena starts in warmup, so an early frame lies.

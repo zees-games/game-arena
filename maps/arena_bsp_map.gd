@@ -36,13 +36,14 @@ const ArenaPaths := preload("../game/arena_paths.gd")
 ## - [b]Timer zones.[/b] dot-timer is not in this game. A combat surf map has no finish by
 ##   definition (that is what its `"kind": "arena"` says); the only zones arena reads are
 ##   the pits, which are a teleport.
-## - [b]The map's sky, sun and fog.[/b] Those are dot-lighting in g2gfast, which arena does
-##   not link. The surfaces are `unshaded` and lit by the baked lightmap alone, so the
-##   world looks like the map; only the background behind it is arena's.
+## - [b]The map's sky, sun and fog.[/b] Those are dot-lighting in g2gfast. Arena links
+##   dot-lighting for its built-in maps but does not read an imported map's `lighting`
+##   block yet (`arena_map_lighting.gd` gives it the old fixed light). The surfaces are
+##   `unshaded` and lit by the baked lightmap alone, so the world looks like the map; only
+##   the background behind it is arena's.
 ## - [b]Kenney stand-ins and g2gfast's prototype set[/b] for a texture the map did not
 ##   carry. Arena's own generated grid ([method ArenaMap.dev_texture]) is drawn instead,
-##   tinted the colour the map's compiler measured for that texture — the same grid the
-##   built-in maps wear, which is this game's look.
+##   tinted the colour the map's compiler measured for that texture.
 ## - [b]Pushes, water, ladders and moving blocks[/b] (`mechanics`). Not run here; see the
 ##   game's docs/imported-maps.md.
 

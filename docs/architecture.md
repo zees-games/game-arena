@@ -82,7 +82,7 @@ Inside a player's tick, the map's own mechanics run after the controller's move 
 
 `ArenaMap` holds a list of `AABB`s. `to_scene()` makes meshes and static bodies, `to_fps_body()` makes a `DotFpsFlatBody`, `to_trace()` makes a `DotTraceFlat`. Building those independently is the obvious approach and it is wrong in a way nothing reports: the server's idea of a wall moves a metre and shots start passing through something clients can see. The self-test asserts all three have the same box count and that a shot at the perimeter stops at it.
 
-It is also why a dev-textured game is easy to reason about: the geometry is the gameplay, and there is no separate art pass that could disagree with it. The texture is generated (`ArenaMap.dev_texture`) and triplanar-mapped, because a `BoxMesh` UV-maps every face to the same 0..1 square; without triplanar a two-metre box and a forty-metre wall show the same number of grid squares and the texture stops telling you about scale, which is its only job.
+It is also why a dev-textured game is easy to reason about: the geometry is the gameplay, and there is no separate art pass that could disagree with it. The texture is Kenney's prototype grid tinted per zone ([maps](maps.md#colour-and-light)) and triplanar-mapped, because a `BoxMesh` UV-maps every face to the same 0..1 square; without triplanar a two-metre box and a forty-metre wall show the same number of grid squares and the texture stops telling you about scale, which is its only job.
 
 An imported combat surf map has no box list and is the one exception; it keeps the same rule by other means ([imported maps](imported-maps.md#the-solid-is-the-games-on-every-machine)).
 

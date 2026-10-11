@@ -161,7 +161,7 @@ The vote for the next map is [dot-vote](https://github.com/modcommunity/dot-vote
 [`CLAUDE.md`](CLAUDE.md) has the reasoning behind each of these.
 
 ## Credits
-The characters are from Kenney's character kits, and the weapons are from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons), which credits its own art. Kenney's assets are CC0.
+The characters are from Kenney's character kits, the built-in maps' grid is Kenney's [Prototype Textures](https://kenney.nl/assets/prototype-textures) (`assets/prototype/`), and the weapons are from [zee-dot-weapons](https://github.com/gamemann/zee-dot-weapons), which credits its own art. Kenney's assets are CC0.
 
 The combat surf maps are other people's work, imported by game-g2gfast. [g2gfast-maps](https://github.com/gamemann/g2gfast-maps) credits each one's author and where it came from (`maps.json`), and `arena_maps` names the author beside each one.
 

@@ -4,6 +4,7 @@ const ArenaMap := preload("arena_map.gd")
 const ArenaBspMap := preload("arena_bsp_map.gd")
 const ArenaImportedMaps := preload("arena_imported_maps.gd")
 const ArenaMapMechanics := preload("arena_map_mechanics.gd")
+const ArenaMapPaint := preload("arena_map_paint.gd")
 
 ## A level as a list of boxes, and the three things that list becomes.
 ##
@@ -81,6 +82,55 @@ var climbs: Array[Climb] = []
 ## so an unreachable top is a decision somebody wrote down rather than a thing nobody
 ## noticed. Append through [method add_out_of_reach].
 var out_of_reach: Array[AABB] = []
+
+
+## Named colour zones, checked before the compass sides: `{name, region: AABB, colour}`.
+##
+## [b]Paint, not geometry: nothing that reads [member boxes] reads this.[/b] The survey,
+## the movement body, the trace and `MAP_VERSIONS` see the same list they saw before, so a
+## repaint is never a new map. See `arena_map_paint.gd` for how a box's colour is chosen.
+var paint_zones: Array[Dictionary] = []
+
+
+## How this map is lit: a dot-lighting document (`DotLightDocument.from_dictionary`).
+##
+## Carried by the map so it changes with the map; `arena_map_lighting.gd` applies it.
+var lighting: Dictionary = DAYLIGHT.duplicate(true)
+
+
+## A clear afternoon: a warm sun high in the south-west, a blue sky, a little haze at the
+## far walls.
+##
+## [b]The sun angles are in dot-lighting's source convention[/b] (a negative pitch is a sun
+## in the sky; `DotLightRig.sun_rotation` converts the direction, not the angles). The
+## brightness is what the rig divides by its reference (200) and square-roots, so 380 is an
+## energy of about 1.4. The ambient colour is the light in the shade: a pale cool grey, not
+## a sky blue, because at the ambient's strength a saturated blue turns every shaded face
+## navy and a yellow crate olive. The fog is what the horizon is drawn in and hazes only
+## the far side of dm_atrium's yard; its distances are source units (metres / 0.01905).
+##
+## `sky_top` is this game's, not dot-lighting's (the document ignores keys it does not
+## know): dot-lighting draws the zenith in the ambient colour, which is right for a world
+## whose ambient was measured from its sky and wrong here, where the shade is deliberately
+## paler than the sky. `arena_map_lighting.gd` repaints the zenith with it.
+const DAYLIGHT := {
+	"sun": {
+		"pitch_src": -50.0,
+		"yaw_src": -35.0,
+		"colour": [1.0, 0.93, 0.80],
+		"brightness": 380.0,
+		"spread_degrees": 1.0,
+		"ambient_colour": [0.74, 0.78, 0.92],
+	},
+	"fog": {
+		"enabled": true,
+		"colour": [0.80, 0.89, 1.0],
+		"start": 2600.0,
+		"end": 12000.0,
+		"max_density": 0.12,
+	},
+	"sky_top": [0.30, 0.56, 0.96],
+}
 
 
 # --- An imported map -------------------------------------------------------
@@ -1093,6 +1143,15 @@ static func dm_atrium() -> ArenaMap:
 			Transform3D(Basis.looking_at(to_centre.normalized(), Vector3.UP), at), tag
 		)
 
+	# The keep is one colour, lavender, the north side's: by the compass alone it would
+	# be the west side's pink, which is the stair beside it, and "the keep" and "pink
+	# stairs" are two places a player has to be able to tell apart. Paint only.
+	map.paint_zones.append({
+		"name": "keep",
+		"region": AABB(Vector3(-19.0, 0.0, -18.5), Vector3(7.5, 6.0, 13.0)),
+		"colour": ArenaMapPaint.LAVENDER,
+	})
+
 	return map
 
 
@@ -1661,19 +1720,23 @@ func to_scene() -> Node3D:
 	var root := Node3D.new()
 	root.name = "Level"
 
-	var material := dev_material()
+	# Colour by role and zone, worked out from the box list and never stored in it: see
+	# `arena_map_paint.gd`.
+	var painter := ArenaMapPaint.Painter.new()
 
 	root.add_child(_make_box(
 		AABB(
 			Vector3(-extent - 2.0, floor_y - 1.0, -extent - 2.0),
 			Vector3(extent * 2.0 + 4.0, 1.0, extent * 2.0 + 4.0)
 		),
-		material,
+		painter.ground(),
 		"Floor"
 	))
 
 	for index in range(boxes.size()):
-		root.add_child(_make_box(boxes[index], material, "Box%02d" % index))
+		root.add_child(_make_box(
+			boxes[index], painter.box(ArenaMapPaint.colour_of(self, index)), "Box%02d" % index
+		))
 
 	return root
 
@@ -1749,9 +1812,10 @@ static func _make_box(box: AABB, material: Material, node_name: String) -> Stati
 
 ## A grid texture, generated rather than shipped.
 ##
-## No art assets anywhere in this repository. A generated grid is what a dev-textured
-## game wants anyway: it makes distance and scale readable, which is the entire
-## function a dev texture performs.
+## What an imported map draws on a surface whose texture it did not carry
+## (`arena_bsp_map.gd`). The built-in maps wear Kenney's prototype grid instead, tinted per
+## zone (`arena_map_paint.gd`); a grid either way, because a grid makes distance and scale
+## readable, which is the entire function a dev texture performs.
 static func dev_texture(
 	size: int = 128,
 	line_every: int = 32,
@@ -1769,22 +1833,6 @@ static func dev_texture(
 				image.set_pixel(x, y, line.lerp(base, 0.5))
 
 	return ImageTexture.create_from_image(image)
-
-
-## A material that tiles the grid by world size rather than by UV.
-##
-## Triplanar, because a [BoxMesh] UV-maps every face to the same 0..1 square: without
-## it a two-metre box and a forty-metre wall show the same number of grid squares, and
-## the texture stops telling you anything about scale — which is the only job it has.
-static func dev_material(tint: Color = Color.WHITE) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.albedo_texture = dev_texture()
-	material.albedo_color = tint
-	material.uv1_triplanar = true
-	material.uv1_scale = Vector3(0.5, 0.5, 0.5)
-	material.roughness = 0.9
-	material.metallic = 0.0
-	return material
 
 
 func describe() -> Dictionary:

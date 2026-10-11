@@ -9,6 +9,8 @@ const ArenaHorde := preload("../game/arena_horde.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
+const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
+const ArenaMapPaint := preload("../maps/arena_map_paint.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMapSurvey := preload("../maps/arena_map_survey.gd")
 const ArenaMenus := preload("../game/arena_menus.gd")
@@ -52,13 +54,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 513
+const CHECKS := 523
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 33
+const SECTIONS := 34
 
 var _passed := 0
 var _failed := 0
@@ -94,6 +96,7 @@ func _run() -> void:
 
 	_test_content()
 	_test_map()
+	_test_map_look()
 	_test_pit()
 	await _test_atrium()
 	_test_bot_ground_speed()
@@ -1706,6 +1709,90 @@ func _test_map() -> void:
 	# asserted in a comment.
 	var texture := ArenaMap.dev_texture(64, 16)
 	_check(texture != null and texture.get_width() == 64, "the dev texture generates")
+	_done()
+
+
+## The built-in maps' paint and lighting: colour that never reaches the geometry, and a
+## lit world that is the map's own document.
+##
+## [b]What this can check is the wiring; whether it looks right is a rendered frame[/b]
+## (`tools/screenshot.sh`). It checks what a frame cannot show: that painting a map left
+## its box list alone, so the survey and `MAP_VERSIONS` still describe it, and that the
+## sky, sun and tone map come out of the map's document rather than a default.
+func _test_map_look() -> void:
+	_section("map paint and lighting")
+
+	var painted := 0
+	var materials := {}
+	var roles := {}
+	var geometry_kept := true
+
+	for id in ArenaMap.ids():
+		var map := ArenaMap.by_id(id)
+		var before := map.boxes.duplicate()
+		var level := map.to_scene()
+
+		for child in level.get_children():
+			for mesh in child.get_children():
+				if mesh is MeshInstance3D and (mesh as MeshInstance3D).material_override != null:
+					painted += 1
+					materials[(mesh as MeshInstance3D).material_override] = true
+
+		for box in map.boxes:
+			roles[ArenaMapPaint.role_of(box, map.extent)] = true
+
+		geometry_kept = geometry_kept and map.boxes == before
+		level.free()
+
+	var expected := 0
+	for id in ArenaMap.ids():
+		expected += ArenaMap.by_id(id).boxes.size() + 1
+	_check(painted == expected, "every box and the floor is drawn with a material", "%d of %d" % [painted, expected])
+	_check(geometry_kept, "painting a map leaves its box list as it was")
+	_check(materials.size() < painted / 4, "boxes of one colour share one material", "%d materials for %d boxes" % [materials.size(), painted])
+	_check(
+		roles.has(ArenaMapPaint.Role.WALL) and roles.has(ArenaMapPaint.Role.TREAD) and roles.has(ArenaMapPaint.Role.COVER),
+		"the maps have walls, stairs and cover, so all three colours are in use",
+		str(roles.keys())
+	)
+
+	# Colour by place: the four sides of a map are four different pastels, so the wall
+	# behind a fight says which side it is on.
+	var sides := {}
+	for at in [Vector3(0, 0, -20), Vector3(20, 0, 0), Vector3(0, 0, 20), Vector3(-20, 0, 0)]:
+		sides[ArenaMapPaint.zone_colour(at, [] as Array[Dictionary], 24.0).to_html()] = true
+	_check(sides.size() == 4, "the four sides are four colours", str(sides.size()))
+
+	var atrium := ArenaMap.dm_atrium()
+	_check(
+		ArenaMapPaint.zone_colour(Vector3(-15.0, 2.0, -12.0), atrium.paint_zones, atrium.extent) == ArenaMapPaint.LAVENDER,
+		"dm_atrium's keep is its own named zone"
+	)
+
+	var lit := ArenaMapLighting.build(atrium)
+	var env: Environment = null
+	var sun: DirectionalLight3D = null
+	for child in lit.get_children():
+		if child is WorldEnvironment:
+			env = (child as WorldEnvironment).environment
+		elif child is DirectionalLight3D:
+			sun = child
+	_check(sun != null and sun.shadow_enabled, "a built-in map has a sun that casts shadows")
+	_check(
+		env != null and env.background_mode == Environment.BG_SKY and env.sky != null,
+		"and a sky, not a flat background"
+	)
+	_check(
+		env != null and env.tonemap_mode != Environment.TONE_MAPPER_LINEAR and env.glow_enabled,
+		"tone-mapped, with glow"
+	)
+	var top: Array = atrium.lighting["sky_top"]
+	var sky_material := env.sky.sky_material as ProceduralSkyMaterial if env != null and env.sky != null else null
+	_check(
+		sky_material != null and sky_material.sky_top_color.is_equal_approx(Color(top[0], top[1], top[2])),
+		"whose zenith is the map's own sky_top"
+	)
+	lit.free()
 	_done()
 
 

@@ -33,9 +33,9 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | `game/arena_client.gd`, `arena_client_extras.gd`, `arena_hud.gd`, `arena_menus.gd`, `arena_presentation.gd`, `arena_browser.gd`, `arena_party.gd`, `arena_avatars.gd`, `arena_beacon.gd`, `arena_projectile_view.gd`, `arena.tscn` | the client: never loaded by a dedicated server |
 | `game/arena_stats.gd`, `arena_awards.gd`, `arena_boards.gd`, `arena_progress.gd`, `arena_identity.gd` | progression and identity |
 | `game/arena_paths.gd` | `rebase` for every `res://` path (pack delivery) |
-| `maps/arena_map.gd`, `arena_map_survey.gd` | the built-in maps as box lists, and the survey |
+| `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
 | `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the g2gfast-maps link |
-| `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art |
+| `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art and Kenney's prototype grid |
 | `examples/` | the eight suites |
 | `tools/` | `screenshot.sh`, `screenshot_menus.sh`, `screenshot_weapons.sh`, `build_avatar_parts.gd`, `audio_probe.sh` |
 | `scenes/arena_server.tscn`, `game.yml` | the server scene and the descriptor that travels in the pack |
@@ -104,6 +104,8 @@ Short forms; the reasoning is in the linked file.
 - Every map passes the survey: no slot under 0.8 m unless a declared climb, nothing unreached unless declared. [maps](docs/maps.md#every-map-is-surveyed)
 - A bot that covers ground does not hold jump. [maps](docs/maps.md#every-map-is-surveyed)
 - Stairs are 0.36 treads ending flush; crate gaps 0.5; a new way up is watched from above. [maps](docs/maps.md#design-rules-every-map-follows)
+- Colour is derived from a box's role and zone (`arena_map_paint.gd`), never stored in the box list; a repaint is not a `MAP_VERSIONS` bump. [maps](docs/maps.md#colour-and-light)
+- A built-in map's light is its `lighting` document (dot-lighting), replaced with the level. Render a look change with `RENDERER=gl_compatibility` too: the shell is Compatibility. [maps](docs/maps.md#colour-and-light)
 - An imported map's solid is in the tree on every machine before any player is bodied; its spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 - Map mechanics run inside the simulated tick on both ends; pushes are stateless; swim and ladder modes are registered on every map. [imported](docs/imported-maps.md#the-maps-own-mechanics)
 - Arena needs a client shell with dot-player-controller v0.1.5 or later. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)

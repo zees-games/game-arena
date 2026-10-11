@@ -8,6 +8,7 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaMode := preload("arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaMenus := preload("arena_menus.gd")
 const ArenaNetBridge := preload("arena_net_bridge.gd")
 const ArenaPaths := preload("arena_paths.gd")
@@ -113,6 +114,9 @@ var _ui_config: DotUiConfig = null
 
 ## The meshes of the map currently drawn. Replaced on a map change.
 var _level: Node3D = null
+
+## The map's sun and environment (`ArenaMapLighting.build`), replaced with the level.
+var _lighting: Node3D = null
 
 ## dot-browser's client half, and the screen over it.
 var browser: ArenaBrowser = null
@@ -256,23 +260,19 @@ func _exit_tree() -> void:
 	ZeeModelCache.set_asset_root("res://")
 
 
-## A sun and an ambient sky, because a dev-textured arena under no light is black.
+## The map's own sun, sky and air, replacing whatever the last map had.
+##
+## [b]Per map, and replaced with the level[/b], because a built-in map carries its lighting
+## as a dot-lighting document (`ArenaMap.lighting`) and the next map may be lit differently.
+## Two `WorldEnvironment`s in one tree is the second one ignored with a warning, so the old
+## one goes first, with `free()` for the same reason the level does.
 func _light() -> void:
-	var sun := DirectionalLight3D.new()
-	sun.name = "Sun"
-	sun.rotation_degrees = Vector3(-52.0, -38.0, 0.0)
-	sun.shadow_enabled = true
-	add_child(sun)
+	if _lighting != null and is_instance_valid(_lighting):
+		remove_child(_lighting)
+		_lighting.free()
 
-	var world := WorldEnvironment.new()
-	var environment := Environment.new()
-	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color(0.36, 0.42, 0.52)
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.55, 0.58, 0.64)
-	environment.ambient_light_energy = 0.75
-	world.environment = environment
-	add_child(world)
+	_lighting = ArenaMapLighting.build(game.map)
+	add_child(_lighting)
 
 
 func _build_interface() -> void:
@@ -650,6 +650,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 	_level = game.map.to_scene()
 	_classify_level()
 	add_child(_level)
+	_light()
 
 	# A mirroring client's combat manager is never rebuilt — `change_map` is the server's —
 	# and its trace is what the copies of every rocket and grenade bounce off. Left alone,

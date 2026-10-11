@@ -5,6 +5,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaDrops := preload("../game/arena_drops.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
@@ -58,24 +59,29 @@ func _initialize() -> void:
 
 	root.add_child(map.to_scene())
 
-	# Sun and sky, because an unlit grey box tells you nothing about a grey-box map —
-	# the whole job of the dev texture is to communicate scale and it cannot do that
-	# with no light falling across it.
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-48.0, -37.0, 0.0)
-	sun.light_energy = 1.15
-	sun.shadow_enabled = true
-	root.add_child(sun)
+	if map.is_imported():
+		# Sun and sky, because an unlit grey box tells you nothing about a grey-box map —
+		# the whole job of the dev texture is to communicate scale and it cannot do that
+		# with no light falling across it.
+		var sun := DirectionalLight3D.new()
+		sun.rotation_degrees = Vector3(-48.0, -37.0, 0.0)
+		sun.light_energy = 1.15
+		sun.shadow_enabled = true
+		root.add_child(sun)
 
-	var env := WorldEnvironment.new()
-	var environment := Environment.new()
-	environment.background_mode = Environment.BG_SKY
-	environment.sky = Sky.new()
-	environment.sky.sky_material = ProceduralSkyMaterial.new()
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.55
-	env.environment = environment
-	root.add_child(env)
+		var env := WorldEnvironment.new()
+		var environment := Environment.new()
+		environment.background_mode = Environment.BG_SKY
+		environment.sky = Sky.new()
+		environment.sky.sky_material = ProceduralSkyMaterial.new()
+		environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+		environment.ambient_light_energy = 0.55
+		env.environment = environment
+		root.add_child(env)
+	else:
+		# A built-in map is drawn under its own lighting document, exactly as the client
+		# draws it: a frame lit by this tool's idea of a sun says nothing about the game.
+		root.add_child(ArenaMapLighting.build(map))
 
 	_camera = Camera3D.new()
 	_camera.fov = 70.0
