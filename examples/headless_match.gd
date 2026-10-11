@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 571
+const CHECKS := 573
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -5134,13 +5134,23 @@ func _test_horde() -> void:
 		"which built a behaviour tree"
 	)
 
-	# The character is per NPC, seeded from the instance. Twenty monsters sharing one
+	# The character is per NPC, seeded from the spawn. Twenty monsters sharing one
 	# preset's seed all take the same shot with the same error at the same moment,
-	# which reads as a firing squad rather than as a fight.
+	# which reads as a firing squad rather than as a fight. The seed is the spawner's
+	# per-spawn number, never the object id: an id moves whenever anything earlier in
+	# the process allocates one more object, and every monster's choices moved with it.
+	# This horde has spawned nothing yet, so the grunt is its first spawn and must carry
+	# exactly the first spawn's seed, whatever object ids this run happened to hand out.
 	var brain := monster.brain as DotNpcAiBrain
 	_check(
-		brain.character != null and brain.character.seed_value == monster.instance_id,
-		"and a character seeded from its own instance"
+		brain.character != null and monster.seed > 1 and brain.character.seed_value == monster.seed,
+		"and a character seeded from its own spawn",
+		"seed %d, character %d" % [monster.seed, brain.character.seed_value if brain.character != null else -1]
+	)
+	_check(
+		monster.seed == horde.spawner.seed_for(1),
+		"and that seed is the first spawn's, not the object id's",
+		"seed %d, first spawn's %d, instance %d" % [monster.seed, horde.spawner.seed_for(1), monster.instance_id]
 	)
 	_check(
 		brain.squad != null and brain.squad.squad_name == &"horde",
@@ -5173,6 +5183,12 @@ func _test_horde() -> void:
 		horde.tick(1.0 / float(TICK_RATE))
 	var gunner := horde.spawn_one(ArenaNpcs.GUNNER, nav.points[nav.point_count() / 3])
 	var gunner_brain := gunner.brain as DotNpcAiBrain if gunner != null else null
+	# Per spawn, not per preset: the second monster gets a seed of its own.
+	_check(
+		gunner != null and gunner.seed > 1 and gunner.seed != monster.seed,
+		"and the next monster is seeded differently",
+		"grunt %d, gunner %d" % [monster.seed, gunner.seed if gunner != null else -1]
+	)
 	_check(
 		gunner_brain != null and "\n".join(gunner_brain.tree.describe_lines()).contains("ranged"),
 		"a gunner builds the ranged branch from its definition"

@@ -79,7 +79,7 @@ func _npc_ready() -> void:
 
 func _build() -> void:
 	_wander_angle = DotNpcAiNode.deterministic_unit(
-		npc.instance_id if npc != null else 0, 7717
+		npc.seed if npc != null else 0, 7717
 	) * TAU
 
 	var has_target := DotNpcAiLeaf.Condition.new(
@@ -374,7 +374,7 @@ func _wander(ctx: DotNpcAiContext) -> DotNpcAiNode.Status:
 		return DotNpcAiNode.Status.FAILURE
 
 	_wander_angle = DotNpcAiSteering.wander(
-		_wander_angle, 0.6 * ctx.delta, npc.instance_id + int(ctx.now)
+		_wander_angle, 0.6 * ctx.delta, npc.seed + int(ctx.now)
 	)
 
 	var direction := DotNpcAiSteering.angle_to_direction(_wander_angle)

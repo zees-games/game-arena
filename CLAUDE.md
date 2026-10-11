@@ -89,6 +89,7 @@ Short forms; the reasoning is in the linked file.
 - Anything hooked to the combat manager rebinds on `map_changed`. [modes](docs/modes.md#effects)
 - Spawn protection: one duration, three records; it does not break on attack; an admin slay passes. [modes](docs/modes.md#spawn-protection)
 - Body breaking is seeded from victim and killer, never the tick. [modes](docs/modes.md#criticals-and-bodies)
+- A monster brain seeds from `npc.seed` (per spawn), never `npc.instance_id` (an identity whose value moves with every allocation). dot-npc `docs/runtime.md`
 - Take a pickup out of the field as it goes, not at the end of the frame. [modes](docs/modes.md#coins-out-of-a-body)
 
 **Maps**
