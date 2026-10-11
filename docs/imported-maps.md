@@ -14,7 +14,13 @@ game-g2gfast imports compiled maps from the surf genre, and some of them are not
 
 A game cannot name another game's script and a delivered pack cannot resolve a `class_name`, so these are preloaded by path. Lifting the loader into an addon is the right home eventually; it would put it in the client shell (so arena could not use it until the addon is tagged and the shell rebuilt), and the reusable half is tangled with g2gfast's genre units, timer zones, textures and lighting. Duplicated deliberately, per the family rule.
 
-A surface with a texture draws it; anything else draws `ArenaMap.dev_texture`, one square to 64 units, tinted the colour the map's compiler measured (black only when the material is named black, g2gfast's rule). Water with no texture draws with `arena_bsp_water.gdshader` (translucent, both sides, a slow ripple). The map's sky, sun and fog are not read yet: arena links dot-lighting for its built-in maps, but an imported map still gets the fixed light it always had (`ArenaMapLighting._imported`); queued as `arena-look-imported-1`. Surfaces are unshaded and lit by their own lightmap.
+A surface with a texture draws it; anything else draws `ArenaMap.dev_texture`, one square to 64 units, tinted the colour the map's compiler measured (black only when the material is named black, g2gfast's rule). Water with no texture draws with `arena_bsp_water.gdshader` (translucent, both sides, a slow ripple). Surfaces are unshaded and lit by their own lightmap.
+
+## Lit from the manifest
+
+`ArenaMapLighting.build` lights an imported map from its manifest's `lighting` block through `DotLightRig`, as game-g2gfast does (`G2GLighting`, copied rather than named): the map's sun angle and colour, its ambient, its fog, and a procedural sky from those numbers, continued under the horizon (`imported_profile`, shadows off in a browser). Three of g2gfast's decisions come with it. **A white ambient is the editor's default, not a sky** (ten of the thirty-three maps): the zenith is looked up by sky name in `SKY_TOPS` and put in the document as `sky_top` (`imported_document`). **A sky named black is black all round.** **A map that packed its six sky faces draws them** through `arena_bsp_sky.gdshader` (a copy of g2gfast's; eight maps). The textures and the lightmap are untouched: the sun lights the players, and the sky and the fog are what change around the map. A manifest that does not read gets the old fixed sun and grey-blue (`_fixed`), with a WARN.
+
+**`sky_top` is drawn by dot-lighting from API level 2** (`rig_draws_sky_top`); on a shell with level 1 the game repaints the zenith after the rig, which gives the same sky. `headless_imported`'s lighting section checks both paths, and `tools/screenshot.sh` draws an imported map under exactly this lighting.
 
 ## The solid is the game's, on every machine
 

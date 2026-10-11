@@ -67,7 +67,7 @@ The look is a sunny afternoon over pastel prototype blocks: a light floor, one p
 - **Shadows in the browser too**, as one orthogonal shadow map. dot-lighting's `web()` drops them because on a large imported level the shadow pass draws the whole level again; a built-in map is under a hundred boxes, and without shadows it rendered flat, every face lit alike, which loses most of the look.
 - **Turned down under Compatibility.** Forward+ lights into an HDR buffer and the filmic curve rolls a sunlit pastel back under white; Compatibility has no headroom and clipped every sunlit face to flat white. Under `gl_compatibility` the profile divides the sun by 700 instead of 200 and drops the ambient to 0.62, which rendered both within a shade of each other. The client shell (dot-server-deploy) is Compatibility on every platform, so that is the look most players get; check both.
 
-No SDFGI, no volumetric fog, no baked light: the fog is depth fog at 0.12, for the far side of dm_atrium's yard. An imported map keeps the fixed light it always had (`_imported`); reading its manifest's `lighting` block is queued as `arena-look-imported-1`.
+No SDFGI, no volumetric fog, no baked light: the fog is depth fog at 0.12, for the far side of dm_atrium's yard. An imported map is lit from its own manifest instead ([imported-maps](imported-maps.md#lit-from-the-manifest)). `sky_top` is drawn by the rig on dot-lighting API level 2 and repainted after it on level 1 (`rig_draws_sky_top`).
 
 ## Design rules every map follows
 

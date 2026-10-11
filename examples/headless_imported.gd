@@ -10,6 +10,7 @@ const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
+const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 
 ## The combat surf maps game-g2gfast imported, played as an arena deathmatch.
 ##
@@ -38,6 +39,9 @@ const ArenaMapDirector := preload("../game/arena_map_director.gd")
 ##   (and sunk in, and climbed out of), a ladder is climbed;
 ## - a hurt volume on [constant HURT_MAP] hurts through dot-combat, every half second, and
 ##   kills as the world, and a negative one heals;
+## - a map is lit from its manifest's `lighting` block (its sun, its sky by name where the
+##   ambient is the editor's white, its own six sky faces where it packed them), on a
+##   dot-lighting that draws `sky_top` and on one that does not;
 ## - as a sweep, every combat surf map found builds and puts its spawns on a floor;
 ## - and a map only the SERVER names (a pack key in `games.current_maps()`, on a fake mount
 ##   under `res://dot_cloud/`) is catalogued as delivered without being fetched, is built from
@@ -62,8 +66,8 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 12
-const CHECKS := 65
+const SECTIONS := 13
+const CHECKS := 72
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -96,6 +100,7 @@ func _run() -> void:
 		return
 
 	_test_catalogue()
+	_test_lighting()
 
 	if not await _test_loads():
 		_finish()
@@ -200,6 +205,96 @@ func _test_catalogue() -> void:
 
 
 # --- Loading ---------------------------------------------------------------
+
+# --- Lighting --------------------------------------------------------------
+
+## The three maps each put one rule in the state it exists for: surf_mai_remix has a sun and
+## a blue ambient of its own, surf_29_12_06 the editor's white ambient under a sky the
+## table knows, surf_buck_wild a sky it packed. Until 2026-10-11 every imported map got
+## one fixed sun and a flat grey-blue, whatever its manifest said.
+func _test_lighting() -> void:
+	_section("an imported map is lit from its manifest's lighting block")
+
+	var own := _lit(&"surf_mai_remix")
+	var sun := own.get_node_or_null("Sun") as DirectionalLight3D
+	var want := DotLightRig.sun_rotation(-60.0, 51.0)
+	_check(
+		sun != null and sun.rotation.is_equal_approx(want)
+			and sun.light_color.is_equal_approx(Color(0.9490196, 0.8784314, 0.7176471)),
+		"its sun is the map's: the manifest's angle and colour, not the old fixed sun"
+	)
+	var own_env := _environment(own)
+	_check(
+		own_env != null and own_env.background_mode == Environment.BG_SKY
+			and own_env.ambient_light_color.is_equal_approx(Color(0.4117647, 0.5882353, 0.7294118)),
+		"its sky and ambient are the map's own, not a flat grey-blue background"
+	)
+	own.free()
+
+	var white := _lit(&"surf_29_12_06")
+	var white_top := _sky_top(white)
+	var table_top: Color = ArenaMapLighting.SKY_TOPS["sky_day01_01"]
+	_check(
+		white_top.is_equal_approx(table_top),
+		"a white ambient draws the sky its name says, not a white dome (%s)" % white_top
+	)
+	white.free()
+
+	# The older shell's path: a dot-lighting that ignores `sky_top` draws the zenith in the
+	# ambient, and the repaint after it must land on the same colour.
+	var lighting: Dictionary = ArenaImportedMaps.manifest(&"surf_29_12_06").get("lighting", {})
+	var older := Node3D.new()
+	var bare := ArenaMapLighting.imported_document(lighting)
+	bare.erase("sky_top")
+	var _older_sun := DotLightRig.apply(older, DotLightDocument.from_dictionary(bare), ArenaMapLighting.imported_profile())
+	var before_repaint := _sky_top(older)
+	ArenaMapLighting._paint_sky_top(older, ArenaMapLighting.imported_document(lighting))
+	_check(
+		not before_repaint.is_equal_approx(table_top) and _sky_top(older).is_equal_approx(table_top),
+		"on a dot-lighting without sky_top the repaint gives the same sky"
+	)
+	older.free()
+
+	var packed := _lit(&"surf_buck_wild")
+	var packed_env := _environment(packed)
+	var packed_sky := packed_env.sky.sky_material as ShaderMaterial if packed_env != null and packed_env.sky != null else null
+	_check(
+		packed_sky != null and packed_sky.get_shader_parameter("face_up") is Texture2D,
+		"a map that packed its six sky faces draws them"
+	)
+
+	var builtin := ArenaMapLighting.build(ArenaMap.by_id(&"dm_box"))
+	var builtin_top: Array = ArenaMap.DAYLIGHT["sky_top"]
+	_check(
+		_sky_top(builtin).is_equal_approx(Color(float(builtin_top[0]), float(builtin_top[1]), float(builtin_top[2]))),
+		"a built-in map still draws its own sky_top"
+	)
+	_check(
+		packed.get_node_or_null("Sun") != null and builtin.get_node_or_null("Sun") != null,
+		"both kinds of map have a sun to light the players"
+	)
+	packed.free()
+	builtin.free()
+	_done()
+
+
+func _lit(id: StringName) -> Node3D:
+	return ArenaMapLighting.build(ArenaMap.by_id(id))
+
+
+func _environment(root: Node3D) -> Environment:
+	for child in root.get_children():
+		if child is WorldEnvironment:
+			return (child as WorldEnvironment).environment
+	return null
+
+
+func _sky_top(root: Node3D) -> Color:
+	var env := _environment(root)
+	if env == null or env.sky == null or not (env.sky.sky_material is ProceduralSkyMaterial):
+		return Color(0, 0, 0, 0)
+	return (env.sky.sky_material as ProceduralSkyMaterial).sky_top_color
+
 
 func _test_loads() -> bool:
 	_section("the game loads it, with its solid in the tree")
