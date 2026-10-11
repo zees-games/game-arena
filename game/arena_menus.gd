@@ -73,7 +73,7 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 			if row != null:
 				look.add(row)
 		var _gone := general.remove_section(&"interface")
-		general.blurb = "Comfort, and whether there is a chat box."
+		general.blurb = "Comfort, camera motion, and whether there is a chat box."
 	var theme_row := interface.find_row(&"ui_theme")
 	if theme_row != null:
 		theme_row.described("The colours of the menus and the scoreboard.")
@@ -83,6 +83,22 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 		.add(DotMenuRow.slider(&"hud_safe_area", "Edge margin", "Room between the HUD and the edge of the screen, for a television or a notch.")
 			.formatted(func(v: float) -> String: return "%d px" % roundi(v)))
 	menu.add_page(interface, &"video")
+
+	# Camera motion, beside Comfort on General: the dip, the roll, the wall lean and the widening,
+	# each a slider to Off for a player whom motion makes sick.
+	if general != null:
+		var motion := general.section("Camera motion")
+		for row: Array in [
+			[&"camera_landing_dip", "Landing dip"],
+			[&"camera_strafe_roll", "Strafe lean"],
+			[&"camera_wall_lean", "Wall-run lean"],
+			[&"camera_speed_fov", "Speed widening"],
+		]:
+			# The words are the setting's own (`ArenaPresentation.CAMERA_MOTION_KEYS`), read from the
+			# schema: this file cannot preload the presentation without a cycle through the HUD.
+			var def: DotSettingsDef = menu.settings.schema.find(row[0]) if menu.settings != null else null
+			motion.add(DotMenuRow.slider(row[0], row[1], def.description if def != null else "")
+				.formatted(func(v: float) -> String: return "Off" if v <= 0.0 else "%d%%" % roundi(v * 100.0)))
 
 	var video := menu.page(&"video")
 	if video != null:

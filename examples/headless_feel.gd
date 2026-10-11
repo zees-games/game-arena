@@ -25,7 +25,8 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 ## - [b]Offline[/b], the real `ArenaClient` runs, strafes and turns among its bots, which run
 ##   circles (a bot that hunts shoots the player, and a death is not a measurement).
 ## - [b]Moves[/b]: a player of its own on dm_box, through `ArenaPlayer.present`, up the stair
-##   at a run, a slide, a jump and a landing.
+##   at a run, a slide, a jump and a landing, a drop from 5 m and a strafe each way: the
+##   camera's motion (landing dip, lean, widening) eases and never snaps.
 ## - [b]Connected[/b]: a dual-stack `DotServer` running `ArenaModule` with one bot whose every
 ##   command is written here (circles), and the real client over ENet through dot-net's relay,
 ##   in windows at 60 and 144 Hz, steady and then with loss and jitter. (The process draws
@@ -115,6 +116,8 @@ var _mover: ArenaPlayer = null
 var _mover_command: DotFpsCommand = null
 var _mover_tick := 1
 var _mover_frames: Array = []
+## The last landing's impact the mover's controller reported, m/s.
+var _mover_impact := 0.0
 
 
 class Early extends Node:
@@ -181,10 +184,10 @@ func _run() -> void:
 	await _teardown()
 
 	# The total the section counter cannot be: a script error aborts the rest of a section
-	# after it announced itself. Offline 5, moves 2, boot 5, connect 3, and 3 a window
+	# after it announced itself. Offline 5, moves 7, boot 5, connect 3, and 3 a window
 	# (2 where the eye is not judged).
 	if _only == "" and _completed == _entered:
-		var expected := 5 + 2 + 5 + 3
+		var expected := 5 + 7 + 5 + 3
 		for window in WINDOWS:
 			expected += 3 if bool(window[8]) else 2
 		_check(_passed + _failed == expected, "every check ran (%d of %d)" % [_passed + _failed, expected])
@@ -313,6 +316,7 @@ func _test_moves() -> void:
 	add_child(_mover)
 	_mover.spawn(Transform3D(Basis(), Vector3(-12.0, 0.05, -12.0)), 0)
 	_mover.attach_camera(100.0)
+	_mover.controller.landed.connect(func(impact: float) -> void: _mover_impact = maxf(_mover_impact, impact))
 	await get_tree().physics_frame
 	# The first tick runs after the tree is up; a teleport before it is undone (see
 	# tools/render_wall_moves.gd).
@@ -343,6 +347,27 @@ func _test_moves() -> void:
 	await _wait(1.0)
 	var jump := _mover_frames.duplicate()
 
+	# A drop from five metres over open floor, standing: the landing dip.
+	_mover.controller.teleport(Vector3(10.0, 5.05, -12.0), 0.0, 0.0)
+	_mover_command = _command(Vector2.ZERO, 0.0, 0)
+	_mover_frames = []
+	_mover_impact = 0.0
+	await _wait(1.4)
+	var drop := _mover_frames.duplicate()
+	var drop_impact := _mover_impact
+
+	# Strafing on the same floor: right, then left, then still.
+	_mover.controller.teleport(Vector3(10.0, 0.05, -12.0), 0.0, 0.0)
+	await _wait(0.3)
+	_mover_frames = []
+	_mover_command = _command(Vector2(1.0, 0.0), 0.0, 0)
+	await _wait(0.8)
+	_mover_command = _command(Vector2(-1.0, 0.0), 0.0, 0)
+	await _wait(0.8)
+	_mover_command = _command(Vector2.ZERO, 0.0, 0)
+	await _wait(0.6)
+	var strafe := _mover_frames.duplicate()
+
 	_mover_command = null
 	_mover.queue_free()
 	_mover = null
@@ -362,7 +387,65 @@ func _test_moves() -> void:
 	_check(climb["n"] > 40 and climb["top"] > 3.0, "the run goes up the stair", "%d frames, top %.2f m" % [climb["n"], climb["top"]])
 	_check(climb["ratio"] < 2.5, "the eye climbs the stair smoothly: no frame rises more than 2.5x the climb's average",
 		"max %.1f mm against a mean of %.1f mm" % [climb["max"] * 1000.0, climb["mean"] * 1000.0])
+
+	# The camera's motion (`ArenaPlayer.camera_motion_picks`): each eases, none snaps.
+	if _verbose:
+		for f in drop.slice(0, drop.size(), 12):
+			print("      drop frame: pos %s grounded %s dip %.4f" % [f["pos"], f["grounded"], f["dip"]])
+	var dip := _motion_track(drop, "dip")
+	var landed_at := -1
+	for i in range(1, drop.size()):
+		if drop[i]["grounded"] and not drop[i - 1]["grounded"]:
+			landed_at = i
+			break
+	var after_rise := 0.0
+	if landed_at > 0:
+		for i in range(landed_at + 1, drop.size()):
+			after_rise = maxf(after_rise, float((drop[i]["eye"] as Vector3).y - (drop[i - 1]["eye"] as Vector3).y))
+	print("    drop: landed at %.1f m/s; dip deepest %.1f mm, largest change in a frame %.1f mm; eye up in a frame after landing max %.1f mm" % [
+		drop_impact, -dip["low"] * 1000.0, dip["step"] * 1000.0, after_rise * 1000.0])
+	var lean := _motion_track(strafe, "roll")
+	var widen_slide := _motion_track(slide, "widen")
+	var widen_run := _motion_track(stair, "widen")
+	print("    strafe: roll %.2f..%.2f degrees, largest change in a frame %.3f, largest change of that %.4f" % [
+		lean["low"], lean["high"], lean["step"], lean["jerk"]])
+	print("    widening: running %.2f degrees at most; slide up to %.2f, largest change in a frame %.3f, of that %.4f" % [
+		widen_run["high"], widen_slide["high"], widen_slide["step"], widen_slide["jerk"]])
+	_check(dip["low"] < -0.02 and dip["step"] < -dip["low"] * 0.35,
+		"a landing from 5 m dips the eye and no frame moves the dip more than a third of its depth",
+		"deepest %.1f mm, largest frame %.1f mm" % [-dip["low"] * 1000.0, dip["step"] * 1000.0])
+	_check(landed_at > 0 and after_rise < 0.004, "and the eye comes back up gently: under 4 mm a frame",
+		"%.1f mm" % (after_rise * 1000.0))
+	_check(lean["high"] > 0.7 and lean["low"] < -0.7 and maxf(lean["high"], -lean["low"]) <= 7.0,
+		"a strafe leans the view both ways, within the 7 degree bound",
+		"%.2f..%.2f" % [lean["low"], lean["high"]])
+	_check(lean["step"] < 0.1 and lean["jerk"] < 0.02,
+		"and the lean eases: under 0.1 degrees a frame, its rate changing under 0.02 a frame, even reversing",
+		"largest turn in a frame %.3f, largest change of that %.4f degrees" % [lean["step"], lean["jerk"]])
+	_check(widen_run["high"] < 0.05 and widen_slide["high"] > 1.0 and widen_slide["step"] < 0.15 and widen_slide["jerk"] < 0.04,
+		"a run does not widen the view, a slide does, and it eases in",
+		"run %.2f, slide %.2f degrees, largest step %.3f, largest change of a step %.4f" % [
+			widen_run["high"], widen_slide["high"], widen_slide["step"], widen_slide["jerk"]])
 	_done()
+
+
+## How [param key] of the camera's motion moved over [param frames]: its range, its largest
+## change in a frame and the largest change of that change (a corner in its motion).
+static func _motion_track(frames: Array, key: String) -> Dictionary:
+	var low := INF
+	var high := -INF
+	var step := 0.0
+	var jerk := 0.0
+	for i in range(frames.size()):
+		var v := float(frames[i][key])
+		low = minf(low, v)
+		high = maxf(high, v)
+		if i > 0:
+			var d := v - float(frames[i - 1][key])
+			step = maxf(step, absf(d))
+			if i > 1:
+				jerk = maxf(jerk, absf(d - (float(frames[i - 1][key]) - float(frames[i - 2][key]))))
+	return {"low": low, "high": high, "step": step, "jerk": jerk}
 
 
 static func _command(move: Vector2, yaw: float, buttons: int) -> DotFpsCommand:
@@ -628,8 +711,12 @@ func _late_process(delta: float) -> void:
 	if _mover != null and _mover.camera != null:
 		_mover.present(delta)
 		var st := _mover.controller.state
+		var motion := _mover.camera_motion
 		_mover_frames.append({"dt": delta, "eye": _mover.camera.global_position,
-			"grounded": st.is_grounded(), "sliding": st.is_sliding(), "pos": st.position})
+			"grounded": st.is_grounded(), "sliding": st.is_sliding(), "pos": st.position,
+			"dip": motion.eye_drop() if motion != null else 0.0,
+			"roll": motion.roll() if motion != null else 0.0,
+			"widen": motion.fov_added() if motion != null else 0.0})
 	if _w.is_empty() or _client == null:
 		return
 	var server_buffer := _server_buffer()

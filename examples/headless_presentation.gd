@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 219
+const CHECKS := 221
 
 var _passed := 0
 var _failed := 0
@@ -1282,6 +1282,33 @@ func _test_look_and_crosshair() -> void:
 		not crosshair.suppressed and is_equal_approx(crosshair.length, 7.0),
 		"and `cross` puts the arms back at the length they were built with"
 	)
+
+	# The camera motion: binding pushes the saved scales, each slider moves its own cue, 0 is off.
+	var player := ArenaPlayer.new()
+	player.setup(ArenaPlayer.Mode.HEADLESS, ArenaMap.dm_box(), 31, "Mover")
+	add_child(player)
+	var _camera := player.attach_camera(100.0)
+	var picks := ArenaPlayer.camera_motion_picks()
+	p.settings.set_value(&"camera_landing_dip", 0.5)
+	p.bind_camera_motion(player)
+	var motion: DotFpsViewMotion = player.camera_motion
+	_check(
+		motion != null and is_equal_approx(motion.landing_dip, picks.landing_dip * 0.5)
+		and is_equal_approx(motion.strafe_roll, picks.strafe_roll),
+		"binding the camera pushes the saved camera motion: the dip at 50%, the lean at the pick",
+		str(motion.describe() if motion != null else {})
+	)
+	for key: StringName in [&"camera_landing_dip", &"camera_strafe_roll", &"camera_wall_lean", &"camera_speed_fov"]:
+		p.settings.set_value(key, 0.0)
+	_check(
+		motion != null and motion.landing_dip == 0.0 and motion.strafe_roll == 0.0 and motion.slide_roll == 0.0
+		and motion.wall_run_roll == 0.0 and motion.fov_speed_gain == 0.0 and motion.slide_fov_gain == 0.0
+		and motion.wall_run_fov_gain == 0.0,
+		"and each camera motion slider at 0 turns its cue off"
+	)
+	for key: StringName in [&"camera_landing_dip", &"camera_strafe_roll", &"camera_wall_lean", &"camera_speed_fov"]:
+		p.settings.reset_value(key)
+	player.queue_free()
 
 	p.settings.reset_value(&"sensitivity")
 	p.settings.reset_value(&"invert_pitch")

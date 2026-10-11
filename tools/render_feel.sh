@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Renders what headless_feel measures, to look at: a bot running across the view, a run with
-# the view model, and the stair, at 144 frames a second against 64 ticks. See
-# tools/render_feel.gd.
+# the view model, the stair, and the camera's motion (a landing, a strafe, a slide), at 144
+# frames a second against 64 ticks. See tools/render_feel.gd.
 #
-#   tools/render_feel.sh                # bot, run and stairs
+#   tools/render_feel.sh                # bot, run, stairs, landing, strafe and slide
 #   tools/render_feel.sh bot            # some of them
 #   tools/render_feel.sh bot --stepped  # the bot drawn at its ticks, as before: the control
 #   RENDERER=gl_compatibility tools/render_feel.sh
@@ -53,6 +53,18 @@ for path in sorted(glob.glob(os.path.join(out, "*.csv"))):
         climbing = [r for r in rise if r > 0.0005]
         mean = sum(climbing) / max(1, len(climbing))
         print(f"stairs: eye rise per frame mean {mean * 1000:.1f} mm, largest {max(rise) * 1000:.1f} mm")
+    if name in ("landing", "strafe", "slide"):
+        # The camera's motion: each column's range, largest change in a frame, and largest
+        # change of that (a corner: a snap shows as a change of step as large as the step).
+        for col, unit, k in (("dip", "mm", 1000.0), ("roll", "deg", 1.0), ("fov", "deg", 1.0)):
+            vs = [float(r[col]) * k for r in rows]
+            s = steps(vs)
+            print(f"{name}: {col} {min(vs):.2f}..{max(vs):.2f} {unit}, largest step {max(abs(x) for x in s):.3f}, "
+                  f"largest change of step {worst_change(vs):.4f}")
+        if name == "landing":
+            ys = [float(r["eye_y"]) for r in rows]
+            s = steps(ys)
+            print(f"landing: eye step per frame {min(s) * 1000:.1f}..{max(s) * 1000:.1f} mm, largest change of step {worst_change(ys) * 1000:.1f} mm")
 try:
     from PIL import Image
 except ImportError:

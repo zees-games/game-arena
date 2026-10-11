@@ -20,6 +20,11 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 ##   quarter of a second. Each frame's step across the screen should be the same.
 ## - `run`: running and turning on open floor, the view model's bob and sway, every third frame.
 ## - `stairs`: up dm_box's stair at a run, every third frame; the eye should climb, not hop.
+## - `landing`: a drop from 5 m onto open floor, every frame from just before the landing; the
+##   eye should go on down a little and come back, not stop dead or jump.
+## - `strafe`: strafing right, then left, every third frame; the horizon should lean into it
+##   and back, gently, about a degree.
+## - `slide`: a run, then a slide, every third frame; the view should widen a little and lean.
 ##
 ## Writes `screenshots/feel/<scenario>_NNN.png`, `<scenario>.csv` (every frame) and, with
 ## PIL, `<scenario>_sheet.png`; `render_feel.sh` prints the largest change of step per frame.
@@ -44,7 +49,7 @@ var _settle := 0
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
-	for name in ["bot", "run", "stairs"]:
+	for name in ["bot", "run", "stairs", "landing", "strafe", "slide"]:
 		if args.is_empty() or args.has(name):
 			_scenarios.append(name)
 
@@ -109,7 +114,25 @@ func _next_scenario() -> void:
 			_settle = 8
 			_frames = 120
 			_save_every = 3
-	_log = PackedStringArray(["frame,tick,alpha,eye_x,eye_y,eye_z,bot_x,bot_z,bot_screen_x,hands_x,hands_y"])
+		"landing":
+			# Looking north over the open south floor, 5 m up; the landing is about 0.67 s in.
+			_player.controller.teleport(Vector3(10.0, 5.05, -4.0), 180.0, 0.0)
+			_bot.controller.teleport(Vector3(-16.0, 0.05, -20.0), 0.0, 0.0)
+			_settle = 38
+			_frames = 72
+			_save_every = 2
+		"strafe":
+			_player.controller.teleport(Vector3(10.0, 0.05, -12.0), 0.0, 0.0)
+			_settle = 20
+			_frames = 216
+			_save_every = 6
+		"slide":
+			# West along the open lane at z -17, between the pillars and the south stair.
+			_player.controller.teleport(Vector3(13.0, 0.05, -17.0), 90.0, 0.0)
+			_settle = 40
+			_frames = 144
+			_save_every = 4
+	_log = PackedStringArray(["frame,tick,alpha,eye_x,eye_y,eye_z,bot_x,bot_z,bot_screen_x,hands_x,hands_y,roll,dip,fov"])
 
 
 func _command(move: Vector2, yaw: float) -> DotFpsCommand:
@@ -137,6 +160,16 @@ func _physics_process(_delta: float) -> bool:
 			mine = _command(Vector2(1.0, 1.0), wrapf(float(_tick) * 3.0, -180.0, 180.0))
 		"stairs":
 			mine = _command(Vector2(0.0, 1.0), -90.0)
+		"landing":
+			mine = _command(Vector2.ZERO, 180.0)
+		"strafe":
+			# Right for 0.75 s, then left, then still (the scenario's frames, at 144 a second).
+			var side := 1.0 if _frame < 108 else -1.0
+			mine = _command(Vector2(side, 0.0) if _frame < 200 else Vector2.ZERO, 0.0)
+		"slide":
+			mine = _command(Vector2(0.0, 1.0), 90.0)
+			if _settle <= 0 and _frame >= 24:
+				mine.buttons = DotFpsCommand.BUTTON_CROUCH
 
 	var _a := _player.simulate_tick(_tick, 1.0 / float(TICK_RATE), mine, DotWeaponCommand.new())
 	var _b := _bot.simulate_tick(_tick, 1.0 / float(TICK_RATE), theirs, DotWeaponCommand.new())
@@ -174,9 +207,12 @@ func _process(delta: float) -> bool:
 	var screen_x := camera.unproject_position(body).x if not camera.is_position_behind(body) else NAN
 	var hands := _hands.get("_animated") as Node3D if _hands != null else null
 	var offset := hands.transform.origin if hands != null else Vector3.ZERO
-	_log.append("%d,%d,%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.5f,%.5f" % [
+	var motion := _player.camera_motion
+	_log.append("%d,%d,%.3f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.5f,%.5f,%.4f,%.5f,%.3f" % [
 		_frame, _tick, Engine.get_physics_interpolation_fraction(), eye.x, eye.y, eye.z,
-		body.x, body.z, screen_x, offset.x, offset.y])
+		body.x, body.z, screen_x, offset.x, offset.y,
+		motion.roll() if motion != null else 0.0, motion.eye_drop() if motion != null else 0.0,
+		camera.fov])
 
 	# The texture is the last completed frame (see screenshot.gd): a saved frame is the one
 	# drawn a frame ago. The spacing is what matters, and that is exact.

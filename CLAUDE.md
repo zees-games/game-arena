@@ -69,7 +69,7 @@ Short forms; the reasoning is in the linked file.
 **Client**
 
 - Adopt the player on `player_added`, never `player_spawned`. Offline, name the player before creating it. [client](docs/client.md#booting-and-adopting-a-player)
-- The camera is written only in `ArenaPlayer.present`, the wall-run lean and stair easing included (no `DotFpsView`); an offline bot's body is drawn between ticks there (`interpolate_body`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
+- The camera is written only in `ArenaPlayer.present`, stair easing and `camera_motion` (dot-player-controller's `DotFpsViewMotion`: dip, rolls, widening; picks in `camera_motion_picks`, scaled by the `camera_*` settings) included, never `DotFpsView`; an offline bot's body is drawn between ticks there (`interpolate_body`). A server may clamp the field of view, never read it. [client](docs/client.md#the-camera-is-written-in-exactly-one-place)
 - A client's own `mode` is never replaced; display reads `displayed_mode()`. [client](docs/client.md#a-client-knows-the-mode-only-for-display)
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer. [client](docs/client.md#escape-the-pointer-and-the-menu)
@@ -113,7 +113,7 @@ Short forms; the reasoning is in the linked file.
 - A guard on a host addon's level (`DotAddonApi.build_level`) needs that addon in `requires.floor.json` at the older path's level, or an older shell refuses the pack. [client](docs/client.md#keys)
 - An imported map's solid is in the tree on every machine before any player is bodied; its spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 - Map mechanics run inside the simulated tick on both ends; pushes are stateless; swim and ladder modes are registered on every map. [imported](docs/imported-maps.md#the-maps-own-mechanics)
-- Arena needs a client shell with dot-player-controller v0.1.5 or later, and with the wall moves (`arena_player.gd` names them). [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
+- Arena needs a client shell with dot-player-controller v0.1.5 or later, and with the wall moves and `DotFpsViewMotion` (`arena_player.gd` names them). [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 
 **Horde, weapons, services**
 

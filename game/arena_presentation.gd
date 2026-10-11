@@ -118,6 +118,9 @@ var _chat_layer: CanvasLayer = null
 ## See [method bind_look].
 var _look: DotFpsTunables = null
 
+## The player whose camera the motion settings move. See [method bind_camera_motion].
+var _camera_player: Node = null
+
 ## The HUD's crosshair, and the arm length it was built with. See [method bind_crosshair].
 var _crosshair: DotCrosshair = null
 var _crosshair_length: float = 0.0
@@ -223,6 +226,14 @@ static func schema() -> DotSettingsSchema:
 	s.add(DotSettingsDef.boolean(&"allow_flashes", true, &"accessibility")
 		.with_description("Off draws no full-screen flashes at all."))
 
+	# Camera motion, each 0 (off) to 2, 1 being the game's pick (`ArenaPlayer.camera_motion_picks`).
+	# ACCOUNT, like the sensitivity: whether motion makes somebody sick is about the person, not
+	# the machine. One each, because a player who cannot take the roll may still want the dip.
+	for key: StringName in CAMERA_MOTION_KEYS:
+		s.add(DotSettingsDef.number(key, 1.0, 0.0, 2.0, &"accessibility", 0.05).with_scope(
+			DotSettingsDef.Scope.ACCOUNT
+		).with_description(CAMERA_MOTION_KEYS[key]))
+
 	# How far the HUD sits in from the edge of the screen, for a television's overscan or a
 	# phone's notch. DEVICE: it is about this screen. Applied live by `ArenaClient`.
 	s.add(DotSettingsDef.integer(&"hud_safe_area", 16, 0, 120, &"hud")
@@ -237,6 +248,16 @@ static func schema() -> DotSettingsSchema:
 	# above keep this game's default (a field of view of 100, horizontal at 4:3).
 	# Applied by the client's DotMenuApplier and DotMenu; the console binds them by name.
 	return DotMenuStock.declare(s, [DotMenuStock.GROUP_VIDEO, DotMenuStock.GROUP_INTERFACE] as Array[StringName])
+
+## The camera motion settings, in [method ArenaPlayer.set_camera_motion_scales]' order, with
+## what each moves.
+const CAMERA_MOTION_KEYS := {
+	&"camera_landing_dip": "How far the view dips when you land from a height. All the way left is off.",
+	&"camera_strafe_roll": "How far the view leans into a strafe or a slide. All the way left is off.",
+	&"camera_wall_lean": "How far the view leans away from a wall you run along. All the way left is off.",
+	&"camera_speed_fov": "How much the view widens when you go faster than a run. All the way left is off.",
+}
+
 
 ## Points every [ArenaPresentation] made after this at a fresh, empty settings directory
 ## named [param tag], and returns it.
@@ -300,6 +321,8 @@ func _on_setting_changed(key: StringName, value: Variant, _why: StringName) -> v
 			_bind_chat(chat_window.team_action if chat_window != null else &"", str(value))
 		&"sensitivity", &"invert_pitch":
 			_apply_look()
+		&"camera_landing_dip", &"camera_strafe_roll", &"camera_wall_lean", &"camera_speed_fov":
+			_apply_camera_motion()
 		&"crosshair":
 			_apply_crosshair()
 		_:
@@ -331,6 +354,25 @@ func _apply_look() -> void:
 
 	_look.mouse_sensitivity = look_degrees_per_count(settings.get_float(&"sensitivity", 2.5))
 	_look.invert_look_y = settings.get_bool(&"invert_pitch", false)
+
+
+## Points the camera motion settings at [param player]'s camera, and applies them. Called by
+## the client when it adopts a player, like [method bind_look], and for the same reason: a
+## setting nobody applies is a slider that moves nothing.
+func bind_camera_motion(player: Node) -> void:
+	_camera_player = player
+	_apply_camera_motion()
+
+
+func _apply_camera_motion() -> void:
+	if settings == null or _camera_player == null or not is_instance_valid(_camera_player):
+		return
+	_camera_player.set_camera_motion_scales(
+		settings.get_float(&"camera_landing_dip", 1.0),
+		settings.get_float(&"camera_strafe_roll", 1.0),
+		settings.get_float(&"camera_wall_lean", 1.0),
+		settings.get_float(&"camera_speed_fov", 1.0)
+	)
 
 
 ## A sensitivity setting as degrees per unit of mouse motion. See [constant DEGREES_PER_COUNT].

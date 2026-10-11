@@ -1056,6 +1056,8 @@ func _adopt(candidate: ArenaPlayer) -> void:
 	# server capping it is a legitimate competitive rule; the player's *choice* is what is
 	# saved, so leaving the server gives it back rather than editing their settings.
 	player.attach_camera(_field_of_view())
+	if presentation != null:
+		presentation.bind_camera_motion(player)
 	_arm(player)
 
 	if hud != null:

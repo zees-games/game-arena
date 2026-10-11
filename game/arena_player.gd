@@ -190,17 +190,16 @@ var _base_fov: float = 75.0
 var camera_offset: Vector3 = Vector3.ZERO
 var camera_roll: float = 0.0
 
-## Degrees the camera leans away from a wall being run along, toward the open side, and
-## how fast that eases in and out per second. `DotFpsView.wall_run_roll` and
-## `wall_run_roll_response`, which this game does not use (the camera is written in
-## [method present] and nowhere else), so the same two numbers and the same arithmetic
-## live here. Exponential, so a run starts and ends without a snap; scaled by how square
-## the view is to the wall, so looking away from it blends toward none rather than flipping.
-var wall_run_roll: float = 6.0
-var wall_run_roll_response: float = 6.0
+## The camera's motion cues: the landing dip, the strafe and slide roll, the wall-run lean
+## and the widening with speed. dot-player-controller's `DotFpsViewMotion`, the arithmetic
+## `DotFpsView` uses, without the view: this game writes its camera in [method present] and
+## nowhere else, so it asks for the numbers and adds them there. Built by
+## [method attach_camera] from [method camera_motion_picks], scaled by the player's camera
+## motion settings ([method set_camera_motion_scales]). Null on a player with no camera.
+var camera_motion: DotFpsViewMotion = null
 
-## The wall-run lean as drawn this frame, degrees. See [method wall_roll].
-var _wall_roll: float = 0.0
+## The aim's zoom this frame, from the view model: [method present] multiplies the lens by it.
+var _aim_fov_scale: float = 1.0
 
 ## What a remote player is drawn as. Null on the local player, who sees their own eyes.
 var body_mesh: Node3D = null
@@ -507,17 +506,31 @@ func _follow_map_volumes() -> void:
 	for pit in _map.pits:
 		if (pit["box"] as AABB).has_point(feet):
 			controller.teleport(pit["to"], float(pit["yaw"]), 0.0)
+			_forget_drawn()
 			return
 
 	if feet.y < _map.bounds.position.y - FALL_OUT_DEPTH and not _map.spawns.is_empty():
 		var at: Transform3D = _map.spawns[0]
 		controller.teleport(at.origin, rad_to_deg(at.basis.get_euler().y), 0.0)
+		_forget_drawn()
+
+
+## Drops what the drawing carries from tick to tick: the stair easing, the frame two ticks
+## back, the camera's motion. After a spawn or a teleport, which the eye jumps with.
+##
+## [b]These lines sat at the end of [method _follow_map_volumes] from 2026-10-11[/b], which
+## runs every tick on an imported map: the stair easing never saw a step there and the
+## frame two ticks back was always forgotten (`arena-camera-feel-1` found it).
+func _forget_drawn() -> void:
 	_yaw_before_tick = controller.state.yaw
 	_position_two_back = Vector3(NAN, NAN, NAN)
 	_step_offset = 0.0
 	_step_rise = 0.0
 	_step_drawn = 0.0
 	_step_tick = controller.state.tick
+	_landing_impact = 0.0
+	if camera_motion != null:
+		camera_motion.snap()
 
 
 ## How far under an imported map's bounds a player is counted as out of it, metres.
@@ -897,6 +910,7 @@ func spawn(at: Transform3D, tick: int, protection_ticks: int = 0) -> void:
 	# and setting yaw afterwards would miss the sampler and the view, which it also
 	# snaps.
 	controller.teleport(at.origin, rad_to_deg(at.basis.get_euler().y), 0.0)
+	_forget_drawn()
 
 	health.spawn_protection_ticks = protection_ticks
 	health.reset(tick)
@@ -1177,13 +1191,27 @@ func present(delta: float) -> void:
 
 		var punch := _present_view_model(drawn)
 
-		_ease_wall_roll(drawn, delta)
+		# The landing dip, the roll and the widening, once a frame from the drawn state.
+		var dip := 0.0
+		var nod := 0.0
+		var lean := 0.0
+		var widen := 0.0
+		if camera_motion != null:
+			_kick_landing(drawn)
+			camera_motion.advance(drawn, delta)
+			dip = camera_motion.eye_drop()
+			nod = camera_motion.pitch()
+			lean = camera_motion.roll()
+			widen = camera_motion.fov_added()
 
-		camera.global_position = view.global_position + camera_offset
+		camera.global_position = view.global_position + camera_offset + Vector3(0.0, dip, 0.0)
 		camera.global_rotation = Vector3(
-			deg_to_rad(drawn.pitch + punch.x), deg_to_rad(drawn.yaw + punch.y),
-			camera_roll + deg_to_rad(_wall_roll)
+			deg_to_rad(drawn.pitch + punch.x + nod), deg_to_rad(drawn.yaw + punch.y),
+			camera_roll + deg_to_rad(lean)
 		)
+		# Widened from the player's own field of view, then zoomed by the aim: a scope at a run
+		# is the scope's zoom of a slightly wider lens, and nothing compounds frame to frame.
+		camera.fov = (_base_fov + widen) * _aim_fov_scale
 	elif body_mesh != null:
 		# A remote player. Its node is moved by `_net_interpolated`, so all that is
 		# left is to face it the way its yaw says -- unless this machine ticks it, when
@@ -1282,23 +1310,94 @@ func _absorb_step(alpha: float, delta: float) -> float:
 	return _step_offset
 
 
-## Eases [member _wall_roll] toward the lean [param drawn] asks for: away from the wall
-## while running along it, nothing otherwise. Once a frame, from the drawn state, so it
-## moves at the frame rate and never steps at a tick.
-func _ease_wall_roll(drawn: DotFpsState, delta: float) -> void:
-	var target := 0.0
-
-	if wall_run_roll > 0.0 and drawn.is_wall_running() and drawn.wall_normal != Vector3.ZERO:
-		var right := DotFpsMotor.forward_for(drawn.yaw).cross(Vector3.UP)
-		target = -drawn.wall_normal.dot(right) * wall_run_roll
-
-	_wall_roll = lerpf(_wall_roll, target, 1.0 - exp(-wall_run_roll_response * delta))
-
-
 ## The wall-run lean as drawn this frame, in degrees (positive leans left). For a check
 ## and for the frame-sequence render.
 func wall_roll() -> float:
-	return _wall_roll
+	return camera_motion.wall_roll() if camera_motion != null else 0.0
+
+
+## This game's camera motion, at a setting of 1 (100%). Christian's pick, judged on rendered
+## frame sequences (`tools/render_feel.sh landing strafe slide`, `render_wall_moves.sh`) and
+## measured by `headless_feel`; docs/client.md has the reasoning for each number.
+##
+## - **Landing dip**: 6 cm at the deepest for a 16 m/s landing (a 5.8 m fall), nothing under
+##   8 m/s, so a plain hop on flat ground (7.4 m/s) and a run of bunny hops dip nothing and a
+##   drop off a ledge or a launch does. A 0.25 s recovery; a nod of 1 degree at the deepest.
+## - **Strafe roll**: 1 degree at a 9 m/s strafe (the run), easing in and out at 8 a second;
+##   1.5 more while sliding.
+## - **Wall-run lean**: 6 degrees away from the wall at 6 a second, as before.
+## - **Bound**: the three together never past 7 degrees.
+## - **Widening**: none at or under the 9 m/s run, 4 degrees (vertical; about 5 at 4:3)
+##   by 15 m/s, 2 more while sliding, 1 more on a wall; easing at 4 a second.
+static func camera_motion_picks() -> DotFpsViewMotion:
+	var m := DotFpsViewMotion.new()
+	m.landing_dip = 0.06
+	m.landing_reference_speed = 16.0
+	m.landing_min_speed = 8.0
+	m.landing_recovery = 0.25
+	m.landing_pitch = 1.0
+	m.strafe_roll = 1.0
+	m.strafe_roll_reference = 9.0
+	m.strafe_roll_response = 8.0
+	m.slide_roll = 1.5
+	m.wall_run_roll = 6.0
+	m.wall_run_roll_response = 6.0
+	m.roll_limit = 7.0
+	m.fov_speed_gain = 4.0
+	m.fov_speed_floor = 9.0
+	m.fov_speed_reference = 15.0
+	m.fov_response = 4.0
+	m.slide_fov_gain = 2.0
+	m.wall_run_fov_gain = 1.0
+	return m
+
+
+## Scales the camera motion from [method camera_motion_picks]: each argument 0 (off) to 2,
+## 1 the pick. The player's `camera_*` settings, through `ArenaPresentation`; motion
+## sickness is why each one goes to 0 on its own.
+func set_camera_motion_scales(landing: float, strafe: float, wall: float, widen: float) -> void:
+	if camera_motion == null:
+		return
+	var picks := camera_motion_picks()
+	camera_motion.landing_dip = picks.landing_dip * maxf(landing, 0.0)
+	camera_motion.landing_pitch = picks.landing_pitch * maxf(landing, 0.0)
+	camera_motion.strafe_roll = picks.strafe_roll * maxf(strafe, 0.0)
+	camera_motion.slide_roll = picks.slide_roll * maxf(strafe, 0.0)
+	camera_motion.wall_run_roll = picks.wall_run_roll * maxf(wall, 0.0)
+	camera_motion.roll_limit = picks.roll_limit * maxf(maxf(strafe, wall), 0.0)
+	camera_motion.fov_speed_gain = picks.fov_speed_gain * maxf(widen, 0.0)
+	camera_motion.slide_fov_gain = picks.slide_fov_gain * maxf(widen, 0.0)
+	camera_motion.wall_run_fov_gain = picks.wall_run_fov_gain * maxf(widen, 0.0)
+
+
+## A landing the eye has not reached yet: its impact (0 for none) and the tick it came on.
+var _landing_impact: float = 0.0
+var _landing_tick: int = -1
+
+
+## Holds a landing until the drawn eye reaches the floor ([method _kick_landing]).
+##
+## [b]The signal comes a tick early for the eye.[/b] It is emitted by the tick that lands, and
+## the frames after it still draw between the tick before (in the air) and that one; kicked
+## there, the dip added to the last of the fall and the eye dropped 21 cm in two frames at
+## 144 Hz instead of 20, then stopped. Kicked when the drawn eye is down, the dip starts where
+## the fall ends.
+func _on_landed(impact: float) -> void:
+	if camera_motion == null:
+		return
+	_landing_impact = maxf(_landing_impact, impact)
+	_landing_tick = controller.state.tick
+
+
+## Kicks a held landing once [param drawn] is on the floor the landing tick left the player
+## on, or a tick later at the latest.
+func _kick_landing(drawn: DotFpsState) -> void:
+	if _landing_impact <= 0.0:
+		return
+	if drawn.position.y > controller.state.position.y + 0.005 and controller.state.tick <= _landing_tick + 1:
+		return
+	camera_motion.note_landing(_landing_impact)
+	_landing_impact = 0.0
 
 
 ## Sway, bob and the recoil's camera half, for the hands under the camera. Returns the
@@ -1309,6 +1408,7 @@ func wall_roll() -> float:
 ## `has_method`, because `view_punch` is newer than the client shell a pack may be running
 ## on, and a call by name to a method the shell's copy lacks fails to compile the script.
 func _present_view_model(drawn: DotFpsState) -> Vector2:
+	_aim_fov_scale = 1.0
 	if weapons == null or weapons.view_model() == null:
 		return Vector2.ZERO
 
@@ -1329,7 +1429,7 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 	var hands := view_model as ZeeViewModel
 	if hands != null:
 		hands.aim(aim_held and is_alive() and camera.current)
-		camera.fov = _base_fov * hands.aim_fov_scale()
+		_aim_fov_scale = hands.aim_fov_scale()
 
 	if not weapons.has_method(&"view_punch"):
 		return Vector2.ZERO
@@ -1461,6 +1561,12 @@ func attach_camera(horizontal_fov_at_4_3: float = 100.0) -> Camera3D:
 	camera.current = true
 	camera.near = 0.05
 	camera.far = 512.0
+
+	# Only a player with a camera has the motion cues; the landing reaches them from the
+	# controller's signal, which is not emitted during a prediction replay.
+	camera_motion = camera_motion_picks()
+	if controller != null and not controller.landed.is_connected(_on_landed):
+		controller.landed.connect(_on_landed)
 
 	set_field_of_view(horizontal_fov_at_4_3)
 
