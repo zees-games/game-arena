@@ -79,7 +79,7 @@ Short forms; the reasoning is in the linked file.
 - Full-screen overlays are sized to the viewport. HUD pieces draw handed values; judge them with `screenshot.sh --glance` at 16:9, 4:3 and 854x480. [client](docs/client.md#the-hud)
 - Below 1280x720 the whole HUD is scaled (`ArenaHud.fit_scale`), never re-laid out; a new piece gets a `footprint()`, which the overlap check reads. [client](docs/client.md#the-hud)
 - Nothing of the HUD on the right edge below 110 px down to a six-row ballot: the shell's column is there (`--glance --ballot`); below that, a piece reads `dot_hud_cover` (`make_room`, `--map-ballot`). [client](docs/client.md#the-hud)
-- The killstreak meter's words end above a full chat log (y 424 at 1280x720); `headless_presentation` checks it. [client](docs/client.md#kill-feedback)
+- The killstreak meter's words end above a full chat log (y 424 at 1280x720); the chat box is scaled with the HUD (`fit_chat_screen`) and 340 wide, clear of the slide prompt; `headless_presentation` checks it at five frames. [client](docs/client.md#the-chat-box)
 - Hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD, never a predicted shot. [client](docs/client.md#kill-feedback)
 - Medal rules live in `ArenaAwards.MedalBook` on the authority; `ArenaAwards.Medal` is a wire index, appended only. [services](docs/services.md#progression)
 - Third person is deliberately not here: one motor to agree about. [client](docs/client.md#avatars)

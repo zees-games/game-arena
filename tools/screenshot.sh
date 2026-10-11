@@ -7,6 +7,7 @@
 #   tools/screenshot.sh dm_atrium --glance [tdm]   # the whole HUD over a real match
 #   tools/screenshot.sh dm_box --glance --map-ballot   # under the 7-row map ballot (--ballot: the 6-row game vote)
 #   RESOLUTION=1280x960 SHOT_SUFFIX=_1280x960 tools/screenshot.sh dm_box --glance   # 4:3
+#   RESOLUTION=854x480 tools/screenshot.sh dm_box --glance --chat   # a full chat log beside the scaled HUD
 #
 # Uses xvfb-run because this needs a rendering context and the machines this runs on
 # have no display. Nothing here is headless-safe: `--headless` gives a null renderer and

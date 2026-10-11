@@ -96,6 +96,7 @@ func _initialize() -> void:
 		_staged_id = id
 		_glance_ballot = args.has("--ballot") or args.has("--map-ballot")
 		_glance_map_ballot = args.has("--map-ballot")
+		_glance_chat = args.has("--chat")
 		return
 
 	if map.is_imported():
@@ -262,6 +263,10 @@ var _glance_ballot := false
 ## Extend, seven rows), which reaches further down the right edge than the game vote's six.
 var _glance_map_ballot := false
 
+## `--glance --chat`: a full chat log (eight rows, a vote line wrapped across two) in the box
+## the game builds, scaled with the HUD as [ArenaPresentation] scales it.
+var _glance_chat := false
+
 const GLANCE_NAMES := ["You", "gamemann", "a_very_long_display_name", "bo", "quiet_one", "newcomer", "Rocket", "Viper"]
 
 
@@ -337,6 +342,8 @@ func _play_glance() -> void:
 	_local.controller.state.wall_jumps_in_air = 1
 
 	var late: Array = []
+	if _glance_chat:
+		_stage_full_chat()
 	if _glance_ballot:
 		_stage_shell_ballot()
 		# What the server says in chat as the ballot opens, which this client centre-prints
@@ -347,7 +354,7 @@ func _play_glance() -> void:
 		late.append([10, func() -> void: _hud.notice(said)])
 
 	_shots = [{
-		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""],
+		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else ""),
 		"local": true,
 		"late": [
 			[12, func() -> void:
@@ -373,6 +380,22 @@ func _play_glance() -> void:
 ## (240..360 px), and does not draw the vote's HUD line while its ballot is open. The shell
 ## draws over every game, so whether it covers this HUD is a question only a frame of both
 ## together answers.
+func _stage_full_chat() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "ChatLayer"
+	layer.layer = 100
+	root.add_child(layer)
+	var screen := Control.new()
+	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(screen)
+	var window := ArenaPresentation.make_chat_window()
+	screen.add_child(window)
+	ArenaPresentation.fit_chat_screen(screen, root.get_visible_rect().size)
+	window.add_text("Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)", Color(0.80, 0.82, 0.86))
+	for i in range(6):
+		window.add_said("Player %d" % (i + 1), "line %d of a full log" % (i + 1), Color(0.62, 0.78, 1.0))
+
+
 func _stage_shell_ballot() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "ShellStandIn"

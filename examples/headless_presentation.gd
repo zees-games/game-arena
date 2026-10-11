@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 217
+const CHECKS := 218
 
 var _passed := 0
 var _failed := 0
@@ -1519,6 +1519,14 @@ func _test_hud_fits_the_frame() -> void:
 	hud.challenge_label.visible = true
 	hud.challenge_bar.visible = true
 
+	# The chat box, scaled with the HUD as ArenaPresentation scales it: unscaled, a full log
+	# at 854x480 reached the killstreak meter and the key hints.
+	var chat_screen := Control.new()
+	add_child(chat_screen)
+	var chat := ArenaPresentation.make_chat_window()
+	chat_screen.add_child(chat)
+	var chat_met := PackedStringArray()
+
 	var frames := [Vector2(854, 480), Vector2(960, 720), Vector2(720, 1280), Vector2(1280, 720), Vector2(1600, 900)]
 	for frame: Vector2 in frames:
 		hud.fit_to_frame(frame)
@@ -1541,6 +1549,19 @@ func _test_hud_fits_the_frame() -> void:
 		_check(met.is_empty() and keys.size() == 15,
 			"at %s, none of the %d pieces meets another" % [size_name, keys.size()], ", ".join(met))
 		_check(outside.is_empty(), "and every one is inside the frame", ", ".join(outside))
+
+		ArenaPresentation.fit_chat_screen(chat_screen, frame)
+		var fit := chat_screen.scale.x
+		var rows := float(chat.max_lines) * (chat.line_height + chat.line_gap)
+		var log_top := frame.y / fit - chat.margin_bottom - chat.entry_height - rows
+		var log_box := chat_screen.get_global_transform() * Rect2(chat.margin_left, log_top, chat.width, rows)
+		for key: String in rects:
+			if log_box.intersects(rects[key]):
+				chat_met.append("%s: %s %s vs log %s" % [size_name, key, rects[key], log_box])
+
+	_check(chat_met.is_empty(), "a full chat log meets no HUD piece at any of those frames",
+		", ".join(chat_met))
+	chat_screen.queue_free()
 
 	# 1280x720 and up are laid out exactly as dot-ui's full-rect inset laid them out.
 	var same := true

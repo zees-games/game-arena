@@ -4,6 +4,7 @@ const ArenaPaths := preload("arena_paths.gd")
 const ArenaVote := preload("arena_vote.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaBindings := preload("arena_bindings.gd")
+const ArenaHud := preload("arena_hud.gd")
 
 ## Settings, audio, effects and a console, on the client.
 ##
@@ -799,7 +800,23 @@ func _build_chat() -> void:
 	_chat_layer.layer = 100
 	add_child(_chat_layer)
 
-	chat_window = DotChatWindow.new()
+	# [b]Scaled with the HUD.[/b] Below 1280x720 `ArenaHud.fit_scale` shrinks the killstreak
+	# meter and the key hints, and an unscaled box beside them reached both at 854x480. The
+	# screen is sized frame / fit and scaled by fit, so the window, which anchors itself to
+	# its parent's rect, still lands bottom-left; at 1280x720 and up it is exactly as before.
+	_chat_screen = Control.new()
+	_chat_screen.name = "ChatScreen"
+	_chat_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chat_layer.add_child(_chat_screen)
+	chat_window = make_chat_window()
+	_chat_screen.add_child(chat_window)
+	_fit_chat()
+
+
+## The box as this game configures it; [method _build_chat] and the screenshot tool's
+## `--glance --chat` both draw this one.
+static func make_chat_window() -> DotChatWindow:
+	var chat_window := DotChatWindow.new()
 	chat_window.name = "ChatWindow"
 	chat_window.open_action = &"arena_chat"
 	chat_window.team_action = &"arena_chat_team"
@@ -814,11 +831,47 @@ func _build_chat() -> void:
 	# rendered frame says.
 	chat_window.margin_left = 24.0
 	chat_window.margin_bottom = 110.0
+	# Narrower than the default 460: the slide prompt ("Cancel slide  C") is drawn from
+	# x 381 at 1280x720, inside a full log's rows, and a long line ran under it.
+	chat_window.width = 340.0
 	chat_window.channels = [
 		{"id": &"all", "label": "Say", "colour": Color(0.88, 0.90, 0.94)},
 		{"id": &"team", "label": "Say (TEAM)", "colour": Color(0.55, 0.85, 0.60), "team": true},
 	]
-	_chat_layer.add_child(chat_window)
+	return chat_window
+
+
+## Lays [param screen], the chat box's parent, out on a frame [param frame] pixels: scaled
+## by the HUD's own [method ArenaHud.fit_scale], so the box shrinks exactly as the HUD does.
+static func fit_chat_screen(screen: Control, frame: Vector2) -> void:
+	var fit := ArenaHud.fit_scale(frame)
+	screen.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	screen.scale = Vector2(fit, fit)
+	screen.position = Vector2.ZERO
+	screen.size = frame / fit
+
+
+## The chat box's parent; see [method _build_chat].
+var _chat_screen: Control = null
+
+## The frame the chat box was last fitted to.
+var _chat_frame := Vector2.ZERO
+
+
+func _fit_chat() -> void:
+	if _chat_screen == null:
+		return
+	var frame := _chat_screen.get_viewport_rect().size if _chat_screen.is_inside_tree() else ArenaHud.DESIGN_FRAME
+	if frame == _chat_frame:
+		return
+	_chat_frame = frame
+	fit_chat_screen(_chat_screen, frame)
+
+
+func _process(_delta: float) -> void:
+	# Polled rather than on `size_changed`: this node can be set up before it is in a tree,
+	# and one Vector2 compare a frame is cheaper than tracking when it enters one.
+	_fit_chat()
 
 
 ## Puts one binding from the settings document onto its action.
