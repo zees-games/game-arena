@@ -75,6 +75,7 @@ Short forms; the reasoning is in the linked file.
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer (`manage_pointer`, `manage_mouse` off). Movable keys are one table, `ArenaBindings`. [client](docs/client.md#escape-the-pointer-and-the-menu)
 - Every key the client reads is an `ArenaBindings` row read through its action, never a keycode; props modes reuse the Launch and Bash keys; no noclip key (V is push to talk). [client](docs/client.md#keys)
+- The wheel rows say Wheel up / Wheel down only on a host dot-ui at API level 2 (`ArenaBindings.wheel_named`); an older shell keeps the "(wheel up)" labels. [client](docs/client.md#keys)
 - Typing suspends the sampler as well as swallowing input; the console does it as a menu overlay, so it is built after the menu (`build_console(menu)`). [client](docs/client.md#the-chat-box)
 - Full-screen overlays are sized to the viewport. HUD pieces (`ArenaHudGlance`) draw handed values; judge them with `screenshot.sh --glance` at 16:9 and 4:3. [client](docs/client.md#the-hud)
 - Nothing of the HUD on the right edge below 110 px down to a six-row ballot: the shell's column is there (`--glance --ballot`). [client](docs/client.md#the-hud)

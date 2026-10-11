@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 192
+const CHECKS := 194
 
 var _passed := 0
 var _failed := 0
@@ -666,8 +666,8 @@ func _test_every_key_is_an_action() -> void:
 	var expected := {
 		&"arena_fire": "Mouse 1", &"arena_aim": "Mouse 2", &"arena_bash": "F",
 		&"arena_reload": "R", &"arena_slot_1": "1", &"arena_slot_2": "2", &"arena_slot_3": "3",
-		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Mouse 4",
-		&"arena_weapon_next": "Mouse 5", &"arena_weapon_last": "Q", &"arena_launch": "E",
+		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Wheel up",
+		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Q", &"arena_launch": "E",
 		&"arena_launch_props": "X", &"arena_punt": "G", &"arena_voice": "V",
 		&"dot_fps_walk": "Alt",
 	}
@@ -677,6 +677,19 @@ func _test_every_key_is_an_action() -> void:
 				or DotInputBinding.describe_action(action) != str(expected[action]):
 			wrong.append("%s=%s" % [action, DotInputBinding.describe_action(action)])
 	_check(wrong.is_empty(), "each is a row and on its default key in the InputMap", str(wrong))
+
+	# The wheel rows by name on a dot-ui that names the wheel, and with the "(wheel up)"
+	# stopgap kept on an older shell's dot-ui, whose only spelling is "Mouse 4".
+	var named := ArenaBindings.make(2).row_for_action(&"arena_weapon_previous")
+	var older := ArenaBindings.make(1).row_for_action(&"arena_weapon_previous")
+	_check(
+		str(named["label"]) == "Previous weapon" and str(named["default"]) == "Wheel up",
+		"the wheel rows say Wheel up / Wheel down where dot-ui names the wheel", str(named)
+	)
+	_check(
+		str(older["label"]).contains("(wheel up)") and str(older["default"]) == "Mouse 4",
+		"and keep the (wheel up) label on an older dot-ui", str(older)
+	)
 
 	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.
 	var sampler := ArenaClient.make_sampler()
