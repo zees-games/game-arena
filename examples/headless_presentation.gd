@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 221
+const CHECKS := 222
 
 var _passed := 0
 var _failed := 0
@@ -693,10 +693,12 @@ func _test_every_key_is_an_action() -> void:
 		"and keep the (wheel up) label on an older dot-ui", str(older)
 	)
 
-	# Both branches only matter if an older shell gets to run them. A pack asks for the
-	# level of every addon it was built against, so requires.floor.json lowers dot-ui and
-	# dot-lighting to 1 for the release's requires.json; dot-core's floor_audit refuses it
-	# once a guard it relies on is gone, here rather than at the release.
+	# A branch only matters if an older shell gets to run it. A pack asks for the level of
+	# every addon it was built against, so requires.floor.json lowers dot-lighting to 1 for
+	# the release's requires.json; dot-ui's floor is 4, because the HUD names dot-ui's glance
+	# pieces (`DotVitals` and the rest, API 4) and a class name cannot be guarded, so the
+	# wheel's level-1 branch above no longer reaches a shell. dot-core's floor_audit refuses
+	# a floor once a guard it relies on is gone, here rather than at the release.
 	var floors := DotAddonApi.parse(FileAccess.get_file_as_string("res://" + DotAddonApi.FLOOR_FILE), DotAddonApi.FLOOR_FILE)
 	var derived := DotAddonApi.derive()
 	var unsound := DotAddonApi.floor_audit(floors.value if floors.ok else {}, derived, DotAddonApi.guarded()) \
@@ -704,8 +706,8 @@ func _test_every_key_is_an_action() -> void:
 	_check(unsound.is_empty(), "requires.floor.json is sound: every floor has a guard behind it", str(unsound))
 	var asked := DotAddonApi.apply_floors(derived, floors.value if floors.ok else {})
 	_check(
-		asked.get("dot_ui") == 1 and asked.get("dot_lighting") == 1,
-		"so a pack asks an older shell for dot-ui 1 and dot-lighting 1", str(asked)
+		asked.get("dot_ui") == 4 and asked.get("dot_lighting") == 1,
+		"so a pack asks a shell for dot-ui 4 (the glance pieces) and dot-lighting 1", str(asked)
 	)
 
 	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.
@@ -1619,8 +1621,14 @@ func _test_hud_fits_the_frame() -> void:
 	_check(is_equal_approx(ArenaHud.fit_scale(Vector2(854, 480)), 480.0 / 720.0)
 			and is_equal_approx(ArenaHud.fit_scale(Vector2(960, 720)), 0.75)
 			and is_equal_approx(ArenaHud.fit_scale(Vector2(720, 1280)), 0.5625)
-			and ArenaHud.fit_scale(Vector2(200, 100)) == ArenaHud.FIT_MIN,
+			and ArenaHud.fit_scale(Vector2(200, 100)) == hud.fit_min
+			and hud.fit_design == ArenaHud.DESIGN_FRAME and hud.fit_min == 0.5,
 		"below it, it is scaled by the short side's share of 1280x720, never under half")
+	# The clock is dot-ui's `DotScoreStrip.clock_text`, which rounds up: a clock never says
+	# 0:00 with time left. Arena's own rounded down until 2026-10-11 (9:37.4 read 9:37).
+	_check(DotScoreStrip.clock_text(577.4) == "9:38" and DotScoreStrip.clock_text(0.3) == "0:01"
+			and DotScoreStrip.clock_text(0.0) == "0:00" and DotScoreStrip.clock_text(600.0) == "10:00",
+		"the clock rounds the seconds left up (%s, %s)" % [DotScoreStrip.clock_text(577.4), DotScoreStrip.clock_text(0.3)])
 
 	hud.queue_free()
 	_done()
@@ -1849,7 +1857,7 @@ func _test_criticals_and_the_body() -> void:
 		hud.note_kill({"killer_id": 6, "victim_id": v, "headshot": v == 9, "weapon": "rifle"}, 6, "Broken")
 	hud.present_body()
 	_check(hud.streak_meter.count == 3, "three kills fill the streak meter to three")
-	_check(hud._popups.is_empty() and hud.hit_marker.alpha == 0.0 and hud.medal_row.shown.is_empty(),
+	_check(hud._popups.is_empty() and hud.hit_marker.alpha() == 0.0 and hud.medal_row.shown.is_empty(),
 		"and a KILL alone draws no points, no hit marker and no medal: the client decides none of them")
 
 	# The challenge bar: the achievement this player is nearest to.
@@ -1989,7 +1997,7 @@ func _test_feedback_from_the_wire() -> void:
 
 	var at := them.global_position + Vector3(0.0, 1.4, 0.0)
 	client._on_hit(ArenaEvents.read_hit(DotNetReader.new(ArenaEvents.write_hit(7, 34.0, at, false, false))))
-	_check(hud.hit_marker.alpha > 0.9 and not hud.hit_marker.kill, "a HIT flashes the hit marker, white")
+	_check(hud.hit_marker.alpha() > 0.9 and not hud.hit_marker.kill, "a HIT flashes the hit marker, white")
 	_check(hud.damage_numbers.entries.size() == 1 and int(hud.damage_numbers.entries[0]["amount"]) == 34,
 		"and a number rises from where it landed, saying what it took")
 	client._on_hit(ArenaEvents.read_hit(DotNetReader.new(ArenaEvents.write_hit(7, 20.0, at, false, false))))
@@ -2000,7 +2008,7 @@ func _test_feedback_from_the_wire() -> void:
 		"a lethal hit to the head turns the marker red and the number gold")
 	hud.hit_marker.advance(1.0)
 	hud.damage_numbers.advance(1.0)
-	_check(hud.hit_marker.alpha == 0.0 and hud.damage_numbers.entries.is_empty(), "and both are gone within a second")
+	_check(hud.hit_marker.alpha() == 0.0 and hud.damage_numbers.entries.is_empty(), "and both are gone within a second")
 
 	var award := ArenaEvents.read_award(DotNetReader.new(
 		ArenaEvents.write_award(6, 7, ArenaAwards.points_for([M.FIRST_BLOOD, M.HEADSHOT]), 4, [M.FIRST_BLOOD, M.HEADSHOT])

@@ -21,6 +21,14 @@ const ArenaPaths := preload("arena_paths.gd")
 ## straight over white prototype tiles, and health, ammunition and the key hints all but
 ## disappeared (`screenshots/dm_box_feel_kill_compat.png` before 2026-10-10).
 ##
+## [b]Only arena's own pieces are here[/b]: the ranked portraits, the kill feed with its
+## weapon silhouettes, the carried weapons, the ability bar. Health, ammunition, the scores
+## and clock, the key prompt and hints, the hit marker and the damage numbers were drawn here
+## too and moved to dot-ui once other games needed them (`DotVitals`, `DotAmmoCounter`,
+## `DotScoreStrip`, `DotKeyPrompt`, `DotKeyHints`, `DotHitMarker`, `DotDamageNumbers`; dot-ui
+## `docs/hud.md`, "The glance pieces"); [ArenaHud] places them beside these. The colours
+## below are the same as `DotHudPiece.DEFAULTS`, so the two sets read as one HUD.
+##
 ## Art: the weapon silhouettes are rendered from zee's models by
 ## `tools/build_weapon_icons.sh` (Kenney's CC0 blaster and tool kits); the ability icons are
 ## Kenney's CC0 game and mobile-control icons (`assets/hud_icons/`). A missing file draws
@@ -35,7 +43,6 @@ const PLATE_EDGE := Color(1.0, 1.0, 1.0, 0.14)
 const GOLD := Color(1.0, 0.8, 0.22)
 const TEXT := Color(0.97, 0.98, 1.0)
 const DIM := Color(0.82, 0.85, 0.92)
-const LOW := Color(1.0, 0.32, 0.28)
 ## The two sides' colours when the teams give none, and the free-for-all plates.
 const BLUE := Color(0.22, 0.5, 0.95)
 const RED := Color(0.9, 0.24, 0.32)
@@ -117,74 +124,6 @@ class Ink:
 		var h := w * s.y / maxf(s.x, 1.0)
 		canvas.draw_texture_rect(tex, Rect2(at.x, at.y - h * 0.5, w, h), false, tint)
 		return w
-
-
-## Top centre: the two scores either side of the clock, and under them what wins and the
-## mode. In a team mode the plates are the sides; in a free-for-all the left one is you and
-## the right one whoever is ahead of you (or behind, when you lead).
-class ScoreStrip extends Control:
-	const PLATE_W := 132.0
-	const CLOCK_W := 112.0
-	const H := 46.0
-	const GAP := 6.0
-
-	var left_score: int = 0
-	var right_score: int = 0
-	var left_tag: String = "YOU"
-	var right_tag: String = "LEADER"
-	var left_colour: Color = BLUE
-	var right_colour: Color = RED
-	var clock: String = "0:00"
-	## "First to 25" and the mode's name, under the plates.
-	var target: String = ""
-	var mode_name: String = ""
-	var clock_low: bool = false
-
-	func show_scores(p_left: int, p_right: int, p_left_tag: String, p_right_tag: String, p_left_colour: Color, p_right_colour: Color) -> void:
-		left_score = p_left
-		right_score = p_right
-		left_tag = p_left_tag
-		right_tag = p_right_tag
-		left_colour = p_left_colour
-		right_colour = p_right_colour
-		queue_redraw()
-
-	func show_clock(p_clock: String, p_low: bool, p_target: String, p_mode: String) -> void:
-		clock = p_clock
-		clock_low = p_low
-		target = p_target
-		mode_name = p_mode
-		queue_redraw()
-
-	func _draw() -> void:
-		var mid := size.x * 0.5
-		var clock_rect := Rect2(mid - CLOCK_W * 0.5, 0.0, CLOCK_W, H)
-		var left := Rect2(clock_rect.position.x - GAP - PLATE_W, 0.0, PLATE_W, H)
-		var right := Rect2(clock_rect.end.x + GAP, 0.0, PLATE_W, H)
-		_side(left, left_colour, left_tag, left_score)
-		_side(right, right_colour, right_tag, right_score)
-		Ink.plate(self, clock_rect, Color(0.07, 0.08, 0.13, 0.82), 8, Color(1, 1, 1, 0.22), 1)
-		Ink.text(self, Vector2(clock_rect.position.x, clock_rect.end.y - 12.0), clock, 26,
-			LOW if clock_low else TEXT, HORIZONTAL_ALIGNMENT_CENTER, CLOCK_W, 5)
-		var under := _under()
-		if under != "":
-			Ink.text(self, Vector2(0.0, H + 22.0), under, 15, Color(TEXT, 0.92), HORIZONTAL_ALIGNMENT_CENTER, size.x, 5)
-
-	func _under() -> String:
-		return target if mode_name == "" else ("%s   ·   %s" % [target, mode_name] if target != "" else mode_name)
-
-	## What it draws, in its own space: the plates and the clock, and the line under them.
-	## `ArenaHud.footprints` reads every piece's, for the layout check.
-	func footprint() -> Rect2:
-		var w := maxf(PLATE_W * 2.0 + GAP * 2.0 + CLOCK_W, Ink.width(_under(), 15))
-		return Rect2(size.x * 0.5 - w * 0.5, 0.0, w, H + 28.0)
-
-	func _side(rect: Rect2, colour: Color, tag: String, score: int) -> void:
-		Ink.plate(self, rect, Color(colour.darkened(0.15), 0.9), 8, Color(1, 1, 1, 0.35), 1)
-		# A lighter top half: the plates read as buttons, not as flat paint.
-		Ink.plate(self, Rect2(rect.position + Vector2(2.0, 2.0), Vector2(rect.size.x - 4.0, rect.size.y * 0.45)), Color(1, 1, 1, 0.12), 6, Color(0, 0, 0, 0), 0)
-		Ink.text(self, Vector2(rect.position.x, rect.position.y + 13.0), tag, 11, Color(1, 1, 1, 0.9), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 3)
-		Ink.text(self, Vector2(rect.position.x, rect.end.y - 7.0), str(score), 26, TEXT, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 5)
 
 
 ## Under the scores: every player ranked, a portrait each with their rank over it and their
@@ -348,89 +287,6 @@ class KillFeed extends Control:
 			x += 22.0
 		x += 10.0
 		Ink.text(self, Vector2(x, base), victim, NAME_SIZE, Color(e["victim_colour"], fade), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 4)
-
-
-## Bottom left, the words over the bars: health in big numbers at the bar's end, armour
-## smaller beside its own thin bar when there is any.
-class Vitals extends Control:
-	var health: float = 100.0
-	var max_health: float = 100.0
-	var armour: float = 0.0
-	## Where the bars end, in this control's space: the numbers sit just past it.
-	var bar_end: float = 260.0
-
-	func show_vitals(p_health: float, p_max: float, p_armour: float) -> void:
-		if not is_equal_approx(p_health, health) or not is_equal_approx(p_armour, armour) or not is_equal_approx(p_max, max_health):
-			health = p_health
-			max_health = p_max
-			armour = p_armour
-			queue_redraw()
-
-	## The plate under the bars and the number.
-	func footprint() -> Rect2:
-		return Rect2(0.0, 0.0, bar_end + 22.0 + Ink.width(str(int(ceilf(health))), 30), 72.0 if armour > 0.0 else 56.0)
-
-	func _draw() -> void:
-		var low := max_health > 0.0 and health / max_health <= 0.25
-		# The plate under the bars and the number: white text on a white floor is an
-		# outline and nothing else (rendered in the client over dm_atrium's floor).
-		var number_w := Ink.width(str(int(ceilf(health))), 30)
-		Ink.plate(self, Rect2(0.0, 0.0, bar_end + 22.0 + number_w, 72.0 if armour > 0.0 else 56.0), PLATE, 9)
-		# A cross, drawn: the genre's health mark, and no art to go missing.
-		var c := Vector2(10.0, 22.0)
-		draw_rect(Rect2(c - Vector2(3.0, 9.0), Vector2(6.0, 18.0)), Color(0, 0, 0, 0.5))
-		draw_rect(Rect2(c - Vector2(9.0, 3.0), Vector2(18.0, 6.0)), Color(0, 0, 0, 0.5))
-		var mark := LOW if low else Color(0.45, 0.92, 0.55)
-		draw_rect(Rect2(c - Vector2(2.0, 8.0), Vector2(4.0, 16.0)), mark)
-		draw_rect(Rect2(c - Vector2(8.0, 2.0), Vector2(16.0, 4.0)), mark)
-		Ink.text(self, Vector2(bar_end + 10.0, 40.0), str(int(ceilf(health))), 30, LOW if low else TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 6)
-		if armour > 0.0:
-			Ink.text(self, Vector2(bar_end + 10.0, 62.0), "%d" % int(ceilf(armour)), 16, Color(0.6, 0.78, 1.0), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 4)
-
-
-## Bottom right: what is in hand, and `magazine | reserve` in big numbers under its name.
-## A weapon with no magazine shows what is left in its pool; a melee weapon its name alone.
-class AmmoCounter extends Control:
-	var weapon_name: String = ""
-	var magazine: int = -1
-	var reserve: int = -1
-	var low: bool = false
-
-	func show_ammo(p_name: String, p_magazine: int, p_reserve: int, p_low: bool) -> void:
-		if p_name != weapon_name or p_magazine != magazine or p_reserve != reserve or p_low != low:
-			weapon_name = p_name
-			magazine = p_magazine
-			reserve = p_reserve
-			low = p_low
-			queue_redraw()
-
-	func _plate() -> Rect2:
-		var name_w := Ink.width(weapon_name.to_upper(), 15)
-		var count_w := 0.0
-		if magazine >= 0:
-			count_w = Ink.width(str(magazine), 36) + 10.0 + (Ink.width("| %d" % reserve, 22) if reserve >= 0 else 0.0)
-		var plate_w := maxf(name_w, count_w) + 28.0
-		return Rect2(size.x - plate_w + 14.0, -4.0, plate_w, 70.0 if magazine >= 0 else 32.0)
-
-	## The plate under the name and the count; nothing with nothing in hand.
-	func footprint() -> Rect2:
-		return _plate() if weapon_name != "" else Rect2()
-
-	func _draw() -> void:
-		if weapon_name == "":
-			return
-		var right := size.x
-		Ink.plate(self, _plate(), PLATE, 9)
-		Ink.text(self, Vector2(0.0, 18.0), weapon_name.to_upper(), 15, Color(TEXT, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, right, 4)
-		if magazine < 0:
-			return
-		var mag := str(magazine)
-		var rest := "| %d" % reserve if reserve >= 0 else ""
-		var rest_w := Ink.width(rest, 22) if rest != "" else 0.0
-		if rest != "":
-			Ink.text(self, Vector2(right - rest_w, 56.0), rest, 22, DIM, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 5)
-		var mag_w := Ink.width(mag, 36)
-		Ink.text(self, Vector2(right - rest_w - 10.0 - mag_w, 56.0), mag, 36, LOW if low else TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 6)
 
 
 ## The right edge: one silhouette per weapon carried, with the number that selects it.
@@ -616,73 +472,6 @@ class AbilityBar extends Control:
 		var key := str(b["key"])
 		var cap_w := Ink.keycap_width(key, 12)
 		var _w := Ink.keycap(self, Vector2(rect.get_center().x - cap_w * 0.5, rect.end.y + 2.0), key, 12)
-
-
-## The right edge: the keys worth knowing, each a word and its key, right-aligned.
-class KeyHints extends Control:
-	const ROW_H := 28.0
-
-	## `[words, key]` per row, top to bottom.
-	var rows: Array = []
-
-	func show_hints(p_rows: Array) -> void:
-		if str(p_rows) != str(rows):
-			rows = p_rows
-			queue_redraw()
-
-	## Each row's key and words, from the left edge.
-	func footprint() -> Rect2:
-		var w := 0.0
-		for r in rows:
-			w = maxf(w, Ink.keycap_width(str(r[1]), 12) + 8.0 + Ink.width(str(r[0]), 16))
-		return Rect2(0.0, 0.0, w, float(rows.size()) * ROW_H) if not rows.is_empty() else Rect2()
-
-	func _draw() -> void:
-		# Key first, then the words, from the left edge: the hints are on the left of the
-		# frame (`ArenaHud.build` says why).
-		var y := ROW_H * 0.5
-		for r in rows:
-			var key := str(r[1])
-			var cap_w := Ink.keycap(self, Vector2(0.0, y), key, 12)
-			Ink.text(self, Vector2(cap_w + 8.0, y + 6.0), str(r[0]), 16, TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 5)
-			y += ROW_H
-
-
-## A prompt for what can be done right now: "Cancel slide [C]", "Reload [R]". Centred on
-## its own position.
-class Prompt extends Control:
-	var words: String = ""
-	var key: String = ""
-
-	func show_prompt(p_words: String, p_key: String) -> void:
-		if p_words != words or p_key != key:
-			words = p_words
-			key = p_key
-			queue_redraw()
-		visible = words != ""
-
-	## What a suite reads.
-	var text: String:
-		get:
-			return "%s  %s" % [words, key] if words != "" else ""
-
-	## The plate under the words and the key.
-	func footprint() -> Rect2:
-		if words == "":
-			return Rect2()
-		var total := Ink.width(words, 17) + 10.0 + Ink.keycap_width(key, 13)
-		return Rect2(size.x * 0.5 - total * 0.5 - 12.0, 0.0, total + 24.0, 34.0)
-
-	func _draw() -> void:
-		if words == "":
-			return
-		var cap_w := Ink.keycap_width(key, 13)
-		var words_w := Ink.width(words, 17)
-		var total := words_w + 10.0 + cap_w
-		var x := size.x * 0.5 - total * 0.5
-		Ink.plate(self, Rect2(x - 12.0, 0.0, total + 24.0, 34.0), PLATE, 8)
-		Ink.text(self, Vector2(x, 23.0), words, 17, TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 4)
-		var _w := Ink.keycap(self, Vector2(x + words_w + 10.0, 17.0), key, 13)
 
 
 ## A portrait per player: their avatar's head, rendered once into a small viewport of its

@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 586
+const CHECKS := 588
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -4306,17 +4306,19 @@ func _test_interface() -> void:
 	hud.follow(subject)
 	hud.refresh_all()
 
-	_check(hud.crosshair != null and hud.health_bar != null, "the HUD builds")
+	# Health is dot-ui's `DotVitals`, handed the followed player's numbers by `present_gear`.
+	hud.present_gear()
+	_check(hud.crosshair != null and hud.vitals != null, "the HUD builds")
 	_check(
-		absf(float(hud.health_bar.value) - subject.health.health) < 0.01,
-		"and its health bar reads the player it follows",
-		"%s vs %.1f" % [hud.health_bar.value, subject.health.health]
+		absf(hud.vitals.health - subject.health.health) < 0.01,
+		"and its health reads the player it follows",
+		"%s vs %.1f" % [hud.vitals.health, subject.health.health]
 	)
 
 	subject.health.health = 33.0
-	hud.refresh_all()
+	hud.present_gear()
 	_check(
-		absf(float(hud.health_bar.value) - 33.0) < 0.01,
+		absf(hud.vitals.health - 33.0) < 0.01 and hud.vitals.number_text() == "33",
 		"and follows it when it changes"
 	)
 
@@ -4427,6 +4429,15 @@ func _test_interface() -> void:
 		mine != null and hud.strip.left_score == mine.score and hud.strip.left_tag == "YOU",
 		"the strip's left score is the followed player's own", "%d" % hud.strip.left_score
 	)
+	# The server's figure, as a networked client hands it over: rounded up, never 0:00 with
+	# time left (dot-ui's `DotScoreStrip.clock_text`; arena's own rounded down).
+	hud.remaining_override = 59.4
+	hud.present_scores()
+	_check(hud.strip.clock == "1:00" and not hud.strip.clock_low, "the clock rounds the seconds left up (59.4 s reads %s)" % hud.strip.clock)
+	hud.remaining_override = 0.3
+	hud.present_scores()
+	_check(hud.strip.clock == "0:01" and hud.strip.clock_low, "and says 0:01, in red, with a fraction of a second left (%s)" % hud.strip.clock)
+	hud.remaining_override = NAN
 	hud.present_portraits()
 	var ranked_kills: Array = []
 	for e in hud.portraits.entries:

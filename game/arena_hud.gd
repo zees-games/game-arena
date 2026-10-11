@@ -12,7 +12,9 @@ const ArenaHudGlance := preload("arena_hud_glance.gd")
 ## is and why): scores, clock and portraits at the top centre, the kill feed top right,
 ## health bottom left, magazine and reserve bottom right with the carried weapons up the
 ## right edge, abilities bottom centre, key hints on the left; and the kill feedback
-## (hit marker, damage numbers, medals, the streak meter) over the middle.
+## (hit marker, damage numbers, medals, the streak meter) over the middle. The health, the
+## ammunition, the strip, the prompt, the hints, the hit marker and the damage numbers are
+## dot-ui's glance pieces (`DotHudPiece`); the rest are arena's own.
 ##
 ## [b]Built here rather than shipped by dot-ui, and that is the division of labour.[/b]
 ## dot-ui knows how to draw a bounded self-expiring list of coloured fragments; it does
@@ -29,26 +31,24 @@ var player: ArenaPlayer = null
 var game: ArenaGame = null
 
 var crosshair: DotCrosshair = null
-var health_bar: DotStatBar = null
-var armour_bar: DotStatBar = null
 
-## The numbers by the bars, bottom left.
-var vitals: ArenaHudGlance.Vitals = null
+## Bottom left: health as a bar with its number, armour as a thin bar under it.
+var vitals: DotVitals = null
 ## `magazine | reserve` under the weapon's name, bottom right.
-var ammo: ArenaHudGlance.AmmoCounter = null
+var ammo: DotAmmoCounter = null
 ## The carried weapons up the right edge.
 var slots: ArenaHudGlance.WeaponSlots = null
 ## Top right: killer, weapon silhouette, victim.
 var feed: ArenaHudGlance.KillFeed = null
 ## Top centre: the two scores and the clock, the target and the mode.
-var strip: ArenaHudGlance.ScoreStrip = null
+var strip: DotScoreStrip = null
 ## Under the strip: every player ranked, portrait, rank and kills.
 var portraits: ArenaHudGlance.Portraits = null
 var portrait_cache: ArenaHudGlance.PortraitCache = null
 ## Bottom centre: slide, launch, dash and the wall jump, with keys and cooldowns.
 var abilities: ArenaHudGlance.AbilityBar = null
 ## The right edge: the keys worth knowing.
-var hints: ArenaHudGlance.KeyHints = null
+var hints: DotKeyHints = null
 
 ## Seconds left, when something other than this game's own match knows. NAN means
 ## "ask the match", which is what a server and an offline client do.
@@ -104,7 +104,7 @@ var launch_key_text: String:
 
 ## The prompt for what can be done now: "Cancel slide [C]" while sliding, "Reload [R]" on
 ## an empty magazine.
-var slide_label: ArenaHudGlance.Prompt = null
+var slide_label: DotKeyPrompt = null
 
 ## The coins this player has collected this match, from the drops layer.
 var coins_label: Label = null
@@ -124,10 +124,10 @@ const STREAK_FULL := 10
 
 ## The hit marker: four ticks round the crosshair on every hit the server confirmed, red
 ## on a kill. See [method note_hit].
-var hit_marker: HitMarker = null
+var hit_marker: DotHitMarker = null
 
 ## Numbers rising off whatever was hit, gold for a headshot.
-var damage_numbers: DamageNumbers = null
+var damage_numbers: DotDamageNumbers = null
 
 ## The medals of the followed player's last kills: icon, name, scale in, hold, fade.
 var medal_row: MedalRow = null
@@ -139,9 +139,6 @@ var _death_text: String = ""
 
 ## The feedback's gold: the streak, the points, a headshot's number.
 const GOLD := Color(1.0, 0.8, 0.22)
-
-## A kill's red: the hit marker on a lethal hit.
-const KILL_RED := Color(1.0, 0.22, 0.2)
 
 ## How the feedback is drawn: fonts, icons, colours, outlined text. An inner class so the
 ## widgets below can call it (an inner class cannot call its outer script's functions).
@@ -268,105 +265,6 @@ class StreakMeter extends Control:
 		)
 
 
-## Four ticks round the crosshair: white on a hit, larger and red on a kill, with a short
-## pop outward as it appears and a fade. Only ever flashed by a hit the server confirmed.
-class HitMarker extends Control:
-	const HIT_SEC := 0.28
-	const KILL_SEC := 0.6
-	var age: float = 99.0
-	var life: float = HIT_SEC
-	var kill: bool = false
-	var headshot: bool = false
-
-	## 1 when it has just flashed, 0 when it is gone.
-	var alpha: float:
-		get:
-			return clampf(1.0 - age / life, 0.0, 1.0)
-
-	func flash(p_kill: bool, p_headshot: bool) -> void:
-		# A pellet landing after the lethal one in the same burst must not turn red white.
-		if kill and not p_kill and age < life * 0.5:
-			return
-		kill = p_kill
-		headshot = p_headshot
-		age = 0.0
-		life = KILL_SEC if p_kill else HIT_SEC
-		queue_redraw()
-
-	func advance(delta: float) -> void:
-		age += delta
-		queue_redraw()
-
-	func _draw() -> void:
-		var a := alpha
-		if a <= 0.0:
-			return
-		var c := size * 0.5
-		var pop := 1.0 + 0.5 * maxf(0.0, 1.0 - age / 0.08)
-		var gap := (9.0 if kill else 7.0) * pop
-		var reach := gap + (16.0 if kill else 10.0) * pop
-		var thick := 4.0 if kill else 2.5
-		var colour := KILL_RED if kill else (Color(1.0, 0.9, 0.6) if headshot else Color.WHITE)
-		for d in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, 1), Vector2(-1, -1)]:
-			var v: Vector2 = (d as Vector2).normalized()
-			draw_line(c + v * (gap - 1.0), c + v * (reach + 1.0), Color(0.0, 0.0, 0.0, 0.55 * a), thick + 2.5, true)
-			draw_line(c + v * gap, c + v * reach, Color(colour, a), thick, true)
-
-
-## Damage numbers: each rises off the point the server said it landed, projected through
-## the camera every frame, so it stays on the body while the view moves. Hits on one victim
-## within [constant MERGE_SEC] add up into one number, the way a burst reads as one hit.
-class DamageNumbers extends Control:
-	const LIFE_SEC := 0.9
-	const MERGE_SEC := 0.35
-	const RISE_PX := 70.0
-	var entries: Array[Dictionary] = []
-	var _seed: int = 0
-
-	func add(victim: int, amount: float, point: Vector3, headshot: bool) -> void:
-		for e in entries:
-			if int(e["victim"]) == victim and float(e["age"]) < MERGE_SEC:
-				e["amount"] = float(e["amount"]) + amount
-				e["headshot"] = bool(e["headshot"]) or headshot
-				e["age"] = 0.0
-				return
-		_seed += 1
-		# A small sideways scatter, deterministic, so two numbers on one body do not stack.
-		var drift := float((_seed * 37) % 7 - 3) * 9.0
-		entries.append({
-			"victim": victim, "amount": amount, "point": point, "headshot": headshot,
-			"age": 0.0, "drift": drift,
-		})
-
-	func advance(delta: float) -> void:
-		for i in range(entries.size() - 1, -1, -1):
-			entries[i]["age"] = float(entries[i]["age"]) + delta
-			if float(entries[i]["age"]) >= LIFE_SEC:
-				entries.remove_at(i)
-		queue_redraw()
-
-	func _draw() -> void:
-		var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
-		if camera == null:
-			return
-		var to_local := get_global_transform().affine_inverse()
-		var font := Look.feedback_font(true)
-		for e in entries:
-			var point: Vector3 = e["point"]
-			if camera.is_position_behind(point):
-				continue
-			var t := float(e["age"]) / LIFE_SEC
-			var head := bool(e["headshot"])
-			var at: Vector2 = to_local * camera.unproject_position(point)
-			at += Vector2(float(e["drift"]), -RISE_PX * (1.0 - pow(1.0 - t, 2.0)))
-			var pop := 1.0 + 0.6 * maxf(0.0, 1.0 - float(e["age"]) / 0.1)
-			var font_size := int(round((30.0 if head else 24.0) * pop))
-			var colour := GOLD if head else Color.WHITE
-			colour.a = clampf((1.0 - t) / 0.4, 0.0, 1.0)
-			var text := str(int(roundf(float(e["amount"]))))
-			Look.draw_outlined(self, font, at + Vector2(-60.0, 0.0), text, font_size, colour, 7, HORIZONTAL_ALIGNMENT_CENTER, 120.0)
-
-
 ## The medals of the followed player's kills: a row above the crosshair, each a coloured
 ## badge with a white icon and its name under it. Each scales in with an overshoot, holds,
 ## and fades; several from one kill come in one after another, and the row re-centres as
@@ -488,7 +386,7 @@ class MedalRow extends Control:
 ## middle to the column, so the width follows the frame: `notice_width`.
 func notice(text: String) -> void:
 	# The ballot already says it, with the time left and the counts: see `is_ballot_line`.
-	if is_ballot_line(text) and covered_rect().has_area():
+	if is_ballot_line(text) and DotHudPiece.covered_rect(self).has_area():
 		return
 	if notice_label == null:
 		# Under the portraits and the medal row: `notice_top`.
@@ -522,36 +420,16 @@ static func is_ballot_line(text: String) -> bool:
 	return open > 0 and text.ends_with("s)") and text.substr(open + 2, text.length() - open - 4).is_valid_int()
 
 
-## [b]Something on top of this HUD: the client shell's ballots.[/b] The shell draws every
-## ballot down the right-hand side, over whatever the game drew, and cannot reach into a
-## delivered game, so the game looks: every visible Control in dot-ui's `dot_hud_cover` group,
-## merged, in this HUD's own coordinates. Named by its string, never dot-ui's constant, so the
-## pack still loads on a shell whose dot-ui predates the group (a missing group is nothing to
-## avoid; a missing constant is a parse error). Empty when nothing covers it.
-const COVER_GROUP := "dot_hud_cover"
-
-
-func covered_rect() -> Rect2:
-	if not is_inside_tree():
-		return Rect2()
-	var to_me := get_global_transform_with_canvas().affine_inverse()
-	var out := Rect2()
-	for node in get_tree().get_nodes_in_group(COVER_GROUP):
-		var other := node as Control
-		if other == null or not other.is_visible_in_tree() or other == self or is_ancestor_of(other):
-			continue
-		var rect := to_me * (other.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, other.size))
-		if rect.has_area():
-			out = rect if not out.has_area() else out.merge(rect)
-	return out
-
-
-## Keeps the HUD out from under [method covered_rect], every frame. The weapon slots up the
-## right edge tighten, then show only the rows around the current one, to end above a ballot
-## that comes down over them (a seven-row map ballot reaches slot 1 at 1280x720); and the
-## vote's centre line goes while its ballot is drawn.
+## [b]Keeps the HUD out from under the client shell's ballots[/b], every frame. The shell
+## draws every ballot down the right-hand side, over whatever the game drew, and cannot reach
+## into a delivered game, so the game looks: `DotHudPiece.covered_rect` is every visible
+## member of the `dot_hud_cover` group, merged, in this HUD's own coordinates. dot-ui's
+## pieces (health, ammunition, the strip, the hints) each dim themselves under one. The
+## weapon slots up the right edge tighten, then show only the rows around the current one, to
+## end above a ballot that comes down over them (a seven-row map ballot reaches slot 1 at
+## 1280x720); and the vote's centre line goes while its ballot is drawn.
 func make_room() -> void:
-	var cover := covered_rect()
+	var cover := DotHudPiece.covered_rect(self)
 	if slots != null:
 		var bottom := -INF
 		if cover.has_area():
@@ -762,12 +640,12 @@ func _build_feedback() -> void:
 	streak_meter.position = Vector2(34.0, -160.0)
 	streak_meter.size = Vector2(10.0, 180.0)
 	add_child(streak_meter)
-	damage_numbers = DamageNumbers.new()
+	damage_numbers = DotDamageNumbers.new()
 	damage_numbers.name = "DamageNumbers"
 	damage_numbers.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	damage_numbers.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(damage_numbers)
-	hit_marker = HitMarker.new()
+	hit_marker = DotHitMarker.new()
 	hit_marker.name = "HitMarker"
 	hit_marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hit_marker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -799,55 +677,23 @@ func set_safe_area(pixels: float) -> void:
 	_fit_feed()
 
 
-## The frame the HUD is drawn for: below it the whole HUD is scaled down, never laid out
-## again. [b]On a frame smaller than this its pieces ran into each other[/b]: standalone at
-## 854x480 the challenge ran over the scores, the ability bar over the health, the medals
-## over the portraits and "Cancel slide" over the health; at 960x720 the scores reached the
-## kill feed. The client shell never shows a game a frame like that (its canvas is
-## 1280x720, stretched to the window), so this is the same answer the shell gives, for the
-## game on its own. Never larger: on a bigger frame the pieces keep their size and the map
-## gets the room. 1280x720 and up are drawn exactly as before.
+## The frame the HUD is drawn for ([member DotHud.fit_design]): below it the whole HUD is
+## scaled down by `DotHud.fit_scale`, never laid out again. [b]On a frame smaller than this
+## its pieces ran into each other[/b]: standalone at 854x480 the challenge ran over the
+## scores, the ability bar over the health, the medals over the portraits and "Cancel slide"
+## over the health; at 960x720 the scores reached the kill feed. The client shell never shows
+## a game a frame like that (its canvas is 1280x720, stretched to the window), so this is the
+## same answer the shell gives, for the game on its own. Never larger: on a bigger frame the
+## pieces keep their size and the map gets the room. Arena found this and dot-ui took it over
+## (`fit_design`, `fit_scale`, `fit_to_frame`, API 4); below half size (`fit_min`) a frame
+## gets overlap, not dust.
 const DESIGN_FRAME := Vector2(1280.0, 720.0)
 
-## Below half size the words are unreadable anyway; a frame that small gets overlap, not
-## dust.
-const FIT_MIN := 0.5
 
-
-## How much the HUD is scaled on a frame [param frame] pixels: 1 at 1280x720 and up, less
-## when either side is short of it. The signature is dot-ui's `DotHud.fit_scale` (API 4),
-## which this overrides: a static of the same name with fewer arguments does not parse there.
-static func fit_scale(frame: Vector2, design: Vector2 = DESIGN_FRAME, minimum: float = FIT_MIN) -> float:
-	if design.x <= 0.0 or design.y <= 0.0:
-		return 1.0
-	return clampf(minf(frame.x / design.x, frame.y / design.y), minimum, 1.0)
-
-
-## The viewport size the HUD was last fitted to; [method _process] refits when it moves.
-var _seen_frame := Vector2.ZERO
-
-
-## dot-ui's inset, and the fit to the frame: a `DotHud` anchors itself to the whole rect,
-## which cannot scale, so this one is placed by hand. Called by `DotHud._ready` and
-## [method set_safe_area].
-func _apply_safe_area() -> void:
-	_seen_frame = get_viewport_rect().size if is_inside_tree() else DESIGN_FRAME
-	fit_to_frame(_seen_frame)
-
-
-## Lays the HUD out on a frame [param frame] pixels: inset by the safe area, scaled by
-## [method fit_scale], in units that are 1280x720 or more however small the frame. Public so
-## a suite can lay it out on a frame it does not have (a headless one is 64 px).
-func fit_to_frame(frame: Vector2) -> void:
-	if config == null:
-		config = DotUiConfig.new()
-	var fit := fit_scale(frame)
-	# In the HUD's own units, as the feed's rows are (`feed_lines_clear`): scaled with it.
-	var inset := config.safe_area * config.scale
-	set_anchors_preset(Control.PRESET_TOP_LEFT)
-	scale = Vector2(fit, fit)
-	position = Vector2(inset, inset) * fit
-	size = frame / fit - Vector2(inset, inset) * 2.0
+func _init() -> void:
+	# Before `_ready`, which is where `DotHud` decides between anchoring and fitting, and
+	# follows the viewport's size from then on.
+	fit_design = DESIGN_FRAME
 
 
 ## Where the client shell's right-hand column starts, in frame pixels: its game ballot and
@@ -934,38 +780,15 @@ func build(p_game: ArenaGame) -> void:
 	add_child(crosshair)
 
 	# Bottom left: health as a thick bar with its number at the end, armour as a thin one
-	# under it when there is any. The bars ease; the numbers are `vitals`, on a plate.
-	vitals = ArenaHudGlance.Vitals.new()
+	# under it when there is any. The bars ease and the numbers do not (`DotVitals`).
+	vitals = DotVitals.new()
 	vitals.name = "Vitals"
 	_place(vitals, Control.PRESET_BOTTOM_LEFT, Rect2(0.0, -84.0, 380.0, 76.0))
+	vitals.bar_start = 38.0
 	vitals.bar_end = 300.0
 
-	health_bar = _make_bar("Health", "%d", Vector2(38.0, -70.0), Vector2(262.0, 16.0))
-	health_bar.show_text = false
-	health_bar.bar_height = 16.0
-	health_bar.fill_colour = Color(0.36, 0.86, 0.48)
-	health_bar.low_colour = Color(0.95, 0.3, 0.28)
-	health_bar.track_colour = Color(0.0, 0.0, 0.0, 0.55)
-	health_bar.bind(func() -> Variant:
-		return player.health.health if _live() else 0.0
-	)
-	health_bar.max_source = func() -> Variant:
-		return player.health.max_health if _live() else 100.0
-
-	armour_bar = _make_bar("Armour", "%d", Vector2(38.0, -46.0), Vector2(262.0, 7.0))
-	armour_bar.show_text = false
-	armour_bar.bar_height = 7.0
-	armour_bar.fill_colour = Color(0.4, 0.66, 1.0)
-	armour_bar.track_colour = Color(0.0, 0.0, 0.0, 0.45)
-	armour_bar.low_fraction = 0.0
-	armour_bar.bind(func() -> Variant:
-		return player.health.armour if _live() else 0.0
-	)
-	armour_bar.max_source = func() -> Variant:
-		return player.health.max_armour if _live() else 100.0
-
 	# Bottom right: the weapon's name, then `magazine | reserve`.
-	ammo = ArenaHudGlance.AmmoCounter.new()
+	ammo = DotAmmoCounter.new()
 	ammo.name = "Ammo"
 	_place(ammo, Control.PRESET_BOTTOM_RIGHT, Rect2(-300.0, -84.0, 290.0, 70.0))
 
@@ -977,7 +800,7 @@ func build(p_game: ArenaGame) -> void:
 	# 1600x900 too. The hints moved to the left edge beside the streak meter, and the weapons
 	# carried sit on the ammunition counter, bottom up, which keeps five of them below a
 	# six-row ballot at 720 tall.
-	hints = ArenaHudGlance.KeyHints.new()
+	hints = DotKeyHints.new()
 	hints.name = "KeyHints"
 	_place(hints, Control.PRESET_CENTER_LEFT, Rect2(62.0, -128.0, 200.0, 120.0))
 
@@ -990,7 +813,7 @@ func build(p_game: ArenaGame) -> void:
 	abilities.name = "Abilities"
 	_place(abilities, Control.PRESET_CENTER_BOTTOM, Rect2(-200.0, -98.0, 400.0, 90.0))
 
-	slide_label = ArenaHudGlance.Prompt.new()
+	slide_label = DotKeyPrompt.new()
 	slide_label.name = "Prompt"
 	_place(slide_label, Control.PRESET_CENTER, Rect2(-330.0, 120.0, 300.0, 36.0))
 	slide_label.visible = false
@@ -1001,7 +824,7 @@ func build(p_game: ArenaGame) -> void:
 	_fit_feed()
 	feed.lifetime_sec = config.feed_lifetime_sec if config != null else 6.0
 
-	strip = ArenaHudGlance.ScoreStrip.new()
+	strip = DotScoreStrip.new()
 	strip.name = "Scores"
 	_place(strip, Control.PRESET_CENTER_TOP, Rect2(-260.0, 0.0, 520.0, 72.0))
 
@@ -1021,25 +844,6 @@ func build(p_game: ArenaGame) -> void:
 
 	if game != null:
 		game.player_killed.connect(_on_kill)
-
-
-func _make_bar(
-	node_name: String,
-	format: String,
-	offset: Vector2,
-	size_hint: Vector2
-) -> DotStatBar:
-	var bar := DotStatBar.new()
-	bar.name = node_name
-	bar.format = format
-	bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	bar.offset_left = offset.x
-	bar.offset_top = offset.y
-	bar.offset_right = offset.x + size_hint.x
-	bar.offset_bottom = offset.y + size_hint.y
-	bar.ease_sec = 0.18
-	add_child(bar)
-	return bar
 
 
 ## Adds [param piece] with [param preset]'s anchors and [param rect] as its offsets from
@@ -1232,9 +1036,6 @@ func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 
-	if is_inside_tree() and get_viewport_rect().size != _seen_frame:
-		_apply_safe_area()
-
 	match_view()
 	present_blind(delta)
 	present_body()
@@ -1273,7 +1074,9 @@ func present_scores() -> void:
 	)
 	var clock := (
 		String(DotMatch.State.keys()[game.match_node.state]).capitalize() if remaining < 0.0
-		else "%d:%02d" % [int(remaining) / 60, int(remaining) % 60]
+		# Rounded up, so the clock never says 0:00 with time left (dot-ui's; arena's own
+		# rounded down until 2026-10-11).
+		else DotScoreStrip.clock_text(remaining)
 	)
 	var mode := game.displayed_mode()
 	var limit := game.match_node.rules.score_limit if game.match_node.rules != null else 0
@@ -1347,9 +1150,7 @@ func present_gear() -> void:
 	if vitals != null:
 		vitals.visible = _live()
 		if _live() and player.health != null:
-			vitals.show_vitals(player.health.health, player.health.max_health, player.health.armour)
-	if armour_bar != null:
-		armour_bar.visible = _live() and player.health != null and player.health.armour > 0.0
+			vitals.show_vitals(player.health.health, player.health.max_health, player.health.armour, player.health.max_armour)
 
 	var slot: DotWeaponSlot = player.arsenal.current() if live and player.arsenal != null else null
 	if ammo != null:
@@ -1478,8 +1279,7 @@ func present_body() -> void:
 	streak_meter.visible = live
 	streak_meter.set_count(streak, STREAK_FULL)
 	streak_meter.advance(delta)
-	hit_marker.advance(delta)
-	damage_numbers.advance(delta)
+	# The hit marker and the damage numbers advance themselves (`DotHudPiece._process`).
 	medal_row.advance(delta)
 
 	if notice_label != null:
