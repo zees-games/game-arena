@@ -44,8 +44,12 @@ const ArenaPaths := preload("../game/arena_paths.gd")
 ## - [b]Kenney stand-ins and g2gfast's prototype set[/b] for a texture the map did not
 ##   carry. Arena's own generated grid ([method ArenaMap.dev_texture]) is drawn instead,
 ##   tinted the colour the map's compiler measured for that texture.
-## - [b]Pushes, water, ladders and moving blocks[/b] (`mechanics`). Not run here; see the
-##   game's docs/imported-maps.md.
+##
+## The map's own mechanics (pushes, water, ladders, conveyors, gravity, hurt) are not left
+## out, but they are not built here either: [code]arena_map_mechanics.gd[/code] reads the
+## manifest's `mechanics` block and the player runs it inside the simulated tick
+## ([code]ArenaPlayer._run_map_mechanics[/code]). Sinking blocks are the one part not ported;
+## see the game's docs/imported-maps.md.
 
 ## Metres per genre unit: 0.75 inch, the scale these maps were built at. Not the 1-inch
 ## figure sometimes quoted — at that scale a surf ramp is one the movement cannot hold.
