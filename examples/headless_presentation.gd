@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 216
+const CHECKS := 217
 
 var _passed := 0
 var _failed := 0
@@ -1172,6 +1172,21 @@ func _test_chat_box() -> void:
 
 	p.settings.reset_value(&"chat_open_key")
 	p.settings.reset_value(&"chat_window")
+
+	# A full log, at the frame the client shell always draws on, must stay under the
+	# killstreak meter's words: at a 250-tall meter the sixth line wrote over them.
+	var hud := ArenaHud.new()
+	hud.config = DotUiConfig.new()
+	add_child(hud)
+	hud.build(null)
+	hud._build_feedback()
+	hud.fit_to_frame(Vector2(1280, 720))
+	var streak: Rect2 = hud.streak_meter.get_global_transform() * hud.streak_meter.label_footprint()
+	var rows := float(window.max_lines) * (window.line_height + window.line_gap)
+	var log_box := Rect2(window.margin_left, 720.0 - window.margin_bottom - window.entry_height - rows, window.width, rows)
+	_check(not log_box.intersects(streak), "a full chat log stays under the killstreak meter at 1280x720",
+		"log %s, meter's words %s" % [log_box, streak])
+	hud.queue_free()
 
 	_completed += 1
 

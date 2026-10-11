@@ -755,8 +755,12 @@ func _build_feedback() -> void:
 	streak_meter.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	streak_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	streak_meter.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	streak_meter.position = Vector2(34.0, -150.0)
-	streak_meter.size = Vector2(10.0, 250.0)
+	# [b]Short enough that its words clear a full chat log.[/b] The chat box's eight rows
+	# reach y 424 at 1280x720 (`ArenaPresentation._build_chat`: 110 off the bottom, the
+	# entry, 8 x 20); a 250-tall bar put "Killstreak xN" at 468..492, and the sixth chat
+	# line wrote over it in the client shell (a ballot's "Vote: …" line wraps to two).
+	streak_meter.position = Vector2(34.0, -160.0)
+	streak_meter.size = Vector2(10.0, 180.0)
 	add_child(streak_meter)
 	damage_numbers = DamageNumbers.new()
 	damage_numbers.name = "DamageNumbers"
