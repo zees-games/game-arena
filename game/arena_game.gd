@@ -111,10 +111,25 @@ signal mode_shown(shown: ArenaMode)
 
 @export_group("Rules")
 
-## Kills to win. Zero uses the ruleset's own.
+## Kills to win. Zero uses the ruleset's own. Gun game ignores it: its limit is its list.
+##
+## [b]These four are the server's say over the mode's numbers[/b], and they are read in two
+## places: [method _build_match], for every match this game builds (each map change builds
+## one), and [method apply_match_limits], for the match being played. The module's
+## `arena_scorelimit`, `arena_timelimit`, `arena_warmup` and `arena_minplayers` cvars write
+## them through the latter. Writing only the live match lost the value at the next map
+## change; writing only these exports changed nothing until then, and `arena_scorelimit` did
+## neither for as long as it existed.
 @export_range(0, 200, 1) var score_limit: int = 25
 
+## The match's length in seconds. Zero uses the ruleset's own.
 @export_range(0.0, 3600.0, 30.0) var time_limit_sec: float = 600.0
+
+## Warmup in seconds. Negative uses the ruleset's own; zero is no warmup.
+@export_range(-1.0, 600.0, 1.0) var warmup_sec: float = -1.0
+
+## Players needed before a round starts. Zero uses the ruleset's own.
+@export_range(0, 64, 1) var min_players: int = 0
 
 @export_group("Mode")
 
@@ -564,6 +579,40 @@ func apply_drop_rules() -> void:
 	drops.life_sec = float(drop_rules["life"])
 
 
+## Puts [member score_limit], [member time_limit_sec], [member warmup_sec] and
+## [member min_players] on the match being played, from the next tick (dot-match reads its
+## rules every tick). The authority's to call; a client is told the score limit and the clock
+## by MATCH. A limit the match has already passed ends it on the next check, which is what a
+## lowered frag limit does in the genre.
+func apply_match_limits() -> void:
+	if match_node == null or match_node.rules == null or mode == null:
+		return
+	# From the mode again, so setting an export back to zero restores the mode's number
+	# rather than keeping the last override.
+	var from_mode: DotMatchRules = mode.rules
+	match_node.rules.score_limit = from_mode.score_limit
+	match_node.rules.time_limit_sec = from_mode.time_limit_sec
+	match_node.rules.warmup_sec = from_mode.warmup_sec
+	match_node.rules.min_players = from_mode.min_players
+	_override_rules(match_node.rules)
+
+
+func _override_rules(rules: DotMatchRules) -> void:
+	# Gun game's limit is the length of its list: a kill is a level, and a limit past the
+	# last gun is kills with the knife nobody is counting ([ArenaMode]).
+	if score_limit > 0 and mode.gun_game.is_empty():
+		rules.score_limit = score_limit
+
+	if time_limit_sec > 0.0:
+		rules.time_limit_sec = time_limit_sec
+
+	if warmup_sec >= 0.0:
+		rules.warmup_sec = warmup_sec
+
+	if min_players > 0:
+		rules.min_players = min_players
+
+
 func _build_match() -> DotResult:
 	# DUPLICATED, not used directly. A Resource is a reference in GDScript, so handing
 	# dot-match the catalogue's own rules would mean a server that raised a score limit
@@ -572,11 +621,7 @@ func _build_match() -> DotResult:
 
 	# The exports override the mode when they are set, so a server can keep the mode
 	# and change the numbers. Zero means "whatever the mode said".
-	if score_limit > 0:
-		rules.score_limit = score_limit
-
-	if time_limit_sec > 0.0:
-		rules.time_limit_sec = time_limit_sec
+	_override_rules(rules)
 
 	match_node = DotMatch.new()
 	match_node.name = "Match"

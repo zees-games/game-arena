@@ -131,7 +131,7 @@ func _module_load() -> DotResult:
 		"arena_maps", _cmd_maps, "List the maps this server can boot", ""
 	)
 
-	add_cvar("arena_scorelimit", str(game.score_limit), "Kills to win the match")
+	_add_match_cvars()
 
 	_add_movement_cvars()
 	_add_drop_cvars()
@@ -206,6 +206,9 @@ func _module_load() -> DotResult:
 	# operator's; `bot_quota_mode off` is a server with no bots.
 	_bot_quota = DotBotQuota.install(self, DEFAULT_BOT_QUOTA)
 
+	# Through `game.min_players` like the other match cvars (`_add_match_cvars`): written to
+	# the live match alone, it was back to the mode's 2 after the first map change, and a
+	# one-player server sat in warmup from then on.
 	add_cvar(
 		"arena_minplayers",
 		str(game.match_node.rules.min_players),
@@ -213,7 +216,8 @@ func _module_load() -> DotResult:
 		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
 	).with_min(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
-			game.match_node.rules.min_players = maxi(new_value.to_int(), 1)
+			game.min_players = maxi(new_value.to_int(), 1)
+			_apply_match_limits()
 			log_info("minimum players changed", {
 				"min_players": game.match_node.rules.min_players
 			})
@@ -771,6 +775,56 @@ func _register_game() -> void:
 	}
 
 	server.games.add_game(descriptor)
+
+
+## `arena_scorelimit`, `arena_timelimit` and `arena_warmup`: the server's numbers over the
+## mode's, live and kept across map changes ([member ArenaGame.score_limit]).
+##
+## [b]`arena_scorelimit` was registered with no handler[/b] and nothing read it, so a game.yml
+## or content.yml value was a line in the config and nothing else (the shipped "25" equalled
+## the default, which hid it). A cvar writes the game's export, which every match built after
+## it reads, and the live match through `_apply_match_limits`, because a server's config is
+## applied after this module loads, when the first match is already running. Zero, for the
+## two limits, is "the mode's own"; a negative warmup is too.
+func _add_match_cvars() -> void:
+	add_cvar(
+		"arena_scorelimit", str(game.score_limit),
+		"Kills to win the match (a side's in a team mode); 0 for the mode's own. Gun game ends at its last gun",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+	).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.score_limit = maxi(new_value.to_int(), 0)
+			_apply_match_limits()
+			log_info("score limit changed", {"score_limit": game.match_node.rules.score_limit})
+	)
+	add_cvar(
+		"arena_timelimit", str(int(game.time_limit_sec)),
+		"Seconds a match lasts; 0 for the mode's own",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+	).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.time_limit_sec = maxf(new_value.to_float(), 0.0)
+			_apply_match_limits()
+			log_info("time limit changed", {"time_limit_sec": game.match_node.rules.time_limit_sec})
+	)
+	add_cvar(
+		"arena_warmup", str(game.warmup_sec),
+		"Seconds of warmup before a match; -1 for the mode's own",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+	).with_min(-1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.warmup_sec = new_value.to_float()
+			_apply_match_limits()
+			log_info("warmup changed", {"warmup_sec": game.match_node.rules.warmup_sec})
+	)
+
+
+## Puts the game's limits on the running match and tells every client: MATCH carries the
+## score limit the HUD divides by and the clock, which a new time limit has just moved.
+func _apply_match_limits() -> void:
+	game.apply_match_limits()
+	if bridge != null:
+		bridge.note_score_limit_changed()
 
 
 ## Puts dot-combat's cvars on the world's current combat manager: after a change, and after a

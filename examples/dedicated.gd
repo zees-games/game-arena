@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 129
+const CHECKS := 134
 
 var _passed := 0
 var _failed := 0
@@ -106,6 +106,7 @@ func _run() -> void:
 		_test_query()
 		await _test_browser()
 		_test_commands()
+		_test_match_cvars()
 		await _test_bots()
 		_test_unload()
 		_test_no_message_preloads_itself()
@@ -975,6 +976,68 @@ func _test_commands() -> void:
 	var restored := _server.console.execute("arena_mode %s" % was)
 	_check(restored.ok, "and it changes back", str(restored.error))
 	_check(_game.mode.id == StringName(was), "to the mode it started on")
+
+
+## The match cvars on a real console: `arena_scorelimit` was registered and read by nothing,
+## and there was no cvar for the time limit or warmup, so a config's numbers were ignored.
+## `set_cvar` is the path a game.yml / content.yml value takes after the module loads (dot-
+## server's descriptor cvars); `execute` is the console's and rcon's.
+func _test_match_cvars() -> void:
+	print("")
+	print("the match cvars")
+
+	var rules := _game.match_node.rules
+	var was_min := rules.min_players
+
+	var score := _server.console.set_cvar("arena_scorelimit", "7")
+	_check(
+		score.ok and _game.match_node.rules.score_limit == 7,
+		"arena_scorelimit 7 from a config is the running match's score limit",
+		"%s, limit %d" % [str(score.error), _game.match_node.rules.score_limit]
+	)
+
+	var timed := _server.console.execute("arena_timelimit 90")
+	_check(
+		timed.ok and is_equal_approx(_game.match_node.rules.time_limit_sec, 90.0),
+		"arena_timelimit 90 at the console is its time limit",
+		"%s, %.1f" % [str(timed.error), _game.match_node.rules.time_limit_sec]
+	)
+
+	var warm := _server.console.execute("arena_warmup 3")
+	var fewer := _server.console.execute("arena_minplayers 1")
+	_check(
+		warm.ok and fewer.ok and is_equal_approx(_game.match_node.rules.warmup_sec, 3.0)
+			and _game.match_node.rules.min_players == 1,
+		"arena_warmup 3 and arena_minplayers 1 are its warmup and its minimum",
+		str(_game.match_node.rules.describe())
+	)
+
+	# A map change builds a new match from the mode; the server's numbers go with it.
+	var changed := _game.change_map(ArenaMap.dm_box())
+	var after := _game.match_node.rules
+	_check(
+		changed.ok and after != rules and after.score_limit == 7
+			and is_equal_approx(after.time_limit_sec, 90.0)
+			and is_equal_approx(after.warmup_sec, 3.0) and after.min_players == 1,
+		"and all four survive a map change, which builds a new match",
+		"%s: %d, %.1f, %.1f, %d" % [
+			str(changed.error), after.score_limit, after.time_limit_sec, after.warmup_sec, after.min_players
+		]
+	)
+
+	# Zero is the mode's own, not "no limit": a server can hand the number back.
+	var back := _server.console.execute("arena_timelimit 0")
+	_check(
+		back.ok and is_equal_approx(_game.match_node.rules.time_limit_sec, _game.mode.rules.time_limit_sec),
+		"arena_timelimit 0 gives the match the mode's own time limit back",
+		"%.1f, the mode's %.1f" % [_game.match_node.rules.time_limit_sec, _game.mode.rules.time_limit_sec]
+	)
+
+	# Put back what the rest of the suite expects.
+	var _a := _server.console.set_cvar("arena_scorelimit", "25")
+	var _b := _server.console.set_cvar("arena_timelimit", "600")
+	var _c := _server.console.set_cvar("arena_warmup", "-1")
+	var _d := _server.console.set_cvar("arena_minplayers", str(was_min))
 
 
 ## Waits [param seconds] of the server's own physics ticks.

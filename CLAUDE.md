@@ -87,6 +87,7 @@ Short forms; the reasoning is in the linked file.
 - Build the team manager before `add_child(match_node)`; assign `resolver.team_of` after `add_child(combat)`. [modes](docs/modes.md#modes-are-data)
 - Whether there are sides is the mode's answer (`is_team_mode()`), not the team manager's. [modes](docs/modes.md#modes-are-data)
 - Gun game's level is the match score, and its score limit is the list's length. [modes](docs/modes.md#gun-game-and-weapon-pools)
+- A match cvar (`arena_scorelimit`, `arena_timelimit`, `arena_warmup`, `arena_minplayers`) writes the `ArenaGame` export AND the live match (`apply_match_limits`): one alone is lost at boot or at the next map change. [modes](docs/modes.md#modes-are-data)
 - Anything hooked to the combat manager rebinds on `map_changed`. [modes](docs/modes.md#effects)
 - Spawn protection: one duration, three records; it does not break on attack; an admin slay passes. [modes](docs/modes.md#spawn-protection)
 - Body breaking is seeded from victim and killer, never the tick. [modes](docs/modes.md#criticals-and-bodies)

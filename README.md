@@ -89,7 +89,9 @@ Settings are cvars. Set them in the server's config, on the command line, or liv
 
 ```
 arena_mode free_for_all        // free_for_all, team_deathmatch, siege, king_of_the_hill, capture_the_flag, gun_game, only_snipers
-arena_scorelimit 25            // kills to win
+arena_scorelimit 25            // kills to win (a side's in a team mode); 0 for the mode's own; gun game ends at its last gun
+arena_timelimit 600            // seconds a match lasts; 0 for the mode's own
+arena_warmup -1                // seconds of warmup before a match; -1 for the mode's own
 arena_minplayers 1             // players needed before a round starts
 arena_streak_rewards ""        // kill streak rewards as streak:reward pairs (heal, armour, haste, empowered)
 arena_spawn_mode avoid         // avoid, weighted, furthest or random

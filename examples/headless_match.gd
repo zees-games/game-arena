@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 585
+const CHECKS := 586
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1349,6 +1349,10 @@ func _test_weapon_modes() -> void:
 	var game := _weapon_mode_game(gun, [920, 921])
 	if not _check(game != null, "a gun game sets up"):
 		return
+	# The server's limit (`arena_scorelimit`, 25 here) is kills; gun game's is levels. It
+	# used to win, so a gun game needed ten knife kills after the last gun to end.
+	_check(game.score_limit == 25 and game.match_node.rules.score_limit == gun.gun_game.size(),
+		"and its match ends at the last gun, not at the server's score limit (%d)" % game.match_node.rules.score_limit)
 	for _i in range(6):
 		await get_tree().process_frame
 	var first := StringName(gun.gun_game[0])
