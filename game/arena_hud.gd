@@ -11,7 +11,7 @@ const ArenaHudGlance := preload("arena_hud_glance.gd")
 ## The in-game display, laid out for a glance (see [ArenaHudGlance] for where each thing
 ## is and why): scores, clock and portraits at the top centre, the kill feed top right,
 ## health bottom left, magazine and reserve bottom right with the carried weapons up the
-## right edge, abilities bottom centre, key hints on the right; and the kill feedback
+## right edge, abilities bottom centre, key hints on the left; and the kill feedback
 ## (hit marker, damage numbers, medals, the streak meter) over the middle.
 ##
 ## [b]Built here rather than shipped by dot-ui, and that is the division of labour.[/b]
@@ -710,6 +710,32 @@ func set_safe_area(pixels: float) -> void:
 		config = DotUiConfig.new()
 	config.safe_area = maxf(pixels, 0.0)
 	_apply_safe_area()
+	_fit_feed()
+
+
+## Where the client shell's right-hand column starts, in frame pixels: its game ballot and
+## its lines are drawn from here down, a third of the frame wide (dot-server-deploy's
+## `client/notice_overlay.gd`, `COLUMN_TOP`; a copy, keep in step).
+const SHELL_COLUMN_TOP := 110.0
+
+
+## How many kill feed rows end above the shell's column when the HUD is inset by
+## [param inset] px: three at the default 16. The rows below that were drawn under an open
+## ballot, and this game cannot tell when one is open, so the feed is never longer.
+static func feed_lines_clear(inset: float) -> int:
+	var pitch := ArenaHudGlance.KillFeed.ROW_H + ArenaHudGlance.KillFeed.ROW_GAP
+	return maxi(int(floor((SHELL_COLUMN_TOP - inset + ArenaHudGlance.KillFeed.ROW_GAP) / pitch)), 1)
+
+
+func _fit_feed() -> void:
+	if feed == null:
+		return
+	var inset := config.safe_area * config.scale if config != null else 16.0
+	var wanted := config.feed_lines if config != null else 5
+	feed.max_lines = mini(wanted, feed_lines_clear(inset))
+	while feed.entries.size() > feed.max_lines:
+		feed.entries.pop_back()
+	feed.queue_redraw()
 
 
 func build(p_game: ArenaGame) -> void:
@@ -806,14 +832,21 @@ func build(p_game: ArenaGame) -> void:
 	ammo.name = "Ammo"
 	_place(ammo, Control.PRESET_BOTTOM_RIGHT, Rect2(-300.0, -84.0, 290.0, 70.0))
 
-	# The right edge: the keys first, then the weapons carried, under the kill feed.
+	# [b]The right edge below 110 px belongs to the client shell[/b]: its ballots and lines are
+	# one column there, a third of the frame wide (`SHELL_COLUMN_TOP`). This game cannot see
+	# when one is open, so its right edge stays clear always. The key hints were centre right
+	# and the weapons' top slot just under the middle; rendered with a ballot open
+	# (`screenshot.sh --glance --ballot`) both were under it at 1280x720, the hints at
+	# 1600x900 too. The hints moved to the left edge beside the streak meter, and the weapons
+	# carried sit on the ammunition counter, bottom up, which keeps five of them below a
+	# six-row ballot at 720 tall.
 	hints = ArenaHudGlance.KeyHints.new()
 	hints.name = "KeyHints"
-	_place(hints, Control.PRESET_CENTER_RIGHT, Rect2(-220.0, -150.0, 210.0, 120.0))
+	_place(hints, Control.PRESET_CENTER_LEFT, Rect2(62.0, -128.0, 200.0, 120.0))
 
 	slots = ArenaHudGlance.WeaponSlots.new()
 	slots.name = "Slots"
-	_place(slots, Control.PRESET_CENTER_RIGHT, Rect2(-170.0, 10.0, 160.0, 210.0))
+	_place(slots, Control.PRESET_BOTTOM_RIGHT, Rect2(-170.0, -294.0, 160.0, 202.0))
 
 	# Bottom centre: the abilities, clear of the hands at the bottom right.
 	abilities = ArenaHudGlance.AbilityBar.new()
@@ -828,7 +861,7 @@ func build(p_game: ArenaGame) -> void:
 	feed = ArenaHudGlance.KillFeed.new()
 	feed.name = "KillFeed"
 	_place(feed, Control.PRESET_TOP_RIGHT, Rect2(-470.0, 0.0, 460.0, 170.0))
-	feed.max_lines = config.feed_lines if config != null else 5
+	_fit_feed()
 	feed.lifetime_sec = config.feed_lifetime_sec if config != null else 6.0
 
 	strip = ArenaHudGlance.ScoreStrip.new()

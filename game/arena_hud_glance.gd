@@ -223,8 +223,10 @@ class Portraits extends Control:
 ## per line. A line you are in has a gold edge. Newest at the top; each fades after
 ## [member lifetime_sec].
 class KillFeed extends Control:
-	const ROW_H := 30.0
-	const ROW_GAP := 4.0
+	# 28 + 3, not 30 + 4: three rows from a 16 px inset end at 106, above the client shell's
+	# column at 110 (`ArenaHud.feed_lines_clear`); at 34 a row the third ran 4 px under it.
+	const ROW_H := 28.0
+	const ROW_GAP := 3.0
 	const ICON_H := 20.0
 	const NAME_SIZE := 15
 
@@ -399,7 +401,9 @@ class WeaponSlots extends Control:
 			queue_redraw()
 
 	func _draw() -> void:
-		var y := ROW_H * 0.5
+		# From the bottom up, so the carried guns sit on the ammunition counter however few
+		# there are, and the top of the box is the one that stays clear of the shell's column.
+		var y := size.y - float(rows.size()) * ROW_H + ROW_H * 0.5
 		for r in rows:
 			var on := int(r["slot"]) == current
 			var alpha := 1.0 if on else 0.72
@@ -506,13 +510,13 @@ class KeyHints extends Control:
 			queue_redraw()
 
 	func _draw() -> void:
+		# Key first, then the words, from the left edge: the hints are on the left of the
+		# frame (`ArenaHud.build` says why).
 		var y := ROW_H * 0.5
 		for r in rows:
 			var key := str(r[1])
-			var cap_w := Ink.keycap_width(key, 12)
-			var cap_x := size.x - cap_w
-			var _w := Ink.keycap(self, Vector2(cap_x, y), key, 12)
-			Ink.text(self, Vector2(0.0, y + 6.0), str(r[0]), 16, TEXT, HORIZONTAL_ALIGNMENT_RIGHT, cap_x - 8.0, 5)
+			var cap_w := Ink.keycap(self, Vector2(0.0, y), key, 12)
+			Ink.text(self, Vector2(cap_w + 8.0, y + 6.0), str(r[0]), 16, TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 5)
 			y += ROW_H
 
 

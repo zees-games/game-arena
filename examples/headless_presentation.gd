@@ -30,7 +30,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 176
+const CHECKS := 179
 
 var _passed := 0
 var _failed := 0
@@ -1423,6 +1423,20 @@ func _test_criticals_and_the_body() -> void:
 		"killing them back is the server's Revenge medal, and they are nobody's nemesis now")
 	hud.notice("hello")
 	_check(hud.notice_label.text == "hello", "and notice() exists, which the client had called for a month")
+
+	# The client shell's column (ballots, its lines) is the right edge from 110 px down. A
+	# headless frame is 64 px, so where things land is the render's to judge
+	# (`screenshot.sh --glance --ballot`); these are the structure that put them there.
+	_check(ArenaHud.feed_lines_clear(16.0) == 3 and hud.feed.max_lines == 3,
+		"the kill feed keeps to the rows that end above the shell's column (%d)" % hud.feed.max_lines)
+	hud.set_safe_area(40.0)
+	var inset_rows := hud.feed.max_lines
+	hud.set_safe_area(16.0)
+	_check(inset_rows == 2 and hud.feed.max_lines == 3,
+		"and to fewer when the safe area pushes it down (%d at 40 px)" % inset_rows)
+	_check(is_zero_approx(hud.hints.anchor_right) and is_equal_approx(hud.slots.anchor_top, 1.0)
+			and hud.slots.offset_bottom <= hud.ammo.offset_top,
+		"the key hints are on the left, the carried weapons on the ammunition counter")
 
 	# The end of the match names the MVP, through the client's own MATCH handler.
 	var summary_game := ArenaGame.new()
