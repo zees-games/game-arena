@@ -453,6 +453,10 @@ func _start_offline() -> void:
 # --- Networked -------------------------------------------------------------
 
 func _build_netcode() -> DotResult:
+	# The server's `mp_teammate_passthrough` through the link (ArenaGame.follow_server_cvars).
+	if link != null:
+		var _following := game.follow_server_cvars(link)
+
 	net = DotNetManager.new()
 	net.name = "Net"
 	net.is_server = false

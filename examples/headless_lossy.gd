@@ -67,7 +67,7 @@ const FIRST_SECONDS := 3.0
 
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 19
+const OTHER_CHECKS := 24
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -138,6 +138,7 @@ func _run() -> void:
 			for window in WINDOWS:
 				await _play_window(window)
 			await _test_wall_moves()
+			await _test_server_cvars_reach_the_client()
 			await _test_leave()
 
 	await _teardown()
@@ -330,6 +331,8 @@ func _connect_client(label: String, udp_port: int) -> Dictionary:
 	game.register_service = false
 	side.add_child(game)
 	game.setup(ArenaMap.dm_box())
+	# What `ArenaClient._build_netcode` does: the server's replicated cvars, through the link.
+	var _following := game.follow_server_cvars(link)
 
 	var net := DotNetManager.new()
 	net.name = "Net"
@@ -374,6 +377,39 @@ func _connect_client(label: String, udp_port: int) -> Dictionary:
 
 	await _until(func() -> bool: return int(record["session"]) != 0 and net.clock.is_synced(), 20.0)
 	return record
+
+
+## [b]dot-combat's `mp_teammate_passthrough` on a client.[/b] The client traces its own shots
+## for tracers and impacts; on its default against a server on 0 or 2 they ended in, or went
+## through, a team-mate where the server's did the opposite. The server's value rides
+## dot-server's replicated cvars before the scene loads, and every change after it.
+func _test_server_cvars_reach_the_client() -> void:
+	_section("the server's mp_teammate_passthrough reaches a client's world, live")
+	var a: Dictionary = _clients["A"]
+	var link: DotClientLink = a["link"]
+	var a_game: ArenaGame = a["game"]
+	_check(link.replicated_cvar("mp_teammate_passthrough") == "1" and a_game.combat.rules.pass_through_level() == 1,
+		"the join carried the server's level and A's world is on it",
+		str(link.replicated_cvars))
+
+	var _two := _server.console.set_cvar("mp_teammate_passthrough", "2")
+	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 2, 5.0),
+		"the server goes to 2 and A's combat rules follow, so its predicted shot passes team-mates too",
+		str(a_game.combat.rules.describe()))
+	var _zero := _server.console.set_cvar("mp_teammate_passthrough", "0")
+	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 0, 5.0),
+		"and to 0", str(a_game.combat.rules.describe()))
+
+	# A map change builds A's world a new manager: it keeps following.
+	var rebuilt := a_game.change_map(a_game.map)
+	_check(rebuilt.ok and a_game.combat.rules.pass_through_level() == 0,
+		"a manager A's world builds for a new map starts on the server's level, not the default",
+		"level %d" % a_game.combat.rules.pass_through_level())
+	var _two_again := _server.console.set_cvar("mp_teammate_passthrough", "2")
+	_check(await _until(func() -> bool: return a_game.combat.rules.pass_through_level() == 2, 5.0),
+		"and the next change reaches it")
+	var _one := _server.console.set_cvar("mp_teammate_passthrough", "1")
+	_done()
 
 
 func _connect_everyone() -> bool:

@@ -46,6 +46,9 @@ const PLATFORM_MODULE_PATH := "res://addons/dot_platform/dot_platform_module.gd"
 
 var game: ArenaGame = null
 
+## dot-combat's cvars (mp_teammate_passthrough), kept to put on each map's new combat manager.
+var _combat_cvars: Array = []
+
 ## The netcode. Owned here rather than by the game, because a headless match and a
 ## dedicated server are different deployments of the same game and only one of them
 ## replicates.
@@ -164,10 +167,20 @@ func _module_load() -> DotResult:
 	# defined there once for every game and live from the next shot; the projectile sweep
 	# reads the same rules. By name, like ArenaProjectiles' pass_through_sets: a host whose
 	# dot-combat predates it loads arena without the cvar.
+	#
+	# REPLICATED, because each client's own manager predicts tracers under it and follows the
+	# server's value through its link (ArenaClient). And re-applied on every map change: the
+	# world builds a NEW combat manager per map, and the one bind_cvars tied the cvar to is
+	# gone, so without this a server on 0 or 2 was back on 1 from the second map on.
 	if game.combat != null and game.combat.has_method(&"bind_cvars"):
-		var _passthrough: Variant = game.combat.call(
-			&"bind_cvars", add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+		var bound: Variant = game.combat.call(
+			&"bind_cvars", add_cvar,
+			DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 		)
+		_combat_cvars = bound as Array if bound is Array else []
+		for cv in _combat_cvars:
+			(cv as DotConVar).changed.connect(_reapply_combat_cvars.unbind(2))
+		game.map_changed.connect(_reapply_combat_cvars.unbind(1))
 
 	# A real server keeps what its monsters learn of each map across restarts. Here and
 	# not in ArenaGame, because every suite builds an ArenaGame and only a server loads this.
@@ -760,6 +773,16 @@ func _register_game() -> void:
 	server.games.add_game(descriptor)
 
 
+## Puts dot-combat's cvars on the world's current combat manager: after a change, and after a
+## map change built a new manager the cvar knows nothing about.
+func _reapply_combat_cvars() -> void:
+	if game == null or not is_instance_valid(game) or game.combat == null:
+		return
+	for cv in _combat_cvars:
+		if cv is DotConVar and is_instance_valid(cv) and game.combat.has_method(&"set_cvar"):
+			var _applied: Variant = game.combat.call(&"set_cvar", (cv as DotConVar).name, (cv as DotConVar).get_string())
+
+
 func _module_unload() -> void:
 	if net != null and is_instance_valid(net):
 		net.stop()
@@ -773,6 +796,11 @@ func _module_unload() -> void:
 
 		if game.player_spawned.is_connected(_on_player_spawned_for_tools):
 			game.player_spawned.disconnect(_on_player_spawned_for_tools)
+
+		for connection in game.map_changed.get_connections():
+			var callable: Callable = connection["callable"]
+			if callable.get_object() == self:
+				game.map_changed.disconnect(callable)
 
 		# Every player this module put in the match comes back out. A module that
 		# unloaded and left them there would leave the game holding bodies whose

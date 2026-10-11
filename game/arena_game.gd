@@ -327,6 +327,9 @@ var _registered_name: StringName = &""
 ## [method _hurt_from_map].
 var _hurt_due: Dictionary = {}
 
+## What [method follow_server_cvars] follows; null on a server and offline.
+var _cvar_source: Object = null
+
 
 func _exit_tree() -> void:
 	if _registered_name != &"":
@@ -417,6 +420,28 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 	return DotResult.success(null)
 
 
+## Keeps this world's combat manager on the server's replicated cvars (dot-combat's
+## `mp_teammate_passthrough`), as [param source] reports them: the client's `DotClientLink`.
+## Remembered, because a map change builds a new manager. True when it is following.
+##
+## [b]Why a client needs it.[/b] This end traces its own shots for tracers and impacts, and
+## on the default 1 against a server on 0 or 2 they ended in (or went through) a team-mate
+## where the server's did the opposite. A family cvar, so it rides dot-server's replicated
+## cvars rather than RULES: one path for every game. By name, like the module's bind: an older
+## host's dot-combat or link cannot follow, and the manager keeps its default.
+func follow_server_cvars(source: Object) -> bool:
+	_cvar_source = source
+	return _follow_cvar_source()
+
+
+func _follow_cvar_source() -> bool:
+	if _cvar_source == null or not is_instance_valid(_cvar_source) or combat == null:
+		return false
+	if not combat.has_method(&"follow_cvars"):
+		return false
+	return bool(combat.call(&"follow_cvars", _cvar_source))
+
+
 func _build_combat() -> DotResult:
 	combat = DotCombatManager.new()
 	combat.name = "Combat"
@@ -464,6 +489,10 @@ func _build_combat() -> DotResult:
 
 	combat.entity_killed.connect(_on_entity_killed)
 	combat.damage_applied.connect(_on_damage_applied)
+
+	# A manager built for a new map starts on dot-combat's defaults; a client puts it back on
+	# the server's cvars here (see follow_server_cvars).
+	var _following := _follow_cvar_source()
 
 
 	projectiles = ArenaProjectiles.new()

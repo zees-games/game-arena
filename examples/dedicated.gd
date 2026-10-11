@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 124
+const CHECKS := 127
 
 var _passed := 0
 var _failed := 0
@@ -290,6 +290,22 @@ func _test_module_loaded() -> void:
 		"and `mp_teammate_passthrough 2` at the console reaches the damage rules",
 		str(_game.combat.rules.describe())
 	)
+	_check(
+		_server.console.find_cvar("mp_teammate_passthrough").has_flag(DotConVar.FLAG_REPLICATED)
+			and _server.console.replicated_values().get("mp_teammate_passthrough", "") == "2",
+		"and it is replicated: every client is sent the server's level",
+		str(_server.console.replicated_values())
+	)
+	# A map change builds a new combat manager; the operator's level has to survive it, or a
+	# server on 2 is back on 1 from the second map on.
+	var rebuilt := _game.change_map(_game.map)
+	_check(
+		rebuilt.ok and _game.combat.rules.pass_through_level() == 2,
+		"and it survives a map change, which builds a new combat manager",
+		"%s, level %d" % [str(rebuilt.error) if not rebuilt.ok else "ok", _game.combat.rules.pass_through_level()]
+	)
+	var _never := _server.console.set_cvar("mp_teammate_passthrough", "0")
+	_check(_game.combat.rules.pass_through_level() == 0, "and a change after it reaches the new manager")
 	var _back := _server.console.set_cvar("mp_teammate_passthrough", "1")
 
 	var harder := _server.console.set_cvar("npc_skill", "hard")

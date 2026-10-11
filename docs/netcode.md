@@ -47,6 +47,8 @@ The wall moves' keys ride the same set (`wall_run_*`, `wall_jump_*`, `wall_slide
 
 `headless_net`'s negative control for this is a fingerprint left apart by a server-only change, not a position gap: in this lockstep harness a snapshot corrects a wrong impulse within a tick or two. dot-player-controller's rewind used to keep the client's own launch cooldown and buttons; the timers and `previous_buttons` travel in `net_flags`.
 
+**One exception, on purpose: a family cvar.** dot-combat's `mp_teammate_passthrough` is bound by the module with `FLAG_REPLICATED`, and dot-server sends it to the client's `DotClientLink` before the scene loads and on every change; `ArenaGame.follow_server_cvars(link)` keeps the world's combat manager on it and re-follows on the manager a map change builds. Six games bind the same cvar and all of them read it the same way, which RULES (arena's own event) could not give them. The server's side has the same trap: `change_map` builds a new manager, so `ArenaModule` re-applies dot-combat's cvars on `map_changed`, or a server on 0 or 2 was back on 1 from the second map. `dedicated` and `headless_lossy` check both, armed.
+
 ## Weapons over the wire
 
 - **The owner's arsenal is filled from `net_carry`** (one bit per weapon, owner-only, for the ammunition's reason) through `ArenaContent.apply_carry` before the predictor replays, and `correct_ammo` follows. A loadout is resolved from a store on the server; without this a connected client's arsenal was empty for the whole match. `net_weapon` (everybody's) says which weapon is in hand, which a slot number cannot once there are several primaries in one slot.
