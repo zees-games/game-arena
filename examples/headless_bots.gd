@@ -43,7 +43,7 @@ const REFERENCE := 2
 ## The reference is an ordinary player (below). Medium, the default, wins a share of its fights
 ## and loses more; hard is a good player who wins most of them; nightmare is beyond that.
 ##
-## Measured when the bands were set, 300 s each: easy 0.48, medium 1.19, hard 1.65, nightmare 2.13.
+## Measured when the bands were set, 300 s each: easy 0.45, medium 1.20, hard 1.72, nightmare 2.75.
 const KD_BANDS := {
 	"easy": [0.0, 0.7],
 	"medium": [0.5, 1.6],
