@@ -60,9 +60,9 @@ const VIEW := &"arena_view"
 const VOICE := &"dot_voice_talk"
 
 
-## [param dot_ui_level] stands in for the host's dot-ui API level (a test of an older
-## shell); -1 asks the build.
-static func make(dot_ui_level: int = -1) -> DotMenuBindings:
+## The key table. The wheel rows are written by name ("Wheel up" / "Wheel down"): a pack
+## asks for dot-ui 4 (requires.floor.json), and dot-ui names the wheel from level 2.
+static func make() -> DotMenuBindings:
 	var keys := DotMenuBindings.new()
 	# Duck is also the slide: a slide IS a duck at a run. C is added beside it while the row
 	# is on its default and no other row has C ([method ArenaClient._add_slide_key]).
@@ -79,12 +79,8 @@ static func make(dot_ui_level: int = -1) -> DotMenuBindings:
 	for i in range(SLOTS.size()):
 		keys.add(SLOTS[i], StringName("bind_slot_%d" % (i + 1)),
 			"Slot %d: %s" % [i + 1, SLOT_NAMES[i]], str(i + 1), "Weapons")
-	if wheel_named(dot_ui_level):
-		keys.add(WEAPON_PREVIOUS, &"bind_weapon_previous", "Previous weapon", "Wheel up", "Weapons")
-		keys.add(WEAPON_NEXT, &"bind_weapon_next", "Next weapon", "Wheel down", "Weapons")
-	else:
-		keys.add(WEAPON_PREVIOUS, &"bind_weapon_previous", "Previous weapon (wheel up)", "Mouse 4", "Weapons")
-		keys.add(WEAPON_NEXT, &"bind_weapon_next", "Next weapon (wheel down)", "Mouse 5", "Weapons")
+	keys.add(WEAPON_PREVIOUS, &"bind_weapon_previous", "Previous weapon", "Wheel up", "Weapons")
+	keys.add(WEAPON_NEXT, &"bind_weapon_next", "Next weapon", "Wheel down", "Weapons")
 	keys.add(WEAPON_LAST, &"bind_weapon_last", "Last weapon", "Q", "Weapons")
 	keys.add(PUNT, &"bind_punt", "Punt a prop", "G", "Weapons")
 
@@ -101,17 +97,3 @@ static func make(dot_ui_level: int = -1) -> DotMenuBindings:
 	if DotAddonApi.build_level("dot_menu") >= 6 and keys.has_method(&"add_loadout"):
 		var _l: Variant = keys.call(&"add_loadout", "Weapons")
 	return keys
-
-
-## Whether the host's dot-ui writes the wheel by name ("Wheel up", dot-ui API level 2).
-##
-## [b]Asked of the HOST, because a delivered pack runs on the shell's dot-ui[/b], not on the
-## one this checkout links. On an older one the wheel can only be spelled "Mouse 4" /
-## "Mouse 5" (it would not read "Wheel up" at all, and the row would fall back to nothing),
-## and a player reads "Mouse 4" as the thumb button, so the rows keep "(wheel up)" /
-## "(wheel down)" in their labels there. The words go stale once a player rebinds the row,
-## which is why they are dropped wherever the host can name the key itself. Delete the
-## older branch once every shell carries dot-ui level 2.
-static func wheel_named(dot_ui_level: int = -1) -> bool:
-	var level := dot_ui_level if dot_ui_level >= 0 else DotAddonApi.build_level("dot_ui")
-	return level >= 2

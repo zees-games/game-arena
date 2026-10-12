@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 275
+const CHECKS := 274
 
 var _passed := 0
 var _failed := 0
@@ -727,24 +727,18 @@ func _test_every_key_is_an_action() -> void:
 			wrong.append("%s=%s" % [action, DotInputBinding.describe_action(action)])
 	_check(wrong.is_empty(), "each is a row and on its default key in the InputMap", str(wrong))
 
-	# The wheel rows by name on a dot-ui that names the wheel, and with the "(wheel up)"
-	# stopgap kept on an older shell's dot-ui, whose only spelling is "Mouse 4".
-	var named := ArenaBindings.make(2).row_for_action(&"arena_weapon_previous")
-	var older := ArenaBindings.make(1).row_for_action(&"arena_weapon_previous")
+	# The wheel rows by name: a pack asks for dot-ui 4, which names the wheel (level 2).
+	var named := ArenaBindings.make().row_for_action(&"arena_weapon_previous")
 	_check(
 		str(named["label"]) == "Previous weapon" and str(named["default"]) == "Wheel up",
-		"the wheel rows say Wheel up / Wheel down where dot-ui names the wheel", str(named)
-	)
-	_check(
-		str(older["label"]).contains("(wheel up)") and str(older["default"]) == "Mouse 4",
-		"and keep the (wheel up) label on an older dot-ui", str(older)
+		"the wheel rows say Wheel up / Wheel down", str(named)
 	)
 
 	# A branch only matters if an older shell gets to run it. A pack asks for the level of
 	# every addon it was built against, so requires.floor.json lowers dot-lighting to 1 for
 	# the release's requires.json; dot-ui's floor is 4, because the HUD names dot-ui's glance
-	# pieces (`DotVitals` and the rest, API 4) and a class name cannot be guarded, so the
-	# wheel's level-1 branch above no longer reaches a shell. dot-core's floor_audit refuses
+	# pieces (`DotVitals` and the rest, API 4) and a class name cannot be guarded (the
+	# wheel's level-1 branch went with it). dot-core's floor_audit refuses
 	# a floor once a guard it relies on is gone, here rather than at the release.
 	var floors := DotAddonApi.parse(FileAccess.get_file_as_string("res://" + DotAddonApi.FLOOR_FILE), DotAddonApi.FLOOR_FILE)
 	var derived := DotAddonApi.derive()
