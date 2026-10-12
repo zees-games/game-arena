@@ -110,6 +110,12 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 			motion.add(DotMenuRow.slider(row[0], row[1], def.description if def != null else "")
 				.formatted(func(v: float) -> String: return "Off" if v <= 0.0 else "%d%%" % roundi(v * 100.0)))
 
+	# Solo bots: dot-bot's presets, saved. A server's bots follow the server's bot_difficulty.
+	if general != null:
+		general.section("Solo bots").add(DotMenuRow.select(&"solo_bot_difficulty", "Bot difficulty",
+			"How well the bots play when you play alone. Easy misses and reacts late; nightmare does neither. A server sets its own.",
+			[[&"easy", "Easy"], [&"medium", "Medium"], [&"hard", "Hard"], [&"nightmare", "Nightmare"]]))
+
 	var video := menu.page(&"video")
 	if video != null:
 		video.section("Image").add(DotMenuRow.toggle(&"view_model", "Weapon in view", "Your hands and gun. A server may turn them off."))

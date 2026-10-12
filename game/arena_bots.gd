@@ -17,13 +17,31 @@ extends RefCounted
 ##
 ## [b]What the brain is told[/b] ([World], a [DotBotWorld]): every player as a
 ## [DotBotContact], the combat trace's line of sight, the map's spawns as places to roam, a
-## sound for every shot fired (from [signal ArenaPlayer.used]) and who hit whom (from
-## [signal ArenaGame.hit_confirmed]). Nothing else, so it cannot see through a wall.
+## route between them over the horde's navigation graph (built-in maps; an imported map has
+## none, and is walked straight), how fast the held weapon's projectile flies (so a rocket
+## is led), a sound for every shot fired (from [signal ArenaPlayer.used]) and who hit whom
+## (from [signal ArenaGame.hit_confirmed]). Nothing else, so it cannot see through a wall.
+##
+## [b]A grenade is four commands, not a button.[/b] Arena has no throw key: a frag is slot 5,
+## drawn, held to cook and released. When the brain says [member DotBotIntent.throw], [Mind]
+## switches to the throwable, holds the trigger for [constant COOK_SEC], lets go along the
+## view the brain chose, and switches back to what it held -- the same presses a person makes.
 ##
 ## [b]Deterministic per bot[/b]: the brain's randomness is seeded from the bot's id, and its
 ## clock is the game's tick, so two runs of the same inputs play the same bots.
 
 const ArenaPlayer := preload("arena_player.gd")
+const ArenaNpcs := preload("arena_npcs.gd")
+
+## The behaviour of a weapon whose shot flies (a rocket, a bolt); every other one is led as
+## hitscan. A path, because the pack names behaviours by path (see [DotWeaponDef]).
+const PROJECTILE_BEHAVIOUR := "dot_weapon_projectile.gd"
+
+## How long a bot cooks a grenade before letting go, seconds. Well inside the frag's 3 s fuse.
+const COOK_SEC := 0.3
+
+## How long a throw may take from the switch to the switch back before it is given up, seconds.
+const THROW_GIVE_UP_SEC := 2.5
 
 ## Where the world is kept on the game.
 const WORLD_META := &"arena_bot_world"
@@ -38,6 +56,19 @@ class Mind:
 	extends RefCounted
 	var brain: DotBotBrain = null
 	var seed: int = 0
+	## The throw in hand: 0 none, then [constant THROW_DRAW], [constant THROW_COOK],
+	## [constant THROW_RELEASE], [constant THROW_BACK].
+	var throw_stage: int = 0
+	var throw_view: Vector2 = Vector2.ZERO
+	var throw_back: int = 0
+	var throw_at: int = 0
+	var throw_cook_from: int = 0
+
+
+const THROW_DRAW := 1
+const THROW_COOK := 2
+const THROW_RELEASE := 3
+const THROW_BACK := 4
 
 
 ## What the brain may know of this game.
@@ -50,6 +81,11 @@ class World:
 	var _tick: int = -1
 	var _contacts: Array = []
 	var _by_id: Dictionary = {}
+	var _players: Dictionary = {}
+	## The graph bots walk on and the map it was built for: the horde's when it has one,
+	## built here on a built-in map when it does not, none on an imported map.
+	var _graph: DotNpcNavGraph = null
+	var _graph_map: Object = null
 
 	func _init(p_game: Object) -> void:
 		game = p_game
@@ -68,6 +104,7 @@ class World:
 		_tick = tick
 		_contacts.clear()
 		_by_id.clear()
+		_players.clear()
 		var teams := _team_mode()
 		for p: ArenaPlayer in game.call("players"):
 			var c := DotBotContact.new()
@@ -87,6 +124,7 @@ class World:
 				c.health = p.health.health / p.health.max_health
 			_contacts.append(c)
 			_by_id[c.id] = c
+			_players[c.id] = p
 
 	func now() -> float:
 		return float(maxi(_tick, 0)) / tick_rate
@@ -111,6 +149,39 @@ class World:
 		for spawn: Transform3D in spawns:
 			out.append(spawn.origin)
 		return out
+
+	## The corners of a way from [param from] to [param to] over the navigation graph; empty
+	## (walk straight) on an imported map, off the graph, or with no way.
+	func route(from: Vector3, to: Vector3) -> PackedVector3Array:
+		var graph := _graph_for_map()
+		if graph == null:
+			return PackedVector3Array()
+		return graph.find_smooth_path(from, to, -1.0, true)
+
+	func _graph_for_map() -> DotNpcNavGraph:
+		var map: Variant = game.get("map")
+		if not (map is Object) or not (map as Object).has_method(&"is_imported") or bool((map as Object).call(&"is_imported")):
+			return null
+		if _graph != null and _graph_map == map:
+			return _graph
+		_graph_map = map
+		_graph = null
+		var horde: Variant = game.get("horde")
+		var data: Variant = (horde as Object).get("nav") if horde is Object else null
+		if not (data is DotNpcNavData) or not (data as DotNpcNavData).matches(ArenaNpcs.digest_of(map)):
+			data = ArenaNpcs.nav_for(map)
+		var graph := DotNpcNavGraph.new()
+		if (data as DotNpcNavData).validate().ok and graph.rebuild(data).ok:
+			_graph = graph
+		return _graph
+
+	## How fast the held weapon's shot flies, m/s; 0 for hitscan, a swing or a throw.
+	func projectile_speed(shooter: DotBotContact) -> float:
+		var p: ArenaPlayer = _players.get(shooter.id) if shooter != null else null
+		var def: DotWeaponDef = p.arsenal.current_def() if p != null and p.arsenal != null else null
+		if def == null or not def.behaviour_path.ends_with(PROJECTILE_BEHAVIOUR) or not (def.tuning is DotWeaponBallistics):
+			return 0.0
+		return (def.tuning as DotWeaponBallistics).speed
 
 	func _team_mode() -> bool:
 		var mode: Variant = game.get("mode")
@@ -167,9 +238,73 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	var intent := mind.brain.think(me, world, world.now())
 	intent.write_move(move)
 	intent.write_fire(fire)
+	_throw(bot, mind, intent, move, fire, tick, tick_rate)
 	move.sanitise()
 	fire.sanitise()
 	return [move, fire]
+
+
+## Turns the brain's [member DotBotIntent.throw] into the presses a person makes: draw the
+## throwable, cook it, let go along the view the brain chose, and draw what was held before.
+## While a throw is under way it owns the trigger, the slot and the view; the legs stay the
+## brain's.
+static func _throw(bot: ArenaPlayer, mind: Mind, intent: DotBotIntent, move: DotFpsCommand, fire: DotWeaponCommand, tick: int, tick_rate: float) -> void:
+	var arsenal := bot.arsenal
+	if arsenal == null or not bot.is_alive():
+		mind.throw_stage = 0
+		return
+	if mind.throw_stage == 0:
+		if not intent.throw or not _has_throwable(arsenal):
+			return
+		mind.throw_stage = THROW_DRAW
+		mind.throw_view = Vector2(intent.yaw, intent.pitch)
+		mind.throw_back = arsenal.current_slot()
+		mind.throw_at = tick
+
+	var thrown := ZeeWeaponIds.SLOT_THROWN
+	if tick - mind.throw_at > int(THROW_GIVE_UP_SEC * tick_rate) and mind.throw_stage < THROW_RELEASE:
+		mind.throw_stage = THROW_RELEASE if mind.throw_stage == THROW_COOK else THROW_BACK
+
+	fire.set_button(DotWeaponCommand.BUTTON_ATTACK, false)
+	match mind.throw_stage:
+		THROW_DRAW:
+			fire.slot = thrown
+			if arsenal.current_slot() == thrown and not arsenal.is_switching():
+				mind.throw_stage = THROW_COOK
+				mind.throw_cook_from = tick
+				fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
+		THROW_COOK:
+			fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
+			if tick - mind.throw_cook_from >= maxi(1, int(COOK_SEC * tick_rate)):
+				mind.throw_stage = THROW_RELEASE
+		THROW_RELEASE:
+			# The trigger up on this tick is the throw.
+			mind.throw_stage = THROW_BACK
+		THROW_BACK:
+			var back := mind.throw_back if mind.throw_back > 0 and mind.throw_back != thrown and arsenal.has_slot(mind.throw_back) else 0
+			if back > 0 and arsenal.current_slot() != back:
+				fire.slot = back
+			if back == 0 or arsenal.current_slot() == back or tick - mind.throw_at > int(THROW_GIVE_UP_SEC * tick_rate) * 2:
+				mind.throw_stage = 0
+
+	if mind.throw_stage in [THROW_DRAW, THROW_COOK, THROW_RELEASE]:
+		# Looking where the brain lobbed it until it is gone.
+		for command: Object in [move, fire]:
+			command.set(&"yaw", mind.throw_view.x)
+			command.set(&"pitch", mind.throw_view.y)
+
+
+## Whether [param arsenal] holds a throwable it can pay for.
+static func _has_throwable(arsenal: DotWeaponArsenal) -> bool:
+	var slot := arsenal.slot_at(ZeeWeaponIds.SLOT_THROWN)
+	if slot == null or slot.def == null:
+		return false
+	var def := slot.def
+	if not def.uses_ammo():
+		return true
+	if def.uses_magazine():
+		return slot.magazine >= def.cost_per_use
+	return def.infinite_reserve or arsenal.ammo().has(def.ammo_type, def.cost_per_use)
 
 
 ## Forgets a bot that left, so its brain is not told about hits any more.

@@ -242,6 +242,17 @@ static func schema() -> DotSettingsSchema:
 	s.add(DotSettingsDef.integer(&"hud_safe_area", 16, 0, 120, &"hud")
 		.with_description("Pixels between the HUD and the edge of the screen."))
 
+	# How well the bots of a solo match play, saved with the player's other settings; the menu's
+	# General page has it, and `ArenaClient._bind_bot_console` applies it to `DotBotSettings`.
+	# Not `bot_difficulty`: that name is dot-bot's console variable for the match in hand (and a
+	# server's cvar), which this sets. A server's bots are the server's, never this.
+	s.add(DotSettingsDef.choice(
+		&"solo_bot_difficulty",
+		&"medium",
+		[&"easy", &"medium", &"hard", &"nightmare"] as Array[StringName],
+		&"gameplay"
+	).with_description("How well the bots play in a solo match. A server sets its own."))
+
 	# One binding setting per key in the table. The two chat keys are declared above with
 	# their ACCOUNT scope, which the table leaves alone.
 	ArenaBindings.make().add_to_schema(s)

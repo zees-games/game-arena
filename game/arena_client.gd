@@ -1587,6 +1587,11 @@ func _bind_bot_console() -> void:
 	var index := args.find("--bot_difficulty")
 	if index >= 0 and index + 1 < args.size():
 		DotLog.result(CHANNEL, "bot difficulty from the command line", settings.set_difficulty(args[index + 1]))
+	elif presentation != null and presentation.settings != null:
+		# The menu's saved pick (General, Solo bots), and again whenever it is changed there.
+		DotLog.result(CHANNEL, "bot difficulty from the settings", settings.set_difficulty(presentation.settings.get_string(&"solo_bot_difficulty", "medium")))
+	if presentation != null and presentation.settings != null and not presentation.settings.changed.is_connected(_on_solo_bot_setting):
+		presentation.settings.changed.connect(_on_solo_bot_setting)
 
 	if presentation == null or presentation.local_console == null:
 		return
@@ -1601,6 +1606,14 @@ func _bind_bot_console() -> void:
 			_keep_offline_bots(DotBotRoster.solo_wanted(clampi(text.to_int(), 0, 16)))
 			return DotResult.success(_bots.size() + 1)
 	)
+
+
+## The menu's Bot difficulty (General, Solo bots) onto this match's bots, as it is changed.
+## A method rather than a lambda, so the connection goes when the client does.
+func _on_solo_bot_setting(key: StringName, value: Variant, _why: StringName) -> void:
+	var settings := DotBotSettings.of(game) if game != null else null
+	if key == &"solo_bot_difficulty" and settings != null and str(value) != settings.difficulty():
+		DotLog.result(CHANNEL, "bot difficulty from the menu", settings.set_difficulty(str(value)))
 
 
 ## Whether the local player was alive last frame, for [method _face_a_respawn].

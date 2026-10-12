@@ -57,9 +57,13 @@ const REFERENCE_PROFILE := {
 	"turn_rate": 450.0, "turn_smooth": 0.5, "prediction": 0.5, "fire_cone": 5.0,
 	"burst": 0.5, "burst_pause": 0.3, "burst_range": 15.0, "strafe": 0.6, "stop_to_shoot": 0.3,
 	"peek": 0.3, "crouch": 0.1, "jump": 0.05, "cover": 0.3, "map_knowledge": 0.4,
+	# No grenades: the bands were measured against a reference that could not throw (bots had
+	# no throw until fpt-arena-bots-2), and a reference cooking frags fights less and moved easy
+	# past its band.
+	"grenades": 0.0,
 }
 
-const CHECKS := 34
+const CHECKS := 46
 const SECTIONS := 5
 
 var _passed := 0
@@ -149,6 +153,13 @@ func _play(preset: String) -> void:
 	var last_first_shot := NAN
 	var blind_shots := 0
 	var shots := 0
+	# Grenades the bot let go of: a throw is not a shot (a frag lobbed at where a target went
+	# behind cover is meant to be blind), so it is counted here and not judged by sight.
+	var thrown: Array[int] = [0]
+	game.player_for(BOT).used.connect(func(outcome: DotWeaponOutcome) -> void:
+		if outcome != null and outcome.used and not outcome.spawns.is_empty() and game.player_for(BOT).arsenal.current_slot() == ZeeWeaponIds.SLOT_THROWN:
+			thrown[0] += 1
+	)
 	var fastest := 0.0
 	var trace: DotTrace = game.combat.trace
 
@@ -170,7 +181,7 @@ func _play(preset: String) -> void:
 			# Against the view the bot had going into the tick, never the last command: a
 			# spawn turns the view too, and that is the map's doing, not the bot's.
 			fastest = maxf(fastest, absf(wrapf(move.yaw - bot.controller.state.yaw, -180.0, 180.0)) * TICK_RATE)
-			if fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK):
+			if fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK) and bot_mind.throw_stage == 0:
 				shots += 1
 				var target := game.player_for(brain.last.target_id) if brain.last.target_id >= 0 else null
 				if target == null or not trace.line_of_sight(bot.muzzle_position(), target.global_position + Vector3.UP * ArenaBots.CHEST):
@@ -193,16 +204,47 @@ func _play(preset: String) -> void:
 	var reaction := _mean(reactions)
 	var first_error := _mean(first_errors)
 	_results[preset] = {"kd": kd, "kills": kills[0], "deaths": kills[1], "reaction": reaction, "first_error": first_error}
-	print("       %-9s %2d kills %2d deaths  K/D %.2f  reaction %.3f s (bot_reaction %.2f, %d engagements)  first shot %.2f deg off  turn %.0f deg/s  %d of %d shots blind" % [
-		preset, kills[0], kills[1], kd, reaction, p.reaction, reactions.size(), first_error, fastest, blind_shots, shots])
+	print("       %-9s %2d kills %2d deaths  K/D %.2f  reaction %.3f s (bot_reaction %.2f, %d engagements)  first shot %.2f deg off  turn %.0f deg/s  %d of %d shots blind  %d grenades" % [
+		preset, kills[0], kills[1], kd, reaction, p.reaction, reactions.size(), first_error, fastest, blind_shots, shots, thrown[0]])
 
 	var band: Array = KD_BANDS[preset]
 	_check(kills[0] + kills[1] >= 4, "%s: the two actually fight (%d deaths in %d s)" % [preset, kills[0] + kills[1], int(SECONDS)])
 	_check(kd >= float(band[0]) and kd <= float(band[1]), "%s: K/D %.2f inside %.2f..%.2f" % [preset, kd, band[0], band[1]])
 	_check(blind_shots == 0, "%s: never fires at somebody it cannot see" % preset, "%d blind of %d" % [blind_shots, shots])
+	if p.grenades > 0.0:
+		_check(thrown[0] > 0, "%s: throws grenades (bot_grenades %.1f) through the throwable slot" % [preset, p.grenades], "%d thrown" % thrown[0])
+	else:
+		_check(thrown[0] == 0, "%s: throws no grenade (bot_grenades 0)" % preset, "%d thrown" % thrown[0])
 	_check(fastest <= p.turn_rate * 1.02, "%s: never turns faster than bot_turn_rate (%.0f deg/s)" % [preset, p.turn_rate], "%.0f" % fastest)
 	_check(reactions.size() > 0 and reaction >= p.reaction * 0.5 and reaction <= p.reaction + p.notice * 2.0 + 0.3,
 		"%s: first shot about bot_reaction after first sight" % preset, "%.3f over %d" % [reaction, reactions.size()])
+
+	# The world walks bots round the boxes: a route between the two spawns furthest apart, each
+	# leg clear at knee height (the horde's graph, built for this map).
+	var world := ArenaBots.world_for(game)
+	var spawns: Array[Transform3D] = game.map.spawns
+	var a := spawns[0].origin
+	var b := a
+	for spawn in spawns:
+		if spawn.origin.distance_to(a) > b.distance_to(a):
+			b = spawn.origin
+	var route := world.route(a, b)
+	var clear := route.size() >= 2
+	var from := a
+	for corner in route:
+		clear = clear and trace.line_of_sight(from + Vector3.UP * 0.5, corner + Vector3.UP * 0.5)
+		from = corner
+	_check(clear, "%s: the world routes between spawns %.0f m apart, every leg clear of the boxes" % [preset, a.distance_to(b)], "%d corners" % route.size())
+
+	# A rocket is led by its speed; a rifle is not.
+	var me := world.contact(BOT)
+	var rifle := world.projectile_speed(me)
+	var bot := game.player_for(BOT)
+	# Into an empty arsenal, so it is in hand at once.
+	bot.arsenal.clear()
+	var _given := bot.arsenal.give(ZeeWeaponIds.LAUNCHER)
+	var rocket := world.projectile_speed(me)
+	_check(rifle == 0.0 and rocket > 0.0, "%s: the brain is told a rocket's speed (%.0f m/s) and a rifle's is none" % [preset, rocket], "rifle %.0f" % rifle)
 
 	remove_child(game)
 	game.queue_free()

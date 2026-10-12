@@ -42,6 +42,7 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 	_shots = [
 		{"id": &"menu", "page": &"general", "file": "menu_general.png"},
+		{"id": &"menu", "page": &"general", "file": "menu_general_2.png", "scroll": 600},
 		{"id": &"menu", "page": &"interface", "file": "menu_interface.png"},
 		{"id": &"menu", "page": &"video", "file": "menu_video.png"},
 		{"id": &"menu", "page": &"audio", "file": "menu_audio.png"},

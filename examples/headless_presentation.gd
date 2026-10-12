@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 270
+const CHECKS := 272
 
 var _passed := 0
 var _failed := 0
@@ -610,6 +610,28 @@ func _test_the_escape_menu() -> void:
 			and menu.screen.find_child("Row_ui_theme", true, false) != null,
 		"the Interface page has the crosshair, the HUD margin and the theme"
 	)
+
+	# Solo bot difficulty: a row on General, saved, and onto the match's bots as it changes.
+	menu.open(&"general")
+	_check(menu.screen.find_child("Row_solo_bot_difficulty", true, false) != null, "General has the solo bots' difficulty")
+	var _saved := p.settings.set_value(&"solo_bot_difficulty", &"easy")
+	var solo := ArenaGame.new()
+	solo.headless = true
+	solo.is_authority = true
+	solo.register_service = false
+	add_child(solo)
+	var _built := solo.setup(ArenaMap.dm_box())
+	var bot_client := ArenaClient.new()
+	bot_client.game = solo
+	bot_client.presentation = p
+	bot_client._bind_bot_console()
+	var was := DotBotSettings.of(solo).difficulty()
+	var _picked := p.settings.set_value(&"solo_bot_difficulty", &"hard")
+	_check(was == "easy" and DotBotSettings.of(solo).difficulty() == "hard",
+		"the saved pick sets the solo bots, and picking again changes them", "%s then %s" % [was, DotBotSettings.of(solo).difficulty()])
+	bot_client.free()
+	remove_child(solo)
+	solo.free()
 
 	menu.open(&"controls")
 	var dash := menu.screen.find_child("Row_bind_dash", true, false)
