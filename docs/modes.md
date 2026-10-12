@@ -80,3 +80,13 @@ Counted on the server for rewards (`ArenaGame.streaks`). The meter reads the kil
 ## The end of a match
 
 Every client opens the scoreboard and names the MVP on the notice line (best score, then kills, deaths, assists), from its own MATCH handler on the transition into `MATCH_END`.
+
+## Loadouts and the owner's rules
+
+Players choose their loadout on B by default (Christian's first play test); the owner can restrict or lock it with dot-loadout's three cvars, bound by `ArenaModule` through `ArenaGame.loadout_command` (`DotLoadoutCommand`) and enforced by the server's `DotLoadoutManager.publish`, whatever a client's screen showed:
+
+- `mp_loadout_menu 0`: nobody chooses; everybody spawns with the schema's defaults and the fixed slots.
+- `mp_loadout_allow "primary=tag:scoped"`: snipers only (any scoped primary: the marksman rifle, the sniper, the bullpup), everything else as usual. Patterns are item ids or `tag:<tag>`, `-` forbids, `*` is every slot: `"*=-tag:explosive"` is no launchers or grenades.
+- `mp_loadout_fixed "primary=sniper thrown=none"`: slots the server fills for everybody.
+
+The slots are `primary` (rifles and the heavies), `secondary`, `melee`, `thrown` and `gear` (armour), on a 7-point budget (`ArenaContent.loadout_schema`). A value naming a slot or item that does not exist, or that leaves a required slot nothing, is refused at the console and the rules stay. A server sets them in `cfg/content.yml` under the game's `cvars:` (see `game.yml`). A mode that hands out the weapons (`ArenaMode.arms_players`: gun game, Only Snipers) overrides the loadout and closes the menu with that reason; that is the mode, the cvars are the owner's whatever the mode. The give order is `ArenaContent.in_give_order` (melee, primary, sidearm, throwable, gear), not the menu's slot order: the arsenal's order is what a bot's weapon choice walks, and changing it moved `headless_bots`' measurements.

@@ -235,6 +235,28 @@ const COST_FOR_SLOT := {
 const PAID_WEAPON := ZeeWeaponIds.LAUNCHER
 
 
+## The order a loadout is put in a player's hands: melee, the primary (or heavy), the sidearm,
+## the throwable, then gear. NOT the schema's slot order, which is the B menu's (primary first).
+##
+## [b]Kept as it was before the menu reordered the slots[/b], because the order things are given
+## in is the arsenal's own order, which every bot's weapon choice walks: giving the knife third
+## moved `headless_bots`' measured reactions (hard slower than medium on the same seed).
+const GIVE_RANK := {
+	ZeeWeaponIds.SLOT_MELEE: 0, ZeeWeaponIds.SLOT_PRIMARY: 1, ZeeWeaponIds.SLOT_HEAVY: 1,
+	ZeeWeaponIds.SLOT_SIDEARM: 2, ZeeWeaponIds.SLOT_THROWN: 3,
+}
+
+
+## [param entries] (`DotLoadoutManager.resolve`'s) in [constant GIVE_RANK] order, stably.
+static func in_give_order(entries: Array[Dictionary]) -> Array[Dictionary]:
+	var ranked: Array[Dictionary] = []
+	for rank in range(5):
+		for e in entries:
+			if int(GIVE_RANK.get(int(e.get("arsenal_slot", 0)), 4)) == rank:
+				ranked.append(e)
+	return ranked
+
+
 ## The items a loadout can name. One per weapon, plus armour.
 ##
 ## Note that the item ids match the weapon ids. That is a convention this game chose,
@@ -281,7 +303,10 @@ static func loadout_schema() -> DotLoadoutSchema:
 	melee.display_name = "Melee"
 	melee.kinds = [DotItem.KIND_WEAPON]
 	melee.arsenal_slot = ZeeWeaponIds.SLOT_MELEE
-	melee.order = 5
+	# After the guns: the order is the B menu's, where a player looks for the primary first.
+	# Nothing stored depends on it (a loadout is keyed by slot id), and the hand a spawn
+	# holds is ArenaPlayer._better_hand's, not the first slot given.
+	melee.order = 22
 
 	var primary := DotLoadoutSlot.make(&"primary", true, ZeeWeaponIds.RIFLE)
 	primary.display_name = "Primary"
@@ -290,13 +315,13 @@ static func loadout_schema() -> DotLoadoutSchema:
 	primary.order = 10
 
 	var secondary := DotLoadoutSlot.make(&"secondary", true, ZeeWeaponIds.PISTOL)
-	secondary.display_name = "Sidearm"
+	secondary.display_name = "Secondary"
 	secondary.kinds = [DotItem.KIND_WEAPON]
 	secondary.arsenal_slot = ZeeWeaponIds.SLOT_SIDEARM
 	secondary.order = 20
 
 	var thrown := DotLoadoutSlot.make(&"thrown", true, ZeeWeaponIds.FRAG)
-	thrown.display_name = "Throwable"
+	thrown.display_name = "Grenades"
 	thrown.kinds = [DotItem.KIND_WEAPON]
 	thrown.arsenal_slot = ZeeWeaponIds.SLOT_THROWN
 	thrown.order = 25

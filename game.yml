@@ -28,6 +28,12 @@ module: game/arena_module.gd
 cvars:
   arena_scorelimit: "25"
   arena_minplayers: "1"
+  # Loadouts on B: players choose by default. An owner restricts them in their cfg/content.yml
+  # (docs/modes.md "Loadouts and the owner's rules"), for example snipers only:
+  #   mp_loadout_allow: "primary=tag:scoped"
+  # or one kit for everybody, chosen by nobody:
+  #   mp_loadout_menu: "0"
+  #   mp_loadout_fixed: "primary=sniper secondary=pistol melee=knife thrown=frag"
 
 # What this game adds to a TMC server's /admin menu (dot-server-deploy reads it; any other
 # host ignores it). Each item is the console line an admin could type, shown only to an

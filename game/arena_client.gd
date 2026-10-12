@@ -8,6 +8,8 @@ const ArenaClientExtras := preload("arena_client_extras.gd")
 const ArenaEvents := preload("arena_events.gd")
 const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
+const ArenaHudGlance := preload("arena_hud_glance.gd")
+const ArenaContent := preload("arena_content.gd")
 const ArenaMode := preload("arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
@@ -332,6 +334,7 @@ func _build_interface() -> void:
 		var maps: Variant = game_menu.call(&"use_maps", map_menu_rows, change_from_menu)
 		if maps is Object:
 			(maps as Object).set(&"noun", "maps and modes")
+	_use_loadout_menu()
 	game_menu.action_requested.connect(func(id: StringName) -> void:
 		if id != ArenaMenus.LEAVE:
 			return
@@ -383,6 +386,7 @@ func _hud_keys() -> void:
 	hud.keys[&"reload"] = table.key_for(ArenaBindings.RELOAD)
 	hud.keys[&"help"] = table.key_for(DotMenuBindings.HELP_ACTION)
 	hud.keys[&"maps"] = table.key_for(&"dot_menu_maps")
+	hud.keys[&"loadout"] = table.key_for(&"dot_menu_loadout") if loadout_menu != null else ""
 	hud.keys[&"launch"] = table.key_for(launch_action())
 	for i in range(ArenaBindings.SLOTS.size()):
 		hud.keys[StringName("slot_%d" % (i + 1))] = table.key_for(ArenaBindings.SLOTS[i])
@@ -436,6 +440,81 @@ func _slide_on_c() -> bool:
 
 # --- Offline ---------------------------------------------------------------
 # --- The map menu (M) ------------------------------------------------------
+
+# --- The loadout menu (B) -----------------------------------------------------
+
+## dot-menu's loadout menu, or null on a host whose dot-menu predates it (API 6).
+var loadout_menu: Object = null
+var _loadout_restored := false
+
+const WEAPON_CARDS_SCRIPT := "res://addons/zee_weapons/content/zee_weapon_cards.gd"
+var _weapon_cards: Script = null
+var _weapon_table: Dictionary = {}
+
+
+## B: primary, sidearm, melee, grenades and gear, as cards with each weapon's picture and
+## numbers. Solo the game's own loadouts answer; connected the server does (dot-loadout's
+## `/loadout`), under the owner's `mp_loadout_*` rules. Guarded on the host's dot-menu and
+## dot-loadout levels, so an older client shell still runs the game without it.
+func _use_loadout_menu() -> void:
+	if DotAddonApi.build_level("dot_menu") < 6 or DotAddonApi.build_level("dot_loadout") < 2:
+		return
+	if not game_menu.has_method(&"use_loadout"):
+		return
+	loadout_menu = game_menu.call(&"use_loadout", loadout_offer, choose_loadout, decorate_loadout_choice)
+	if loadout_menu != null:
+		# Remembered on this device (the client has no account to file it under), and never
+		# from a suite or a render on scratch settings: those must not write, or read back, a
+		# player's real choice.
+		var scratch := ArenaPresentation.settings_directory.begins_with("user://scratch/")
+		loadout_menu.call(&"remember_as", "" if scratch else "arena", "local")
+
+
+## Solo: what this player may pick, from the game's own manager.
+func loadout_offer() -> Variant:
+	if game == null or game.loadout_command == null or player == null:
+		return DotResult.fail(DotError.CODE_STATE, "Join the match first.")
+	return await game.loadout_command.call(&"offer", ArenaGame.storage_key(player.player_id))
+
+
+## Solo: saves [param picks], and hands them over now in warmup or spawn protection.
+func choose_loadout(picks: Dictionary) -> Variant:
+	if game == null or game.loadout_command == null or player == null:
+		return DotResult.fail(DotError.CODE_STATE, "Join the match first.")
+	return await game.loadout_command.call(&"choose", null, ArenaGame.storage_key(player.player_id), picks)
+
+
+## A card's picture (the HUD's rendered weapon silhouettes) and numbers (zee's cards).
+func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
+	var id := StringName(str(choice.get("id", "")))
+	var out: Dictionary = {}
+	var icon := ArenaHudGlance.Ink.weapon_icon(id)
+	if icon != null:
+		out["icon"] = icon
+	if id == &"armour":
+		out["detail"] = "Takes half of every hit until it wears through."
+		out["kind"] = "Gear"
+		out["stats"] = [{"label": "Armour", "value": 1.0, "text": "100"}]
+		return out
+	if _weapon_cards == null and DotAddonApi.build_level("zee_weapons") >= 3 and ResourceLoader.exists(WEAPON_CARDS_SCRIPT):
+		_weapon_cards = load(WEAPON_CARDS_SCRIPT) as Script
+	if _weapon_table.is_empty():
+		_weapon_table = ArenaContent.weapon_table()
+	if _weapon_cards != null and _weapon_table.has(id):
+		var card: Variant = _weapon_cards.call(&"card", _weapon_table[id])
+		if card is Dictionary:
+			out.merge(card as Dictionary)
+	return out
+
+
+## Sends the choice this player saved last time (dot-menu remembers it on this device), once
+## per join: solo into the game's own manager, connected to the server.
+func _restore_loadout() -> void:
+	if loadout_menu == null or _loadout_restored:
+		return
+	_loadout_restored = true
+	var _sent: Variant = await loadout_menu.call(&"restore")
+
 
 ## Built once: making the catalogue builds every map, the imported ones included.
 var _menu_catalogue: DotMapCatalogue = null
@@ -1282,6 +1361,7 @@ func _adopt(candidate: ArenaPlayer) -> void:
 		)
 
 	_hear_the_local_player()
+	_restore_loadout.call_deferred()
 
 	# Logged because this is the moment everything a person can see comes into
 	# existence — the camera, the HUD's subject and every key below the `player == null`

@@ -31,6 +31,8 @@ var player: ArenaPlayer = null
 var game: ArenaGame = null
 
 var crosshair: DotCrosshair = null
+## Whether the host's DotCrosshair fades while aiming (dot-ui API 5).
+var _crosshair_fades: bool = DotAddonApi.build_level("dot_ui") >= 5
 
 ## Bottom left: health as a bar with its number, armour as a thin bar under it.
 var vitals: DotVitals = null
@@ -60,7 +62,7 @@ var remaining_override: float = NAN
 var keys: Dictionary = {
 	&"slide": "C", &"launch": "E", &"dash": "Shift", &"jump": "Space",
 	&"scoreboard": "Tab", &"menu": "Esc", &"chat": "Y", &"reload": "R", &"help": "H",
-	&"maps": "M",
+	&"maps": "M", &"loadout": "",
 }
 
 ## Seconds until the portraits are read again: a ranked row a few times a second is a
@@ -803,7 +805,9 @@ func build(p_game: ArenaGame) -> void:
 	# six-row ballot at 720 tall.
 	hints = DotKeyHints.new()
 	hints.name = "KeyHints"
-	_place(hints, Control.PRESET_CENTER_LEFT, Rect2(62.0, -128.0, 200.0, 120.0))
+	# Seven rows since B (the loadout) joined them: started higher, so the last row ends above
+	# the streak meter's words (rendered: at -128 the Slide row sat on "Killstreak").
+	_place(hints, Control.PRESET_CENTER_LEFT, Rect2(62.0, -170.0, 200.0, 196.0))
 
 	slots = ArenaHudGlance.WeaponSlots.new()
 	slots.name = "Slots"
@@ -1179,11 +1183,17 @@ func present_gear() -> void:
 
 	if hints != null:
 		hints.visible = live
-		hints.show_hints([
+		var shown: Array = [
 			["Scoreboard", keys[&"scoreboard"]], ["Menu", keys[&"menu"]], ["Help", keys[&"help"]],
 			["Maps", keys[&"maps"]],
-			["Chat", keys[&"chat"]], ["Slide", keys[&"slide"]],
-		])
+		]
+		# The loadout's key only where there is a loadout menu: an older shell, or a mode that
+		# hands out the weapons, has none to open.
+		var shown_mode: Variant = game.displayed_mode() if game != null else null
+		if str(keys.get(&"loadout", "")) != "" and (shown_mode == null or not bool(shown_mode.call(&"arms_players"))):
+			shown.append(["Loadout", keys[&"loadout"]])
+		shown.append_array([["Chat", keys[&"chat"]], ["Slide", keys[&"slide"]]])
+		hints.show_hints(shown)
 
 
 ## What the ammunition counter shows for [param who]: the magazine, or for a weapon that
@@ -1244,6 +1254,11 @@ func present_body() -> void:
 	if crosshair != null:
 		# The scope has its own reticle; a crosshair drawn over it is two.
 		crosshair.visible = not scoped
+		# Down an iron sight the sight is the aiming mark: the crosshair fades out as the gun
+		# comes up and back as it goes down (dot-ui's DotCrosshair, API 5; Christian's first
+		# play test had both on screen at once). Hip fire keeps it.
+		if _crosshair_fades:
+			crosshair.call(&"set_aim", hands.aim_fraction() if hands != null and not scoped else 0.0)
 
 	if hurt_overlay != null:
 		var hurt := 0.0

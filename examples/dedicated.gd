@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 143
+const CHECKS := 150
 
 var _passed := 0
 var _failed := 0
@@ -108,6 +108,7 @@ func _run() -> void:
 		await _test_browser()
 		_test_commands()
 		_test_match_cvars()
+		await _test_loadout_command()
 		await _test_bots()
 		_test_unload()
 		_test_no_message_preloads_itself()
@@ -1192,6 +1193,56 @@ func _test_match_cvars() -> void:
 	var _b := _server.console.set_cvar("arena_timelimit", "600")
 	var _c := _server.console.set_cvar("arena_warmup", "-1")
 	var _d := _server.console.set_cvar("arena_minplayers", str(was_min))
+
+
+## B's server half: the `loadout` command and the owner's mp_loadout_* cvars, enforced HERE,
+## whatever a client's screen showed. From the session the client-spawn section adopted (77).
+func _test_loadout_command() -> void:
+	print("")
+	print("the loadout command and the owner's rules")
+
+	var cmd: Object = _game.loadout_command
+	if not _check(cmd != null and _server.console.find_command("loadout") != null
+			and _server.console.find_cvar("mp_loadout_allow") != null
+			and _server.console.find_cvar("mp_loadout_fixed") != null
+			and _server.console.find_cvar("mp_loadout_menu") != null,
+			"the server has the loadout command and the owner's three cvars"):
+		return
+	var session := _server.session_by_userid(77)
+	if not _check(session != null, "the adopted player is still here"):
+		return
+
+	var say := func(line: String) -> Dictionary:
+		var words := line.split(" ", false)
+		var ctx := session.make_context("loadout", words.slice(1), DotCmdContext.Source.CHAT, func(_l: String) -> void: pass)
+		var _r := _server.console.execute(line, ctx)
+		return cmd.get(&"last_result")
+
+	var snipers := _server.console.execute("mp_loadout_allow primary=tag:scoped")
+	var rifle: Dictionary = say.call("loadout primary=rifle")
+	_check(snipers.ok and not bool(rifle.get("ok", true)),
+		"with mp_loadout_allow primary=tag:scoped, a player's rifle is refused by the server", str(rifle))
+	var marksman: Dictionary = say.call("loadout primary=marksman")
+	var active: DotResult = await _game.loadouts.active_for(ArenaGame.storage_key(77))
+	_check(bool(marksman.get("ok", false)) and active.ok and (active.value as DotLoadout).item_in(&"primary") == &"marksman",
+		"and a scoped gun is taken and is what they spawn with", str(marksman))
+
+	var typo := _server.console.execute("mp_loadout_allow barrel=rifle")
+	_check(not typo.ok and _server.console.find_cvar("mp_loadout_allow").get_string() == "primary=tag:scoped"
+			and _game.loadouts.rules != null and _game.loadouts.rules.allowed.has(&"primary"),
+		"a value naming a slot that does not exist is refused at the console, and the rules stay", str(typo.error))
+
+	var _fixed := _server.console.execute("mp_loadout_fixed primary=sniper")
+	var _off := _server.console.execute("mp_loadout_menu 0")
+	var locked: Dictionary = say.call("loadout primary=marksman")
+	var spawned: DotResult = await _game.loadouts.active_for(ArenaGame.storage_key(77))
+	_check(not bool(locked.get("ok", true)) and (spawned.value as DotLoadout).item_in(&"primary") == &"sniper",
+		"locked by the owner, nobody chooses and everybody spawns with the fixed slot", str(locked))
+
+	var _a := _server.console.set_cvar("mp_loadout_menu", "1")
+	var _b := _server.console.set_cvar("mp_loadout_fixed", "")
+	var _c := _server.console.set_cvar("mp_loadout_allow", "")
+	_check(_game.loadouts.rules == null, "and emptied, the cvars are no restriction")
 
 
 ## Waits [param seconds] of the server's own physics ticks.

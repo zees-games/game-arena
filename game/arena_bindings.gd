@@ -97,6 +97,9 @@ static func make(dot_ui_level: int = -1) -> DotMenuBindings:
 	keys.add_help("Interface")
 	# M is the map menu, in every game of the family (dot-menu's `dot_menu_maps`).
 	var _m := keys.add_maps("Interface")
+	# B is the loadout menu (dot-menu's `dot_menu_loadout`), where the host has it (API 6).
+	if DotAddonApi.build_level("dot_menu") >= 6 and keys.has_method(&"add_loadout"):
+		var _l: Variant = keys.call(&"add_loadout", "Weapons")
 	return keys
 
 

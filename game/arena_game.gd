@@ -187,6 +187,13 @@ var entities := DotEntityTable.new()
 var combat: DotCombatManager = null
 var loadouts: DotLoadoutManager = null
 
+## The loadout menu's server half (dot-loadout's `DotLoadoutCommand`): the `/loadout` command
+## the B menu sends, its `loadout_menu` notice, and the owner's `mp_loadout_*` cvars, which the
+## module binds. Solo the client asks it directly. Untyped and loaded by path because a host with
+## a dot-loadout older than API 2 has no such class, and this script must still parse there
+## (`requires.floor.json`); null on such a host, and the B menu is then not offered.
+var loadout_command: Object = null
+
 ## Rockets in flight. Built alongside the combat manager, because it traces against
 ## the same world and resolves through the same rules.
 var projectiles: ArenaProjectiles = null
@@ -738,7 +745,62 @@ func _build_loadouts() -> DotResult:
 		return DotLoadoutEntitlements.of([ArenaContent.PAID_WEAPON])
 
 	add_child(loadouts)
+	_build_loadout_command()
 	return DotResult.success(null)
+
+
+const LOADOUT_COMMAND_SCRIPT := "res://addons/dot_loadout/integrations/dot_loadout_command.gd"
+
+
+## The B menu's server half, when the host's dot-loadout has one (API 2).
+func _build_loadout_command() -> void:
+	if DotAddonApi.build_level("dot_loadout") < 2 or not ResourceLoader.exists(LOADOUT_COMMAND_SCRIPT):
+		return
+	loadout_command = (load(LOADOUT_COMMAND_SCRIPT) as GDScript).new()
+	loadout_command.set(&"manager", loadouts)
+	# The player a command came from: the session's userid, which is this game's player id.
+	loadout_command.set(&"key_fn", func(ctx: Object) -> String:
+		var session: Variant = ctx.get(&"session") if ctx != null else null
+		return storage_key(int((session as Object).get(&"userid"))) if session is Object else "")
+	loadout_command.set(&"closed_fn", func(_key: String) -> String: return loadout_closed_reason())
+	loadout_command.set(&"applied_fn", func(_ctx: Object, key: String) -> bool:
+		return await rearm_if_allowed(player_id_of_key(key)))
+
+
+## Why the B menu has nothing to choose right now, or "": a mode that decides what everybody
+## carries (gun game, Only Snipers) makes a loadout pointless, and the menu says so rather than
+## saving a choice the next spawn throws away.
+func loadout_closed_reason() -> String:
+	if mode != null and mode.arms_players():
+		return "%s hands out the weapons. Your loadout is kept for the next mode." % mode.display_name
+	return ""
+
+
+## The player id a loadout key names (`arena-player-%08d`), or 0.
+static func player_id_of_key(key: String) -> int:
+	return key.trim_prefix("arena-player-").to_int() if key.begins_with("arena-player-") else 0
+
+
+## Whether a new loadout goes into [param id]'s hands now rather than at the next spawn: in
+## warmup, and while their spawn protection lasts (they have not been in a fight with what they
+## spawned holding). Anything later would be a free reload and a weapon swap mid-fight.
+func loadout_now_allowed(id: int) -> bool:
+	var player := player_for(id)
+	if player == null or not player.is_alive():
+		return false
+	if match_node != null and match_node.state == DotMatch.State.WARMUP:
+		return true
+	return player.health != null and player.health.is_protected(_tick)
+
+
+## Puts [param id]'s saved loadout in their hands when [method loadout_now_allowed]. True when it
+## did. Authority only: the arsenal replicates from here.
+func rearm_if_allowed(id: int) -> bool:
+	if not is_authority or not loadout_now_allowed(id):
+		return false
+	await apply_loadout(id)
+	DotLog.debug(CHANNEL, "loadout handed over at once", {"player": id})
+	return true
 
 
 ## Statistics, achievements and boards, if this instance keeps any.
@@ -1459,7 +1521,7 @@ func apply_loadout(id: int) -> void:
 		arm_for_mode(player)
 		return
 
-	player.give_loadout(loadouts.resolve(res.value))
+	player.give_loadout(ArenaContent.in_give_order(loadouts.resolve(res.value)))
 	arm_for_mode(player)
 
 

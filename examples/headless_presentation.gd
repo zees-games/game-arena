@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 245
+const CHECKS := 262
 
 var _passed := 0
 var _failed := 0
@@ -86,6 +86,7 @@ func _run() -> void:
 	await _test_hud_fits_the_frame()
 	_test_hud_makes_room_for_a_ballot()
 	await _test_the_map_menu()
+	await _test_the_loadout_menu()
 
 	print("")
 	_check(
@@ -1684,6 +1685,120 @@ func _test_the_map_menu() -> void:
 	var changed := client.change_from_menu(StringName("mode:%s" % mode_id))
 	_check(changed.ok and client.game.mode.id == mode_id and client.game.map.id == wanted,
 		"and a mode changes on the same map", "%s: %s" % [mode_id, changed.error.message if not changed.ok else "ok"])
+	remove_child(client)
+	client.free()
+	await get_tree().process_frame
+	_done()
+
+
+## Christian's first play test: B opens the loadout (primary, secondary, melee, grenades), a
+## choice applies at once in warmup or spawn protection and otherwise on the next spawn, and an
+## owner's rules are what the menu offers and what the game takes. Solo, so the game here is the
+## authority; the server's command and cvars are `dedicated`'s. And the crosshair fades while the
+## gun is aimed down its sight.
+func _test_the_loadout_menu() -> void:
+	_section("B is the loadout menu, and the crosshair fades down the sights")
+	var client := ArenaClient.new()
+	client.force_offline = true
+	add_child(client)
+	for _i in 6:
+		await get_tree().process_frame
+	var menu: DotMenu = client.game_menu
+	var keys: DotMenuBindings = menu.bindings if menu != null else null
+	_check(keys != null and keys.key_for(DotMenuBindings.LOADOUT_ACTION) == "B" and keys.defaults_on("B").size() == 1,
+		"the loadout menu is on B, and nothing else in the table is",
+		str(keys.defaults_on("B").map(func(r: Dictionary) -> String: return str(r["label"]))) if keys != null else "no menu")
+	var game: ArenaGame = client.game
+	var me := client.player
+	if not _check(game.loadout_command != null and me != null, "the game has the menu's server half, and a player"):
+		remove_child(client)
+		client.free()
+		_done()
+		return
+	var offer: Dictionary = await client.loadout_offer()
+	var slot_ids: Array = (offer.get("slots", []) as Array).map(func(sl: Dictionary) -> String: return str(sl["id"]))
+	_check(slot_ids == ["primary", "secondary", "melee", "thrown", "gear"], "primary, secondary, melee, grenades and gear, in that order", str(slot_ids))
+	var decorated: Dictionary = client.decorate_loadout_choice("primary", {"id": "rifle"})
+	_check(decorated.get("icon") is Texture2D and (decorated.get("stats", []) as Array).size() >= 4 and str(decorated.get("detail", "")) != "",
+		"a card has the weapon's picture, a line and its numbers")
+
+	var b := InputEventKey.new()
+	b.physical_keycode = KEY_B
+	b.keycode = KEY_B
+	b.pressed = true
+	menu.close_all()
+	_check(menu.handle_event(b), "B is the menu's")
+	for _i in 2:
+		await get_tree().process_frame
+	_check(menu.loadout_screen != null and menu.loadout_screen.is_open() and menu.loadout_screen.slots().size() == 5,
+		"and opens the loadout screen on the five slots")
+	menu.loadout_screen.cancel()
+
+	game.match_node.state = DotMatch.State.WARMUP
+	var now: Dictionary = await client.choose_loadout({"primary": "marksman", "thrown": "sticky"})
+	_check(bool(now.get("ok", false)) and bool(now.get("now", false)) and me.arsenal.carries(&"marksman") and me.arsenal.carries(&"sticky"),
+		"in warmup a choice is in the player's hands at once", str(now))
+
+	game.match_node.state = DotMatch.State.LIVE
+	me.health.spawn_protection_ticks = 0
+	me.health.invulnerable_until_tick = -1
+	var later: Dictionary = await client.choose_loadout({"primary": "carbine"})
+	_check(bool(later.get("ok", false)) and not bool(later.get("now", true)) and not me.arsenal.carries(&"carbine"),
+		"mid-round it waits for the next spawn", str(later))
+	var _back := game.respawn_player(me.player_id)
+	for _i in 3:
+		await get_tree().process_frame
+	_check(me.arsenal.carries(&"carbine") and me.arsenal.carries(&"sticky"), "and the next spawn carries it")
+
+	var snipers: DotResult = game.loadout_command.call(&"apply_strings", true, "primary=tag:scoped", "")
+	var limited: Dictionary = await client.loadout_offer()
+	var primaries: Array = ((limited["slots"] as Array)[0]["choices"] as Array).map(func(c: Dictionary) -> String: return str(c["id"]))
+	_check(snipers.ok and not primaries.is_empty() and not primaries.has("rifle") and primaries.has("marksman"),
+		"an owner's 'snipers only' is what the menu offers", str(primaries))
+	var refused: Dictionary = await client.choose_loadout({"primary": "rifle"})
+	_check(not bool(refused.get("ok", true)), "and a rifle is refused by the game, not only hidden", str(refused))
+	var active: DotResult = await game.loadouts.active_for(ArenaGame.storage_key(me.player_id))
+	_check(primaries.has(str((active.value as DotLoadout).item_in(&"primary"))),
+		"a saved carbine spawns as a scoped gun while the rule is on", str((active.value as DotLoadout).item_in(&"primary")))
+	var locked: DotResult = game.loadout_command.call(&"apply_strings", false, "", "primary=sniper")
+	var fixed_offer: Dictionary = await client.loadout_offer()
+	_check(locked.ok and fixed_offer["choose"] == false and str((fixed_offer["slots"] as Array)[0]["current"]) == "sniper",
+		"an owner can lock the loadout: nothing to choose, and the fixed slot is what everybody gets")
+	var _open: Variant = game.loadout_command.call(&"apply_strings", true, "", "")
+
+	var was_mode := game.mode
+	game.mode = ArenaMode.only_snipers()
+	var closed: Dictionary = await client.loadout_offer()
+	_check(closed["choose"] == false and str(closed["note"]).contains("hands out the weapons"),
+		"a mode that hands out the weapons says so, and lets nothing be picked", str(closed.get("note", "")))
+	game.mode = was_mode
+
+	# The crosshair, down the sights: hip draws it, aimed hides it, released brings it back.
+	var hud: ArenaHud = client.hud
+	var hands: ZeeViewModel = me.weapons.view_model() as ZeeViewModel if me.weapons != null else null
+	me.arsenal.select(ZeeWeaponIds.SLOT_PRIMARY, game.current_tick())
+	for _i in 30:
+		await get_tree().process_frame
+	if _check(hud != null and hud.crosshair != null and hands != null, "the HUD has a crosshair and the player hands"):
+		hud.present_body()
+		hud.crosshair.follow_aim(1.0)
+		var hip := hud.crosshair.aim_opacity
+		# Fully raised, as the view model's own ramp leaves it (headless there is no pointer to
+		# hold the aim key with, so the fraction is set where the ramp would put it), then
+		# lowered again. The HUD reads it every frame; the render is in tools/screenshot.sh.
+		hands.set(&"_aim_fraction", 1.0)
+		hud.present_body()
+		hud.crosshair.follow_aim(1.0)
+		var aimed := hud.crosshair.aim_opacity
+		hands.set(&"_aim_fraction", 0.0)
+		hud.present_body()
+		hud.crosshair.follow_aim(0.016)
+		var easing := hud.crosshair.aim_opacity
+		hud.crosshair.follow_aim(1.0)
+		_check(easing > 0.0 and easing < 1.0, "lowering the gun fades the crosshair back rather than snapping it", "%.2f" % easing)
+		_check(hip > 0.99 and aimed < 0.01 and hud.crosshair.aim_opacity > 0.99,
+			"the crosshair is drawn at the hip, gone down the sights, and back after",
+			"hip %.2f, aimed %.2f (fraction %.2f, scoped %s), after %.2f" % [hip, aimed, hands.aim_fraction(), hands.is_scoped(), hud.crosshair.aim_opacity])
 	remove_child(client)
 	client.free()
 	await get_tree().process_frame
