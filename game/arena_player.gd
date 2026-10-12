@@ -172,6 +172,10 @@ const HEALTH_TAG_WIDTH := 0.9
 ## The meshes a body break hid, so a respawn can draw them again. Client side.
 var _broken: Array[MeshInstance3D] = []
 
+## This player's body went down as a ragdoll (or was hidden by the server's style), so a
+## respawn has to draw it again. Client side.
+var _fell: bool = false
+
 ## Draws this player's own body in first person when the server's `fp_body` rule says so.
 var _first_person: DotPlayerFirstPersonBody = null
 
@@ -1009,8 +1013,32 @@ func break_body(
 	return made
 
 
-## Puts a broken body back together once the player is alive again.
+## This player's body falls: a ragdoll copied from what is drawn, built in [param yard] as
+## [param death] says (the server's pick, off the KILL). Client side, drawing only; the
+## figure is hidden until [method _mend_body] draws it again on respawn. Null when the
+## server's style hides bodies or there is no body to copy.
+##
+## [b]After any body break[/b]: the limbs a critical took off are hidden by then, so the
+## ragdoll is what is left of the body, and the pieces fly on their own.
+func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath) -> DotPlayerRagdoll:
+	if yard == null or body_mesh == null or not body_mesh.is_inside_tree():
+		return null
+	# The gun goes down with the hand that held it rather than hanging in the air.
+	var made := yard.spawn(body_mesh, death, controller.state.velocity)
+	_fell = made != null or not body_mesh.visible
+	if _fell and held != null:
+		held.visible = false
+	return made
+
+
+## Puts a broken or fallen body back together once the player is alive again.
 func _mend_body() -> void:
+	if _fell and is_alive() and body_mesh != null:
+		_fell = false
+		body_mesh.visible = true
+		if held != null:
+			held.visible = true
+
 	if _broken.is_empty() or not is_alive() or body_mesh == null:
 		return
 

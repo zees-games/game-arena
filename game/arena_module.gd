@@ -182,6 +182,14 @@ func _module_load() -> DotResult:
 			(cv as DotConVar).changed.connect(_reapply_combat_cvars.unbind(2))
 		game.map_changed.connect(_reapply_combat_cvars.unbind(1))
 
+	# Dead bodies: dot-player-char's sv_ragdoll, sv_ragdoll_style, _time, _max, _force and
+	# _reactions. The server only picks each death's reaction from them (ArenaGame.decide_death);
+	# REPLICATED, because the clients are what draw the bodies and need the style, the
+	# lifetime and the cap. The rules belong to the game, not the map, so one bind lasts.
+	var _ragdoll_cvars := game.ragdoll_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
 	# A real server keeps what its monsters learn of each map across restarts. Here and
 	# not in ArenaGame, because every suite builds an ArenaGame and only a server loads this.
 	game.persist_npc_heat = true

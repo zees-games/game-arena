@@ -609,6 +609,25 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	pickup.priority = 50
 	c.add(pickup)
 
+	# A body landing: dot-player-char's stock death sounds (Kenney, CC0), the thud, the face
+	# plant's smack, a crumple's slump and a launch's whoosh. Positional, because they say
+	# where somebody went down; the files ship in the addon, so the paths are its own.
+	for row: Dictionary in DotPlayerDeathSounds.rows():
+		var fall := DotAudioDef.new()
+		fall.id = row["id"]
+		fall.path = row["path"]
+		fall.variants = row["variants"]
+		fall.kind = DotAudioDef.Kind.POSITIONAL_3D
+		fall.bus = &"SFX"
+		fall.gain_db = float(row["gain_db"])
+		fall.pitch_min = float(row["pitch_min"])
+		fall.pitch_max = float(row["pitch_max"])
+		fall.cooldown_ms = int(row["cooldown_ms"])
+		fall.max_distance = 45.0
+		fall.max_concurrent = 3
+		fall.priority = 45
+		c.add(fall)
+
 	return c
 
 
@@ -660,6 +679,12 @@ static func _base_recipes() -> Dictionary:
 		ArenaVote.CUE_END: DotAudioSynth.Voice.PICKUP,
 		ArenaVote.CUE_WARNING: DotAudioSynth.Voice.BLIP,
 		ArenaVote.CUE_COUNT: DotAudioSynth.Voice.CLICK,
+		# A body landing. The real files ship in dot-player-char; these stand in only on a
+		# build that lacks them.
+		DotPlayerDeathReactions.SOUND_THUD: DotAudioSynth.Voice.IMPACT,
+		DotPlayerDeathReactions.SOUND_FACE_PLANT: DotAudioSynth.Voice.IMPACT,
+		DotPlayerDeathReactions.SOUND_SLUMP: DotAudioSynth.Voice.STEP,
+		DotPlayerDeathReactions.SOUND_WHOOSH: DotAudioSynth.Voice.SPAWN,
 	}
 
 

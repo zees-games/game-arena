@@ -229,8 +229,14 @@ static func read_prop_act(reader: DotNetReader) -> Dictionary:
 ## wire for a value with exactly two shapes is a string somebody will put a name in.
 ## [param critical] is last and optional on the wire, like MATCH's score limit: a reader
 ## that finds the message ends before it reads a kill that was not one.
+##
+## [param death] (dot-player-char's [DotPlayerDeath]: the reaction the server picked, its
+## seed, the shot's direction and damage) comes after it and is optional the same way, so
+## every client builds the same fall and an older client reads the kill without it. About
+## seven bytes, in dot-player-char's own form (`DotPlayerDeath.write_to`).
 static func write_kill(
-	killer_id: int, victim_id: int, weapon: String, headshot: bool, critical: bool = false
+	killer_id: int, victim_id: int, weapon: String, headshot: bool, critical: bool = false,
+	death: DotPlayerDeath = null
 ) -> PackedByteArray:
 	var writer := _w()
 	writer.write_varint(killer_id)
@@ -238,6 +244,8 @@ static func write_kill(
 	writer.write_string(weapon, WEAPON_BYTES)
 	writer.write_bool(headshot)
 	writer.write_bool(critical)
+	if death != null:
+		death.write_to(writer)
 	return writer.to_bytes()
 
 
@@ -249,6 +257,12 @@ static func read_kill(reader: DotNetReader) -> Dictionary:
 		"headshot": reader.read_bool(),
 	}
 	out["critical"] = reader.read_bool() if reader.bits_remaining() >= 1 else false
+	# A byte's worth or more left is the death; less is the padding to the last byte.
+	if reader.bits_remaining() >= 8:
+		var death := DotPlayerDeath.read_from(reader).to_dict()
+		# `headshot` is the kill's own field, read above; the death's copy is the same fact.
+		death.erase("headshot")
+		out.merge(death)
 	out["ok"] = reader.ok()
 	return out
 

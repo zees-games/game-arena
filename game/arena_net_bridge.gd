@@ -1231,7 +1231,9 @@ func _on_player_killed(entry: DotKillFeed.Entry) -> void:
 		int(entry.victim_key) if String(entry.victim_key).is_valid_int() else 0,
 		String(entry.cause),
 		entry.headshot,
-		bool(entry.get_meta(&"critical", false))
+		bool(entry.get_meta(&"critical", false)),
+		# The fall the server picked (ArenaGame.decide_death), so every client draws the same.
+		entry.get_meta(&"death", null) as DotPlayerDeath
 	))
 
 

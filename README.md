@@ -107,6 +107,19 @@ mp_teammate_passthrough 1      // team modes: 0 a team-mate is hit and blocks, 1
 
 `mp_teammate_passthrough` is the family's shared one from dot-combat, live from the next shot, and covers rockets and grenades in flight too. At 2 a team-mate never stops a shot; a blast still reaches them.
 
+Dead bodies fall as ragdolls, from [dot-player-char](https://github.com/modcommunity/dot-player-char). The server picks how each one goes down and every player sees the same fall:
+
+```
+sv_ragdoll 1                   // 1 a physical body, 0 a quick fall with no physics
+sv_ragdoll_style ragdoll       // ragdoll, stiff (one piece), topple (no physics) or hide (vanishes)
+sv_ragdoll_time 10             // seconds a body lies there before it fades
+sv_ragdoll_max 8               // most bodies at once; the oldest fades to make room
+sv_ragdoll_force 1             // how hard kills throw bodies; 0 drops them where they stood
+sv_ragdoll_reactions ""        // weights, e.g. "headshot_launch=6,power_launch=8,face_plant=1.5,crumple=2.5,limp=4"; 0 turns one off
+```
+
+A headshot can throw the body up and back, the sniper rifle and the rocket launcher always throw it, the shotguns and the heavy melee can, and anybody may go down on their face with a smack or crumple where they stood.
+
 Bots come from [dot-bot](https://github.com/modcommunity/dot-bot), and they play the same way solo and on a server:
 
 ```

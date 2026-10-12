@@ -159,6 +159,10 @@ var view_model: ZeeViewModel = null
 ## Every rocket and grenade in the air, drawn.
 var projectile_view: ArenaProjectileView = null
 
+## Where the dead lie: dot-player-char's ragdolls, built from each KILL's death (the server's
+## pick) under [member ArenaGame.ragdoll_rules]. Client side.
+var ragdolls: DotPlayerRagdolls = null
+
 ## The projectile layer whose detonations are being heard, so a new one is noticed.
 var _heard_projectiles: RefCounted = null
 
@@ -243,6 +247,12 @@ func _ready() -> void:
 	projectile_view = ArenaProjectileView.new()
 	projectile_view.name = "Projectiles"
 	add_child(projectile_view)
+
+	_build_ragdolls()
+	if _offline:
+		# Solo, the world is this process's and there is no KILL message: the death the game
+		# decided is on the kill's entry.
+		game.player_killed.connect(_on_solo_kill)
 
 	_sampler = make_sampler()
 	# C slides as well as Duck: added once the key table has been applied, in
@@ -752,6 +762,9 @@ func _on_map_changed(map: DotMapDef) -> void:
 		game.combat.trace = game.map.shot_trace()
 	if game.projectiles != null:
 		game.projectiles.clear()
+	if ragdolls != null:
+		# A body lying on the old map's floor would hang in the new one's air.
+		ragdolls.clear()
 
 	if presentation != null:
 		# Everything drawn for the old map is meaningless now -- a decal is a hole in a
@@ -918,7 +931,8 @@ func _on_kill(info: Dictionary) -> void:
 
 	# The body comes apart, if the server's rules say this death breaks one. Seeded from
 	# the victim and the tick so every client breaks it the same way; pushed away from
-	# the killer, which every client knows.
+	# the killer, which every client knows. Then what is left of it falls, the way the
+	# server picked (`death_*` on the KILL), so every client draws the same fall.
 	if victim != null and victim != player:
 		var away := Vector3.ZERO
 		if killer != null:
@@ -932,6 +946,42 @@ func _on_kill(info: Dictionary) -> void:
 			int(info["victim_id"]) * 7919 + int(info["killer_id"]),
 			bool(info.get("critical", false))
 		)
+		var death := DotPlayerDeath.from_dict(info)
+		if death.direction == Vector3.ZERO and away != Vector3.ZERO:
+			# An older server sent no direction: away from the killer is the honest guess.
+			death.direction = away.normalized()
+		var _fell := victim.fall_body(ragdolls, death)
+
+
+## A kill in a solo game: the same fall a connected client draws from the KILL message, from
+## the death [method ArenaGame.decide_death] put on the entry.
+func _on_solo_kill(entry: DotKillFeed.Entry) -> void:
+	if game == null or not String(entry.victim_key).is_valid_int():
+		return
+	var victim := game.player_for(int(entry.victim_key))
+	if victim == null or victim == player:
+		return
+	var death: DotPlayerDeath = entry.get_meta(&"death", null)
+	var _fell := victim.fall_body(ragdolls, death if death != null else DotPlayerDeath.new())
+
+
+## The dead bodies' yard: the game's ragdoll rules, the world's collision layers, and the
+## presentation's sound. Built once; cleared on a map change.
+func _build_ragdolls() -> void:
+	ragdolls = DotPlayerRagdolls.new()
+	ragdolls.name = "Ragdolls"
+	ragdolls.rules = game.ragdoll_rules
+	var stack := game.player_stack
+	if stack != null and stack.physics != null and stack.physics.layout != null:
+		# The level is classified onto `world` (see `_classify_level`); props are on `prop`.
+		game.ragdoll_rules.collision_mask = stack.physics.layout.mask_of([&"world", &"prop"])
+	ragdolls.sound_fn = _ragdoll_sound
+	add_child(ragdolls)
+
+
+func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
+	if presentation != null and presentation.audio != null:
+		var _played := presentation.audio.play_at(id, at, clampf(volume, 0.3, 1.0))
 
 
 ## The server confirmed this player's damage landed. The hit marker, the number and the

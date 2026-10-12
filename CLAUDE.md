@@ -96,7 +96,7 @@ Short forms; the reasoning is in the linked file.
 - A match cvar (`arena_scorelimit`, `_timelimit`, `_warmup`, `_minplayers`) writes the `ArenaGame` export AND the live match (`apply_match_limits`), or it is lost at boot or the next map change. [modes](docs/modes.md#modes-are-data)
 - Anything hooked to the combat manager rebinds on `map_changed`. [modes](docs/modes.md#effects)
 - Spawn protection: one duration, three records; it does not break on attack; an admin slay passes. [modes](docs/modes.md#spawn-protection)
-- Body breaking is seeded from victim and killer, never the tick. [modes](docs/modes.md#criticals-and-bodies)
+- Body breaking is seeded from victim and killer, never the tick; a death's fall is the server's pick (`decide_death`), sent on KILL, never picked on a client. [modes](docs/modes.md#criticals-and-bodies)
 - A monster brain seeds from `npc.seed`, never `npc.instance_id` (moves with every allocation). dot-npc `docs/runtime.md`
 - Take a pickup out of the field as it goes, not at the end of the frame. [modes](docs/modes.md#coins-out-of-a-body)
 

@@ -345,6 +345,16 @@ var _hurt_due: Dictionary = {}
 ## What [method follow_server_cvars] follows; null on a server and offline.
 var _cvar_source: Object = null
 
+## What a dead body does, and which death reactions the server allows: dot-player-char's
+## `sv_ragdoll*` cvars. Bound by the module on the server (REPLICATED) and followed through the
+## client link on a client, which is the end that draws the bodies. One for the life of the
+## game, not per map, so a map change keeps the server's setting.
+var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
+
+## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
+## kill rather than per kill: the table is twenty-seven fresh resources.
+var _weapon_defs: Dictionary = {}
+
 
 func _exit_tree() -> void:
 	if _registered_name != &"":
@@ -446,6 +456,8 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 ## host's dot-combat or link cannot follow, and the manager keeps its default.
 func follow_server_cvars(source: Object) -> bool:
 	_cvar_source = source
+	# The ragdoll rules are the game's, not the map's, so they follow once and keep following.
+	var _bodies := ragdoll_rules.follow_cvars(source)
 	return _follow_cvar_source()
 
 
@@ -1371,6 +1383,29 @@ func rule(key: String) -> float:
 	return float(movement_rules.get(key, SHOW_DEFAULTS.get(key, 0.0)))
 
 
+## The fall a death gets: dot-player-char's reaction rule over the server's weights, seeded from
+## the victim and the tick. Server side; the bridge sends it on KILL and every client draws it.
+##
+## The direction is the shot's; a death with none (a fall, a slay) is pushed by nothing. The
+## killing weapon's def is what lets the sniper and the launcher throw a body
+## (zee-dot-weapons' `params.death_reaction`).
+func decide_death(entity_id: int, damage: DotDamage) -> DotPlayerDeath:
+	if _weapon_defs.is_empty():
+		_weapon_defs = ArenaContent.weapon_table()
+	var def: Object = _weapon_defs.get(damage.weapon_id)
+	var direction := damage.direction
+	if direction.length_squared() < 0.0001 and damage.attacker != 0 and damage.attacker != entity_id:
+		var killer := player_for(damage.attacker)
+		var victim := player_for(entity_id)
+		if killer != null and victim != null:
+			direction = victim.controller.state.position - killer.controller.state.position
+	direction.y = clampf(direction.y, -0.4, 0.4)
+	return DotPlayerDeath.decide(
+		ragdoll_rules.reactions(), damage.is_headshot(), damage.amount, direction,
+		DotPlayerDeath.seed_of(entity_id, _tick), def
+	)
+
+
 ## How a body comes apart on death under the current rules.
 func break_rules() -> DotPlayerBreakRules:
 	var rules := DotPlayerBreakRules.new()
@@ -1744,6 +1779,9 @@ func _on_entity_killed(entity_id: int, damage: DotDamage) -> void:
 	# dot-match's entry has no field for it; the bridge reads it to tell every client a
 	# lethal critical happened, which is what breaks a body and what a reward hangs on.
 	entry.set_meta(&"critical", damage.critical)
+	# How the body falls, picked once, here, and sent with the kill (see `decide_death`).
+	if is_authority:
+		entry.set_meta(&"death", decide_death(entity_id, damage))
 
 	# The medals, before the streaks move: a shutdown is judged on the streak the victim
 	# died with. Emitted after `player_killed`, so a client hears the kill first.

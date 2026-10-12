@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 227
+const CHECKS := 240
 
 var _passed := 0
 var _failed := 0
@@ -80,6 +80,7 @@ func _run() -> void:
 	_test_a_respawn_faces_its_spawn()
 	_test_the_view_turns_every_frame()
 	_test_criticals_and_the_body()
+	await _test_bodies_fall()
 	_test_feedback_from_the_wire()
 	_test_stock_avatars_differ()
 	await _test_hud_fits_the_frame()
@@ -1510,6 +1511,124 @@ func _test_the_view_turns_every_frame() -> void:
 	client.player = null
 	client.game = null
 	client.free()
+	g.queue_free()
+	_done()
+
+
+## A dead body falls as the server said: the death rides the KILL, the client builds a ragdoll
+## from the figure it draws, the body lies on the floor rather than through it, the server's
+## cvars turn it into a topple or nothing, and a respawn draws the figure again. What a fall
+## LOOKS like is the contact sheets (docs/client.md), not this.
+func _test_bodies_fall() -> void:
+	_section("A dead body falls the way the server picked, and gets up on respawn")
+
+	# The server's half: the sniper names the power launch, so its kill is one.
+	var g := ArenaGame.new()
+	g.is_authority = true
+	add_child(g)
+	var _set := g.setup(ArenaMap.dm_box())
+	var dmg := DotDamage.new()
+	dmg.attacker = 3
+	dmg.weapon_id = ZeeWeaponIds.SNIPER
+	dmg.amount = 120.0
+	dmg.direction = Vector3(0, 0, -1)
+	var sniped := g.decide_death(9, dmg)
+	_check(sniped.reaction == &"power_launch", "a sniper kill is a power launch (%s)" % sniped.reaction)
+	dmg.weapon_id = ZeeWeaponIds.PISTOL
+	var counted := {}
+	for tick in range(200):
+		g._tick = tick
+		var d := g.decide_death(9, dmg)
+		counted[d.reaction] = int(counted.get(d.reaction, 0)) + 1
+	_check(not counted.has(&"power_launch") and not counted.has(&"headshot_launch") and counted.size() >= 2,
+		"a pistol body shot never launches, and is not always the same fall (%s)" % str(counted))
+	g.ragdoll_rules.set_cvar("sv_ragdoll_reactions", "limp=0,crumple=0,face_plant=1")
+	_check(g.decide_death(9, dmg).reaction == &"face_plant", "sv_ragdoll_reactions reweights the server's pick")
+	g.ragdoll_rules.set_cvar("sv_ragdoll_reactions", "")
+
+	# The wire: the death rides KILL, and an older kill still reads.
+	var wrote := ArenaEvents.write_kill(3, 9, "sniper", false, true, sniped)
+	var read := ArenaEvents.read_kill(DotNetReader.new(wrote))
+	var back := DotPlayerDeath.from_dict(read)
+	_check(bool(read["ok"]) and bool(read["critical"]) and back.reaction == sniped.reaction
+		and back.roll_seed == sniped.roll_seed and absf(back.damage - 120.0) < 0.5
+		and back.direction.distance_to(sniped.direction) < 0.02,
+		"the KILL carries the reaction, the seed, the damage and the direction (%d bytes)" % wrote.size())
+	var old := ArenaEvents.read_kill(DotNetReader.new(ArenaEvents.write_kill(3, 9, "pistol", true, false)))
+	_check(bool(old["ok"]) and not old.has("death_reaction") and DotPlayerDeath.from_dict(old).reaction == &"limp",
+		"a KILL without one reads as a plain fall")
+
+	# The client's half, on a floor in a physics world.
+	var floor_body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(60, 1, 60)
+	shape.shape = box
+	shape.position = Vector3(0, -0.5, 0)
+	floor_body.add_child(shape)
+	add_child(floor_body)
+	var yard := DotPlayerRagdolls.new()
+	add_child(yard)
+
+	var player := ArenaPlayer.new()
+	player.setup(ArenaPlayer.Mode.HEADLESS, ArenaMap.dm_box(), 6, "Faller")
+	add_child(player)
+	player.spawn(Transform3D(Basis(), Vector3(0.0, 0.0, 0.0)), 0)
+	player.attach_body_mesh(Color.WHITE, ArenaAvatars.stock_avatar(&"faller"))
+	player.present(0.016)
+	player.make_dead()
+	var fall := DotPlayerDeath.new()
+	fall.reaction = &"limp"
+	fall.direction = Vector3(1, 0, 0)
+	fall.damage = 80.0
+	var body := player.fall_body(yard, fall)
+	_check(body != null and body.style == DotPlayerRagdollRules.Style.RAGDOLL and body.part_count() == 6,
+		"the stock avatar falls as a six-part ragdoll (%s)" % (str(body.describe()) if body != null else "none"))
+	_check(not player.body_mesh.visible, "and the standing figure is hidden")
+	var waited := 0.0
+	while waited < 8.0 and not body.settled:
+		await get_tree().physics_frame
+		waited += get_physics_process_delta_time()
+	_check(body.settled and body.centre().y < 0.6 and body.lowest_point() > -0.12,
+		"it lies on the floor and stops (torso %.2f m, lowest %.2f m, %.1f s)" % [body.centre().y, body.lowest_point(), waited])
+	player.health.alive = true
+	player.present(0.016)
+	_check(player.body_mesh.visible, "a respawn draws the figure again")
+
+	yard.rules.enabled = false
+	player.make_dead()
+	var toppled := player.fall_body(yard, fall)
+	_check(toppled != null and toppled.style == DotPlayerRagdollRules.Style.TOPPLE, "sv_ragdoll 0: a topple, no physics")
+	player.health.alive = true
+	player.present(0.016)
+	yard.rules.style = DotPlayerRagdollRules.Style.HIDE
+	player.make_dead()
+	_check(player.fall_body(yard, fall) == null and not player.body_mesh.visible,
+		"sv_ragdoll_style hide: nothing, and the figure gone")
+
+	# The solo path: no KILL message, the death is on the entry.
+	var client := ArenaClient.new()
+	client.game = g
+	client._build_ragdolls()
+	# The client is not in the tree here (its _ready builds a whole game); its yard has to be.
+	client.remove_child(client.ragdolls)
+	add_child(client.ragdolls)
+	var added: DotResult = g.add_player(11, "Eleven")
+	var eleven: ArenaPlayer = added.value if added.ok else null
+	eleven.attach_body_mesh(Color.WHITE, ArenaAvatars.stock_avatar(&"eleven"))
+	eleven.make_dead()
+	var entry := DotKillFeed.Entry.new()
+	entry.victim_key = "11"
+	entry.set_meta(&"death", fall)
+	client._on_solo_kill(entry)
+	_check(client.ragdolls.live().size() == 1, "solo, a kill's entry carries the fall and the client draws it")
+	_check(client.ragdolls.rules == g.ragdoll_rules, "and it draws under the game's (the server's) rules")
+
+	client.ragdolls.queue_free()
+	client.free()
+	yard.queue_free()
+	player.queue_free()
+	floor_body.queue_free()
 	g.queue_free()
 	_done()
 
