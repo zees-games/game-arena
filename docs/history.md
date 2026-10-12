@@ -115,6 +115,12 @@ Measured by `headless_feel`, the first suite to judge what a frame shows rather 
 
 Arena had none of the landing dip, strafe roll and speed widening dot-player-controller's own camera had, because it writes its camera itself and had copied only the wall-run lean. Measured first: the landing was a 4.9 cm a frame corner at 144 Hz. The addon's own dip turned out to be a snap (the full dip and a 6 degree pitch set on the landing frame), so the cues moved into `DotFpsViewMotion` there, the dip as a spring kicked in velocity, and arena calls it. Two things only the frames showed: kicked when `landed` fired, the dip began a tick early, while the eye was still drawing the last of the fall (21 cm in two frames, then a stop); and the step-easing reset from `39e7d23` sat at the end of `_follow_map_volumes`, which runs every tick on an imported map, so stairs there were never eased and the frame two ticks back was always forgotten. It is `_forget_drawn` now, on a spawn and a teleport.
 
+## Solo bots were the test fixture (2026-10-11)
+
+The first play test on Windows (bootstrap, solo) died twelve times in ninety seconds and was killed from 30 to 40 m within a second, again and again. Nothing was mistuned: `ArenaClient._drive_bots` was `headless_match`'s fixture, copied into the client to get kills on screen, and its own comment said so. It faced the nearest player through any wall at pitch 0 and held the trigger under 40 m. The brain a server ran (sight, reaction, aim error, range, strafing) was never met by anybody playing solo, because solo never ran it. Both run dot-bot's `DotBotBrain` now (`ArenaBots`), and `headless_bots` holds every preset to a K/D band in the real game. The lesson for any game here: a bot driver in the client is a second brain, and the one players meet first.
+
+Building it found one dot-bot bug: a sound made on the same timestamp as a brain's last think was never heard (a time comparison), so a bot with its back to a shooter died without turning round. Sounds carry a sequence number now.
+
 ## Still open, unexplained
 
 - `dedicated` exited with 23 ObjectDB instances and 6 resources leaked (2026-09-23), as many before the message self-preloads were removed as after: too few to be the whole script graph, so a different shape from the one mg-buses-from-hell had. Not re-measured since.

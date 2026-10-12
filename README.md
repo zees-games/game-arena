@@ -107,6 +107,17 @@ mp_teammate_passthrough 1      // team modes: 0 a team-mate is hit and blocks, 1
 
 `mp_teammate_passthrough` is the family's shared one from dot-combat, live from the next shot, and covers rockets and grenades in flight too. At 2 a team-mate never stops a shot; a blast still reaches them.
 
+Bots come from [dot-bot](https://github.com/modcommunity/dot-bot), and they play the same way solo and on a server:
+
+```
+bot_quota 4                    // players to fill the server to; people take a bot's place
+bot_quota_mode fill            // fill, fixed, per_player or off
+bot_difficulty medium          // easy, medium, hard or nightmare
+bot_reaction 0.3               // any single setting of the preset, e.g. seconds before a bot fires on somebody new
+```
+
+`bot_difficulty` sets about thirty `bot_*` settings at once (reaction time, aim error and how fast it settles, turn speed, view cone, hearing, strafing, peeking, preferred range, bursts and more). Change any one of them after choosing a preset and it stays changed; `bot_settings` lists them all and `bot_settings_reset` goes back to the preset. dot-bot's README has the full table. Solo, the same names work in the console (the key under Escape), `bot_quota` counts you as one of the players, and `./game.sh -- --bot_difficulty hard --bots 5` sets both at launch.
+
 Console commands:
 
 | Command | |
@@ -153,6 +164,7 @@ The vote for the next map is [dot-vote](https://github.com/modcommunity/dot-vote
 | Suite | What it covers |
 | --- | --- |
 | `headless_match` | A whole match with four bots, then the HUD, the menus and the weapons |
+| `headless_bots` | A bot at each difficulty against the same reference player: kills and deaths, reaction time, aim, no shots through walls |
 | `headless_net` | A server and a client in one process, over a connection that drops packets |
 | `headless_presentation` | What a client draws and plays |
 | `headless_stack` | The whole stack of addons together |

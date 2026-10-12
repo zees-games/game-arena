@@ -206,6 +206,12 @@ func _module_load() -> DotResult:
 	# operator's; `bot_quota_mode off` is a server with no bots.
 	_bot_quota = DotBotQuota.install(self, DEFAULT_BOT_QUOTA)
 
+	# [b]How the bots play[/b]: dot-bot's `bot_difficulty` (easy, medium, hard, nightmare;
+	# medium by default) and every `bot_*` setting it bundles, each overridable. On the game,
+	# where the bots' brains read it (ArenaBots), never in the registry: two servers in one
+	# process must not share a difficulty.
+	var _bot_cvars := DotBotSettings.of(game).bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY, add_command)
+
 	# Through `game.min_players` like the other match cvars (`_add_match_cvars`): written to
 	# the live match alone, it was back to the mode's 2 after the first map change, and a
 	# one-player server sat in warmup from then on.
@@ -614,9 +620,8 @@ const DEFAULT_BOT_QUOTA := 4
 ## spawn, a loadout and a JOIN to everybody, and nobody notices a bot arriving a second late.
 const BOT_CHECK_SEC := 1.0
 
-const BOT_NAMES := ["Ada", "Brick", "Cog", "Dash", "Echo", "Fuse", "Grit", "Hex", "Ion", "Jolt", "Knox", "Lux"]
-
 var _bot_quota: DotBotQuota = null
+var _bot_roster := DotBotRoster.new()
 var _since_bot_check := 0.0
 
 
@@ -634,15 +639,14 @@ func _keep_bots() -> void:
 	var wanted := _bot_quota.wanted(humans, slots)
 	var bots := bridge.bot_ids()
 
-	while bots.size() < wanted:
-		var name := "Bot %s" % BOT_NAMES[bots.size() % BOT_NAMES.size()]
-		var id := bridge.add_bot(name)
-		if id == 0:
-			break
-		bots.append(id)
-
-	while bots.size() > wanted:
-		bridge.remove_bot(bots.pop_back())
+	# Named from dot-bot's pool, never a person's name and never "Bot 3".
+	var taken: Array = []
+	for p in game.players():
+		taken.append(p.display_name)
+	var _kept := _bot_roster.keep(wanted, bots,
+		func(bot_name: String) -> int: return bridge.add_bot(bot_name),
+		func(id: int) -> void: bridge.remove_bot(id),
+		taken)
 
 
 ## One authoritative tick.

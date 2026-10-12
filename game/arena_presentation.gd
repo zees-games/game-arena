@@ -105,6 +105,9 @@ var fx: DotFxManager = null
 ## The player's console, built by [method build_console] once the client has a menu.
 var console: DotConsoleController = null
 var console_panel: DotConsolePanel = null
+## The client's own console source ([method _local_commands]), so the offline client can add
+## what only a solo game has: the bot settings, which a server's console holds otherwise.
+var local_console: DotConsoleLocal = null
 
 ## The in-game chat box. See [method _build_chat].
 var chat_window: DotChatWindow = null
@@ -831,7 +834,8 @@ func build_console(menu: Object = null) -> DotResult:
 	var server_sources := console.sources().slice(1)
 	for s in server_sources:
 		console.remove_source(s)
-	console.add_source(_local_commands())
+	local_console = _local_commands()
+	console.add_source(local_console)
 	for s in server_sources:
 		console.add_source(s)
 

@@ -63,13 +63,17 @@ The wall moves' keys ride the same set (`wall_run_*`, `wall_jump_*`, `wall_slide
 
 `ArenaNpcNet` replicates each monster with dot-npc's `DotNpcNetSync` fields: never predicted, because a monster's position comes out of a navigation graph and a brain no client could reproduce. A client interpolates and draws ([horde](horde.md)).
 
-## Server bots
+## Bots
 
-`ArenaNetBridge.add_bot` / `remove_bot` add a server-side `ArenaPlayer` with no peer, registered with owner 0 so every client mirrors it, announced with a JOIN and a LEAVE like anybody. `game/arena_bots.gd` writes what a bot presses into the same `last_move` / `last_fire` slot a client's input lands in inside `_commands()`, so the game ticks it exactly as a person: the nearest visible enemy (`combat.trace.line_of_sight`, side-aware in a team mode), aim error that settles over two seconds of a fight, a reaction delay, a fighting distance kept and strafed at, and a walk between spawns with nobody to fight. Deterministic per bot and tick.
+**One brain, solo and on a server.** `game/arena_bots.gd` feeds dot-bot's `DotBotBrain` from this game and turns its intent into the two commands a client sends. On a server, `ArenaNetBridge.add_bot` / `remove_bot` add an `ArenaPlayer` with no peer, registered with owner 0 so every client mirrors it, announced with a JOIN and a LEAVE like anybody, and `_commands()` writes what the bot presses into the same `last_move` / `last_fire` slot a client's input lands in, so the game ticks it exactly as a person. Offline, `ArenaClient._drive_bots` asks the same `ArenaBots.think` for each bot it added.
 
-How many is dot-server's `DotBotQuota` (`bot_quota` 4, `bot_quota_mode fill`, `bot_quota_empty 1`): `ArenaModule._keep_bots` corrects the count once a second, newest bot out first, so each person who joins takes a bot's place. `bot_quota_mode off` is a server with no bots. Needs dot-server API level 5 (`requires.json` is derived at packaging).
+What the brain is told (`ArenaBots.World`, kept on the game as metadata): every player as a `DotBotContact` (position, velocity, view, health, team in a team mode), `combat.trace.line_of_sight`, the map's spawns as places to roam, a sound for every shot (`ArenaPlayer.used`) and who hit whom (`ArenaGame.hit_confirmed`, which makes a bot flinch and turn toward the shooter). Nothing else, so it cannot see through a wall. Its clock is the game's tick and its randomness is seeded from the bot's id.
 
-The offline client's bots (`_commands_for_tick`) are a different thing: a test fixture that aims at the nearest opponent through walls.
+**How well it plays is `bot_difficulty`** (easy, medium, hard, nightmare; medium by default) and the thirty `bot_*` settings each preset bundles (dot-bot's README has the table). `DotBotSettings.of(game)` holds them: the module binds them as cvars, the offline client as console variables (`ArenaClient._bind_bot_console`), with `-- --bot_difficulty <preset>` at launch. A setting set by hand survives a preset change; `bot_settings` lists them, `bot_settings_reset` drops the hand-set ones.
+
+How many is dot-server's `DotBotQuota` (`bot_quota` 4, `bot_quota_mode fill`, `bot_quota_empty 1`): `ArenaModule._keep_bots` corrects the count once a second through dot-bot's `DotBotRoster`, newest bot out first, so each person who joins takes a bot's place, and names each bot from dot-bot's pool (never a person's name, never "Bot 3"). `bot_quota_mode off` is a server with no bots. Needs dot-server API level 5 (`requires.json` is derived at packaging). Offline, `bot_quota` at the console is the same count (people + bots, so `bot_quota 4` is you and three bots) and `-- --bots N` sets the bots at launch.
+
+**Solo used to be a test fixture**: `_drive_bots` faced the nearest player through any wall and held the trigger under 40 m, `headless_match`'s aimbot, and the first play test on Windows died twelve times in ninety seconds to it ([history](history.md)). `headless_match` still drives its own bots that way, because it wants kills fast and is not about how bots play; `headless_bots` is ([testing](testing.md#the-suites)).
 
 ## Inputs and the clock under real loss
 

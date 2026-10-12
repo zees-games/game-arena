@@ -83,6 +83,7 @@ Short forms; the reasoning is in the linked file.
 - The killstreak meter's words end above a full chat log (y 424 at 1280x720); the chat box is scaled with the HUD (`fit_chat_screen`) and 340 wide, clear of the slide prompt; `headless_presentation` checks it at five frames. [client](docs/client.md#the-chat-box)
 - Hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD, never a predicted shot. [client](docs/client.md#kill-feedback)
 - Medal rules live in `ArenaAwards.MedalBook` on the authority; `ArenaAwards.Medal` is a wire index, appended only. [services](docs/services.md#progression)
+- Every bot, solo and server, is `ArenaBots.think` (dot-bot's brain); never a second driver in the client. Its settings live on the game (`DotBotSettings.of(game)`), never in the registry. [netcode](docs/netcode.md#bots)
 - Third person is deliberately not here: one motor to agree about. [client](docs/client.md#avatars)
 
 **Modes and the round**

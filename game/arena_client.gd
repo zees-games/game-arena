@@ -2,6 +2,7 @@ extends Node
 
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaBindings := preload("arena_bindings.gd")
+const ArenaBots := preload("arena_bots.gd")
 const ArenaBrowser := preload("arena_browser.gd")
 const ArenaClientExtras := preload("arena_client_extras.gd")
 const ArenaEvents := preload("arena_events.gd")
@@ -79,7 +80,8 @@ var extras: ArenaClientExtras = null
 ## Play alone even when a link is available. `--offline`.
 @export var force_offline: bool = false
 
-## How many bots to add when playing offline. Zero is an empty arena.
+## How many bots to add when playing offline. Zero is an empty arena. `bot_quota` at the
+## console changes it while playing (people + bots, as on a server); `-- --bots N` at launch.
 @export_range(0, 15, 1) var offline_bots: int = 3
 
 var _offline := true
@@ -113,8 +115,17 @@ var _awaiting_click := false
 ## g2gfast shipped exactly that and a person had to report it.
 var _watch_id: int = -1
 
-## Bots this client drives, offline only. Session id -> a simple aim-and-hold brain.
+## Bots this client drives, offline only. Session id -> the bot's body.
 var _bots: Dictionary = {}
+
+## Their minds (ArenaBots.Mind), by session id: the same brain a server's bots run.
+var _bot_minds: Dictionary = {}
+
+## Names offline bots from dot-bot's pool, and keeps their number.
+var _bot_roster := DotBotRoster.new()
+
+## The next offline bot's session id.
+var _next_bot_id: int = 100
 
 ## The meshes of the map currently drawn. Replaced on a map change.
 var _level: Node3D = null
@@ -474,20 +485,8 @@ func _start_offline() -> void:
 	if added.ok:
 		_adopt(added.value as ArenaPlayer)
 
-	for i in range(offline_bots):
-		var bot := game.add_player(100 + i, "Bot %d" % (i + 1))
-
-		if bot.ok:
-			var body := bot.value as ArenaPlayer
-			# A stock avatar, deterministic in the id, so an offline bot looks the
-			# same every launch and different from the bot beside it.
-			body.attach_body_mesh(
-				Color.from_hsv(float(i) / 6.0, 0.55, 0.85),
-				ArenaAvatars.stock_avatar(
-					StringName(ArenaGame.storage_key(body.player_id))
-				)
-			)
-			_bots[body.player_id] = body
+	_bind_bot_console()
+	_keep_offline_bots(_launch_bots())
 
 
 # --- Networked -------------------------------------------------------------
@@ -1230,44 +1229,98 @@ func _local_commands(move: DotFpsCommand) -> Dictionary:
 	return out
 
 
-## The bots from `headless_match`, in a client: aim at whoever is nearest and hold the
-## trigger. Offline only — a server's bots are the server's.
+## The offline bots: the brain a server's bots run (ArenaBots, dot-bot), with the same
+## `bot_difficulty`. Offline only; a server's bots are the server's.
+##
+## [b]Not the test fixture any more.[/b] This used to face the nearest player through any
+## wall and hold the trigger under 40 m -- `headless_match`'s aimbot -- and a first play test
+## died twelve times in ninety seconds to it. See ArenaBots.
 func _drive_bots() -> void:
+	var tick := game.current_tick()
 	for id in _bots:
 		var bot: ArenaPlayer = _bots[id]
 
-		# A tool that stages a bot (tools/screenshot_weapons.gd) writes its `bot_move` and
-		# `bot_fire` itself; driving it here as well would overwrite them every tick.
-		if not bot.is_alive() or bot.get_meta(&"bot_scripted", false):
+		# A tool or suite that stages a bot (tools/screenshot_weapons.gd, headless_feel)
+		# writes its `bot_move` and `bot_fire` itself; driving it here as well would
+		# overwrite them every tick.
+		if bot.get_meta(&"bot_scripted", false):
 			continue
 
-		var nearest: ArenaPlayer = null
-		var best := INF
+		var mind: ArenaBots.Mind = _bot_minds.get(id)
+		if mind == null:
+			mind = ArenaBots.Mind.new()
+			mind.seed = int(id)
+			_bot_minds[id] = mind
+		var made := ArenaBots.think(game, bot, mind, tick, float(game.tick_rate))
+		bot.set_meta("bot_move", made[0])
+		bot.set_meta("bot_fire", made[1])
 
-		for other in game.players():
-			if other == bot or not other.is_alive():
-				continue
 
-			var distance := bot.global_position.distance_to(other.global_position)
+## Adds or removes offline bots until there are [param count], named from dot-bot's pool.
+func _keep_offline_bots(count: int) -> void:
+	var taken: Array = []
+	for p in game.players():
+		taken.append(p.display_name)
+	var ids: Array = _bots.keys()
+	var _kept := _bot_roster.keep(count, ids, _add_offline_bot, _remove_offline_bot, taken)
 
-			if distance < best:
-				best = distance
-				nearest = other
 
-		var move := DotFpsCommand.new()
-		var fire := DotWeaponCommand.new()
+func _add_offline_bot(bot_name: String) -> int:
+	var id := _next_bot_id
+	_next_bot_id += 1
+	var bot := game.add_player(id, bot_name)
+	if not bot.ok:
+		return 0
+	var body := bot.value as ArenaPlayer
+	# A stock avatar, deterministic in the id, so an offline bot looks the same every launch
+	# and different from the bot beside it.
+	body.attach_body_mesh(
+		Color.from_hsv(float(id - 100) / 6.0, 0.55, 0.85),
+		ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(body.player_id)))
+	)
+	_bots[body.player_id] = body
+	return id
 
-		if nearest != null:
-			var to := nearest.global_position - bot.global_position
-			move.yaw = rad_to_deg(atan2(-to.x, -to.z))
-			move.pitch = 0.0
-			move.move = Vector2(0.0, 1.0)
-			fire.yaw = move.yaw
-			fire.pitch = move.pitch
-			fire.set_button(DotWeaponCommand.BUTTON_ATTACK, best < 40.0)
 
-		bot.set_meta("bot_move", move)
-		bot.set_meta("bot_fire", fire)
+func _remove_offline_bot(id: int) -> void:
+	_bots.erase(id)
+	_bot_minds.erase(id)
+	ArenaBots.forget(game, id)
+	game.remove_player(id)
+
+
+## How many bots a solo launch starts with: `-- --bots N`, else [member offline_bots].
+func _launch_bots() -> int:
+	var args := OS.get_cmdline_user_args()
+	var index := args.find("--bots")
+	if index >= 0 and index + 1 < args.size() and args[index + 1].is_valid_int():
+		return clampi(args[index + 1].to_int(), 0, 15)
+	return offline_bots
+
+
+## `bot_difficulty` and every `bot_*` setting at the solo console, the names a server has;
+## `bot_quota` too, counted the server's way (people + bots). `-- --bot_difficulty hard` at
+## launch picks the preset before the first bot thinks.
+func _bind_bot_console() -> void:
+	var settings := DotBotSettings.of(game)
+	var args := OS.get_cmdline_user_args()
+	var index := args.find("--bot_difficulty")
+	if index >= 0 and index + 1 < args.size():
+		DotLog.result(CHANNEL, "bot difficulty from the command line", settings.set_difficulty(args[index + 1]))
+
+	if presentation == null or presentation.local_console == null:
+		return
+	var local := presentation.local_console
+	var _bound := settings.bind_console(local)
+	local.add_var(&"bot_quota", "Players in a solo match, you included; the rest are bots (0 to 16).",
+		func() -> Variant: return _bots.size() + 1,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "bot_quota takes a number")
+			_keep_offline_bots(DotBotRoster.solo_wanted(clampi(text.to_int(), 0, 16)))
+			return DotResult.success(_bots.size() + 1)
+	)
 
 
 ## Whether the local player was alive last frame, for [method _face_a_respawn].

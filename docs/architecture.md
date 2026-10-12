@@ -64,7 +64,7 @@ Three small decisions in those joins:
 - **Use the session id, never the peer id.** A peer id is reassigned the moment somebody reconnects, and everything downstream would be handed to the next player to join. `ArenaModule._add` says so at the point it matters.
 - The loadout key is `"arena-player-%08d"`, not `str(id)`. `DotLoadoutKey.is_usable` has a minimum length so a malformed key can never reach a filesystem path, and a bare `"7"` is refused. Padding is right; loosening the check is not.
 - Monsters are in a different id space, allocated by `DotEntityTable` ([horde](horde.md#a-monsters-entity-id)). The player half is deliberately not converted; the reason is there.
-- Server bots are players with session ids from `ArenaNetBridge.BOT_SESSION_BASE` (900,000,000 + n), above any userid and below the entity table's ids ([netcode](netcode.md#server-bots)).
+- Server bots are players with session ids from `ArenaNetBridge.BOT_SESSION_BASE` (900,000,000 + n), above any userid and below the entity table's ids ([netcode](netcode.md#bots)).
 
 ## Order inside a tick
 

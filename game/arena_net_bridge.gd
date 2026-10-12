@@ -584,6 +584,7 @@ func remove_bot(session_id: int) -> void:
 		return
 
 	_bot_minds.erase(session_id)
+	ArenaBots.forget(game, session_id)
 	var behaviour: ArenaPlayerNet = _behaviours.get(session_id)
 	_behaviours.erase(session_id)
 

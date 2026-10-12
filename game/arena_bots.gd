@@ -1,34 +1,33 @@
 extends RefCounted
-## What a server's bot does with a tick: whom to fight, where to go, and when to pull the
-## trigger, as the same two commands a client sends.
+## What a bot does with a tick, as the same two commands a client sends: dot-bot's brain,
+## fed from this game. One brain for every bot arena has, solo and on a server.
 ##
 ## [b]Commands, not a second simulation.[/b] A bot is an [ArenaPlayer] like anybody else and
 ## moves through the same controller, shoots through the same arsenal and is hit by the same
 ## lag-compensated trace; all this decides is what it would have pressed. That keeps a bot
 ## from ever doing something a player could not -- no walking through walls, no shot the
-## arsenal would refuse -- and keeps the server's tick order exactly what it is for people.
+## arsenal would refuse -- and keeps the tick order exactly what it is for people.
 ##
-## [b]Not the offline client's bots.[/b] Those aim at whoever is nearest and hold the
-## trigger, through walls, from anywhere; they are a test fixture and their own comment says
-## so. A server's bot is something somebody plays against, so it fires only at what it can
-## see, keeps a fighting distance and strafes there, misses a little, waits a moment before
-## reacting to somebody it has just seen, and walks between the map's spawns when there is
-## nobody to fight.
+## [b]Solo used to be a test fixture.[/b] The offline client drove its bots with the
+## `headless_match` aimbot: face the nearest player through any wall, hold the trigger under
+## 40 m, no reaction and no aim error. A first play test on Windows died twelve times in ninety
+## seconds to it, killed from 30 to 40 m within a second, while the brain a server ran (sight,
+## reaction, aim error, range, strafing) was never met by anybody playing solo. Both now ask
+## [DotBotBrain], so `bot_difficulty` means the same thing in both.
 ##
-## [b]Deterministic per bot and tick[/b], from a seed of its id: two servers given the same
-## inputs play the same bots, which is what makes a bot's behaviour something a test can
-## hold still.
+## [b]What the brain is told[/b] ([World], a [DotBotWorld]): every player as a
+## [DotBotContact], the combat trace's line of sight, the map's spawns as places to roam, a
+## sound for every shot fired (from [signal ArenaPlayer.used]) and who hit whom (from
+## [signal ArenaGame.hit_confirmed]). Nothing else, so it cannot see through a wall.
+##
+## [b]Deterministic per bot[/b]: the brain's randomness is seeded from the bot's id, and its
+## clock is the game's tick, so two runs of the same inputs play the same bots.
 
 const ArenaPlayer := preload("arena_player.gd")
 
-## Farthest a bot opens fire from, metres.
-const FIRE_RANGE := 45.0
-## Distance a bot likes to fight at; closer it backs off, further it closes in.
-const PREFERRED_RANGE := 9.0
-## Seconds between a bot seeing somebody new and shooting at them.
-const REACTION_SEC := 0.35
-## Degrees of aim error at the start of a fight, shrinking as it goes on.
-const AIM_ERROR_DEG := 3.5
+## Where the world is kept on the game.
+const WORLD_META := &"arena_bot_world"
+
 ## Height of the eye and of a target's chest above its feet, metres.
 const EYE := 1.6
 const CHEST := 1.25
@@ -37,12 +36,116 @@ const CHEST := 1.25
 ## One bot's memory between ticks. Kept by the caller, one per bot.
 class Mind:
 	extends RefCounted
-	var target: int = -1
-	var seen_since_tick: int = -1
-	var waypoint := Vector3.INF
-	var strafe := 1.0
-	var strafe_until_tick: int = 0
+	var brain: DotBotBrain = null
 	var seed: int = 0
+
+
+## What the brain may know of this game.
+class World:
+	extends DotBotWorld
+
+	var game: Object = null
+	var tick_rate: float = 64.0
+	var brains: Dictionary = {}
+	var _tick: int = -1
+	var _contacts: Array = []
+	var _by_id: Dictionary = {}
+
+	func _init(p_game: Object) -> void:
+		game = p_game
+		if game.has_signal(&"hit_confirmed"):
+			game.connect(&"hit_confirmed", _on_hit)
+		if game.has_signal(&"player_added"):
+			game.connect(&"player_added", _hear_player)
+		for p in game.call("players"):
+			_hear_player(p)
+
+	## Rebuilds the contacts once a tick, however many bots ask.
+	func refresh(tick: int, rate: float) -> void:
+		tick_rate = maxf(rate, 1.0)
+		if tick == _tick:
+			return
+		_tick = tick
+		_contacts.clear()
+		_by_id.clear()
+		var teams := _team_mode()
+		for p: ArenaPlayer in game.call("players"):
+			var c := DotBotContact.new()
+			c.id = p.player_id
+			c.eye_height = EYE
+			c.aim_height = CHEST
+			c.alive = p.is_alive()
+			c.team = p.team if teams else 0
+			if p.controller != null:
+				c.position = p.controller.state.position
+				c.velocity = p.controller.state.velocity
+				c.view_yaw = p.controller.state.yaw
+				c.view_pitch = p.controller.state.pitch
+			else:
+				c.position = p.global_position
+			if p.health != null and p.health.max_health > 0.0:
+				c.health = p.health.health / p.health.max_health
+			_contacts.append(c)
+			_by_id[c.id] = c
+
+	func now() -> float:
+		return float(maxi(_tick, 0)) / tick_rate
+
+	func contact(id: int) -> DotBotContact:
+		return _by_id.get(id)
+
+	func contacts() -> Array:
+		return _contacts
+
+	func line_of_sight(from: Vector3, to: Vector3) -> bool:
+		var combat: Variant = game.get("combat")
+		var trace: Variant = (combat as Object).get("trace") if combat is Object else null
+		if trace is DotTrace:
+			return (trace as DotTrace).line_of_sight(from, to)
+		return true
+
+	func waypoints() -> PackedVector3Array:
+		var out := PackedVector3Array()
+		var map: Variant = game.get("map")
+		var spawns: Array = (map as Object).get("spawns") if map is Object else []
+		for spawn: Transform3D in spawns:
+			out.append(spawn.origin)
+		return out
+
+	func _team_mode() -> bool:
+		var mode: Variant = game.get("mode")
+		return mode is Object and (mode as Object).has_method("is_team_mode") and bool((mode as Object).call("is_team_mode"))
+
+	## Every shot is a sound; a swing or a throw is a quieter one.
+	func _hear_player(p: Object) -> void:
+		if not (p is ArenaPlayer) or p.has_meta(&"arena_bot_heard"):
+			return
+		p.set_meta(&"arena_bot_heard", true)
+		var body := p as ArenaPlayer
+		body.used.connect(func(outcome: DotWeaponOutcome) -> void:
+			if outcome == null or not outcome.used:
+				return
+			var loud := 1.0 if not outcome.shots.is_empty() or not outcome.spawns.is_empty() else 0.3
+			emit_sound(body.muzzle_position(), loud, body.player_id, now())
+		)
+
+	func _on_hit(attacker: int, victim: int, _amount: float, _point: Vector3, _headshot: bool, _lethal: bool) -> void:
+		var brain: DotBotBrain = brains.get(victim)
+		if brain == null:
+			return
+		var from := contact(attacker)
+		brain.hurt(from.eye() if from != null else Vector3.INF, now())
+
+
+## The world on [param game], made the first time a bot asks.
+static func world_for(game: Object) -> World:
+	if game.has_meta(WORLD_META):
+		var held: Variant = game.get_meta(WORLD_META)
+		if held is World:
+			return held
+	var made := World.new(game)
+	game.set_meta(WORLD_META, made)
+	return made
 
 
 ## [move, fire] for [param bot] this tick.
@@ -50,111 +153,28 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	var move := DotFpsCommand.new()
 	var fire := DotWeaponCommand.new()
 
-	if bot == null or not bot.is_alive():
+	if game == null or bot == null:
 		return [move, fire]
 
-	var here := bot.global_position
-	var target := _choose_target(game, bot, mind, tick)
+	var world := world_for(game)
+	world.refresh(tick, tick_rate)
 
-	if target != null:
-		var to := target.global_position - here
-		var flat := Vector2(to.x, to.z).length()
-		var aim_at := target.global_position + Vector3.UP * CHEST
-		var from := here + Vector3.UP * EYE
+	if mind.brain == null:
+		mind.brain = DotBotBrain.new(mind.seed if mind.seed != 0 else bot.player_id, DotBotSettings.of(game))
+	world.brains[bot.player_id] = mind.brain
 
-		# Aim error that settles as the fight goes on: a bot that hits with its first round
-		# from across the map reads as a cheat, and one that never improves as a dummy.
-		var engaged := float(tick - mind.seen_since_tick) / maxf(tick_rate, 1.0)
-		var error := AIM_ERROR_DEG * clampf(1.0 - engaged / 2.0, 0.25, 1.0)
-		var wobble := _noise(mind.seed, tick)
-
-		var yaw := rad_to_deg(atan2(-to.x, -to.z)) + wobble.x * error
-		var pitch := rad_to_deg(atan2((aim_at - from).y, maxf(flat, 0.01))) + wobble.y * error * 0.5
-
-		move.yaw = yaw
-		move.pitch = clampf(pitch, -85.0, 85.0)
-		fire.yaw = move.yaw
-		fire.pitch = move.pitch
-
-		# Keep a fighting distance and strafe there, changing direction now and then.
-		if tick >= mind.strafe_until_tick:
-			mind.strafe = -mind.strafe
-			mind.strafe_until_tick = tick + int(tick_rate * (0.8 + absf(wobble.x)))
-		var forward := 1.0 if flat > PREFERRED_RANGE * 1.4 else (-0.6 if flat < PREFERRED_RANGE * 0.6 else 0.0)
-		move.move = Vector2(mind.strafe, forward)
-
-		var reacted := engaged >= REACTION_SEC
-		fire.set_button(DotWeaponCommand.BUTTON_ATTACK, reacted and flat <= FIRE_RANGE)
-		return [move, fire]
-
-	# Nobody to fight: walk to a spawn, then the next one.
-	if mind.waypoint == Vector3.INF or Vector2(mind.waypoint.x - here.x, mind.waypoint.z - here.z).length() < 2.0:
-		mind.waypoint = _next_waypoint(game, mind, tick)
-
-	if mind.waypoint != Vector3.INF:
-		var to_point := mind.waypoint - here
-		move.yaw = rad_to_deg(atan2(-to_point.x, -to_point.z))
-		move.pitch = 0.0
-		move.move = Vector2(0.0, 1.0)
-		fire.yaw = move.yaw
-
+	var me := world.contact(bot.player_id)
+	var intent := mind.brain.think(me, world, world.now())
+	intent.write_move(move)
+	intent.write_fire(fire)
+	move.sanitise()
+	fire.sanitise()
 	return [move, fire]
 
 
-## The nearest living enemy the bot can see, keeping the current one while it stays visible
-## so a bot does not flick between two people standing a metre apart.
-static func _choose_target(game: Object, bot: ArenaPlayer, mind: Mind, tick: int) -> ArenaPlayer:
-	var trace: DotTrace = _trace(game)
-	var teams := _team_mode(game)
-	var from := bot.global_position + Vector3.UP * EYE
-	var best: ArenaPlayer = null
-	var best_distance := INF
-
-	for other: ArenaPlayer in game.call("players"):
-		if other == bot or not other.is_alive():
-			continue
-		if teams and other.team == bot.team and bot.team != 0:
-			continue
-		if trace != null and not trace.line_of_sight(from, other.global_position + Vector3.UP * CHEST):
-			continue
-
-		var distance := bot.global_position.distance_to(other.global_position)
-		if other.player_id == mind.target:
-			distance *= 0.7
-
-		if distance < best_distance:
-			best_distance = distance
-			best = other
-
-	var chosen := best.player_id if best != null else -1
-	if chosen != mind.target:
-		mind.target = chosen
-		mind.seen_since_tick = tick
-
-	return best
-
-
-static func _next_waypoint(game: Object, mind: Mind, tick: int) -> Vector3:
-	var map: Variant = game.get("map")
-	var spawns: Array = (map as Object).get("spawns") if map is Object else []
-	if spawns.is_empty():
-		return Vector3.INF
-	var index := absi(hash(mind.seed * 7919 + tick)) % spawns.size()
-	return (spawns[index] as Transform3D).origin
-
-
-static func _trace(game: Object) -> DotTrace:
-	var combat: Variant = game.get("combat")
-	var trace: Variant = (combat as Object).get("trace") if combat is Object else null
-	return trace as DotTrace if trace is DotTrace else null
-
-
-static func _team_mode(game: Object) -> bool:
-	var mode: Variant = game.get("mode")
-	return mode is Object and (mode as Object).has_method("is_team_mode") and bool((mode as Object).call("is_team_mode"))
-
-
-## A smooth -1..1 wobble per bot, from its seed and the tick.
-static func _noise(seed: int, tick: int) -> Vector2:
-	var t := float(tick) * 0.05 + float(seed % 1000)
-	return Vector2(sin(t * 1.3) * cos(t * 0.7), sin(t * 0.9 + 1.7))
+## Forgets a bot that left, so its brain is not told about hits any more.
+static func forget(game: Object, id: int) -> void:
+	if game != null and game.has_meta(WORLD_META):
+		var held: Variant = game.get_meta(WORLD_META)
+		if held is World:
+			(held as World).brains.erase(id)
