@@ -219,6 +219,45 @@ static func make_rig() -> Node3D:
 	return rig
 
 
+## The person an avatar document is drawn as: dot-player-char's people (one rig and one style
+## for every game in the family, docs/characters.md), coloured from the document.
+##
+## [b]The document stays this game's[/b] (body, head, crest, colours): it is what a server
+## validates, what the site's avatar translates into, and what the HUD's portraits and every
+## stored profile hold, and none of that had to change for the body to be drawn differently.
+## A Kenney body part gives the person that skin's clothes, a Kenney head that skin's face and
+## hair (and which of the four bodies); a primitive part takes the colour the document tints it,
+## over a stock person seeded by [param player_key]. The crest is not drawn: the people have no
+## mount for it.
+static func look_of(avatar: DotAvatar, player_key: StringName) -> DotHumanoidLook:
+	var look := DotHumanoidLook.stock(_mix(absi(hash(String(player_key)))))
+	if avatar == null or avatar.schema_id != SCHEMA_ID:
+		return look
+
+	var body := _kenney_letter(avatar.part_in(SLOT_BODY))
+	var head := _kenney_letter(avatar.part_in(SLOT_HEAD))
+	if body != "":
+		look.top = Color(DotHumanoidLook.SITE_SKINS[body][2])
+		look.bottom = Color(DotHumanoidLook.SITE_SKINS[body][3])
+	elif avatar.has_slot(SLOT_BODY):
+		look.top = avatar.colour_of(SLOT_BODY, 0)
+	if head != "":
+		look.skin = Color(DotHumanoidLook.SITE_SKINS[head][0])
+		look.hair = Color(DotHumanoidLook.SITE_SKINS[head][1])
+		look.body = DotHumanoidLook.BODIES["abcdefghijklmnopqr".find(head) % DotHumanoidLook.BODIES.size()]
+	return look
+
+
+## The skin letter of a `arena_<slot>_kenney_<letter>` part, or "".
+static func _kenney_letter(part: StringName) -> String:
+	var text := String(part)
+	var at := text.find("_kenney_")
+	if at < 0:
+		return ""
+	var letter := text.substr(at + 8)
+	return letter if DotHumanoidLook.SITE_SKINS.has(letter) else ""
+
+
 ## A member's site avatar as an arena figure: their top's skin is the body, their face's
 ## skin the head. See `DotPlatformIdentity.avatar_translate_fn`.
 ##

@@ -530,7 +530,7 @@ class PortraitCache extends Node:
 			return (have[0] as SubViewport).get_texture()
 		if not have.is_empty() and is_instance_valid(have[0]):
 			(have[0] as Node).queue_free()
-		var view := _render(avatar)
+		var view := _render(avatar, id)
 		_made[id] = [view, digest]
 		return view.get_texture()
 
@@ -543,7 +543,7 @@ class PortraitCache extends Node:
 					(have[0] as Node).queue_free()
 				_made.erase(id)
 
-	func _render(avatar: DotAvatar) -> SubViewport:
+	func _render(avatar: DotAvatar, id: int) -> SubViewport:
 		var view := SubViewport.new()
 		view.size = Vector2i(SIDE, SIDE)
 		view.transparent_bg = true
@@ -566,9 +566,16 @@ class PortraitCache extends Node:
 		sun.light_energy = 1.1
 		view.add_child(sun)
 
-		var rig := ArenaAvatars.make_rig()
-		view.add_child(rig)
-		var _built := ArenaAvatars.apply(avatar, rig, ArenaAvatars.schema(), ArenaAvatars.catalogue())
+		# The same person the body is (`ArenaPlayer` draws `ArenaAvatars.look_of` of the same
+		# document and key), standing still, so the face in the row is the face in the world.
+		var person := DotHumanoidFigure.new()
+		view.add_child(person)
+		person.build(ArenaAvatars.look_of(avatar, StringName("arena-player-%08d" % id)), 1.8)
+		person.animate(0.0, 0.0)
+		var face := FACE
+		var bones := person.skeleton()
+		if bones != null and bones.find_bone("Head") >= 0:
+			face = _head_of(person, bones)
 
 		# The figure faces -Z, so the camera is on that side, a little to one side so the
 		# head has depth. `look_at_from_position`, because this may run before the viewport
@@ -577,11 +584,23 @@ class PortraitCache extends Node:
 		camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 		camera.size = FRAME_SIZE
 		view.add_child(camera)
-		camera.look_at_from_position(FACE + Vector3(-0.8, 0.15, -3.0), FACE)
+		camera.look_at_from_position(face + Vector3(-0.8, 0.15, -3.0), face)
 		camera.current = true
 		return view
 
-	## Where the head is in the rig (measured from a render: the top at 1.72 m, the eyes at
-	## about 1.58), and how much of it the frame holds.
-	const FACE := Vector3(0.0, 1.49, 0.0)
+	## The middle of the person's head, in the figure's space: the head bone (the bottom of the
+	## head) carried up through the model, plus a third of a head.
+	static func _head_of(person: DotHumanoidFigure, bones: Skeleton3D) -> Vector3:
+		var to_figure := Transform3D.IDENTITY
+		var node: Node = bones
+		while node != null and node != person:
+			if node is Node3D:
+				to_figure = (node as Node3D).transform * to_figure
+			node = node.get_parent()
+		var head := to_figure * bones.get_bone_global_pose(bones.find_bone("Head")).origin
+		return head + Vector3(0.0, 0.2, 0.0)
+
+	## Where the head is when there is no skeleton to ask (the capsule), and how much of it the
+	## frame holds.
+	const FACE := Vector3(0.0, 1.3, 0.0)
 	const FRAME_SIZE := 0.66

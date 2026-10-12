@@ -2150,6 +2150,17 @@ func _test_vote_is_heard() -> void:
 ## and pings, and a screen that goes dark. Nothing here can say they LOOK right — that is
 ## `tools/screenshot.sh --admin` — but it can say they are built, that they come and go
 ## with the flag, and that the ping happens once a period rather than once a frame.
+static func _shrunk_bones(player: ArenaPlayer) -> int:
+	if player.figure == null or player.figure.skeleton() == null:
+		return -1
+	var skel := player.figure.skeleton()
+	var n := 0
+	for i in skel.get_bone_count():
+		if skel.get_bone_pose_scale(i).x < 0.01:
+			n += 1
+	return n
+
+
 ## A lethal critical breaks a body, a respawn mends it, and the HUD shows what a body is
 ## doing: badly hurt, ready to launch, sliding.
 func _test_criticals_and_the_body() -> void:
@@ -2165,18 +2176,21 @@ func _test_criticals_and_the_body() -> void:
 	rules.mode = DotPlayerBreakRules.Mode.LIMBS
 	rules.limbs = 1
 	rules.criticals_only = true
-	var whole := DotPlayerBodyBreak.visible_meshes(player.body_mesh).size()
+	# The body is a skinned person (dot-player-char's people): a limb is baked off the skin and
+	# its bones shrink to the stump, so what is counted is the shrunk bones.
+	var whole := _shrunk_bones(player)
 
 	player.make_dead()
 	_check(player.break_body(rules, Vector3.FORWARD, 42, false) == null,
 		"an ordinary death leaves the body whole")
 	var broke := player.break_body(rules, Vector3.FORWARD, 42, true)
-	var left := DotPlayerBodyBreak.visible_meshes(player.body_mesh).size()
-	_check(broke != null and left < whole, "a lethal critical takes a limb off (%d of %d left)" % [left, whole])
+	var left := _shrunk_bones(player)
+	_check(broke != null and broke.piece_count() == 1 and left > whole,
+		"a lethal critical takes a limb off (%d bones shrunk to the stump)" % left)
 
 	player.health.alive = true
 	player.present(0.016)
-	_check(DotPlayerBodyBreak.visible_meshes(player.body_mesh).size() == whole,
+	_check(_shrunk_bones(player) == whole,
 		"and a respawn puts the body back together")
 
 	# Somebody else, hurt: a bar over their head for a few seconds.

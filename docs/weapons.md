@@ -8,7 +8,7 @@ Every weapon a player carries is zee-dot-weapons'. `ArenaContent.weapons()` is `
 
 - Simulation goes through `weapons.simulate_tick`, which runs the arsenal and then the bash.
 - `used` is the rig's signal, so it carries the bash and is silent in a replay ([netcode](netcode.md#weapons-over-the-wire)).
-- Somebody else's gun is a `ZeeWorldModel` on a hand `ArenaPlayer.attachment()` answers for (the avatar rig has no hand), driven from the snapshot on a mirror and from the rig on anything this machine simulates, on one code path.
+- Somebody else's gun is a `ZeeWorldModel` on the hand `ArenaPlayer.attachment()` answers for (the person's own gun hand, `DotHumanoidFigure.attachment`; a capsule gets a fixed point), driven from the snapshot on a mirror and from the rig on anything this machine simulates, on one code path.
 - The camera's half of the recoil is added in `present`, through `has_method`: `view_punch` and `shot_fx` are newer than some client shells' copy of zee-dot-weapons, and a call by name to a method the shell's copy lacks would not compile. On such a shell the game runs with no punch and with arena's own flash and report.
 
 ## Projectiles

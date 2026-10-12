@@ -171,6 +171,7 @@ const HEALTH_TAG_WIDTH := 0.9
 
 ## The meshes a body break hid, so a respawn can draw them again. Client side.
 var _broken: Array[MeshInstance3D] = []
+var _severed: bool = false
 
 ## This player's body went down as a ragdoll (or was hidden by the server's style), so a
 ## respawn has to draw it again. Client side.
@@ -220,6 +221,11 @@ var _aim_fov_scale: float = 1.0
 
 ## What a remote player is drawn as. Null on the local player, who sees their own eyes.
 var body_mesh: Node3D = null
+
+## The person drawn in [member body_mesh]: dot-player-char's people, the family's one style for
+## players, bots and NPCs, coloured from [member avatar] by `ArenaAvatars.look_of`. Null on a
+## server, and for the capsule a build without the people's art falls back to.
+var figure: DotHumanoidFigure = null
 
 ## What this player looks like, as a dot-user-avatar document; null is the stock figure.
 ##
@@ -1017,6 +1023,8 @@ func break_body(
 	)
 
 	if made != null:
+		# A person's limbs are baked off its skin and its bones shrunk; the respawn mends them.
+		_severed = figure != null
 		for mesh in before:
 			if not mesh.visible:
 				_broken.append(mesh)
@@ -1036,6 +1044,9 @@ func break_body(
 func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath) -> DotPlayerRagdoll:
 	if yard == null or body_mesh == null or not body_mesh.is_inside_tree():
 		return null
+	# Your own body in first person has no head; the one that falls has.
+	if figure != null:
+		figure.hide_head = false
 	# The gun goes down with the hand that held it rather than hanging in the air.
 	var made := yard.spawn(body_mesh, death, controller.state.velocity)
 	_fell = made != null or not body_mesh.visible
@@ -1046,6 +1057,10 @@ func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath) -> DotPlayerRagdo
 
 ## Puts a broken or fallen body back together once the player is alive again.
 func _mend_body() -> void:
+	if _severed and is_alive() and figure != null:
+		_severed = false
+		figure.mend()
+
 	if _fell and is_alive() and body_mesh != null:
 		_fell = false
 		body_mesh.visible = true
@@ -1085,6 +1100,9 @@ func present_own_body(show: bool, yaw: float) -> void:
 			attach_body_mesh(Color.WHITE, avatar)
 		if _first_person != null:
 			_first_person.restore()
+		if figure != null:
+			figure.hide_head = false
+			figure.position = Vector3.ZERO
 		body_mesh.visible = true
 		_present_held()
 		return
@@ -1092,6 +1110,8 @@ func present_own_body(show: bool, yaw: float) -> void:
 	if not show or not is_alive() or camera == null or not camera.current:
 		if _first_person != null:
 			_first_person.restore()
+		if figure != null:
+			figure.hide_head = false
 		if body_mesh != null:
 			body_mesh.visible = false
 		if held != null:
@@ -1119,6 +1139,11 @@ func present_own_body(show: bool, yaw: float) -> void:
 	body_mesh.visible = true
 	body_mesh.rotation = Vector3(0.0, deg_to_rad(yaw), 0.0)
 	body_mesh.position = body_mesh.basis * Vector3(0.0, 0.0, FIRST_PERSON_BACK)
+	if figure != null:
+		# A skinned person is one mesh, so the helper's hide-by-name has nothing to choose
+		# from: the head bone is shrunk instead, and the body stands behind the eye.
+		figure.hide_head = true
+		return
 	_first_person.apply(body_mesh)
 
 
@@ -1285,8 +1310,47 @@ func present(delta: float) -> void:
 		_present_held()
 		_present_health_tag(delta)
 
+	_animate_figure(drawn, delta)
 	_present_beacon(delta, drawn.position)
 	_mend_body()
+
+
+## Tells the person how this player moves, and advances its clip. Client side.
+##
+## [b]From the drawn state[/b], the same one the body is placed from, so the stride matches the
+## ground the body covers this frame. The weapon kind picks the arms: a gun, a melee weapon
+## (a swing plays the slash over the legs), or empty hands.
+func _animate_figure(drawn: DotFpsState, delta: float) -> void:
+	if figure == null or body_mesh == null or not body_mesh.visible:
+		return
+
+	var v := drawn.velocity
+	figure.set_motion({
+		"on_floor": drawn.mode == DotFpsState.Mode.GROUND,
+		"vertical": v.y,
+		"crouched": drawn.crouch_fraction > 0.5,
+		"swimming": drawn.mode == swim.mode_id,
+		"climbing": drawn.mode == ladder.mode_id,
+		"alive": is_alive(),
+	})
+
+	var id := mirror_weapon if mirrored else (arsenal.current_def().id if arsenal != null and arsenal.current_def() != null else &"")
+	var def := weapon_catalogue().get_def(id) if id != &"" else null
+	var kind := DotHumanoidFigure.Hold.NONE
+	if def != null:
+		kind = DotHumanoidFigure.Hold.MELEE if def.slot == ZeeWeaponIds.SLOT_MELEE else (
+			DotHumanoidFigure.Hold.NONE if def.slot == ZeeWeaponIds.SLOT_THROWN else DotHumanoidFigure.Hold.GUN)
+	figure.set_hold(kind)
+
+	var seq := mirror_fire_seq if mirrored else (weapons.fire_seq % ZeeWeaponNet.FIRE_SEQ_WRAP if weapons != null else 0)
+	if ZeeWeaponNet.uses_between(_figure_fire_seq, seq) > 0 and kind == DotHumanoidFigure.Hold.MELEE:
+		figure.swing()
+	_figure_fire_seq = seq
+
+	figure.animate(Vector2(v.x, v.z).length(), delta)
+
+
+var _figure_fire_seq: int = 0
 
 
 ## Moves the camera from the eye to behind it, and draws the body where the eye is.
@@ -1577,6 +1641,10 @@ const WATCHED_RECOIL := {
 ## a crest and no hand — so the player answers for it, with a hand placed where a figure
 ## this size holds a gun: chest high, right of centre, in front.
 func attachment(point: StringName) -> Node3D:
+	if figure != null:
+		# The person's own hand, which moves with its clips.
+		return figure.attachment(point)
+
 	if point != &"right_hand" or body_mesh == null:
 		return null
 
@@ -1692,10 +1760,12 @@ func attach_body_mesh(colour: Color, avatar: DotAvatar = null) -> void:
 	body_mesh = Node3D.new()
 	body_mesh.name = "Body"
 	add_child(body_mesh)
-	_hold_weapon()
 
-	if avatar != null and _wear(avatar):
+	if _wear(avatar):
+		_hold_weapon()
 		return
+
+	_hold_weapon()
 
 	var material := StandardMaterial3D.new()
 	material.albedo_color = colour
@@ -1754,6 +1824,7 @@ func rewear(next: DotAvatar) -> void:
 	# The hand and the gun in it hung off the old body and went with it.
 	_hand = null
 	held = null
+	figure = null
 	attach_body_mesh(Color.WHITE, next)
 
 
@@ -1764,19 +1835,17 @@ func rewear(next: DotAvatar) -> void:
 ## drawn as a capsule — and `conform` already drops a part it does not have, so
 ## reaching this at all means the schema itself would not build.
 func _wear(avatar: DotAvatar) -> bool:
-	var rig := ArenaAvatars.make_rig()
-	body_mesh.add_child(rig)
+	figure = DotHumanoidFigure.new()
+	figure.name = "Person"
+	body_mesh.add_child(figure)
+	var height := controller.tunables.stand_height if controller != null and controller.tunables != null else 1.8
+	figure.build(ArenaAvatars.look_of(avatar, StringName("arena-player-%08d" % player_id)), height)
 
-	var built := ArenaAvatars.apply(
-		avatar, rig, ArenaAvatars.schema(), ArenaAvatars.catalogue()
-	)
-
-	if not built.ok:
-		DotLog.debug(CHANNEL, "an avatar could not be drawn; using the capsule", {
-			"player": player_id, "why": built.error.message
-		})
-		body_mesh.remove_child(rig)
-		rig.queue_free()
+	if not figure.from_art:
+		DotLog.debug(CHANNEL, "the people's art is missing; using the capsule", {"player": player_id})
+		body_mesh.remove_child(figure)
+		figure.queue_free()
+		figure = null
 		return false
 
 	return true
