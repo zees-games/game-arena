@@ -1232,6 +1232,7 @@ func _on_hit(info: Dictionary) -> void:
 	hud.note_hit(int(info.get("victim_id", 0)), float(info.get("amount", 0.0)), point, bool(info.get("headshot", false)), lethal)
 	if presentation != null:
 		presentation.on_hit_confirmed(lethal)
+	_draw_body_hit(point)
 
 
 ## A kill's medals and points, as the server judged them. Every client hears every
@@ -1398,6 +1399,21 @@ func _arm(body: ArenaPlayer) -> void:
 	view_model.name = "Hands"
 	body.camera.add_child(view_model)
 	body.arm_first_person(view_model, _offline)
+
+
+## The hit drawn on the body the server says was hit: zee's red burst at [param point]. The
+## presentation ray draws one already when it meets the victim's body here, and the rig's
+## effects skip a second within a fifth of a second; this is for the hit the ray missed (a
+## lag-compensated hit on a body that has since moved). Through `has_method`: an older
+## shell's zee has no `play_body_hit`.
+func _draw_body_hit(point: Vector3) -> void:
+	if not weapon_draws_shots():
+		return
+	var fx: Object = player.weapons.call(&"shot_fx")
+	if fx == null or not fx.has_method(&"play_body_hit"):
+		return
+	var from: Vector3 = player.global_position + Vector3(0.0, 1.6, 0.0)
+	fx.call(&"play_body_hit", point, point - from)
 
 
 ## Whether the local weapon draws its own shot. True on a client shell carrying a
