@@ -34,18 +34,18 @@ const ArenaPresentation := preload("arena_presentation.gd")
 ## Ctrl          crouch              Mouse1  fire
 ## R             reload              1..4    weapon slots  (wheel cycles)
 ## Tab (hold)    scoreboard          Esc     release the mouse, then the menu
+## H             help
 ## [/codeblock]
 
 const CHANNEL := "arena.client"
 
 ## The player pressed Leave on the Escape menu.
 ##
-## [b]Announced rather than acted on, and it used to be neither.[/b] What "leave" means
-## belongs to whatever loaded this client — the shell goes back to its own menu, an embedded
-## page closes the frame — so a client that called `get_tree().quit()` itself would be one
-## that cannot be embedded in anything. What it did before was nothing at all: the button
-## existed, emitted its signal, and the only thing this file did with the pause menu was
-## `var _unused := pause`.
+## [b]Announced, and acted on by dot-menu's stock Leave[/b] ([member DotMenu.leave_on_its_own],
+## set in [ArenaMenus]): connected, it disconnects the client link, and the shell that loaded
+## this client goes back to its own menu on the disconnect; solo on a desktop it quits. This
+## signal is for an embedder that wants to know. Until 2026-10-11 nothing listened to it and
+## the button did nothing.
 signal leave_requested()
 
 ## Where a dot-server client link publishes itself.
@@ -350,6 +350,7 @@ func _hud_keys() -> void:
 	hud.keys[&"chat"] = table.key_for(ArenaBindings.CHAT)
 	hud.keys[&"scoreboard"] = table.key_for(ArenaBindings.SCOREBOARD)
 	hud.keys[&"reload"] = table.key_for(ArenaBindings.RELOAD)
+	hud.keys[&"help"] = table.key_for(DotMenuBindings.HELP_ACTION)
 	hud.keys[&"launch"] = table.key_for(launch_action())
 	for i in range(ArenaBindings.SLOTS.size()):
 		hud.keys[StringName("slot_%d" % (i + 1))] = table.key_for(ArenaBindings.SLOTS[i])

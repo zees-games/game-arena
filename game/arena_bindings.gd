@@ -90,6 +90,8 @@ static func make(dot_ui_level: int = -1) -> DotMenuBindings:
 	keys.add(CHAT_TEAM, &"chat_team_key", "Team chat", "U", "Chat", DotSettingsDef.Scope.ACCOUNT)
 	keys.add(VOICE, &"bind_voice", "Push to talk", "V", "Chat")
 	keys.add(SCOREBOARD, &"bind_scoreboard", "Scoreboard (hold)", "Tab", "Interface")
+	# H opens help, in every game of the family (dot-menu's `dot_menu_help`).
+	keys.add_help("Interface")
 	return keys
 
 

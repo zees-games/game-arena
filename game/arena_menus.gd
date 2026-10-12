@@ -2,6 +2,7 @@ extends RefCounted
 
 const ArenaBindings := preload("arena_bindings.gd")
 const ArenaBrowser := preload("arena_browser.gd")
+const ArenaModes := preload("arena_modes.gd")
 
 ## The Escape menu and the Tab board: dot-menu's, with this game's pages on it.
 ##
@@ -17,7 +18,12 @@ const ArenaBrowser := preload("arena_browser.gd")
 ##   [ArenaBindings], each a key button (rebindable, swapping on a conflict).
 ## - **Servers**: dot-browser's list, drawn as a page ([method _servers_page]).
 ##
-## What a press of Leave means stays the client's: [signal DotMenu.action_requested].
+## **Leave** is dot-menu's stock one ([member DotMenu.leave_on_its_own]): off the server when
+## connected, which hands the player back to whatever loaded the client, and a quit when solo
+## on a desktop. Until 2026-10-11 Leave only emitted `ArenaClient.leave_requested`, which
+## nothing listened to, so the button did nothing; the signal is still emitted for an
+## embedder. **H opens help** ([method _fill_help]: the goal and every mode), and the HUD's
+## own key hints list it, so dot-menu's corner plate is off here.
 
 const CHANNEL := "arena.menus"
 
@@ -44,6 +50,9 @@ static func build(host: Node, presentation: Node, browser: ArenaBrowser = null) 
 	menu.open_on_escape = false
 	menu.manage_pointer = false
 	menu.scoreboard_action = ArenaBindings.SCOREBOARD
+	menu.leave_on_its_own = true
+	# The HUD's key hints have H (`ArenaHud`), so dot-menu's corner plate would say it twice.
+	config.help_hint = &"off"
 	# The chat box or the console has the keyboard: Tab is a letter then, not the board.
 	if presentation != null:
 		menu.busy = func() -> bool: return presentation.swallows_input()
@@ -51,6 +60,7 @@ static func build(host: Node, presentation: Node, browser: ArenaBrowser = null) 
 	DotLog.result(CHANNEL, "the menu", menu.setup())
 
 	add_pages(menu, browser)
+	fill_help(menu.help)
 
 	# The console after the menu, so DotConsoleKit registers it as one of the menu's
 	# overlays: opening it frees the pointer and stops the player through
@@ -118,6 +128,19 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 
 	if browser != null:
 		menu.add_page(_servers_page(menu, browser), &"advanced")
+
+
+## The help screen's goal and modes; the keys come from [ArenaBindings]. The modes are read
+## from [ArenaModes], so a mode added there is on the help screen with nothing else edited.
+static func fill_help(help: DotMenuHelp) -> void:
+	if help == null:
+		return
+	help.about = "Fast deathmatch: run, slide, dash and shoot. Score by fragging, or by whatever the mode asks; the scoreboard (Tab) says who is ahead."
+	var lines: Array = []
+	for mode in ArenaModes.all():
+		lines.append([mode.display_name, mode.description])
+	help.add_section("Modes", lines, &"plain")
+	help.add_text("Moving", "Duck while running to slide (C slides too), Shift dashes, and E launches you. In a props mode E grabs a prop and F freezes it.")
 
 
 ## dot-browser's list as a page: a card of servers, each with a Join, and a Refresh.

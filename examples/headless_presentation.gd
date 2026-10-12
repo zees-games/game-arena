@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 222
+const CHECKS := 227
 
 var _passed := 0
 var _failed := 0
@@ -642,6 +642,27 @@ func _test_the_escape_menu() -> void:
 		not menu.help.extra_keys.has("Weapons") and p.bindings.groups().has("Weapons"),
 		"the help screen's weapon keys come from the table, not a fixed list"
 	)
+	menu.close()
+
+	# The family's rule since the first play test: H is help, nothing else is on H, and the
+	# Escape menu has Help & commands and a Leave that does something.
+	_check(p.bindings.key_for(DotMenuBindings.HELP_ACTION) == "H" and p.bindings.defaults_on("H").size() == 1,
+		"help is on H, and nothing else in the table is",
+		str(p.bindings.defaults_on("H").map(func(r: Dictionary) -> String: return str(r["label"]))))
+	var h := InputEventKey.new()
+	h.physical_keycode = KEY_H
+	h.keycode = KEY_H
+	h.pressed = true
+	_check(menu.handle_event(h) and menu.help.is_open(), "H opens the help screen")
+	_check(menu.help.about != "" and menu.help.heading() == "How to play Arena" and int(menu.help.describe()["sections"]) >= 2,
+		"which says what the game is and lists the modes before the keys")
+	menu.help.close()
+	menu.open()
+	var leave := menu.screen.find_child("Action_leave", true, false) as Button
+	_check(menu.screen.find_child("Action_help", true, false) != null and leave != null and leave.visible,
+		"the Escape menu has Help & commands and Leave")
+	_check(menu.leave_on_its_own and menu.help_hint == null,
+		"Leave disconnects or quits by itself, and the HUD's own hints carry H, not a second plate")
 	menu.close()
 
 	p.settings.reset_value(&"master_volume")

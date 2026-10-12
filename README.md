@@ -52,7 +52,8 @@ A match starts in warmup, then counts down, then goes live. Nobody spawns until 
 | **V** | Push to talk |
 | **Y** / **U** | Chat / team chat |
 | **Tab** (hold) | Scoreboard |
-| **Esc** | Menu, and release the mouse |
+| **H** | Help: the modes and every key as you have it bound |
+| **Esc** | Menu, and release the mouse. Leave is at the bottom |
 
 In Siege, **E** picks up and drops a prop, **F** freezes it, **G** punts it, and launch moves to **X**.
 
