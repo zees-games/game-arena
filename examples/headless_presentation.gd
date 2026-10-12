@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 262
+const CHECKS := 270
 
 var _passed := 0
 var _failed := 0
@@ -87,6 +87,7 @@ func _run() -> void:
 	_test_hud_makes_room_for_a_ballot()
 	await _test_the_map_menu()
 	await _test_the_loadout_menu()
+	await _test_the_hud_follows_the_theme()
 
 	print("")
 	_check(
@@ -1799,6 +1800,58 @@ func _test_the_loadout_menu() -> void:
 		_check(hip > 0.99 and aimed < 0.01 and hud.crosshair.aim_opacity > 0.99,
 			"the crosshair is drawn at the hip, gone down the sights, and back after",
 			"hip %.2f, aimed %.2f (fraction %.2f, scoped %s), after %.2f" % [hip, aimed, hands.aim_fraction(), hands.is_scoped(), hud.crosshair.aim_opacity])
+	remove_child(client)
+	client.free()
+	await get_tree().process_frame
+	_done()
+
+
+## Christian's first play test: a darker HUD by default, which follows the menu's theme so a
+## player can change it. A whole offline client, because what is checked is the join the client
+## makes (`follow_hud`), and both dot-ui's pieces and this game's own (the feed, the slots, the
+## medals) are under its HUD.
+func _test_the_hud_follows_the_theme() -> void:
+	_section("The HUD is dark by default and follows the menu's theme live")
+	var client := ArenaClient.new()
+	client.force_offline = true
+	add_child(client)
+	for _i in 6:
+		await get_tree().process_frame
+	var menu: DotMenu = client.game_menu
+	var hud: ArenaHud = client.hud
+	var piece: DotHudPiece = null
+	# The kill feed: one of the pieces arena keeps, drawn with its own `Ink`.
+	var own: Control = hud.feed
+	for n in hud.find_children("*", "Control", true, false):
+		if n is DotHudPiece:
+			piece = n
+			break
+	_check(menu != null and piece != null and own != null and menu.followed_huds().has(hud), "the client hands the menu its HUD",
+		"menu %s, piece %s, own %s" % [menu, piece, own])
+	if menu == null or piece == null or own == null:
+		remove_child(client)
+		client.free()
+		_done()
+		return
+	var Ink = ArenaHud.ArenaHudGlance.Ink
+	var _m := menu.settings.set_value(&"ui_theme", &"midnight")
+	var plate := piece.colour(&"plate")
+	_check(plate.get_luminance() < 0.1 and plate.a >= 0.7 and piece.colour(&"keycap").get_luminance() < 0.3,
+		"the default HUD is dark: deep plates and dark key caps", str(plate))
+	_check(Ink.c(own, &"plate") == plate and Ink.bright(own) < 0.5, "and this game's own pieces draw in the same theme")
+	_check(piece.colour(&"highlight") == ArenaHud.GOLD, "with arena's gold as its accent")
+	var _a := menu.settings.set_value(&"ui_theme", &"arcade")
+	_check(piece.number(&"team_fill") == 100 and piece.colour(&"keycap").get_luminance() > 0.8 and Ink.bright(own) > 0.99,
+		"the bright first HUD is a theme a player can pick, and both kinds of piece follow it")
+	var _p := menu.settings.set_value(&"ui_theme", &"contrast")
+	var contrast := menu.themes.named(&"contrast")
+	_check(piece.colour(&"plate") == contrast.hud_plate and Ink.c(own, &"plate_edge") == contrast.hud_edge
+		and piece.colour(&"highlight") == ArenaHud.GOLD, "another theme reaches every piece at once, the accent kept")
+	var _s := menu.settings.set_value(&"hud_scale", 1.2)
+	_check(is_equal_approx(hud.user_scale, 1.2), "and the HUD size setting resizes the HUD")
+	_s = menu.settings.set_value(&"hud_scale", 1.0)
+	_m = menu.settings.set_value(&"ui_theme", &"midnight")
+	_check(piece.colour(&"plate") == plate, "and back")
 	remove_child(client)
 	client.free()
 	await get_tree().process_frame

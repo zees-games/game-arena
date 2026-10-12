@@ -37,12 +37,9 @@ const ArenaPaths := preload("arena_paths.gd")
 const WEAPON_ICON_DIR := "res://assets/weapon_icons"
 const HUD_ICON_DIR := "res://assets/hud_icons"
 
-## The plates' fill: near black, see-through.
-const PLATE := Color(0.06, 0.07, 0.11, 0.62)
-const PLATE_EDGE := Color(1.0, 1.0, 1.0, 0.14)
+## Arena's accent: your own ring, row and slot. The rest of every piece's colours are the
+## theme's ([method Ink.c]), so the menu's theme restyles these pieces with dot-ui's.
 const GOLD := Color(1.0, 0.8, 0.22)
-const TEXT := Color(0.97, 0.98, 1.0)
-const DIM := Color(0.82, 0.85, 0.92)
 ## The two sides' colours when the teams give none, and the free-for-all plates.
 const BLUE := Color(0.22, 0.5, 0.95)
 const RED := Color(0.9, 0.24, 0.32)
@@ -67,6 +64,27 @@ class Ink:
 			_fonts[italic] = f
 		return _fonts[italic]
 
+	## A HUD colour by dot-ui's name for it (`plate`, `plate_edge`, `text`, `dim`, `highlight`,
+	## `ink`, `keycap`, ...): the theme's on [constant DotHudPiece.THEME_TYPE] as
+	## [param canvas] sees it (the menu sets one on the HUD, see `ArenaClient`), else dot-ui's
+	## default. Read when drawing, so a theme change is followed on the next frame.
+	static func c(canvas: CanvasItem, key: StringName) -> Color:
+		var control := canvas as Control
+		if control != null and control.has_theme_color(key, &"DotHudPiece"):
+			return control.get_theme_color(key, &"DotHudPiece")
+		# `keycap_edge` is dot-ui 6's; on an older shell's dot-ui it is not in DEFAULTS.
+		return DotHudPiece.DEFAULTS.get(key, Color(1.0, 1.0, 1.0, 0.3) if key == &"keycap_edge" else Color.WHITE)
+
+	## How bright the theme's HUD is, 0 to 1: dot-ui's `team_fill` (38 in the dark default,
+	## 100 in the bright "Arcade" theme). What a piece with its own saturated colour (the
+	## ability buttons, a medal's ring) blends its dark and its bright look by.
+	static func bright(canvas: CanvasItem) -> float:
+		var control := canvas as Control
+		var n := 38
+		if control != null and control.has_theme_constant(&"team_fill", &"DotHudPiece"):
+			n = control.get_theme_constant(&"team_fill", &"DotHudPiece")
+		return clampf((float(n) - 38.0) / 62.0, 0.0, 1.0)
+
 	static func width(text: String, size: int) -> float:
 		return font().get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
 
@@ -77,10 +95,17 @@ class Ink:
 	) -> void:
 		var f := font()
 		if outline > 0:
-			canvas.draw_string_outline(f, at, words, align, box, size, outline, Color(0.02, 0.02, 0.05, 0.85 * colour.a))
+			var ink := c(canvas, &"ink")
+			canvas.draw_string_outline(f, at, words, align, box, size, outline, Color(ink, ink.a * colour.a))
 		canvas.draw_string(f, at, words, align, box, size, colour)
 
-	static func plate(canvas: CanvasItem, rect: Rect2, fill: Color = PLATE, radius: int = 7, edge: Color = PLATE_EDGE, edge_width: int = 1) -> void:
+	## A rounded plate; [param fill] and [param edge] default (alpha below 0) to the theme's
+	## `plate` and `plate_edge`.
+	static func plate(canvas: CanvasItem, rect: Rect2, fill: Color = Color(0, 0, 0, -1), radius: int = 7, edge: Color = Color(0, 0, 0, -1), edge_width: int = 1) -> void:
+		if fill.a < 0.0:
+			fill = c(canvas, &"plate")
+		if edge.a < 0.0:
+			edge = c(canvas, &"plate_edge")
 		var box := StyleBoxFlat.new()
 		box.bg_color = fill
 		box.set_corner_radius_all(radius)
@@ -90,15 +115,17 @@ class Ink:
 			box.set_border_width_all(edge_width)
 		canvas.draw_style_box(box, rect)
 
-	## A key drawn as a key: a light cap with the key's name, its left edge at
+	## A key drawn as a key: a cap in the theme's `keycap` with the key's name, its left edge at
 	## [param at].x and its centre at [param at].y. Returns its width.
 	static func keycap(canvas: CanvasItem, at: Vector2, key: String, size: int = 13, alpha: float = 1.0) -> float:
 		var w := maxf(width(key, size) + 12.0, float(size) + 10.0)
 		var h := float(size) + 10.0
 		var rect := Rect2(at.x, at.y - h * 0.5, w, h)
 		plate(canvas, Rect2(rect.position + Vector2(0.0, 2.0), rect.size), Color(0.0, 0.0, 0.0, 0.45 * alpha), 5, Color(0, 0, 0, 0), 0)
-		plate(canvas, rect, Color(0.93, 0.94, 0.97, 0.95 * alpha), 5, Color(1, 1, 1, 0.0), 0)
-		canvas.draw_string(font(), Vector2(rect.position.x, rect.end.y - 6.0), key, HORIZONTAL_ALIGNMENT_CENTER, w, size, Color(0.08, 0.09, 0.14, alpha))
+		var cap := c(canvas, &"keycap")
+		var edge := c(canvas, &"keycap_edge")
+		plate(canvas, rect, Color(cap, cap.a * alpha), 5, Color(edge, edge.a * alpha), 1 if edge.a > 0.0 else 0)
+		canvas.draw_string(font(), Vector2(rect.position.x, rect.end.y - 6.0), key, HORIZONTAL_ALIGNMENT_CENTER, w, size, Color(c(canvas, &"keycap_text"), alpha))
 		return w
 
 	static func keycap_width(key: String, size: int = 13) -> float:
@@ -157,9 +184,9 @@ class Portraits extends Control:
 			var e: Dictionary = entries[i]
 			var c := Vector2(first + SPACING * float(i), 14.0 + RADIUS)
 			var me := bool(e.get("me", false))
-			var ring: Color = GOLD if me else e.get("ring", Color(1, 1, 1, 0.85))
+			var ring: Color = Ink.c(self, &"highlight") if me else e.get("ring", Color(1, 1, 1, 0.85))
 			Ink.text(self, Vector2(c.x - 30.0, 11.0), "#%d" % int(e.get("rank", i + 1)), 11,
-				GOLD if me else Color(TEXT, 0.95), HORIZONTAL_ALIGNMENT_CENTER, 60.0, 3)
+				Ink.c(self, &"highlight") if me else Color(Ink.c(self, &"text"), 0.95), HORIZONTAL_ALIGNMENT_CENTER, 60.0, 3)
 			draw_circle(c + Vector2(0.0, 2.0), RADIUS + 3.0, Color(0, 0, 0, 0.35))
 			draw_circle(c, RADIUS + 2.5, ring)
 			var back: Color = e.get("colour", Color(0.3, 0.34, 0.45))
@@ -170,9 +197,9 @@ class Portraits extends Control:
 				draw_texture_rect(tex, Rect2(c - Vector2(side, side) * 0.5, Vector2(side, side)), false)
 			else:
 				var initials := str(e.get("name", "?")).substr(0, 2).to_upper()
-				Ink.text(self, c + Vector2(-RADIUS, 6.0), initials, 15, TEXT, HORIZONTAL_ALIGNMENT_CENTER, RADIUS * 2.0, 4)
+				Ink.text(self, c + Vector2(-RADIUS, 6.0), initials, 15, Ink.c(self, &"text"), HORIZONTAL_ALIGNMENT_CENTER, RADIUS * 2.0, 4)
 			Ink.text(self, Vector2(c.x - 30.0, c.y + RADIUS + 17.0), str(int(e.get("kills", 0))), 14,
-				GOLD if me else TEXT, HORIZONTAL_ALIGNMENT_CENTER, 60.0, 4)
+				Ink.c(self, &"highlight") if me else Ink.c(self, &"text"), HORIZONTAL_ALIGNMENT_CENTER, 60.0, 4)
 
 
 ## Top right: who killed whom, with the weapon's silhouette between the names, on a plate
@@ -270,8 +297,8 @@ class KillFeed extends Control:
 		var inner := _inner(e)
 		var rect := Rect2(size.x - inner - pad * 2.0, y, inner + pad * 2.0, ROW_H)
 		var involved := bool(e["involved"])
-		Ink.plate(self, rect, Color(PLATE, PLATE.a * fade), 6,
-			Color(GOLD, 0.95 * fade) if involved else Color(PLATE_EDGE, PLATE_EDGE.a * fade), 2 if involved else 1)
+		Ink.plate(self, rect, Color(Ink.c(self, &"plate"), Ink.c(self, &"plate").a * fade), 6,
+			Color(Ink.c(self, &"highlight"), 0.95 * fade) if involved else Color(Ink.c(self, &"plate_edge"), Ink.c(self, &"plate_edge").a * fade), 2 if involved else 1)
 		var x := rect.position.x + pad
 		var base := y + ROW_H * 0.5 + NAME_SIZE * 0.36
 		if killer != "":
@@ -280,7 +307,7 @@ class KillFeed extends Control:
 		if tex != null:
 			x += Ink.icon(self, tex, Vector2(x, y + ROW_H * 0.5), ICON_H, Color(1, 1, 1, fade), 64.0)
 		else:
-			Ink.text(self, Vector2(x, base), "[%s]" % str(e["weapon_text"]), 13, Color(DIM, fade), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 3)
+			Ink.text(self, Vector2(x, base), "[%s]" % str(e["weapon_text"]), 13, Color(Ink.c(self, &"dim"), fade), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 3)
 			x += Ink.width("[%s]" % str(e["weapon_text"]), 13)
 		if head != null:
 			draw_texture_rect(head, Rect2(x + 4.0, y + ROW_H * 0.5 - 8.0, 16.0, 16.0), false, Color(1.0, 0.45, 0.3, fade))
@@ -381,7 +408,7 @@ class WeaponSlots extends Control:
 			# A plate per weapon: a white silhouette on a pale wall is no silhouette at all.
 			var plate_x := cap_x - 112.0
 			Ink.plate(self, Rect2(plate_x, y - plate_h * 0.5, size.x - plate_x + 4.0, plate_h),
-				Color(PLATE, 0.8 if on else 0.6), 7, Color(GOLD, 0.85) if on else Color(PLATE_EDGE, 0.1), 2 if on else 1)
+				Color(Ink.c(self, &"plate"), 0.8 if on else 0.6), 7, Color(Ink.c(self, &"highlight"), 0.85) if on else Color(Ink.c(self, &"plate_edge"), 0.1), 2 if on else 1)
 			var _w := Ink.keycap(self, Vector2(cap_x, y), key, 12, alpha)
 			var tex := Ink.weapon_icon(r["id"])
 			var h := minf(24.0 if on else 18.0, plate_h - 2.0)
@@ -393,7 +420,7 @@ class WeaponSlots extends Control:
 				var _s := Ink.icon(self, tex, at + Vector2(1.5, 1.5), h, Color(0, 0, 0, 0.55 * alpha), 90.0)
 				var _d := Ink.icon(self, tex, at, h, Color(1, 1, 1, alpha), 90.0)
 			else:
-				Ink.text(self, Vector2(0.0, y + 5.0), str(r["name"]), 13, Color(TEXT, alpha), HORIZONTAL_ALIGNMENT_RIGHT, cap_x - 10.0, 4)
+				Ink.text(self, Vector2(0.0, y + 5.0), str(r["name"]), 13, Color(Ink.c(self, &"text"), alpha), HORIZONTAL_ALIGNMENT_RIGHT, cap_x - 10.0, 4)
 			y += pitch
 
 
@@ -448,19 +475,24 @@ class AbilityBar extends Control:
 		var ready := left <= 0.0
 		var active := bool(b["active"])
 		Ink.plate(self, Rect2(rect.position + Vector2(0.0, 3.0), rect.size), Color(0, 0, 0, 0.4), 10, Color(0, 0, 0, 0), 0)
-		var fill := Color(0.2, 0.55, 0.95, 0.88) if ready else Color(0.16, 0.2, 0.3, 0.85)
-		Ink.plate(self, rect, fill, 10, GOLD if active else Color(1, 1, 1, 0.55 if ready else 0.25), 3 if active else 2)
-		Ink.plate(self, Rect2(rect.position + Vector2(3.0, 3.0), Vector2(rect.size.x - 6.0, rect.size.y * 0.42)), Color(1, 1, 1, 0.14 if ready else 0.05), 8, Color(0, 0, 0, 0), 0)
+		# The dark HUD draws a ready button as a deep slate edged in white and a charging one
+		# near black; the bright theme ("Arcade") as the first HUD's saturated blue key.
+		var bright := Ink.bright(self)
+		var fill := Color(0.11, 0.16, 0.26, 0.92).lerp(Color(0.2, 0.55, 0.95, 0.88), bright) if ready \
+			else Color(0.04, 0.05, 0.08, 0.86).lerp(Color(0.16, 0.2, 0.3, 0.85), bright)
+		var edge := Ink.c(self, &"highlight") if active else Color(Ink.c(self, &"text"), (0.7 if ready else 0.22) if bright < 0.5 else (0.55 if ready else 0.25))
+		Ink.plate(self, rect, fill, 10, edge, 3 if active else 2)
+		Ink.plate(self, Rect2(rect.position + Vector2(3.0, 3.0), Vector2(rect.size.x - 6.0, rect.size.y * 0.42)), Color(1, 1, 1, lerpf(0.06, 0.14, bright) if ready else 0.04), 8, Color(0, 0, 0, 0), 0)
 		var tex: Texture2D = b.get("icon", null)
 		if tex != null:
 			var side := SIDE * 0.62
 			draw_texture_rect(tex, Rect2(rect.get_center() - Vector2(side, side) * 0.5, Vector2(side, side)), false, Color(1, 1, 1, 1.0 if ready else 0.45))
 		else:
-			Ink.text(self, Vector2(rect.position.x, rect.get_center().y + 5.0), str(b["label"]).substr(0, 5).to_upper(), 12, TEXT, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 3)
+			Ink.text(self, Vector2(rect.position.x, rect.get_center().y + 5.0), str(b["label"]).substr(0, 5).to_upper(), 12, Ink.c(self, &"text"), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 3)
 		if not ready:
 			var cover := rect.size.y * clampf(left / total, 0.0, 1.0)
 			Ink.plate(self, Rect2(rect.position, Vector2(rect.size.x, cover)), Color(0.0, 0.0, 0.02, 0.5), 10, Color(0, 0, 0, 0), 0)
-			Ink.text(self, Vector2(rect.position.x, rect.get_center().y + 8.0), "%.1f" % left if left < 10.0 else "%d" % int(left), 20, TEXT, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 5)
+			Ink.text(self, Vector2(rect.position.x, rect.get_center().y + 8.0), "%.1f" % left if left < 10.0 else "%d" % int(left), 20, Ink.c(self, &"text"), HORIZONTAL_ALIGNMENT_CENTER, rect.size.x, 5)
 		var pips_max := int(b.get("pips_max", 0))
 		if pips_max > 0:
 			var pips := int(b.get("pips", 0))
@@ -468,7 +500,7 @@ class AbilityBar extends Control:
 			for i in range(pips_max):
 				var c := Vector2(px + 16.0 * float(i), rect.position.y - 9.0)
 				draw_circle(c, 5.0, Color(0, 0, 0, 0.55))
-				draw_circle(c, 3.8, GOLD if i < pips else Color(1, 1, 1, 0.25))
+				draw_circle(c, 3.8, Ink.c(self, &"highlight") if i < pips else Color(1, 1, 1, 0.25))
 		var key := str(b["key"])
 		var cap_w := Ink.keycap_width(key, 12)
 		var _w := Ink.keycap(self, Vector2(rect.get_center().x - cap_w * 0.5, rect.end.y + 2.0), key, 12)

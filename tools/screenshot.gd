@@ -267,6 +267,10 @@ var _glance_map_ballot := false
 ## the game builds, scaled with the HUD as [ArenaPresentation] scales it.
 var _glance_chat := false
 
+## `--glance --theme <id>`: which of dot-menu's themes the HUD is drawn in; empty is dot-ui's
+## default. Names the frame.
+var _glance_theme := ""
+
 const GLANCE_NAMES := ["You", "gamemann", "a_very_long_display_name", "bo", "quiet_one", "newcomer", "Rocket", "Viper"]
 
 
@@ -330,6 +334,17 @@ func _play_glance() -> void:
 	_hud.build(game)
 	_hud.follow(_local)
 	var _caught := _hud.catch_up()
+	# `--theme <id>`: the HUD in one of dot-menu's themes, as the menu sets it
+	# (`DotMenu.follow_hud`); without it, dot-ui's default, which is the dark HUD.
+	# `--hud-scale <k>`: at the player's HUD size.
+	var args := OS.get_cmdline_user_args()
+	var theme_at := args.find("--theme")
+	if theme_at >= 0 and theme_at + 1 < args.size():
+		_glance_theme = args[theme_at + 1]
+		_hud.theme = DotMenuThemes.stock().named(StringName(_glance_theme)).hud_theme(ArenaHud.accent_theme())
+	var scale_at := args.find("--hud-scale")
+	if scale_at >= 0 and scale_at + 1 < args.size():
+		_hud.user_scale = float(args[scale_at + 1])
 
 	var slot := _local.arsenal.current()
 	if slot != null and slot.def.magazine > 0:
@@ -354,7 +369,7 @@ func _play_glance() -> void:
 		late.append([10, func() -> void: _hud.notice(said)])
 
 	_shots = [{
-		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else ""),
+		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else "") + ("_" + _glance_theme if _glance_theme != "" else ""),
 		"local": true,
 		"late": [
 			[12, func() -> void:

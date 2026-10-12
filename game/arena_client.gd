@@ -326,6 +326,10 @@ func _build_interface() -> void:
 	# to manage it: pointer lock needs a click in a browser, which only this client knows
 	# about ([method _apply_mouse]), and two owners fighting is a cursor that flickers.
 	game_menu = ArenaMenus.build(self, presentation, browser if listed.ok else null)
+	# The HUD in the menu's theme and at the player's HUD size, switched live (dot-menu 7). By
+	# name, so a client shell older than that still runs the game in dot-ui's dark default.
+	if game_menu.has_method(&"follow_hud"):
+		game_menu.call(&"follow_hud", hud, ArenaHud.accent_theme())
 	# M: the maps and the modes (dot-menu's map menu). Solo a choice changes here at once;
 	# connected the server decides, by the owner's `sv_map_menu_flag`, and anybody without it
 	# gets a vote instead (dot-vote's map menu, over this game's ballot). By name, so a client

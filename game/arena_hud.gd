@@ -200,8 +200,9 @@ class Look:
 		canvas: CanvasItem, font: Font, at: Vector2, text: String, font_size: int, colour: Color,
 		outline: int = 6, align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT, width: float = -1.0
 	) -> void:
+		var ink := ArenaHudGlance.Ink.c(canvas, &"ink")
 		canvas.draw_string_outline(
-			font, at, text, align, width, font_size, outline, Color(0.05, 0.03, 0.08, colour.a * 0.85)
+			font, at, text, align, width, font_size, outline, Color(ink, ink.a * colour.a)
 		)
 		canvas.draw_string(font, at, text, align, width, font_size, colour)
 
@@ -242,15 +243,16 @@ class StreakMeter extends Control:
 		var width := 10.0
 		var track := Rect2(0.0, 0.0, width, size.y)
 		var back := StyleBoxFlat.new()
-		back.bg_color = Color(0.05, 0.04, 0.1, 0.5)
+		back.bg_color = Color(ArenaHudGlance.Ink.c(self, &"plate"), 0.6)
 		back.set_corner_radius_all(4)
-		back.border_color = Color(1.0, 1.0, 1.0, 0.25)
+		back.border_color = Color(ArenaHudGlance.Ink.c(self, &"text"), 0.25)
 		back.set_border_width_all(1)
 		draw_style_box(back, track.grow(1.0))
+		var gold := ArenaHudGlance.Ink.c(self, &"highlight")
 		var fill := track.size.y * _shown
 		if fill > 0.5:
 			var bar := StyleBoxFlat.new()
-			bar.bg_color = GOLD
+			bar.bg_color = gold
 			bar.set_corner_radius_all(4)
 			draw_style_box(bar, Rect2(0.0, track.size.y - fill, width, fill))
 			draw_rect(Rect2(1.5, track.size.y - fill + 2.0, 2.0, maxf(0.0, fill - 4.0)), Color(1.0, 0.95, 0.7, 0.7))
@@ -261,10 +263,10 @@ class StreakMeter extends Control:
 		var at := Rect2(Vector2(width * 0.5 - side * 0.5, -side - 8.0), Vector2(side, side))
 		if icon != null:
 			draw_texture_rect(icon, at.grow(2.0), false, Color(0.1, 0.05, 0.0, 0.6))
-			draw_texture_rect(icon, at, false, GOLD if count > 0 else Color(1.0, 1.0, 1.0, 0.45))
+			draw_texture_rect(icon, at, false, gold if count > 0 else Color(1.0, 1.0, 1.0, 0.45))
 		Look.draw_outlined(
 			self, Look.feedback_font(true), Vector2(-14.0, size.y + 26.0), "Killstreak x%d" % count,
-			17, GOLD if count > 0 else Color(1.0, 1.0, 1.0, 0.6), 6
+			17, gold if count > 0 else Color(1.0, 1.0, 1.0, 0.6), 6
 		)
 
 
@@ -347,13 +349,22 @@ class MedalRow extends Control:
 			var r := RADIUS * grow
 			var colour: Color = m["colour"]
 			draw_circle(at + Vector2(0.0, 3.0), r + 4.0, Color(0.0, 0.0, 0.0, 0.35 * fade))
-			draw_circle(at, r + 3.5, Color(1.0, 1.0, 1.0, 0.92 * fade))
-			draw_circle(at, r, Color(colour.darkened(0.25), fade))
-			draw_circle(at - Vector2(0.0, r * 0.12), r * 0.86, Color(colour, fade))
+			# The dark HUD: a deep disc rimmed in the medal's colour, the icon in it lit in the
+			# colour. The bright theme ("Arcade"): the first HUD's white-ringed coloured badge.
+			var dark := ArenaHudGlance.Ink.bright(self) < 0.5
 			var icon: Texture2D = m["icon"]
+			if dark:
+				draw_circle(at, r + 3.5, Color(colour.lightened(0.2), fade))
+				draw_circle(at, r, Color(ArenaHudGlance.Ink.c(self, &"plate"), 0.94 * fade))
+				draw_circle(at, r * 0.86, Color(colour.darkened(0.55), 0.55 * fade))
+			else:
+				draw_circle(at, r + 3.5, Color(1.0, 1.0, 1.0, 0.92 * fade))
+				draw_circle(at, r, Color(colour.darkened(0.25), fade))
+				draw_circle(at - Vector2(0.0, r * 0.12), r * 0.86, Color(colour, fade))
 			if icon != null:
 				var side := r * 1.4
-				draw_texture_rect(icon, Rect2(at - Vector2(side, side) * 0.5, Vector2(side, side)), false, Color(1.0, 1.0, 1.0, fade))
+				draw_texture_rect(icon, Rect2(at - Vector2(side, side) * 0.5, Vector2(side, side)), false,
+					Color(colour.lightened(0.45), fade) if dark else Color(1.0, 1.0, 1.0, fade))
 			var medal := int(m["medal"])
 			var tally := (
 				"2" if medal == ArenaAwards.Medal.DOUBLE_KILL
@@ -362,7 +373,7 @@ class MedalRow extends Control:
 			)
 			if tally != "":
 				var badge := at + Vector2(r * 0.72, r * 0.62)
-				draw_circle(badge, 12.0 * grow, Color(1.0, 1.0, 1.0, fade))
+				draw_circle(badge, 12.0 * grow, Color(colour.lightened(0.2), fade) if dark else Color(1.0, 1.0, 1.0, fade))
 				draw_circle(badge, 10.0 * grow, Color(colour.darkened(0.35), fade))
 				draw_string(
 					Look.feedback_font(), badge + Vector2(-20.0, 5.0 * grow), tally, HORIZONTAL_ALIGNMENT_CENTER,
@@ -697,6 +708,17 @@ func _init() -> void:
 	# Before `_ready`, which is where `DotHud` decides between anchoring and fitting, and
 	# follows the viewport's size from then on.
 	fit_design = DESIGN_FRAME
+
+
+## Arena's own colour over whichever theme the player picked: gold for "yours" (your ring,
+## row, slot and streak). Everything else (plates, words, ink, key caps) is the theme's, so
+## Paper and High contrast can change it; `ArenaClient` hands this to dot-menu's
+## `follow_hud` with the HUD (Christian's first play test, 2026-10-11: a darker HUD that
+## follows the menu's theme).
+static func accent_theme() -> Theme:
+	var t := Theme.new()
+	t.set_color(&"highlight", &"DotHudPiece", GOLD)
+	return t
 
 
 ## Where the client shell's right-hand column starts, in frame pixels: its game ballot and
