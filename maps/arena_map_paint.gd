@@ -43,8 +43,10 @@ const ACCENT := Color(1.00, 0.62, 0.10)
 const ACCENT_ALT := Color(0.94, 0.30, 0.42)
 
 ## The ground: a mid cool grey, so the sun reads warm on it and a player stands out
-## against it. It was near white, which was most of what read as washed out.
-const GROUND := Color(0.74, 0.76, 0.84)
+## against it. It was near white, which was most of what read as washed out, and then
+## (0.74, 0.76, 0.84), whose sunlit floor still rendered at 0.79 luminance under the
+## Compatibility renderer the client shell uses; this lands it at 0.70, a light grey.
+const GROUND := Color(0.62, 0.64, 0.72)
 
 ## Compass sides, for a box no named zone holds. The perimeter wall on each side takes the
 ## same colour, so the wall behind a fight says which side of the map it is.

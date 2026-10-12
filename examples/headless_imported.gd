@@ -67,7 +67,7 @@ const SCORE_LIMIT := 4
 const HURT_MAP := &"surf_xiv_v2a"
 
 const SECTIONS := 13
-const CHECKS := 72
+const CHECKS := 71
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -239,21 +239,6 @@ func _test_lighting() -> void:
 		"a white ambient draws the sky its name says, not a white dome (%s)" % white_top
 	)
 	white.free()
-
-	# The older shell's path: a dot-lighting that ignores `sky_top` draws the zenith in the
-	# ambient, and the repaint after it must land on the same colour.
-	var lighting: Dictionary = ArenaImportedMaps.manifest(&"surf_29_12_06").get("lighting", {})
-	var older := Node3D.new()
-	var bare := ArenaMapLighting.imported_document(lighting)
-	bare.erase("sky_top")
-	var _older_sun := DotLightRig.apply(older, DotLightDocument.from_dictionary(bare), ArenaMapLighting.imported_profile())
-	var before_repaint := _sky_top(older)
-	ArenaMapLighting._paint_sky_top(older, ArenaMapLighting.imported_document(lighting))
-	_check(
-		not before_repaint.is_equal_approx(table_top) and _sky_top(older).is_equal_approx(table_top),
-		"on a dot-lighting without sky_top the repaint gives the same sky"
-	)
-	older.free()
 
 	var packed := _lit(&"surf_buck_wild")
 	var packed_env := _environment(packed)

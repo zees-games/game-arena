@@ -118,7 +118,7 @@ Short forms; the reasoning is in the linked file.
 - A wall route is declared (`add_wall_route`) and driven through the motor in `headless_match`; a run gap drops about 0.7 m and outspans a dash-jump. [maps](docs/maps.md#design-rules-every-map-follows)
 - Colour is derived from a box's role and zone (`arena_map_paint.gd`), never stored in the box list; a repaint is not a `MAP_VERSIONS` bump. [maps](docs/maps.md#colour-and-light)
 - A built-in map's light is its `lighting` document (dot-lighting), replaced with the level. Render a look change with `RENDERER=gl_compatibility` too: the shell is Compatibility. [maps](docs/maps.md#colour-and-light)
-- An imported map is lit from its manifest's `lighting`; `sky_top` is repainted only on a dot-lighting below level 2. [imported](docs/imported-maps.md#lit-from-the-manifest)
+- An imported map is lit from its manifest's `lighting` (`imported_profile`, a stock tier); a built-in map with dot-lighting's `painted()`, so the pack asks for dot-lighting 3. [imported](docs/imported-maps.md#lit-from-the-manifest), [maps](docs/maps.md#colour-and-light)
 - A guard on a host addon's level (`DotAddonApi.build_level`) needs that addon in `requires.floor.json` at the older path's level, or an older shell refuses the pack. [client](docs/client.md#keys)
 - An imported map's solid is in the tree on every machine before any player is bodied; its spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 - Map mechanics run inside the simulated tick on both ends; pushes are stateless; swim and ladder modes are registered on every map. [imported](docs/imported-maps.md#the-maps-own-mechanics)

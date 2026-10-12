@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 591
+const CHECKS := 592
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -2239,12 +2239,19 @@ func _test_map_look() -> void:
 	var lit := ArenaMapLighting.build(atrium)
 	var env: Environment = null
 	var sun: DirectionalLight3D = null
+	var fill: DirectionalLight3D = null
 	for child in lit.get_children():
 		if child is WorldEnvironment:
 			env = (child as WorldEnvironment).environment
-		elif child is DirectionalLight3D:
+		elif child is DirectionalLight3D and child.name == "Sun":
 			sun = child
+		elif child is DirectionalLight3D and child.name == "Fill":
+			fill = child
 	_check(sun != null and sun.shadow_enabled, "a built-in map has a sun that casts shadows")
+	# dot-lighting's painted(): the shade's shape comes from a shadowless fill where the
+	# Compatibility renderer has no occlusion, and the grade from the adjustment pass.
+	_check(fill != null and not fill.shadow_enabled and env != null and env.adjustment_enabled,
+		"and a shadowless fill and a grade (dot-lighting's painted())")
 	_check(
 		env != null and env.background_mode == Environment.BG_SKY and env.sky != null,
 		"and a sky, not a flat background"

@@ -6,7 +6,7 @@ extends RefCounted
 ## (`ArenaMap.lighting`), so it changes with the map and a map can be lit differently from
 ## the next without any code knowing which map it is. [DotLightRig] turns the document into
 ## a sun and an [Environment]; what stays here is this game's: which [DotLightProfile] a
-## machine gets, the zenith (`sky_top`), and the shape of the sun's shadow map. The
+## machine gets and the shape of the sun's shadow map. The
 ## reasoning for each is in docs/maps.md, "Colour and light".
 ##
 ## [b]An imported map is lit from its manifest's `lighting` block[/b], as game-g2gfast
@@ -47,10 +47,6 @@ static func build(map: Object) -> Node3D:
 
 	var lighting: Dictionary = map.lighting
 	var sun := DotLightRig.apply(root, DotLightDocument.from_dictionary(lighting), profile())
-	if not rig_draws_sky_top():
-		_paint_sky_top(root, lighting)
-
-	_grade(root)
 	if sun != null and sun.shadow_enabled:
 		# One orthogonal shadow map over the whole map rather than four cascades: the
 		# largest built-in map is 64 m across, so one map covers it at a usable resolution,
@@ -61,99 +57,32 @@ static func build(map: Object) -> Node3D:
 	return root
 
 
-## The contrast and colour a built-in map is drawn with, on the rig's environment.
+## What this machine draws of a map's lighting: dot-lighting's `painted()`.
 ##
-## [b]This game's grade, not dot-lighting's.[/b] The rig turns a document into light; how
-## punchy the picture is on top is a look, and these flat-painted boxes want more of it
-## than a textured, lightmapped level does. A little contrast and saturation (the
-## renderer's adjustment pass, which both renderers have) so the pastels are colours and
-## the floor is not white, and ambient occlusion where Forward+ can draw it, so every
-## crate and stair sits on the floor instead of floating on it.
-const GRADE_CONTRAST := 1.12
-const GRADE_SATURATION := 1.1
-
-
-static func _grade(root: Node3D) -> void:
-	for node in root.get_children():
-		var world := node as WorldEnvironment
-		if world == null or world.environment == null:
-			continue
-		var env := world.environment
-		env.adjustment_enabled = true
-		env.adjustment_contrast = GRADE_CONTRAST
-		env.adjustment_saturation = GRADE_SATURATION
-		if RenderingServer.get_current_rendering_method() == "forward_plus":
-			env.ssao_enabled = true
-			env.ssao_radius = 1.2
-			env.ssao_intensity = 1.6
-
-
-## Whether the host's dot-lighting draws a document's `sky_top` itself (API level 2).
+## [b]`painted()` is the family's profile for flat-painted boxes[/b] (dot-lighting API 3):
+## a longer filmic shoulder and a lower exposure, a contrast and saturation grade, ambient
+## occlusion where Forward+ can draw it, and a shadowless fill from the side the sun is not
+## on, so a crate's two shaded faces are two shades under Compatibility, which has no
+## occlusion. Its light numbers are per renderer: the client shell draws Compatibility
+## everywhere, which clips before it tone maps. This game's own grade and its hand-set
+## Compatibility numbers (reference 700, ambient 0.45) were the first try at the same thing
+## and moved into dot-lighting so every painted game gets it; measured on dm_box from a
+## player's eye, the sunlit floor went 0.88 -> 0.70 luminance with the darker `GROUND`.
 ##
-## [b]Asked of the HOST, because a delivered pack runs on the shell's dot-lighting.[/b]
-## Level 1 ignores the key and draws the zenith in the ambient colour, so on such a shell
-## this game repaints the sky after the rig ([method _paint_sky_top]); from level 2 the rig
-## draws it, mirrored under the horizon with the rest, and the repaint would only be a
-## second copy of the same rule. Drop the repaint once every shell has level 2.
-static func rig_draws_sky_top() -> bool:
-	return DotAddonApi.build_level("dot_lighting") >= 2
-
-
-## The zenith in the document's `sky_top`, where the map gives one, for a dot-lighting
-## that does not draw it ([method rig_draws_sky_top]).
-##
-## dot-lighting draws the top of the sky in the ambient colour, because in a world it
-## imports the ambient was measured from the sky. Here the ambient is chosen for the shade
-## and is paler than any sky, so the map names its zenith separately.
-static func _paint_sky_top(root: Node3D, lighting: Dictionary) -> void:
-	var top: Variant = lighting.get("sky_top", null)
-
-	if not (top is Array and (top as Array).size() >= 3):
-		return
-
-	for node in root.get_children():
-		if node is WorldEnvironment and (node as WorldEnvironment).environment.sky != null:
-			var material := (node as WorldEnvironment).environment.sky.sky_material as ProceduralSkyMaterial
-			if material != null:
-				material.sky_top_color = Color(float(top[0]), float(top[1]), float(top[2]))
-				# [method profile] mirrors the sky under the horizon, from the top colour the
-				# rig built it with; the mirror follows the repaint.
-				material.ground_bottom_color = material.sky_top_color
-
-
-## What this machine draws of a map's lighting.
-##
-## [b]A browser gets dot-lighting's `web()` with the sun's shadows put back.[/b] `web()`
-## drops them because on a large imported level the shadow pass draws the whole level a
-## second time. A built-in map here is under a hundred boxes, and drawn without shadows
-## it loses the sunlit look entirely (rendered and compared: flat, every face lit alike),
-## which is most of what this lighting is for. [method build] makes it one orthogonal
-## pass. There is no capability query for "this GPU is slow", so the platform is the
-## question here.
+## [b]A browser gets the sun's shadows put back.[/b] `web()` drops them because on a large
+## imported level the shadow pass draws the whole level a second time. A built-in map here
+## is under a hundred boxes, and drawn without shadows it loses the sunlit look entirely
+## (rendered and compared: flat, every face lit alike), which is most of what this lighting
+## is for. [method build] makes it one orthogonal pass. There is no capability query for
+## "this GPU is slow", so the platform is the question here.
 ##
 ## [b]The sky continues under the horizon.[/b] These maps are walled, so from inside it is
 ## never seen; from above (an overview, a spectator) the default dark ground half is a brown
 ## void around a bright map, which is the first thing the old look was criticised for.
 static func profile() -> DotLightProfile:
-	var p := DotLightProfile.web() if OS.has_feature("web") else DotLightProfile.high()
+	var p := DotLightProfile.painted()
 	p.sun_shadows = true
 	p.sky_below_horizon = true
-	# A fill under the sun, not level with it. It was 1.0 (a shade almost as bright as the
-	# sun side), and with pale paint and a white floor the first play test's frames had no
-	# dark anywhere: nothing to read a shape or a player against. At 0.7 the shade is a
-	# clear step down and a pastel in it still reads as itself, not a dirty version.
-	p.ambient_energy = 0.7
-
-	# [b]The Compatibility renderer has no headroom above white, so the same light is
-	# turned down for it.[/b] Forward+ lights into an HDR buffer and the filmic curve rolls
-	# a sunlit pastel (sun about 1.4 plus a full ambient) back under white; Compatibility
-	# clips it, and every sunlit face rendered as flat white with the colour gone. The
-	# client shell runs Compatibility on every platform, so this is the look most players
-	# get. Measured side by side: these two numbers put both renderers' frames within a
-	# shade of each other. The world is the same; this is what the machine can draw of it.
-	if RenderingServer.get_current_rendering_method() == "gl_compatibility":
-		p.brightness_reference = 700.0
-		p.ambient_energy = 0.45
 	return p
 
 
@@ -174,8 +103,6 @@ static func _build_imported(root: Node3D, map: Object) -> void:
 	var document := imported_document(lighting)
 	var _sun := DotLightRig.apply(root, DotLightDocument.from_dictionary(document), imported_profile())
 
-	if not rig_draws_sky_top():
-		_paint_sky_top(root, document)
 
 	if is_black_sky(lighting):
 		_darken(root)

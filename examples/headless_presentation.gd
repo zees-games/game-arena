@@ -735,8 +735,9 @@ func _test_every_key_is_an_action() -> void:
 	)
 
 	# A branch only matters if an older shell gets to run it. A pack asks for the level of
-	# every addon it was built against, so requires.floor.json lowers dot-lighting to 1 for
-	# the release's requires.json; dot-ui's floor is 4, because the HUD names dot-ui's glance
+	# every addon it was built against; dot-lighting is asked at that level (the maps are lit
+	# with `DotLightProfile.painted()`, API 3, and the level-1 `sky_top` repaint went with
+	# the floor that lowered it to 1); dot-ui's floor is 4, because the HUD names dot-ui's glance
 	# pieces (`DotVitals` and the rest, API 4) and a class name cannot be guarded (the
 	# wheel's level-1 branch went with it). dot-core's floor_audit refuses
 	# a floor once a guard it relies on is gone, here rather than at the release.
@@ -747,8 +748,9 @@ func _test_every_key_is_an_action() -> void:
 	_check(unsound.is_empty(), "requires.floor.json is sound: every floor has a guard behind it", str(unsound))
 	var asked := DotAddonApi.apply_floors(derived, floors.value if floors.ok else {})
 	_check(
-		asked.get("dot_ui") == 4 and asked.get("dot_lighting") == 1,
-		"so a pack asks a shell for dot-ui 4 (the glance pieces) and dot-lighting 1", str(asked)
+		asked.get("dot_ui") == 4 and asked.get("dot_lighting") == derived.get("dot_lighting") \
+			and int(asked.get("dot_lighting", 0)) >= 3,
+		"so a pack asks a shell for dot-ui 4 (the glance pieces) and the dot-lighting it was built on (3+, painted())", str(asked)
 	)
 
 	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.
