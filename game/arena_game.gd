@@ -351,6 +351,10 @@ var _cvar_source: Object = null
 ## game, not per map, so a map change keeps the server's setting.
 var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 
+## Whether a player may switch to third person: dot-player-controller's `mp_forceview`. Bound
+## by the module (REPLICATED) and followed by the client, which is the end with a camera.
+var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
+
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.
 var _weapon_defs: Dictionary = {}
@@ -458,6 +462,7 @@ func follow_server_cvars(source: Object) -> bool:
 	_cvar_source = source
 	# The ragdoll rules are the game's, not the map's, so they follow once and keep following.
 	var _bodies := ragdoll_rules.follow_cvars(source)
+	var _view := view_rules.follow_cvars(source)
 	return _follow_cvar_source()
 
 

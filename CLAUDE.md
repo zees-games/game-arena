@@ -37,6 +37,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - **Run the suites after changing any dot-* addon this game links.** That is what this project is for. [testing](docs/testing.md)
 - `headless_presentation` and `headless_feel` have a client; `headless_lossy` and `headless_feel` real ENet and loss; only `headless_feel` judges frames. [testing](docs/testing.md#the-suites)
 - Read every suite's stderr even when it exits 0; cap every run with `timeout`. [testing](docs/testing.md#traps-the-suites-have-hit)
+- A camera change is looked at: `tools/render_cameras.sh` (third-person and chase cameras flown round every spawn, armed) and `tools/render_views.gd` (both views and `mp_forceview`). [client](docs/client.md)
 - A suite or tool that builds a presentation or client calls `ArenaPresentation.use_scratch_settings` first: never the player's file. [testing](docs/testing.md#traps-the-suites-have-hit)
 - **Look at it.** No check reaches the screen: the render tools in `tools/` (above), under `xvfb-run`. [client](docs/client.md#looking-at-it)
 - Without the `maps/imported` link the three built-in maps play and the imported checks skip; that is supported.

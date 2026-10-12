@@ -179,6 +179,19 @@ var _fell: bool = false
 ## Draws this player's own body in first person when the server's `fp_body` rule says so.
 var _first_person: DotPlayerFirstPersonBody = null
 
+## Third person: the camera behind and over the shoulder of the eye, kept out of the level by
+## dot-core's probe, and the whole body drawn. The client sets it from the view key under the
+## server's `mp_forceview`; presentation only, the simulation does not know.
+var third_person: bool = false
+
+## Layers the third-person camera stops against (the level and props). Set by the client.
+var third_person_mask: int = 1
+
+var _tp_probe: DotCameraProbe = null
+
+## The third-person camera's place behind the eye, in the view's own axes: right, up, back.
+const THIRD_PERSON_OFFSET := Vector3(0.45, 0.35, 2.6)
+
 ## The camera's own field of view, before an aim zooms it. Written by
 ## [method set_field_of_view] so a zoom always scales the player's setting, never itself.
 var _base_fov: float = 75.0
@@ -1066,11 +1079,23 @@ const FIRST_PERSON_BACK := 0.18
 ## (see [DotPlayerFirstPersonBody]); the held weapon's world model stays hidden, because
 ## the view model is already the gun in your hands.
 func present_own_body(show: bool, yaw: float) -> void:
+	if third_person and is_alive() and camera != null and camera.current:
+		# Seen from behind: the whole body and the gun in its hands. Placed by `present`.
+		if body_mesh == null:
+			attach_body_mesh(Color.WHITE, avatar)
+		if _first_person != null:
+			_first_person.restore()
+		body_mesh.visible = true
+		_present_held()
+		return
+
 	if not show or not is_alive() or camera == null or not camera.current:
 		if _first_person != null:
 			_first_person.restore()
 		if body_mesh != null:
 			body_mesh.visible = false
+		if held != null:
+			held.visible = false
 		return
 
 	if body_mesh == null:
@@ -1089,6 +1114,8 @@ func present_own_body(show: bool, yaw: float) -> void:
 		# guessed. What to KEEP is two words every avatar here uses.
 		_first_person.shown_names = PackedStringArray(["leg", "foot", "shoe", "boot"])
 
+	if held != null:
+		held.visible = false
 	body_mesh.visible = true
 	body_mesh.rotation = Vector3(0.0, deg_to_rad(yaw), 0.0)
 	body_mesh.position = body_mesh.basis * Vector3(0.0, 0.0, FIRST_PERSON_BACK)
@@ -1237,6 +1264,10 @@ func present(delta: float) -> void:
 			deg_to_rad(drawn.pitch + punch.x + nod), deg_to_rad(drawn.yaw + punch.y),
 			camera_roll + deg_to_rad(lean)
 		)
+		if third_person and camera.current:
+			_place_third_person(drawn, delta)
+		elif _tp_probe != null:
+			_tp_probe.reset()
 		# Widened from the player's own field of view, then zoomed by the aim: a scope at a run
 		# is the scope's zoom of a slightly wider lens, and nothing compounds frame to frame.
 		camera.fov = (_base_fov + widen) * _aim_fov_scale
@@ -1256,6 +1287,26 @@ func present(delta: float) -> void:
 
 	_present_beacon(delta, drawn.position)
 	_mend_body()
+
+
+## Moves the camera from the eye to behind it, and draws the body where the eye is.
+##
+## [b]Swept from the eye, not set.[/b] dot-core's [DotCameraProbe] pulls the camera in ahead
+## of a wall it is swinging toward and eases it back out; a camera simply placed 2.6 m back
+## spends every corner inside the corner (the play test's death camera was exactly that).
+## The body is placed on the drawn feet every frame, not left on this node: this node is
+## moved by the tick, and a body drawn at the tick under a camera drawn per frame shakes.
+func _place_third_person(drawn: DotFpsState, delta: float) -> void:
+	if _tp_probe == null:
+		_tp_probe = DotCameraProbe.new(camera.get_world_3d(), third_person_mask)
+	_tp_probe.collision_mask = third_person_mask
+	var pivot := view.global_position
+	var wanted := pivot + camera.global_basis * THIRD_PERSON_OFFSET
+	camera.global_position = _tp_probe.resolve(pivot, wanted, delta)
+
+	if body_mesh != null:
+		body_mesh.global_position = drawn.position
+		body_mesh.global_rotation = Vector3(0.0, deg_to_rad(drawn.yaw), 0.0)
 
 
 ## The controller's state as drawn at [param alpha] through its last tick, from -1 to 2.
@@ -1441,8 +1492,8 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 		return Vector2.ZERO
 
 	var view_model := weapons.view_model()
-	# Nothing in the hands of somebody who is dead or watching someone else.
-	view_model.visible = is_alive() and camera.current
+	# Nothing in the hands of somebody who is dead, watching someone else, or seen from behind.
+	view_model.visible = is_alive() and camera.current and not third_person
 
 	weapons.drive_view(
 		Vector2(drawn.yaw, drawn.pitch),

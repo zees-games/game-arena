@@ -53,6 +53,8 @@ const WEAPON_PREVIOUS := &"arena_weapon_previous"
 const WEAPON_NEXT := &"arena_weapon_next"
 const WEAPON_LAST := &"arena_weapon_last"
 const PUNT := &"arena_punt"
+## First or third person, where the server allows it (`mp_forceview`).
+const VIEW := &"arena_view"
 ## dot-voice's action (DotVoiceManager.TALK_ACTION), so the talk key is one setting with every
 ## other game's; still stored as bind_voice.
 const VOICE := &"dot_voice_talk"
@@ -90,6 +92,7 @@ static func make(dot_ui_level: int = -1) -> DotMenuBindings:
 	keys.add(CHAT_TEAM, &"chat_team_key", "Team chat", "U", "Chat", DotSettingsDef.Scope.ACCOUNT)
 	keys.add(VOICE, &"bind_voice", "Push to talk", "V", "Chat")
 	keys.add(SCOREBOARD, &"bind_scoreboard", "Scoreboard (hold)", "Tab", "Interface")
+	keys.add(VIEW, &"bind_view", "First or third person, where the server allows it", "F5", "Interface")
 	# H opens help, in every game of the family (dot-menu's `dot_menu_help`).
 	keys.add_help("Interface")
 	return keys

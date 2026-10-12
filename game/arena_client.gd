@@ -979,6 +979,81 @@ func _build_ragdolls() -> void:
 	add_child(ragdolls)
 
 
+## The level's layers: what the third-person and spectator cameras stop against.
+func _level_mask() -> int:
+	var stack := game.player_stack if game != null else null
+	if stack != null and stack.physics != null and stack.physics.layout != null:
+		return stack.physics.layout.mask_of([&"world", &"prop"])
+	return 1
+
+
+## The camera's two guards from dot-core, once a player is adopted.
+##
+## [b]The fade is what keeps a bot's face out of the lens.[/b] Players here are not in the
+## physics space (their movement is a shape query and their hitboxes are analytic), so
+## nothing stops one walking into another; the fade is handed the figures and hides any
+## within a hand of the camera, and in third person fades one standing between the camera
+## and the player. The third-person camera itself is swept by the player's probe against
+## [method _level_mask].
+func _guard_camera(p: ArenaPlayer) -> void:
+	if p == null or p.camera == null:
+		return
+	p.third_person_mask = _level_mask()
+	# Seen from behind, a player with no site avatar is the stock figure everybody else
+	# already sees them as (the same document, from the same key), not a plain capsule.
+	if p.avatar == null:
+		p.rewear(ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(p.player_id))))
+	if p.camera.get_node_or_null(^"Fade") == null:
+		var fade := DotCameraFade.new()
+		fade.name = "Fade"
+		fade.bodies_fn = _other_figures
+		p.camera.add_child(fade)
+	if not game.view_rules.changed.is_connected(_on_view_rules_changed):
+		game.view_rules.changed.connect(_on_view_rules_changed)
+	_set_third_person(game.view_rules.resolve(p.third_person))
+
+
+## Everybody else's drawn figure, for the camera fade.
+func _other_figures() -> Array:
+	var out: Array = []
+	if game == null:
+		return out
+	for id in game.player_ids():
+		var other := game.player_for(id)
+		if other != null and other != player and other.body_mesh != null:
+			out.append(other.body_mesh)
+	return out
+
+
+## The view key: the other view if the server's `mp_forceview` allows it, a line if not.
+func toggle_view() -> void:
+	if player == null:
+		return
+	var wanted := game.view_rules.toggled(player.third_person)
+	if wanted == player.third_person:
+		if hud != null and game.view_rules.refusal() != "":
+			hud.notice(game.view_rules.refusal())
+		return
+	_set_third_person(wanted)
+	if hud != null:
+		hud.notice("Third person" if wanted else "First person")
+
+
+func _set_third_person(on: bool) -> void:
+	if player == null:
+		return
+	player.third_person = on
+	var fade := player.camera.get_node_or_null(^"Fade") as DotCameraFade if player.camera != null else null
+	if fade != null:
+		fade.focus = player.view if on else null
+
+
+## The server changed `mp_forceview`: the view it now allows.
+func _on_view_rules_changed() -> void:
+	if player != null:
+		_set_third_person(game.view_rules.resolve(player.third_person))
+
+
 func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
 	if presentation != null and presentation.audio != null:
 		var _played := presentation.audio.play_at(id, at, clampf(volume, 0.3, 1.0))
@@ -1106,6 +1181,7 @@ func _adopt(candidate: ArenaPlayer) -> void:
 	# server capping it is a legitimate competitive rule; the player's *choice* is what is
 	# saved, so leaving the server gives it back rather than editing their settings.
 	player.attach_camera(_field_of_view())
+	_guard_camera(player)
 	if presentation != null:
 		presentation.bind_camera_motion(player)
 	_arm(player)
@@ -1580,6 +1656,12 @@ func _drive_spectator_camera() -> void:
 			player.camera.current = true
 		return
 
+	# The chase and death cameras are pulled out of the level by dot-spectate, given it.
+	var manager := game.spectate.manager
+	if manager != null and manager.camera_world == null:
+		manager.camera_world = player.camera.get_world_3d()
+		manager.camera_mask = _level_mask()
+
 	var where := game.spectate.camera_for(id)
 
 	if where == Transform3D.IDENTITY:
@@ -1815,6 +1897,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _is(event, ArenaBindings.PUNT):
 		_ask_prop(ArenaEvents.PropAct.PUNT)
 		_holding = false
+		return
+	if _is(event, ArenaBindings.VIEW):
+		toggle_view()
 		return
 
 	# The slots: requested through the COMMAND, never by calling the arsenal directly. A
