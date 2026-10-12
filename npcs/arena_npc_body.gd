@@ -37,9 +37,9 @@ extends Node3D
 ## draws the capsule.
 ##
 ## [b]A monster drawn as a capsule read as "no model".[/b] The kit is already shipped for
-## players' avatars (`avatars/kenney/`), so a monster is that figure in an atlas nobody's
-## avatar is likely to be (the robots and the green-faced one), tinted toward its kind's
-## colour so the four kinds are told apart at a glance. Its height is [member body_height];
+## players' avatars, so a monster is the person of a skin nobody's avatar is likely to be
+## (the robots and the green-faced one), its top tinted toward its kind's colour so the four
+## kinds are told apart at a glance. Its height is [member body_height];
 ## the collision is not this node's and does not change.
 @export var skin: String = ""
 
@@ -83,53 +83,22 @@ func _ready() -> void:
 	add_child(snout)
 
 
-## The kit's figure, turned to face -Z (it is glTF, which faces +Z) and scaled to
-## [member body_height]. False when the art is not in this build, so the capsule draws.
+## One of the family's animated people (dot-player-char's `DotHumanoidFigure`), the person
+## the kit's skin letter names, its top pulled toward the kind's tint so the four kinds are told
+## apart at range, [member body_height] tall. It animates from how far its body moves
+## (`auto_animate`): the horde's brain moves the body, and nothing here knows a speed. False
+## when the art is not in this build, so the capsule draws.
 func _build_figure() -> bool:
-	var scene: Variant = load(ArenaPaths.rebase("res://avatars/kenney/character-a.glb"))
-	var texture: Variant = load(ArenaPaths.rebase("res://avatars/kenney/Textures/texture-%s.png" % skin))
-
-	if not (scene is PackedScene) or not (texture is Texture2D):
+	var look := DotHumanoidLook.from_letter(skin)
+	if look == null:
 		return false
-
-	var model := (scene as PackedScene).instantiate() as Node3D
-	if model == null:
+	var person := DotHumanoidFigure.new()
+	person.name = "Figure"
+	add_child(person)
+	person.build(look.with_side(tint, 0.5), body_height)
+	if not person.from_art:
+		remove_child(person)
+		person.free()
 		return false
-
-	var material := StandardMaterial3D.new()
-	material.albedo_texture = texture
-	# The atlas's own colours, nudged toward the kind's tint: enough to tell a grunt from a
-	# brute at range, not so much that the figure is a silhouette.
-	material.albedo_color = Color.WHITE.lerp(tint, 0.35)
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-
-	var low := INF
-	var high := -INF
-	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-		mesh.material_override = material
-		var box := _to_model(mesh, model) * mesh.get_aabb()
-		low = minf(low, box.position.y)
-		high = maxf(high, box.end.y)
-
-	var anim := model.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	if anim != null:
-		anim.stop()
-		anim.active = false
-
-	var scale_by := body_height / maxf(high - low, 0.01) if is_finite(low) else 1.0
-	model.name = "Figure"
-	model.basis = Basis(Vector3.UP, PI).scaled(Vector3.ONE * scale_by)
-	model.position = Vector3(0.0, -low * scale_by, 0.0)
-	add_child(model)
+	person.auto_animate = true
 	return true
-
-
-static func _to_model(node: Node3D, root: Node3D) -> Transform3D:
-	var out := Transform3D.IDENTITY
-	var walk: Node = node
-	while walk != null and walk != root:
-		if walk is Node3D:
-			out = (walk as Node3D).transform * out
-		walk = walk.get_parent()
-	return out

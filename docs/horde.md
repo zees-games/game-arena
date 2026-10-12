@@ -32,7 +32,7 @@ Monsters are replicated by `ArenaNpcNet` ([netcode](netcode.md#monsters-are-serv
 
 ## Figures
 
-`npcs/arena_npc_body.gd` draws the character kit's figure (`avatars/kenney/`, already shipped for avatars) when its scene names a `skin`: grunt `l`, brute `o`, stalker `r`, gunner `g`, each tinted a third of the way toward its old colour, scaled to `body_height`, and turned half a turn because the kit faces +Z. With no skin or no art, the capsule and snout draw. The collision is not this node's. Its preload is relative (`../game/arena_paths.gd`): an absolute `res://` in a script inside a delivered pack resolves against the host. They do not animate yet.
+`npcs/arena_npc_body.gd` draws one of the family's animated people (dot-player-char's `DotHumanoidFigure`, the person of the character kit's skin letter, animating from how far its body moves) when its scene names a `skin`: grunt `l`, brute `o`, stalker `r`, gunner `g`, its top tinted half way toward its old colour, scaled to `body_height`. With no skin or no art, the capsule and snout draw. The collision is not this node's. Its preload is relative (`../game/arena_paths.gd`): an absolute `res://` in a script inside a delivered pack resolves against the host.
 
 ## Props
 
