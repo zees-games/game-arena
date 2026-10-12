@@ -106,6 +106,12 @@ enum PropAct {
 ## Bits a prop action occupies. Three, which is eight — twice what there are.
 const PROP_ACT_BITS := 3
 
+
+## Whether every [enum PropAct] fits in [constant PROP_ACT_BITS]. What headless_net reads: the
+## writer masks, so an act past the field would go out as a smaller one.
+static func prop_acts_fit() -> bool:
+	return int(PropAct.values().max()) < (1 << PROP_ACT_BITS)
+
 const NAME_BYTES := 64
 const MAP_BYTES := 64
 const TEXT_BYTES := 256

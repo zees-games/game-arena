@@ -19,6 +19,7 @@ const ArenaPlayerNet := preload("../game/arena_player_net.gd")
 const ArenaHorde := preload("../game/arena_horde.gd")
 const ArenaNpcs := preload("../game/arena_npcs.gd")
 const WallRouteDriver := preload("wall_route_driver.gd")
+const ArenaRequest := preload("../game/arena_request.gd")
 
 ## Two clients, one server, one process, and a lossy wire between them.
 ##
@@ -38,7 +39,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 211
+const CHECKS := 214
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
@@ -2105,6 +2106,16 @@ func _test_event_wire() -> void:
 		ArenaEvent.new(ArenaEvents.Kind.HELLO, PackedByteArray()).validate().ok,
 		"and a known one is not"
 	)
+
+	# A kind goes out in a fixed field the writer masks without a word, so one past it aliases a
+	# smaller kind: game-zombie-zone sent HURT and AMMO as HELLO and MAP that way.
+	_check(ArenaEvent.fits(), "every event kind fits the event's kind field",
+		"%d kinds in %d bits" % [ArenaEvents.Kind.size(), ArenaEvent.KIND_BITS])
+	_check(ArenaRequest.fits(), "every request kind fits the request's kind field",
+		"%d kinds in %d bits" % [ArenaEvents.Ask.size(), ArenaRequest.KIND_BITS])
+	_check(ArenaEvents.prop_acts_fit(), "every prop act fits the prop request's act field",
+		"%d acts in %d bits" % [ArenaEvents.PropAct.size(), ArenaEvents.PROP_ACT_BITS])
+
 	_done()
 
 
