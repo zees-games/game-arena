@@ -48,6 +48,7 @@ Short forms; the reasoning is in the linked file.
 
 **Architecture**
 
+- **Footsteps and a bed per map are dot-audio's stock** (`ArenaPresentation.keep_walkers`, grounded by a ray because a mirrored player's controller is never ticked here; `bed_for` by map prefix). Levels are measured with `addons/dot_audio/tools/loudness.sh` (−17 LUFS band, `loudness_trim_db`); stock ids have files, so the stand-in check skips them.
 - One player id: `player_id` is the session userid, never the peer id. Loadout keys are `"arena-player-%08d"`. [architecture](docs/architecture.md#one-id-space-for-players)
 - Tick order: movement, then shots after everyone moved, then map hurt, then the match. [architecture](docs/architecture.md#order-inside-a-tick)
 - `ArenaMap`'s scene, movement body and trace come from one box list; never build one separately. [architecture](docs/architecture.md#one-description-three-representations)

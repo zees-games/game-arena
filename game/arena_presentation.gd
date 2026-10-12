@@ -101,6 +101,11 @@ var bindings: DotMenuBindings = ArenaBindings.make()
 ## The connection overlay (`net_stat` at the console). See [method DotMenuNetStat.follow].
 var net_stat: DotMenuNetStat = null
 var audio: DotAudioManager = null
+
+## Everybody's footsteps by surface and a bed per map: dot-audio's stock (Kenney's footsteps
+## and generated beds, CC0; the addon's stock/CREDITS.md).
+var steps: DotAudioFootsteps = null
+var ambience: DotAudioAmbience = null
 var fx: DotFxManager = null
 ## The player's console, built by [method build_console] once the client has a menu.
 var console: DotConsoleController = null
@@ -452,6 +457,7 @@ func _apply_crosshair() -> void:
 ## fed every frame rather than the sounds being played flat.
 static func sound_catalogue() -> DotAudioCatalogue:
 	var c := DotAudioCatalogue.new()
+	DotAudioStock.add_to(c)
 
 	for id in [&"rifle", &"shotgun", &"rail"]:
 		var fire := DotAudioDef.new()
@@ -710,11 +716,25 @@ func _build_audio() -> DotResult:
 	# A firefight is the busiest this game gets and thirty-two is what it needs; past
 	# that the pool is holding sounds nobody can pick out of the mix.
 	audio.voices = 32
+	# Measured toward the family's -17 LUFS (dot-audio docs/loudness.md): a 40 s stand-in round
+	# read -21.1 LUFS with the bed, the steps and the limiter in.
+	audio.loudness_trim_db = 4.0
 	add_child(audio)
 
 	var res := audio.setup()
 	if not res.ok:
 		return res.wrap("the arena's audio")
+
+	steps = DotAudioFootsteps.new()
+	steps.name = "Footsteps"
+	steps.manager = audio
+	add_child(steps)
+	ambience = DotAudioAmbience.new()
+	ambience.name = "Ambience"
+	ambience.manager = audio
+	ambience.fallback_bed = &"amb_industrial"
+	add_child(ambience)
+	ambience.set_map_bed(bed_for(&""))
 
 	# Only on a real sink, and only after setup: the manager decides whether there is a
 	# device, and on a headless server there is nothing to bake for. Building the bank
@@ -1262,8 +1282,31 @@ func on_wall_jumped() -> int:
 
 
 ## A map changed. Everything drawn for the old one is meaningless now.
-func on_map_changed() -> void:
+func on_map_changed(map_id: StringName = &"") -> void:
 	fx.clear()
+	if ambience != null:
+		ambience.set_map_bed(bed_for(map_id))
+
+
+## A map's bed, from its name: the built-in arenas are halls of machinery, a surf map is ramps
+## in the air (wind), a climb map is rock (a cave), a hop map is outdoors. By prefix, because
+## imported maps arrive by the hundred and nobody will list them.
+static func bed_for(map_id: StringName) -> StringName:
+	var id := String(map_id).to_lower()
+	if id.begins_with("surf_"):
+		return &"amb_wind"
+	if id.begins_with("kz_") or id.begins_with("climb_") or id.begins_with("xc_"):
+		return &"amb_cave"
+	if id.begins_with("bhop_") or id.begins_with("bunnyhop"):
+		return &"amb_outdoor"
+	return &"amb_industrial"
+
+
+## Everybody on the map steps, once a frame: players and bots, each grounded by a ray (a
+## mirrored player's controller is never ticked here, so its own answer is stale).
+func keep_walkers(bodies: Array) -> void:
+	if steps != null:
+		steps.keep(bodies)
 
 
 func on_server_clamps(request: Dictionary) -> PackedStringArray:

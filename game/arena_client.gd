@@ -927,7 +927,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 		# Everything drawn for the old map is meaningless now -- a decal is a hole in a
 		# wall that no longer exists, and a decal ring that survives a map change is one
 		# that survives the map it was about.
-		presentation.on_map_changed()
+		presentation.on_map_changed(game.map.id if game.map != null else &"")
 
 	if hud != null:
 		# An imported map is somebody else's work, and its author is named where it starts.
@@ -1703,6 +1703,7 @@ func _process(delta: float) -> void:
 			forward = -player.camera.global_transform.basis.z
 		presentation.present(delta, eye, forward)
 		_apply_shake()
+		presentation.keep_walkers(game.players())
 
 	# A position report, once a second, for as long as the client has a player.
 	#
