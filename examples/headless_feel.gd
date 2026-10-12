@@ -78,9 +78,24 @@ const WINDOWS := [
 	["144 Hz display, 20% loss 30..80 ms", 144, 0.20, 55.0, 25.0, 6.0, false, 0.0, true, 0.10],
 ]
 
+## Where the local runner's circle is centred: dm_box's open floor south of the stair and
+## the pillar, nothing overhead and no wall within 5 m (the ledges and walkways are ceilings
+## at 3.0, which a jump's head reaches). The circle is about 2.3 m across at a run; hopping
+## drifts it a metre or two. `_check_open_floor` says if a runner did not stay clear.
+const RUN_CENTRE := Vector3(11.75, 0.05, -17.25)
+
+## The room the open-floor check wants around a runner: half a width, and from just above
+## the feet to a head and a margin over it.
+const CLEAR_HALF_WIDTH := 0.7
+const CLEAR_HEIGHT := 2.4
+
 ## Degrees a second the player turns the mouse, and degrees a tick the bot turns.
 const TURN_RATE := 240.0
 const BOT_TURN := 2.0
+
+## Ticks between jump presses in a jumping window: a hop is about 41 ticks in the air at
+## 64 Hz, so each one runs about 11 ticks on the floor first.
+const JUMP_EVERY := 52
 
 var _verbose := false
 var _only := ""
@@ -101,6 +116,8 @@ var _client: Node = null
 var _bot_session := 0
 
 var _driving := false
+## Whether the window hops (see `_hold_movement`).
+var _jumping := false
 var _turning := false
 
 ## Server truth: session -> {server tick -> position}.
@@ -184,12 +201,12 @@ func _run() -> void:
 	await _teardown()
 
 	# The total the section counter cannot be: a script error aborts the rest of a section
-	# after it announced itself. Offline 5, moves 7, boot 5, connect 3, and 3 a window
-	# (2 where the eye is not judged).
+	# after it announced itself. Offline 5, moves 7, boot 5, connect 3, and 4 a window
+	# (3 where the eye is not judged).
 	if _only == "" and _completed == _entered:
 		var expected := 5 + 7 + 5 + 3
 		for window in WINDOWS:
-			expected += 3 if bool(window[8]) else 2
+			expected += 4 if bool(window[8]) else 3
 		_check(_passed + _failed == expected, "every check ran (%d of %d)" % [_passed + _failed, expected])
 
 	print("")
@@ -289,14 +306,19 @@ func _test_offline() -> void:
 	_done()
 
 
+## [b]Jump is pressed a tick in every [constant JUMP_EVERY], not held.[/b] Held, auto-hop
+## leaves the ground on the tick it lands and the turning gains air speed every hop: 11 m/s
+## at the start of a window, 24 at its end, a circle growing past 5 m and across half the
+## map into the ledges and the east wall. Pressed again after a moment on the floor, every
+## hop starts at a run's speed and the circle stays the size it was.
 func _hold_movement(jump: bool) -> void:
 	Input.action_press(&"dot_fps_forward")
 	Input.action_press(&"dot_fps_right")
-	if jump:
-		Input.action_press(&"dot_fps_jump")
+	_jumping = jump
 
 
 func _release_movement() -> void:
+	_jumping = false
 	for action in [&"dot_fps_forward", &"dot_fps_right", &"dot_fps_jump"]:
 		Input.action_release(action)
 
@@ -605,19 +627,29 @@ func _connect() -> bool:
 	# The client's copy of itself is corrected once, here, before anything is measured.
 	_place_on_circle(_game.player_for(_bot_session), Vector3(-16.0, 0.05, 14.0), 4.0)
 	var me := _client.get("player") as ArenaPlayer
-	_place_on_circle(_game.player_for(me.player_id) if me != null else null, Vector3(15.0, 0.05, -13.0), 2.2)
+	_place_on_circle(_game.player_for(me.player_id) if me != null else null, RUN_CENTRE, 2.2, -45.0, false)
 	_done()
 	return playing and sees
 
 
 ## Puts [param p] (on the server) where the circle it runs is centred on [param centre]:
-## [param radius] metres from it, square to the way its yaw says it is heading. A runner
-## whose yaw grows turns toward (-cos, 0, sin) of it.
-func _place_on_circle(p: ArenaPlayer, centre: Vector3, radius: float) -> void:
+## [param radius] metres from it, square to the way it is heading. [param heading] is the
+## heading's angle off the yaw in degrees (-45 for forward and right held), and
+## [param turns_left] says which side the centre is on: a runner whose yaw grows turns
+## toward (-cos, 0, sin) of its heading, one whose yaw shrinks the other way.
+##
+## [b]The local runner's yaw shrinks.[/b] The mouse moves right, and it holds forward and
+## right. Until 2026-10-12 it was placed as if it turned left, so every window's circle was
+## centred 4.4 m off, under the east ledge's lip and against the east wall: the jumping
+## window's apex hit the ledge's underside, and the "eye" check measured a ceiling bump and
+## a wall slide, which client and server disagree about by a few centimetres, and failed on a
+## correction whenever a loaded machine lined one up with a judged frame.
+func _place_on_circle(p: ArenaPlayer, centre: Vector3, radius: float, heading: float = 0.0,
+		turns_left: bool = true) -> void:
 	if p == null:
 		return
-	var yaw := deg_to_rad(p.controller.state.yaw)
-	var at := centre + Vector3(cos(yaw), 0.0, -sin(yaw)) * radius
+	var h := deg_to_rad(p.controller.state.yaw + heading)
+	var at := centre + Vector3(cos(h), 0.0, -sin(h)) * radius * (1.0 if turns_left else -1.0)
 	p.controller.teleport(at, p.controller.state.yaw, p.controller.state.pitch)
 	p.global_position = at
 
@@ -651,6 +683,11 @@ func _teardown() -> void:
 # --- Drivers ----------------------------------------------------------------
 
 func _early_physics() -> void:
+	if _jumping:
+		if Engine.get_physics_frames() % JUMP_EVERY == 0:
+			Input.action_press(&"dot_fps_jump")
+		else:
+			Input.action_release(&"dot_fps_jump")
 	if _mover != null and _mover_command != null:
 		var _outcome := _mover.simulate_tick(_mover_tick, 1.0 / float(TICK_RATE), _mover_command, DotWeaponCommand.new())
 		_mover_tick += 1
@@ -734,6 +771,8 @@ func _late_process(delta: float) -> void:
 		"physics": physics, "vm": _view_model_offset(p), "others": {},
 		"tick": (_client.get("net") as DotNetManager).clock.tick if _client.get("net") != null else 0,
 		"drift": float((_client.get("net") as DotNetManager).clock.get("_drift_scale")) if _client.get("net") != null else 1.0,
+		"slip": float((_client.get("net") as DotNetManager).clock.get("_slip")) if _client.get("net") != null else 0.0,
+		"slip_rate": float((_client.get("net") as DotNetManager).clock.get("_slip_recovery")) if _client.get("net") != null else 0.0,
 		"alpha": p.get("drawn_alpha"), "frac": Engine.get_physics_interpolation_fraction(),
 		"offset": p.drawn_offset,
 	}
@@ -779,7 +818,7 @@ func _render_tick() -> float:
 
 
 func _begin_window(_unused: float) -> void:
-	_w = {"frames": [], "started": Time.get_ticks_msec(), "last": null}
+	_w = {"frames": [], "started": Time.get_ticks_msec(), "last": null, "tick0": _game.current_tick() if _game != null else 0}
 	var net: DotNetManager = _client.get("net")
 	if net != null:
 		_w["corrections"] = int(net.predictor.get("_corrections_applied"))
@@ -805,6 +844,7 @@ func _server_buffer() -> DotNetInput.Buffer:
 func _end_window() -> Dictionary:
 	var w := _w
 	_w = {}
+	w["tick1"] = _game.current_tick() if _game != null else 0
 	w["seconds"] = float(Time.get_ticks_msec() - int(w["started"])) / 1000.0
 	return w
 
@@ -846,10 +886,20 @@ func _local(w: Dictionary, limit: float = 0.02) -> Dictionary:
 			# Less 15% of the step: after a slip the drawing runs up to a tenth fast or slow
 			# while it is taken up (DotNetClock.render_alpha), and is drawn along the tick
 			# before, whose velocity this is not. A slip not taken up is a whole step.
-			offs.append(maxf(0.0, (Vector3(step.x, 0.0, step.z) - flat * dt).length() - 0.15 * speed * dt))
+			#
+			# [b]And less what the clock does on purpose.[/b] While it gains lead its ticks run
+			# up to 12% short (`_drift_scale` 0.88: the player moves 14% faster in real time)
+			# and a slip is taken up at twice that (`_slip_recovery` 0.27), so the eye runs up
+			# to half as fast again for a few frames by design. Judged against real time alone,
+			# a frame of that on open floor at a run was 2.4-2.9 cm "off" in about one 40->70
+			# window in four; a still or doubled frame is a whole step, which this still is.
+			var clock_share := absf(1.0 / maxf(float(b.get("drift", 1.0)), 0.01) - 1.0)
+			if absf(float(b.get("slip", 0.0))) > 1e-6 or absf(float(a.get("slip", 0.0))) > 1e-6:
+				clock_share += float(b.get("slip_rate", 0.0))
+			offs.append(maxf(0.0, (Vector3(step.x, 0.0, step.z) - flat * dt).length() - (0.15 + clock_share) * speed * dt))
 			if offs[-1] > limit and _verbose:
 				print("      alpha %s frac %.3f offset %s" % [b["alpha"], b["frac"], b["offset"]])
-				print("      local off frame %d: ticks %d drift %.4f dt %.4f physics %d step %s vel %s prev vel %s eye %s" % [i, int(b["tick"]) - int(a["tick"]), b["drift"], dt, b["physics"], step, v, a["vel"], b["eye"]])
+				print("      local off frame %d: ticks %d drift %.4f slip %.3f -> %.3f at %.3f dt %.4f physics %d step %s vel %s prev vel %s eye %s" % [i, int(b["tick"]) - int(a["tick"]), b["drift"], float(a.get("slip", 0.0)), float(b.get("slip", 0.0)), float(b.get("slip_rate", 0.0)), dt, b["physics"], step, v, a["vel"], b["eye"]])
 		if dt > 0.0:
 			turns.append(absf(wrapf(float(b["yaw"]) - float(a["yaw"]), -180.0, 180.0)) / (TURN_RATE * dt))
 	var jumps := 0
@@ -922,6 +972,8 @@ func _others(w: Dictionary, limit: float = 0.02) -> Dictionary:
 			var prev_rt: float = was["render"]
 			if rt < prev_rt - 0.001:
 				back += 1
+				if _verbose:
+					print("      bot render time back at frame %d: %.4f -> %.4f ticks (dt %.4f)" % [i, prev_rt, rt, dt])
 			var track: Dictionary = _track.get(id, {})
 			var t_now: Variant = _truth_at(track, rt)
 			var t_was: Variant = _truth_at(track, prev_rt)
@@ -1006,10 +1058,51 @@ func _check_view_model(w: Dictionary) -> void:
 
 # --- A connected window -------------------------------------------------------
 
+## Both runners stayed on open floor through the window: nothing of the map within
+## [constant CLEAR_HALF_WIDTH] of them or over their heads, by the server's own track. Every
+## other check here judges a frame against one velocity, which a wall or a ceiling breaks;
+## a runner that drifted into one is measuring the wall (see `_place_on_circle`).
+func _check_open_floor(w: Dictionary) -> void:
+	var me: ArenaPlayer = _client.get("player")
+	var touched := PackedStringArray()
+	var ticks := 0
+	for who in [me.player_id if me != null else 0, _bot_session]:
+		var track: Dictionary = _track.get(who, {})
+		for t in range(int(w["tick0"]), int(w["tick1"]) + 1):
+			if not track.has(t):
+				continue
+			ticks += 1
+			var at: Vector3 = track[t]
+			var room := AABB(at + Vector3(-CLEAR_HALF_WIDTH, 0.05, -CLEAR_HALF_WIDTH),
+				Vector3(CLEAR_HALF_WIDTH * 2.0, CLEAR_HEIGHT, CLEAR_HALF_WIDTH * 2.0))
+			for box in _game.map.boxes:
+				if room.intersects(box):
+					touched.append("%s at %s by %s" % ["runner" if who != _bot_session else "bot", at, box])
+					break
+	if _verbose and me != null:
+		var tr: Dictionary = _track.get(me.player_id, {})
+		var lo := Vector3(INF, INF, INF)
+		var hi := -lo
+		var speeds := []
+		for t in range(int(w["tick0"]), int(w["tick1"])):
+			if tr.has(t) and tr.has(t + 1):
+				lo = lo.min(tr[t])
+				hi = hi.max(tr[t])
+				var d: Vector3 = (tr[t + 1] as Vector3) - (tr[t] as Vector3)
+				speeds.append(Vector2(d.x, d.z).length() * TICK_RATE)
+		print("    runner's track: x %.1f..%.1f  z %.1f..%.1f; speed p5 %.1f  p50 %.1f  max %.1f m/s" % [
+			lo.x, hi.x, lo.z, hi.z, _pct(speeds, 0.05), _pct(speeds, 0.5), _pct(speeds, 1.0)])
+	_check(ticks > 100 and touched.is_empty(), "both runners stayed on open floor, clear of walls and ceilings",
+		"%d ticks, %d near the map%s" % [ticks, touched.size(), (": " + touched[0]) if not touched.is_empty() else ""])
+
+
 func _play_window(window: Array) -> void:
 	_section("%s" % window[0])
 	_set_link(window)
 	Engine.max_fps = int(window[1])
+	# Every window starts on its circle, wherever the last one ended (see `_place_on_circle`).
+	var me := _client.get("player") as ArenaPlayer
+	_place_on_circle(_game.player_for(me.player_id) if me != null else null, RUN_CENTRE, 2.2, -45.0, false)
 	_hold_movement(bool(window[6]))
 	_turning = true
 	await _wait(1.5)
@@ -1044,6 +1137,7 @@ func _play_window(window: Array) -> void:
 	if _verbose:
 		print("    interpolator %s; relay %s" % [net.interpolator.describe(), _relay.describe()])
 
+	_check_open_floor(w)
 	var lossy := float(window[2]) > 0.0
 	if bool(window[8]):
 		_check_local(w, 0.03 if lossy else 0.02)
