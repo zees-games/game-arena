@@ -487,6 +487,16 @@ func install_commands(host: Object) -> DotResult:
 
 	var bound := commands.bind(host)
 
+	# The map menu (M), dot-vote's: the ballot's own maps and modes, each said to be which,
+	# changed now through the source (the map director, so every peer follows). Read by
+	# name, because a server on a dot-vote older than the menu has no `map_menu`.
+	var menu_half: Variant = commands.get(&"map_menu")
+	if menu_half is Object:
+		(menu_half as Object).set(&"rows_fn", func(rows: Array) -> Array:
+			for row: Dictionary in rows:
+				row["mode"] = "Mode" if str(row["id"]).begins_with(ArenaVoteSource.MODE_PREFIX) else "Map"
+			return rows)
+
 	if feed != null:
 		feed.command = commands.command_name("vote")
 

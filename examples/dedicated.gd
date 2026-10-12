@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 140
+const CHECKS := 143
 
 var _passed := 0
 var _failed := 0
@@ -102,7 +102,7 @@ func _run() -> void:
 		_test_module_loaded()
 		_test_client_spawn()
 		await _test_services()
-		_test_maps_and_vote()
+		await _test_maps_and_vote()
 		_test_finish_round_waits_for_a_live_round()
 		_test_query()
 		await _test_browser()
@@ -624,6 +624,59 @@ func _test_maps_and_vote() -> void:
 		"dot-vote's commands are on the console, the operator's with the players'",
 		"missing: %s" % ", ".join(absent)
 	)
+
+	# The map menu's server half (M): the maps and the modes of this ballot, each said to be
+	# which; the owner's flag changes the map now through the director (so peers follow),
+	# anybody else gets a vote. Contexts as dot-server makes them for a chat line.
+	var menu_half: Object = module.vote.commands.get("map_menu")
+	_check(menu_half != null and _server.console.find_command("mapmenu") != null
+		and _server.console.find_cvar("sv_map_menu_flag").get_string() == "generic",
+		"the map menu is there, staff-only by default")
+	var menu_player := DotCmdContext.new()
+	menu_player.source = DotCmdContext.Source.CHAT
+	var offered: Dictionary = menu_half.call("offer", menu_player) if menu_half != null else {"maps": []}
+	var rows: Array = offered["maps"]
+	_check(rows.filter(func(r: Dictionary) -> bool: return r["mode"] == "Map").size() > 1
+		and not bool(offered.get("allowed", true)) and bool(offered.get("vote", false)),
+		"a player is offered the maps (and modes), as a vote", str(rows.map(func(r: Dictionary) -> String: return str(r["id"]))))
+	var start_map := "map:%s" % _game.map.id
+	var target := &""
+	for row: Dictionary in rows:
+		if row["mode"] == "Map" and not bool(row["current"]):
+			target = StringName(str(row["id"]))
+			break
+	var staff := DotCmdContext.new()
+	staff.source = DotCmdContext.Source.CHAT
+	staff.permissions = PackedStringArray(["generic"])
+	# The adopted player has no client to say it has the map, and the sync host would wait
+	# out its whole timeout for it (headless_admin's note), so it is off the host for the
+	# change and back on after. Not awaited directly either: a suite that hung on a change
+	# would say nothing at all.
+	var sync_peers := module.maps.sync.peers.duplicate()
+	for peer in sync_peers:
+		module.maps.sync.remove_peer(int(peer))
+	var box: Array = []
+	var run := func() -> void: box.append(await menu_half.call("choose", staff, target))
+	run.call()
+	# Up to half a minute: the sync host waits for this suite's adopted player, who has no
+	# client to say it is ready, before it swaps without them.
+	for _i in 300:
+		if not box.is_empty():
+			break
+		await get_tree().create_timer(0.1).timeout
+	var menu_result: Dictionary = box[0] if not box.is_empty() else {}
+	_check(bool(menu_result.get("ok", false)) and "map:%s" % _game.map.id == String(target),
+		"staff choosing a map changes it on the spot", "%s: %s" % [target, menu_result.get("text", "no answer")])
+	# Back to the map the rest of this suite expects.
+	var back: Array = []
+	var undo := func() -> void: back.append(await menu_half.call("choose", staff, StringName(start_map)))
+	undo.call()
+	for _i in 300:
+		if not back.is_empty():
+			break
+		await get_tree().create_timer(0.1).timeout
+	for peer in sync_peers:
+		module.maps.sync.add_peer(int(peer))
 
 	# A player's `!nominate dm_atrium`, as chat hands it to the console, from the session
 	# the client-spawn section adopted. The ballot's id is `map:dm_atrium`; a command that

@@ -12,6 +12,8 @@ const ArenaMode := preload("arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaMenus := preload("arena_menus.gd")
+const ArenaMaps := preload("arena_maps.gd")
+const ArenaModes := preload("arena_modes.gd")
 const ArenaNetBridge := preload("arena_net_bridge.gd")
 const ArenaPaths := preload("arena_paths.gd")
 const ArenaProjectileView := preload("arena_projectile_view.gd")
@@ -322,6 +324,14 @@ func _build_interface() -> void:
 	# to manage it: pointer lock needs a click in a browser, which only this client knows
 	# about ([method _apply_mouse]), and two owners fighting is a cursor that flickers.
 	game_menu = ArenaMenus.build(self, presentation, browser if listed.ok else null)
+	# M: the maps and the modes (dot-menu's map menu). Solo a choice changes here at once;
+	# connected the server decides, by the owner's `sv_map_menu_flag`, and anybody without it
+	# gets a vote instead (dot-vote's map menu, over this game's ballot). By name, so a client
+	# shell older than the map menu still runs the game without it.
+	if game_menu.has_method(&"use_maps"):
+		var maps: Variant = game_menu.call(&"use_maps", map_menu_rows, change_from_menu)
+		if maps is Object:
+			(maps as Object).set(&"noun", "maps and modes")
 	game_menu.action_requested.connect(func(id: StringName) -> void:
 		if id != ArenaMenus.LEAVE:
 			return
@@ -372,6 +382,7 @@ func _hud_keys() -> void:
 	hud.keys[&"scoreboard"] = table.key_for(ArenaBindings.SCOREBOARD)
 	hud.keys[&"reload"] = table.key_for(ArenaBindings.RELOAD)
 	hud.keys[&"help"] = table.key_for(DotMenuBindings.HELP_ACTION)
+	hud.keys[&"maps"] = table.key_for(&"dot_menu_maps")
 	hud.keys[&"launch"] = table.key_for(launch_action())
 	for i in range(ArenaBindings.SLOTS.size()):
 		hud.keys[StringName("slot_%d" % (i + 1))] = table.key_for(ArenaBindings.SLOTS[i])
@@ -421,6 +432,65 @@ func _slide_on_c() -> bool:
 	if duck.is_empty() or table.stored(duck, presentation.settings) != str(duck["default"]):
 		return false
 	return table.row_using("C", &"bind_duck", presentation.settings).is_empty()
+
+
+# --- Offline ---------------------------------------------------------------
+# --- The map menu (M) ------------------------------------------------------
+
+## Built once: making the catalogue builds every map, the imported ones included.
+var _menu_catalogue: DotMapCatalogue = null
+
+
+## What M lists solo, in the ballot's ids so a server's list reads the same: every map that
+## can host the mode being played (`map:<id>`), then every mode the map being played can host
+## (`mode:<id>`).
+func map_menu_rows() -> Array:
+	var out: Array = []
+	if game == null:
+		return out
+	if _menu_catalogue == null:
+		_menu_catalogue = ArenaMaps.catalogue()
+	var here := game.map.id if game.map != null else &""
+	for def in _menu_catalogue.available():
+		if game.mode != null and not ArenaMaps.supports_mode(def, game.mode):
+			continue
+		out.append({"id": "map:%s" % def.id, "name": def.name_or_id(), "mode": "Map",
+			"detail": "Combat surf map" if bool(def.meta.get("imported", false)) else "", "current": def.id == here})
+	var current_def := _menu_catalogue.get_map(here)
+	for mode in ArenaModes.all():
+		if current_def != null and not ArenaMaps.supports_mode(current_def, mode):
+			continue
+		out.append({"id": "mode:%s" % mode.id, "name": mode.display_name, "mode": "Mode",
+			"detail": mode.description.get_slice("\n", 0), "current": game.mode != null and mode.id == game.mode.id})
+	return out
+
+
+## Solo: a map (`map:<id>`) or a mode on this map (`mode:<id>`), now. The game changes and the
+## level is rebuilt as a server's change would have it rebuilt ([method _on_map_changed]).
+func change_from_menu(id: StringName) -> DotResult:
+	if not _offline:
+		return DotResult.fail(DotError.CODE_STATE, "The server changes the map.")
+	var text := String(id)
+	var map := game.map
+	var mode: ArenaMode = null
+	if text.begins_with("map:"):
+		map = ArenaMap.by_id(StringName(text.substr(4)))
+	elif text.begins_with("mode:"):
+		mode = ArenaModes.by_id(StringName(text.substr(5)))
+		if mode == null:
+			return DotResult.fail(DotError.CODE_INVALID, "There is no mode called '%s'." % text.substr(5))
+		map = ArenaMap.by_id(game.map.id)
+	if map == null:
+		return DotResult.fail(DotError.CODE_INVALID, "There is no map called '%s'." % text)
+	var changed := game.change_map(map, mode)
+	if not changed.ok:
+		return changed
+	if _menu_catalogue == null:
+		_menu_catalogue = ArenaMaps.catalogue()
+	var def := _menu_catalogue.get_map(map.id)
+	if def != null:
+		_on_map_changed(def)
+	return DotResult.success(id)
 
 
 # --- Offline ---------------------------------------------------------------

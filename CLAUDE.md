@@ -75,6 +75,7 @@ Short forms; the reasoning is in the linked file.
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures; the client owns the pointer. [client](docs/client.md#escape-the-pointer-and-the-menu)
 - Every key the client reads is an `ArenaBindings` row read through its action, never a keycode; props modes reuse the Launch and Bash keys; no noclip key (V is push to talk). [client](docs/client.md#keys)
+- M is the map menu (dot-menu's, `dot_menu_maps`): solo `ArenaClient.map_menu_rows()` lists `map:` and `mode:` ids as the ballot does and `change_from_menu()` changes through `ArenaGame.change_map` and rebuilds the level; on a server dot-vote's map menu over this ballot changes through the map director for the owner's `sv_map_menu_flag` and gives anybody else a vote. No row may default to M; `headless_presentation` and `dedicated` check it.
 - Wheel rows are named only on a host dot-ui at API level 2 (`ArenaBindings.wheel_named`). [client](docs/client.md#keys)
 - Typing suspends the sampler as well as swallowing input; the console does it as a menu overlay, so it is built after the menu (`build_console(menu)`). [client](docs/client.md#the-chat-box)
 - Full-screen overlays are sized to the viewport. HUD pieces draw handed values; judge them with `screenshot.sh --glance` at 16:9, 4:3 and 854x480. [client](docs/client.md#the-hud)

@@ -60,6 +60,7 @@ var remaining_override: float = NAN
 var keys: Dictionary = {
 	&"slide": "C", &"launch": "E", &"dash": "Shift", &"jump": "Space",
 	&"scoreboard": "Tab", &"menu": "Esc", &"chat": "Y", &"reload": "R", &"help": "H",
+	&"maps": "M",
 }
 
 ## Seconds until the portraits are read again: a ranked row a few times a second is a
@@ -1180,6 +1181,7 @@ func present_gear() -> void:
 		hints.visible = live
 		hints.show_hints([
 			["Scoreboard", keys[&"scoreboard"]], ["Menu", keys[&"menu"]], ["Help", keys[&"help"]],
+			["Maps", keys[&"maps"]],
 			["Chat", keys[&"chat"]], ["Slide", keys[&"slide"]],
 		])
 

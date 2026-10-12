@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 240
+const CHECKS := 245
 
 var _passed := 0
 var _failed := 0
@@ -85,6 +85,7 @@ func _run() -> void:
 	_test_stock_avatars_differ()
 	await _test_hud_fits_the_frame()
 	_test_hud_makes_room_for_a_ballot()
+	await _test_the_map_menu()
 
 	print("")
 	_check(
@@ -1630,6 +1631,62 @@ func _test_bodies_fall() -> void:
 	player.queue_free()
 	floor_body.queue_free()
 	g.queue_free()
+	_done()
+
+
+## The family's rule since the first play test: M opens the maps and the modes, and solo a
+## choice changes now. A whole offline client, because the change rebuilds its level. The
+## server's half (the owner's flag, the vote) is in `dedicated` and dot-vote's suite.
+func _test_the_map_menu() -> void:
+	_section("M opens the maps and the modes, and solo a choice changes the map")
+	var client := ArenaClient.new()
+	client.force_offline = true
+	add_child(client)
+	for _i in 6:
+		await get_tree().process_frame
+	var menu: DotMenu = client.game_menu
+	var keys: DotMenuBindings = menu.bindings if menu != null else null
+	_check(keys != null and keys.key_for(DotMenuBindings.MAPS_ACTION) == "M" and keys.defaults_on("M").size() == 1,
+		"the map menu is on M, and nothing else in the table is",
+		str(keys.defaults_on("M").map(func(r: Dictionary) -> String: return str(r["label"]))) if keys != null else "no menu")
+	var rows := client.map_menu_rows()
+	_check(rows.filter(func(r: Dictionary) -> bool: return str(r["id"]).begins_with("map:")).size() > 1
+		and rows.any(func(r: Dictionary) -> bool: return str(r["id"]).begins_with("mode:")),
+		"it lists more than one map, and the modes this map can host", str(rows.map(func(r: Dictionary) -> String: return str(r["id"]))))
+	var m := InputEventKey.new()
+	m.physical_keycode = KEY_M
+	m.keycode = KEY_M
+	m.pressed = true
+	menu.close_all()
+	_check(menu.handle_event(m) and menu.picker.is_open(), "M opens the picker")
+	var wanted := &""
+	var key := KEY_NONE
+	for row in range(1, DotMenuPicker.PAGE_SIZE + 1):
+		var it: Variant = menu.picker.at_row(row)
+		if it is Dictionary and str((it as Dictionary)["id"]).begins_with("map:") and not bool((it as Dictionary)["current"]):
+			wanted = StringName(str((it as Dictionary)["id"]).substr(4))
+			key = KEY_0 + row
+			break
+	var digit := InputEventKey.new()
+	digit.physical_keycode = key
+	digit.keycode = key
+	digit.pressed = true
+	var _k := menu.handle_event(digit)
+	for _i in 4:
+		await get_tree().physics_frame
+	_check(wanted != &"" and client.game.map.id == wanted and client._level != null and is_instance_valid(client._level),
+		"choosing a map changes to it now, and the level is rebuilt", "%s, now %s" % [wanted, client.game.map.id])
+	var mode_id := &""
+	for r: Dictionary in client.map_menu_rows():
+		if str(r["id"]).begins_with("mode:") and not bool(r["current"]):
+			mode_id = StringName(str(r["id"]).substr(5))
+			break
+	var changed := client.change_from_menu(StringName("mode:%s" % mode_id))
+	_check(changed.ok and client.game.mode.id == mode_id and client.game.map.id == wanted,
+		"and a mode changes on the same map", "%s: %s" % [mode_id, changed.error.message if not changed.ok else "ok"])
+	remove_child(client)
+	client.free()
+	await get_tree().process_frame
 	_done()
 
 

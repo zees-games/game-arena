@@ -95,6 +95,8 @@ static func make(dot_ui_level: int = -1) -> DotMenuBindings:
 	keys.add(VIEW, &"bind_view", "First or third person, where the server allows it", "F5", "Interface")
 	# H opens help, in every game of the family (dot-menu's `dot_menu_help`).
 	keys.add_help("Interface")
+	# M is the map menu, in every game of the family (dot-menu's `dot_menu_maps`).
+	var _m := keys.add_maps("Interface")
 	return keys
 
 
