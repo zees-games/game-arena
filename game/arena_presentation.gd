@@ -716,9 +716,11 @@ func _build_audio() -> DotResult:
 	# A firefight is the busiest this game gets and thirty-two is what it needs; past
 	# that the pool is holding sounds nobody can pick out of the mix.
 	audio.voices = 32
-	# Measured toward the family's -17 LUFS (dot-audio docs/loudness.md): a 40 s stand-in round
-	# read -21.1 LUFS with the bed, the steps and the limiter in.
-	audio.loudness_trim_db = 4.0
+	# Measured toward the family's -17 LUFS (dot-audio docs/loudness.md) with the local player
+	# driven by tools/loudness_pilot.gd (walking, turning off walls, firing bursts): at 4.0 a
+	# 40 s round read -19.5 LUFS, at 7.5 three rounds read -16.8, -17.6 and -17.2. The earlier
+	# 4.0 came from a stand-in that pushed against the first wall it met.
+	audio.loudness_trim_db = 7.5
 	add_child(audio)
 
 	var res := audio.setup()

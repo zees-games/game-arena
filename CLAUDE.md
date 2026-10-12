@@ -28,7 +28,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | `maps/` | the built-in maps as box lists with their survey, paint and lighting; the combat surf maps' loader (copies of g2gfast's); `maps/imported` is the g2gfast-maps link |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monster and prop scenes, avatar parts (generated), effect scenes, vendored zee art, Kenney's prototype grid and medal icons |
 | `examples/` | the nine suites; `wall_route_driver.gd` drives a map's wall routes |
-| `tools/` | render tools (`screenshot.sh --glance` is the whole HUD), avatar and icon builders, `audio_probe.sh`. [client](docs/client.md#looking-at-it) |
+| `tools/` | render tools (`screenshot.sh --glance` is the whole HUD), avatar and icon builders, `audio_probe.sh`, `loudness_pilot.gd`. [client](docs/client.md#looking-at-it) |
 | `scenes/arena_server.tscn`, `game.yml` | the server scene and the descriptor that travels in the pack |
 
 ## Running and testing
@@ -48,7 +48,7 @@ Short forms; the reasoning is in the linked file.
 
 **Architecture**
 
-- **Footsteps and a bed per map are dot-audio's stock** (`ArenaPresentation.keep_walkers`, grounded by a ray because a mirrored player's controller is never ticked here; `bed_for` by map prefix). Levels are measured with `addons/dot_audio/tools/loudness.sh` (−17 LUFS band, `loudness_trim_db`); stock ids have files, so the stand-in check skips them.
+- **Footsteps and a bed per map are dot-audio's stock** (`ArenaPresentation.keep_walkers`, grounded by a ray because a mirrored player's controller is never ticked here; `bed_for` by map prefix). Levels are measured with `addons/dot_audio/tools/loudness.sh --warmup=6 --fire` (−17 LUFS band, `loudness_trim_db`), which drives the local player through `tools/loudness_pilot.gd`; a run whose `capture pilot:` line shows no walking measured the bots, not the game. Stock ids have files, so the stand-in check skips them.
 - One player id: `player_id` is the session userid, never the peer id. Loadout keys are `"arena-player-%08d"`. [architecture](docs/architecture.md#one-id-space-for-players)
 - Tick order: movement, then shots after everyone moved, then map hurt, then the match. [architecture](docs/architecture.md#order-inside-a-tick)
 - `ArenaMap`'s scene, movement body and trace come from one box list; never build one separately. [architecture](docs/architecture.md#one-description-three-representations)
