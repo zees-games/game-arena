@@ -227,8 +227,8 @@ static func make_rig() -> Node3D:
 ## stored profile hold, and none of that had to change for the body to be drawn differently.
 ## A Kenney body part gives the person that skin's clothes, a Kenney head that skin's face and
 ## hair (and which of the four bodies); a primitive part takes the colour the document tints it,
-## over a stock person seeded by [param player_key]. The crest is not drawn: the people have no
-## mount for it.
+## over a stock person seeded by [param player_key]. The crest is not part of the look: it is a
+## model of its own, drawn on the person's crown by [method crest_of].
 static func look_of(avatar: DotAvatar, player_key: StringName) -> DotHumanoidLook:
 	var look := DotHumanoidLook.stock(_mix(absi(hash(String(player_key)))))
 	if avatar == null or avatar.schema_id != SCHEMA_ID:
@@ -246,6 +246,36 @@ static func look_of(avatar: DotAvatar, player_key: StringName) -> DotHumanoidLoo
 		look.hair = Color(DotHumanoidLook.SITE_SKINS[head][1])
 		look.body = DotHumanoidLook.BODIES["abcdefghijklmnopqr".find(head) % DotHumanoidLook.BODIES.size()]
 	return look
+
+
+## How far above the crown each crest's middle sits, so it stands on the hair rather than
+## through it. Read off a rendered head: the crown mount is the top of the mesh.
+const CREST_LIFT := {&"arena_crest_fin": 0.09, &"arena_crest_ring": 0.08}
+
+
+## The avatar's crest as a model to hang on a person's crown mount (`attachment(&"crest")`),
+## tinted the document's colour; null when the avatar wears none or the part will not load.
+##
+## [b]On the crown, not at a fixed height over the feet[/b]: the mount is on the head bone, so the
+## crest crouches, nods with the aim and shrinks with the head in first person. The rig's fixed
+## `crest` node it was built into before the people stood at standing height whatever the body
+## did, and once the people came in nothing drew the crest at all.
+static func crest_of(avatar: DotAvatar) -> Node3D:
+	if avatar == null or avatar.schema_id != SCHEMA_ID or not avatar.has_slot(SLOT_CREST):
+		return null
+	var part := avatar.part_in(SLOT_CREST)
+	if not CRESTS.has(part):
+		return null
+	var scene := load(ArenaPaths.rebase("res://avatars/%s.tscn" % part)) as PackedScene
+	if scene == null:
+		return null
+	var crest := scene.instantiate() as Node3D
+	crest.name = "Crest"
+	crest.position = Vector3(0.0, float(CREST_LIFT.get(part, 0.08)), 0.0)
+	if crest is GeometryInstance3D:
+		(crest as GeometryInstance3D).set_instance_shader_parameter(
+			&"dot_avatar_tint_0", avatar.colour_of(SLOT_CREST, 0))
+	return crest
 
 
 ## The skin letter of a `arena_<slot>_kenney_<letter>` part, or "".

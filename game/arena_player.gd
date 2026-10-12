@@ -1350,6 +1350,9 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 		"swimming": drawn.mode == swim.mode_id,
 		"climbing": drawn.mode == ladder.mode_id,
 		"alive": is_alive(),
+		# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
+		# reads where this player is aiming.
+		"aim": deg_to_rad(drawn.pitch),
 	})
 
 	var id := mirror_weapon if mirrored else (arsenal.current_def().id if arsenal != null and arsenal.current_def() != null else &"")
@@ -1865,6 +1868,13 @@ func _wear(avatar: DotAvatar) -> bool:
 		figure.queue_free()
 		figure = null
 		return false
+
+	var crest := ArenaAvatars.crest_of(avatar)
+	var crown := figure.attachment(&"crest") if crest != null else null
+	if crown != null:
+		crown.add_child(crest)
+	elif crest != null:
+		crest.free()
 
 	return true
 
