@@ -50,6 +50,7 @@ static func build(map: Object) -> Node3D:
 	if not rig_draws_sky_top():
 		_paint_sky_top(root, lighting)
 
+	_grade(root)
 	if sun != null and sun.shadow_enabled:
 		# One orthogonal shadow map over the whole map rather than four cascades: the
 		# largest built-in map is 64 m across, so one map covers it at a usable resolution,
@@ -58,6 +59,33 @@ static func build(map: Object) -> Node3D:
 		sun.directional_shadow_max_distance = maxf(float(map.extent) * 3.0, 60.0)
 
 	return root
+
+
+## The contrast and colour a built-in map is drawn with, on the rig's environment.
+##
+## [b]This game's grade, not dot-lighting's.[/b] The rig turns a document into light; how
+## punchy the picture is on top is a look, and these flat-painted boxes want more of it
+## than a textured, lightmapped level does. A little contrast and saturation (the
+## renderer's adjustment pass, which both renderers have) so the pastels are colours and
+## the floor is not white, and ambient occlusion where Forward+ can draw it, so every
+## crate and stair sits on the floor instead of floating on it.
+const GRADE_CONTRAST := 1.12
+const GRADE_SATURATION := 1.1
+
+
+static func _grade(root: Node3D) -> void:
+	for node in root.get_children():
+		var world := node as WorldEnvironment
+		if world == null or world.environment == null:
+			continue
+		var env := world.environment
+		env.adjustment_enabled = true
+		env.adjustment_contrast = GRADE_CONTRAST
+		env.adjustment_saturation = GRADE_SATURATION
+		if RenderingServer.get_current_rendering_method() == "forward_plus":
+			env.ssao_enabled = true
+			env.ssao_radius = 1.2
+			env.ssao_intensity = 1.6
 
 
 ## Whether the host's dot-lighting draws a document's `sky_top` itself (API level 2).
@@ -110,9 +138,11 @@ static func profile() -> DotLightProfile:
 	var p := DotLightProfile.web() if OS.has_feature("web") else DotLightProfile.high()
 	p.sun_shadows = true
 	p.sky_below_horizon = true
-	# Full-strength fill: the reference look's shade is light, and a pastel at 0.8 of a
-	# pale ambient reads as a dirty version of itself.
-	p.ambient_energy = 1.0
+	# A fill under the sun, not level with it. It was 1.0 (a shade almost as bright as the
+	# sun side), and with pale paint and a white floor the first play test's frames had no
+	# dark anywhere: nothing to read a shape or a player against. At 0.7 the shade is a
+	# clear step down and a pastel in it still reads as itself, not a dirty version.
+	p.ambient_energy = 0.7
 
 	# [b]The Compatibility renderer has no headroom above white, so the same light is
 	# turned down for it.[/b] Forward+ lights into an HDR buffer and the filmic curve rolls
@@ -123,7 +153,7 @@ static func profile() -> DotLightProfile:
 	# shade of each other. The world is the same; this is what the machine can draw of it.
 	if RenderingServer.get_current_rendering_method() == "gl_compatibility":
 		p.brightness_reference = 700.0
-		p.ambient_energy = 0.62
+		p.ambient_energy = 0.45
 	return p
 
 

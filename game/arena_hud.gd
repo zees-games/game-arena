@@ -4,6 +4,7 @@ extends DotHud
 const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaAwards := preload("arena_awards.gd")
+const ArenaStats := preload("arena_stats.gd")
 const ArenaPaths := preload("arena_paths.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
@@ -93,10 +94,46 @@ var blind_overlay: ColorRect = null
 ## The scope, drawn at full aim with a scoped weapon. Under every widget, over the world.
 var scope: ZeeScopeOverlay = null
 
-## Red at the screen's edge when the followed player is badly hurt. A radial gradient, so
-## no art; strongest at no health, gone above [constant HURT_FROM].
-var hurt_overlay: TextureRect = null
+## Red at the screen's edge when the followed player is badly hurt, and a short pulse of it
+## on every hit. Drawn by a shader per pixel ([constant HURT_SHADER]), so no art and no
+## resolution of its own; strongest at no health, gone above [constant HURT_FROM].
+##
+## [b]A shader, not a gradient texture.[/b] It was a `GradientTexture2D`, which is 64 by 64
+## unless told otherwise, stretched over the whole viewport: Christian's first play test
+## showed the oval in visible pixel steps at 1080p. Computed per pixel there is nothing to
+## stretch, and a little dither keeps the long soft ramp from banding into rings.
+var hurt_overlay: ColorRect = null
 const HURT_FROM := 0.35
+
+## The hit pulse: dot-fx's `hurt_flash` (its strength in [member flash_source]'s
+## `flash_colour`), drawn at the edge rather than over the screen. dot-fx computes the
+## flash and draws nothing; nothing drew it before this, so a hit showed no red at all until
+## health fell under [constant HURT_FROM]. Read through dot-fx so the player's "no flashes"
+## and the three-a-second limit hold. [constant HURT_PULSE_GAIN] maps the flash's peak
+## (0.28) to about [constant HURT_PULSE_MAX] of the edge.
+var flash_source: Object = null
+const HURT_PULSE_GAIN := 2.2
+const HURT_PULSE_MAX := 0.6
+
+## The edge, per pixel. Distance is measured in the screen's own shape (an ellipse touching
+## the edges), so the clear middle is the same share of a 4:3 and a 21:9 frame; `smoothstep`
+## then a square gives a soft start and a deep rim. Alpha is the node's modulate, so the
+## strength is one number the HUD writes and the checks read.
+const HURT_SHADER := """
+shader_type canvas_item;
+uniform vec4 tint : source_color = vec4(0.62, 0.0, 0.02, 0.78);
+uniform float inner = 0.7;
+uniform float outer = 1.32;
+void fragment() {
+	vec2 p = (UV - vec2(0.5)) * 2.0;
+	float d = length(p);
+	float a = smoothstep(inner, outer, d);
+	a = a * a * (1.6 - 0.6 * a);
+	float n = fract(sin(dot(FRAGCOORD.xy, vec2(12.9898, 78.233))) * 43758.5453);
+	a = clamp(a + (n - 0.5) / 96.0, 0.0, 1.0);
+	COLOR = vec4(tint.rgb, tint.a * a);
+}
+"""
 
 ## The launch's key, which is X in a mode where E is the prop tool: the client's to say.
 var launch_key_text: String:
@@ -475,6 +512,42 @@ static func notice_width(frame_width: float) -> float:
 static func notice_top(frame_height: float) -> float:
 	return minf(maxf(182.0, frame_height * 0.27 + 70.0), frame_height * 0.5 - 70.0)
 
+## How far along a challenge is, in the words its stat is counted in.
+##
+## [b]Never the raw counter over the raw target.[/b] Christian's first play test showed
+## "(2/100000)" over the score box: damage dealt against a hundred-thousand target, which
+## read as a debug print. Playing time is seconds and reads as a clock ("0:03 of 10 h");
+## a target of a thousand or more is shortened ("2 of 100k"); a small one stays a count
+## ("3/25"), which is what a player wants to see go up.
+static func progress_text(stat: StringName, value: int, target: int) -> String:
+	if stat == ArenaStats.PLAYTIME_SEC:
+		return "%s of %s" % [_duration(value), _duration(target)]
+	if target >= 1000:
+		return "%s of %s" % [_short_count(value), _short_count(target)]
+	return "%d/%d" % [value, target]
+
+
+static func _short_count(n: int) -> String:
+	if absi(n) >= 1000000:
+		return ("%.1fM" % (n / 1000000.0)).replace(".0M", "M")
+	if absi(n) >= 1000:
+		return ("%.1fk" % (n / 1000.0)).replace(".0k", "k")
+	return str(n)
+
+
+static func _duration(sec: int) -> String:
+	if sec >= 3600 and sec % 3600 == 0:
+		return "%d h" % (sec / 3600)
+	if sec >= 3600:
+		return "%d:%02d h" % [sec / 3600, (sec % 3600) / 60]
+	return "%d:%02d" % [sec / 60, sec % 60]
+
+
+## "1 coin", "5 coins": the count and the noun, agreed (the play test read "+1 COINS").
+static func coins_text(count: int) -> String:
+	return "%d coin" % count if absi(count) == 1 else "%d coins" % count
+
+
 ## The challenge bar at the top: the achievement the player is nearest to, and how near.
 var challenge_label: Label = null
 var challenge_bar: ProgressBar = null
@@ -517,7 +590,10 @@ func present_challenge(live: bool) -> void:
 
 	var a: DotAchievement = _challenges.achievements[index]
 	var target := int(a.requirements[0].value)
-	challenge_label.text = "%s — %s  (%d/%d)" % [a.display_name, a.description.trim_suffix("."), player.challenge_value, target]
+	challenge_label.text = "%s — %s  %s" % [
+		a.display_name, a.description.trim_suffix("."),
+		progress_text(a.requirements[0].stat, player.challenge_value, target),
+	]
 	challenge_bar.max_value = float(target)
 	challenge_bar.value = float(player.challenge_value)
 
@@ -762,22 +838,16 @@ func build(p_game: ArenaGame) -> void:
 	blind_overlay.visible = false
 	add_child(blind_overlay)
 
-	hurt_overlay = TextureRect.new()
+	hurt_overlay = ColorRect.new()
 	hurt_overlay.name = "Hurt"
-	var gradient := Gradient.new()
-	# Clear over the middle two thirds, so it reads as the edge of vision closing in
-	# rather than as a red filter over the screen (the first render was the second).
-	gradient.set_color(0, Color(0.75, 0.0, 0.0, 0.0))
-	gradient.set_color(1, Color(0.75, 0.0, 0.0, 0.7))
-	gradient.add_point(0.72, Color(0.75, 0.0, 0.0, 0.0))
-	var radial := GradientTexture2D.new()
-	radial.gradient = gradient
-	radial.fill = GradientTexture2D.FILL_RADIAL
-	radial.fill_from = Vector2(0.5, 0.5)
-	radial.fill_to = Vector2(1.0, 0.5)
-	hurt_overlay.texture = radial
-	hurt_overlay.stretch_mode = TextureRect.STRETCH_SCALE
-	hurt_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	# Clear over the middle, so it reads as the edge of vision closing in rather than as a
+	# red filter over the screen (the first render was the second).
+	var shader := Shader.new()
+	shader.code = HURT_SHADER
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	hurt_overlay.material = material
+	hurt_overlay.color = Color.WHITE
 	# Top-left anchored and sized to the viewport in `present_body`, like the blind: full-rect
 	# anchors with a size written every frame drew an engine warning per write.
 	hurt_overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -1287,6 +1357,9 @@ func present_body() -> void:
 		if live and player.health != null and player.health.max_health > 0.0:
 			var fraction := player.health.health / player.health.max_health
 			hurt = clampf((HURT_FROM - fraction) / HURT_FROM, 0.0, 1.0)
+		if live and flash_source != null and is_instance_valid(flash_source):
+			var flash: Color = flash_source.get(&"flash_colour")
+			hurt = maxf(hurt, minf(flash.a * HURT_PULSE_GAIN, HURT_PULSE_MAX))
 		hurt_overlay.modulate.a = hurt
 		if hurt > 0.0 and is_inside_tree():
 			# The whole viewport, as the blind does: the HUD sits in the safe area and the
@@ -1339,10 +1412,10 @@ func present_body() -> void:
 	if live and game != null and game.drops != null:
 		count = int(game.drops.coins.get(player.player_id, 0))
 	coins_label.visible = count > 0
-	coins_label.text = "%d  COINS" % count
+	coins_label.text = coins_text(count)
 
 	if _coins_seen >= 0 and count > _coins_seen:
-		popup("+%d  COINS" % (count - _coins_seen), Color(1.0, 0.82, 0.25))
+		popup("+" + coins_text(count - _coins_seen), Color(1.0, 0.82, 0.25))
 	_coins_seen = count
 
 	_advance_popups(get_process_delta_time())

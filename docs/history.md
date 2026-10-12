@@ -125,6 +125,14 @@ The first play test on Windows (bootstrap, solo) died twelve times in ninety sec
 
 Building it found one dot-bot bug: a sound made on the same timestamp as a brain's last think was never heard (a time comparison), so a bot with its back to a shooter died without turning round. Sounds carry a sequence number now.
 
+## A wall the server could not see (2026-10-12)
+
+The first play test respawned in view of the bot that had just killed him, twice in ninety seconds, under a spawn rule that charges 500 for a site an enemy can see. The sight test asked Godot's physics space, and a dedicated server or a headless game has no built-in map there: the level is analytic and only a client builds bodies. Every site was "seen" by every enemy, the penalty was charged to all of them alike, and it decided nothing. It asks the map's trace now, the one shots use, and `headless_match` checks a wall hides a site in a headless game. Fixing it changed `headless_bots`: one-on-one with hidden respawns there are fewer fights a minute, and at 300 s hard and medium swapped places on one seed, so the suite plays 600 s. The lesson: any question about the level asked on a server goes to the map's trace or movement body, never the physics space.
+
+## Players walked through each other (2026-10-12)
+
+`mp_solidplayers` is the family's cvar, and every other first-person game makes it bite with a capsule in the physics space that the motor's physics sweep stops at. Arena's motor sweeps the map's box list on the server and on every predicting client, so that capsule reached neither, and bots walked through the player, their faces filling the screen. The other players are boxes in the movement body's sweep now (`arena_solid_body.gd`), and `headless_net` walks one player into another on a server with a predicting client, both ways round the cvar.
+
 ## Still open, unexplained
 
 - `dedicated` exited with 23 ObjectDB instances and 6 resources leaked (2026-09-23), as many before the message self-preloads were removed as after: too few to be the whole script graph, so a different shape from the one mg-buses-from-hell had. Not re-measured since.

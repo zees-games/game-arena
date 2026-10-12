@@ -883,9 +883,30 @@ func _friend_positions(team: StringName, key: String = "") -> Array:
 
 
 ## Whether an enemy standing at [param from] can see a site: eye height to head height, walls
-## and props in the way.
+## in the way.
+##
+## [b]Through the map's own trace, the one shots use[/b] (`combat.trace`: the box list on a
+## built-in map, the brushes on an imported one). It asked Godot's physics space, which on
+## a dedicated server, and in any headless game, holds no built-in map at all: the level
+## is analytic there and only a client builds bodies. So every site was "seen" by every
+## enemy, `sight_penalty` charged them all alike and decided nothing, and the first play
+## test respawned in view of the bot that had just killed him. Props are not in the trace;
+## a prop is not cover a spawn should count on. The physics query stays as the fallback for
+## a game with no combat yet.
 func _can_see_site(from: Vector3, to: Vector3) -> bool:
+	var eye := from + Vector3(0, 1.6, 0)
+	var head := to + Vector3(0, 1.6, 0)
+	var trace: DotTrace = game.combat.trace if game != null and game.combat != null else null
+
+	if trace != null:
+		var span := head - eye
+		var length := span.length()
+		if length < 0.01:
+			return true
+		var hit := trace.ray(eye, span / length, length)
+		return not hit.ok() or hit.distance >= length - 0.05
+
 	if physics == null or not is_inside_tree():
 		return false
 
-	return physics.query().line_of_sight_3d(get_viewport().find_world_3d(), from + Vector3(0, 1.6, 0), to + Vector3(0, 1.6, 0))
+	return physics.query().line_of_sight_3d(get_viewport().find_world_3d(), eye, head)

@@ -23,25 +23,28 @@ const ArenaPaths := preload("../game/arena_paths.gd")
 ## lines, tinted per material. Tinting one light texture keeps the grid identical on every
 ## surface, which is what lets the grid measure distance the same everywhere.
 
-## The pastels. Albedo, sRGB; the grid texture under them is about 0.82 grey, so these
-## are chosen bright and land a step darker.
-const LAVENDER := Color(0.80, 0.70, 1.00)
-const MINT := Color(0.58, 0.96, 0.78)
-const PINK := Color(1.00, 0.66, 0.84)
-const BUTTER := Color(1.00, 0.92, 0.52)
-const SKY := Color(0.60, 0.82, 1.00)
+## The zone colours. Albedo, sRGB; the grid texture under them is about 0.82 grey, so they
+## land a step darker. Saturated pastels rather than pale ones: the first play test's
+## frames were near white everywhere (pale paint, a white floor, a full ambient), and a
+## player in them had nothing to stand out against.
+const LAVENDER := Color(0.62, 0.48, 0.96)
+const MINT := Color(0.30, 0.84, 0.60)
+const PINK := Color(0.98, 0.50, 0.72)
+const BUTTER := Color(1.00, 0.80, 0.28)
+const SKY := Color(0.36, 0.64, 0.98)
 ## A zone that is not a compass side: dm_atrium's north gallery, the wall-run ledges. Cool on
 ## purpose: it lies in the north wall's shade, and the warm pastels tried there (a peach, a
 ## coral) went brown under the cool ambient in both renderers, where this stays a pastel.
-const AQUA := Color(0.48, 0.90, 0.90)
+const AQUA := Color(0.24, 0.76, 0.80)
 
 ## Cover. Saturated where the zones are soft, and never one of them.
-const ACCENT := Color(1.00, 0.78, 0.22)
+const ACCENT := Color(1.00, 0.62, 0.10)
 ## Cover inside a butter-yellow zone, where the yellow accent would vanish.
-const ACCENT_ALT := Color(1.00, 0.45, 0.58)
+const ACCENT_ALT := Color(0.94, 0.30, 0.42)
 
-## The ground: near white with a cool cast, so the sun reads warm on it.
-const GROUND := Color(0.97, 0.97, 1.00)
+## The ground: a mid cool grey, so the sun reads warm on it and a player stands out
+## against it. It was near white, which was most of what read as washed out.
+const GROUND := Color(0.74, 0.76, 0.84)
 
 ## Compass sides, for a box no named zone holds. The perimeter wall on each side takes the
 ## same colour, so the wall behind a fight says which side of the map it is.
@@ -52,10 +55,10 @@ const WEST := PINK
 const CENTRE := BUTTER
 
 ## How far a walkway slab is paled toward white.
-const SLAB_PALE := 0.45
+const SLAB_PALE := 0.3
 ## How far a perimeter wall is paled: it fills most of every frame and at full strength
 ## one colour drowns the rest.
-const WALL_PALE := 0.25
+const WALL_PALE := 0.12
 
 const GRID_PATH := "res://assets/prototype/grid.png"
 const TILES_PATH := "res://assets/prototype/tiles.png"

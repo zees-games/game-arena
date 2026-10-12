@@ -31,8 +31,10 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 
 const TICK_RATE := 64
 
-## Game seconds per preset.
-const SECONDS := 300.0
+## Game seconds per preset. 600 since the respawn started hiding from the killer (a spawn
+## an enemy can see is charged in a headless game too): one-on-one, that means fewer fights
+## per minute, and at 300 s hard and medium swapped places on one seed (1.25 against 1.37).
+const SECONDS := 600.0
 
 ## The bot and the reference player's session ids.
 const BOT := 1
@@ -44,6 +46,7 @@ const REFERENCE := 2
 ## and loses more; hard is a good player who wins most of them; nightmare is beyond that.
 ##
 ## Measured when the bands were set, 300 s each: easy 0.45, medium 1.20, hard 1.72, nightmare 2.75.
+## With hidden respawns, 600 s each: easy 0.62, medium 1.42, hard 1.67, nightmare 2.91.
 const KD_BANDS := {
 	"easy": [0.0, 0.7],
 	"medium": [0.5, 1.6],

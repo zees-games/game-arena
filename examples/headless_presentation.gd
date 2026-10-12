@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 272
+const CHECKS := 275
 
 var _passed := 0
 var _failed := 0
@@ -2239,6 +2239,19 @@ func _test_criticals_and_the_body() -> void:
 	player.health.health = player.health.max_health
 	hud.present_body()
 	_check(hud.hurt_overlay.modulate.a == 0.0, "and healthy, it does not")
+	# Per pixel, never a stretched texture: the play test's edge was a 64-pixel gradient
+	# blown up to the screen, in visible steps.
+	_check(hud.hurt_overlay.material is ShaderMaterial,
+		"the red edge is drawn by a shader, not a stretched texture")
+
+	# The play test's "+1 COINS" and "(2/100000)".
+	_check(ArenaHud.coins_text(1) == "1 coin" and ArenaHud.coins_text(5) == "5 coins",
+		"one coin is a coin (%s, %s)" % [ArenaHud.coins_text(1), ArenaHud.coins_text(5)])
+	var damage := ArenaHud.progress_text(&"arena.damage_dealt", 2, 100000)
+	var hours := ArenaHud.progress_text(&"arena.playtime_sec", 3, 36000)
+	var kills := ArenaHud.progress_text(&"arena.kills", 11, 100)
+	_check(damage == "2 of 100k" and hours == "0:03 of 10 h" and kills == "11/100",
+		"a challenge's progress reads in its own units (%s; %s; %s)" % [damage, hours, kills])
 
 	hud.present_body()
 	_check(hud.abilities.visible and hud.abilities.line(&"launch").contains("LAUNCH"),
@@ -2272,7 +2285,7 @@ func _test_criticals_and_the_body() -> void:
 	player.challenge = int(picked[0])
 	player.challenge_value = int(picked[1])
 	hud.present_challenge(true)
-	_check(hud.challenge_label.visible and hud.challenge_label.text.contains("(11/") and hud.challenge_bar.value == 11.0,
+	_check(hud.challenge_label.visible and hud.challenge_label.text.contains("11/100") and hud.challenge_bar.value == 11.0,
 		"and the HUD draws it with a bar (%s)" % hud.challenge_label.text)
 	player.challenge = -1
 	hud.present_challenge(true)

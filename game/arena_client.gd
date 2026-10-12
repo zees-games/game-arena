@@ -311,6 +311,10 @@ func _build_interface() -> void:
 	hud.name = "Hud"
 	add_child(hud)
 	hud.build(game)
+	# The hit pulse at the screen's edge is dot-fx's hurt flash, drawn: so it obeys the
+	# player's "no flashes" and the flash rate limit like every other flash.
+	if presentation != null:
+		hud.flash_source = presentation.fx
 
 	# The server browser: the one page that is about something other than this game. Built
 	# whether or not this client is connected, because looking for a server is what you do

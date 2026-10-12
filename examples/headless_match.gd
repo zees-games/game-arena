@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 588
+const CHECKS := 591
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1558,6 +1558,7 @@ func _test_ffa_spawn_sides() -> void:
 		"%s / %s" % [str(to_team.error), str(to_ffa.error)]
 	)
 	_ffa_spawn_scenario(game, "after a team mode")
+	_spawn_sight_scenario(game)
 
 	game.queue_free()
 	remove_child(game)
@@ -1637,6 +1638,91 @@ func _ffa_spawn_scenario(game: ArenaGame, when: String) -> void:
 		picked == "twelve_from_enemies",
 		"and furthest-from-enemies avoids the spawn 2 m from %d for one 12 m from two "
 			% friend + "enemies",
+		"picked '%s' %s" % [picked, "" if chosen.ok else str(chosen.error)]
+	)
+
+
+## A wall hides a spawn from an enemy in a headless game, and the director takes the hidden
+## site over an open one as far away. Until 2026-10-12 the sight test asked Godot's physics
+## space, which holds no built-in map on a dedicated server or a headless game, so every
+## site was seen, the penalty charged them all alike, and the first play test respawned in
+## view of his killer.
+func _spawn_sight_scenario(game: ArenaGame) -> void:
+	var stack := game.player_stack
+	var map := game.map
+	var trace := map.shot_trace()
+	var floor_y := map.floor_y
+	var inside := func(at: Vector3) -> bool:
+		for box: AABB in map.boxes:
+			if box.grow(0.3).has_point(at + Vector3(0, 0.5, 0)) or box.grow(0.3).has_point(at + Vector3(0, 1.6, 0)):
+				return true
+		return false
+	var clear := func(a: Vector3, b: Vector3) -> bool:
+		var span := (b - a)
+		var hit := trace.ray(a + Vector3(0, 1.6, 0), span.normalized(), span.length())
+		return not hit.ok()
+
+	# A wall: a tall box with standing room on both sides of it along x, and an open
+	# site the same distance from the enemy on its own side.
+	var enemy := Vector3.ZERO
+	var hidden := Vector3.ZERO
+	var open := Vector3.ZERO
+	var found := false
+	for box: AABB in map.boxes:
+		if box.size.y < 3.0 or box.position.y > floor_y + 0.5 or minf(box.size.x, box.size.z) < 0.8:
+			continue
+		var z := box.get_center().z
+		var a := Vector3(box.position.x - 2.0, floor_y, z)
+		var b := Vector3(box.end.x + 2.0, floor_y, z)
+		var reach := b.x - a.x
+		for sign in [1.0, -1.0]:
+			var c := a + Vector3(0, 0, sign * reach)
+			if inside.call(a) or inside.call(b) or inside.call(c):
+				continue
+			if absf(a.x) > map.extent or absf(b.x) > map.extent or absf(c.z) > map.extent:
+				continue
+			if clear.call(a, b) or not clear.call(a, c):
+				continue
+			enemy = a
+			hidden = b
+			open = c
+			found = true
+			break
+		if found:
+			break
+
+	if not _check(found, "%s has a wall with standing room either side of it" % String(map.id)):
+		return
+
+	_check(
+		not stack._can_see_site(enemy, hidden) and stack._can_see_site(enemy, open),
+		"headless, a wall hides a spawn from an enemy and open floor does not (%s / %s from %s)"
+			% [str(hidden), str(open), str(enemy)]
+	)
+
+	# Everybody but the respawner and one enemy out of the way, far below the map, where
+	# the trace's floor hides them from both sites.
+	_stand(game, 901, enemy)
+	_stand(game, 902, Vector3(0, -500, 0))
+	_stand(game, 903, Vector3(0, -500, 0))
+	_stand(game, 900, Vector3(0, -500, 0))
+	var saved_mode := stack.spawns.rules.mode
+	var saved_floor := stack.spawns.rules.minimum_enemy_distance
+	stack.spawns.rules.mode = DotSpawnRules.Mode.SAFEST
+	stack.spawns.rules.minimum_enemy_distance = 0.0
+	stack.spawns.clear_sites()
+	# The open site first, so a tie would pick it: only the sight penalty separates them.
+	stack.spawns.add_site(DotSpawnSite.point(&"open", open))
+	stack.spawns.add_site(DotSpawnSite.point(&"behind_the_wall", hidden))
+	var chosen := stack.choose_spawn(900)
+	var picked := String((chosen.value as DotSpawnChoice).site.id) if chosen.ok else ""
+	stack.spawns.rules.mode = saved_mode
+	stack.spawns.rules.minimum_enemy_distance = saved_floor
+	stack.refresh_spawns()
+
+	_check(
+		picked == "behind_the_wall",
+		"and of two sites as far from the enemy, the director picks the one it cannot see",
 		"picked '%s' %s" % [picked, "" if chosen.ok else str(chosen.error)]
 	)
 

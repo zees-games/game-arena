@@ -1079,10 +1079,28 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 				var where := Transform3D(Basis.IDENTITY, Vector3(wall.x, map.floor_y, wall.z) - aim * 2.0)
 				presentation.present(0.016, eye, aim)
 				presentation.on_died(where)
-				for particles in presentation.fx.find_children("Gibs", "CPUParticles3D", true, false):
+				# The burst's two emitters (blood drops and a mist; it was one of red cubes).
+				for particles in presentation.fx.find_children("*", "CPUParticles3D", true, false):
+					if not (particles.name in [&"Drops", &"Mist"]):
+						continue
 					(particles as CPUParticles3D).speed_scale = 0.2
 					(particles as CPUParticles3D).restart(),
 			"wait": 4,
+		},
+		{
+			# The same death from four metres, where a player who was nearby sees it: what the
+			# burst looks like, not where it is.
+			"name": "%s_fx_death_near" % String(id),
+			"from": wall - aim * 6.0 + side * 1.5 + Vector3.UP * 0.4,
+			"at": wall - aim * 2.0 + Vector3.UP * 1.0,
+			"arm": func() -> void:
+				var where := Transform3D(Basis.IDENTITY, Vector3(wall.x, map.floor_y, wall.z) - aim * 2.0)
+				presentation.on_died(where)
+				for particles in presentation.fx.find_children("*", "CPUParticles3D", true, false):
+					if particles.name in [&"Drops", &"Mist"]:
+						(particles as CPUParticles3D).speed_scale = 0.2
+						(particles as CPUParticles3D).restart(),
+			"wait": 6,
 		},
 	]
 
