@@ -28,6 +28,10 @@ A surface with a texture draws it; anything else draws `ArenaMap.dev_texture`, o
 
 **Arena needs dot-player-controller v0.1.5 or later** (in client shell 20261009-1627 and after): `DotFpsFlatBody.rest_contact` used to push a player out of a box along its deepest axis, and with the 512 m extent's quantisation a client slid 2.8 m along a wall during a launch the server made straight up.
 
+## Bots route over a mesh baked from the brushes
+
+The navigation graph `ArenaNpcs.nav_for` lays is a grid over a box list, which an imported map does not have, so `ArenaBots.World.route` asks dot-bot's `DotBotNav` instead: baked from `collision_root` with the body's radius, standing height and step, once per map, on the first route a bot asks for. It bakes with `bake_in_background`, because the two default surf maps took 2.2 and 2.8 s against a map change of 30 to 130 ms; a coarser cell only brought that to 0.5 s. Until it lands `route` answers empty and bots walk straight, as they did before. A combat surf map is two halves joined by ramps and drops, which a walking mesh does not hold: a route to the far half ends at the edge of the near one and the brain walks straight on from there. `headless_imported`'s "bots route round the brushes" section checks every leg from one spawn to every other is clear, the near half is reached in full and the far half's routes end nearer than they start. Because the mesh lands when the machine finishes it, bots on an imported map are not deterministic run to run; built-in maps still are.
+
 ## Spawns and teleports are settled at load
 
 Mapper spawns and pit destinations are often inside solid, and the motor pushes out at most a step a tick, so a player rose through the floor. `ArenaMap.settle_spawns` lifts each one in 5 cm steps until a standing hull is clear, up to 2 m, before `_build_match` makes spawn points of them.

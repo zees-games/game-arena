@@ -1,6 +1,7 @@
 {
   "format": 1,
   "addons": {
+    "dot_bot": 2,
     "dot_loadout": 1,
     "dot_menu": 5,
     "dot_ui": 4,

@@ -28,7 +28,10 @@ extends RefCounted
 ## view the brain chose, and switches back to what it held -- the same presses a person makes.
 ##
 ## [b]Deterministic per bot[/b]: the brain's randomness is seeded from the bot's id, and its
-## clock is the game's tick, so two runs of the same inputs play the same bots.
+## clock is the game's tick, so two runs of the same inputs play the same bots. Not on an
+## imported map, whose routes start when its background bake lands ([method World._nav_for_map]).
+
+const CHANNEL := "arena.bots"
 
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
@@ -86,6 +89,10 @@ class World:
 	## built here on a built-in map when it does not, none on an imported map.
 	var _graph: DotNpcNavGraph = null
 	var _graph_map: Object = null
+	## An imported map's walkable mesh, baked from its brushes in the background, and the map
+	## it is for. See [method _nav_for_map].
+	var _nav: DotBotNav = null
+	var _nav_map: Object = null
 
 	func _init(p_game: Object) -> void:
 		game = p_game
@@ -150,13 +157,63 @@ class World:
 			out.append(spawn.origin)
 		return out
 
-	## The corners of a way from [param from] to [param to] over the navigation graph; empty
-	## (walk straight) on an imported map, off the graph, or with no way.
+	## The corners of a way from [param from] to [param to]: over the navigation graph on a
+	## built-in map, over the mesh baked from the brushes on an imported one; empty (walk
+	## straight) off either, with no way, or while an imported map's mesh is still baking.
 	func route(from: Vector3, to: Vector3) -> PackedVector3Array:
+		var nav := _nav_for_map()
+		if nav != null:
+			return nav.path(from, to)
 		var graph := _graph_for_map()
 		if graph == null:
 			return PackedVector3Array()
 		return graph.find_smooth_path(from, to, -1.0, true)
+
+	## The mesh for an imported map, the bake started on the first route asked on it; null on a
+	## built-in map.
+	##
+	## [b]Not the graph.[/b] The graph is laid over a box list, and an imported map's solid is
+	## hundreds of convex brushes with ramps and ledges at every height, so its bots walked
+	## straight at each other through the walls. dot-bot's [DotBotNav] bakes what a body can
+	## stand on from those brushes ([member ArenaMap.collision_root], on every machine that
+	## simulates). [b]In the background[/b], because the two default surf maps took 2 to 3 s
+	## to bake against a tenth of a second for the whole map change: bots walk straight for
+	## those seconds and route after.
+	func _nav_for_map() -> DotBotNav:
+		var map: Variant = game.get("map")
+		if not (map is Object) or not (map as Object).has_method(&"is_imported") or not bool((map as Object).call(&"is_imported")):
+			return null
+		if _nav != null and _nav_map == map:
+			return _nav
+		# An older shell's dot-bot has no background bake, and baking in the tick is seconds:
+		# its bots walk straight, as they did before.
+		if DotAddonApi.build_level("dot_bot") < 3:
+			return null
+		var root: Variant = (map as Object).get("collision_root")
+		if not (root is Node3D) or not (root as Node3D).is_inside_tree():
+			return null
+		if _nav != null:
+			_nav.clear()
+		_nav = DotBotNav.new()
+		_nav_map = map
+		var body := _body_tunables()
+		var started := _nav.bake_in_background(root, {"radius": body.radius, "height": body.stand_height, "climb": body.step_height})
+		if not started.ok:
+			DotLog.warn(CHANNEL, "bots cannot route on this map", {"map": str((map as Object).get("id")), "error": started.error.message})
+		return _nav
+
+	## Whether an imported map's mesh is still baking; false on a built-in map or once landed.
+	func is_route_pending() -> bool:
+		return _nav != null and _nav_map == game.get("map") and _nav.is_baking()
+
+	## A body as the map moves it: a live player's, or the arena's own.
+	func _body_tunables() -> DotFpsTunables:
+		for p: Object in game.call("players"):
+			var controller: Variant = p.get("controller")
+			var tunables: Variant = (controller as Object).get("tunables") if controller is Object else null
+			if tunables is DotFpsTunables:
+				return tunables
+		return ArenaPlayer.arena_tunables()
 
 	func _graph_for_map() -> DotNpcNavGraph:
 		var map: Variant = game.get("map")

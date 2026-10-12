@@ -8,6 +8,7 @@ const ArenaModes := preload("../game/arena_modes.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
+const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
@@ -66,8 +67,8 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 13
-const CHECKS := 71
+const SECTIONS := 14
+const CHECKS := 74
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -108,6 +109,7 @@ func _run() -> void:
 
 	await _test_spawns_on_the_floor()
 	await _test_deathmatch()
+	await _test_bot_routes()
 	_test_surf_movement()
 	_test_ramp()
 	_test_pits()
@@ -539,6 +541,58 @@ func _commands_for_tick(tick: int) -> Dictionary:
 
 
 # --- Surf movement -------------------------------------------------------------
+
+func _test_bot_routes() -> void:
+	_section("bots route round the brushes, from a mesh baked off the tick")
+
+	# The deathmatch above asked for routes, so the bake started there; it lands on a later
+	# frame. Armed by returning null from ArenaBots.World._nav_for_map (routes empty, as before).
+	var world := ArenaBots.world_for(_game)
+	var spawns: Array[Transform3D] = _game.map.spawns
+	var a := spawns[0].origin
+	var b := a
+	for spawn in spawns:
+		if spawn.origin.distance_to(a) > b.distance_to(a):
+			b = spawn.origin
+	var route := world.route(a, b)
+	var frames := 0
+	while world.is_route_pending() and frames < 1200:
+		await get_tree().process_frame
+		frames += 1
+	route = world.route(a, b)
+	_check(not world.is_route_pending() and route.size() >= 2,
+		"the mesh lands and gives a route between spawns %.0f m apart (%d corners, %d frames waited)" % [a.distance_to(b), route.size(), frames])
+
+	# From that spawn to every other: every leg clear at knee height. A combat surf map is two
+	# halves joined by ramps and drops, which a walking mesh does not hold, so a route to the
+	# far half ends at the edge of this one (the bot walks straight on from there); the near
+	# half is reached in full.
+	var trace := _game.combat.trace
+	var clear := 0
+	var reached := 0
+	var furthest := 0.0
+	var short_but_closer := 0
+	for spawn in spawns:
+		if spawn.origin == a:
+			continue
+		var way := world.route(a, spawn.origin)
+		var ok := way.size() >= 2
+		var from := a
+		for corner in way:
+			ok = ok and trace.line_of_sight(from + Vector3.UP * 0.5, corner + Vector3.UP * 0.5)
+			from = corner
+		clear += 1 if ok else 0
+		if way.size() >= 2 and way[way.size() - 1].distance_to(spawn.origin) < 1.0:
+			reached += 1
+			furthest = maxf(furthest, a.distance_to(spawn.origin))
+		elif way.size() >= 2 and way[way.size() - 1].distance_to(spawn.origin) < a.distance_to(spawn.origin):
+			short_but_closer += 1
+	_check(clear == spawns.size() - 1,
+		"a route to every other spawn, every leg clear of the brushes (%d of %d)" % [clear, spawns.size() - 1])
+	_check(reached > 0 and furthest > 5.0 and reached + short_but_closer == spawns.size() - 1,
+		"its own half reached in full (%d spawns, the furthest %.0f m), the far half's routes end nearer than they start (%d)" % [reached, furthest, short_but_closer])
+	_done()
+
 
 func _test_surf_movement() -> void:
 	_section("the surf air control is on here, off on a built-in map, and on again")

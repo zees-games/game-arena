@@ -4,7 +4,7 @@ What this game does not do yet, each with where the detail is. Each is unfinishe
 
 - **dot-game.** The module extends `DotModule` and `ArenaServices` is its own, not `DotGameModule` / `DotGameServices`. Not yet converted; dot-game's CLAUDE.md names arena as the one to convert first.
 - **Delivering the combat surf maps**: code done; the packs need publishing from g2gfast-maps, each author's permission confirming, and naming in `cfg/content.yml`. [imported](imported-maps.md#delivered-maps)
-- **Bots on an imported map** walk straight between spawns (the navigation graph is built from a built-in map's boxes; an imported map's brushes have none yet), so on a surf map they walk into its walls until they see somebody. **Server bots** buy or choose nothing and are not a separate count in the query answer. [netcode](netcode.md#bots)
+- **Server bots** buy or choose nothing and are not a separate count in the query answer. [netcode](netcode.md#bots)
 - **Monsters do not animate**: the figure stands while the monster moves. [horde](horde.md#figures)
 - **Coins** do not feed the match score or a power-up meter and are not a dot-stats stat. **Challenges** (a dot-achievements progress bar) are not built. [modes](modes.md#coins-out-of-a-body)
 - **Pickups in the world**: the map places none (only what a critical kill drops). A level-design decision, not a wiring one.

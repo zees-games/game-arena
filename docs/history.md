@@ -133,6 +133,10 @@ The first play test respawned in view of the bot that had just killed him, twice
 
 `mp_solidplayers` is the family's cvar, and every other first-person game makes it bite with a capsule in the physics space that the motor's physics sweep stops at. Arena's motor sweeps the map's box list on the server and on every predicting client, so that capsule reached neither, and bots walked through the player, their faces filling the screen. The other players are boxes in the movement body's sweep now (`arena_solid_body.gd`), and `headless_net` walks one player into another on a server with a predicting client, both ways round the cvar.
 
+## A route through a crate's corner (2026-10-12)
+
+`headless_bots` failed "the world routes between spawns … every leg clear" on all four presets, and bisecting arena, dot-bot and the people commits found nothing: fresh clones of every committed head passed. The failure was an uncommitted change in the shared dot-npc checkout, a native A* that breaks equal-cost ties the other way. Its path was as short as the old one, but dot-npc's smoother then cut the first leg through the corner of dm_box's east top crate: a probe inside a grid cell the builder had removed snapped to the nearest point left, across the corner, and the hop to it was a real, clear diagonal edge, so `can_walk_straight` passed it. The check measured the right thing (a knee-height ray through a box is a bot walking into it); the smoother was wrong, and only the old tie-break had hidden it. The fix is dot-npc's: `can_walk_straight` refuses a probe further than 0.75 of a grid cell from every point, which is a probe in a removed cell. When a suite fails at HEAD and the commits do not explain it, look at `git status` in every linked addon first.
+
 ## Still open, unexplained
 
 - `dedicated` exited with 23 ObjectDB instances and 6 resources leaked (2026-09-23), as many before the message self-preloads were removed as after: too few to be the whole script graph, so a different shape from the one mg-buses-from-hell had. Not re-measured since.

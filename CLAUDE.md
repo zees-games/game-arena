@@ -121,6 +121,7 @@ Short forms; the reasoning is in the linked file.
 - An imported map is lit from its manifest's `lighting` (`imported_profile`, a stock tier); a built-in map with dot-lighting's `painted()`, so the pack asks for dot-lighting 3. [imported](docs/imported-maps.md#lit-from-the-manifest), [maps](docs/maps.md#colour-and-light)
 - A guard on a host addon's level (`DotAddonApi.build_level`) needs that addon in `requires.floor.json` at the older path's level, or an older shell refuses the pack. [client](docs/client.md#keys)
 - An imported map's solid is in the tree on every machine before any player is bodied; its spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
+- Bots route on an imported map over a `DotBotNav` baked from its brushes in the background (never in the tick: 2 to 3 s); empty until it lands. [imported](docs/imported-maps.md#bots-route-over-a-mesh-baked-from-the-brushes)
 - Map mechanics run inside the simulated tick on both ends; pushes are stateless; swim and ladder modes are registered on every map. [imported](docs/imported-maps.md#the-maps-own-mechanics)
 - Arena needs a client shell with dot-player-controller v0.1.5 or later, and with the wall moves and `DotFpsViewMotion` (`arena_player.gd` names them). [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 
