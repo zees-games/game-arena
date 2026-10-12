@@ -7,6 +7,7 @@ const ArenaContent := preload("arena_content.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaLadderMode := preload("../maps/arena_ladder_mode.gd")
 const ArenaMapMechanics := preload("../maps/arena_map_mechanics.gd")
+const ArenaSolidBody := preload("arena_solid_body.gd")
 
 ## One player: movement, weapons, health and hitboxes, assembled.
 ##
@@ -296,6 +297,23 @@ class HeadlessController extends DotFpsController:
 		return flat_body
 
 
+## The other players' standing hulls this player's sweeps stop at (`Array[AABB]`, its own
+## left out; empty while `mp_solidplayers` is 0). Set by the game that holds the player
+## ([method ArenaGame.solid_hulls_for]); unset, nobody is solid to this player. Read through
+## [method _solid_hulls] by the movement body ([code]arena_solid_body.gd[/code]), so a game
+## that sets it after the body was built still reaches it.
+var solid_hulls_fn: Callable = Callable()
+
+
+func _solid_hulls() -> Array:
+	return solid_hulls_fn.call(player_id) if solid_hulls_fn.is_valid() else []
+
+
+## The map's movement body, wrapped so the other players' hulls stop its sweeps.
+func _movement_body(of_map: ArenaMap) -> DotFpsBody:
+	return ArenaSolidBody.new().wrap(of_map.movement_body(), _solid_hulls)
+
+
 ## Builds the whole player. Call before adding to the tree.
 func setup(p_mode: Mode, map: ArenaMap, id: int, name_text: String = "") -> void:
 	mode = p_mode
@@ -329,7 +347,7 @@ func _build_controller() -> void:
 		var headless := HeadlessController.new()
 		# The map's own backend: its boxes for a built-in map, the physics space for an
 		# imported one (see `ArenaMap.movement_body`).
-		headless.flat_body = _map.movement_body()
+		headless.flat_body = _movement_body(_map)
 		controller = headless
 	else:
 		controller = DotFpsController.new()
@@ -808,7 +826,7 @@ func rebind_map(new_map: ArenaMap) -> void:
 		return
 
 	if controller is HeadlessController:
-		(controller as HeadlessController).flat_body = new_map.movement_body()
+		(controller as HeadlessController).flat_body = _movement_body(new_map)
 
 	_use_map_volumes()
 

@@ -25,6 +25,10 @@ The client uses `Mode.HEADLESS` collision, on a client with a screen. `HEADLESS`
 
 An imported map gives every player a `DotFpsPhysicsBody` bound to the map's brushes, which both ends put in the tree alike, so the rule holds ([imported maps](imported-maps.md#the-solid-is-the-games-on-every-machine)).
 
+## Players are solid to each other
+
+`mp_solidplayers` (dot-player-controller's `DotPlayerBodyRules`, `ArenaGame.body_rules`, 1 by default) is bound REPLICATED by the module and followed by the client, because the client predicts its own player against the others. The family's hull is a capsule in the physics space, which arena's analytic movement never asks, so arena does it in the movement body: every player's body is `arena_solid_body.gd` around the map's (`ArenaPlayer._movement_body`), and its sweeps also stop at the other living players' standing hulls (`ArenaGame.solid_hulls_for`: boxes, two radii across, from where each stands now). Only the sweep sees them; `overlaps` and `rest_contact` answer for the map, so two players placed inside each other walk apart and are solid once clear (the family's pass-out rule). Players tick in one order on every machine, so a mover meets the others where they are at that point in the tick. A client replays against the others where it last heard they are, which agrees with itself and can differ from the server by centimetres while two lean on each other; `headless_net` measured 5 mm. The wrapper copies the controller's mask and exclusions onto the map's body, so an imported map's physics body asks what it asked unwrapped. Players and bots alike; there is no hull for monsters or props here.
+
 ## Drawing between ticks
 
 `ArenaPlayer.present` uses `DotFpsController.render_state`, and `ArenaNetBridge._adopt_tick_rate` moves `Engine.physics_ticks_per_second` as well as the game's, the config's and the clock's. Either half alone measures as no better than nothing: the fraction a renderer interpolates at is a fraction through a physics frame, which is a fraction through a tick only while the two rates agree.

@@ -202,6 +202,13 @@ func _module_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# mp_solidplayers: whether players and bots stop at each other (1, the default) or pass
+	# through (0). REPLICATED, because each client predicts its own player against the
+	# others' hulls (ArenaGame.solid_hulls_for).
+	var _solid_cvars := game.body_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
 	# A real server keeps what its monsters learn of each map across restarts. Here and
 	# not in ArenaGame, because every suite builds an ArenaGame and only a server loads this.
 	game.persist_npc_heat = true

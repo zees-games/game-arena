@@ -39,7 +39,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 214
+const CHECKS := 221
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
@@ -52,7 +52,7 @@ var _skipped_checks := 0
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 19
+const SECTIONS := 20
 
 var _passed := 0
 var _failed := 0
@@ -106,6 +106,7 @@ func _run() -> void:
 	# After the weapons for the same reason: it waits out spawn protection, and this
 	# harness fires every eighth tick. Before the disconnect, which takes the killer away.
 	_test_hits_and_medals_reach_clients()
+	_test_solid_players_predicted()
 	_test_disconnect()
 	_test_monsters_reach_a_client()
 
@@ -1844,8 +1845,13 @@ func _test_weapons_over_the_wire() -> void:
 ## (0 for nobody), and reports how far that peer's prediction of itself strayed from the
 ## server's simulation of it: `{worst_gap, grounded_ticks}`, the second counting ticks the
 ## client predicted it out of noclip.
-func _flight_window(peer: int, ticks: int, buttons: int) -> Dictionary:
+## [param moves] overrides a peer's command for the whole window (peer -> DotFpsCommand), and
+## `closest` is the nearest the server ever had the two clients' players on the ground plane.
+func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {}) -> Dictionary:
 	var first := _server_game.current_tick() + 1
+	var closest := INF
+	var server_a: ArenaPlayer = _server_bridge.behaviour_for(int(_clients[2]["session"])).player
+	var server_b: ArenaPlayer = _server_bridge.behaviour_for(int(_clients[3]["session"])).player
 	var worst := 0.0
 	var worst_at := ""
 	var grounded := 0
@@ -1870,6 +1876,8 @@ func _flight_window(peer: int, ticks: int, buttons: int) -> Dictionary:
 				var held := DotFpsCommand.new()
 				held.buttons = buttons
 				pair = [held, DotWeaponCommand.new()]
+			if moves.has(peer_id):
+				pair = [moves[peer_id], DotWeaponCommand.new()]
 			commands[peer_id] = pair
 
 			var packet: PackedByteArray = _clients[peer_id]["bridge"].encode_input(
@@ -1880,6 +1888,8 @@ func _flight_window(peer: int, ticks: int, buttons: int) -> Dictionary:
 				_server_bridge.receive_input(peer_id, packet)
 
 		_server_bridge.server_tick(tick)
+		var apart := server_a.controller.state.position - server_b.controller.state.position
+		closest = minf(closest, Vector2(apart.x, apart.z).length())
 
 		for entry_down in _downstream:
 			var target_peer: int = entry_down["peer"]
@@ -1916,7 +1926,108 @@ func _flight_window(peer: int, ticks: int, buttons: int) -> Dictionary:
 			grounded += 1
 
 	return {"worst_gap": worst, "grounded_ticks": grounded, "worst_at": worst_at,
-		"worst_aligned": worst_aligned}
+		"worst_aligned": worst_aligned, "closest": closest}
+
+## Players are solid to each other (`mp_solidplayers`, 1 by default): a walk into another
+## player stops two radii apart on the server, and the walker's own client predicts the same
+## stop. Then, at 0 on both ends (the cvar is replicated), the same walk passes through.
+##
+## [b]Arena's own, not the family's hull.[/b] Movement here is analytic on the server and on
+## every predicting client, so dot-player-controller's physics capsule reached neither, and
+## until 2026-10-12 everybody walked through everybody (fpt-arena-solid-players-1).
+func _test_solid_players_predicted() -> void:
+	print("")
+	_section("[players are solid, and predicted so]")
+
+	var session_a := int(_clients[2]["session"])
+	var session_b := int(_clients[3]["session"])
+	var server_a: ArenaPlayer = _server_bridge.behaviour_for(session_a).player
+	var server_b: ArenaPlayer = _server_bridge.behaviour_for(session_b).player
+	var client_game: ArenaGame = (_clients[2]["bridge"] as ArenaNetBridge).game
+	var radius := server_a.controller.tunables.radius
+	var two_radii := radius * 2.0
+
+	_check(
+		_server_game.body_rules.solid and client_game.body_rules.solid,
+		"players are solid by default on the server and on a client"
+	)
+
+	# A lane of open floor along -z, found with the map's own trace rather than assumed:
+	# the first try stood the two on a stair block's edge and measured the stairs.
+	var trace := _server_game.map.shot_trace()
+	var lane_x := NAN
+	for step in range(0, 41):
+		var x := -20.0 + float(step)
+		var open := true
+		for dx in [-0.5, 0.0, 0.5]:
+			for y in [0.3, 1.0, 1.7]:
+				if trace.ray(Vector3(x + dx, y, 20.0), Vector3(0, 0, -1), 14.0).ok():
+					open = false
+		if open:
+			lane_x = x
+			break
+	if not _check(not is_nan(lane_x), "the map has a lane of open floor to walk"):
+		_done()
+		return
+	var saved_a := server_a.controller.state.position
+	var saved_b := server_b.controller.state.position
+
+	var idle := DotFpsCommand.new()
+	var walk := DotFpsCommand.new()
+	walk.move = Vector2(0.0, 1.0)
+	walk.yaw = 0.0
+	var place := func() -> void:
+		server_a.controller.teleport(Vector3(lane_x, 0.1, 19.0), 0.0)
+		server_b.controller.teleport(Vector3(lane_x, 0.1, 13.0), 0.0)
+		var _settle := _flight_window(0, 24, 0, {2: idle, 3: idle})
+
+	place.call()
+	var solid := _flight_window(2, 96, 0, {2: walk, 3: idle})
+	var a_z := server_a.controller.state.position.z
+	var b_z := server_b.controller.state.position.z
+	print("  measured: solid, closest %.3f m (two radii %.2f), A at z %.2f, B at z %.2f, worst prediction gap %.3f m" % [
+		float(solid["closest"]), two_radii, a_z, b_z, float(solid["worst_aligned"])])
+	_check(
+		float(solid["closest"]) >= two_radii - 0.02 and float(solid["closest"]) <= two_radii + 0.25,
+		"walked into another player, the server stops the walker two radii from them",
+		"closest %.3f m, two radii %.2f" % [float(solid["closest"]), two_radii]
+	)
+	_check(
+		a_z > b_z,
+		"and never past them",
+		"A z %.2f, B z %.2f" % [a_z, b_z]
+	)
+	_check(
+		float(solid["worst_aligned"]) < 0.1,
+		"and the walker's client predicted the stop (worst %.3f m from the server)" % float(solid["worst_aligned"])
+	)
+
+	_server_game.body_rules.solid = false
+	client_game.body_rules.solid = false
+	for peer_id in _clients:
+		(_clients[peer_id]["bridge"] as ArenaNetBridge).game.body_rules.solid = false
+	place.call()
+	var through := _flight_window(2, 96, 0, {2: walk, 3: idle})
+	print("  measured: mp_solidplayers 0, closest %.3f m, A at z %.2f, worst prediction gap %.3f m" % [
+		float(through["closest"]), server_a.controller.state.position.z, float(through["worst_aligned"])])
+	_check(
+		server_a.controller.state.position.z < server_b.controller.state.position.z - 1.0,
+		"at mp_solidplayers 0 the same walk passes through them",
+		"A z %.2f, B z %.2f" % [server_a.controller.state.position.z, server_b.controller.state.position.z]
+	)
+	_check(
+		float(through["worst_aligned"]) < 0.1,
+		"and is predicted so (worst %.3f m)" % float(through["worst_aligned"])
+	)
+
+	_server_game.body_rules.solid = true
+	for peer_id in _clients:
+		(_clients[peer_id]["bridge"] as ArenaNetBridge).game.body_rules.solid = true
+	server_a.controller.teleport(saved_a)
+	server_b.controller.teleport(saved_b)
+	var _back := _flight_window(0, 24, 0)
+	_done()
+
 
 func _test_event_wire() -> void:
 	print("")

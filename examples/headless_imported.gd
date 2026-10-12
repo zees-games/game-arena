@@ -367,8 +367,10 @@ func _test_loads() -> bool:
 			return false
 
 	var first := _game.player_for(1)
-	_check(first.controller.flat_body is DotFpsPhysicsBody
-		and (first.controller.flat_body as DotFpsPhysicsBody).is_bound(),
+	# Inside the solid-players wrapper (`arena_solid_body.gd`), which only adds the others.
+	var map_body: Variant = first.controller.flat_body.get(&"inner")
+	_check(map_body is DotFpsPhysicsBody
+		and (map_body as DotFpsPhysicsBody).is_bound(),
 		"a player moves against the physics space, bound before the first tick")
 
 	_game.start(0)

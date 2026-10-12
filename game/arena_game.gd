@@ -5,6 +5,7 @@ const ArenaContent := preload("arena_content.gd")
 const ArenaEffects := preload("arena_effects.gd")
 const ArenaHorde := preload("arena_horde.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaSolidBody := preload("arena_solid_body.gd")
 const ArenaMode := preload("arena_mode.gd")
 const ArenaModes := preload("arena_modes.gd")
 const ArenaObjectives := preload("arena_objectives.gd")
@@ -362,6 +363,14 @@ var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 ## by the module (REPLICATED) and followed by the client, which is the end with a camera.
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 
+## Whether players and bots are solid to each other: dot-player-controller's
+## `mp_solidplayers` (1 by default). Bound by the module (REPLICATED) and followed by the
+## client, because a client predicts its own player against the others' hulls. Arena's
+## movement is analytic, so the hulls are boxes in each player's movement body
+## ([method solid_hulls_for], `arena_solid_body.gd`), not the physics capsule the other
+## games give a body.
+var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
+
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.
 var _weapon_defs: Dictionary = {}
@@ -470,6 +479,7 @@ func follow_server_cvars(source: Object) -> bool:
 	# The ragdoll rules are the game's, not the map's, so they follow once and keep following.
 	var _bodies := ragdoll_rules.follow_cvars(source)
 	var _view := view_rules.follow_cvars(source)
+	var _solid := body_rules.follow_cvars(source)
 	return _follow_cvar_source()
 
 
@@ -1291,6 +1301,7 @@ func add_player(
 
 	player.join_combat(combat)
 	player.apply_movement_rules(movement_rules)
+	player.solid_hulls_fn = solid_hulls_for
 	_players[id] = player
 
 	var added := match_node.add_player(str(id), display_name, _tick, wanted_team)
@@ -1484,6 +1495,25 @@ func break_rules() -> DotPlayerBreakRules:
 
 func player_for(id: int) -> ArenaPlayer:
 	return _players.get(id)
+
+
+## The standing hulls player [param id] stops at: every other living player's, where they
+## stand now; none while `mp_solidplayers` is 0. Asked per sweep by the movement body, so a
+## player moved earlier in this tick is met where it moved to (the same on every machine:
+## players tick in one order).
+func solid_hulls_for(id: int) -> Array:
+	var out: Array = []
+	if not body_rules.solid:
+		return out
+	for key: Variant in _players.keys():
+		if int(key) == id:
+			continue
+		var other: ArenaPlayer = _players[key]
+		if other == null or not other.is_alive() or other.controller == null or other.controller.state == null:
+			continue
+		var tunables := other.controller.tunables
+		out.append(ArenaSolidBody.hull_at(other.controller.state.position, tunables.stand_height, tunables.radius))
+	return out
 
 
 func players() -> Array[ArenaPlayer]:
