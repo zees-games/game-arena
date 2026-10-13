@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 150
+const CHECKS := 154
 
 var _passed := 0
 var _failed := 0
@@ -676,6 +676,47 @@ func _test_maps_and_vote() -> void:
 		if not back.is_empty():
 			break
 		await get_tree().create_timer(0.1).timeout
+
+	# Every row the menu lists is one the source offers, and a mode row chosen changes the
+	# mode on the same map. Found by dot-server-deploy's burst_probe walking a list fetched
+	# once: after a change to dm_pit the team-mode rows were refused as "There is no map
+	# called 'mode:tdm'". A list from now offers only what can run now; a stale row is
+	# refused with the reason (ArenaVoteSource.unavailable_reason).
+	var fresh: Array = (menu_half.call("offer", staff) as Dictionary)["maps"]
+	var unknown := fresh.filter(func(r: Dictionary) -> bool:
+		return not module.vote.director.source.has(StringName(str(r["id"]))))
+	_check(unknown.is_empty() and fresh.any(func(r: Dictionary) -> bool: return r["mode"] == "Mode"),
+		"every row the map menu lists is one the ballot offers, modes among them", str(unknown))
+	var mode_box: Array = []
+	var to_tdm := func() -> void: mode_box.append(await menu_half.call("choose", staff, &"mode:tdm"))
+	to_tdm.call()
+	for _i in 300:
+		if not mode_box.is_empty():
+			break
+		await get_tree().create_timer(0.1).timeout
+	var mode_result: Dictionary = mode_box[0] if not mode_box.is_empty() else {}
+	_check(bool(mode_result.get("ok", false)) and _game.mode != null and _game.mode.id == &"tdm"
+		and "map:%s" % _game.map.id == start_map,
+		"staff choosing a mode row changes the mode on the same map",
+		"%s on %s: %s" % [_game.mode.id if _game.mode != null else &"", _game.map.id, mode_result.get("text", "no answer")])
+	mode_box.clear()
+	var to_ffa := func() -> void: mode_box.append(await menu_half.call("choose", staff, &"mode:ffa"))
+	to_ffa.call()
+	for _i in 300:
+		if not mode_box.is_empty():
+			break
+		await get_tree().create_timer(0.1).timeout
+	_check(_game.mode != null and _game.mode.id == &"ffa", "and back to free-for-all the same way",
+		str((mode_box[0] as Dictionary).get("text", "")) if not mode_box.is_empty() else "no answer")
+	# A row from a list opened on a map with team spawns, chosen after a change to dm_pit
+	# (none): refused, saying why. The director's current map is swapped for the check
+	# only; nothing awaits in between, and the refusal changes nothing.
+	var director_here: DotMapDef = module.maps.current
+	module.maps.current = module.maps.session.catalogue.get_map(&"dm_pit")
+	var stale: Dictionary = await menu_half.call("choose", staff, &"mode:tdm")
+	module.maps.current = director_here
+	_check(not bool(stale.get("ok", true)) and str(stale.get("text", "")).contains("no team spawns"),
+		"a stale team-mode row on a map with no team spawns is refused with that reason", str(stale.get("text", "")))
 	for peer in sync_peers:
 		module.maps.sync.add_peer(int(peer))
 

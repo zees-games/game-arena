@@ -122,6 +122,41 @@ func current_id() -> StringName:
 	return &""
 
 
+## Why [param id] is not offered now, for dot-vote's map menu (`DotVoteMapMenu.unavailable_text`),
+## or empty when it is offered or this source cannot say.
+##
+## [b]The case that needs it is a list opened before a change.[/b] M lists the team modes on
+## a map with team spawns; after a change to a free-for-all map (dm_pit) the same rows are
+## no longer offered, and the menu's generic refusal read "There is no map called
+## 'mode:tdm'", which sent a reader looking for a missing map.
+func unavailable_reason(id: StringName) -> String:
+	if has(id):
+		return ""
+	var text := String(id)
+	if text.begins_with(MODE_PREFIX):
+		var mode := ArenaModes.by_id(StringName(text.substr(MODE_PREFIX.length())))
+		if mode == null:
+			return "There is no mode called '%s'." % text.substr(MODE_PREFIX.length())
+		if game != null and game.mode != null and game.mode.id == mode.id:
+			return "%s is already being played." % mode.display_name
+		var here: DotMapDef = director.current if director != null else null
+		if here != null and not ArenaMaps.supports_mode(here, mode):
+			return "%s cannot be played on %s: %s Choose a map that can host it first." % [
+				mode.display_name, here.name_or_id(),
+				"it is an imported map, with no layout to build it from." if bool(here.meta.get("imported", false)) and ArenaMaps.needs_built_world(mode)
+				else "it has no team spawns."]
+		return "%s is not on offer here now. Open the list again." % mode.display_name
+	if text.begins_with(MAP_PREFIX):
+		var def := catalogue.get_map(StringName(text.substr(MAP_PREFIX.length()))) if catalogue != null else null
+		if def == null:
+			return "There is no map called '%s'." % text.substr(MAP_PREFIX.length())
+		var mode: ArenaMode = game.mode if game != null else null
+		if mode != null and not ArenaMaps.supports_mode(def, mode):
+			return "%s cannot host %s. Change the mode first." % [def.name_or_id(), mode.display_name]
+		return "%s is not on offer here now. Open the list again." % def.name_or_id()
+	return "A choice must say whether it is a map or a mode: '%s'." % text
+
+
 func supports_apply() -> bool:
 	return director != null
 
