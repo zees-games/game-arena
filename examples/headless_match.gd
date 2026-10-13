@@ -58,13 +58,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 592
+const CHECKS := 598
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 39
+const SECTIONS := 40
 
 var _passed := 0
 var _failed := 0
@@ -139,6 +139,7 @@ func _run() -> void:
 	await _test_streaks()
 	_test_medal_rules()
 	await _test_medals_from_a_game()
+	await _test_toys()
 
 	# Last, and it has to be. It replaces the combat manager, the match node and the
 	# map, so everything above that reads any of them — the kill feed a HUD catches
@@ -1941,6 +1942,134 @@ func _test_capture_the_flag() -> void:
 ## Through the real state machine rather than by setting the state: warmup exists, the
 ## objective layer keys off it, and a test that jumped the machine would be testing a
 ## state the game never reaches this way.
+## dot-props' toys on the built-in maps, on a headless authority: every map's built, clear of
+## its boxes and spawns and still two seconds on (the toy level's collision under them); a walk
+## into a ball sends it on; a shot pushes it and is still the combat's (a ball is no cover); a
+## rocket's blast throws a barrel; going live puts them home; sv_toys 0 takes them away.
+func _test_toys() -> void:
+	_section("the maps' toys")
+	var bad: Array = []
+	var game: ArenaGame = null
+	# dm_box last, and kept: each game's level and toys share this one physics space, so the
+	# others are freed before the next is built.
+	for id: StringName in [&"dm_atrium", &"dm_pit", &"dm_box"]:
+		var map: ArenaMap = ArenaMap.by_id(id)
+		var g := ArenaGame.new()
+		g.name = "ToyGame_%s" % id
+		g.tick_rate = TICK_RATE
+		g.headless = true
+		g.register_service = false
+		# A world of its own: every other game this suite has built is in the default one,
+		# on dm_box, and its level would be under these toys too.
+		var view := SubViewport.new()
+		view.own_world_3d = true
+		view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		add_child(view)
+		_toy_views.append(view)
+		view.add_child(g)
+		var ready := g.setup(map)
+		if not ready.ok or g.toys == null:
+			bad.append("%s: %s" % [id, str(ready.error)])
+			g.get_parent().remove_child(g)
+			g.queue_free()
+			continue
+		if g.toys.count() != map.toys.size() or map.toys.is_empty() or not g.toys.missing.is_empty():
+			bad.append("%s: %d of %d built" % [id, g.toys.count(), map.toys.size()])
+		for toy in g.toys.toys:
+			var box := AABB(toy.global_position + Vector3(-0.6, 0.05, -0.6), Vector3(1.2, 1.2, 1.2))
+			for b in map.boxes:
+				if b.intersects(box):
+					bad.append("%s: %s %d in a box" % [id, toy.def["id"], toy.index])
+					break
+			for spawn in map.spawns:
+				if Vector2(spawn.origin.x - toy.global_position.x, spawn.origin.z - toy.global_position.z).length() < 2.4:
+					bad.append("%s: %s %d on a spawn" % [id, toy.def["id"], toy.index])
+		for _i in range(120):
+			await get_tree().physics_frame
+		for toy in g.toys.toys:
+			if toy.body.global_position.distance_to(toy.rest.origin) > 0.5:
+				bad.append("%s: %s %d strayed to %s" % [id, toy.def["id"], toy.index, toy.body.global_position.snapped(Vector3.ONE * 0.1)])
+		if id == &"dm_box":
+			game = g
+		else:
+			g.get_parent().remove_child(g)
+			g.free()
+	_check(bad.is_empty() and game != null, "every built-in map's toys are built, clear of its boxes and spawns, and stay put", "; ".join(bad.slice(0, 6)))
+	if game == null:
+		_done()
+		return
+
+	game.start(0)
+	var _a := game.add_player(950, "Kicker")
+	var _b := game.add_player(951, "Target")
+	game.match_node.rules.respawn_delay_sec = 120.0
+	_go_live(game)
+	var ball := game.toys.toy(0)
+	var b0 := ball.body.global_position
+
+	# Walked into.
+	var kicker := game.player_for(950)
+	_stand(game, 950, b0 + Vector3(-0.8, -0.5, 0.0))
+	for _i in range(10):
+		kicker.controller.state.velocity = Vector3(6.0, 0.0, 0.0)
+		game._advance_toys(1.0 / float(TICK_RATE))
+		await get_tree().physics_frame
+	for _i in range(30):
+		await get_tree().physics_frame
+	_check(ball.body.global_position.x > b0.x + 0.5, "a player walking into a beach ball sends it on ahead",
+		"%.2f m" % (ball.body.global_position.x - b0.x))
+
+	# Shot: the ball goes, and the combat's own trace sees straight through where it stood, so
+	# the shot goes on to whoever is behind it: a toy is never cover.
+	var other := game.toys.toy(1)
+	var o0 := other.body.global_position
+	var shot := DotShot.new()
+	shot.attacker = 950
+	shot.tick = game.current_tick()
+	shot.origin = o0 + Vector3(0.0, 0.0, 6.0)
+	shot.direction = Vector3(0.0, 0.0, -1.0)
+	shot.damage = 20.0
+	shot.max_range = 40.0
+	var clear_through := game.combat.trace.line_of_sight(shot.origin, o0 + Vector3(0.0, 0.0, -2.0))
+	game._shoot_toys([shot] as Array[DotShot])
+	for _i in range(30):
+		await get_tree().physics_frame
+	_check(other.body.global_position.z < o0.z - 0.4 and clear_through,
+		"a shot pushes the ball it passes, and the combat's trace sees through it: a toy is no cover",
+		"moved %.2f m, trace clear %s" % [o0.z - other.body.global_position.z, str(clear_through)])
+
+	# A rocket's blast beside the barrel.
+	var barrel := game.toys.toy(3)
+	var r0 := barrel.body.global_position
+	var spawn := DotWeaponSpawn.new()
+	spawn.splash_radius = 4.0
+	game._on_detonated_near_toys(r0 + Vector3(-1.5, 0.0, 0.0), spawn)
+	for _i in range(30):
+		await get_tree().physics_frame
+	_check(barrel.body.global_position.distance_to(r0) > 0.3, "a blast throws the barrel beside it", "%.2f m" % barrel.body.global_position.distance_to(r0))
+
+	# Live again: home.
+	game._on_match_state_changed(DotMatch.State.WARMUP, DotMatch.State.LIVE)
+	await get_tree().physics_frame
+	_check(ball.body.global_position.distance_to(ball.rest.origin) < 0.05 and barrel.body.global_position.distance_to(barrel.rest.origin) < 0.05,
+		"a round going live puts every toy home")
+
+	var _off := game.toy_rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "0")
+	_check(not ball.visible and game.toys.shot_along(o0 + Vector3(0, 0.4, 6), Vector3(0, 0, -1), 20.0, 20.0, 1) == -1,
+		"sv_toys 0 takes them away")
+	var _on := game.toy_rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "1")
+	game.get_parent().remove_child(game)
+	game.queue_free()
+	for view: Node in _toy_views:
+		remove_child(view)
+		view.queue_free()
+	_toy_views.clear()
+	_done()
+
+
+var _toy_views: Array = []
+
+
 func _go_live(game: ArenaGame) -> void:
 	game.match_node.rules.warmup_sec = 0.0
 	game.match_node.rules.countdown_sec = 0.0

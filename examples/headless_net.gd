@@ -39,7 +39,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 221
+const CHECKS := 225
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
@@ -52,7 +52,7 @@ var _skipped_checks := 0
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 20
+const SECTIONS := 21
 
 var _passed := 0
 var _failed := 0
@@ -94,6 +94,10 @@ func _run() -> void:
 	_test_ready_gate()
 	_test_predicted_node_is_not_moved()
 	await _test_map_sync_wire()
+	# The new map's TOYS, which a real link delivers to every ready peer (this harness routes
+	# no event by itself): client 3 stayed on the old map, and keeps reading snapshots only
+	# because a client registers the toys' mirrors whatever map it is on.
+	_deliver_toys()
 	await _test_voice_wire()
 	_test_forced_noclip_is_predicted()
 	_test_blind_and_beacon()
@@ -109,6 +113,7 @@ func _run() -> void:
 	_test_solid_players_predicted()
 	_test_disconnect()
 	_test_monsters_reach_a_client()
+	await _test_toys_reach_a_client()
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -368,7 +373,10 @@ func _join_everyone() -> void:
 		_check(added.ok, "peer %d joins the server" % peer_id, str(added.error))
 
 	_check(_joins.size() == 2, "both joins were announced", str(_joins.size()))
-	_check(_server_net.registry.count() == 2, "two entities are replicated")
+	# And the map's toys, one entity each (see [method _test_toys_reach_a_client]).
+	var toys := _server_bridge.toy_count()
+	_check(toys > 0 and _server_net.registry.count() == 2 + toys, "two players are replicated, and the map's toys",
+		"%d entities, %d toys" % [_server_net.registry.count(), toys])
 
 	# Every client learns about every player, itself included.
 	for peer_id in _clients:
@@ -377,8 +385,14 @@ func _join_everyone() -> void:
 		for payload in _joins:
 			_check(bridge.apply_join(payload).ok, "client %d mirrors a join" % peer_id)
 
+		# The TOYS a signon carries; this harness routes no events by itself. Before any
+		# snapshot: a client that has not paired the toys stops reading a snapshot at the
+		# first entity it does not know, players and all (dot-net's `receive_snapshot`).
+		_deliver_event(peer_id, ArenaEvents.Kind.TOYS, _server_bridge.get("_toys_body"))
+		_quiet_client_toys(peer_id)
+
 		var net: DotNetManager = _clients[peer_id]["net"]
-		_check(net.registry.count() == 2, "client %d knows both players" % peer_id)
+		_check(net.registry.count() == 2 + toys and bridge.toy_count() == toys, "client %d knows both players, and the toys" % peer_id)
 
 		var mine := net.registry.owned_by(peer_id)
 		_check(mine.size() == 1, "client %d owns exactly one" % peer_id)
@@ -1219,7 +1233,7 @@ func _test_disconnect() -> void:
 	_section("[disconnect]")
 
 	_server_bridge.remove_peer(3)
-	_check(_server_net.registry.count() == 1, "the peer's entity is released",
+	_check(_server_net.registry.count() == 1 + _server_bridge.toy_count(), "the peer's entity is released",
 		str(_server_net.registry.count()))
 	_check(_server_game.player_for(12) == null, "and it leaves the game")
 	_check(_server_bridge.behaviour_for(12) == null, "and the bridge forgets it")
@@ -1233,6 +1247,69 @@ func _test_disconnect() -> void:
 
 
 ## Hands a client an event exactly as the server's link would put it on the wire.
+## The map's toys on a client: paired by index from TOYS, frozen copies, a ball kicked on the
+## server followed there, and the switch... arena places loose toys only, so a kick and a shot.
+func _test_toys_reach_a_client() -> void:
+	print("")
+	_section("[the map's toys reach a client]")
+	var client_game: ArenaGame = _clients[2]["game"]
+	var client_bridge: ArenaNetBridge = _clients[2]["bridge"]
+	_check(client_game.map.id == _server_game.map.id and client_bridge.toy_count() == _server_game.toys.count() and _server_game.toys.count() > 0,
+		"the client's toys are paired with the server's, by index, on the map they share",
+		"%s and %s, %d of %d" % [client_game.map.id, _server_game.map.id, client_bridge.toy_count(), _server_game.toys.count()])
+	var server_ball := _server_game.toys.toy(0)
+	var client_ball := client_game.toys.toy(0)
+	_check(client_ball != null and client_ball.body.freeze and not client_ball.authoritative and server_ball.authoritative,
+		"the client's toys are frozen copies, posed from the server's")
+	var start := client_ball.body.global_position
+	var _kicked := _server_game.toys.use(server_ball.index, server_ball.body.global_position + Vector3(0, 1.4, 1.2), Vector3(0, -0.3, -1))
+	var furthest := 0.0
+	for _i in range(30):
+		_pump(1)
+		await get_tree().physics_frame
+		furthest = maxf(furthest, client_ball.body.global_position.distance_to(start))
+	for _i in range(40):
+		_pump(1)
+		await get_tree().physics_frame
+	var apart := client_ball.body.global_position.distance_to(server_ball.body.global_position)
+	_check(furthest > 1.0 and apart < 0.6, "a ball kicked on the server rolls off on the client and rests where the server's did",
+		"%.2f m out, %.2f m apart" % [furthest, apart])
+	# A shot on the server: the client sees the second ball go.
+	var server_other := _server_game.toys.toy(1)
+	var client_other := client_game.toys.toy(1)
+	var o0 := client_other.body.global_position
+	var shot := DotShot.new()
+	shot.origin = server_other.body.global_position + Vector3(0, 0, 5)
+	shot.direction = Vector3(0, 0, -1)
+	shot.damage = 25.0
+	shot.max_range = 30.0
+	_server_game._shoot_toys([shot] as Array[DotShot])
+	for _i in range(40):
+		_pump(1)
+		await get_tree().physics_frame
+	_check(client_other.body.global_position.distance_to(o0) > 0.5, "a ball shot on the server is seen to go on the client",
+		"%.2f m" % client_other.body.global_position.distance_to(o0))
+	_done()
+
+
+## The server's current TOYS to every client, as a signon or a map change sends it.
+func _deliver_toys() -> void:
+	for peer_id in _clients:
+		_deliver_event(peer_id, ArenaEvents.Kind.TOYS, _server_bridge.get("_toys_body"))
+		_quiet_client_toys(peer_id)
+
+
+## One process, one physics space: a client's frozen copies would stand exactly where the
+## server's balls are and push them off. A real client is another machine.
+func _quiet_client_toys(peer_id: int) -> void:
+	var client_game: ArenaGame = _clients[peer_id]["game"]
+	if client_game.toys != null:
+		for toy in client_game.toys.toys:
+			if toy.body != null:
+				toy.body.collision_layer = 0
+				toy.body.collision_mask = 0
+
+
 func _deliver_event(peer_id: int, kind: int, body: PackedByteArray) -> void:
 	var writer := DotNetWriter.new()
 	var _wrote := _server_net.messages.encode(ArenaEvent.new(kind, body), writer)

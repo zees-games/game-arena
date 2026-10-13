@@ -1134,6 +1134,9 @@ func _build_ragdolls() -> void:
 		game.ragdoll_rules.collision_mask = stack.physics.layout.mask_of([&"world", &"prop"])
 	ragdolls.sound_fn = _ragdoll_sound
 	add_child(ragdolls)
+	# The map's toys are heard the same way: a bounce, a knock, a barrel's roll.
+	if not game.toy_sound.is_connected(_ragdoll_sound):
+		var _toys := game.toy_sound.connect(_ragdoll_sound)
 
 
 ## The level's layers: what the third-person and spectator cameras stop against.

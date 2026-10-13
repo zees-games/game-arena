@@ -162,6 +162,17 @@ func _build_physics() -> DotResult:
 	physics.profile.tick_rate = game.tick_rate
 
 	physics.layout = DotPhysicsLayout.shooter_3d()
+	# The map's loose toys (dot-props'): a ball or a barrel on `toy`, which the level, props
+	# and other toys stop and a person never does (they walk through and push it,
+	# `ArenaGame._advance_toys`). And `footprint`, which nothing collides with: arena places
+	# only loose toys, so there are none, but the box asks for a bit.
+	physics.layout.layers.append(DotPhysicsLayer.make(
+		&"toy", [&"world", &"prop", &"debris", &"toy"],
+		"A map's loose toy: a ball, a barrel, a tyre. People walk through it and push it."
+	))
+	physics.layout.layers.append(DotPhysicsLayer.make(
+		&"footprint", [], "Where a fixed toy stands, for a walkable mesh's bake only."
+	))
 	physics.surfaces = DotPhysicsSurfaceSet.standard()
 	physics.register_service = false
 	# A dedicated server has no inspector to read layer names in, and the write is

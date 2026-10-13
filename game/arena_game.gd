@@ -268,6 +268,28 @@ var persist_npc_heat: bool = false
 ## Physics props. Null unless the mode asks for them and this instance is the authority.
 var props: ArenaProps = null
 
+## The map's toys (dot-props' [DotPropToyBox]): loose ones only here, beach balls, footballs,
+## barrels and tyres, which a person walks through and pushes and a shot sends rolling but which
+## stop no shot and hold nobody up, so they are never cover, a ledge or a launch in a
+## deathmatch. Built from [member ArenaMap.toys] on both ends in the same order, simulated by
+## the authority, posed from snapshots on a client (`arena_toy_net.gd`). Null before a map.
+var toys: DotPropToyBox = null
+
+## dot-props' `sv_toys*`, bound by the module REPLICATED and followed by a client.
+var toy_rules: DotPropToyRules = DotPropToyRules.new()
+
+## The map's toys are about to go (a map change), on both ends: what the bridge releases their
+## entities on. And built, which is what a client's bridge pairs them on.
+signal toys_clearing()
+signal toys_built()
+
+## A toy made a sound, on whichever end draws it: what the presentation plays.
+signal toy_sound(id: StringName, at: Vector3, strength: float)
+
+## A headless authority's copy of the level in the physics space, for the toys to land on:
+## nothing else here asks the physics space about a built-in map (see [ArenaProps]).
+var _toy_level: Node3D = null
+
 ## Status effects: burning, empowered, haste, spawn protection, slowed.
 ##
 ## Built in every mode, because spawn protection is one of them and every mode has
@@ -451,6 +473,7 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 
 	# The stack is what knows the collision layout, and it is built last.
 	_classify_world_collision()
+	_build_toys()
 
 	if register_service:
 		_registered_name = (
@@ -478,6 +501,7 @@ func follow_server_cvars(source: Object) -> bool:
 	_cvar_source = source
 	# The ragdoll rules are the game's, not the map's, so they follow once and keep following.
 	var _bodies := ragdoll_rules.follow_cvars(source)
+	var _toys := toy_rules.follow_cvars(source)
 	var _view := view_rules.follow_cvars(source)
 	var _solid := body_rules.follow_cvars(source)
 	return _follow_cvar_source()
@@ -1125,6 +1149,9 @@ func change_map(new_map: ArenaMap, new_mode: ArenaMode = null) -> DotResult:
 	# game inside their `map_changed` handlers.
 	_reconcile_world_layers()
 
+	# Before the announcement: the net bridge registers them inside its `map_changed`.
+	_build_toys()
+
 	# Whatever state the last match ended in, the new one starts from the beginning.
 	match_node.start(_tick)
 
@@ -1224,6 +1251,8 @@ func _classify_world_collision() -> void:
 ## both the combat manager and the match node, and a node that is still connected to a
 ## freed object when its own handler runs is the error that has no line number.
 func _teardown_world() -> void:
+	_clear_toys()
+
 	if progress != null:
 		progress.unbind_world()
 
@@ -1723,6 +1752,12 @@ func tick(commands: Dictionary = {}) -> void:
 			if projectiles != null:
 				projectiles.accept(outcome)
 
+	# The toys after everybody moved: a walk into a ball sends it on. Then every shot that
+	# passes one pushes it, before the combat resolves the shot, which a toy never stops.
+	if is_authority:
+		_advance_toys(delta)
+		_shoot_toys(shots)
+
 	if is_authority:
 		_unlag_record()
 		for shot in shots:
@@ -2110,7 +2145,110 @@ func _on_match_state_changed(from: DotMatch.State, to: DotMatch.State) -> void:
 	# A new round has its own first blood, and nobody's revenge carries over from warmup.
 	if to == DotMatch.State.LIVE:
 		medals.reset_round()
+		# And every toy home: a ball parked in a doorway during warmup is not a round's
+		# head start for anybody.
+		if toys != null and is_authority:
+			toys.reset()
 	match_state_changed.emit(from, to)
+
+
+# --- Toys --------------------------------------------------------------------
+
+## A toy's blast at its centre, m/s to a toy of up to 3 kg (dot-props' `blast`).
+const TOY_BLAST_SPEED := 12.0
+
+
+## The map's toys from [member ArenaMap.toys], on both ends, in the order the map lists them:
+## that order is how a client pairs each with the server's entity. A headless authority gets
+## a collision copy of a built-in level for them to land on; an imported map's solid is in the
+## physics space already, and a drawing end's level is its scene.
+func _build_toys() -> void:
+	_clear_toys()
+	if map == null:
+		return
+	var layout: DotPhysicsLayout = player_stack.physics.layout if player_stack != null and player_stack.physics != null else null
+
+	if is_authority and headless and not map.is_imported() and not map.toys.is_empty():
+		_toy_level = map.to_collision()
+		_toy_level.name = "ToyLevel"
+		add_child(_toy_level)
+		if player_stack != null:
+			var _n := player_stack.classify_tree(_toy_level, &"world")
+
+	toys = DotPropToyBox.new()
+	toys.name = "Toys"
+	toys.authoritative = is_authority
+	toys.draw = not headless
+	toys.rules = toy_rules
+	toys.gravity = 20.0
+	toys.kill_y = map.floor_y - 40.0
+	if layout != null:
+		toys.loose_layer = layout.layer_mask(&"toy")
+		toys.loose_mask = layout.collision_mask(&"toy")
+		toys.solid_layer = layout.layer_mask(&"prop")
+		toys.solid_mask = layout.collision_mask(&"prop")
+		toys.footprint_layer = layout.layer_mask(&"footprint")
+		toys.aim_mask = layout.mask_of([&"world", &"toy"] as Array[StringName])
+	add_child(toys)
+	var built := toys.build(map.toys)
+	if not built.ok:
+		DotLog.warn(CHANNEL, "a map's toys would not build", {"map": String(map.id), "why": built.error.message})
+	var _sounds := toys.sound.connect(func(id: StringName, at: Vector3, strength: float) -> void: toy_sound.emit(id, at, strength))
+
+	if projectiles != null and is_authority and not projectiles.detonated.is_connected(_on_detonated_near_toys):
+		projectiles.detonated.connect(_on_detonated_near_toys)
+
+	toys_built.emit()
+
+
+func _clear_toys() -> void:
+	if toys != null:
+		toys_clearing.emit()
+		remove_child(toys)
+		toys.queue_free()
+		toys = null
+	if _toy_level != null and is_instance_valid(_toy_level):
+		remove_child(_toy_level)
+		_toy_level.queue_free()
+	_toy_level = null
+
+
+## Everybody against the toys this tick, after they moved: a walk into a ball pushes it, then
+## the box's own tick (the awake cap, the lost sent home). Authority only.
+func _advance_toys(delta: float) -> void:
+	if toys == null or toys.count() == 0:
+		return
+	for id in player_ids():
+		var player: ArenaPlayer = _players[id]
+		if not player.is_alive():
+			continue
+		var state := player.controller.state
+		var tunables := player.controller.tunables
+		var radius := tunables.radius if tunables != null else 0.35
+		var height := lerpf(tunables.stand_height, tunables.crouch_height, state.crouch_fraction) if tunables != null else 1.8
+		var _pushed := toys.push_from(state.position, state.velocity, radius, height)
+	toys.advance(delta)
+
+
+## Every shot this tick against the toys: the first toy along each pellet, nearer than any wall,
+## is pushed by dot-props' `shot`. [b]The shot goes on[/b]: the combat resolves it against the
+## level and the players as if the toy were not there, so a ball is never cover and never eats
+## a bullet meant for somebody behind it. Authority only.
+func _shoot_toys(shots: Array[DotShot]) -> void:
+	if toys == null or toys.count() == 0 or shots.is_empty():
+		return
+	var layout: DotPhysicsLayout = player_stack.physics.layout if player_stack != null and player_stack.physics != null else null
+	var level := layout.layer_mask(&"world") if layout != null else 1
+	for shot in shots:
+		var directions: Array = shot.pellets if not shot.pellets.is_empty() else [shot.direction]
+		# Each pellet carries the shot's damage, as dot-combat resolves them.
+		for raw: Variant in directions:
+			var _pushed := toys.shot_along(shot.origin, raw as Vector3, maxf(shot.max_range, 1.0), shot.damage, level)
+
+
+func _on_detonated_near_toys(at: Vector3, spawn: DotWeaponSpawn) -> void:
+	if toys != null and is_authority and spawn != null:
+		var _thrown := toys.blast(at, maxf(spawn.splash_radius, 2.0), TOY_BLAST_SPEED)
 
 
 # --- Diagnostics -----------------------------------------------------------

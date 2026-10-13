@@ -66,6 +66,9 @@ enum Kind {
 	## medals ([enum ArenaAwards.Medal]). To everybody, straight after the KILL it belongs to,
 	## because the victim's screen names a nemesis from it.
 	AWARD,
+	## The map's toys: the map's id, then their net ids in toy order (both ends build the toys
+	## in the same order from the map). When the server's are built, and to a joiner at signon.
+	TOYS,
 }
 
 enum Ask {
@@ -560,6 +563,28 @@ static func read_hit(reader: DotNetReader) -> Dictionary:
 	}
 	out["ok"] = reader.ok()
 	return out
+
+
+# --- TOYS ------------------------------------------------------------------
+
+static func write_toys(map_id: StringName, net_ids: PackedInt64Array) -> PackedByteArray:
+	var w := _w()
+	w.write_string(String(map_id), NPC_ID_BYTES)
+	w.write_varint(net_ids.size())
+	for id in net_ids:
+		w.write_varint(maxi(int(id), 0))
+	return w.to_bytes()
+
+
+static func read_toys(r: DotNetReader) -> Dictionary:
+	var map_id := StringName(r.read_string(NPC_ID_BYTES))
+	var count := r.read_varint()
+	var ids := PackedInt64Array()
+	if count < 0 or count > 256:
+		return {"map_id": map_id, "ids": ids, "ok": false}
+	for i in count:
+		ids.append(r.read_varint())
+	return {"map_id": map_id, "ids": ids, "ok": r.ok()}
 
 
 # --- AWARD -----------------------------------------------------------------

@@ -196,6 +196,12 @@ func _module_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# The map's toys: dot-props' sv_toys, sv_toys_awake, sv_toys_push. REPLICATED, because a
+	# client hides the toys a server took away. The game's, so one bind lasts.
+	var _toy_cvars := game.toy_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
 	# mp_forceview: whether players may switch to third person (0), or are held in first (1)
 	# or third (2). REPLICATED, because each client places its own camera under it.
 	var _view_cvars := game.view_rules.bind_cvars(

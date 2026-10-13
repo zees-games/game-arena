@@ -63,6 +63,14 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 
 	root.add_child(map.to_scene())
+	# The map's toys, as a client draws them: frozen where the map puts them. Built in the
+	# first frame, because the box builds in the tree and nothing here is in it yet.
+	if not map.toys.is_empty():
+		_toy_box = DotPropToyBox.new()
+		_toy_box.name = "Toys"
+		_toy_box.authoritative = false
+		root.add_child(_toy_box)
+		_toy_placements = map.toys
 
 	# Every map, built-in or imported, is drawn under the lighting the client builds for it
 	# (`ArenaMapLighting.build`): a frame lit by this tool's idea of a sun says nothing about
@@ -187,7 +195,16 @@ var _armed := false
 ## truthy, so the tree quits on the first frame and writes nothing. That is what the
 ## first version of this file did, and its symptom was a clean exit with an empty
 ## `screenshots/`.
+var _toy_box: DotPropToyBox = null
+var _toy_placements: Array = []
+
+
 func _process(delta: float) -> bool:
+	if _toy_box != null and not _toy_placements.is_empty():
+		var _built := _toy_box.build(_toy_placements)
+		_toy_placements = []
+		_wait = maxi(_wait, 2)
+
 	if _imported_game != null and _shots.is_empty():
 		_play_imported()
 		return false

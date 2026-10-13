@@ -189,6 +189,13 @@ var mechanics: ArenaMapMechanics = null
 ## player is built or re-bodied on this map.
 var collision_root: Node3D = null
 
+## The map's toys (dot-props' placements, `{toy, at, yaw}`), which [ArenaGame] builds on both
+## ends in this order. Loose ones only, never a fixed toy: the movement and the shot trace are
+## this list's boxes and nothing else, so a see-saw or a trampoline would be something a player
+## walks through and a shot passes, and a fixed toy that did collide would be cover or a ledge
+## the map's survey never saw. Set by the built-in maps; an imported map has none.
+var toys: Array = []
+
 
 ## Whether this is an imported map rather than a list of boxes.
 func is_imported() -> bool:
@@ -640,6 +647,16 @@ static func dm_box() -> ArenaMap:
 			&"red" if index < 4 else &"blue"
 		)
 
+	# Toys (dot-props', loose only: see [member toys]): beach balls on the open floor, a
+	# football, a barrel and a tyre, each clear of every box and two and a half metres from
+	# every spawn.
+	map.toys = [
+		{"toy": "beach_ball", "at": [12.0, 0.0, -8.0]},
+		{"toy": "beach_ball", "at": [-12.0, 0.0, 8.0]},
+		{"toy": "football", "at": [-20.0, 0.0, -10.0]},
+		{"toy": "barrel", "at": [20.0, 0.0, 10.0], "yaw": 25.0},
+		{"toy": "tyre", "at": [-20.0, 0.0, 20.0], "yaw": 60.0},
+	]
 	return map
 
 
@@ -1244,6 +1261,17 @@ static func dm_atrium() -> ArenaMap:
 		"colour": ArenaMapPaint.LAVENDER,
 	})
 
+	# Toys (loose only, see [member toys]): balls in the open courts, barrels by the east
+	# wall, tyres in two corners.
+	map.toys = [
+		{"toy": "beach_ball", "at": [10.0, 0.0, -18.0]},
+		{"toy": "beach_ball", "at": [-22.0, 0.0, 12.0]},
+		{"toy": "football", "at": [4.0, 0.0, -2.0]},
+		{"toy": "barrel", "at": [24.0, 0.0, 10.0]},
+		{"toy": "barrel", "at": [24.8, 0.0, 10.7], "yaw": 40.0},
+		{"toy": "tyre", "at": [-24.0, 0.0, -12.0], "yaw": 30.0},
+		{"toy": "tyre", "at": [8.0, 0.0, 28.0], "yaw": 80.0},
+	]
 	return map
 
 
@@ -1544,6 +1572,12 @@ static func dm_pit() -> ArenaMap:
 			Transform3D(Basis.looking_at(to_centre.normalized(), Vector3.UP), at)
 		)
 
+	# Toys (loose only, see [member toys]): the pit is small and close, so two, in its
+	# north and south lanes.
+	map.toys = [
+		{"toy": "beach_ball", "at": [0.0, 0.0, 12.0]},
+		{"toy": "football", "at": [10.0, 0.0, -12.0]},
+	]
 	return map
 
 

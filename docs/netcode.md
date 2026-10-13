@@ -89,6 +89,10 @@ How many is dot-server's `DotBotQuota` (`bot_quota` 4, `bot_quota_mode fill`, `b
 
 `headless_lossy` is the suite for all of this ([testing](testing.md#headless_lossy-real-enet-through-real-loss)).
 
+## The map's toys
+
+Each toy is an entity (`arena_toy_net.gd`: `state_transform`, `on`, `count`), registered by the server when the map's toys are built and named in TOYS (the map's id, then the net ids in toy order), sent to every ready peer and to a joiner at signon. **A client registers a mirror for every id the moment TOYS arrives**, under `ToyMirrors`, and hands each its toy by index once its own toys for that map exist: dot-net stops reading a snapshot at the first entity a client does not know, because a body cannot be skipped without its declarations, so a mirror missing while the client loads the map (or for good, on a client left on another map, as `headless_net`'s client 3 is) froze every player after it. A server's entities on the old map leave the registry and the tree at once on a map change.
+
 ## Still open
 
 - The other games' bridges send one command per input packet and feed the clock `ping_ms`; each wants `DotNetInput.write_batch` and its own `link_rtt_ms`.
