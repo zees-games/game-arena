@@ -6,6 +6,8 @@ const ArenaImportedMaps := preload("arena_imported_maps.gd")
 const ArenaMapMechanics := preload("arena_map_mechanics.gd")
 const ArenaMapPaint := preload("arena_map_paint.gd")
 
+const CONTACT_SHADE_SCRIPT := "res://addons/dot_lighting/runtime/dot_contact_shade.gd"
+
 ## A level as a list of boxes, and the three things that list becomes.
 ##
 ## [b]This is the idea the whole project is arranged around.[/b] A dev-textured arena
@@ -1864,7 +1866,29 @@ func to_scene() -> Node3D:
 			boxes[index], painter.box(ArenaMapPaint.colour_of(self, index)), "Box%02d" % index
 		))
 
+	_add_contact_shade(root)
 	return root
+
+
+## Where a box meets the floor or another box, dot-lighting's contact shade (API 4): the
+## Compatibility renderer the client shell draws has no ambient occlusion, and every crate and
+## wall stood on the floor with no shade at its foot. One unshaded mesh, built once here.
+## By path, behind the level, so a shell older than the helper draws the map without it.
+func _add_contact_shade(root: Node3D) -> void:
+	if DotAddonApi.build_level("dot_lighting") < 4 or not ResourceLoader.exists(CONTACT_SHADE_SCRIPT):
+		return
+	var shade_boxes: Array = []
+	var floor_box := AABB(
+		Vector3(-extent - 2.0, floor_y - 1.0, -extent - 2.0),
+		Vector3(extent * 2.0 + 4.0, 1.0, extent * 2.0 + 4.0)
+	)
+	for box: AABB in [floor_box] + boxes:
+		shade_boxes.append({"transform": Transform3D(Basis.IDENTITY, box.get_center()), "size": box.size})
+	var shade: Variant = (load(CONTACT_SHADE_SCRIPT) as GDScript).call(&"node", shade_boxes)
+	if shade is MeshInstance3D and (shade as MeshInstance3D).mesh != null:
+		root.add_child(shade)
+	elif shade is Node:
+		(shade as Node).free()
 
 
 ## The level as collision only: static bodies, no meshes, no material.
