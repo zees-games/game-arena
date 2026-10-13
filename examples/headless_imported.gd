@@ -12,6 +12,7 @@ const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
+const ArenaSurf := preload("../game/arena_surf.gd")
 
 ## The combat surf maps game-g2gfast imported, played as an arena deathmatch.
 ##
@@ -31,6 +32,9 @@ const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 ## - the map is found by its manifest's kind and catalogued, in or out of the rotation;
 ## - the game loads it with its solid in the tree and the physics backends bound to it;
 ## - every player appears on one of the map's OWN spawn points, standing on its floor;
+## - bots ride its ramps: the map's ride edges (`maps/surf/<id>.surf.json`) are in their
+##   routes, a bot handed one rides it to the platform below and lands alive, and a roaming bot's
+##   own route hands it one;
 ## - a deathmatch is played on it for [constant PLAY_SECONDS] seconds and nobody falls
 ##   through, leaves the map or ends up inside a brush, and kills are scored until the
 ##   score limit ends the round;
@@ -67,8 +71,8 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 14
-const CHECKS := 74
+const SECTIONS := 15
+const CHECKS := 78
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -116,6 +120,7 @@ func _run() -> void:
 	_test_shots()
 	_test_mechanics()
 	await _test_hurt()
+	await _test_surf_rides()
 	await _test_every_map()
 	await _test_server_named()
 
@@ -591,6 +596,116 @@ func _test_bot_routes() -> void:
 		"a route to every other spawn, every leg clear of the brushes (%d of %d)" % [clear, spawns.size() - 1])
 	_check(reached > 0 and furthest > 5.0 and reached + short_but_closer == spawns.size() - 1,
 		"its own half reached in full (%d spawns, the furthest %.0f m), the far half's routes end nearer than they start (%d)" % [reached, furthest, short_but_closer])
+	_done()
+
+
+## The map the ride check plays: the first combat surf map with planned rides (see
+## docs/imported-maps.md, "Bots ride the ramps", for why not [constant MAP]).
+const RIDE_MAP := &"surf_ski_2"
+## Its starts, and how many must land.
+const RIDE_STARTS := 3
+const RIDE_LANDING := 2
+## How long a roaming bot is given to take a ride of its own accord, seconds.
+const ROAM_SECONDS := 90.0
+
+
+## Bots ride the ramps (`game/arena_surf.gd`): the edges are linked into the mesh, a route to a
+## platform below crosses one, a bot handed it by its route lands on the far platform alive from
+## [constant RIDE_STARTS] starts (the edge's own and perturbed ones), and a bot left to roam
+## is handed one by its own route.
+func _test_surf_rides() -> void:
+	_section("bots ride a ramp to another platform, aiming as they go")
+	var changed := _game.change_map(ArenaMap.by_id(RIDE_MAP))
+	var world := ArenaBots.world_for(_game)
+	# The mesh bakes in the background from the first route asked; the rides are linked when
+	# it lands.
+	var _first := world.route(Vector3.ZERO, Vector3.ONE)
+	var frames := 0
+	while world.is_route_pending() and frames < 1200:
+		await get_tree().process_frame
+		frames += 1
+	var surf: ArenaSurf = world.surf_for_map() if changed.ok else null
+	var planned: Array = surf.edges.filter(func(e: ArenaSurf.Edge) -> bool: return e.cache.size() > 0) if surf != null else []
+	var linked := not planned.is_empty() and planned.all(func(e: ArenaSurf.Edge) -> bool: return e.linked)
+	_check(linked, "%s's planned ride edges are linked into the bots' mesh (%s)" % [RIDE_MAP,
+		str(surf.describe()) if surf != null else "no cache at %s" % ArenaSurf.path_for(RIDE_MAP)])
+	if not linked:
+		_check(false, "so no route crosses one")
+		_check(false, "nor does a bot ride one")
+		_check(false, "nor take one of its own accord")
+		_done()
+		return
+	var edge: ArenaSurf.Edge = planned[0]
+	var way := world.route_detail(edge.from, edge.to)
+	_check((way["rides"] as PackedInt32Array).has(edge.id),
+		"the route from its platform to the one below crosses ride edge %d (%d corners)" % [edge.id, (way["points"] as PackedVector3Array).size()])
+
+	var id := 4
+	var bot := _game.player_for(id)
+	# Everybody else off the ramp's line: players are solid (mp_solidplayers), and one standing on
+	# the start platform is a wall the planned rides never met. A bot that rides into somebody is
+	# a game, not this check.
+	var aside: Vector3 = surf.edges[surf.edges.size() - 1].to if surf.edges.size() > 1 else edge.to + Vector3(30.0, 0.0, 0.0)
+	for other in _game.players():
+		if other.player_id != id and other.player_id != 5 and other.is_alive():
+			other.controller.teleport(aside + Vector3(float(other.player_id), 0.0, 0.0), 0.0, 0.0)
+	var landed := 0
+	var alive := 0
+	var notes: Array[String] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 41
+	var tick := 0
+	for k in range(RIDE_STARTS):
+		if not bot.is_alive():
+			_game.respawn_player(id)
+		var at := edge.from
+		var velocity := Vector3.ZERO
+		if k > 0:
+			var forward := DotFpsMotor.forward_for(edge.course.reference_yaw())
+			at += Vector3(-forward.z, 0.0, forward.x) * rng.randf_range(-0.8, 0.8)
+			velocity = DotFpsMotor.forward_for(edge.course.reference_yaw() + rng.randf_range(-60.0, 60.0)) * rng.randf_range(2.0, 8.0)
+		bot.controller.teleport(at, edge.course.reference_yaw(), 0.0)
+		bot.controller.state.velocity = velocity
+		var mind := ArenaBots.Mind.new()
+		mind.seed = 77 + k
+		# What the route hands it when it reaches the edge's start.
+		mind.ride = DotBotSurfRide.new().begin(edge.cache, edge.course, surf._sim_for(edge, bot.controller), tick, float(TICK_RATE))
+		var before := surf.landed
+		var ticks := 0
+		while mind.ride != null and ticks < int(ArenaSurf.RIDE_SECONDS * TICK_RATE) + 4:
+			_game.tick({id: ArenaBots.think(_game, bot, mind, tick, float(TICK_RATE))})
+			tick += 1
+			ticks += 1
+			if ticks % 32 == 0:
+				await get_tree().physics_frame
+		var feet := bot.controller.state.position
+		var made_it := surf.landed > before and surf.nav.on_island(edge.course.landing_island, feet, 0.6)
+		landed += 1 if made_it else 0
+		alive += 1 if made_it and bot.is_alive() else 0
+		notes.append("%s %.2f s at %s" % ["landed" if made_it else "missed", float(ticks) / TICK_RATE, str(feet.round())])
+	_line("     edge %d, %.0f m: %s" % [edge.id, edge.from.distance_to(edge.to), "; ".join(notes)])
+	_check(landed >= RIDE_LANDING and alive == landed,
+		"a bot rides it to the platform below and lands alive (%d of %d)" % [landed, RIDE_STARTS])
+
+	# Of its own accord: a bot on a spawn platform roams, and its routes cross the edges.
+	var roamer := _game.player_for(5)
+	if not roamer.is_alive():
+		_game.respawn_player(5)
+	roamer.controller.teleport(edge.from, 0.0, 0.0)
+	var roam_mind := ArenaBots.Mind.new()
+	roam_mind.seed = 5
+	var begun_before := surf.begun
+	var landed_before := surf.landed
+	for t in range(int(ROAM_SECONDS * TICK_RATE)):
+		_game.tick({5: ArenaBots.think(_game, roamer, roam_mind, tick, float(TICK_RATE))})
+		tick += 1
+		if t % 32 == 0:
+			await get_tree().physics_frame
+		if surf.begun > begun_before and roam_mind.ride == null:
+			break
+	# Whether it lands is the check above; this one is that its own route hands it a ride.
+	_check(surf.begun > begun_before,
+		"a roaming bot's own route hands it a ride (%d begun, %d landed)" % [surf.begun - begun_before, surf.landed - landed_before])
 	_done()
 
 

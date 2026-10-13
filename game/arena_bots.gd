@@ -30,11 +30,18 @@ extends RefCounted
 ## [b]Deterministic per bot[/b]: the brain's randomness is seeded from the bot's id, and its
 ## clock is the game's tick, so two runs of the same inputs play the same bots. Not on an
 ## imported map, whose routes start when its background bake lands ([method World._nav_for_map]).
+##
+## [b]Ramps are ridden.[/b] On a combat surf map with a surf cache the routes cross ride edges
+## between the platforms and walk through the map's teleports, and a bot whose route reaches a
+## ride hands its legs to the surf pilot until it lands, aiming and shooting as before
+## ([code]arena_surf.gd[/code], loaded only on a shell with dot-bot 4 and
+## dot-player-controller 3).
 
 const CHANNEL := "arena.bots"
 
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
+const ArenaPaths := preload("arena_paths.gd")
 
 ## The behaviour of a weapon whose shot flies (a rocket, a bolt); every other one is led as
 ## hitscan. A path, because the pack names behaviours by path (see [DotWeaponDef]).
@@ -66,6 +73,9 @@ class Mind:
 	var throw_back: int = 0
 	var throw_at: int = 0
 	var throw_cook_from: int = 0
+	## The ride under way (dot-bot's DotBotSurfRide, untyped so an older shell still compiles
+	## this), or null.
+	var ride: Variant = null
 
 
 const THROW_DRAW := 1
@@ -93,6 +103,10 @@ class World:
 	## it is for. See [method _nav_for_map].
 	var _nav: DotBotNav = null
 	var _nav_map: Object = null
+	## The map's ride edges ([code]arena_surf.gd[/code]), once its mesh has landed and if it has
+	## a surf cache; and whether that was looked for on this mesh.
+	var _surf: RefCounted = null
+	var _surf_looked: bool = false
 
 	func _init(p_game: Object) -> void:
 		game = p_game
@@ -155,7 +169,37 @@ class World:
 		var spawns: Array = (map as Object).get("spawns") if map is Object else []
 		for spawn: Transform3D in spawns:
 			out.append(spawn.origin)
+		var surf := surf_for_map()
+		if surf != null:
+			out.append_array(surf.call(&"landing_points"))
 		return out
+
+	## A route that may ride a ramp or walk through a teleport: the mesh's own answer once the
+	## map's ride edges are linked into it, the walked corners otherwise.
+	func route_detail(from: Vector3, to: Vector3) -> Dictionary:
+		var surf := surf_for_map()
+		if surf != null:
+			return surf.call(&"route_detail", from, to)
+		var points := route(from, to)
+		var rides := PackedInt32Array()
+		rides.resize(points.size())
+		rides.fill(-1)
+		return {"points": points, "rides": rides}
+
+	## The map's ride edges, linked into its mesh: null on a built-in map, before the mesh lands,
+	## on a map with no surf cache, and on a shell without dot-bot 4 or dot-player-controller 3.
+	func surf_for_map() -> RefCounted:
+		var nav := _nav_for_map()
+		if nav == null or not nav.is_ready():
+			return null
+		if _surf_looked:
+			return _surf
+		_surf_looked = true
+		if DotAddonApi.build_level("dot_bot") < 4 or DotAddonApi.build_level("dot_player_controller") < 3:
+			return null
+		var surf_script := load(ArenaPaths.rebase("res://game/arena_surf.gd")) as GDScript
+		_surf = surf_script.call(&"load_for", game.get("map"), nav) if surf_script != null else null
+		return _surf
 
 	## The corners of a way from [param from] to [param to]: over the navigation graph on a
 	## built-in map, over the mesh baked from the brushes on an imported one; empty (walk
@@ -196,6 +240,8 @@ class World:
 			_nav.clear()
 		_nav = DotBotNav.new()
 		_nav_map = map
+		_surf = null
+		_surf_looked = false
 		var body := _body_tunables()
 		var started := _nav.bake_in_background(root, {"radius": body.radius, "height": body.stand_height, "climb": body.step_height})
 		if not started.ok:
@@ -293,6 +339,11 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 
 	var me := world.contact(bot.player_id)
 	var intent := mind.brain.think(me, world, world.now())
+	var surf := world.surf_for_map()
+	if surf != null:
+		surf.call(&"steer", bot, mind, intent, tick, tick_rate)
+	elif mind.ride != null:
+		mind.ride = null
 	intent.write_move(move)
 	intent.write_fire(fire)
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)

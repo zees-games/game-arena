@@ -120,6 +120,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - A guard on a host addon's level needs that addon in `requires.floor.json` at the older path's level. [client](docs/client.md#keys)
 - An imported map's solid is in the tree on every machine before any player is bodied; spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 - Bots route on an imported map over a `DotBotNav` baked in the background, never in the tick. [imported](docs/imported-maps.md#bots-route-over-a-mesh-baked-from-the-brushes)
+- Ride edges are planned by `tools/surf_rides.tscn`, never at load; `arena_surf.gd` loads by path only with dot-bot 4, dot-player-controller 3. [imported](docs/imported-maps.md#bots-ride-the-ramps)
 - Map mechanics run inside the simulated tick on both ends; pushes are stateless; swim and ladder modes are registered on every map. [imported](docs/imported-maps.md#the-maps-own-mechanics)
 - Arena needs a shell with dot-player-controller v0.1.5+, the wall moves and `DotFpsViewMotion`. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 
