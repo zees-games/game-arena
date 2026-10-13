@@ -1,6 +1,6 @@
 # game-arena docs
 
-The detail behind [CLAUDE.md](../CLAUDE.md). One subject per file; open the one you are about to touch. Family-wide rules are in the family's [CLAUDE.md](../../../CLAUDE.md) and [docs/](../../../docs/).
+The detail behind [CLAUDE.md](../CLAUDE.md). Arena plays free-for-all, team, objective, horde (`siege`), props and gun game modes ([modes.md](modes.md)). One subject per file; open the one you are about to touch. Family-wide rules are in the family's [CLAUDE.md](../../../CLAUDE.md) and [docs/](../../../docs/).
 
 | File | Read it before |
 | --- | --- |
