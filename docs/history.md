@@ -31,6 +31,8 @@ One line each; the detail is in [bugs-found.md](../../../docs/bugs-found.md) or 
 
 **The client tried Godot physics first**: the player fell through a perfectly drawn floor into a void.
 
+**A READY that overtook the seat was answered with nobody (2026-10-12).** Over a lossy ENet link a client's READY can arrive before its seat, and `mark_ready` sent the signon then: a HELLO naming session 0, so the client never knew which body was its own. Eleven other bridges had already been fixed for the same race the same day; arena's `mark_ready` never looked at the seat and had not been checked. `headless_net`'s ready gate had asserted the bug as the rule ("marking it ready sends it the whole signon", to a peer nobody had seated).
+
 ## Map changes
 
 **A map change kept everybody where they stood**, so a player whose spot was a box on the next map was pushed down through the floor. Found building `dm_atrium`'s keep.

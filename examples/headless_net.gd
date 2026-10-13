@@ -39,7 +39,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 225
+const CHECKS := 229
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
@@ -2328,14 +2328,35 @@ func _test_ready_gate() -> void:
 
 	var link := bridge.open_link(bridge)
 	link.loopback = func(method: StringName, peer: int, payload: PackedByteArray) -> void:
-		sent.append([method, peer, payload.size()])
+		sent.append([method, peer, payload.size(), payload])
 
 	bridge.send_event(77, ArenaEvents.Kind.NOTICE, ArenaEvents.write_notice("early"))
 	_check(sent.is_empty(), "an event to a peer that has not said READY is dropped")
 
+	# [b]A READY before the seat is kept, and the seat answers it.[/b] Over ENet with loss a
+	# client's READY can overtake the link's `loaded` (another channel) and so its seat; answered
+	# at once, its HELLO named session 0 and the client never knew which body was its own.
 	bridge.mark_ready(77)
+	_check(sent.is_empty(), "a READY before the seat is kept: nothing is sent yet", str(sent.size()))
+	var early := bridge.add_player(77, 577, "Early")
+	var watcher := ArenaNetBridge.new()
+	watcher.name = "GateWatcher"
+	add_child(watcher)
+	var watcher_game := _make_game(false)
+	var watcher_net := _make_manager(false, &"gatewatch", 77)
+	var _attached := watcher.attach(watcher_game, watcher_net)
+	_start(watcher_net)
+	for s: Array in sent:
+		if s[0] == &"event" and int(s[1]) == 77:
+			var _got: DotResult = watcher.receive_event(s[3])
+	var hello: Dictionary = watcher.get("_hello")
+	_check(early.ok and int(hello.get("session_id", 0)) == 577 and watcher_game.player_for(577) != null,
+		"and the seat answers it: the HELLO names the player seated, and the signon describes them",
+		"hello %s" % str(hello))
+	watcher.queue_free()
+	watcher_game.queue_free()
+	watcher_net.queue_free()
 	var after_ready: int = sent.size()
-	_check(after_ready > 0, "and marking it ready sends it the whole signon", str(after_ready))
 
 	bridge.send_event(77, ArenaEvents.Kind.NOTICE, ArenaEvents.write_notice("late"))
 	_check(sent.size() > after_ready, "and later events reach it")
@@ -2354,8 +2375,15 @@ func _test_ready_gate() -> void:
 	_check(
 		late.ok and to_ready.size() == 1,
 		"a later joiner is announced to the peers already in",
-		str(sent)
+		str(to_ready.size())
 	)
+
+	# A READY from a peer that left before its seat is forgotten, or the next owner of that
+	# peer id would be sent a signon before it asked.
+	bridge.mark_ready(99)
+	bridge.remove_peer(99)
+	var _again := bridge.add_player(99, 599, "Reused")
+	_check(not bridge.get("_ready_peers").has(99), "a READY from a peer that left before its seat is forgotten")
 
 	bridge.queue_free()
 	game.queue_free()

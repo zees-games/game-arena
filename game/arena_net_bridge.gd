@@ -169,6 +169,15 @@ static func link_rtt_ms(link: Node) -> float:
 ## client that never learns who it is.
 var _ready_peers: Dictionary = {}
 
+## Peers whose READY came before their seat ([method add_player]). Server side.
+##
+## [b]Kept, not answered.[/b] A client sends READY when its link says PLAYING, which the link
+## decides itself after sending `loaded` on another channel; over ENet with loss the READY can
+## overtake `loaded` and so the seat. Answered then, its HELLO named session 0 and its signon
+## no player of its own: a client with a world and no idea which body is its own, for good,
+## because nothing sends a HELLO again. The seat answers it instead.
+var _ready_unseated: Dictionary = {}
+
 ## Whether this end has had its HELLO. Client side.
 var _hello: Dictionary = {}
 
@@ -352,6 +361,10 @@ func add_player(peer_id: int, session_id: int, display_name: String) -> DotResul
 	# peers only: one that is not ready yet gets the whole roster when it is.
 	send_event(0, ArenaEvents.Kind.JOIN, payload)
 
+	if _ready_unseated.has(peer_id):
+		_ready_unseated.erase(peer_id)
+		mark_ready(peer_id)
+
 	return DotResult.success(identity)
 
 
@@ -433,6 +446,10 @@ func _build_identity(player: ArenaPlayer, peer_id: int) -> DotNetIdentity:
 
 ## Drops a peer's player from the game and from replication.
 func remove_peer(peer_id: int) -> void:
+	# A peer that said READY and left before its seat: a peer id is reused, and a stale entry
+	# would answer the next owner's seat with a signon before it has asked.
+	_ready_unseated.erase(peer_id)
+
 	if not _players_by_peer.has(peer_id):
 		return
 
@@ -1518,6 +1535,12 @@ func _on_prop_act(peer_id: int, body: Dictionary) -> void:
 ## A peer has built its scene and may be sent things.
 func mark_ready(peer_id: int) -> void:
 	if net == null or not net.is_server or _ready_peers.has(peer_id):
+		return
+
+	# Before the seat: kept, and answered by add_player (see [member _ready_unseated]).
+	if not _players_by_peer.has(peer_id):
+		_ready_unseated[peer_id] = true
+		DotLog.debug(CHANNEL, "a READY before the seat, kept", {"peer": peer_id})
 		return
 
 	_ready_peers[peer_id] = true
