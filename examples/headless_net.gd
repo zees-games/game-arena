@@ -39,7 +39,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 229
+const CHECKS := 230
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
@@ -78,6 +78,9 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	var errors := EngineErrors.new()
+	OS.add_logger(errors)
+
 	print("game-arena — netcode over two clients")
 
 	_build_server()
@@ -114,6 +117,13 @@ func _run() -> void:
 	_test_disconnect()
 	_test_monsters_reach_a_client()
 	await _test_toys_reach_a_client()
+
+	OS.remove_logger(errors)
+	# Engine errors go to stderr and change no exit code: a toy pulled out of the tree after a
+	# mid-tick rebuild (dot-net history #30) printed `!is_inside_tree()` on green runs elsewhere.
+	var seen := errors.seen()
+	_check(seen.is_empty(), "the engine reported no error over the whole run",
+		"%d: %s" % [seen.size(), ", ".join(seen.slice(0, 3))])
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -2510,3 +2520,27 @@ func _test_config_agreement() -> void:
 			"%s vs %s" % [net.messages.schema_hash(), server_hash]
 		)
 	_done()
+
+
+## Counts the engine's own errors while installed (mg-smash-copter's dedicated suite has the
+## same class): they go to stderr and change no exit code, so only this makes one fail a run.
+class EngineErrors extends Logger:
+	var _lock := Mutex.new()
+	var _seen := PackedStringArray()
+
+	func _log_error(
+		function: String, _file: String, _line: int, code: String, _rationale: String,
+		_editor_notify: bool, _error_type: int, _script_backtraces: Array[ScriptBacktrace]
+	) -> void:
+		_lock.lock()
+		_seen.append("%s (%s)" % [code, function])
+		_lock.unlock()
+
+	func _log_message(_message: String, _error: bool) -> void:
+		pass
+
+	func seen() -> PackedStringArray:
+		_lock.lock()
+		var out := _seen.duplicate()
+		_lock.unlock()
+		return out
