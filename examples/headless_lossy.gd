@@ -286,6 +286,17 @@ func _boot() -> bool:
 		_done()
 		return false
 
+	# No quota bots, as in headless_feel. A client predicts its own player against the
+	# others where it last heard they are, a round trip old, so a bump into a running bot
+	# is a correction of up to a couple of metres that no loss caused; and a bot shoots. A
+	# fills a server to four with two bots, and whether A met one in a window was down to
+	# the wall clock: 0.9 to 1.3 m worst on a desk, p95 0.59 m and 2.1 m on a CI runner
+	# (v0.1.11's release). This suite measures the link; players against players is
+	# headless_net's.
+	var quota: DotBotQuota = _module().get("_bot_quota")
+	if quota != null and quota.mode_cvar != null:
+		quota.mode_cvar.force_set("off")
+
 	_relay = Relay.new()
 	_relay.seed = 20261009
 	var w: Array = WINDOWS[0]

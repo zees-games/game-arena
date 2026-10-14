@@ -1577,7 +1577,7 @@ func _test_movement_rules_reach_clients() -> void:
 ## one of them puts the player somewhere else: off the wall, or allowed a second jump off
 ## it. So the north gallery's two wall routes are driven from the client's own predicted
 ## state, the way a player would, and both ends have to make the route, agree to within the
-## harness's loss all the way, and end up in the same place.
+## snapshot's rounding all the way through the loss, and end up in the same place.
 func _test_wall_moves_predicted() -> void:
 	print("")
 	_section("[a wall run and a wall jump, predicted]")
@@ -1624,15 +1624,15 @@ func _test_wall_moves_predicted() -> void:
 			"%s: the server's player makes it, and so does the client's prediction" % name,
 			"server %s, client %s" % [server_player.controller.state.position, client_player.controller.state.position]
 		)
-		# A hand's width, like the launch above: in this lockstep a lost packet is a tick the
-		# server runs without that tick's command (a real server has its input buffer and
-		# the resent copies; headless_lossy measures that), so a lost crouch press before a
-		# slide-jump puts the two ends a few centimetres of crouch apart until the next
-		# snapshot. What must not happen is the run or the jump itself coming out
-		# differently, which leaves them metres apart and still apart once down.
+		# Five centimetres. `_driven_window` plays the link the way a real one plays (the
+		# client ahead of its snapshots, each command early with its copies), so what is
+		# left is the snapshot's own rounding, 5 to 7 mm whichever tick the presses fall
+		# on. A wall jump a tick late is 0.1 m in its first tick; this used to allow 0.35
+		# because the harness itself made every jump a tick late on the client, and the
+		# gap was then only as big as the wait for the next snapshot.
 		_check(
-			float(measured["worst_aligned"]) < 0.35 and landed_apart < 0.01,
-			"%s: the client predicted it within a hand's width of the server, and lands where it does" % name,
+			float(measured["worst_aligned"]) < 0.05 and landed_apart < 0.01,
+			"%s: the client predicted it within five centimetres of the server, and lands where it does" % name,
 			"worst %.3f m at %s, %.3f m apart once down" % [float(measured["worst_aligned"]), measured["worst_at"], landed_apart]
 		)
 
@@ -1644,26 +1644,44 @@ func _test_wall_moves_predicted() -> void:
 
 ## [method _flight_window] with [param peer]'s commands from [param driver], read off the
 ## client's own predicted state, until the driver has landed (or [param ticks] run out).
+##
+## [b]Played the way a real link plays it, not the way [method _flight_window] does.[/b]
+## Two things differ, and each one alone made the chimney's result depend on nothing but
+## where its presses fell among the harness's snapshots and lost packets -- that is, on
+## which sections ran before this one: CI, without the imported maps, failed it on every
+## run from 2026-10-11 with the same numbers, and a desk with them passed.
+##
+## - The client plays a tick before the server's snapshot of it arrives. Handed over first,
+##   the snapshot rewinds the client to the server's tick T with its clock still on T - 1,
+##   there is nothing to replay, and the client simulates T a second time with T's command.
+##   From then on its tick T + 1 is built from command T: invisible on a held input, a tick
+##   late on every press. Each wall jump came out a tick late on the client and the next
+##   snapshot pulled it back, 0.13 to 0.43 m apart in between.
+## - A command reaches the server a tick before the server runs it, carrying copies of the
+##   ones before it, as [constant ArenaNetBridge.INPUT_COPIES] and the client's input lead
+##   arrange on a real link. With no lead, a lost packet is a command the server never
+##   gets, and a lost jump press is a climb the server never makes.
+##
+## So the loss here is what a real link survives: one packet in five upstream, recovered
+## from the copies, and one snapshot in five downstream.
 func _driven_window(peer: int, driver: WallRouteDriver, ticks: int) -> Dictionary:
 	var first := _server_game.current_tick() + 1
 	var worst_aligned := 0.0
 	var worst_at := ""
-	var previous := Vector3.ZERO
-	var has_previous := false
 	var session := int(_clients[peer]["session"])
 	var predicted: ArenaPlayer = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(session).player
 	var actual: ArenaPlayer = _server_bridge.behaviour_for(session).player
 	var after_landing := 0
 	var last_aligned := INF
 
-	for tick in range(first, first + ticks):
-		var commands := {}
-
+	# Each peer's command for a tick, made and sent the tick before.
+	var send := func(tick: int) -> Dictionary:
+		var made := {}
 		for peer_id in _clients:
 			var pair := _commands_for(peer_id, tick)
 			if peer_id == peer:
 				pair = [driver.next(predicted.controller.state), DotWeaponCommand.new()]
-			commands[peer_id] = pair
+			made[peer_id] = pair
 
 			var packet: PackedByteArray = _clients[peer_id]["bridge"].encode_input(
 				tick, pair[0], pair[1]
@@ -1671,8 +1689,28 @@ func _driven_window(peer: int, driver: WallRouteDriver, ticks: int) -> Dictionar
 			_drop_up += 1
 			if _drop_up % LOSS_EVERY != 0:
 				_server_bridge.receive_input(peer_id, packet)
+		return made
 
+	var commands: Dictionary = send.call(first)
+
+	for tick in range(first, first + ticks):
+		for peer_id in _clients:
+			var pair: Array = commands[peer_id]
+			_clients[peer_id]["net"].clock.tick = tick
+			_clients[peer_id]["bridge"].client_tick(tick, pair[0], pair[1])
+
+		commands = send.call(tick + 1)
 		_server_bridge.server_tick(tick)
+
+		# Both ends have run this tick on this tick's command: what the client predicted,
+		# against what the server did, before the snapshot replaces the prediction.
+		var gap := predicted.controller.state.position.distance_to(actual.controller.state.position)
+		last_aligned = gap
+		if gap > worst_aligned:
+			worst_aligned = gap
+			worst_at = "tick %d client %s server %s" % [
+				tick, predicted.controller.state.position, actual.controller.state.position
+			]
 
 		for entry_down in _downstream:
 			var target_peer: int = entry_down["peer"]
@@ -1681,22 +1719,6 @@ func _driven_window(peer: int, driver: WallRouteDriver, ticks: int) -> Dictionar
 				if _clients.has(target):
 					_clients[target]["bridge"].receive_snapshot(entry_down["bytes"])
 		_downstream.clear()
-
-		for peer_id in _clients:
-			var pair2: Array = commands[peer_id]
-			_clients[peer_id]["net"].clock.tick = tick
-			_clients[peer_id]["bridge"].client_tick(tick, pair2[0], pair2[1])
-
-		# The client runs a tick ahead of the server in this lockstep, so its last
-		# position is where the server is now (see _flight_window).
-		if has_previous:
-			var gap := previous.distance_to(actual.controller.state.position)
-			last_aligned = gap
-			if gap > worst_aligned:
-				worst_aligned = gap
-				worst_at = "tick %d client %s server %s" % [tick, previous, actual.controller.state.position]
-		previous = predicted.controller.state.position
-		has_previous = true
 
 		# A dozen ticks standing after the landing, so a late correction is still counted.
 		if driver.finished(predicted.controller.state) and driver.finished(actual.controller.state):
