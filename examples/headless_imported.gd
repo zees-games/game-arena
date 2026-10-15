@@ -13,6 +13,9 @@ const ArenaContent := preload("../game/arena_content.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaSurf := preload("../game/arena_surf.gd")
+const ArenaDrops := preload("../game/arena_drops.gd")
+const ArenaEvents := preload("../game/arena_events.gd")
+const ArenaJail := preload("../maps/arena_jail.gd")
 
 ## The combat surf maps game-g2gfast imported, played as an arena deathmatch.
 ##
@@ -71,8 +74,8 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 15
-const CHECKS := 78
+const SECTIONS := 17
+const CHECKS := 99
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -117,11 +120,13 @@ func _run() -> void:
 	_test_surf_movement()
 	_test_ramp()
 	_test_pits()
+	_test_jail()
 	_test_shots()
 	_test_mechanics()
 	await _test_hurt()
 	await _test_surf_rides()
 	await _test_every_map()
+	await _test_packs()
 	await _test_server_named()
 
 	_finish()
@@ -895,6 +900,168 @@ func _test_pits() -> void:
 	_check(player.controller.state.position.distance_to(spawn.origin) < 0.5,
 		"fallen out of the bottom of the map, back at a spawn")
 
+	_done()
+
+
+# --- The jail ------------------------------------------------------------------------
+
+func _test_jail() -> void:
+	_section("the jail: a fall lands in it, the button opens the gate, then it shuts and cools down")
+
+	var jail: RefCounted = _game.map.jail
+	var falls: Array[int] = []
+	for index: int in jail.roles:
+		if int(jail.roles[index]) == ArenaJail.Role.FALL:
+			falls.append(index)
+	_check(jail != null and falls.size() >= 2 and not jail.exit_indices.is_empty(),
+		"found by its shape: %d pits fall into it, %d ways out" % [falls.size(), jail.exit_indices.size()])
+
+	# One second open, two shut: short enough to run out in a suite, whole ticks all the same.
+	_game.jail_rules["open"] = 1.0
+	_game.jail_rules["cooldown"] = 2.0
+	var told: Array[int] = [0]
+	var counter := func() -> void: told[0] += 1
+	_game.jail_changed.connect(counter)
+	_game.apply_jail_rules()
+	_check(jail.open_ticks == TICK_RATE and jail.cooldown_ticks == 2 * TICK_RATE,
+		"the rules are in ticks (%d open, %d shut)" % [jail.open_ticks, jail.cooldown_ticks])
+
+	var player := _fresh(2)
+	var fall_box: AABB = _game.map.pits[falls[0]]["box"]
+	player.controller.teleport(fall_box.get_center(), 0.0, 0.0)
+	_game.tick({})
+	var button: AABB = jail.button_box()
+	var at := player.controller.state.position
+	_check(at.distance_to(jail.cell()) < 0.5 and at.distance_to(button.get_center()) > 5.0,
+		"a fall lands in the cell, not at the button (%.1f m from the cell)" % at.distance_to(jail.cell()))
+
+	player.controller.teleport(button.get_center(), 0.0, 0.0)
+	var told_before: int = told[0]
+	_game.tick({})
+	_check(jail.opened_at >= 0 and jail.is_open(player.controller.state.tick) and told[0] > told_before,
+		"standing on the button opens the gate, and says so")
+	_check((player.controller.state.position - button.get_center()).length() < 1.0,
+		"and the button itself no longer sends anybody anywhere")
+
+	var gate: Dictionary = _game.map.pits[jail.exit_indices[0]]
+	player.controller.teleport((gate["box"] as AABB).get_center(), 0.0, 0.0)
+	_game.tick({})
+	_check(player.controller.state.position.distance_to(gate["to"]) < 0.5,
+		"open, the way out is a way out")
+
+	var ticks_open := 0
+	while jail.is_open(player.controller.state.tick) and ticks_open < 4 * TICK_RATE:
+		_game.tick({})
+		ticks_open += 1
+	_check(absi(ticks_open - TICK_RATE) <= 3, "it shuts after its open time (%d ticks of %d)" % [ticks_open, TICK_RATE])
+
+	player.controller.teleport((gate["box"] as AABB).get_center(), 0.0, 0.0)
+	_game.tick({})
+	_check(player.controller.state.position.distance_to(jail.cell()) < 0.5,
+		"shut, a walk into the way out puts the player back in the cell")
+
+	var first_opened: int = jail.opened_at
+	player.controller.teleport(button.get_center(), 0.0, 0.0)
+	_game.tick({})
+	_check(jail.opened_at == first_opened, "the button does nothing while it cools down")
+
+	var waited := 0
+	while not jail.can_press(player.controller.state.tick) and waited < 6 * TICK_RATE:
+		_game.tick({})
+		waited += 1
+	player.controller.teleport(button.get_center(), 0.0, 0.0)
+	_game.tick({})
+	_check(jail.opened_at > first_opened, "and works again once it has (%d ticks later)" % waited)
+
+	jail.enabled = false
+	var fall_pit: Dictionary = _game.map.pit_at(fall_box.get_center(), player.controller.state.tick)
+	_check(fall_pit == _game.map.pits[falls[0]] and _game.map.pit_at(button.get_center(), 0) == _game.map.pits[jail.button_index],
+		"with arena_jail off every volume does what the map shipped")
+	jail.enabled = true
+
+	var wire := ArenaEvents.read_jail(DotNetReader.new(ArenaEvents.write_jail(true, 640, 1280, 4321)))
+	var shut_tick := 4321 + 640
+	_game.apply_jail_state(wire)
+	_check(bool(wire["ok"]) and jail.opened_at == 4321 and jail.is_open(4321 + 10) and not jail.is_open(shut_tick),
+		"the gate's state survives the wire, so a client predicts the same door")
+	_game.jail_changed.disconnect(counter)
+	_game.jail_rules["open"] = 10.0
+	_game.jail_rules["cooldown"] = 20.0
+	_game.apply_jail_rules()
+	jail.opened_at = -1
+	_done()
+
+
+# --- Packs and the dash ----------------------------------------------------------------
+
+func _test_packs() -> void:
+	_section("the shift powerup is off, and a map's packs heal, refill and come back")
+
+	var game := ArenaGame.new()
+	game.tick_rate = TICK_RATE
+	game.headless = true
+	game.is_authority = true
+	game.register_service = false
+	game.mode = ArenaMode.free_for_all(SCORE_LIMIT)
+	add_child(game)
+	var res := game.setup(ArenaMap.by_id(&"dm_box"))
+	_check(res.ok, "a map with packs loads")
+	var _added := game.add_player(1, "a")
+	var player := game.player_for(1)
+	game.respawn_player(1)
+
+	_check(not player.controller.tunables.dash_enabled and not ArenaPlayer.arena_tunables().dash_enabled,
+		"the dash is off by default (arena_dash turns it on)")
+	_check(game.drops.pack_count() == game.map.packs.size() and game.map.packs.size() >= 4
+		and game.drops.packs_available() == game.map.packs.size(),
+		"every pack the map places is out (%d)" % game.map.packs.size())
+	_check(ArenaMap.PACK_HEALTH == ArenaDrops.Kind.HEALTH and ArenaMap.PACK_AMMO == ArenaDrops.Kind.AMMO,
+		"the map and the drops layer number the pack kinds alike")
+
+	var health_at := Vector3.ZERO
+	var ammo_at := Vector3.ZERO
+	for pack: Dictionary in game.map.packs:
+		if int(pack["kind"]) == ArenaMap.PACK_HEALTH and health_at == Vector3.ZERO:
+			health_at = pack["at"]
+		if int(pack["kind"]) == ArenaMap.PACK_AMMO and ammo_at == Vector3.ZERO:
+			ammo_at = pack["at"]
+
+	# At full health a health pack stays where it is, for someone who needs it.
+	player.controller.teleport(health_at, 0.0, 0.0)
+	var out := game.drops.packs_available()
+	game.tick({})
+	_check(game.drops.packs_available() == out, "a health pack is left alone by somebody at full health")
+
+	player.health.health = player.health.max_health - 40.0
+	player.controller.teleport(health_at, 0.0, 0.0)
+	game.tick({})
+	_check(player.health.health > player.health.max_health - 40.0 and game.drops.packs_available() == out - 1,
+		"hurt, they take it and are healed (%.0f)" % player.health.health)
+
+	var respawn_ticks := int(round(game.drops.pack_respawn_sec * float(TICK_RATE)))
+	player.controller.teleport(Vector3(0.0, 40.0, 0.0), 0.0, 0.0)
+	for _i in range(respawn_ticks + 2):
+		game.tick({})
+	_check(game.drops.packs_available() == out, "and it comes back after its respawn time (%d ticks)" % respawn_ticks)
+
+	var slot_id: int = player.arsenal.slots()[0]
+	for s in player.arsenal.slots():
+		var def: DotWeaponDef = player.arsenal.slot_at(s).def
+		if def != null and def.uses_ammo() and def.ammo_type != &"" and not def.infinite_reserve and def.reserve_cap() > 0:
+			slot_id = s
+			break
+	var held: DotWeaponDef = player.arsenal.slot_at(slot_id).def
+	player.arsenal.ammo().set_count(held.ammo_type, 0)
+	player.controller.teleport(ammo_at, 0.0, 0.0)
+	game.tick({})
+	var got := player.arsenal.ammo().count(held.ammo_type)
+	_check(got > 0 and got <= held.reserve_cap(), "an ammo pack refills a reserve that was empty (%d of %d)" % [got, held.reserve_cap()])
+
+	game.drop_rules["packs"] = false
+	game.apply_drop_rules()
+	_check(game.drops.pack_count() == 0, "arena_packs 0 takes them all away")
+	remove_child(game)
+	game.free()
 	_done()
 
 

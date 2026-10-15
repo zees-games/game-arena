@@ -146,7 +146,7 @@ static func fill_help(help: DotMenuHelp) -> void:
 	for mode in ArenaModes.all():
 		lines.append([mode.display_name, mode.description])
 	help.add_section("Modes", lines, &"plain")
-	help.add_text("Moving", "Duck while running to slide (C slides too), Shift dashes, and E launches you. In a props mode E grabs a prop and F freezes it.")
+	help.add_text("Moving", "Duck while running to slide (C slides too), Shift dashes when the server turns arena_dash on, and E launches you. In a props mode E grabs a prop and F freezes it.")
 
 
 ## dot-browser's list as a page: a card of servers, each with a Join, and a Refresh.

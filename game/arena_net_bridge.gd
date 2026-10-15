@@ -276,6 +276,7 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 		game.player_killed.connect(_on_player_killed)
 		game.match_state_changed.connect(_on_match_state_changed)
 		game.movement_rules_changed.connect(_on_movement_rules_changed)
+		game.jail_changed.connect(_on_jail_changed)
 		game.hit_confirmed.connect(_on_hit_confirmed)
 		game.medals_awarded.connect(_on_medals_awarded)
 
@@ -899,6 +900,18 @@ func _on_movement_rules_changed(rules: Dictionary) -> void:
 	send_event(0, ArenaEvents.Kind.RULES, ArenaEvents.write_rules(rules))
 
 
+## The jail's gate was pressed or its rules changed: every client gets the state. Server side.
+func _on_jail_changed() -> void:
+	if net == null or not net.is_server or game == null or game.map == null or game.map.jail == null:
+		return
+	send_event(0, ArenaEvents.Kind.JAIL, _jail_body())
+
+
+func _jail_body() -> PackedByteArray:
+	var jail: RefCounted = game.map.jail
+	return ArenaEvents.write_jail(jail.enabled, jail.open_ticks, jail.cooldown_ticks, jail.opened_at)
+
+
 func send_event(peer_id: int, kind: int, body: PackedByteArray) -> void:
 	if net == null or not net.is_server or link == null:
 		return
@@ -981,6 +994,19 @@ func send_signon(peer_id: int) -> void:
 		)
 
 	_send_match_state(peer_id)
+
+	# The map's packs that are out right now. A kill's drop lives seconds and a joiner never
+	# misses one; a pack lives the whole map, so a joiner would otherwise not see it until
+	# it was next taken and came back.
+	if game != null and game.drops != null:
+		for pack in game.drops.packs_out():
+			send_event(peer_id, ArenaEvents.Kind.DROP, ArenaEvents.write_drop(
+				int(pack["id"]), int(pack["kind"]), int(pack["value"]), pack["at"], pack["at"]
+			))
+
+	# The jail's gate, when the map has one: a joiner mid-open would otherwise predict it shut.
+	if game != null and game.map != null and game.map.jail != null:
+		send_event(peer_id, ArenaEvents.Kind.JAIL, _jail_body())
 
 	# The map's toys, by net id in toy order: the joiner's own copies are paired with them.
 	if not _toys_body.is_empty():
@@ -1458,6 +1484,10 @@ func _on_event(message: DotNetMessage) -> void:
 			var took := ArenaEvents.read_taken(reader)
 			if bool(took["ok"]) and game.drops != null:
 				game.drops.mirror_taken(int(took["id"]), int(took["taker"]))
+		ArenaEvents.Kind.JAIL:
+			var told_jail := ArenaEvents.read_jail(reader)
+			if bool(told_jail["ok"]) and game != null:
+				game.apply_jail_state(told_jail)
 		ArenaEvents.Kind.RULES:
 			var rules := ArenaEvents.read_rules(reader)
 			if bool(rules["ok"]) and game != null:

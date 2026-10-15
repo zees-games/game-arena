@@ -4,6 +4,7 @@ const ArenaAvatars := preload("../game/arena_avatars.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaDrops := preload("../game/arena_drops.gd")
+const ArenaJailView := preload("../game/arena_jail_view.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
@@ -63,6 +64,7 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 
 	root.add_child(map.to_scene())
+	_stage_packs.call_deferred(map)
 	# The map's toys, as a client draws them: frozen where the map puts them. Built in the
 	# first frame, because the box builds in the tree and nothing here is in it yet.
 	if not map.toys.is_empty():
@@ -150,6 +152,12 @@ func _initialize() -> void:
 	# comparable across nights; a new piece of a map is usually somewhere none of them
 	# points, and the keep on dm_atrium was a blank wall in the eye frame and a lid in
 	# the overview -- neither says whether its doorways read as doorways.
+	_append_views(args, id)
+
+
+## The `--view` frames of [param args], appended to the shots. An imported map takes them too
+## (a jail or a pack on it is somewhere none of the fixed frames points).
+func _append_views(args: PackedStringArray, id: StringName) -> void:
 	var at := 0
 
 	while true:
@@ -499,6 +507,21 @@ const IMPORTED_TICKS := 160
 var _imported_game: ArenaGame = null
 
 
+## The map's health and ammo packs, drawn the way a client draws the ones the server announces:
+## through the drops layer's own `mirror_drop`.
+func _stage_packs(map: ArenaMap) -> void:
+	if map.packs.is_empty():
+		return
+	var layer := ArenaDrops.new()
+	layer.name = "Packs"
+	layer.is_authority = false
+	layer.draws = true
+	root.add_child(layer)
+	for index in range(map.packs.size()):
+		var pack: Dictionary = map.packs[index]
+		layer.mirror_drop(ArenaDrops.PACK_ID_BASE + index, int(pack["kind"]), pack["at"], pack["at"], 0)
+
+
 func _stage_imported(map: ArenaMap, id: StringName) -> void:
 	_imported_game = ArenaGame.new()
 	_imported_game.name = "Game"
@@ -526,6 +549,13 @@ func _play_imported() -> void:
 
 	game.match_node.rules.warmup_sec = 0.0
 	game.match_node.rules.countdown_sec = 0.0
+
+	# The jail's gate and button, as a client draws them (the game here is headless, which
+	# draws none of its own presentation).
+	if _staged_map.jail != null:
+		var jail_view := ArenaJailView.new()
+		root.add_child(jail_view)
+		jail_view.build(_staged_map.jail, func() -> int: return 0)
 
 	for i in range(5):
 		var _added := game.add_player(201 + i, "Bot %d" % (i + 1))
@@ -629,6 +659,7 @@ func _play_imported() -> void:
 	]
 
 	_shots.append_array(mechanics_shots)
+	_append_views(OS.get_cmdline_user_args(), _staged_id)
 	var ramp := _biggest_ramp(_staged_map)
 
 	if not ramp.is_empty():

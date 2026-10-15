@@ -76,7 +76,7 @@ const RELIABLE_SECONDS := 35.0
 
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 24
+const OTHER_CHECKS := 28
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -148,6 +148,7 @@ func _run() -> void:
 				await _play_window(window)
 			await _test_wall_moves()
 			await _test_server_cvars_reach_the_client()
+			await _test_view_feel_and_packs_reach_the_client()
 			await _test_leave()
 
 	await _teardown()
@@ -450,6 +451,39 @@ func _test_server_cvars_reach_the_client() -> void:
 	var _one := _server.console.set_cvar("mp_teammate_passthrough", "1")
 	# The leave section reuses A's link; a listener left behind would outlive this section.
 	link.replicated_cvar_changed.disconnect(hear)
+	_done()
+
+
+## [b]zee-dot-weapons' `mp_vm_*` and the map's packs on a client.[/b] The hands are drawn on the
+## client, so the server's sway, tilt, bob, landing and aim steadiness have to reach it, at the
+## join and live; and a pack lives the whole map, so a client that joined after the server built
+## the map has to be told the packs that are out.
+func _test_view_feel_and_packs_reach_the_client() -> void:
+	_section("the server's mp_vm_* and the map's packs reach a client")
+	var a: Dictionary = _clients["A"]
+	var a_game: ArenaGame = a["game"]
+	var link: DotClientLink = a["link"]
+	var held := link.replicated_cvar("mp_vm_sway", "")
+	_check(held != "" and is_equal_approx(a_game.feel_rules.sway, held.to_float()),
+		"the join carried mp_vm_sway and A's view model feel is on it", "held '%s', sway %s" % [held, a_game.feel_rules.sway])
+
+	var _set := _server.console.set_cvar("mp_vm_sway", "2.5")
+	_check(await _until(func() -> bool: return is_equal_approx(a_game.feel_rules.sway, 2.5), RELIABLE_SECONDS),
+		"a change of mp_vm_sway reaches A live", str(a_game.feel_rules.describe()))
+	var _bob := _server.console.set_cvar("mp_vm_aim_steadiness", "0.4")
+	_check(await _until(func() -> bool: return is_equal_approx(a_game.feel_rules.aim_steadiness, 0.4), RELIABLE_SECONDS),
+		"and mp_vm_aim_steadiness, which the others are not", str(a_game.feel_rules.describe()))
+	var _back := _server.console.set_cvar("mp_vm_sway", "1")
+	var _back2 := _server.console.set_cvar("mp_vm_aim_steadiness", "0.75")
+
+	# The harness opens A's bridge after the join, so A missed the signon's packs; send them as the
+	# signon does (one DROP each, from the server's bridge) and see them known, through the loss.
+	var out: int = _game.drops.packs_available() if _game != null and _game.drops != null else -1
+	for pack in _game.drops.packs_out():
+		_module().bridge.send_event(_peer_of("A"), ArenaEvents.Kind.DROP, ArenaEvents.write_drop(
+			int(pack["id"]), int(pack["kind"]), int(pack["value"]), pack["at"], pack["at"]))
+	_check(out > 0 and await _until(func() -> bool: return a_game.drops.known_count() >= out, RELIABLE_SECONDS),
+		"A was told every pack that is out (%d)" % out, "A knows %d" % a_game.drops.known_count())
 	_done()
 
 
@@ -1123,6 +1157,10 @@ func _test_wall_moves() -> void:
 
 	# Stand at the foot of the north wall's clear stretch, a hand off its face, and let the
 	# client be told where it is before anything is measured.
+	# The wall script dashes in the air to get past the wall run's speed, and the dash is off by
+	# default now: turn it on for the server and let RULES carry it to A's prediction.
+	var _dash_on := _server.console.set_cvar("arena_dash", "1")
+	await _until(func() -> bool: return own.controller.tunables.dash_enabled, RELIABLE_SECONDS)
 	_wall_idle = true
 	_wall_from = -1
 	# Twice: the commands A sent before it went idle are still arriving for a few ticks after
@@ -1179,6 +1217,7 @@ func _test_wall_moves() -> void:
 
 	_wall_idle = false
 	_wall_from = -1
+	var _dash_off := _server.console.set_cvar("arena_dash", "0")
 	_done()
 
 

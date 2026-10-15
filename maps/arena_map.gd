@@ -5,6 +5,12 @@ const ArenaBspMap := preload("arena_bsp_map.gd")
 const ArenaImportedMaps := preload("arena_imported_maps.gd")
 const ArenaMapMechanics := preload("arena_map_mechanics.gd")
 const ArenaMapPaint := preload("arena_map_paint.gd")
+const ArenaJail := preload("arena_jail.gd")
+
+## A pack's kind in [member packs]: `ArenaDrops.Kind.HEALTH` and `.AMMO`, written out here so a
+## map does not depend on the game (a headless check holds the two together).
+const PACK_HEALTH := 1
+const PACK_AMMO := 2
 
 const CONTACT_SHADE_SCRIPT := "res://addons/dot_lighting/runtime/dot_contact_shade.gd"
 
@@ -181,6 +187,10 @@ var bounds: AABB = AABB()
 ## the pits under the ramps and the ways into and out of its jail.
 var pits: Array[Dictionary] = []
 
+## The map's jail, found among its pits (see `arena_jail.gd`); null when it has none. Its state
+## (the gate) belongs to the game that loaded the map, which is why it lives on this instance.
+var jail: RefCounted = null
+
 ## What the map's brush entities do to a player — pushes, water, ladders, gravity,
 ## conveyors and hurt — read from the manifest's `mechanics` block. Null on a built-in map,
 ## which is how every caller knows there is nothing to run. See `arena_map_mechanics.gd`.
@@ -191,12 +201,30 @@ var mechanics: ArenaMapMechanics = null
 ## player is built or re-bodied on this map.
 var collision_root: Node3D = null
 
+## Where the map's health and ammo packs lie: `{kind, at}` with `kind` an `ArenaDrops.Kind`
+## ([constant PACK_HEALTH] or [constant PACK_AMMO]) and `at` the floor point under it. Always append through
+## [method add_pack]. The packs are the game's (`arena_packs`, `ArenaDrops.set_packs`); this
+## is only where. An imported map has none.
+var packs: Array[Dictionary] = []
+
 ## The map's toys (dot-props' placements, `{toy, at, yaw}`), which [ArenaGame] builds on both
 ## ends in this order. Loose ones only, never a fixed toy: the movement and the shot trace are
 ## this list's boxes and nothing else, so a see-saw or a trampoline would be something a player
 ## walks through and a shot passes, and a fixed toy that did collide would be cover or a ledge
 ## the map's survey never saw. Set by the built-in maps; an imported map has none.
 var toys: Array = []
+
+
+## What a body with its feet at [param feet] on simulation tick [param tick] is sent through: a
+## pit's `{box, to, yaw}`, or an empty dictionary for none. The pits as the map ships them, but
+## through the jail when it has one and the jail is on. Both ends call this from the tick.
+func pit_at(feet: Vector3, tick: int) -> Dictionary:
+	for index in range(pits.size()):
+		if (pits[index]["box"] as AABB).has_point(feet):
+			if jail != null:
+				return jail.resolve(index, tick)
+			return pits[index]
+	return {}
 
 
 ## Whether this is an imported map rather than a list of boxes.
@@ -659,6 +687,12 @@ static func dm_box() -> ArenaMap:
 		{"toy": "barrel", "at": [20.0, 0.0, 10.0], "yaw": 25.0},
 		{"toy": "tyre", "at": [-20.0, 0.0, 20.0], "yaw": 60.0},
 	]
+	# Packs (health either side of the middle, ammo north and south): clear of every box, off the spawns.
+	map.add_pack(PACK_HEALTH, Vector3(-8.0, 0.0, 0.0))
+	map.add_pack(PACK_HEALTH, Vector3(8.0, 0.0, 0.0))
+	map.add_pack(PACK_AMMO, Vector3(0.0, 0.0, -8.0))
+	map.add_pack(PACK_AMMO, Vector3(0.0, 0.0, 8.0))
+
 	return map
 
 
@@ -1274,6 +1308,12 @@ static func dm_atrium() -> ArenaMap:
 		{"toy": "tyre", "at": [-24.0, 0.0, -12.0], "yaw": 30.0},
 		{"toy": "tyre", "at": [8.0, 0.0, 28.0], "yaw": 80.0},
 	]
+	# Packs (two health, two ammo, off the building): clear of every box, off the spawns.
+	map.add_pack(PACK_HEALTH, Vector3(-8.0, 0.0, 0.0))
+	map.add_pack(PACK_HEALTH, Vector3(12.0, 0.0, -12.0))
+	map.add_pack(PACK_AMMO, Vector3(12.0, 0.0, 0.0))
+	map.add_pack(PACK_AMMO, Vector3(-4.0, 0.0, -12.0))
+
 	return map
 
 
@@ -1580,6 +1620,12 @@ static func dm_pit() -> ArenaMap:
 		{"toy": "beach_ball", "at": [0.0, 0.0, 12.0]},
 		{"toy": "football", "at": [10.0, 0.0, -12.0]},
 	]
+	# Packs (health on the east and west, ammo north and south): clear of every box, off the spawns.
+	map.add_pack(PACK_HEALTH, Vector3(-12.0, 0.0, 0.0))
+	map.add_pack(PACK_HEALTH, Vector3(12.0, 0.0, 0.0))
+	map.add_pack(PACK_AMMO, Vector3(0.0, 0.0, -12.0))
+	map.add_pack(PACK_AMMO, Vector3(0.0, 0.0, 12.0))
+
 	return map
 
 
@@ -1657,6 +1703,7 @@ static func imported(map_id: StringName) -> ArenaMap:
 		var _m := map.add_spawn(at)
 
 	map.pits = ArenaBspMap.pits_of(manifest)
+	map.jail = ArenaJail.detect(map.pits)
 	map.mechanics = ArenaMapMechanics.new()
 	map.mechanics.read(manifest)
 	return map
@@ -1680,6 +1727,11 @@ func spawn_tag(index: int) -> StringName:
 		return &""
 
 	return StringName(spawn_tags[index])
+
+
+func add_pack(kind: int, at: Vector3) -> ArenaMap:
+	packs.append({"kind": kind, "at": at})
+	return self
 
 
 func add_box(box: AABB) -> ArenaMap:

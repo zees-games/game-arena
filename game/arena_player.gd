@@ -451,7 +451,8 @@ static func arena_tunables() -> DotFpsTunables:
 	tunables.launch_cooldown = 8.0
 	# Shift dashes: the sprint bit, which this game leaves free because it has no sprint
 	# (sprint_speed_scale is 1). A press throws you along the way you steer.
-	tunables.dash_enabled = true
+	# Off by default: arena_dash 1 turns it on (a mode or an operator's choice).
+	tunables.dash_enabled = false
 	tunables.dash_button = DotFpsCommand.BUTTON_SPRINT
 	tunables.dash_speed = 15.0
 	tunables.dash_lift = 2.5
@@ -544,11 +545,11 @@ func _follow_map_volumes() -> void:
 
 	var feet := controller.state.position
 
-	for pit in _map.pits:
-		if (pit["box"] as AABB).has_point(feet):
-			controller.teleport(pit["to"], float(pit["yaw"]), 0.0)
-			_forget_drawn()
-			return
+	var pit := _map.pit_at(feet, controller.state.tick)
+	if not pit.is_empty():
+		controller.teleport(pit["to"], float(pit["yaw"]), 0.0)
+		_forget_drawn()
+		return
 
 	if feet.y < _map.bounds.position.y - FALL_OUT_DEPTH and not _map.spawns.is_empty():
 		var at: Transform3D = _map.spawns[0]
@@ -745,6 +746,29 @@ func _build_rig(role: ZeeWeaponRig.Role, authority: bool, view_model: Node3D) ->
 ## server's rig is the one whose shots land and this one is the gun that moves.
 func arm_first_person(view_model: Node3D, authority: bool) -> void:
 	_build_rig(ZeeWeaponRig.Role.LOCAL, authority, view_model)
+
+
+## Whether any carried weapon's reserve is below its cap: what an ammo pack asks before it
+## is taken, so one is left for someone who needs it.
+func needs_ammo() -> bool:
+	if arsenal == null:
+		return false
+	for slot_id in arsenal.slots():
+		var def: DotWeaponDef = arsenal.slot_at(slot_id).def
+		if def != null and def.uses_ammo() and def.ammo_type != &"" and not def.infinite_reserve \
+				and arsenal.ammo().count(def.ammo_type) < def.reserve_cap():
+			return true
+	return false
+
+
+## Adds [param share] (0 to 1) of every carried weapon's reserve cap to its pool: an ammo pack.
+func refill_ammo(share: float) -> void:
+	if arsenal == null:
+		return
+	for slot_id in arsenal.slots():
+		var def: DotWeaponDef = arsenal.slot_at(slot_id).def
+		if def != null and def.uses_ammo() and def.ammo_type != &"" and not def.infinite_reserve:
+			var _added := arsenal.add_ammo(def.ammo_type, int(ceil(float(def.reserve_cap()) * share)))
 
 
 ## The shared weapon table, built once for the whole process.

@@ -69,6 +69,13 @@ enum Kind {
 	## The map's toys: the map's id, then their net ids in toy order (both ends build the toys
 	## in the same order from the map). When the server's are built, and to a joiner at signon.
 	TOYS,
+	## The jail's gate: whether the jail is on, how long a press holds the gate open and how long
+	## it then stays shut (ticks), and the tick it was last opened (0 for never, else tick + 1).
+	## A client's prediction asks the same function the server's does, and this is the one number
+	## it cannot work out. When the gate is pressed or a rule changes, and to a joiner at signon.
+	##
+	## After TOYS, for the reason VOTE gives.
+	JAIL,
 }
 
 enum Ask {
@@ -457,6 +464,22 @@ static func read_rules(reader: DotNetReader) -> Dictionary:
 		var key := reader.read_string(RULE_KEY_BYTES)
 		rules[key] = reader.read_float32()
 	return {"rules": rules, "ok": reader.ok()}
+
+
+static func write_jail(enabled: bool, open_ticks: int, cooldown_ticks: int, opened_at: int) -> PackedByteArray:
+	var writer := _w()
+	writer.write_uint(1 if enabled else 0, 1)
+	writer.write_varint(maxi(open_ticks, 0))
+	writer.write_varint(maxi(cooldown_ticks, 0))
+	writer.write_varint(maxi(opened_at + 1, 0))
+	return writer.to_bytes()
+
+
+static func read_jail(reader: DotNetReader) -> Dictionary:
+	var out := {"enabled": reader.read_uint(1) == 1, "open_ticks": reader.read_varint(), "cooldown_ticks": reader.read_varint()}
+	out["opened_at"] = reader.read_varint() - 1
+	out["ok"] = reader.ok()
+	return out
 
 
 static func write_drop(id: int, kind: int, value: int, from: Vector3, at: Vector3) -> PackedByteArray:

@@ -40,6 +40,10 @@ Mapper spawns and pit destinations are often inside solid, and the motor pushes 
 
 `ArenaPlayer._follow_map_volumes` runs inside the simulated tick, on the server and in the owning client's prediction alike, so neither end has to tell the other: feet entering a RESPAWN zone are put at its destination facing its yaw, and a player 10 m under the map's bounds is put back at a spawn.
 
+## The jail
+
+A map whose teleport volumes make a button (a volume that other pits aim into and that itself aims outside every volume) with exits near its destination gets an `ArenaJail` (`maps/arena_jail.gd`), found by shape and never by name. While `arena_jail` is 1: a fall puts the player in the cell, standing in the button volume presses it, and the exits work only while the gate is open (`arena_jail_open` seconds), after which the gate stays shut for `arena_jail_cooldown` seconds. Shut, an exit puts the player back in the cell, so the gate needs no collision toggling. The state is a pure function of the tick and `opened_at`, which clients are told in a JAIL event; `ArenaPlayer` asks `ArenaMap.pit_at(feet, tick)` in the simulated tick on both ends. `ArenaJailView` draws the gate and the button, and is presentation only. Turned off, every volume does what the map says.
+
 ## The surf genre's air control on these maps
 
 `ArenaPlayer.SURF_TUNABLES` is `air_accelerate` 150 (what g2gfast runs them at), a 30 u/s wish cap, 800 u/s² of gravity, a 57-unit jump and the 3500 u/s limit; ground movement, slide, launch and dash stay the arena's. `ArenaGame.map_movement()` is derived on both ends from `ArenaMap.movement_profile` (`&"surf"` for a `kind: arena` map), and `ArenaPlayer.apply_map_movement` writes it and puts every key it is not given back to `arena_tunables()`, which is what takes it off on the next built-in map. It is applied before a player enters the tree and before `rebind_map`. `arena_surf` (1/0) and `arena_surf_airaccelerate` (150) ride RULES because a client predicts with them. Christian's pick is the default; the arena's own movement is one cvar away.

@@ -141,6 +141,7 @@ func _module_load() -> DotResult:
 
 	_add_movement_cvars()
 	_add_drop_cvars()
+	_add_jail_cvars()
 	_add_spawn_cvars()
 	_add_unlag_cvar()
 
@@ -212,6 +213,12 @@ func _module_load() -> DotResult:
 	# through (0). REPLICATED, because each client predicts its own player against the
 	# others' hulls (ArenaGame.solid_hulls_for).
 	var _solid_cvars := game.body_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
+	# mp_vm_sway, _strafe_tilt, _bob, _landing and _aim_steadiness: zee-dot-weapons' view
+	# model feel. REPLICATED, because the hands are drawn on each client, not on the server.
+	var _feel_cvars := game.feel_rules.bind_cvars(
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
@@ -1095,7 +1102,7 @@ const MOVEMENT_CVARS := {
 	"arena_launch_velocity": ["launch_velocity", "Upward speed of a launch, m/s"],
 	"arena_launch_forward": ["launch_forward", "Forward speed a launch adds, m/s"],
 	"arena_launch_cooldown": ["launch_cooldown", "Seconds between launches"],
-	"arena_dash": ["dash_enabled", "Shift dashes along the way you steer (1) or does nothing (0)"],
+	"arena_dash": ["dash_enabled", "Shift dashes along the way you steer (1) or does nothing (0, the default)"],
 	"arena_dash_speed": ["dash_speed", "Speed of a dash, m/s"],
 	"arena_dash_lift": ["dash_lift", "Upward speed a dash adds, m/s"],
 	"arena_dash_cooldown": ["dash_cooldown", "Seconds between dashes"],
@@ -1147,6 +1154,14 @@ func _add_movement_cvars() -> void:
 		)
 
 
+## cvar -> the key in `ArenaGame.jail_rules` it sets, and what it means.
+const JAIL_CVARS := {
+	"arena_jail": ["enabled", "A fall on a map with a jail lands in it, and its gate works (1), or the map's volumes run as shipped (0)"],
+	"arena_jail_open": ["open", "Seconds the jail's gate stays open after its button is pressed"],
+	"arena_jail_cooldown": ["cooldown", "Seconds the gate then stays shut before the button works again"],
+}
+
+
 ## cvar -> the key in `ArenaGame.drop_rules` it sets, and what it means.
 const DROP_CVARS := {
 	"arena_drop_coins": ["coins", "Coins a critical kill drops (0 for none)"],
@@ -1154,6 +1169,10 @@ const DROP_CVARS := {
 	"arena_drop_health": ["health", "Health in the pack a critical kill drops (0 for none)"],
 	"arena_drop_any_kill": ["any_kill", "Every kill drops (1), or only a critical one (0)"],
 	"arena_drop_life": ["life", "Seconds a drop lies there before it goes"],
+	"arena_packs": ["packs", "The map's health and ammo packs are out (1) or not (0)"],
+	"arena_pack_health": ["pack_health", "Health in a map's health pack"],
+	"arena_pack_ammo": ["pack_ammo", "Percent of each weapon's reserve an ammo pack refills"],
+	"arena_pack_respawn": ["pack_respawn", "Seconds a taken pack takes to come back"],
 }
 
 
@@ -1216,6 +1235,23 @@ func _add_drop_cvars() -> void:
 				)
 				game.apply_drop_rules()
 				log_info("drop rule changed", {"rule": key, "value": new_value})
+		)
+
+
+func _add_jail_cvars() -> void:
+	for cvar in JAIL_CVARS:
+		var key: String = JAIL_CVARS[cvar][0]
+		var value: Variant = game.jail_rules[key]
+		add_cvar(
+			cvar, ("1" if value else "0") if value is bool else str(value),
+			JAIL_CVARS[cvar][1], DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+		).with_min(0.0).changed.connect(
+			func(_old: String, new_value: String) -> void:
+				game.jail_rules[key] = (
+					new_value.to_float() != 0.0 if game.jail_rules[key] is bool else new_value.to_float()
+				)
+				game.apply_jail_rules()
+				log_info("jail rule changed", {"rule": key, "value": new_value})
 		)
 
 

@@ -14,6 +14,7 @@ const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaProgress := preload("arena_progress.gd")
 const ArenaProjectiles := preload("arena_projectiles.gd")
 const ArenaDrops := preload("arena_drops.gd")
+const ArenaJailView := preload("arena_jail_view.gd")
 const ArenaProps := preload("arena_props.gd")
 const ArenaSpectate := preload("arena_spectate.gd")
 const ArenaAwards := preload("arena_awards.gd")
@@ -102,6 +103,10 @@ signal map_changed(map: ArenaMap)
 ## The server owner changed how the arena moves (`arena_slide*`, `arena_launch*`). The
 ## bridge sends it to every client; see [member movement_rules].
 signal movement_rules_changed(rules: Dictionary)
+
+## The jail's gate was pressed, or its rules changed (the authority's; a client applying the
+## server's state does not emit it). The bridge sends it to every client.
+signal jail_changed
 
 ## A client learned which mode is being played. Client side; the HUD shows its banner.
 signal mode_shown(shown: ArenaMode)
@@ -235,7 +240,29 @@ var medals := ArenaAwards.MedalBook.new()
 ## The server owner's drop rules (`arena_drop_*`), applied to every drops layer built.
 var drop_rules := {
 	"coins": 5, "coin_value": 1, "health": 25.0, "any_kill": false, "life": 10.0,
+	"packs": true, "pack_health": 50.0, "pack_ammo": 50.0, "pack_respawn": 20.0,
 }
+
+## The jail's gate and button, drawn. Null on a headless end and on a map without a jail.
+var jail_view: Node3D = null
+
+## The simulation tick the players are on, for what is drawn from it: a player's own state, since
+## that is the tick the pits are asked about, and the game's own count before there is one.
+func sim_tick() -> int:
+	for id in _players:
+		var p: ArenaPlayer = _players[id]
+		if p != null and is_instance_valid(p) and p.controller != null:
+			return p.controller.state.tick
+	return _tick
+
+
+## The server owner's jail rules (`arena_jail*`), applied to the map's jail when a map loads and
+## when one changes: whether it is on, seconds the gate stays open and seconds it then stays shut.
+var jail_rules := {"enabled": true, "open": 10.0, "cooldown": 20.0}
+
+## What the packs were last placed with, so a rule change that is not about them does not put
+## every pack back (which would restart its respawn timer). See [method apply_drop_rules].
+var _packs_placed_with: Array = []
 
 ## Statistics, achievements and boards. Null when [member track_progress] is off or
 ## this instance is not the authority.
@@ -393,6 +420,11 @@ var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 ## games give a body.
 var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 
+## The view model's motion amounts: zee-dot-weapons' `mp_vm_*` cvars. Bound by the module
+## (REPLICATED) and followed by the client, which is the end that draws the hands. The
+## client's view model is handed this object, so one cvar change reaches the sway.
+var feel_rules: ZeeViewFeel = ZeeViewFeel.new()
+
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.
 var _weapon_defs: Dictionary = {}
@@ -504,6 +536,7 @@ func follow_server_cvars(source: Object) -> bool:
 	var _toys := toy_rules.follow_cvars(source)
 	var _view := view_rules.follow_cvars(source)
 	var _solid := body_rules.follow_cvars(source)
+	var _feel := feel_rules.follow_cvars(source)
 	return _follow_cvar_source()
 
 
@@ -588,6 +621,12 @@ func _build_combat() -> DotResult:
 		var who := player_for(entity_id)
 		return who.global_position if who != null else null
 	apply_drop_rules()
+	apply_jail_rules()
+
+	if not headless and map != null and map.jail != null:
+		jail_view = ArenaJailView.new()
+		add_child(jail_view)
+		jail_view.build(map.jail, sim_tick)
 
 	return DotResult.success(null)
 
@@ -625,6 +664,48 @@ static func parse_streak_rewards(text: String) -> Dictionary:
 	return out
 
 
+## Puts [member jail_rules] on the map's jail, if it has one. Called when the drops layer is
+## built (which is on every map) and when a rule changes. Authority side tells clients.
+func apply_jail_rules() -> void:
+	if map == null or map.jail == null:
+		return
+	var jail: RefCounted = map.jail
+	jail.enabled = bool(jail_rules["enabled"])
+	jail.open_ticks = maxi(int(round(float(jail_rules["open"]) * float(tick_rate))), 1)
+	jail.cooldown_ticks = maxi(int(round(float(jail_rules["cooldown"]) * float(tick_rate))), 0)
+	if is_authority:
+		jail_changed.emit()
+
+
+## The server's jail state, on a client: the rules in ticks and when the gate was last opened.
+func apply_jail_state(told: Dictionary) -> void:
+	if map == null or map.jail == null:
+		return
+	var jail: RefCounted = map.jail
+	jail.enabled = bool(told["enabled"])
+	jail.open_ticks = int(told["open_ticks"])
+	jail.cooldown_ticks = int(told["cooldown_ticks"])
+	jail.opened_at = int(told["opened_at"])
+
+
+## Whoever stands in the jail's button presses it. Authority side, after everybody has moved.
+func _sweep_jail_button() -> void:
+	if not is_authority or map == null or map.jail == null:
+		return
+	var jail: RefCounted = map.jail
+	if not jail.enabled:
+		return
+	var box: AABB = jail.button_box()
+	for id in player_ids():
+		var p: ArenaPlayer = _players[id]
+		if p.is_alive() and box.has_point(p.controller.state.position):
+			var at: int = p.controller.state.tick
+			if jail.press(at):
+				DotLog.info(CHANNEL, "the jail's gate opened", {"by": id, "tick": at})
+				jail_changed.emit()
+				return
+
+
 ## Puts [member drop_rules] on the drops layer. Called when it is built and when a rule
 ## changes.
 func apply_drop_rules() -> void:
@@ -635,6 +716,16 @@ func apply_drop_rules() -> void:
 	drops.health_amount = float(drop_rules["health"])
 	drops.any_kill = bool(drop_rules["any_kill"])
 	drops.life_sec = float(drop_rules["life"])
+	drops.packs_enabled = bool(drop_rules["packs"])
+	drops.pack_health = float(drop_rules["pack_health"])
+	drops.pack_ammo_share = clampf(float(drop_rules["pack_ammo"]) / 100.0, 0.0, 1.0)
+	drops.pack_respawn_sec = float(drop_rules["pack_respawn"])
+	var wanted: Array = [
+		map, drops, drops.packs_enabled, drops.pack_health, drops.pack_ammo_share, drops.pack_respawn_sec,
+	]
+	if map != null and is_authority and (_packs_placed_with.size() != wanted.size() or wanted != _packs_placed_with):
+		_packs_placed_with = wanted
+		drops.set_packs(map.packs, _tick)
 
 
 ## Puts [member score_limit], [member time_limit_sec], [member warmup_sec] and
@@ -1289,6 +1380,10 @@ func _teardown_world() -> void:
 	combat = null
 	projectiles = null
 
+	if jail_view != null:
+		remove_child(jail_view)
+		jail_view.queue_free()
+		jail_view = null
 	if drops != null:
 		remove_child(drops)
 		drops.queue_free()
@@ -1821,8 +1916,12 @@ func tick(commands: Dictionary = {}) -> void:
 					"position": p.controller.state.position,
 					"hurt": p.health.health < p.health.max_health,
 					"heal": func(amount: float) -> void: var _h := p.health.heal(amount),
+					"needs_ammo": p.needs_ammo(),
+					"ammo": func(share: float) -> void: p.refill_ammo(share),
 				}
 		drops.tick(_tick, sweepers)
+
+	_sweep_jail_button()
 
 	match_node.tick(_tick)
 

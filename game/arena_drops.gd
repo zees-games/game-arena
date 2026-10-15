@@ -16,7 +16,11 @@ extends Node3D
 
 const CHANNEL := "arena.drops"
 
-enum Kind { COIN, HEALTH }
+enum Kind { COIN, HEALTH, AMMO }
+
+## A world pack's wire id is this plus its spot's index, so it can never meet a kill drop's
+## (those count up from 1) and a joiner is told the same id the others already hold.
+const PACK_ID_BASE := 1000000
 
 ## A drop is out: [param id] is its number on the wire, [param from] where the body was
 ## (the coins burst from there), [param at] where it lands. Server side.
@@ -33,6 +37,15 @@ var coin_value: int = 1
 
 ## Health a health pack gives; 0 drops no pack.
 var health_amount: float = 25.0
+
+## Whether the map's own health and ammo packs are out. See [method set_packs].
+var packs_enabled: bool = true
+
+## Health in a world health pack, and the share (0 to 1) of every weapon's reserve cap an ammo
+## pack refills, and the seconds either takes to come back.
+var pack_health: float = 50.0
+var pack_ammo_share: float = 0.5
+var pack_respawn_sec: float = 20.0
 
 ## Whether every kill drops, rather than only a critical one.
 var any_kill: bool = false
@@ -56,6 +69,11 @@ var _next_id: int = 1
 ## id -> {"pickup": DotPickup, "kind": int, "value": int, "expires": int}. Authority side.
 var _live: Dictionary = {}
 
+## One per map pack spot: {"pickup": DotPickup, "kind": int, "id": int, "at": Vector3}. Kept for
+## the life of the layer, unlike a kill's drop: the family's [DotPickup] does the respawn.
+## Authority side.
+var _packs: Array[Dictionary] = []
+
 ## id -> {"node": Node3D, "value": int, "kind": int, "from": Vector3, "at": Vector3, "age": float,
 ## "taker_at": Variant}. Drawing side.
 var _drawn: Dictionary = {}
@@ -75,6 +93,77 @@ func setup(tick_rate: int) -> void:
 	field.tick_rate = _tick_rate
 	field.is_authority = is_authority
 	add_child(field)
+
+
+## Puts the map's packs out: [param spots] is {"kind": Kind, "at": Vector3} each. Replaces any
+## already out, so a rule change or a map change is one call. Authority side.
+func set_packs(spots: Array, tick: int) -> void:
+	for pack in _packs:
+		var old: DotPickup = pack["pickup"]
+		if is_instance_valid(old):
+			field.remove_child(old)
+			old.queue_free()
+		if pack["announced"]:
+			taken.emit(int(pack["id"]), 0)
+			mirror_taken(int(pack["id"]), 0)
+	_packs.clear()
+	field.refresh()
+
+	if not is_authority or not packs_enabled:
+		return
+
+	for index in range(spots.size()):
+		var spot: Dictionary = spots[index]
+		var kind := int(spot["kind"])
+		var pickup := DotPickup.new()
+		pickup.name = "Pack%d" % index
+		pickup.item_id = &"ammo_pack" if kind == Kind.AMMO else &"health"
+		pickup.count = int(pack_health) if kind == Kind.HEALTH else 0
+		pickup.respawn_sec = maxf(pack_respawn_sec, 0.5)
+		pickup.radius = 1.2
+		pickup.height = 2.0
+		pickup.set_tick_rate(_tick_rate)
+		pickup.set_meta(&"pack", index)
+		field.add_child(pickup)
+		pickup.global_position = spot["at"]
+		var entry := {
+			"pickup": pickup, "kind": kind, "id": PACK_ID_BASE + index,
+			"at": spot["at"], "announced": false,
+		}
+		_packs.append(entry)
+		pickup.respawned.connect(_announce_pack.bind(index))
+		_announce_pack(tick, index)
+	field.refresh()
+
+
+## What a joiner is told: every pack that is out right now. A pack that is taken is told as it
+## comes back. Authority side.
+func packs_out() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for pack in _packs:
+		if (pack["pickup"] as DotPickup).available:
+			out.append({
+				"id": pack["id"], "kind": pack["kind"], "at": pack["at"],
+				"value": int(pack_health) if int(pack["kind"]) == Kind.HEALTH else 0,
+			})
+	return out
+
+
+func pack_count() -> int:
+	return _packs.size()
+
+
+func packs_available() -> int:
+	return packs_out().size()
+
+
+func _announce_pack(_tick: int, index: int) -> void:
+	var pack := _packs[index]
+	pack["announced"] = true
+	var at: Vector3 = pack["at"]
+	var value := int(pack_health) if int(pack["kind"]) == Kind.HEALTH else 0
+	dropped.emit(int(pack["id"]), int(pack["kind"]), at, at, value)
+	mirror_drop(int(pack["id"]), int(pack["kind"]), at, at, value)
 
 
 ## A kill happened. Drops what the rules say at [param where]. Authority side; returns how
@@ -132,17 +221,32 @@ func _spawn(kind: int, value: int, from: Vector3, at: Vector3, tick: int) -> voi
 ##
 ## [param players] is id -> {"position": Vector3, "hurt": bool, "heal": Callable}.
 func tick(tick: int, players: Dictionary) -> void:
-	if not is_authority or field == null or _live.is_empty():
+	if not is_authority or field == null or (_live.is_empty() and _packs.is_empty()):
 		return
+
+	# Respawns first, so a pack that comes back this tick can be taken this tick.
+	var _back := field.tick(tick)
 
 	field.wants_fn = func(taker: int, pickup: DotPickup) -> bool:
 		if pickup.item_id == &"health":
 			return bool(players.get(taker, {}).get("hurt", false))
+		if pickup.item_id == &"ammo_pack":
+			return bool(players.get(taker, {}).get("needs_ammo", false))
 		return true
 
 	for id in players:
 		var entry: Dictionary = players[id]
 		for pickup in field.sweep(int(id), entry["position"], tick):
+			if pickup.has_meta(&"pack"):
+				var pack := _packs[int(pickup.get_meta(&"pack"))]
+				var give := &"ammo" if pickup.item_id == &"ammo_pack" else &"heal"
+				if give == &"ammo" and entry.has("ammo"):
+					(entry["ammo"] as Callable).call(pack_ammo_share)
+				elif give == &"heal" and entry.has("heal"):
+					(entry["heal"] as Callable).call(float(pickup.count))
+				taken.emit(int(pack["id"]), int(id))
+				mirror_taken(int(pack["id"]), int(id))
+				continue
 			var drop_id := int(pickup.get_meta(&"drop_id", 0))
 			if pickup.item_id == &"coin":
 				coins[int(id)] = int(coins.get(int(id), 0)) + pickup.count
@@ -184,6 +288,9 @@ func mirror_drop(id: int, kind: int, at: Vector3, from: Vector3, value: int) -> 
 		return
 
 	var node := _model(kind)
+	# A map's pack is bigger than a kill's drop: it is something to walk to across a room.
+	if id >= PACK_ID_BASE:
+		node.scale = Vector3.ONE * 2.2
 	add_child(node)
 	node.global_position = from + Vector3(0.0, 1.0, 0.0)
 	_drawn[id] = {"node": node, "kind": kind, "value": value, "from": from, "at": at, "age": 0.0, "taker": 0}
@@ -245,7 +352,24 @@ static func _model(kind: int) -> Node3D:
 	var mesh := MeshInstance3D.new()
 	var material := StandardMaterial3D.new()
 
-	if kind == Kind.COIN:
+	if kind == Kind.AMMO:
+		# A squat orange crate with a lighter band: the rounds. Bigger than a coin, so a pack
+		# reads across a room.
+		var crate := BoxMesh.new()
+		crate.size = Vector3(0.5, 0.3, 0.32)
+		mesh.mesh = crate
+		material.albedo_color = Color(0.95, 0.55, 0.1)
+		material.emission_enabled = true
+		material.emission = Color(0.45, 0.2, 0.02)
+		var band := MeshInstance3D.new()
+		var strap := BoxMesh.new()
+		strap.size = Vector3(0.12, 0.34, 0.36)
+		band.mesh = strap
+		var band_material := StandardMaterial3D.new()
+		band_material.albedo_color = Color(0.95, 0.92, 0.8)
+		band.material_override = band_material
+		root.add_child(band)
+	elif kind == Kind.COIN:
 		var disc := CylinderMesh.new()
 		disc.top_radius = 0.18
 		disc.bottom_radius = 0.18
@@ -274,6 +398,11 @@ static func _model(kind: int) -> Node3D:
 	mesh.material_override = material
 	root.add_child(mesh)
 	return root
+
+
+## How many drops this end has been told about and not told gone, drawn or not.
+func known_count() -> int:
+	return _known.size()
 
 
 func live_count() -> int:
