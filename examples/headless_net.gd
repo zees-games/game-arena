@@ -870,8 +870,8 @@ func _follow_onto_imported(
 	print("  measured: imported map, jump peak %.2f m, worst gap %.2f m (%s)" % [
 		float(peak[0]) - start_y, float(hop["worst_gap"]), hop["worst_at"]
 	])
-	_check(float(peak[0]) - start_y > 0.8 and float(hop["worst_gap"]) < 0.75,
-		"jumping on it, the client predicts the server to within a hand's width",
+	_check(float(peak[0]) - start_y > 0.8 and float(hop["worst_gap"]) < 0.05,
+		"jumping on it, the client predicts the server to within five centimetres",
 		"peak %.2f m, worst %.2f m" % [float(peak[0]) - start_y, float(hop["worst_gap"])])
 
 	# A booster: the map's mechanics run inside prediction on the client exactly as on the
@@ -893,9 +893,9 @@ func _follow_onto_imported(
 	])
 	_check(carried > 20.0, "a booster on it carries the server's player on at its speed",
 		"%.1f m in 48 ticks" % carried)
-	# Against the server's same tick, because at 47 m/s the harness's one tick of lead is
-	# 0.74 m by itself (the jump's 0.09 above is that same tick, at a jump's speed).
-	_check(float(boosted["worst_aligned"]) < 0.1,
+	# Both ends on the same tick (a real link's order); measured 0.02 m at 47 m/s. This
+	# used to allow 0.1 because the harness's tick of lead was 0.74 m by itself.
+	_check(float(boosted["worst_aligned"]) < 0.05,
 		"and the client predicts the push with it, tick for tick",
 		"worst %.3f m against the server's same tick, %.2f m at the same moment" % [
 			float(boosted["worst_aligned"]), float(boosted["worst_gap"])])
@@ -1445,8 +1445,8 @@ func _test_forced_noclip_is_predicted() -> void:
 		"%d of 64 ticks" % int(shipped["grounded_ticks"])
 	)
 	_check(
-		float(shipped["worst_gap"]) < 0.75,
-		"and never predicted them more than a hand's width from the server",
+		float(shipped["worst_gap"]) < 0.05,
+		"and never predicted them more than five centimetres from the server",
 		"worst %.2f m" % float(shipped["worst_gap"])
 	)
 
@@ -1546,7 +1546,7 @@ func _test_movement_rules_reach_clients() -> void:
 	print("  measured: launch peak %.2f m, worst gap %.2f m (%s)" % [float(peak[0]) - start_y, float(launch["worst_gap"]), launch["worst_at"]])
 	_check(float(peak[0]) - start_y > 3.0, "E throws the server's player into the air (from %s)" % open_sky,
 		"%.2f m" % (float(peak[0]) - start_y))
-	_check(float(launch["worst_gap"]) < 0.75, "and the client predicts it to within a hand's width",
+	_check(float(launch["worst_gap"]) < 0.05, "and the client predicts it to within five centimetres",
 		"worst %.2f m" % float(launch["worst_gap"]))
 
 	# The negative control: the same change made on the server's player alone. In this
@@ -1965,9 +1965,6 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 	var worst_at := ""
 	var grounded := 0
 	var worst_aligned := 0.0
-	var previous := Vector3.ZERO
-	var has_previous := false
-
 	# Measured only once a snapshot from inside the window has arrived. Until then the
 	# client cannot know anything the server did at the top of it — the first run of this
 	# measured 159 m, which was the client's copy still where an earlier section had
@@ -1976,9 +1973,11 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 		int(_clients[peer]["net"].stats.packets_received) if peer != 0 else 0
 	)
 
-	for tick in range(first, first + ticks):
-		var commands := {}
-
+	# A real link's order, as in _driven_window: each command is made and sent the tick
+	# before the server runs it (with its copies), the client plays tick T before T's
+	# snapshot reaches it, and the gap is read with both ends on T.
+	var send := func(tick: int) -> Dictionary:
+		var made := {}
 		for peer_id in _clients:
 			var pair := _commands_for(peer_id, tick)
 			if peer_id == peer:
@@ -1987,7 +1986,7 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 				pair = [held, DotWeaponCommand.new()]
 			if moves.has(peer_id):
 				pair = [moves[peer_id], DotWeaponCommand.new()]
-			commands[peer_id] = pair
+			made[peer_id] = pair
 
 			var packet: PackedByteArray = _clients[peer_id]["bridge"].encode_input(
 				tick, pair[0], pair[1]
@@ -1995,10 +1994,40 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 			_drop_up += 1
 			if _drop_up % LOSS_EVERY != 0:
 				_server_bridge.receive_input(peer_id, packet)
+		return made
 
+	var commands: Dictionary = send.call(first)
+
+	for tick in range(first, first + ticks):
+		for peer_id in _clients:
+			var pair2: Array = commands[peer_id]
+			_clients[peer_id]["net"].clock.tick = tick
+			_clients[peer_id]["bridge"].client_tick(tick, pair2[0], pair2[1])
+
+		# Not past the window's last tick: a command for a tick nobody here runs would sit
+		# in the server's buffer ahead of the next window's own for that tick.
+		if tick < first + ticks - 1:
+			commands = send.call(tick + 1)
 		_server_bridge.server_tick(tick)
 		var apart := server_a.controller.state.position - server_b.controller.state.position
 		closest = minf(closest, Vector2(apart.x, apart.z).length())
+
+		# Both ends have run this tick: what the client predicted, against what the server
+		# did, before this tick's snapshot replaces the prediction.
+		var measure := peer != 0 and int(_clients[peer]["net"].stats.packets_received) != heard_before
+		if measure:
+			var session := int(_clients[peer]["session"])
+			var predicted: ArenaPlayer = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(session).player
+			var actual: ArenaPlayer = _server_bridge.behaviour_for(session).player
+			var gap := predicted.controller.state.position.distance_to(actual.controller.state.position)
+			if gap > worst:
+				worst_at = "tick %d client %s server %s" % [
+					tick, predicted.controller.state.position, actual.controller.state.position
+				]
+			worst = maxf(worst, gap)
+			worst_aligned = worst
+			if predicted.controller.state.mode != DotFpsState.Mode.NOCLIP:
+				grounded += 1
 
 		for entry_down in _downstream:
 			var target_peer: int = entry_down["peer"]
@@ -2007,32 +2036,6 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 				if _clients.has(target):
 					_clients[target]["bridge"].receive_snapshot(entry_down["bytes"])
 		_downstream.clear()
-
-		for peer_id in _clients:
-			var pair2: Array = commands[peer_id]
-			_clients[peer_id]["net"].clock.tick = tick
-			_clients[peer_id]["bridge"].client_tick(tick, pair2[0], pair2[1])
-
-		if peer == 0 or int(_clients[peer]["net"].stats.packets_received) == heard_before:
-			continue
-
-		var session := int(_clients[peer]["session"])
-		var predicted: ArenaPlayer = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(session).player
-		var actual: ArenaPlayer = _server_bridge.behaviour_for(session).player
-		var gap := predicted.controller.state.position.distance_to(actual.controller.state.position)
-		# The client runs a tick ahead of the server in this lockstep (its input is for the
-		# tick the server runs next), so its last position is where the server is NOW.
-		if has_previous:
-			worst_aligned = maxf(worst_aligned, previous.distance_to(actual.controller.state.position))
-		previous = predicted.controller.state.position
-		has_previous = true
-		if gap > worst:
-			worst_at = "tick %d client %s server %s" % [
-				tick, predicted.controller.state.position, actual.controller.state.position
-			]
-		worst = maxf(worst, gap)
-		if predicted.controller.state.mode != DotFpsState.Mode.NOCLIP:
-			grounded += 1
 
 	return {"worst_gap": worst, "grounded_ticks": grounded, "worst_at": worst_at,
 		"worst_aligned": worst_aligned, "closest": closest}
@@ -2107,7 +2110,7 @@ func _test_solid_players_predicted() -> void:
 		"A z %.2f, B z %.2f" % [a_z, b_z]
 	)
 	_check(
-		float(solid["worst_aligned"]) < 0.1,
+		float(solid["worst_aligned"]) < 0.03,
 		"and the walker's client predicted the stop (worst %.3f m from the server)" % float(solid["worst_aligned"])
 	)
 
@@ -2125,7 +2128,7 @@ func _test_solid_players_predicted() -> void:
 		"A z %.2f, B z %.2f" % [server_a.controller.state.position.z, server_b.controller.state.position.z]
 	)
 	_check(
-		float(through["worst_aligned"]) < 0.1,
+		float(through["worst_aligned"]) < 0.03,
 		"and is predicted so (worst %.3f m)" % float(through["worst_aligned"])
 	)
 
