@@ -43,10 +43,14 @@ var _frame := 0
 var _log: PackedStringArray = []
 var _kicked := false
 var _settle := 0
+## `third` on the command line: the same routes drawn from the third-person camera, files
+## named `<scenario>_tp_NNN.png`, so the body's roll and turn on the wall can be looked at.
+var _third := false
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
+	_third = args.has("third")
 	for name in ["run", "runjump", "chimney"]:
 		if args.is_empty() or args.has(name):
 			_scenarios.append(name)
@@ -65,6 +69,9 @@ func _initialize() -> void:
 	_player.spawn(Transform3D(Basis(), Vector3(0.0, 0.1, 25.0)), 0)
 	_player.attach_camera(100.0)
 	_player.camera.current = true
+	_player.third_person = _third
+	if _third:
+		_player.present_own_body(false, 0.0)
 	# The first scenario starts on the first physics frame, not here: the player's nodes are
 	# not ready until the tree runs, and a teleport made before that is undone by it (the
 	# first version of this tool recorded a run from the spawn point).
@@ -152,7 +159,7 @@ func _process(delta: float) -> bool:
 	# what matters, and that is exact.
 	if _frame % SAVE_EVERY == 0:
 		var image := root.get_texture().get_image()
-		image.save_png(OUT_DIR.path_join("%s_%03d.png" % [_scenario, _frame / SAVE_EVERY]))
+		image.save_png(OUT_DIR.path_join("%s%s_%03d.png" % [_scenario, "_tp" if _third else "", _frame / SAVE_EVERY]))
 
 	_frame += 1
 	return false

@@ -480,7 +480,14 @@ const MOVEMENT_RULES: PackedStringArray = [
 	"wall_run_enabled", "wall_run_min_speed", "wall_run_max_time", "wall_run_gravity_scale",
 	"wall_jump_enabled", "wall_jump_push_speed", "wall_jump_up_speed", "wall_jump_max_per_air",
 	"wall_slide_speed",
+	"wall_run_end_speed", "wall_run_vertical_damping", "wall_run_max_fall_speed",
+	"wall_run_max_approach_angle", "wall_jump_look_blend", "wall_jump_max_per_wall",
+	"wall_run_body_roll", "wall_run_body_yaw",
 ]
+
+## The rules in [constant MOVEMENT_RULES] that pose a drawn body rather than move one: they
+## are not tunables, they live on [member body_motion], and these are their defaults.
+const BODY_RULES := {"wall_run_body_roll": 25.0, "wall_run_body_yaw": 12.0}
 
 
 ## What a combat surf map plays with, as overrides on [method arena_tunables].
@@ -573,6 +580,8 @@ func _forget_drawn() -> void:
 	_landing_impact = 0.0
 	if camera_motion != null:
 		camera_motion.snap()
+	if body_motion != null:
+		body_motion.snap()
 
 
 ## How far under an imported map's bounds a player is counted as out of it, metres.
@@ -640,9 +649,45 @@ func apply_movement_rules(rules: Dictionary) -> void:
 	for key in rules:
 		if not MOVEMENT_RULES.has(String(key)):
 			continue
+		if BODY_RULES.has(String(key)):
+			_body_rules[String(key)] = float(rules[key])
+			_apply_body_rules()
+			continue
 		_set_rule(controller.tunables, String(key), rules[key])
 		if _class_base != null:
 			_set_rule(_class_base, String(key), rules[key])
+
+
+## What a server set for the body pose, kept so a body made later wears it.
+var _body_rules: Dictionary = {}
+
+## Poses every drawn body (the person's own in third person, and everyone else's) while it wall
+## runs: a [DotFpsViewMotion] used only for [method DotFpsViewMotion.body_roll] and `body_yaw`.
+var body_motion: DotFpsViewMotion = null
+
+
+func _apply_body_rules() -> void:
+	if body_motion == null:
+		return
+	for key in _body_rules:
+		body_motion.set(key, _body_rules[key])
+
+
+## Poses [member body_mesh] from [param drawn]: its yaw, then the wall-run roll and turn.
+## A body not on a wall has exactly the yaw it had, so this is every body's placement.
+func _pose_body(drawn: DotFpsState, yaw: float, delta: float) -> void:
+	if body_mesh == null:
+		return
+	if body_motion == null:
+		body_motion = DotFpsViewMotion.new()
+		body_motion.wall_run_body_roll = BODY_RULES.wall_run_body_roll
+		body_motion.wall_run_body_yaw = BODY_RULES.wall_run_body_yaw
+		_apply_body_rules()
+	body_motion.advance(drawn, delta)
+	body_mesh.global_basis = (
+		Basis(Vector3.UP, deg_to_rad(yaw + body_motion.body_yaw()))
+		* Basis(Vector3.BACK, deg_to_rad(body_motion.body_roll()))
+	)
 
 
 static func _set_rule(tunables: DotFpsTunables, key: String, value: Variant) -> void:
@@ -1348,7 +1393,7 @@ func present(delta: float) -> void:
 			body_mesh.global_position = drawn.position
 			var alpha := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
 			yaw = rad_to_deg(lerp_angle(deg_to_rad(_yaw_before_tick), deg_to_rad(drawn.yaw), alpha))
-		body_mesh.global_rotation = Vector3(0.0, deg_to_rad(yaw), 0.0)
+		_pose_body(drawn, yaw, delta)
 		_present_held()
 		_present_health_tag(delta)
 
@@ -1415,7 +1460,7 @@ func _place_third_person(drawn: DotFpsState, delta: float) -> void:
 
 	if body_mesh != null:
 		body_mesh.global_position = drawn.position
-		body_mesh.global_rotation = Vector3(0.0, deg_to_rad(drawn.yaw), 0.0)
+		_pose_body(drawn, drawn.yaw, delta)
 
 
 ## The controller's state as drawn at [param alpha] through its last tick, from -1 to 2.

@@ -4156,7 +4156,7 @@ func _test_wall_rules() -> void:
 			continue
 		walls_cvars += 1
 		var key: String = ArenaModule.MOVEMENT_CVARS[cvar][0]
-		if not ArenaPlayer.MOVEMENT_RULES.has(key) or t.get(key) == null:
+		if not ArenaPlayer.MOVEMENT_RULES.has(key) or (t.get(key) == null and not ArenaPlayer.BODY_RULES.has(key)):
 			unbacked.append(cvar)
 	_check(walls_cvars >= 3 and unbacked.is_empty(),
 		"every arena_wall_* cvar sets a tunable RULES carries (%d)" % walls_cvars, ", ".join(unbacked))

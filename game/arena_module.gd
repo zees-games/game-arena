@@ -1115,6 +1115,14 @@ const MOVEMENT_CVARS := {
 	"arena_wall_jump_up": ["wall_jump_up_speed", "Upward speed a wall jump sets, m/s"],
 	"arena_wall_jumps": ["wall_jump_max_per_air", "Wall jumps before landing again, off any walls (0 for no limit)"],
 	"arena_wall_slide": ["wall_slide_speed", "Fastest fall while pressed against a wall, m/s (0 for no wall slide)"],
+	"arena_wall_run_end_speed": ["wall_run_end_speed", "A run ends when the speed along the wall falls under this, m/s"],
+	"arena_wall_run_damping": ["wall_run_vertical_damping", "How fast a run eases the vertical speed away, per second (higher holds you up harder)"],
+	"arena_wall_run_max_fall": ["wall_run_max_fall_speed", "Fastest fall a run can still catch, m/s"],
+	"arena_wall_run_angle": ["wall_run_max_approach_angle", "Widest angle off the wall's plane a run can start at, degrees (running head-on is no run)"],
+	"arena_wall_jump_look": ["wall_jump_look_blend", "How far a wall jump leans from the wall's normal toward the view, 0 to 1"],
+	"arena_wall_jumps_per_wall": ["wall_jump_max_per_wall", "Wall jumps off the same wall before landing again"],
+	"arena_wall_run_body_roll": ["wall_run_body_roll", "Degrees a drawn body rolls (feet to the wall) while wall running"],
+	"arena_wall_run_body_yaw": ["wall_run_body_yaw", "Degrees a drawn body turns toward the wall while wall running"],
 	"arena_break": ["break_mode", "On a death the body: 0 stays whole, 1 loses limbs, 2 explodes"],
 	"arena_break_limbs": ["break_limbs", "How many limbs come off when arena_break is 1"],
 	"arena_break_criticals": ["break_criticals_only", "Only a critical (a headshot) breaks a body (1), or any kill (0)"],
@@ -1142,6 +1150,8 @@ func _add_movement_cvars() -> void:
 			defaults.get(key) if not ArenaGame.SHOW_DEFAULTS.has(key)
 			else ArenaGame.SHOW_DEFAULTS[key]
 		)
+		if value == null:
+			value = ArenaPlayer.BODY_RULES.get(key)
 		var text := ("1" if value else "0") if value is bool else str(value)
 
 		add_cvar(
