@@ -74,8 +74,9 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 17
-const CHECKS := 99
+const SECTIONS := 18
+## 99 fixed, plus one audit check per imported map: the catalogue grows without this changing.
+const CHECKS_FIXED := 99
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -126,6 +127,7 @@ func _run() -> void:
 	await _test_hurt()
 	await _test_surf_rides()
 	await _test_every_map()
+	await _test_collision_audit()
 	await _test_packs()
 	await _test_server_named()
 
@@ -143,9 +145,9 @@ func _finish() -> void:
 		get_tree().quit(1)
 		return
 
-	if _passed + _failed != CHECKS:
+	if _passed + _failed != CHECKS_FIXED + ArenaMap.imported_ids().size():
 		_line("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
-			_passed + _failed, CHECKS
+			_passed + _failed, CHECKS_FIXED + ArenaMap.imported_ids().size()
 		])
 		get_tree().quit(1)
 		return
@@ -1432,6 +1434,40 @@ func _test_every_map() -> void:
 	_check(built == ArenaMap.imported_ids().size(),
 		"every one builds a solid (%d of %d)" % [built, ArenaMap.imported_ids().size()])
 	_check(bad.is_empty(), "and three in four of its spawns stand on a floor, clear of solid (%s fail)" % [bad])
+
+	_done()
+
+
+## dot-core's [DotCollisionAudit] over every imported map as a client draws it (the drawn brushes
+## beside the collision the game builds): geometry with no shape near it is a wall a player
+## walks into. Fails on any finding; what is meant to be walked through is opted out in
+## `arena_bsp_map.gd` with the reason.
+func _test_collision_audit() -> void:
+	_section("every imported map: nothing drawn is walked through")
+
+	for id in ArenaMap.imported_ids():
+		var map := ArenaMap.by_id(id)
+		var world := Node3D.new()
+		world.add_child(map.to_scene())
+		world.add_child(map.to_collision())
+		add_child(world)
+
+		var res := DotCollisionAudit.audit(world, true)
+		var found := 0
+		var examined := 0
+
+		if res.ok:
+			var report: DotCollisionAudit = res.value
+			found = report.count()
+			examined = report.examined
+			_line("     %s: %d findings of %d examined" % [id, found, examined])
+
+			for line in report.describe_lines().slice(1, 12):
+				_line("       %s" % line)
+
+		_check(res.ok and found == 0 and examined > 0, "%s: nothing drawn is walked through%s" % [id, "" if res.ok else " (" + res.error.message + ")"])
+		world.queue_free()
+		await get_tree().physics_frame
 
 	_done()
 

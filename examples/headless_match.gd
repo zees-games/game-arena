@@ -58,13 +58,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 598
+const CHECKS := 601
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 40
+const SECTIONS := 41
 
 var _passed := 0
 var _failed := 0
@@ -106,6 +106,7 @@ func _run() -> void:
 	_test_bot_ground_speed()
 	_test_reach()
 	_test_survey()
+	await _test_collision_audit()
 	await _test_crate_climb()
 	_test_wall_routes()
 	await _test_box_upper()
@@ -3175,6 +3176,41 @@ func _test_reach() -> void:
 		"and none asks a player to cross more air than they can carry",
 		"; ".join(too_far)
 	)
+	_done()
+
+
+## dot-core's [DotCollisionAudit] over every built-in map as a client draws it: drawn geometry
+## with no shape near it is a wall a player walks into. The lenient audit (`anywhere`) because
+## the drawn level and the solid are separate subtrees. A map fails on any finding; what is
+## meant to be walked through carries the opt-out where it is built, with the reason.
+func _test_collision_audit() -> void:
+	_section("every map: nothing drawn is walked through")
+
+	for id in ArenaMap.ids():
+		var map := ArenaMap.by_id(id)
+		var world := Node3D.new()
+		world.add_child(map.to_scene())
+		world.add_child(map.to_collision())
+		add_child(world)
+
+		var res := DotCollisionAudit.audit(world, true)
+		var found := 0
+		var examined := 0
+
+		if res.ok:
+			var report: DotCollisionAudit = res.value
+			found = report.count()
+			examined = report.examined
+			print("  %s: %d findings of %d examined" % [id, found, examined])
+
+			for line in report.describe_lines().slice(1, 12):
+				print("  %s" % line)
+
+		_check(res.ok and found == 0 and examined > 0, "%s: nothing drawn is walked through" % id,
+			"" if res.ok else res.error.message)
+		world.queue_free()
+		await get_tree().physics_frame
+
 	_done()
 
 

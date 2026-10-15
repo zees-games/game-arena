@@ -2334,7 +2334,8 @@ func _advance_toys(delta: float) -> void:
 ## level and the players as if the toy were not there, so a ball is never cover and never eats
 ## a bullet meant for somebody behind it. Authority only.
 func _shoot_toys(shots: Array[DotShot]) -> void:
-	if toys == null or toys.count() == 0 or shots.is_empty():
+	# shot_along arrived at dot-props level 6; an older checkout has no such method.
+	if toys == null or toys.count() == 0 or shots.is_empty() or DotAddonApi.build_level("dot_props") < 6:
 		return
 	var layout: DotPhysicsLayout = player_stack.physics.layout if player_stack != null and player_stack.physics != null else null
 	var level := layout.layer_mask(&"world") if layout != null else 1
