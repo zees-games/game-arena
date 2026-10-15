@@ -361,6 +361,14 @@ func _build_netcode() -> DotResult:
 	# ago, and without compensation every shot at a moving target misses behind them.
 	config.enable_lag_compensation = true
 	config.max_entities_per_snapshot = 64
+	# Unlimited, both caps. Measured with tools/net_probe.gd (one client, 12 to 31 hunting
+	# bots, real ENet on loopback): the stream is a steady ~6 kB/s at 32 snapshots a second,
+	# ~16 kB/s at the join burst, never above 25% of dot-net's 64 kB/s default, and the
+	# limiter starved nothing, so the cap was never what queued a packet. It can only ever
+	# hold a packet back, and a snapshot is bounded anyway by max_entities_per_snapshot and
+	# the mtu, so a game whose worst case is a few kB/s is better without it.
+	config.per_client_budget = 0
+	config.per_client_packet_rate = 0
 	# From the game, so the client cannot be given a different one. See
 	# ArenaGame.NET_WORLD_EXTENT.
 	config.world_extent = ArenaGame.NET_WORLD_EXTENT
