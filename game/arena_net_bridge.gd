@@ -1630,7 +1630,15 @@ func _adopt_tick_rate(rate: int) -> void:
 	net.config.tick_rate = rate
 	# A copy taken at setup() that writing the config does not touch.
 	net.clock.tick_rate = rate
-	Engine.physics_ticks_per_second = rate
+	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap
+	# to a quarter second of ticks (8 steps are 62.5 ms at 128 Hz, so a client under 16 fps ran
+	# fewer ticks than the server). A shell built before it gets the same rule here, as
+	# game-g2gfast does; remove this branch when the oldest shell is API 7.
+	if DotAddonApi.build_level("dot_net") >= 7:
+		DotNetClock.adopt_tick_rate(rate)
+	else:
+		Engine.max_physics_steps_per_frame = maxi(Engine.max_physics_steps_per_frame, ceili(0.25 * float(rate)))
+		Engine.physics_ticks_per_second = rate
 
 
 ## Forgets a player a LEAVE named. Client side.
