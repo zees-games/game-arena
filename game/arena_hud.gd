@@ -2,6 +2,7 @@
 extends DotHud
 
 const ArenaGame := preload("arena_game.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaStats := preload("arena_stats.gd")
@@ -1132,7 +1133,12 @@ func catch_up(since_tick: int = -1) -> int:
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
+	var t := Time.get_ticks_usec()
+	_present(delta)
+	ArenaFrameProbe.add(&"hud", t)
 
+
+func _present(delta: float) -> void:
 	match_view()
 	present_blind(delta)
 	present_body()

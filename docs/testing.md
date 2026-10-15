@@ -62,3 +62,7 @@ The family's rule is that an exported setting whose name occurs once in its repo
 ## Looking at it
 
 No suite reaches the screen. The render tools are in [client.md](client.md#looking-at-it).
+
+## Timing a frame
+
+No suite measures a browser's frame either. A threadless web export is the case that matters, and `cl_perf` is how it reports: export the shell, serve a pack, open `embed.html?server=ws://127.0.0.1:6074&cl_perf=10` in a browser, and read the `arena.perf` lines in its console. What they hold and what they showed is in [netcode.md](netcode.md#a-frames-cost). A machine busy with other work moves the frame times by a factor of three between runs, so compare the work counts (`snapshot`, `replay_n`) or runs taken back to back.

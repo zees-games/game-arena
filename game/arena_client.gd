@@ -6,6 +6,7 @@ const ArenaBots := preload("arena_bots.gd")
 const ArenaBrowser := preload("arena_browser.gd")
 const ArenaClientExtras := preload("arena_client_extras.gd")
 const ArenaEvents := preload("arena_events.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
@@ -182,6 +183,7 @@ func _ready() -> void:
 	# delivered pack sits under `res://dot_cloud/<id>/<version>/`, and the pack's art table
 	# names `res://assets/...` — so without this every gun loads invisible, one WARN each.
 	ZeeModelCache.set_asset_root(ArenaPaths.root())
+	ArenaFrameProbe.from_launch()
 
 	link = DotRegistry.get_node_service(LINK_SERVICE)
 	_offline = force_offline \
@@ -682,6 +684,14 @@ func _build_netcode() -> DotResult:
 	# 256 while the server said 128, and a quantised position decoded against the wrong
 	# range is a different position rather than a less precise one.
 	config.world_extent = ArenaGame.NET_WORLD_EXTENT
+	# One reconciliation a frame, against the newest snapshot, however many arrived: each
+	# replays the whole input lead, and a browser that read a stall's worth of queued
+	# snapshots in one frame replayed them all and never caught up (docs/netcode.md, "A
+	# frame's cost"). By name, because a pack runs on whatever dot-net its shell carries.
+	# `cl_reconcile_per_snapshot 1` at launch is the old way, kept so the two can be
+	# measured against each other in one build under the same load.
+	if &"reconcile_once_per_frame" in config:
+		config.set(&"reconcile_once_per_frame", ArenaFrameProbe.launch_value("cl_reconcile_per_snapshot") != "1")
 	net.config = config
 	add_child(net)
 
@@ -1477,6 +1487,12 @@ static func _add_key(action: StringName, key: Key) -> void:
 # --- The loop --------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	var t := Time.get_ticks_usec()
+	_physics_step(delta)
+	ArenaFrameProbe.add(&"physics", t)
+
+
+func _physics_step(delta: float) -> void:
 	var move := _sampler.sample(delta) if _sampler != null else DotFpsCommand.new()
 	if hud != null and presentation != null and presentation.bindings != null:
 		hud.launch_key_text = presentation.bindings.key_for(launch_action())
@@ -1688,11 +1704,38 @@ const SPAWN_FACE_REACH := 2.0
 
 
 func _process(delta: float) -> void:
+	var t := Time.get_ticks_usec()
+	_present_frame(delta)
+	ArenaFrameProbe.add(&"present", t)
+	ArenaFrameProbe.frame(delta, _probe_extra)
+
+
+## The round trip and the input lead beside a frame report: a stalled frame shows up in
+## both before it shows up anywhere else.
+func _probe_extra() -> Dictionary:
+	if net == null or _offline:
+		return {"offline": true}
+	var clock := net.clock.describe()
+	return {
+		"rtt_ms": int(net.stats.rtt_percentile(0.5)),
+		"link_rtt_ms": int(ArenaNetBridge.link_rtt_ms(link)) if link != null else -1,
+		"lead": net.clock.tick - net.clock.server_tick(),
+		"snaps": clock.get("snaps", 0),
+		"lost_ms": clock.get("lost_ms", 0),
+	}
+
+
+func _present_frame(delta: float) -> void:
 	if net != null and not _offline:
 		# Once a frame, and it is not optional: `DotNetInterpolator` blends two
 		# snapshots perfectly and the result sits in a property nothing reads unless
 		# this runs. Remote players otherwise step at the snapshot rate.
+		var t := Time.get_ticks_usec()
+		var replays := bridge.probe_replays_before() if bridge != null else -1
 		net.interpolate_frame()
+		if bridge != null:
+			bridge.probe_replays_after(replays)
+		ArenaFrameProbe.add(&"interpolate", t)
 
 	# Where every speaker is, so a proximity voice comes from the player who said it.
 	# The server already decided who hears whom by distance; playing the result from
@@ -1750,8 +1793,10 @@ func _process(delta: float) -> void:
 	if game == null:
 		return
 
+	var t := Time.get_ticks_usec()
 	for body in game.players():
 		body.present(delta)
+	ArenaFrameProbe.add(&"bodies", t)
 
 	_watch_projectiles()
 

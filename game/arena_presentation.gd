@@ -1,6 +1,7 @@
 extends Node
 
 const ArenaPaths := preload("arena_paths.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaVote := preload("arena_vote.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaBindings := preload("arena_bindings.gd")
@@ -1094,6 +1095,15 @@ func _local_commands() -> DotConsoleLocal:
 	)
 	local.add_command(&"fx", "Show the effects system", func(_a: PackedStringArray) -> Variant:
 		return fx.describe_lines()
+	)
+	local.add_var(&"cl_perf", "Seconds between frame reports in the log (arena.perf); 0 is off.",
+		func() -> Variant: return ArenaFrameProbe.interval,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_float():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_perf takes a number of seconds")
+			ArenaFrameProbe.set_interval(text.to_float())
+			return DotResult.success(ArenaFrameProbe.interval)
 	)
 	local.add_command(&"where", "Where this client thinks it is", func(_a: PackedStringArray) -> Variant:
 		# The one thing no assertion and no screenshot can give you, and the reason

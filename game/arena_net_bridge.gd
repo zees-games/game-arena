@@ -12,6 +12,7 @@ const ArenaToyNet := preload("arena_toy_net.gd")
 const ArenaNpcNet := preload("arena_npc_net.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaBots := preload("arena_bots.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaRequest := preload("arena_request.gd")
 
 ## Joins [ArenaGame] to a [DotNetManager]. The netcode seam, and the only file in
@@ -672,11 +673,22 @@ func client_tick(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> void
 
 	net.local_inputs().push(command)
 
+	var t := Time.get_ticks_usec()
+	# The snapshots read since the last tick, reconciled once against the newest, before
+	# this tick predicts on top of them (DotNetConfig.reconcile_once_per_frame; by name for
+	# an older shell's dot-net, where each snapshot already reconciled as it came).
+	if net.has_method(&"flush_reconcile"):
+		var replays := probe_replays_before()
+		net.call(&"flush_reconcile")
+		probe_replays_after(replays)
+		ArenaFrameProbe.add(&"reconcile", t)
+		t = Time.get_ticks_usec()
 	for identity in net.registry.predicted():
 		for behaviour in identity.behaviours:
 			if behaviour.has_method("_net_apply_input"):
 				behaviour.call("_net_apply_input", command, tick)
 			behaviour._net_simulate(tick, net.clock.tick_duration())
+	ArenaFrameProbe.add(&"predict", t)
 
 
 ## Applies a snapshot. Client side.
@@ -710,7 +722,27 @@ func receive_snapshot(payload: PackedByteArray) -> DotResult:
 	if rtt_source.is_valid():
 		net.stats.note_rtt(float(rtt_source.call()))
 
-	return net.receive_snapshot(payload)
+	if not ArenaFrameProbe.on():
+		return net.receive_snapshot(payload)
+	var t := Time.get_ticks_usec()
+	var replays := probe_replays_before()
+	var received := net.receive_snapshot(payload)
+	probe_replays_after(replays)
+	ArenaFrameProbe.add(&"snapshot", t)
+	return received
+
+
+## The predictor's reconciliation count, for [method probe_replays_after]; -1 with the probe off.
+func probe_replays_before() -> int:
+	if not ArenaFrameProbe.on() or net == null or net.predictor == null:
+		return -1
+	return net.predictor._replays
+
+
+## Counts the ticks the reconciliation since [param before] replayed, for `cl_perf`.
+func probe_replays_after(before: int) -> void:
+	if before >= 0 and net.predictor._replays != before:
+		ArenaFrameProbe.count(&"replay_n", net.predictor._last_replay_ticks)
 
 
 # --- The client-to-server channel ------------------------------------------
