@@ -174,14 +174,13 @@ static func _def_for(id: StringName, map: ArenaMap) -> DotMapDef:
 	return def
 
 
-## The imported combat surf maps in the rotation when nothing says otherwise.
+## The imported combat surf maps in the rotation when nothing says otherwise: every one.
 ##
-## [b]Christian's two, by name, because he named them[/b] ("small maps that don't need a
-## timer and should be used in game-arena, since they are intended for deathmatch"): the
-## rest are installed, loadable with `arena_map <id>` and offered by nothing until an
-## operator lists them. `arena_imported_rotation` is the setting (`all`, `none`, or ids
-## separated by commas), read into [member imported_rotation].
-const IMPORTED_ROTATION_DEFAULT := "surf_10x_reloaded_fixed,surf_110b_austinpowers"
+## g2gfast marks them `"kind": "arena"` and keeps them out of its own rotation, so arena is
+## where they are played. It used to offer only two by name; an operator can still narrow
+## it. `arena_imported_rotation` is the setting (`all`, `none`, or ids separated by commas),
+## read into [member imported_rotation].
+const IMPORTED_ROTATION_DEFAULT := "all"
 
 ## Which imported maps the rotation, the vote and nominations may offer: `all`, `none`
 ## (or empty), or a comma-separated list of ids. See [constant IMPORTED_ROTATION_DEFAULT].

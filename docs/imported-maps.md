@@ -65,7 +65,7 @@ A combat surf map's walking mesh is islands: platforms with ramps between them t
 
 ## Rotation and modes
 
-`arena_imported_rotation` (`all`, `none`, or ids) defaults to `surf_10x_reloaded_fixed,surf_110b_austinpowers`, the two Christian named; the rest are `enabled = false`, which the rotation, the ballot and nominations already read, and stay loadable with `arena_map <id>`. `ArenaMaps.supports_mode` keeps siege, the objective modes and every props mode off them (`needs_built_world`: navigation, objective layout and scattered props are built from a box list), and their untagged spawns keep the team modes off. Free-for-all, gun game and the weapon pools play.
+`arena_imported_rotation` (`all`, `none`, or ids) defaults to `all`: g2gfast keeps every `kind: arena` map out of its rotation, so every one is offered here by the rotation, the ballot and nominations (a map left out by the setting is `enabled = false`, still loadable with `arena_map <id>`). `ArenaMaps.supports_mode` keeps siege, the objective modes and every props mode off them (`needs_built_world`: navigation, objective layout and scattered props are built from a box list), and their untagged spawns keep the team modes off. Free-for-all, gun game and the weapon pools play.
 
 ## Delivered maps
 

@@ -192,8 +192,8 @@ func _test_catalogue() -> void:
 			on.append(String(map.id))
 
 	on.sort()
-	_check(on == ["surf_10x_reloaded_fixed", "surf_110b_austinpowers"],
-		"the default rotation offers Christian's two and no other import (%s)" % [on])
+	_check(on.size() == ids.size(),
+		"the default rotation offers every combat surf map found (%d of %d)" % [on.size(), ids.size()])
 
 	ArenaMaps.imported_rotation = "all"
 	ArenaMaps.apply_rotation(catalogue)
