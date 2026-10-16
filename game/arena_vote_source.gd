@@ -217,7 +217,16 @@ func _apply_mode(mode_id: StringName) -> DotResult:
 	# `ArenaMapSession`, which reads the mode from there. Setting it on the game
 	# directly would be assigning the mode to a running match — the thing the note
 	# above says not to do.
-	director.current.meta["mode"] = String(mode_id)
+	#
+	# [b]Put back afterwards, win or lose.[/b] Left in the def it was a standing order: the
+	# next time the rotation, a map vote or an admin brought that map up, it switched the
+	# mode back to this one over whatever the players or an operator had chosen since (vote
+	# Team Deathmatch here, Free For All elsewhere, rotate back, and the ballot's "current
+	# mode" is a lie). The change is awaited whole, so the stamp is read before we restore.
+	var def: DotMapDef = director.current
+	var had_mode := def.meta.has("mode")
+	var old_mode: Variant = def.meta.get("mode")
+	def.meta["mode"] = String(mode_id)
 
 	# INFO, because a mode change is a map change to the same map — every player is
 	# re-teamed and the match restarts — and the director's own line names only the map.
@@ -227,7 +236,14 @@ func _apply_mode(mode_id: StringName) -> DotResult:
 		"to": String(mode_id),
 	})
 
-	return await director.change_to(director.current.id)
+	var result: DotResult = await director.change_to(def.id)
+
+	if had_mode:
+		def.meta["mode"] = old_mode
+	else:
+		def.meta.erase("mode")
+
+	return result
 
 
 func _map_choice(def: DotMapDef) -> DotVoteChoice:

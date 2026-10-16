@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 154
+const CHECKS := 155
 
 var _passed := 0
 var _failed := 0
@@ -708,6 +708,11 @@ func _test_maps_and_vote() -> void:
 		await get_tree().create_timer(0.1).timeout
 	_check(_game.mode != null and _game.mode.id == &"ffa", "and back to free-for-all the same way",
 		str((mode_box[0] as Dictionary).get("text", "")) if not mode_box.is_empty() else "no answer")
+	# A mode vote is a one-off, not a standing order: the stamp it puts in the map's def is
+	# gone once the change is done, or the next visit to that map flips the mode back over
+	# whatever was chosen since.
+	_check(not module.maps.current.meta.has("mode"),
+		"a mode change leaves no mode behind in the map's def", str(module.maps.current.meta.get("mode", "")))
 	# A row from a list opened on a map with team spawns, chosen after a change to dm_pit
 	# (none): refused, saying why. The director's current map is swapped for the check
 	# only; nothing awaits in between, and the refusal changes nothing.
