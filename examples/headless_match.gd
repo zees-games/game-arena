@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 601
+const CHECKS := 604
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -3279,6 +3279,17 @@ func _test_survey() -> void:
 			"%s: every spawn stands on ground the flood fill reaches" % id,
 			"%d of %d" % [surveyed["spawns_reached"], map.spawns.size()]
 		)
+		# A spawn whose eye looks at a wall from under 2.5 m is a player who respawns with
+		# their nose against it (dm_box's two axis spawns did, a metre from a 2.7 m crate).
+		var nosed := PackedStringArray()
+		for at in map.spawns:
+			var eye := at.origin + Vector3.UP * 1.6
+			var ahead := eye + (-at.basis.z) * 2.5
+			for box in map.boxes:
+				if box.intersects_segment(eye, ahead) != null:
+					nosed.append(str(at.origin))
+					break
+		_check(nosed.is_empty(), "%s: no spawn faces a wall within 2.5 m" % id, "; ".join(nosed))
 		_check(
 			unexplained.is_empty(),
 			"%s: every surface nobody can reach is one the map says is out of reach" % id,

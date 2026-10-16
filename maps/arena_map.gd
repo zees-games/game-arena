@@ -672,8 +672,15 @@ static func dm_box() -> ArenaMap:
 	for index in range(8):
 		var angle := TAU * float(index) / 8.0
 		var at := Vector3(cos(angle) * 18.0, 0.1, sin(angle) * 18.0)
+		var facing := -at.normalized()
+		# The two on the x axis stand a metre from the foot of the tallest crate (2.7 m,
+		# x 14.5..17, z -1..1.5), so "facing the middle" is a spawn with its nose against a
+		# wall at eye height (found by looking at a respawn frame). Turn them along the
+		# wall instead, the half-turn twin of each other so the map stays symmetric.
+		if absf(at.z) < 0.01:
+			facing = Vector3(0.0, 0.0, -signf(at.x))
 		map.add_spawn(
-			Transform3D(Basis.looking_at(-at.normalized(), Vector3.UP), at),
+			Transform3D(Basis.looking_at(facing, Vector3.UP), at),
 			&"red" if index < 4 else &"blue"
 		)
 
