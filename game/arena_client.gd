@@ -54,6 +54,13 @@ const CHANNEL := "arena.client"
 ## the button did nothing.
 signal leave_requested()
 
+## The level and the local player's camera exist, so the frame shows the game and not an
+## empty room. A shell that knows the contract (dot-server-deploy's `_watch_game_ready`)
+## keeps its loading screen up until this, then draws every material once under it so the
+## shaders compile there rather than at the first shot; see [method warm_up_items]. Emitted
+## again after each map change. Nothing here depends on anyone listening.
+signal ready_to_show()
+
 ## Where a dot-server client link publishes itself.
 const LINK_SERVICE := &"dot_client_link"
 
@@ -249,6 +256,7 @@ func _ready() -> void:
 	_classify_level()
 	add_child(_level)
 	_light()
+	_say_ready_to_show.call_deferred()
 
 	projectile_view = ArenaProjectileView.new()
 	projectile_view.name = "Projectiles"
@@ -692,6 +700,12 @@ func _build_netcode() -> DotResult:
 	# measured against each other in one build under the same load.
 	if &"reconcile_once_per_frame" in config:
 		config.set(&"reconcile_once_per_frame", ArenaFrameProbe.launch_value("cl_reconcile_per_snapshot") != "1")
+	# And none at all when the snapshot says what this client already predicted, which is
+	# most of them: the replay's cost is the lead, a round trip of ticks, so without this a
+	# higher ping was a slower frame (docs/netcode.md, "A frame's cost"). By name for the
+	# same reason; `cl_replay_always 1` at launch replays every one, for an A/B.
+	if &"skip_matching_replays" in config:
+		config.set(&"skip_matching_replays", ArenaFrameProbe.launch_value("cl_replay_always") != "1")
 	net.config = config
 	add_child(net)
 
@@ -921,6 +935,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 	_classify_level()
 	add_child(_level)
 	_light()
+	_say_ready_to_show.call_deferred()
 
 	# A mirroring client's combat manager is never rebuilt — `change_map` is the server's —
 	# and its trace is what the copies of every rocket and grenade bounce off. Left alone,
@@ -1384,6 +1399,7 @@ func _adopt(candidate: ArenaPlayer) -> void:
 
 	_hear_the_local_player()
 	_restore_loadout.call_deferred()
+	_say_ready_to_show.call_deferred()
 
 	# Logged because this is the moment everything a person can see comes into
 	# existence — the camera, the HUD's subject and every key below the `player == null`
@@ -1396,6 +1412,45 @@ func _adopt(candidate: ArenaPlayer) -> void:
 		"health": player.health.health if player.health != null else -1.0,
 		"alive": player.is_alive(),
 	})
+
+
+func is_ready_to_show() -> bool:
+	return _level != null and is_instance_valid(_level) and player != null and player.camera != null
+
+
+func _say_ready_to_show() -> void:
+	if is_ready_to_show():
+		ready_to_show.emit()
+
+
+## What a shell draws once under its loading screen besides what is already in the tree:
+## the meshes and materials of every weapon model the art table names, so the first time
+## somebody draws a gun nobody has held yet is not also the first time its materials compile
+## (in a browser, a stall of a few hundred milliseconds in the middle of a fight). Loading
+## them here also fills `ZeeModelCache`, so the first equip does not read the file either.
+## Collected here rather than with dot-core's `DotRenderWarmup.collect`: a pack runs on
+## whatever dot-core its shell carries, and naming a class an older one lacks fails to parse.
+func warm_up_items() -> Array:
+	var out: Array = []
+	for path in ZeeWeaponArtTable.model_paths():
+		var model := ZeeModelCache.instantiate(path)
+		if model == null:
+			continue
+		var stack: Array[Node] = [model]
+		while not stack.is_empty():
+			var node: Node = stack.pop_back()
+			stack.append_array(node.get_children())
+			var mi := node as MeshInstance3D
+			if mi == null or mi.mesh == null:
+				continue
+			if not out.has(mi.mesh):
+				out.append(mi.mesh)
+			for i in mi.mesh.get_surface_count():
+				var m := mi.get_active_material(i)
+				if m != null and not out.has(m):
+					out.append(m)
+		model.free()
+	return out
 
 
 ## The hands under the camera, and the player's rig rebuilt to draw them.
