@@ -62,6 +62,7 @@ func _run() -> void:
 	print("game-arena: the presentation layer")
 
 	_test_schema()
+	_test_the_weapon_art_is_vendored()
 	_test_audio_is_a_firefight()
 	_test_effects_and_the_player_who_asked_for_none()
 	_test_a_shot_is_drawn()
@@ -1874,6 +1875,25 @@ func _test_the_hud_follows_the_theme() -> void:
 	remove_child(client)
 	client.free()
 	await get_tree().process_frame
+	_done()
+
+
+## The pack carries its art (a delivered game has only what is vendored in assets/), so every
+## model the weapons table names must exist here. v0.1.13 shipped without low-poly-guns/ and
+## ammo/: eleven weapons were invisible in production and nothing failed.
+func _test_the_weapon_art_is_vendored() -> void:
+	_section("Every model the weapon art table names is vendored in this game")
+	var missing: Array[String] = []
+	var count := 0
+	for art in ZeeWeaponArtTable.all():
+		for path in [art.model_path, art.magazine_path]:
+			if path == "":
+				continue
+			count += 1
+			if not ResourceLoader.exists(path):
+				missing.append(path)
+	_check(count > 20, "the table names models (%d)" % count)
+	_check(missing.is_empty(), "no weapon model is missing", str(missing))
 	_done()
 
 
