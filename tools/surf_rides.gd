@@ -17,8 +17,11 @@ const ArenaBots := preload("../game/arena_bots.gd")
 ## [b]--explore[/b] bakes the bots' mesh exactly as the game does, takes its islands, and from
 ## every platform that holds a spawn or a teleport's landing searches (dot-bot's
 ## [DotBotSurfPlanner], score: distance from the start plus energy) for a ride that ends standing
-## on another platform. Each one found is an edge; its landing platform is explored in turn. The
-## edges are written with no rides yet, replacing the file.
+## on another platform. The landings tried are the platforms that are not a teleport's floor,
+## lowest first and at least [constant MIN_RIDE_METRES] away; landing on any of them counts.
+## Each one found is an edge; its landing platform is explored in turn (`--platforms N` caps
+## how many are explored from). The edges are written with no rides yet, replacing the file, and
+## rewritten as each is found, so a run its timeout cuts short keeps what it found.
 ##
 ## [b]--plan i,j[/b] plans those edges (all, without a list): a ride searched from each of
 ## `--starts` starts perturbed round the edge's start (the first exactly there, standing), then
@@ -33,7 +36,9 @@ const ArenaBots := preload("../game/arena_bots.gd")
 ## platform), `--section x0,z0 x1,z1` (the solid under a line), `--hold pos vel yaw mx,my
 ## [--action N]` (one command held), `--search pos vel island[,island...] [--width W --seconds S
 ## --guide "x,y,z;..." --progress P --trace]` (one search, its best line traced), `--wander`
-## (from every teleport landing to wherever the ramps lead). `--measure --think` drives the live
+## (from every teleport landing to wherever the ramps lead), `--islands` (every island and
+## teleport, as text), `--picture out.png` (the map from above: ramps, platforms, teleports,
+## spawns). `--measure --think` drives the live
 ## rides through `ArenaBots.think`, the brain and all.
 ##
 ## Everything is seeded, so two runs print the same numbers.
@@ -46,8 +51,12 @@ const MIN_ISLAND_AREA := 12.0
 ## are tried from each platform; and a map gets at most so many edges.
 const LANDING_AREA := 40.0
 const MAX_RIDE_METRES := 450.0
+## Closer than this is a step off the platform, not a ride.
+const MIN_RIDE_METRES := 40.0
 const TARGETS_PER_PLATFORM := 12
 const MAX_EDGES := 8
+## Platforms explored from, at most (`--platforms`).
+const MAX_PLATFORMS := 12
 
 ## A perturbed start: up to this far sideways and along, metres, and moving at up to the
 ## arena's run speed in a direction up to this far off the ride's (degrees).
@@ -102,6 +111,11 @@ func _run() -> void:
 		get_tree().quit(1)
 		return
 	var path := ProjectSettings.globalize_path(ArenaSurf.path_for(map_id))
+	if args.has("--islands"):
+		list_islands()
+	var picture_at := args.find("--picture")
+	if picture_at >= 0:
+		picture(args[picture_at + 1], 1.0)
 	if args.has("--probe"):
 		probe()
 	if args.has("--section"):
@@ -115,7 +129,7 @@ func _run() -> void:
 		if args.has("--write"):
 			_write(path, {"edges": found})
 	if args.has("--explore"):
-		var edges := explore()
+		var edges := explore(_opt(args, "--platforms", MAX_PLATFORMS), func(found: Array) -> void: _write(path, {"edges": found}))
 		_write(path, {"edges": edges})
 	var plan_at := args.find("--plan")
 	if plan_at >= 0:
@@ -343,6 +357,96 @@ func section(args: PackedStringArray) -> void:
 			print("[surf] %s: y %.1f slope %.0f normal %s" % [str(p.round()), hit["position"].y, rad_to_deg(acos(clampf(nrm.y, -1, 1))), str(nrm.snapped(Vector3.ONE * 0.01))])
 
 
+## Prints every platform of the mesh worth standing on, the spawns on each, and every teleport
+## (its box and where it puts a player): the map as the search sees it.
+func list_islands() -> void:
+	var spawns_on: Dictionary = {}
+	for spawn: Transform3D in game.map.spawns:
+		var i := nav.island_at(spawn.origin, 2.0)
+		spawns_on[i] = int(spawns_on.get(i, 0)) + 1
+	for island: Dictionary in nav.islands():
+		if float(island["area"]) < MIN_ISLAND_AREA:
+			continue
+		var box: AABB = island["bounds"]
+		print("[surf] island %d: %.0f m2, centre %s, from %s to %s, %d spawns%s" % [island["index"], island["area"],
+			str((island["centre"] as Vector3).round()), str(box.position.round()), str(box.end.round()), int(spawns_on.get(island["index"], 0)),
+			", a teleport's floor" if _in_pit(island) else ""])
+	var pits: Array = game.map.pits
+	for i in range(pits.size()):
+		var box: AABB = pits[i]["box"]
+		var to: Vector3 = pits[i]["to"]
+		print("[surf] teleport %d: %s to %s, lands at %s (island %d) yaw %.0f" % [i, str(box.position.round()), str(box.end.round()),
+			str(to.round()), nav.island_at(to, 2.5), float(pits[i]["yaw"])])
+
+
+## Writes a top-down picture of the map to [param out] (a PNG, [param scale] metres a pixel): the
+## highest ramp face of each column in blue to cyan by height, else the highest floor under the
+## sky in grey by height; platforms of the mesh worth landing on tinted green, teleports red,
+## where they put a player yellow, spawns white. For reading a map no search finds a ride on.
+func picture(out: String, scale: float) -> void:
+	var b := game.map.bounds
+	var w := int(ceil(b.size.x / scale))
+	var h := int(ceil(b.size.z / scale))
+	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
+	var space := game.map.collision_root.get_world_3d().direct_space_state
+	var lo := b.position.y
+	var hi := b.end.y
+	for px in range(w):
+		for pz in range(h):
+			var x := b.position.x + (px + 0.5) * scale
+			var z := b.position.z + (pz + 0.5) * scale
+			var top := hi - 1.5
+			var colour := Color(0, 0, 0)
+			var found_floor := false
+			for _k in range(8):
+				var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(Vector3(x, top, z), Vector3(x, lo - 2.0, z)))
+				if hit.is_empty():
+					break
+				var y: float = hit["position"].y
+				var ny: float = (hit["normal"] as Vector3).y
+				var t := clampf((y - lo) / maxf(1.0, hi - lo), 0.0, 1.0)
+				var slope := rad_to_deg(acos(clampf(ny, -1.0, 1.0)))
+				if slope > 46.0 and slope < 85.0:
+					colour = Color(0.1, 0.2 + 0.8 * t, 0.5 + 0.5 * t)
+					break
+				if not found_floor and slope <= 46.0:
+					found_floor = true
+					colour = Color(0.15 + 0.6 * t, 0.15 + 0.6 * t, 0.15 + 0.6 * t)
+				top = y - 0.1
+			img.set_pixel(px, pz, colour)
+	var to_pixel := func(p: Vector3) -> Vector2i:
+		return Vector2i(int((p.x - b.position.x) / scale), int((p.z - b.position.z) / scale))
+	for island: Dictionary in nav.islands():
+		if float(island["area"]) < LANDING_AREA or (island["bounds"] as AABB).position.y > hi - 2.0 or (island["bounds"] as AABB).position.y < lo + 1.0 or _in_pit(island):
+			continue
+		var ib: AABB = island["bounds"]
+		for px in range(maxi(0, int((ib.position.x - b.position.x) / scale)), mini(w, int((ib.end.x - b.position.x) / scale) + 1)):
+			for pz in range(maxi(0, int((ib.position.z - b.position.z) / scale)), mini(h, int((ib.end.z - b.position.z) / scale) + 1)):
+				var p := Vector3(b.position.x + (px + 0.5) * scale, ib.get_center().y, b.position.z + (pz + 0.5) * scale)
+				if nav.on_island(int(island["index"]), p, scale):
+					img.set_pixel(px, pz, img.get_pixel(px, pz).lerp(Color(0.2, 0.9, 0.2), 0.6))
+	for pit: Dictionary in game.map.pits:
+		var pb: AABB = pit["box"]
+		if pb.size.x > 100.0:
+			continue
+		var a: Vector2i = to_pixel.call(pb.position)
+		var e: Vector2i = to_pixel.call(pb.end)
+		# A small teleport filled, a big one (the pit under a ramp) outlined.
+		var small := pb.size.x <= 12.0 and pb.size.z <= 12.0
+		for px in range(clampi(a.x, 0, w - 1), clampi(e.x, 0, w - 1) + 1):
+			for pz in range(clampi(a.y, 0, h - 1), clampi(e.y, 0, h - 1) + 1):
+				if small or px == a.x or px == e.x or pz == a.y or pz == e.y:
+					img.set_pixel(px, pz, Color(0.9, 0.1, 0.1))
+		var d: Vector2i = to_pixel.call(pit["to"])
+		img.set_pixel(clampi(d.x, 0, w - 1), clampi(d.y, 0, h - 1), Color(1, 1, 0))
+	for spawn: Transform3D in game.map.spawns:
+		var s: Vector2i = to_pixel.call(spawn.origin)
+		img.set_pixel(clampi(s.x, 0, w - 1), clampi(s.y, 0, h - 1), Color(1, 1, 1))
+	img.resize(w * 3, h * 3, Image.INTERPOLATE_NEAREST)
+	var _saved := img.save_png(out)
+	print("[surf] picture %s: %d x %d, x from %.0f, z from %.0f, %.1f m a pixel (x right, z down)" % [out, w, h, b.position.x, b.position.z, scale / 3.0])
+
+
 ## Holds each of eight headings from every spawn platform for six seconds and prints where the
 ## player ends and what stopped it: what a search is up against, before it searches.
 func probe() -> void:
@@ -384,7 +488,9 @@ func probe() -> void:
 
 
 ## The edges a search finds from the spawn platforms and every platform a ride lands on.
-func explore() -> Array:
+## [param platforms] caps the platforms ridden from, spawns first; [param progress] is handed
+## the edges so far after each one is found, so a run cut short by its timeout keeps them.
+func explore(platforms: int, progress: Callable) -> Array:
 	var islands := nav.islands()
 	var bounds := game.map.bounds
 	var targets := PackedInt32Array()
@@ -407,33 +513,33 @@ func explore() -> Array:
 		if i >= 0 and targets.has(i) and not start_of.has(i):
 			start_of[i] = nav.closest(pit["to"])
 			queue.append(i)
-	# Where a ride may end: the bigger platforms, biggest first.
+	# Where a ride may end: the bigger platforms that are not a teleport's floor.
 	var landings := PackedInt32Array()
 	for t in targets:
-		if float((islands[t] as Dictionary)["area"]) >= LANDING_AREA:
+		if float((islands[t] as Dictionary)["area"]) >= LANDING_AREA and not _in_pit(islands[t]):
 			landings.append(t)
 	print("[surf] exploring from %d platforms toward %d landings" % [queue.size(), landings.size()])
 	var edges: Array = []
 	var planner := DotBotSurfPlanner.new()
 	planner.seconds = ArenaSurf.RIDE_SECONDS
 	var explored := 0
-	while not queue.is_empty() and edges.size() < MAX_EDGES and explored < 12:
+	while not queue.is_empty() and edges.size() < MAX_EDGES and explored < platforms:
 		var from_island: int = queue.pop_front()
 		explored += 1
 		var from: Vector3 = start_of[from_island]
 		# Toward each platform worth riding to, biggest first: a search with no goal to steer
 		# by (distance from the start) only ever found the way off the edge.
 		var tried := 0
-		# Nearest first, and only below: the biggest islands of these maps are the roofs of their
-		# rooms, and a ride goes down.
+		# Lowest first, only below and not beside the start: a ride goes down, and the platform at
+		# the bottom of a ramp is where the whole ramp was ridden. Nearest first spent every try on
+		# the strips of walkable ramp next to the spawn, a hundred seconds each, and never reached
+		# the platforms across the map; biggest first spent them on the roofs of the rooms.
 		var order: Array = Array(landings)
 		order = order.filter(func(t: int) -> bool:
 			var c: Vector3 = (islands[t] as Dictionary)["centre"]
-			return c.y < from.y - 1.0)
+			return c.y < from.y - 1.0 and Vector2(c.x - from.x, c.z - from.z).length() >= MIN_RIDE_METRES)
 		order.sort_custom(func(a: int, b: int) -> bool:
-			var ca: Vector3 = (islands[a] as Dictionary)["centre"]
-			var cb: Vector3 = (islands[b] as Dictionary)["centre"]
-			return Vector2(ca.x - from.x, ca.z - from.z).length() < Vector2(cb.x - from.x, cb.z - from.z).length())
+			return float((islands[a] as Dictionary)["centre"].y) < float((islands[b] as Dictionary)["centre"].y))
 		for target: int in order:
 			if target == from_island or tried >= TARGETS_PER_PLATFORM or edges.size() >= MAX_EDGES:
 				continue
@@ -449,7 +555,12 @@ func explore() -> Array:
 			course.floor_y = bounds.position.y - ArenaSurf.FALL_OUT_DEPTH
 			for pit: Dictionary in game.map.pits:
 				course.pit_boxes.append(pit["box"])
+			# Steered toward this one, but landing on any of them is a ride: the best line toward a
+			# far platform often ends on its neighbour.
 			course.targets.append(target)
+			for other: int in order:
+				if other != target:
+					course.targets.append(other)
 			course.unsupported_fn = ArenaSurf.unsupported_test(game.map)
 			course.toward_goal = true
 			course.unsupported_penalty = ArenaSurf.UNSUPPORTED_PENALTY
@@ -465,15 +576,29 @@ func explore() -> Array:
 				continue
 			var landing := _replay_end(start, found["actions"], course, sim)
 			var to_point := nav.closest(landing)
+			var landed := nav.island_at(landing, 1.5)
+			var reached := landed if landed >= 0 else target
 			var seconds := float(found["ticks"]) / float(TICK_RATE)
 			print("[surf]   island %d to %d: a ride of %.2f s landing at %s, %.1f s searching" % [
-				from_island, target, seconds, str(to_point.round()), (Time.get_ticks_msec() - t0) / 1000.0])
-			edges.append({"from": _units(from), "to": _units(to_point), "from_island": from_island, "to_island": target,
+				from_island, reached, seconds, str(to_point.round()), (Time.get_ticks_msec() - t0) / 1000.0])
+			edges.append({"from": _units(from), "to": _units(to_point), "from_island": from_island, "to_island": reached,
 				"explored_seconds": snappedf(seconds, 0.01), "veto": true})
-			if not start_of.has(target):
-				start_of[target] = to_point
-				queue.append(target)
+			progress.call(edges)
+			if not start_of.has(reached):
+				start_of[reached] = to_point
+				queue.append(reached)
 	return edges
+
+
+## Whether [param island] is a teleport's floor: its middle, a step above it, inside a pit. A
+## combat surf map's big teleports are the rooms under its ramps, and their floors bake as the
+## largest islands of the map; landing there is the fall, not a platform.
+func _in_pit(island: Dictionary) -> bool:
+	var at := nav.closest(island["centre"]) + Vector3.UP * 0.5
+	for pit: Dictionary in game.map.pits:
+		if (pit["box"] as AABB).has_point(at):
+			return true
+	return false
 
 
 func _replay_end(start: DotFpsState, actions: PackedByteArray, course: DotBotSurfCourse, sim: DotFpsSimulator) -> Vector3:
