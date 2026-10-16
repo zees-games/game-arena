@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 274
+const CHECKS := 276
 
 var _passed := 0
 var _failed := 0
