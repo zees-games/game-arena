@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 276
+const CHECKS := 283
 
 var _passed := 0
 var _failed := 0
@@ -1717,6 +1717,45 @@ func _test_the_map_menu() -> void:
 ## owner's rules are what the menu offers and what the game takes. Solo, so the game here is the
 ## authority; the server's command and cvars are `dedicated`'s. And the crosshair fades while the
 ## gun is aimed down its sight.
+## A stand-in for dot-auth's client: the three members the loadout key reads.
+class FakeAuth extends Node:
+	signal signed_in(identity: Variant)
+	signal signed_out()
+	var key := ""
+	func account_key() -> String:
+		return key
+
+
+## The loadout is filed per site account: two accounts differ, a guest is "local", and a
+## sign-in or sign-out mid-session re-keys it.
+func _check_loadout_accounts(client: ArenaClient) -> void:
+	var menu: Object = client.loadout_menu
+	if not _check(menu != null, "the client has a loadout menu to key"):
+		return
+	_check(menu.get(&"remember_account") == "local", "with no auth client in the registry the loadout is filed under local")
+	_check(ArenaClient.loadout_account_key(null) == "local" and ArenaClient.loadout_account_key(Node.new()) == "local",
+		"no auth, or an auth with no account_key, is local")
+	var auth := FakeAuth.new()
+	add_child(auth)
+	client.follow_account(auth)
+	_check(menu.get(&"remember_account") == "local", "a guest (signed out) is local")
+	auth.key = "backbone:alice"
+	auth.signed_in.emit(null)
+	var alice: String = str(menu.get(&"remember_account"))
+	auth.key = "backbone:bob"
+	auth.signed_in.emit(null)
+	var bob: String = str(menu.get(&"remember_account"))
+	_check(alice == "backbone:alice" and bob == "backbone:bob" and alice != bob,
+		"two accounts on one machine are filed apart", "%s / %s" % [alice, bob])
+	auth.key = ""
+	auth.signed_out.emit()
+	_check(menu.get(&"remember_account") == "local", "signing out falls back to local")
+	_check(not str(menu.get(&"remember_account")).contains("token"), "and no key is ever a token")
+	client.follow_account(null)
+	remove_child(auth)
+	auth.free()
+
+
 func _test_the_loadout_menu() -> void:
 	_section("B is the loadout menu, and the crosshair fades down the sights")
 	var client := ArenaClient.new()
@@ -1729,6 +1768,7 @@ func _test_the_loadout_menu() -> void:
 	_check(keys != null and keys.key_for(DotMenuBindings.LOADOUT_ACTION) == "B" and keys.defaults_on("B").size() == 1,
 		"the loadout menu is on B, and nothing else in the table is",
 		str(keys.defaults_on("B").map(func(r: Dictionary) -> String: return str(r["label"]))) if keys != null else "no menu")
+	await _check_loadout_accounts(client)
 	var game: ArenaGame = client.game
 	var me := client.player
 	if not _check(game.loadout_command != null and me != null, "the game has the menu's server half, and a player"):

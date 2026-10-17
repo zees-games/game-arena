@@ -464,6 +464,12 @@ func _slide_on_c() -> bool:
 ## dot-menu's loadout menu, or null on a host whose dot-menu predates it (API 6).
 var loadout_menu: Object = null
 var _loadout_restored := false
+var _loadout_scratch := false
+var _account_auth: Object = null
+
+## dot-auth's client, as the shell that signed the player in registers it. Absent solo
+## without a shell, or from a shell that predates it: then every loadout is "local".
+const AUTH_SERVICE := &"dot_auth_client"
 
 const WEAPON_CARDS_SCRIPT := "res://addons/zee_weapons/content/zee_weapon_cards.gd"
 var _weapon_cards: Script = null
@@ -481,11 +487,48 @@ func _use_loadout_menu() -> void:
 		return
 	loadout_menu = game_menu.call(&"use_loadout", loadout_offer, choose_loadout, decorate_loadout_choice)
 	if loadout_menu != null:
-		# Remembered on this device (the client has no account to file it under), and never
+		# Remembered under the signed-in site account (or "local" as a guest), and never
 		# from a suite or a render on scratch settings: those must not write, or read back, a
 		# player's real choice.
-		var scratch := ArenaPresentation.settings_directory.begins_with("user://scratch/")
-		loadout_menu.call(&"remember_as", "" if scratch else "arena", "local")
+		_loadout_scratch = ArenaPresentation.settings_directory.begins_with("user://scratch/")
+		follow_account(DotRegistry.get_node_service(AUTH_SERVICE))
+
+
+## The key a loadout is remembered under for [param auth] (a DotAuthClient, or null): its
+## account's public id when signed in, "local" for a guest or a client with no auth. Never a
+## token. Untyped because a shell older than dot-auth's `account_key` has no such method.
+static func loadout_account_key(auth: Object) -> String:
+	if auth == null or not is_instance_valid(auth) or not auth.has_method(&"account_key"):
+		return "local"
+	var key := str(auth.call(&"account_key"))
+	return key if key != "" else "local"
+
+
+## Files the loadout under [param auth]'s account from now on, and again whenever the player
+## signs in or out mid-session (a different account's choice is then the one restored).
+func follow_account(auth: Object) -> void:
+	if _account_auth != null and is_instance_valid(_account_auth):
+		for sig: StringName in [&"signed_in", &"signed_out"]:
+			if _account_auth.is_connected(sig, _on_account_changed):
+				_account_auth.disconnect(sig, _on_account_changed)
+	_account_auth = auth
+	if auth != null and is_instance_valid(auth):
+		for sig: StringName in [&"signed_in", &"signed_out"]:
+			if auth.has_signal(sig):
+				auth.connect(sig, _on_account_changed)
+	_rekey_loadout()
+
+
+func _on_account_changed(_identity: Variant = null) -> void:
+	_rekey_loadout()
+	if _loadout_restored:
+		_loadout_restored = false
+		_restore_loadout()
+
+
+func _rekey_loadout() -> void:
+	if loadout_menu != null:
+		loadout_menu.call(&"remember_as", "" if _loadout_scratch else "arena", loadout_account_key(_account_auth))
 
 
 ## Solo: what this player may pick, from the game's own manager.
