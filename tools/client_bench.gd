@@ -39,6 +39,8 @@ var _seconds := 15.0
 var _burn_ms := 0.0
 var _port := PORT
 var _map := "dm_box"
+var _mode := "ffa"
+var _play := false
 
 var _server_pid := -1
 var _relay = null
@@ -57,6 +59,8 @@ func _ready() -> void:
 			"--burn": _burn_ms = float(args[i + 1])
 			"--port": _port = int(args[i + 1])
 			"--map": _map = args[i + 1]
+			"--mode": _mode = args[i + 1]
+	_play = "--play" in args
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("client_bench_" + _role)
 	if _role == "server":
@@ -77,6 +81,7 @@ func _serve() -> void:
 	game.time_limit_sec = 0.0
 	game.warmup_sec = 0.0
 	game.headless = true
+	game.mode_id = StringName(_mode)
 	game.register_service = true
 	add_child(game)
 	var map := ArenaMap.by_id(StringName(_map))
@@ -137,10 +142,50 @@ class Burner extends Node:
 			pass
 
 
+## `--play`: a player rather than a statue. Runs and strafes in bursts, turns, jumps, holds
+## the trigger most of the time and swaps weapons now and then, so the bench's bots have a
+## moving target that shoots back, and the client's prediction covers firing, reloads,
+## switches, damage, deaths and respawns: what a match is, and what an idle bench never was.
+class Pilot extends Node:
+	var _t := 0.0
+	var _rng := RandomNumberGenerator.new()
+	var _next := 0.0
+
+	func _ready() -> void:
+		_rng.seed = 20261017
+		Input.action_press(&"dot_fps_forward")
+		Input.action_press(&"arena_fire")
+
+	func _process(delta: float) -> void:
+		_t += delta
+		var turn := InputEventMouseMotion.new()
+		turn.relative = Vector2(sin(_t * 0.7) * 6.0, sin(_t * 1.3) * 1.5)
+		Input.parse_input_event(turn)
+		if _t < _next:
+			return
+		_next = _t + _rng.randf_range(0.3, 1.2)
+		for a: StringName in [&"dot_fps_left", &"dot_fps_right", &"dot_fps_jump"]:
+			Input.action_release(a)
+		match _rng.randi_range(0, 5):
+			0: Input.action_press(&"dot_fps_left")
+			1: Input.action_press(&"dot_fps_right")
+			2: Input.action_press(&"dot_fps_jump")
+			3:
+				if _rng.randf() < 0.5:
+					Input.action_release(&"arena_fire")
+				else:
+					Input.action_press(&"arena_fire")
+			4:
+				var wheel := InputEventMouseButton.new()
+				wheel.button_index = MOUSE_BUTTON_WHEEL_UP if _rng.randf() < 0.5 else MOUSE_BUTTON_WHEEL_DOWN
+				wheel.pressed = true
+				Input.parse_input_event(wheel)
+
+
 func _run() -> void:
 	var args := PackedStringArray(["--headless", "--path", ProjectSettings.globalize_path("res://"),
 		"res://tools/client_bench.tscn", "--", "--role", "server", "--port", str(_port),
-		"--bots", str(_bots), "--map", _map])
+		"--bots", str(_bots), "--map", _map, "--mode", _mode])
 	_server_pid = OS.create_process(OS.get_executable_path(), args)
 	if _server_pid <= 0:
 		printerr("client_bench: could not start the server")
@@ -186,6 +231,16 @@ func _run() -> void:
 		var net = _client.get("net")
 		if p != null and p.is_alive() and net != null and net.clock.is_synced():
 			break
+	# `--raw-input`: predict on the sampled command rather than the one the wire carries
+	# (DotNetConfig.predict_wire_input), to measure what the rounding is worth.
+	var client_net = _client.get("net")
+	if "--raw-input" in OS.get_cmdline_user_args() and client_net != null and "predict_wire_input" in client_net.config:
+		client_net.config.predict_wire_input = false
+	# After the client, whose bindings register the actions the pilot presses.
+	if _play:
+		var pilot := Pilot.new()
+		pilot.process_priority = -999
+		add_child(pilot)
 	# Settle: the first seconds are loading and the clock finding its lead.
 	await get_tree().create_timer(3.0).timeout
 	Engine.max_fps = 0
@@ -233,8 +288,28 @@ func _measure() -> void:
 	var fclock := DotMenuFrameClock.new()
 	fclock.start(get_tree())
 	var perf0: Dictionary = net.perf_counters() if net != null and net.has_method(&"perf_counters") else {}
+	var next_line := start + 2000000
+	var line_perf: Dictionary = perf0
+	var line_mm: Dictionary = {}
 	while (Time.get_ticks_usec() - start) / 1.0e6 < _seconds:
 		await get_tree().process_frame
+		if "--timeline" in OS.get_cmdline_user_args() and Time.get_ticks_usec() >= next_line and net != null:
+			next_line += 2000000
+			var pc: Dictionary = net.perf_counters()
+			var mm: Dictionary = net.predictor.describe()["mismatches"]
+			var diff := {}
+			for k in mm:
+				var dv := int(mm[k]) - int(line_mm.get(k, 0))
+				if dv > 0:
+					diff[k] = dv
+			var p = _client.get("player")
+			print("  t=%4.1f alive %s replays %d skipped %d ticks %d steps %d %s" % [(Time.get_ticks_usec() - start) / 1e6,
+				p != null and p.is_alive(), int(pc[&"reconciles"]) - int(line_perf[&"reconciles"]) - (int(pc[&"skipped"]) - int(line_perf[&"skipped"])),
+				int(pc[&"skipped"]) - int(line_perf[&"skipped"]), int(pc[&"replayed_ticks"]) - int(line_perf[&"replayed_ticks"]),
+				int(pc[&"client_ticks"]) - int(line_perf[&"client_ticks"]), diff])
+			print("      last ", net.predictor.describe().get("last_mismatch", {}))
+			line_perf = pc
+			line_mm = mm
 		var now := Time.get_ticks_usec()
 		frames.append((now - last) / 1000.0)
 		last = now
@@ -267,6 +342,8 @@ func _measure() -> void:
 		print("  net: snapshots %.1f/frame %.3f ms | reconciles %.0f (skipped %.0f) %.3f ms/frame | replayed %.2f ticks/frame | predict %.3f ms/frame" % [
 			d.call(&"snapshots") / n, d.call(&"snapshot_usec") / n / 1000.0, d.call(&"reconciles"), d.call(&"skipped"),
 			d.call(&"reconcile_usec") / n / 1000.0, d.call(&"replayed_ticks") / n, d.call(&"predict_usec") / n / 1000.0])
+	if net != null and net.predictor != null:
+		print("  predictor %s | predicted identities %d" % [net.predictor.describe(), net.registry.predicted().size()])
 	var clock: Dictionary = net.clock.describe() if net != null else {}
 	print("  input lead %.1f ticks avg | clock rtt %s ms, jitter %s, snaps %s, catch-ups %s" % [lead_sum / n,
 		clock.get("rtt_ms"), clock.get("jitter_ms"), clock.get("snaps"), clock.get("catch_ups")])

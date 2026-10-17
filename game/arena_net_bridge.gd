@@ -683,11 +683,20 @@ func client_tick(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> void
 		probe_replays_after(replays)
 		ArenaFrameProbe.add(&"reconcile", t)
 		t = Time.get_ticks_usec()
-	for identity in net.registry.predicted():
-		for behaviour in identity.behaviours:
-			if behaviour.has_method("_net_apply_input"):
-				behaviour.call("_net_apply_input", command, tick)
-			behaviour._net_simulate(tick, net.clock.tick_duration())
+	# [b]Through dot-net's predictor, not around it[/b] (`DotNetManager.predict_tick`, API 10).
+	# Simulating the predicted behaviours here by hand predicted the same thing, but the
+	# predictor never saw these ticks: `skip_matching_replays` had nothing remembered to
+	# compare a snapshot with unless a replay had happened to cover its tick, so most snapshots
+	# replayed the whole lead, and the net graph's prediction row read 0 ms/s. By name, with
+	# the old loop kept, for an older shell's dot-net.
+	if net.has_method(&"predict_tick"):
+		net.call(&"predict_tick", tick, command)
+	else:
+		for identity in net.registry.predicted():
+			for behaviour in identity.behaviours:
+				if behaviour.has_method("_net_apply_input"):
+					behaviour.call("_net_apply_input", command, tick)
+				behaviour._net_simulate(tick, net.clock.tick_duration())
 	ArenaFrameProbe.add(&"predict", t)
 
 

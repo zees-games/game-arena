@@ -242,6 +242,15 @@ func _predict(tick: int, delta: float) -> void:
 	_newest_simulated = maxi(_newest_simulated, tick)
 
 
+## Whether a replay would simulate anything: not while dead, when `simulate_tick` returns
+## at once and the server's word is all there is. dot-net then keeps the rewind and skips
+## the replay (`DotNetBehaviour._net_predicts`, API 10), where it used to replay the whole
+## lead on every snapshot of a death, because the server's body moves and the client's
+## does not, so none of them matched.
+func _net_predicts() -> bool:
+	return player != null and player.health != null and player.health.alive
+
+
 ## Whether a tick would be simulated as a replay. For a suite.
 func is_replay(tick: int) -> bool:
 	return tick <= _newest_simulated
