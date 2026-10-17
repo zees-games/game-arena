@@ -2,7 +2,6 @@
 extends Node3D
 
 const ArenaAvatars := preload("arena_avatars.gd")
-const ArenaBeacon := preload("arena_beacon.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaLadderMode := preload("../maps/arena_ladder_mode.gd")
@@ -257,7 +256,7 @@ var beacon: bool = false
 
 ## The marker [member beacon] draws, while it does. Client side; built and freed by
 ## [method present].
-var beacon_marker: ArenaBeacon = null
+var beacon_marker: DotFxBeacon = null
 
 ## The movement this player was built with, before any class scaled it.
 ##
@@ -1758,7 +1757,7 @@ const HAND_POSITION := Vector3(0.26, 1.12, -0.34)
 ## over a spectating player's last position points everybody at an empty floor.
 ##
 ## Placed at the DRAWN position, which is the render state on the local player and the
-## interpolated one on a remote player, for the reason [ArenaBeacon] is top level.
+## interpolated one on a remote player, for the reason [DotFxBeacon] is top level.
 func _present_beacon(delta: float, at: Vector3) -> void:
 	if not beacon or not is_alive():
 		if beacon_marker != null:
@@ -1767,8 +1766,16 @@ func _present_beacon(delta: float, at: Vector3) -> void:
 		return
 
 	if beacon_marker == null:
-		beacon_marker = ArenaBeacon.new()
+		beacon_marker = DotFxBeacon.new()
 		beacon_marker.name = "Beacon"
+		# Red-orange, the colour nothing else in a dev-textured arena is. Ping off: the game
+		# plays its own catalogue ping (BEACON_SOUND) from advance()'s return, so the node's
+		# would be heard twice.
+		beacon_marker.colour = Color(1.0, 0.28, 0.18)
+		beacon_marker.ring_radius = 0.78
+		beacon_marker.column_height = 14.0
+		beacon_marker.column_base = 2.1
+		beacon_marker.ping_enabled = false
 		add_child(beacon_marker)
 
 	beacon_marker.local_view = camera != null

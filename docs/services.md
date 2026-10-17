@@ -42,7 +42,7 @@ Relayed commands are off by default and audited either way: a line typed on a we
 - **`admin_abilities` is on for every `ArenaPlayer`, server and client alike.** The admin modifiers register after the game's own and their indices travel on the wire, so a client without them would read a forced noclip as another modifier and predict the player falling.
 - **A slay turns god, buddha and spawn protection off for exactly one damage event** and puts the flags back, and carries `ArenaEffects.ADMIN_KILL` so the protection hook lets it through.
 - **A respawn clears freeze and noclip and keeps god, blind and beacon** (`ArenaModTools.PERSIST_ON_RESPAWN`): those are about the person, and a death must not end a punishment.
-- **Blind and beacon are replicated state, not events**, so a joiner, a lost snapshot and a map change are all corrected by the next snapshot. `net_blind` is owner-only (an opponent who could read it would know when somebody cannot see); `net_beacon` goes to everybody, and a beaconed player's entity is `always_relevant`. The client draws `ArenaHud.blind_overlay` and `ArenaBeacon` (a ring and a column through walls, not drawn on your own; each pulse plays `ArenaPresentation.BEACON_SOUND`).
+- **Blind and beacon are replicated state, not events**, so a joiner, a lost snapshot and a map change are all corrected by the next snapshot. `net_blind` is owner-only (an opponent who could read it would know when somebody cannot see); `net_beacon` goes to everybody, and a beaconed player's entity is `always_relevant`. The client draws `ArenaHud.blind_overlay` and `DotFxBeacon` from dot-fx (a ring and a column through walls, not drawn on your own; each pulse plays `ArenaPresentation.BEACON_SOUND`).
 
 ## The map vote
 

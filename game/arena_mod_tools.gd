@@ -17,7 +17,7 @@ const ArenaPlayer := preload("arena_player.gd")
 ## Blind and beacon are the two that are about a SCREEN rather than a body, and each is one
 ## flag on [ArenaPlayer] that `ArenaPlayerNet` replicates — the blind to its owner alone,
 ## the beacon to everybody — and that the client draws: `ArenaHud` blacks the owner's
-## screen out, `ArenaBeacon` rings the player on every screen and pings. The server decides;
+## screen out, `DotFxBeacon` (dot-fx) rings the player on every screen and pings. The server decides;
 ## nothing about either is a client's to choose.
 ##
 ## Ids are the session userid as a string, which is `ArenaPlayer.player_id` — the one id
