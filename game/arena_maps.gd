@@ -223,7 +223,7 @@ static func apply_rotation(catalogue: DotMapCatalogue) -> void:
 ## An imported map as dot-map content.
 ##
 ## [b]Local, not delivered[/b] — no `content_id` — because on every machine that has it the
-## map is files in this build's tree (the linked g2gfast-maps) that `ArenaMap.by_id`
+## map is files in this build's tree (the linked arena-surf-dm-maps) that `ArenaMap.by_id`
 ## builds, exactly like a built-in. The version is its manifest's hash
 ## (`ArenaImportedMaps.version_of`), so a server and a client holding different imports of
 ## one map disagree at the announce instead of colliding against different brushes.

@@ -14,8 +14,8 @@ const ArenaBspMap := preload("arena_bsp_map.gd")
 ##
 ## [b]The format is g2gfast's.[/b] `<root>/<id>/<id>.json` beside `<id>.bin`, a lightmap
 ## and `textures/`, read by [ArenaBspMap]. The roots are `res://maps/imported` (the
-## g2gfast-maps repository, linked in by dot-bootstrap at the same path g2gfast links it,
-## so the `.import` markers written there are right here too) and `user://maps`, where a
+## arena-surf-dm-maps repository, linked in by dot-bootstrap at the path its `.import`
+## markers were written against) and `user://maps`, where a
 ## map that arrived at runtime would be; the first root that has an id wins, so a map in
 ## the build is never silently replaced by one dropped in beside it.
 ##
@@ -169,7 +169,7 @@ static func manifest(id: StringName) -> Dictionary:
 ##
 ## [b]From the bytes, not a constant.[/b] dot-map's sync protocol accepts an announced map
 ## only at the version the client also has, and a rotation cooldown and every record are
-## about a map AT a version. A re-import in g2gfast-maps that moved a brush is a different
+## about a map AT a version. A re-import that moved a brush is a different
 ## map; hashing the manifest (which carries every offset into the mesh) says so on both
 ## ends without anybody remembering to bump anything — the rule g2gfast's packs follow.
 ##

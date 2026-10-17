@@ -15,7 +15,7 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 | `headless_presentation` | the client's presentation layer, effects, HUD pieces (HIT and AWARD read off the wire into the hit marker, numbers, medals and points), the private match over HTTP, every key the client reads as a rebindable action (fire, a slot, the props-mode remap, a saved binding after a restart) |
 | `headless_stack` | the player stack: spawning, sides, protection |
 | `headless_admin` | the admin tools on a real `DotServer` with the module loaded by path |
-| `headless_imported` | a deathmatch on a combat surf map: catalogue, spawns, floors, ramps, pits, surf air control, mechanics, bots' routes over the baked mesh, a bot riding a ride edge on surf_ski_2 and a roaming bot taking one, delivery from a fake mount. Skips, and says so, without the g2gfast-maps link |
+| `headless_imported` | a deathmatch on a combat surf map: catalogue, spawns, floors, ramps, pits, surf air control, mechanics, bots' routes over the baked mesh, a bot riding a ride edge on surf_ski_2 and a roaming bot taking one, delivery from a fake mount. Skips, and says so, without the arena-surf-dm-maps link |
 | `dedicated` | a real `DotServer` loading `ArenaModule`: boot, commands, the vote's clock, bots, unload, exiting clean |
 | `headless_feel` | what each rendered frame shows, at a display rate (below) |
 

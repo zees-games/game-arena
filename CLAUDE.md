@@ -1,6 +1,6 @@
 # game-arena
 
-The reference game: a 3D deathmatch in six kinds of mode on three built-in maps and g2gfast-maps' combat surf maps, with bots and zee-dot-weapons, over dot-net, as a signed dot-cloud pack: the only test of the joins between the addons.
+The reference game: a 3D deathmatch in six kinds of mode on three built-in maps and arena-surf-dm-maps' combat surf maps (delivered, not shipped), with bots and zee-dot-weapons, over dot-net, as a signed dot-cloud pack: the only test of the joins between the addons.
 
 Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is specific to this game. **The detail is in [docs/](docs/README.md)**.
 
@@ -23,7 +23,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | Path | What |
 | --- | --- |
 | `game/` | everything that runs, flat; the client half is never loaded by a dedicated server. File by file: [architecture](docs/architecture.md#where-the-code-is) |
-| `maps/` | the built-in maps as box lists (survey, paint, lighting); the combat surf maps' loader; `maps/imported` links g2gfast-maps |
+| `maps/` | the built-in maps as box lists (survey, paint, lighting); the combat surf maps' loader; `maps/imported` links arena-surf-dm-maps |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monsters, props, avatar parts, effects, vendored zee art, Kenney's grid and medal icons |
 | `examples/` | the nine suites; `wall_route_driver.gd` drives a map's wall routes |
 | `tools/` | render tools (`screenshot.sh --glance`), avatar and icon builders, `audio_probe.sh`, `loudness_pilot.gd`. [client](docs/client.md#looking-at-it) |

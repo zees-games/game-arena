@@ -57,7 +57,7 @@ const ArenaJail := preload("../maps/arena_jail.gd")
 ##   the mount on a change, is gone when the server stops naming it, and a named pack that is
 ##   not `"kind": "arena"` is skipped.
 ##
-## [b]Skips, loudly, when the maps are not linked[/b] — a checkout without g2gfast-maps
+## [b]Skips, loudly, when the maps are not linked[/b] — a checkout without arena-surf-dm-maps
 ## plays the built-ins only, which is a supported state (dot-ci has no link). It is allowed
 ## to skip; it is not allowed to pass: the exit code is 0 and the line says why.
 
@@ -105,7 +105,7 @@ func _run() -> void:
 
 	if ArenaMap.imported_ids().is_empty():
 		_line("no imported maps under %s — nothing to check" % ArenaImportedMaps.roots()[0])
-		_line("  link g2gfast-maps: dot-bootstrap/bootstrap.sh --links game-arena")
+		_line("  link arena-surf-dm-maps: dot-bootstrap/bootstrap.sh --links game-arena")
 		get_tree().quit(0)
 		return
 

@@ -366,7 +366,7 @@ func _build_maps() -> void:
 
 ## A server announcing one of its delivered maps wins over a local import of the same id.
 ##
-## [b]Because dot-map would refuse it otherwise[/b]: a client with g2gfast-maps linked has
+## [b]Because dot-map would refuse it otherwise[/b]: a client with arena-surf-dm-maps linked has
 ## `surf_x` in its catalogue as a local def at `0.0.0-<hash>`, and `DotMapSyncClient` refuses
 ## an announce for a known LOCAL map at another version ("this client has a different
 ## version of that map"). The server named a pack, built from that pack's bytes, and is

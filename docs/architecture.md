@@ -105,4 +105,4 @@ Everything is flat under `game/` and `maps/`, grouped here by what it is for.
 | `game/arena_stats.gd`, `arena_awards.gd`, `arena_boards.gd`, `arena_progress.gd`, `arena_identity.gd` | progression and identity |
 | `game/arena_paths.gd` | `rebase` for every `res://` path (pack delivery) |
 | `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
-| `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the g2gfast-maps link |
+| `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the arena-surf-dm-maps link |

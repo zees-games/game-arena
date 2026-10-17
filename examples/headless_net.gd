@@ -42,7 +42,7 @@ const LOSS_EVERY := 5
 const CHECKS := 230
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
-## many checks that adds. Without g2gfast-maps linked they are skipped and said so, and
+## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
 ## the total expected drops by exactly that many: a skip is allowed, a silent one is not.
 const IMPORTED_MAP := &"surf_10x_reloaded_fixed"
 const IMPORTED_CHECKS := 9
@@ -797,7 +797,7 @@ func _test_map_sync_wire() -> void:
 	if ArenaMap.imported_ids().has(IMPORTED_MAP):
 		await _follow_onto_imported(host, client_game, client_entry, peer, target)
 	else:
-		print("  skip  no imported maps linked (g2gfast-maps); %d checks not run" % IMPORTED_CHECKS)
+		print("  skip  no imported maps linked (arena-surf-dm-maps); %d checks not run" % IMPORTED_CHECKS)
 		_skipped_checks += IMPORTED_CHECKS
 
 	host.queue_free()
