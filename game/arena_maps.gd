@@ -4,6 +4,7 @@ const ArenaPaths := preload("arena_paths.gd")
 
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
+const ArenaMapDoc := preload("../maps/arena_map_doc.gd")
 const ArenaMode := preload("arena_mode.gd")
 
 ## This game's maps as dot-map content: a catalogue, a rotation and a vote can address.
@@ -139,6 +140,13 @@ static func catalogue(content: DotContentIndex = null) -> DotMapCatalogue:
 	# catalogue is built the same way on a server, which is what keeps that one rule.
 	out.follow_content(content if content != null else DotContentIndex.shared(), accepted_map_kinds())
 
+	# A pack's map whose document is bad is refused and not listed. Dropped here for the
+	# list as built; [method supports_mode] and [method menu_rows] check again, because the
+	# catalogue re-adds its followed rows whenever the session turns.
+	for def in out.maps.duplicate():
+		if is_workshop(def) and not build_workshop(def).ok:
+			var _removed := out.remove(def.id)
+
 	return out
 
 
@@ -172,6 +180,23 @@ static func is_workshop(def: DotMapDef) -> bool:
 	return def != null and def.entry_key != ""
 
 
+## The map a subscribed pack's [param def] describes: its `scene` is a map document
+## (`maps/arena_map_doc.gd`) whose id is the entry's id. A fresh [ArenaMap] each call, like
+## [method ArenaMap.by_id]. A refusal is logged once per entry, then silent, because the
+## menu asks on every open.
+static func build_workshop(def: DotMapDef) -> DotResult:
+	if not is_workshop(def):
+		return DotResult.fail(DotError.CODE_INVALID, "not a Workshop map", String(def.id) if def != null else "")
+	var text := FileAccess.get_file_as_string(def.scene_path) if FileAccess.file_exists(def.scene_path) else ""
+	var built := ArenaMapDoc.build(text, def.id)
+	if not built.ok and not _refused_keys.has(def.entry_key):
+		_refused_keys[def.entry_key] = true
+		DotLog.warn(CHANNEL, "a Workshop map was refused", {
+			"entry": def.entry_key, "why": built.error.message,
+		})
+	return built
+
+
 ## The rows of the solo map menu (M), in the ballot's ids so a server's list reads the same:
 ## every map that can host [param mode] (`map:<id>`), then every mode [param here] can host
 ## (`mode:<id>`) from [param modes] (passed in: `arena_modes.gd` preloads this file). A pack's map is named with its pack, "Name [Pack]".
@@ -181,6 +206,8 @@ static func menu_rows(
 	var out: Array = []
 	for def in catalogue.available():
 		if mode != null and not supports_mode(def, mode):
+			continue
+		if is_workshop(def) and not build_workshop(def).ok:
 			continue
 		var detail := ""
 		if bool(def.meta.get("imported", false)):
@@ -520,6 +547,9 @@ static func _has_team_spawns(map: ArenaMap) -> bool:
 ## map. A free-for-all runs anywhere; a team mode needs somewhere to put the sides.
 static func supports_mode(def: DotMapDef, mode: ArenaMode) -> bool:
 	if def == null or mode == null:
+		return false
+
+	if is_workshop(def) and not build_workshop(def).ok:
 		return false
 
 	# An imported map has no box list, and the monsters' navigation, the objectives'

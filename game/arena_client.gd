@@ -495,6 +495,21 @@ func _slide_on_c() -> bool:
 	return table.row_using("C", &"bind_duck", presentation.settings).is_empty()
 
 
+## A fresh map by id: the game's own, else a subscribed pack's from the catalogue the menu
+## lists (so only a solo, accepted, valid one). Null value with ok is not returned: an unknown
+## id is a failure here, as the menu's own refusal.
+func _build_map(id: StringName) -> DotResult:
+	var own := ArenaMap.by_id(id)
+	if own != null:
+		return DotResult.success(own)
+	if _menu_catalogue == null:
+		_menu_catalogue = ArenaMaps.catalogue()
+	var def := _menu_catalogue.get_map(id)
+	if ArenaMaps.is_workshop(def):
+		return ArenaMaps.build_workshop(def)
+	return DotResult.fail(DotError.CODE_INVALID, "There is no map called '%s'." % id)
+
+
 # --- Offline ---------------------------------------------------------------
 # --- The map menu (M) ------------------------------------------------------
 
@@ -641,16 +656,18 @@ func change_from_menu(id: StringName) -> DotResult:
 	var map := game.map
 	var mode: ArenaMode = null
 	if text.begins_with("map:"):
-		map = ArenaMap.by_id(StringName(text.substr(4)))
-		if map == null and _menu_catalogue != null and ArenaMaps.is_workshop(_menu_catalogue.get_map(StringName(text.substr(4)))):
-			# Listed, not yet playable: the game builds a map from a box list and a Workshop map
-			# is a scene (docs/not-yet.md, "Workshop maps").
-			return DotResult.fail(DotError.CODE_UNSUPPORTED, "Arena cannot play Workshop maps yet.")
+		var built := _build_map(StringName(text.substr(4)))
+		if not built.ok:
+			return built
+		map = built.value
 	elif text.begins_with("mode:"):
 		mode = ArenaModes.by_id(StringName(text.substr(5)))
 		if mode == null:
 			return DotResult.fail(DotError.CODE_INVALID, "There is no mode called '%s'." % text.substr(5))
-		map = ArenaMap.by_id(game.map.id)
+		var rebuilt := _build_map(game.map.id)
+		if not rebuilt.ok:
+			return rebuilt
+		map = rebuilt.value
 	if map == null:
 		return DotResult.fail(DotError.CODE_INVALID, "There is no map called '%s'." % text)
 	var changed := game.change_map(map, mode)

@@ -26,14 +26,19 @@ func _process(_delta: float) -> bool:
 		DotLog.set_level(DotLog.Level.ERROR)
 		var _scratch := ArenaPresentation.use_scratch_settings("screenshot_workshop")
 		DirAccess.make_dir_recursive_absolute("res://screenshots")
+		DirAccess.make_dir_recursive_absolute("user://workshop_shot")
+		var doc := FileAccess.open("user://workshop_shot/hill.json", FileAccess.WRITE)
+		doc.store_string(JSON.stringify({"schema": 1, "id": "fixture_hill", "name": "Fixture Hill",
+			"boxes": [[-4, 0, -4, 8, 1, 8]], "spawns": [{"at": [-14, 0.1, 0], "yaw": 270}]}))
+		doc.close()
 		var index := DotContentIndex.new()
 		index.set_session(DotContentIndex.SESSION_SOLO)
 		var _added := index.add_pack({
-			"content_id": "fixture/hills", "version": "1.0.0", "prefix": "res://fixture/",
+			"content_id": "fixture/hills", "version": "1.0.0", "prefix": "user://workshop_shot/",
 			"session": DotContentIndex.SESSION_SOLO, "source": &"subscription",
 			"provides": {"schema": 1, "title": "Hilltop Pack", "kinds": ["map"], "entries": [
-				{"kind": "map", "id": "fixture_hill", "name": "Fixture Hill", "scene": "hill.tscn", "map_kind": "arena"},
-				{"kind": "map", "id": "fixture_run", "name": "Fixture Run", "scene": "run.tscn", "map_kind": "surf"},
+				{"kind": "map", "id": "fixture_hill", "name": "Fixture Hill", "scene": "hill.json", "map_kind": "arena"},
+				{"kind": "map", "id": "fixture_run", "name": "Fixture Run", "scene": "run.json", "map_kind": "surf"},
 			]},
 		})
 		var catalogue := ArenaMaps.catalogue(index)
