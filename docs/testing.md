@@ -16,6 +16,7 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 | `headless_stack` | the player stack: spawning, sides, protection |
 | `headless_admin` | the admin tools on a real `DotServer` with the module loaded by path |
 | `headless_imported` | a deathmatch on a combat surf map: catalogue, spawns, floors, ramps, pits, surf air control, mechanics, bots' routes over the baked mesh, a bot riding a ride edge on surf_ski_2 and a roaming bot taking one, delivery from a fake mount. Skips, and says so, without the arena-surf-dm-maps link |
+| `headless_workshop` | subscribed maps against a fixture `DotContentIndex`: the accepted kind is listed in solo (catalogue, map menu rows, the ballot) as `Name [Pack]`, an unaccepted `map_kind` is not, an online session lists none, and a pack cannot take a built-in map's id |
 | `dedicated` | a real `DotServer` loading `ArenaModule`: boot, commands, the vote's clock, bots, unload, exiting clean |
 | `headless_feel` | what each rendered frame shows, at a display rate (below) |
 

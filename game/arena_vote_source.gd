@@ -250,6 +250,7 @@ func _map_choice(def: DotMapDef) -> DotVoteChoice:
 	var choice := DotVoteChoice.of(
 		StringName(MAP_PREFIX + String(def.id)), def.name_or_id()
 	)
+	choice.pack_title = def.pack_title
 	choice.group = GROUP_MAPS
 	choice.description = def.description
 	choice.min_players = def.min_players

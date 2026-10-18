@@ -104,7 +104,7 @@ const MAP_VERSIONS := {
 ## `tools/check.sh`, `tools/package_check.sh` and bootstrap all carried one and all
 ## four went stale — and the fix has always been the same: read it from the one place
 ## that cannot, which is the code that makes the maps.
-static func catalogue() -> DotMapCatalogue:
+static func catalogue(content: DotContentIndex = null) -> DotMapCatalogue:
 	var out := DotMapCatalogue.new()
 	out.meta = {"game": "arena"}
 
@@ -134,6 +134,68 @@ static func catalogue() -> DotMapCatalogue:
 				"map": String(id), "why": added.error.message
 			})
 
+	# The Workshop's maps, after the game's own so that an id of ours always wins. The index
+	# is solo or online as its host set it, so an online session lists none of them; the
+	# catalogue is built the same way on a server, which is what keeps that one rule.
+	out.follow_content(content if content != null else DotContentIndex.shared(), accepted_map_kinds())
+
+	return out
+
+
+## The file a game pack states what it takes from subscriptions in (dot-cloud's
+## docs/workshop.md, "What a game accepts"). Read from there, not repeated here, because the
+## site offers a pack by this same file and a second list would drift from it.
+const PROVIDES_PATH := "res://provides.json"
+
+## What [method accepted_map_kinds] answers when the file cannot be read.
+const ACCEPTED_MAP_KINDS_FALLBACK := ["arena"]
+
+
+## The `map_kind`s of subscribed maps this game lists: `accepts.map_kinds` in `provides.json`.
+static func accepted_map_kinds() -> PackedStringArray:
+	var out := PackedStringArray()
+	var path := ArenaPaths.rebase(PROVIDES_PATH)
+	var parsed: Variant = null
+	if FileAccess.file_exists(path):
+		parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var accepts: Variant = (parsed as Dictionary).get("accepts") if parsed is Dictionary else null
+	var kinds: Variant = (accepts as Dictionary).get("map_kinds") if accepts is Dictionary else null
+	if not (kinds is Array):
+		kinds = ACCEPTED_MAP_KINDS_FALLBACK
+	for kind: Variant in (kinds as Array):
+		out.append(str(kind))
+	return out
+
+
+## Whether [param def] came from a subscribed pack rather than from this game.
+static func is_workshop(def: DotMapDef) -> bool:
+	return def != null and def.entry_key != ""
+
+
+## The rows of the solo map menu (M), in the ballot's ids so a server's list reads the same:
+## every map that can host [param mode] (`map:<id>`), then every mode [param here] can host
+## (`mode:<id>`) from [param modes] (passed in: `arena_modes.gd` preloads this file). A pack's map is named with its pack, "Name [Pack]".
+static func menu_rows(
+	catalogue: DotMapCatalogue, here: StringName, mode: ArenaMode, modes: Array
+) -> Array:
+	var out: Array = []
+	for def in catalogue.available():
+		if mode != null and not supports_mode(def, mode):
+			continue
+		var detail := ""
+		if bool(def.meta.get("imported", false)):
+			detail = "Combat surf map"
+		elif is_workshop(def):
+			detail = "Workshop map"
+		out.append({"id": "map:%s" % def.id, "name": def.label(), "mode": "Map",
+			"detail": detail, "current": def.id == here})
+	var current_def := catalogue.get_map(here)
+	for each: ArenaMode in modes:
+		if current_def != null and not supports_mode(current_def, each):
+			continue
+		out.append({"id": "mode:%s" % each.id, "name": each.display_name, "mode": "Mode",
+			"detail": each.description.get_slice("\n", 0),
+			"current": mode != null and each.id == mode.id})
 	return out
 
 
@@ -464,7 +526,7 @@ static func supports_mode(def: DotMapDef, mode: ArenaMode) -> bool:
 	# layout and the scattered props are all built out of one. Offered such a mode it
 	# would build a hill in mid-air and a navmesh of nothing, so it hosts the modes that
 	# are only about the players: free-for-all, gun game, a weapon pool.
-	if bool(def.meta.get("imported", false)) and needs_built_world(mode):
+	if (bool(def.meta.get("imported", false)) or is_workshop(def)) and needs_built_world(mode):
 		return false
 
 	if not mode.is_team_mode():
