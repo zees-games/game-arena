@@ -61,6 +61,12 @@ signal leave_requested()
 ## again after each map change. Nothing here depends on anyone listening.
 signal ready_to_show()
 
+## Holds the cover until the level, the local body and the camera exist, then draws the
+## weapon materials once under it. The root keeps `ready_to_show` and `warm_up_items` only
+## because it declares its own signal (the gate then leaves it alone) and because a shell
+## older than the gate asks the root's methods, not the gate.
+var gate: DotLoadGate
+
 ## Where a dot-server client link publishes itself.
 const LINK_SERVICE := &"dot_client_link"
 
@@ -192,6 +198,14 @@ func _ready() -> void:
 	ZeeModelCache.set_asset_root(ArenaPaths.root())
 	ArenaFrameProbe.from_launch()
 
+	# Closed before anything else is built, so no frame shows a half-made world.
+	gate = DotLoadGate.new()
+	add_child(gate)
+	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
+	gate.hold(&"map", "Loading the map")
+	gate.require(&"spawned", func() -> bool: return player != null and player.camera != null, "Joining")
+	gate.warm_up(_weapon_warm_items())
+
 	link = DotRegistry.get_node_service(LINK_SERVICE)
 	_offline = force_offline \
 		or link == null \
@@ -256,7 +270,7 @@ func _ready() -> void:
 	_classify_level()
 	add_child(_level)
 	_light()
-	_say_ready_to_show.call_deferred()
+	gate.release(&"map")
 
 	projectile_view = ArenaProjectileView.new()
 	projectile_view.name = "Projectiles"
@@ -585,24 +599,12 @@ var _menu_catalogue: DotMapCatalogue = null
 ## can host the mode being played (`map:<id>`), then every mode the map being played can host
 ## (`mode:<id>`).
 func map_menu_rows() -> Array:
-	var out: Array = []
 	if game == null:
-		return out
+		return []
 	if _menu_catalogue == null:
 		_menu_catalogue = ArenaMaps.catalogue()
 	var here := game.map.id if game.map != null else &""
-	for def in _menu_catalogue.available():
-		if game.mode != null and not ArenaMaps.supports_mode(def, game.mode):
-			continue
-		out.append({"id": "map:%s" % def.id, "name": def.name_or_id(), "mode": "Map",
-			"detail": "Combat surf map" if bool(def.meta.get("imported", false)) else "", "current": def.id == here})
-	var current_def := _menu_catalogue.get_map(here)
-	for mode in ArenaModes.all():
-		if current_def != null and not ArenaMaps.supports_mode(current_def, mode):
-			continue
-		out.append({"id": "mode:%s" % mode.id, "name": mode.display_name, "mode": "Mode",
-			"detail": mode.description.get_slice("\n", 0), "current": game.mode != null and mode.id == game.mode.id})
-	return out
+	return ArenaMaps.menu_rows(_menu_catalogue, here, game.mode, ArenaModes.all())
 
 
 ## Solo: a map (`map:<id>`) or a mode on this map (`mode:<id>`), now. The game changes and the
@@ -615,6 +617,10 @@ func change_from_menu(id: StringName) -> DotResult:
 	var mode: ArenaMode = null
 	if text.begins_with("map:"):
 		map = ArenaMap.by_id(StringName(text.substr(4)))
+		if map == null and _menu_catalogue != null and ArenaMaps.is_workshop(_menu_catalogue.get_map(StringName(text.substr(4)))):
+			# Listed, not yet playable: the game builds a map from a box list and a Workshop map
+			# is a scene (docs/not-yet.md, "Workshop maps").
+			return DotResult.fail(DotError.CODE_UNSUPPORTED, "Arena cannot play Workshop maps yet.")
 	elif text.begins_with("mode:"):
 		mode = ArenaModes.by_id(StringName(text.substr(5)))
 		if mode == null:
@@ -933,6 +939,8 @@ func _on_map_changing(map: DotMapDef) -> void:
 ## player can SEE is a scene this client added, and a client that rebuilt one and not
 ## the other would walk through walls it can see and stop at walls it cannot.
 func _on_map_changed(map: DotMapDef) -> void:
+	# Cover and stop the frozen body until the new level is in (released below).
+	gate.hold(&"map", "Loading the map")
 	# **The client has to ADOPT the map it was handed, and this is where that was
 	# missing.** `ArenaGame.map` is assigned in exactly three places — `setup`, the
 	# module's mode change, and `change_map` — and every one of them runs on the
@@ -978,7 +986,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 	_classify_level()
 	add_child(_level)
 	_light()
-	_say_ready_to_show.call_deferred()
+	gate.release(&"map")
 
 	# A mirroring client's combat manager is never rebuilt — `change_map` is the server's —
 	# and its trace is what the copies of every rocket and grenade bounce off. Left alone,
@@ -1442,7 +1450,7 @@ func _adopt(candidate: ArenaPlayer) -> void:
 
 	_hear_the_local_player()
 	_restore_loadout.call_deferred()
-	_say_ready_to_show.call_deferred()
+	gate.freeze(player)
 
 	# Logged because this is the moment everything a person can see comes into
 	# existence — the camera, the HUD's subject and every key below the `player == null`
@@ -1458,12 +1466,7 @@ func _adopt(candidate: ArenaPlayer) -> void:
 
 
 func is_ready_to_show() -> bool:
-	return _level != null and is_instance_valid(_level) and player != null and player.camera != null
-
-
-func _say_ready_to_show() -> void:
-	if is_ready_to_show():
-		ready_to_show.emit()
+	return gate != null and gate.is_open()
 
 
 ## What a shell draws once under its loading screen besides what is already in the tree:
@@ -1474,6 +1477,10 @@ func _say_ready_to_show() -> void:
 ## Collected here rather than with dot-core's `DotRenderWarmup.collect`: a pack runs on
 ## whatever dot-core its shell carries, and naming a class an older one lacks fails to parse.
 func warm_up_items() -> Array:
+	return gate.warm_items() if gate != null else []
+
+
+func _weapon_warm_items() -> Array:
 	var out: Array = []
 	for path in ZeeWeaponArtTable.model_paths():
 		var model := ZeeModelCache.instantiate(path)
