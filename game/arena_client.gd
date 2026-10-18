@@ -61,14 +61,15 @@ signal leave_requested()
 ## again after each map change. Nothing here depends on anyone listening.
 signal ready_to_show()
 
-## Holds the cover until the level, the local body and the camera exist, then draws the
-## weapon materials once under it. The root keeps `ready_to_show` and `warm_up_items` only
-## because it declares its own signal (the gate then leaves it alone) and because a shell
-## older than the gate asks the root's methods, not the gate.
+## dot-game's platform layer: the load gate and its cover (held until the level, the local
+## body and the camera exist, then the weapon materials drawn once under it), the browser
+## filesystem flush, and [signal DotGameClient.input_blocked_changed] for the sampler. Not its
+## settings, menu, console, pointer or board: arena's are [ArenaMenus] and
+## [ArenaPresentation], see [method _build_platform]. The root keeps `ready_to_show` and
+## `warm_up_items` only because it declares its own signal (the gate then leaves it alone) and
+## because a shell older than the gate asks the root's methods, not the gate.
+var platform: DotGameClient = null
 var gate: DotLoadGate
-
-## Where a dot-server client link publishes itself.
-const LINK_SERVICE := &"dot_client_link"
 
 ## Field of view, horizontal at 4:3. An arena shooter's number, not Godot's.
 const FIELD_OF_VIEW := 100.0
@@ -191,6 +192,38 @@ var _held_slot: int = 0
 var _last_slot: int = 0
 
 
+## dot-game's platform layer, added first so the cover is the first thing drawn.
+##
+## [b]Only the pieces that remove duplicate code without moving a documented rule.[/b] Taken:
+## the gate (with the map hold and the weapon warm-up on it), the link and the offline
+## answer, the browser flush, and the input-blocked signal. Left off, each for a reason:
+## [code]use_settings[/code] and [code]use_console[/code], because the settings document is
+## [ArenaPresentation]'s plain manager with a menu built round it by [ArenaMenus] (the
+## Servers page, the camera rows) and the console must be built after that menu;
+## [code]capture_pointer[/code], because Escape releases and then opens, and "Click to play"
+## is arena's ([method _unhandled_input]); the Tab board, because [ArenaMenus].Board merges
+## dot-match's records with the roster.
+func _build_platform() -> void:
+	platform = DotGameClient.new()
+	platform.name = "Platform"
+	platform.force_offline = force_offline
+	platform.use_settings = false
+	platform.use_console = false
+	platform.capture_pointer = false
+	platform.scoreboard_action = &""
+	platform.spawned_fn = func() -> bool: return player != null and player.camera != null
+	add_child(platform)
+	gate = platform.gate
+	link = platform.link as Node
+	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
+	gate.hold(&"map", "Loading the map")
+	gate.warm_up(_weapon_warm_items())
+	# The chat box and console have the keyboard, and so does the menu: the platform polls
+	# this every frame, so there is no signal to forward from each of them.
+	platform.busy_fn = _input_busy
+	platform.input_blocked_changed.connect(_suspend_input)
+
+
 func _ready() -> void:
 	# zee-dot-weapons' art is this game's copy of it, wherever this game is mounted. A
 	# delivered pack sits under `res://dot_cloud/<id>/<version>/`, and the pack's art table
@@ -199,17 +232,8 @@ func _ready() -> void:
 	ArenaFrameProbe.from_launch()
 
 	# Closed before anything else is built, so no frame shows a half-made world.
-	gate = DotLoadGate.new()
-	add_child(gate)
-	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
-	gate.hold(&"map", "Loading the map")
-	gate.require(&"spawned", func() -> bool: return player != null and player.camera != null, "Joining")
-	gate.warm_up(_weapon_warm_items())
-
-	link = DotRegistry.get_node_service(LINK_SERVICE)
-	_offline = force_offline \
-		or link == null \
-		or OS.get_cmdline_user_args().has("--offline")
+	_build_platform()
+	_offline = platform.offline
 
 	game = ArenaGame.new()
 	game.name = "Game"
@@ -307,6 +331,8 @@ func _ready() -> void:
 		DotLog.result(CHANNEL, "netcode", netted)
 
 	_grab_mouse()
+	DotLog.result(CHANNEL, "the platform", platform.setup())
+	_suspend_input(platform.is_input_blocked())
 
 
 func _exit_tree() -> void:
@@ -376,8 +402,7 @@ func _build_interface() -> void:
 		leave_requested.emit())
 	# The menu, its help or the console opening or closing: the pointer and the sampler.
 	game_menu.overlays_changed.connect(func(_open: bool) -> void:
-		_apply_mouse()
-		_refresh_suspended())
+		_apply_mouse())
 
 	board = ArenaMenus.Board.new(
 		game_menu.scoreboard, game.match_node.scoreboard,
@@ -859,19 +884,20 @@ func _wire_chat_window() -> void:
 
 	window.submitted.connect(_on_chat_submitted)
 
-	window.opened.connect(func(_channel: StringName) -> void: _refresh_suspended())
-	window.closed.connect(func() -> void: _refresh_suspended())
+
+## Something other than the cover has the keyboard or the screen.
+func _input_busy() -> bool:
+	return (presentation != null and presentation.swallows_input()) \
+		or (game_menu != null and game_menu.any_open())
 
 
-## Movement stops while anything has the keyboard or the screen: the chat box, the
-## console, or dot-menu's menu. Only when none does is it given back, so the console
-## closing while the chat box is still open does not walk the player. The console reaches
-## this as one of the menu's overlays (`overlays_changed`); the chat box is not one, so its
-## own open and close call this too ([method _wire_chat_window]).
-func _refresh_suspended() -> void:
+## Movement stops while anything has the keyboard or the screen: the cover, the chat box,
+## the console, or dot-menu's menu ([member platform]'s [code]busy_fn[/code] says which). Only
+## when none does is it given back, so the console closing while the chat box is still open
+## does not walk the player.
+func _suspend_input(blocked: bool) -> void:
 	if _sampler != null:
-		_sampler.suspended = (presentation != null and presentation.swallows_input()) \
-			or (game_menu != null and game_menu.any_open())
+		_sampler.suspended = blocked
 
 
 ## Whether the menu, its help or the console is up, in which case the mouse is a pointer.

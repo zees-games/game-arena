@@ -68,7 +68,7 @@ func _run() -> void:
 	_test_a_shot_is_drawn()
 	_test_shake_is_computed_not_applied()
 	_test_console()
-	_test_console_stops_movement()
+	await _test_console_stops_movement()
 	_test_the_escape_menu()
 	_test_every_key_is_an_action()
 	_test_party_is_sandboxed()
@@ -526,7 +526,8 @@ func _test_console() -> void:
 ## the client suspending the sampler while the console is open. Driven through the real
 ## wiring with the key held down: the console is one of dot-menu's overlays
 ## ([method ArenaMenus.build]), and the menu's `overlays_changed` is what the client
-## suspends on, through the same `_refresh_suspended` as the chat box.
+## suspends on, through the platform's `input_blocked_changed` (polled in its _process, so the
+## steps below wait two frames) as the chat box does.
 func _test_console_stops_movement() -> void:
 	_section("A held movement key does not move the player while the console is open")
 
@@ -537,7 +538,11 @@ func _test_console_stops_movement() -> void:
 	client._sampler = ArenaClient.make_sampler()
 	client._wire_chat_window()
 	client.game_menu = ArenaMenus.build(self, p)
-	client.game_menu.overlays_changed.connect(func(_open: bool) -> void: client._refresh_suspended())
+	var platform := DotGameClient.new()
+	platform.use_gate = false
+	platform.busy_fn = client._input_busy
+	platform.input_blocked_changed.connect(client._suspend_input)
+	add_child(platform)
 
 	var forward: StringName = client._sampler.actions["forward"]
 	Input.action_press(forward)
@@ -546,21 +551,28 @@ func _test_console_stops_movement() -> void:
 		"with nothing open, the held key walks (the control)")
 
 	p.console.open()
+	await get_tree().process_frame
+	await get_tree().process_frame
 	_check(client._sampler.sample(1.0 / 64.0).move == Vector2.ZERO,
 		"with the console open, the held key does not move the player")
 
 	p.chat_window.open()
 	p.console.close()
+	await get_tree().process_frame
+	await get_tree().process_frame
 	_check(client._sampler.sample(1.0 / 64.0).move == Vector2.ZERO,
 		"closing the console while the chat box is still open keeps the player still")
 
 	p.chat_window.close()
+	await get_tree().process_frame
+	await get_tree().process_frame
 	_check(client._sampler.sample(1.0 / 64.0).move.y > 0.5,
 		"and with both closed the key walks again")
 
 	Input.action_release(forward)
 	_check(not client._sampler.suspended, "nothing is left suspended")
 
+	platform.queue_free()
 	client.game_menu.queue_free()
 	client.presentation = null
 	client.free()
