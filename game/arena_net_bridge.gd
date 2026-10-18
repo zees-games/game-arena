@@ -689,14 +689,32 @@ func client_tick(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> void
 	# compare a snapshot with unless a replay had happened to cover its tick, so most snapshots
 	# replayed the whole lead, and the net graph's prediction row read 0 ms/s. By name, with
 	# the old loop kept, for an older shell's dot-net.
+	#
+	# [b]The old loop predicts what the server will compute, and says so.[/b] The web shell
+	# pinned 2026-10-17 has dot-net 0.1.12: the skip (`skip_matching_replays`, `_remember`)
+	# but no `predict_tick`. That loop predicted on the command as typed while the server ran
+	# it as it arrived, rounded by the wire, so the prediction drifted off the server's by
+	# millimetres a tick and never matched a snapshot; and it remembered nothing, so nothing
+	# could be skipped anyway. Every snapshot replayed the whole lead: 29-41 ticks re-simulated
+	# a frame in a browser, the frame's largest cost. Rounding the command the way the wire
+	# does (what `predict_tick` does under `predict_wire_input`) and remembering each tick
+	# took a replica of that shell (24 s against three bots) from 92 of 500 snapshots skipped and
+	# 9.2 ticks re-simulated a frame to 458 of 485 skipped and 0.6.
 	if net.has_method(&"predict_tick"):
 		net.call(&"predict_tick", tick, command)
 	else:
+		# Same object as the one buffered above, so its replays run on the rounded one too.
+		var wire := DotNetWriter.new(32)
+		command.write(wire)
+		command.read(DotNetReader.new(wire.to_bytes()))
+		var remember := net.predictor != null and net.predictor.has_method(&"_remember")
 		for identity in net.registry.predicted():
 			for behaviour in identity.behaviours:
 				if behaviour.has_method("_net_apply_input"):
 					behaviour.call("_net_apply_input", command, tick)
 				behaviour._net_simulate(tick, net.clock.tick_duration())
+			if remember:
+				net.predictor.call(&"_remember", identity, tick)
 	ArenaFrameProbe.add(&"predict", t)
 
 

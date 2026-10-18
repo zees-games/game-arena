@@ -296,7 +296,7 @@ func _measure() -> void:
 		if "--timeline" in OS.get_cmdline_user_args() and Time.get_ticks_usec() >= next_line and net != null:
 			next_line += 2000000
 			var pc: Dictionary = net.perf_counters()
-			var mm: Dictionary = net.predictor.describe()["mismatches"]
+			var mm: Dictionary = net.predictor.describe().get("mismatches", {})
 			var diff := {}
 			for k in mm:
 				var dv := int(mm[k]) - int(line_mm.get(k, 0))
@@ -307,7 +307,9 @@ func _measure() -> void:
 				p != null and p.is_alive(), int(pc[&"reconciles"]) - int(line_perf[&"reconciles"]) - (int(pc[&"skipped"]) - int(line_perf[&"skipped"])),
 				int(pc[&"skipped"]) - int(line_perf[&"skipped"]), int(pc[&"replayed_ticks"]) - int(line_perf[&"replayed_ticks"]),
 				int(pc[&"client_ticks"]) - int(line_perf[&"client_ticks"]), diff])
-			print("      last ", net.predictor.describe().get("last_mismatch", {}))
+			print("      last ", net.predictor.describe().get("last_mismatch", {}), " | draws %d objects %d" % [
+				int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+				int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))])
 			line_perf = pc
 			line_mm = mm
 		var now := Time.get_ticks_usec()
@@ -411,6 +413,23 @@ func _print_render() -> void:
 					if m != null:
 						mats[m.get_rid()] = true
 	print("    visible meshes %d (shadow casters %d) | particles %d | distinct materials %d" % [meshes, cast, particles, mats.size()])
+	# Every visible geometry instance by class and by the nearest scripted ancestor: what the
+	# renderer's object count is made of (it counts each again per shadow split).
+	var by := {}
+	stack = [get_tree().root]
+	while not stack.is_empty():
+		var nd: Node = stack.pop_back()
+		stack.append_array(nd.get_children())
+		if not (nd is VisualInstance3D) or not (nd as Node3D).is_visible_in_tree():
+			continue
+		var owner_node: Node = nd.get_parent()
+		while owner_node != null and owner_node.get_script() == null:
+			owner_node = owner_node.get_parent()
+		var key := "%s in %s" % [nd.get_class(), (owner_node.get_script() as Script).resource_path.get_file() if owner_node != null else "-"]
+		by[key] = int(by.get(key, 0)) + 1
+	for k: String in by:
+		if int(by[k]) >= 3:
+			print("      %4d  %s" % [by[k], k])
 
 
 func _fail(why: String) -> void:

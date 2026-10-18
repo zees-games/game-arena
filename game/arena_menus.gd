@@ -39,8 +39,11 @@ static func build(host: Node, presentation: Node, browser: ArenaBrowser = null) 
 	var menu := DotMenu.new()
 	menu.name = "GameMenu"
 	# Under the HUD's clock, mode label and portraits (to y 160) and its notice line (182..): the
-	# default 64 drew "Loadout equipped." over the mode label.
-	menu.toast_top = 236.0
+	# default 64 drew "Loadout equipped." over the mode label. By name: the web shell pinned
+	# 2026-10-17 has dot-menu 0.1.3, older than `toast_top`, and assigning it there stopped
+	# this function with a script error, so that shell's client had no menu at all.
+	if &"toast_top" in menu:
+		menu.set(&"toast_top", 236.0)
 	menu.settings = settings
 	menu.bindings = presentation.bindings if presentation != null else ArenaBindings.make()
 	var config := DotMenuConfig.new()
