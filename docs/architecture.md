@@ -78,6 +78,10 @@ Three small decisions in those joins:
 
 Inside a player's tick, the map's own mechanics run after the controller's move and before the pits ([imported maps](imported-maps.md#the-maps-own-mechanics)), and drops are swept after the player stack and before the match ([modes](modes.md#coins-out-of-a-body)).
 
+## Nobody is harmed behind a loading cover
+
+A client behind its `DotLoadGate` cover froze itself and cannot see. `ArenaModule` is not on `DotGameModule`, so it borrows dot-game's `DotGameRoster` for the bookkeeping alone (`ArenaModule.loading`): a seat is loading from the spawn event until the client's `game.cover` report says the cover lifted, and again from every map change (`mark_reloading`). `ArenaGame.loading_fn` asks it by player id, and `ArenaEffects.adjust_damage`, the one hook every damage path runs through (weapons, monsters, map hurt volumes, falls), refuses a hit on a loading seat, after the administrator's slay, which is never vetoed. Nobody dies behind a cover, so no round loses a player who never saw it begin. Bots and offline play have no `loading_fn` and are never loading. `headless_lossy` checks it over a real socket.
+
 ## One description, three representations
 
 `ArenaMap` holds a list of `AABB`s. `to_scene()` makes meshes and static bodies, `to_fps_body()` makes a `DotFpsFlatBody`, `to_trace()` makes a `DotTraceFlat`. Building those independently is the obvious approach and it is wrong in a way nothing reports: the server's idea of a wall moves a metre and shots start passing through something clients can see. The self-test asserts all three have the same box count and that a shot at the perimeter stops at it.

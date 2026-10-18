@@ -183,6 +183,17 @@ func adjust_damage(damage: DotDamage) -> void:
 	if bool(damage.context.get(ADMIN_KILL, false)):
 		return
 
+	# A player whose client is still behind its loading cover froze itself and cannot see: no
+	# weapon, monster, map volume or fall may hurt it, and so nobody dies behind a cover and
+	# no round loses a player who never saw it begin. Here because this is the one hook every
+	# path to `apply_damage` runs through; after the slay above, which is the operator's.
+	if not game.can_be_harmed(damage.victim):
+		damage.refuse("loading")
+		DotLog.debug(CHANNEL, "a hit was refused", {
+			"why": "loading", "attacker": damage.attacker, "victim": damage.victim,
+		})
+		return
+
 	if manager.is_invulnerable(damage.victim):
 		damage.refuse("invulnerable")
 		DotLog.debug(CHANNEL, "a hit was refused", {

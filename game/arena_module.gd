@@ -83,6 +83,14 @@ var vote: ArenaVote = null
 ## dot-server session id -> whether we have put them in the match.
 var _joined: Dictionary = {}
 
+## Who is still behind their loading cover, from dot-game's roster used for that alone: this
+## module is not on DotGameModule, so it seats people itself and only borrows the bookkeeping
+## (loading from the spawn event until the client says its cover lifted, again from a map
+## change). A player id is the userid, so [method ArenaGame.can_be_harmed] asks it by that.
+## Bots are never seated here, so they are never loading.
+var loading: DotGameRoster = null
+var _handles_cover: bool = false
+
 ## The authoritative tick. Counted here because the module is what drives it.
 var _tick: int = 0
 
@@ -301,6 +309,8 @@ func _module_load() -> DotResult:
 
 	server.client_disconnected.connect(_on_client_disconnected)
 	game.player_killed.connect(_on_player_killed)
+
+	_build_loading()
 
 	var netted := _build_netcode()
 
@@ -703,6 +713,8 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_tick += 1
+	if loading != null:
+		loading.poll_loading()
 	bridge.server_tick(_tick)
 
 	_since_bot_check += delta
@@ -893,7 +905,49 @@ func _reapply_combat_cvars() -> void:
 			var _applied: Variant = game.combat.call(&"set_cvar", (cv as DotConVar).name, (cv as DotConVar).get_string())
 
 
+## The loading roster and the handler for the client's cover report on dot-server's envelope.
+## A kind on the existing envelope because the RPC set is frozen; a client that predates it is
+## released by the roster's timeout. Duck-typed so an older dot-server still loads this.
+func _build_loading() -> void:
+	loading = DotGameRoster.new()
+	loading.server = server
+
+	if game != null:
+		game.loading_fn = loading.is_loading
+
+	if server == null or not ("envelope" in server):
+		return
+
+	var env: Object = server.get(&"envelope")
+
+	if env != null and env.has_method("register"):
+		env.call("register", DotGameRoster.COVER_KIND, Callable(self, "_on_cover_report"), false)
+		_handles_cover = true
+
+
+func _on_cover_report(peer_id: int, payload: Dictionary) -> void:
+	var covered: Variant = payload.get("covered")
+
+	if loading != null and covered is bool:
+		loading.report_cover(peer_id, covered)
+
+
 func _module_unload() -> void:
+	if _handles_cover and server != null:
+		var env: Object = server.get(&"envelope")
+
+		if env != null and env.has_method("handle"):
+			env.call("handle", DotGameRoster.COVER_KIND, Callable())
+
+		_handles_cover = false
+
+	if game != null and is_instance_valid(game):
+		game.loading_fn = Callable()
+
+	if loading != null:
+		loading.clear()
+		loading = null
+
 	if net != null and is_instance_valid(net):
 		net.stop()
 
@@ -1043,6 +1097,9 @@ func _add(session: DotClientSession) -> void:
 
 	_joined[session.userid] = true
 
+	if loading != null:
+		var _seated := loading.add(session)
+
 	# Chat, voice and map changes, all keyed on the PEER because all three are about a
 	# connection rather than about a person: a chat backlog goes to a socket, a voice
 	# frame is relayed to a socket, and a map change waits on a socket.
@@ -1065,6 +1122,9 @@ func _on_client_disconnected(session: DotClientSession, _reason: String) -> void
 	# its acknowledgement record as well as taking the player out of the match.
 	bridge.remove_peer(session.peer_id)
 	_joined.erase(session.userid)
+
+	if loading != null:
+		loading.remove(session)
 
 	if services != null:
 		services.remove_peer(session.peer_id)
@@ -1391,6 +1451,11 @@ func _reply_chat(peer: int, text: String) -> void:
 ## change, and both firing means two entries in the play history for one play — a
 ## "not in the last five" cooldown that is quietly a cooldown of two or three.
 func _on_map_changed(map: DotMapDef) -> void:
+	# Every client covers for the new map and says so when it lifts; until it does nobody is
+	# harmed, and one that never re-covers is released after the roster's grace.
+	if loading != null:
+		loading.mark_reloading()
+
 	if vote != null:
 		vote.note_changed()
 

@@ -4,6 +4,7 @@ const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModTools := preload("../game/arena_mod_tools.gd")
+const ArenaContent := preload("../game/arena_content.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
@@ -76,7 +77,7 @@ const RELIABLE_SECONDS := 35.0
 
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 28
+const OTHER_CHECKS := 36
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -149,6 +150,7 @@ func _run() -> void:
 			await _test_wall_moves()
 			await _test_server_cvars_reach_the_client()
 			await _test_view_feel_and_packs_reach_the_client()
+			await _test_loading_cover()
 			await _test_leave()
 
 	await _teardown()
@@ -312,7 +314,7 @@ func _boot() -> bool:
 
 ## A client: a DotClientLink on ENet only, and the netcode `ArenaClient._build_netcode`
 ## builds, minus everything that draws.
-func _connect_client(label: String, udp_port: int) -> Dictionary:
+func _connect_client(label: String, udp_port: int, lift_cover: bool = true) -> Dictionary:
 	var side := Node.new()
 	side.name = "Client%s" % label
 	add_child(side)
@@ -344,6 +346,11 @@ func _connect_client(label: String, udp_port: int) -> Dictionary:
 	if not record["spawned"][0]:
 		record["error"] = "never spawned: %s" % record["gone"][0]
 		return record
+
+	# What DotGameClient does when its gate opens. A client that never says so is held
+	# unharmable by the server for its load timeout, which would change every other section.
+	if lift_cover:
+		DotGameClient.report_cover(link, false)
 
 	var game := ArenaGame.new()
 	game.name = "Game"
@@ -1222,6 +1229,69 @@ func _test_wall_moves() -> void:
 
 
 # --- The end ----------------------------------------------------------------
+
+## [b]A seat whose client has not lifted its cover cannot be harmed, and can once it does.[/b]
+## C joins and says nothing (a client still loading its level); the server's own damage path
+## is then asked to hurt it, by a hazard (the world, attacker 0) and by A's weapon-style hit,
+## and must refuse both. C then sends the cover report on the real wire and the same hit lands.
+func _test_loading_cover() -> void:
+	_section("a client behind its loading cover is not harmed, and is once it lifts")
+	var c := await _connect_client("C", _server.config.effective_enet_port(), false)
+	_clients["C"] = c
+	if not _check(c.get("bridge") != null and int(c["session"]) != 0, "C connects",
+			str(c.get("error", ""))):
+		_done()
+		return
+
+	var id := int(c["session"])
+	var roster: DotGameRoster = _module().loading
+	var victim: ArenaPlayer = _game.player_for(id)
+	_check(victim != null and roster != null and roster.is_loading(id) and not _game.can_be_harmed(id),
+		"the server holds C as loading from its spawn", str(roster.describe()) if roster != null else "no roster")
+
+	var type: DotDamageType = _game.combat.damage_type(ArenaContent.DAMAGE_WORLD)
+	var before := victim.health.health if victim != null else 0.0
+	var world_hit := DotDamage.make(0, id, 10.0, type)
+	world_hit.tick = _game.current_tick()
+	var _dealt_world := _game.combat.apply_damage(world_hit)
+	var hit := DotDamage.make(_peer_session("A"), id, 10.0, type)
+	hit.tick = _game.current_tick()
+	var _dealt_hit := _game.combat.apply_damage(hit)
+	_check(victim != null and victim.health.health == before and victim.is_alive(),
+		"a hazard and another player's hit both do nothing to it",
+		"%s -> %s" % [before, victim.health.health if victim != null else -1.0])
+
+	# Spawn protection exempts world damage, so the world hit landing after the lift (and not
+	# before) is what shows the cover, not protection, was the veto.
+	DotGameClient.report_cover(c["link"], false)
+	var lifted := await _until(func() -> bool: return not roster.is_loading(id), RELIABLE_SECONDS)
+	_check(lifted and _game.can_be_harmed(id), "its cover report crosses the wire and ends the loading state")
+
+	var after_lift := victim.health.health if victim != null else 0.0
+	var late_hit := DotDamage.make(0, id, 10.0, type)
+	late_hit.tick = _game.current_tick()
+	var _dealt_late := _game.combat.apply_damage(late_hit)
+	_check(victim != null and victim.health.health < after_lift,
+		"and the same hit now lands", "%s -> %s" % [after_lift, victim.health.health if victim != null else -1.0])
+
+	# A bot or a seat the roster does not hold is never loading.
+	_check(not roster.is_loading(DUMMY_ID) and _game.can_be_harmed(DUMMY_ID),
+		"a seat the roster does not hold is always harmable")
+
+	_game.loading_fn = Callable()
+	_check(_game.can_be_harmed(id), "a game with no loading_fn (offline) harms everyone")
+	_game.loading_fn = roster.is_loading
+
+	(c["link"] as DotClientLink).disconnect_from_server("done")
+	(c["net"] as DotNetManager).stop()
+	var gone := await _until(func() -> bool: return _game.player_for(id) == null, RELIABLE_SECONDS)
+	_check(gone and not roster.is_loading(id), "C leaves and the roster forgets it")
+	_done()
+
+
+func _peer_session(label: String) -> int:
+	return int(_clients[label]["session"])
+
 
 func _test_leave() -> void:
 	_section("B leaves, and A is told once")

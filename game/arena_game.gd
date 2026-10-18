@@ -191,6 +191,11 @@ var match_node: DotMatch = null
 var entities := DotEntityTable.new()
 
 var combat: DotCombatManager = null
+
+## Whether a player's client is still behind its loading cover: `func(player_id: int) -> bool`.
+## The server module fills it from its [DotGameRoster]; unset (offline, a suite, a bot) nobody
+## is loading. See [method can_be_harmed].
+var loading_fn: Callable = Callable()
 var loadouts: DotLoadoutManager = null
 
 ## The loadout menu's server half (dot-loadout's `DotLoadoutCommand`): the `/loadout` command
@@ -1983,6 +1988,15 @@ func _hurt_from_map() -> void:
 
 
 # --- Events ----------------------------------------------------------------
+
+## Whether [param entity_id] may be hurt now. False only for a player whose client is behind
+## its loading cover (frozen by its own client, unable to see); a monster, a bot or a game
+## with no [member loading_fn] is always harmable, so every offline suite is unchanged.
+func can_be_harmed(entity_id: int) -> bool:
+	if not loading_fn.is_valid():
+		return true
+	return not bool(loading_fn.call(entity_id))
+
 
 func _on_entity_killed(entity_id: int, damage: DotDamage) -> void:
 	var victim := player_for(entity_id)
