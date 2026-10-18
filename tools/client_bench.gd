@@ -245,6 +245,7 @@ func _run() -> void:
 	await get_tree().create_timer(3.0).timeout
 	Engine.max_fps = 0
 	_switch_off()
+	_hide()
 	await _measure()
 	link.disconnect_from_server("done")
 	_finish(0)
@@ -270,6 +271,34 @@ func _switch_off() -> void:
 			if path != "" and path.contains(name_part):
 				nd.set_process(false)
 				nd.set_physics_process(false)
+
+
+## `--hide a,b`: render ablation. `shadow` turns off every light's shadow, `light:<Name>`
+## hides lights whose node name contains Name, `viewports` stops every SubViewport,
+## `canvas` hides every CanvasLayer (the HUD), `node:<Name>` hides Node3Ds whose name contains Name. The drop in draws and objects is
+## that piece's share.
+func _hide() -> void:
+	var args := OS.get_cmdline_user_args()
+	var at := args.find("--hide")
+	if at < 0 or at + 1 >= args.size():
+		return
+	var names := args[at + 1].split(",")
+	var stack: Array[Node] = [get_tree().root]
+	while not stack.is_empty():
+		var nd: Node = stack.pop_back()
+		stack.append_array(nd.get_children())
+		for want in names:
+			if want == "shadow" and nd is Light3D:
+				(nd as Light3D).shadow_enabled = false
+			elif want.begins_with("light:") and nd is Light3D and String(nd.name).contains(want.substr(6)):
+				(nd as Light3D).visible = false
+			elif want == "viewports" and nd is SubViewport:
+				(nd as SubViewport).render_target_update_mode = SubViewport.UPDATE_DISABLED
+			elif want == "canvas" and nd is CanvasLayer:
+				(nd as CanvasLayer).visible = false
+			elif want.begins_with("node:") and nd is Node3D and String(nd.name).contains(want.substr(5)):
+				(nd as Node3D).visible = false
+	print("hidden: ", names)
 
 
 func _measure() -> void:
