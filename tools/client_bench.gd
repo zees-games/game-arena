@@ -301,6 +301,38 @@ func _hide() -> void:
 	print("hidden: ", names)
 
 
+## `--mismatches`: every reconcile the prediction missed, by how far, so a run can tell
+## rounding (under 2 cm) from a real disagreement and a teleport (a respawn).
+var _mm_seen := -1
+var _mm_rows: Array = []
+
+
+func _note_mismatch(last: Dictionary) -> void:
+	if last.is_empty() or int(last["tick"]) == _mm_seen:
+		return
+	_mm_seen = int(last["tick"])
+	var a: Variant = last["predicted"]
+	var b: Variant = last["received"]
+	var d := -1.0
+	if a is Vector3 and b is Vector3:
+		d = (a as Vector3).distance_to(b as Vector3)
+	var p = _client.get("player")
+	_mm_rows.append([_mm_seen, String(last["property"]), d, p != null and p.is_alive(), a, b])
+
+
+func _print_mismatches() -> void:
+	var buckets := {"<2cm": 0, "2-10cm": 0, "10cm-1m": 0, ">1m": 0, "other": 0}
+	var by_prop := {}
+	for r in _mm_rows:
+		by_prop[r[1]] = int(by_prop.get(r[1], 0)) + 1
+		var d: float = r[2]
+		var k := "other" if d < 0.0 else ("<2cm" if d < 0.02 else ("2-10cm" if d < 0.1 else ("10cm-1m" if d < 1.0 else ">1m")))
+		buckets[k] += 1
+	print("  mismatches seen %d %s %s" % [_mm_rows.size(), by_prop, buckets])
+	for r in _mm_rows.slice(0, 25):
+		print("    tick %d %-20s %.4f alive %s pred %s recv %s" % r)
+
+
 func _measure() -> void:
 	ArenaFrameProbe.set_interval(1.0e9)
 	var frames := PackedFloat32Array()
@@ -341,6 +373,8 @@ func _measure() -> void:
 				int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))])
 			line_perf = pc
 			line_mm = mm
+		if net != null and "--mismatches" in OS.get_cmdline_user_args():
+			_note_mismatch(net.predictor.describe().get("last_mismatch", {}))
 		var now := Time.get_ticks_usec()
 		frames.append((now - last) / 1000.0)
 		last = now
@@ -360,6 +394,8 @@ func _measure() -> void:
 		step_sum += s
 		step_max = maxi(step_max, s)
 	var elapsed := (Time.get_ticks_usec() - start) / 1.0e6
+	if "--mismatches" in OS.get_cmdline_user_args():
+		_print_mismatches()
 	print("client_bench: delay %d ms each way, burn %.1f ms, %d bots, %.0f s" % [roundi(_delay), _burn_ms, _bots, elapsed])
 	print("  fps %.1f | frame p50 %.1f p95 %.1f max %.1f ms" % [n / elapsed, sorted[n / 2], sorted[int(n * 0.95)], sorted[n - 1]])
 	var fs := fclock.summary(elapsed + 1.0)
