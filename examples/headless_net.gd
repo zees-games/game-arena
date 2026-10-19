@@ -654,11 +654,13 @@ func _test_map_sync_wire() -> void:
 	_section("[map sync over the link]")
 
 	var server_link := ArenaNetLink.attached_to(self, _server_bridge, true)
+	add_child(server_link)
 	server_link.name = "MapServerLink"
 
 	var client_entry: Dictionary = _clients[_clients.keys()[0]]
 	var client_bridge: ArenaNetBridge = client_entry["bridge"]
 	var client_link := ArenaNetLink.attached_to(self, client_bridge, false)
+	add_child(client_link)
 	client_link.name = "MapClientLink"
 
 	# Both loopbacks, crossed. `send_map` refuses to fall through to an RPC when the
@@ -921,11 +923,13 @@ func _test_voice_wire() -> void:
 	var heard: Array[PackedByteArray] = []
 
 	var server_link := ArenaNetLink.attached_to(self, _server_bridge, true)
+	add_child(server_link)
 	server_link.name = "VoiceServerLink"
 
 	var client_entry: Dictionary = _clients[_clients.keys()[0]]
 	var client_bridge: ArenaNetBridge = client_entry["bridge"]
 	var client_link := ArenaNetLink.attached_to(self, client_bridge, false)
+	add_child(client_link)
 	client_link.name = "VoiceClientLink"
 
 	client_link.loopback = func(m: StringName, peer: int, payload: PackedByteArray) -> void:

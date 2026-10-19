@@ -113,7 +113,6 @@ static func attached_to(
 	link.name = NODE_NAME
 	link.bridge = p_bridge
 	link.is_server = server
-	parent.add_child(link)
 	return link
 
 

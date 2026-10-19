@@ -298,6 +298,10 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 ## must be NAMED the same, because the name is the routing.
 func open_link(parent: Node) -> ArenaNetLink:
 	link = ArenaNetLink.attached_to(parent, self, net != null and net.is_server)
+	# Through DotGameLink, not a bare add_child: the link sits under the server node (the
+	# route is by path), so nothing frees it when this bridge's module unloads, and the next
+	# load's link would be renamed `@Node@n` and every RPC to a client lost.
+	DotGameLink.attach(link, parent, self, ArenaNetLink.NODE_NAME)
 	return link
 
 
