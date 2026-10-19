@@ -53,6 +53,7 @@ var _combat_cvars: Array = []
 ## dedicated server are different deployments of the same game and only one of them
 ## replicates.
 var net: DotNetManager = null
+var _cv_maxrate: DotConVar = null
 var bridge: ArenaNetBridge = null
 
 ## Chat, voice and moderation. See [ArenaServices] for why it is not this file.
@@ -152,6 +153,7 @@ func _module_load() -> DotResult:
 	_add_jail_cvars()
 	_add_spawn_cvars()
 	_add_unlag_cvar()
+	_add_rate_cvar()
 
 	add_cvar(
 		"arena_streak_rewards", "3:heal,5:haste,7:empowered",
@@ -384,7 +386,7 @@ func _build_netcode() -> DotResult:
 	# limiter starved nothing, so the cap was never what queued a packet. It can only ever
 	# hold a packet back, and a snapshot is bounded anyway by max_entities_per_snapshot and
 	# the mtu, so a game whose worst case is a few kB/s is better without it.
-	config.per_client_budget = 0
+	config.per_client_budget = _cv_maxrate.get_int() if _cv_maxrate != null else 0
 	config.per_client_packet_rate = 0
 	# From the game, so the client cannot be given a different one. See
 	# ArenaGame.NET_WORLD_EXTENT.
@@ -1272,6 +1274,24 @@ func _add_unlag_cvar() -> void:
 		func(_old: String, new_value: String) -> void:
 			game.max_unlag_ms = new_value.to_float()
 			log_info("lag compensation limit changed", {"ms": game.max_unlag_ms}))
+
+
+## `sv_maxrate`: bytes a second each client may be sent, 0 for no cap (the default).
+##
+## [b]0, because a cap here can only ever hurt[/b] (2026-10-15, `tools/net_probe.gd`): the
+## stream to one client is ~6 kB/s steady and ~16 kB/s at a join with up to 31 bots, and a
+## snapshot is already bounded by `max_entities_per_snapshot` and the mtu. What a cap does
+## when it bites is hold a snapshot back, which a player reads as a ping spike. It is here
+## for an operator on a metered uplink, and it is dot-net's `per_client_budget`, read live.
+func _add_rate_cvar() -> void:
+	_cv_maxrate = add_cvar("sv_maxrate", "0",
+		"Bytes a second each client may be sent; 0 is no cap (a cap that bites delays snapshots)",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0)
+	_cv_maxrate.changed.connect(
+		func(_old: String, new_value: String) -> void:
+			if net != null and net.config != null:
+				net.config.per_client_budget = new_value.to_int()
+			log_info("rate cap changed", {"bytes_per_sec": new_value.to_int()}))
 
 
 func _add_spawn_cvars() -> void:
