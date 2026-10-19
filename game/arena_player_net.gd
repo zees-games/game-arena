@@ -34,6 +34,29 @@ var net_crouch: float = 0.0
 var net_flags: int = 0
 var net_modifiers: int = 0
 
+## The owner's own movement exactly: position, velocity and crouch as float32, to the
+## owning client alone ([method _write_exact]).
+##
+## [b]Why the quantised copy above is not enough to rewind from[/b] (2026-10-18). A predicting
+## client rewinds to the snapshot and replays its unacknowledged commands, and the replay only
+## lands where the server did if it starts where the server was. `net_position` is a 1 cm grid
+## and `net_velocity` 5 cm/s steps, and the motor is not smooth in either near a wall, a step
+## or the floor's skin: half a centimetre is the difference between touching a wall and not,
+## standing on a tread and walking into its face, grounded and falling for a tick. Replaying
+## from the quantised state diverged on 594 of 994 rewinds round dm_atrium in a headless probe
+## (1 of 994 from the exact one), so nearly every snapshot was replayed and corrected and the
+## next replay started from a quantised state again. dm_box hid it: running flat in the open
+## touches nothing. Finer quantisation only shrinks it (20 of 994 at a quarter of a millimetre),
+## because the slack the match is judged with shrinks with it.
+##
+## Owner-only, because nobody else rewinds this player: observers interpolate the quantised
+## copy as before. A [code]PackedFloat32Array[/code] so the match is exact (dot-net compares a
+## custom property after a round trip), and declared here rather than in dot-player-controller
+## so the declaration comes from the pack on both ends, whatever addon the client's shell has.
+var net_exact: PackedFloat32Array = PackedFloat32Array()
+
+const EXACT_FLOATS := 7
+
 # --- Health from DotCombatNetSync, weapons from DotWeaponNetSync ---
 var net_health: int = 0
 var net_armour: int = 0
@@ -136,6 +159,9 @@ func _register_net_vars() -> void:
 			# opponent should not have, and a modified client that had it would know
 			# when to push. Data never sent cannot be read out of a client.
 			declaration.to_owner_only()
+
+	# The owner's exact movement, to rewind from (see [member net_exact]).
+	replicate(&"net_exact", DotNetVar.Type.CUSTOM).codec(_write_exact, _read_exact).to_owner_only()
 
 	# [b]Per-player state rather than an event, and that is what makes both of these
 	# survive what an event does not.[/b] A client that joins after the admin typed
@@ -262,6 +288,7 @@ func pull() -> void:
 		return
 
 	DotFpsNetSync.pull(player.controller.state, self)
+	_pull_exact(player.controller.state)
 	DotCombatNetSync.pull(player.health, self)
 
 	# The rig's pull is dot-weapon's three and the pack's four.
@@ -288,6 +315,47 @@ func pull() -> void:
 		identity.always_relevant = player.beacon
 
 
+## Fills [member net_exact] from the simulation; every end, every tick it pulls.
+func _pull_exact(state: DotFpsState) -> void:
+	var exact := PackedFloat32Array()
+	exact.resize(EXACT_FLOATS)
+	exact[0] = state.position.x
+	exact[1] = state.position.y
+	exact[2] = state.position.z
+	exact[3] = state.velocity.x
+	exact[4] = state.velocity.y
+	exact[5] = state.velocity.z
+	exact[6] = state.crouch_fraction
+	net_exact = exact
+
+
+## Puts the exact copy over what [method DotFpsNetSync.push] restored from the quantised one.
+## Empty on everybody but the owner (and before the first snapshot), which keeps the push.
+func _push_exact(state: DotFpsState) -> void:
+	if net_exact.size() != EXACT_FLOATS:
+		return
+	state.position = Vector3(net_exact[0], net_exact[1], net_exact[2])
+	state.velocity = Vector3(net_exact[3], net_exact[4], net_exact[5])
+	state.crouch_fraction = net_exact[6]
+
+
+static func _write_exact(writer: DotNetWriter, value: Variant) -> void:
+	var exact: PackedFloat32Array = value if value is PackedFloat32Array else PackedFloat32Array()
+	writer.write_bool(exact.size() == EXACT_FLOATS)
+	if exact.size() == EXACT_FLOATS:
+		for f in exact:
+			writer.write_float32(f)
+
+
+static func _read_exact(reader: DotNetReader) -> Variant:
+	var exact := PackedFloat32Array()
+	if reader.read_bool():
+		exact.resize(EXACT_FLOATS)
+		for i in EXACT_FLOATS:
+			exact[i] = reader.read_float32()
+	return exact
+
+
 ## Copies received state back into the simulation. Receiving side.
 ##
 ## Runs for a remote player, where it is the only thing that moves them, and for the
@@ -302,6 +370,7 @@ func _net_state_applied(tick: int) -> void:
 	last_state_tick = tick
 
 	DotFpsNetSync.push(self, player.controller.state)
+	_push_exact(player.controller.state)
 	DotCombatNetSync.push(self, player.health)
 	_push_weapons()
 
