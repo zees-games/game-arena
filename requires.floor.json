@@ -2,7 +2,6 @@
   "format": 1,
   "addons": {
     "dot_core": 10,
-    "dot_game": 9,
     "dot_bot": 2,
     "dot_loadout": 1,
     "dot_menu": 5,
