@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 155
+const CHECKS := 157
 
 var _passed := 0
 var _failed := 0
@@ -1113,6 +1113,26 @@ func _test_client_spawn() -> void:
 		_game.player_for(4242) == null,
 		"and the peer id is not a player key here"
 	)
+
+	# **The map sync admits a peer at its READY, and that admission is what names the map.**
+	# The module used to register a joiner at the seat with `add_peer`, which only enrolls it
+	# for the NEXT change, so a client that joined a server on any map but dm_box stayed on
+	# dm_box until the next change: drawn on the wrong level, predicting against walls the
+	# server did not have (4773e55). Nothing asserted the wiring; this is the module's own
+	# path, seat then READY, read off the link.
+	var sync: DotMapSyncHost = module.maps.sync if module.maps != null else null
+	var announced: Array = []
+	if link != null:
+		link.loopback_map = func(_m: StringName, peer: int, payload: Dictionary) -> void:
+			if peer == 4242 and DotMapMessage.kind_of(payload) == DotMapMessage.KIND_ANNOUNCE:
+				announced.append(str((payload.get("map", {}) as Dictionary).get("id", "")))
+	_check(sync != null and not sync.peers.has(4242),
+		"a seated peer that has not said READY is not on the map sync yet",
+		str(sync.peers) if sync != null else "no sync host")
+	module.bridge.mark_ready(4242)
+	_check(sync != null and sync.peers.has(4242) and announced == [String(_game.map.id)],
+		"its READY admits it and announces the server's map (%s), once" % _game.map.id,
+		str(announced))
 
 
 func _test_commands() -> void:
