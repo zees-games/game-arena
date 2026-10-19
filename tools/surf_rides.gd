@@ -123,7 +123,7 @@ func _run() -> void:
 	if args.has("--hold"):
 		hold(args)
 	if args.has("--search"):
-		search_from(args)
+		search_from(args, path)
 	if args.has("--wander"):
 		var found := wander(_opt(args, "--width", 48))
 		if args.has("--write"):
@@ -281,7 +281,7 @@ func wander(width: int) -> Array:
 
 
 ## One search from a given state toward one island: `--search x,y,z vx,vy,vz island`.
-func search_from(args: PackedStringArray) -> void:
+func search_from(args: PackedStringArray, path: String) -> void:
 	var at := args.find("--search")
 	var p := args[at + 1].split(",")
 	var v := args[at + 2].split(",")
@@ -330,10 +330,22 @@ func search_from(args: PackedStringArray) -> void:
 	if bool(found["found"]):
 		var ride := DotBotSurfPlanner.trajectory(s, found["actions"], planner.hold, course, sim)
 		var e: PackedFloat32Array = ride["entries"]
-		var path: Array[String] = []
+		var points: Array[String] = []
 		for i in range(0, e.size() / 7, 32):
-			path.append(str(Vector3(e[i * 7], e[i * 7 + 1], e[i * 7 + 2]).round()))
-		print("[surf]   %s" % " ".join(path))
+			points.append(str(Vector3(e[i * 7], e[i * 7 + 1], e[i * 7 + 2]).round()))
+		print("[surf]   %s" % " ".join(points))
+		# `--add`: keep the ride as a new edge of the file (to plan with `--plan i`), for a platform
+		# `--explore` never reached.
+		if args.has("--add"):
+			var landing := _replay_end(s, found["actions"], course, sim)
+			var landed := nav.island_at(landing, 1.5)
+			var data := _read(path)
+			var edges: Array = data.get("edges", [])
+			edges.append({"from": _units(course.start), "to": _units(nav.closest(landing)), "from_island": nav.island_at(course.start, 2.5),
+				"to_island": landed if landed >= 0 else target, "explored_seconds": snappedf(float(found["ticks"]) / float(TICK_RATE), 0.01), "veto": true})
+			data["edges"] = edges
+			_write(path, data)
+			print("[surf]   added as edge %d" % (edges.size() - 1))
 
 
 ## Prints the solid under a line of points: `--section x0,z0 x1,z1 [step]`, each sample as

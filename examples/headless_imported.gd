@@ -77,7 +77,7 @@ const HURT_MAP := &"surf_xiv_v2a"
 
 const SECTIONS := 19
 ## 102 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 102
+const CHECKS_FIXED := 106
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -627,7 +627,10 @@ const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed"]
 ## teleport near the end), so 2 of 3 would fail a working ride two runs in five, while
 ## 2 of 6 fails about one in fifteen and still catches a ride that has stopped working.
 const ROTATION_RIDE_STARTS := 6
-const ROTATION_RIDE_LANDING := 2
+## Per planned edge in file order (10x: edges 0, 2 and 5 of the file, the last to the far platform 22).
+## Measured live 55%, 45% and 40% (`tools/surf_rides.tscn --measure`), and 2 of 6 starts landed on
+## each here; 2 is the bar for the same reason as before, and a ride that has stopped working lands none.
+const ROTATION_RIDE_LANDING: Array = [2, 2, 2]
 
 
 ## Bots ride the ramps (`game/arena_surf.gd`): the edges are linked into the mesh, a route to a
@@ -636,7 +639,7 @@ const ROTATION_RIDE_LANDING := 2
 ## is handed one by its own route.
 func _test_surf_rides() -> void:
 	_section("bots ride a ramp to another platform, aiming as they go")
-	var rode := await _ride_on(RIDE_MAP, 0, RIDE_STARTS, RIDE_LANDING)
+	var rode := await _ride_on(RIDE_MAP, 0, RIDE_STARTS, [RIDE_LANDING])
 	if rode.is_empty():
 		_check(false, "nor take one of its own accord")
 		_done()
@@ -681,7 +684,7 @@ func _test_rotation_rides() -> void:
 ## route crosses the first, then rides that edge from [param starts] starts, [param need] of
 ## which must land. Returns
 ## the map's surf, the edge and the tick reached, or nothing when there was nothing to ride.
-func _ride_on(map_id: StringName, tick: int, starts: int, need: int) -> Dictionary:
+func _ride_on(map_id: StringName, tick: int, starts: int, need: Array) -> Dictionary:
 	var changed := _game.change_map(ArenaMap.by_id(map_id))
 	var world := ArenaBots.world_for(_game)
 	# The mesh bakes in the background from the first route asked; the rides are linked when
@@ -700,7 +703,17 @@ func _ride_on(map_id: StringName, tick: int, starts: int, need: int) -> Dictiona
 		_check(false, "so no route crosses one")
 		_check(false, "nor does a bot ride one")
 		return {}
-	var edge: ArenaSurf.Edge = planned[0]
+	var rode := {}
+	for k in range(need.size()):
+		# Planned edge k (in file order) must land need[k] of the starts; 0 skips it.
+		if k < planned.size() and int(need[k]) > 0:
+			rode = await _ride_edge(map_id, world, surf, planned[k], tick, starts, int(need[k]))
+			tick = int(rode.get("tick", tick)) + 64
+	return rode
+
+
+## One planned [param edge]: the route crosses it, then a bot rides it from [param starts] starts.
+func _ride_edge(map_id: StringName, world: ArenaBots.World, surf: ArenaSurf, edge: ArenaSurf.Edge, tick: int, starts: int, need: int) -> Dictionary:
 	var way := world.route_detail(edge.from, edge.to)
 	_check((way["rides"] as PackedInt32Array).has(edge.id),
 		"the route from its platform to the one below crosses ride edge %d (%d corners)" % [edge.id, (way["points"] as PackedVector3Array).size()])
