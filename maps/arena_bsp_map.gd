@@ -71,9 +71,13 @@ const ROLE_COLOURS := {
 	"FLOOR": Color(0.46, 0.48, 0.52),
 }
 
-## Lifts the baked darks so geometry stays readable; g2gfast's numbers, measured there.
-const AMBIENT := 0.10
+## Lifts the baked darks so geometry stays readable. g2gfast's numbers were 0.10 and no
+## gamma; rendered here on a real GPU, greatriver and dust2 (median lightmap texel about a
+## fifth of full) came out near black under a bright sky, so the shade is lifted by a gamma
+## of 0.55 (white stays white) and the floor raised to 0.20.
+const AMBIENT := 0.20
 const LIGHT_BOOST := 1.35
+const LIGHTMAP_LIFT := 0.55
 ## Higher for a grid surface, which has no darks of its own to lose. See g2gfast's
 ## `G2GBspMap.prototype_ambient`, which was chosen by rendering it.
 const PROTOTYPE_AMBIENT := 0.32
@@ -410,6 +414,7 @@ static func _water_material(s: Dictionary, lightmap: Texture2D) -> ShaderMateria
 	mat.set_shader_parameter("lightmap_tex", lightmap)
 	mat.set_shader_parameter("light_boost", LIGHT_BOOST)
 	mat.set_shader_parameter("ambient", AMBIENT)
+	mat.set_shader_parameter("lift", LIGHTMAP_LIFT)
 	var colour: Variant = s.get("colour", null)
 	if colour is Array and (colour as Array).size() >= 3:
 		var c := Color(float(colour[0]), float(colour[1]), float(colour[2]))
@@ -432,6 +437,7 @@ static func _material_for(s: Dictionary, dir: String, lightmap: Texture2D) -> Sh
 	mat.set_shader_parameter("lightmap_tex", lightmap)
 	mat.set_shader_parameter("light_boost", LIGHT_BOOST)
 	mat.set_shader_parameter("ambient", AMBIENT)
+	mat.set_shader_parameter("lift", LIGHTMAP_LIFT)
 
 	var texture_name: Variant = s.get("texture", null)
 

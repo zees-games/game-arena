@@ -10,12 +10,13 @@ uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, r
 uniform sampler2D lightmap_tex : source_color, filter_linear, repeat_disable;
 uniform vec4 tint : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform float uv_scale = 1.0;
-uniform float ambient : hint_range(0.0, 1.0) = 0.10;
+uniform float ambient : hint_range(0.0, 1.0) = 0.20;
+uniform float lift : hint_range(0.3, 1.0) = 0.55;
 uniform float light_boost : hint_range(0.0, 4.0) = 1.35;
 
 void fragment() {
 	vec4 base = texture(albedo_tex, UV * uv_scale) * tint;
 	vec3 lm = texture(lightmap_tex, UV2).rgb;
-	ALBEDO = base.rgb * (lm * light_boost + ambient);
+	ALBEDO = base.rgb * (pow(lm, vec3(lift)) * light_boost + ambient);
 	ALPHA = base.a;
 }

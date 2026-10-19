@@ -27,7 +27,10 @@ uniform bool has_albedo2 = false;
 uniform float uv_scale = 1.0;
 // The baked light is tone-mapped into an 8-bit atlas, so its darks clamp to black;
 // `ambient` lifts them to where a player can see the geometry.
-uniform float ambient : hint_range(0.0, 1.0) = 0.10;
+uniform float ambient : hint_range(0.0, 1.0) = 0.20;
+// A lightmap's darks are crushed by the 8-bit atlas, and most of these maps' median texel is a
+// fifth of full: a gamma below 1 lifts the shade and leaves white (a fullbright map) at white.
+uniform float lift : hint_range(0.3, 1.0) = 0.55;
 uniform float light_boost : hint_range(0.0, 4.0) = 1.35;
 
 void fragment() {
@@ -36,5 +39,5 @@ void fragment() {
 		base = mix(base, texture(albedo2_tex, UV * uv_scale) * tint, clamp(COLOR.a, 0.0, 1.0));
 	}
 	vec3 lm = texture(lightmap_tex, UV2).rgb;
-	ALBEDO = base.rgb * (lm * light_boost + ambient);
+	ALBEDO = base.rgb * (pow(lm, vec3(lift)) * light_boost + ambient);
 }
