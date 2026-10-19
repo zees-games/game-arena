@@ -294,7 +294,15 @@ func _ready() -> void:
 	_classify_level()
 	add_child(_level)
 	_light()
-	gate.release(&"map")
+	# **Connected, this level is a placeholder and the cover stays up over it** (2026-10-19).
+	# The server names its map only once the client says READY (`ArenaModule` admits the peer
+	# to the map sync then), and the first `_on_map_changed` releases this hold. Released here,
+	# the cover lifted on dm_box while the server's map was still a round trip (or a download)
+	# away: the player saw and walked the wrong level, and the cover report told the server
+	# the seat was loaded, so it could be shot behind the second cover the map change put up.
+	# `client_bench` with a probe, dm_atrium at 100 ms each way: open on dm_box for 140 ms.
+	if _offline:
+		gate.release(&"map")
 
 	projectile_view = ArenaProjectileView.new()
 	projectile_view.name = "Projectiles"
@@ -826,6 +834,16 @@ func _build_netcode() -> DotResult:
 
 	var extra := extras.attach(bridge, game)
 	DotLog.result(CHANNEL, "the client's chat, voice and map layers", extra)
+
+	# The join's map hold (see `_ready`) is let go by the first map the server names; if
+	# that map cannot be had, a cover that never lifts is worse than the level in hand.
+	if extras.maps != null:
+		extras.maps.fetch_failed.connect(func(_map: DotMapDef, _error: DotError) -> void:
+			gate.release(&"map"))
+		extras.maps.change_aborted.connect(func(_id: StringName, _reason: String) -> void:
+			gate.release(&"map"))
+	else:
+		gate.release(&"map")
 
 	extras.said.connect(_on_said)
 

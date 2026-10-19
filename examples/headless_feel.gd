@@ -201,10 +201,10 @@ func _run() -> void:
 	await _teardown()
 
 	# The total the section counter cannot be: a script error aborts the rest of a section
-	# after it announced itself. Offline 5, moves 7, boot 5, connect 3, and 4 a window
+	# after it announced itself. Offline 5, moves 7, boot 5, connect 4, and 4 a window
 	# (3 where the eye is not judged).
 	if _only == "" and _completed == _entered:
-		var expected := 5 + 7 + 5 + 3
+		var expected := 5 + 7 + 5 + 4
 		for window in WINDOWS:
 			expected += 4 if bool(window[8]) else 3
 		_check(_passed + _failed == expected, "every check ran (%d of %d)" % [_passed + _failed, expected])
@@ -675,6 +675,24 @@ func _connect() -> bool:
 	_client.set("mouse_capture_override", true)
 	_client_side.add_child(_client)
 
+	# **The cover lifts on the server's map, never on the placeholder the client boots on.**
+	# A connected client builds dm_box and learns the server's map a round trip after READY.
+	# Its gate let go of the map at boot, so the cover lifted on dm_box and came back for the
+	# real map: a joiner on dm_atrium saw and walked the wrong level for 140 ms (100 ms each
+	# way), and the cover report made the server count the seat loaded while it was not.
+	# The server here is on dm_box, so this asks the order, not the map: was the server's
+	# map in when the gate first opened?
+	var map_in := [false]
+	var opened_on := [""]
+	var extras: Node = _client.get("extras")
+	var gate: DotLoadGate = _client.get("gate")
+	if extras != null:
+		extras.connect("map_changed", func(_m: DotMapDef) -> void: map_in[0] = true)
+	if gate != null:
+		gate.opened.connect(func() -> void:
+			if opened_on[0] == "":
+				opened_on[0] = "after the server's map" if map_in[0] else "before the server's map")
+
 	var playing := await _until(func() -> bool:
 		var p: ArenaPlayer = _client.get("player")
 		var net: DotNetManager = _client.get("net")
@@ -682,6 +700,9 @@ func _connect() -> bool:
 	_check(playing, "the client adopts its player and is alive", "transport %s" % _link.transport_used)
 	var sees := await _until(func() -> bool: return _remote_bot() != null and _remote_bot().is_alive(), 30.0)
 	_check(sees, "and sees the server's bot")
+	await _until(func() -> bool: return opened_on[0] != "", 10.0)
+	_check(opened_on[0] == "after the server's map",
+		"its loading cover first lifted once the server had named its map", opened_on[0])
 	_check(Engine.physics_ticks_per_second == TICK_RATE, "the engine steps physics at the server's rate",
 		str(Engine.physics_ticks_per_second))
 
