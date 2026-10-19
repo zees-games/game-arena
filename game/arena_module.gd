@@ -567,6 +567,14 @@ func _build_maps() -> DotResult:
 		if maps != null:
 			maps.handle(peer, payload)
 
+	# Admitted at READY rather than at the seat: a client builds its world on the default
+	# map, and only an admission tells it the one the server is on. Before this every client
+	# that joined after a map change predicted against the wrong level for the whole map:
+	# a correction on most frames, and walls in the wrong place.
+	bridge.peer_ready_fn = func(peer: int) -> void:
+		if maps != null:
+			maps.admit_peer(peer)
+
 	maps.map_changed.connect(_on_map_changed)
 	maps.map_over.connect(_on_map_over)
 
@@ -1106,8 +1114,8 @@ func _add(session: DotClientSession) -> void:
 	if services != null:
 		services.add_peer(session.peer_id)
 
-	if maps != null:
-		maps.add_peer(session.peer_id)
+	# Not the map sync: that admits the peer when it says READY (`bridge.peer_ready_fn`),
+	# because admitting tells it the current map and nothing reaches a client before then.
 
 	log_info("player joined the match", {
 		"userid": session.userid, "name": session.display_name

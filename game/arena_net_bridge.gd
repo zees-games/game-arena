@@ -108,6 +108,12 @@ var map_in_fn: Callable = Callable()
 ## or readiness, server side. [ArenaModule] points it at `DotMapSyncHost.handle`.
 var map_report_fn: Callable = Callable()
 
+## [code]func(peer: int) -> void[/code]. A peer said READY, server side. [ArenaModule]
+## points it at [method ArenaMapDirector.admit_peer], which tells the peer the map the
+## server is on: a client builds its world on the default map and, without this, stays
+## there until the next change, predicting against walls the server does not have.
+var peer_ready_fn: Callable = Callable()
+
 ## How the client learns its round-trip time, in milliseconds.
 ##
 ## [b]Nothing in dot-net writes an RTT sample, and it needs one.[/b]
@@ -1634,6 +1640,9 @@ func mark_ready(peer_id: int) -> void:
 
 	_ready_peers[peer_id] = true
 	send_signon(peer_id)
+
+	if peer_ready_fn.is_valid():
+		peer_ready_fn.call(peer_id)
 
 	DotLog.info(CHANNEL, "a peer is ready", {"peer": peer_id})
 

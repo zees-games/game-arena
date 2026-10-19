@@ -312,6 +312,13 @@ func add_peer(peer_id: int) -> void:
 		sync.add_peer(peer_id)
 
 
+## Registers a peer and tells it the map this server is on (now, or once a running
+## change settles). The join path: [method add_peer] alone tells a joiner nothing.
+func admit_peer(peer_id: int) -> void:
+	if sync != null:
+		sync.admit_peer(peer_id)
+
+
 func remove_peer(peer_id: int) -> void:
 	if sync != null:
 		sync.remove_peer(peer_id)

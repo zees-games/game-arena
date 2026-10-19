@@ -1011,6 +1011,16 @@ func _on_map_changed(map: DotMapDef) -> void:
 
 	if adopted != null:
 		game.map = adopted
+		# **And every player already here moves with it** (2026-10-18). `change_map` rebinds
+		# its roster, but a joining client adopts the announced map here without it, after
+		# its own player was built against the signon map (`dm_box`): the server walked
+		# dm_atrium while the client predicted dm_box's walls, so every snapshot near a wall
+		# disagreed. `client_bench --play` on dm_atrium: 83-95% of reconciles corrected,
+		# about 2.5 ticks replayed a frame, and a client predicting a level it cannot see.
+		for player in game.players():
+			if player != null and player.map_in_hand() != adopted:
+				player.apply_map_movement(game.map_movement())
+				player.rebind_map(adopted)
 	else:
 		# A delivered map this build has no geometry for. The level cannot be drawn,
 		# and drawing the OLD one is what this whole comment is about — so say so

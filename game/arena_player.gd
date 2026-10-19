@@ -875,6 +875,11 @@ func _build_hitboxes() -> void:
 	hitboxes.refresh()
 
 
+## The map this player's collision was built against, which [method rebind_map] replaces.
+func map_in_hand() -> ArenaMap:
+	return _map
+
+
 ## Rebuilds this player's collision against a different map.
 ##
 ## [b]Assigning the body is not enough, and that is the whole reason this is a
