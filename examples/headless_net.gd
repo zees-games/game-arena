@@ -1537,6 +1537,14 @@ func _test_movement_rules_reach_clients() -> void:
 
 	# Somewhere with nothing overhead: the noclip section's spot is under the south
 	# arcade, whose roof stopped the first launch measured here at 1.19 m.
+	# The match may still be moving WARMUP to COUNTDOWN here (join and loading timing
+	# decide when), and the state change respawns everybody: a launch cut by that is a
+	# respawn, not a misprediction (5.59 m at the tick it happened). Wait for it first.
+	var waited_live := 0
+	while not _server_game.match_node.is_live() and waited_live < 40:
+		var _wait_live := _flight_window(0, 32, 0)
+		waited_live += 1
+
 	var open_sky := _open_sky(_server_game.map)
 	server_player.controller.teleport(open_sky)
 	server_player.controller.state.velocity = Vector3.ZERO
