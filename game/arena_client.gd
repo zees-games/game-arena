@@ -81,6 +81,8 @@ var hud: ArenaHud = null
 var game_menu: DotMenu = null
 ## The Tab board's rows from dot-match. See [ArenaMenus.Board].
 var board: ArenaMenus.Board = null
+## The match summary opened the Tab board (rather than a held Tab), so the client closes it.
+var _summary_board_open: bool = false
 ## Applies dot-menu's stock settings this game does not apply itself: the window, V-Sync,
 ## the frame cap and render scale.
 var applier: DotMenuApplier = null
@@ -414,7 +416,7 @@ func _build_interface() -> void:
 
 	board = ArenaMenus.Board.new(
 		game_menu.scoreboard, game.match_node.scoreboard,
-		link if not _offline else null, game.match_node.teams
+		link if not _offline else null, game.match_node.teams, game
 	)
 
 	if presentation != null:
@@ -1155,6 +1157,12 @@ func _on_match(info: Dictionary) -> void:
 	# the most valuable player, which is the summary the genre shows between matches.
 	if game.match_node.state == DotMatch.State.MATCH_END and was != DotMatch.State.MATCH_END:
 		_show_match_summary()
+	# The summary board came up by itself, so nothing is holding Tab to close it: it goes
+	# when the next match begins, else it covers the whole of the next round.
+	elif was == DotMatch.State.MATCH_END and _summary_board_open:
+		_summary_board_open = false
+		if game_menu != null:
+			game_menu.scoreboard.close()
 
 	# What the HUD's "24 / 35" divides by. This match's rules are its own copy
 	# (`ArenaGame` duplicates the mode's), so writing them touches nothing shared.
@@ -1412,6 +1420,7 @@ func _show_match_summary() -> void:
 		])
 	if game_menu != null and not game_menu.any_open():
 		game_menu.scoreboard.open()
+		_summary_board_open = true
 
 
 # --- Following the local player --------------------------------------------

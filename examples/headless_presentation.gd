@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 283
+const CHECKS := 286
 
 var _passed := 0
 var _failed := 0
@@ -1718,6 +1718,20 @@ func _test_the_map_menu() -> void:
 	var changed := client.change_from_menu(StringName("mode:%s" % mode_id))
 	_check(changed.ok and client.game.mode.id == mode_id and client.game.map.id == wanted,
 		"and a mode changes on the same map", "%s: %s" % [mode_id, changed.error.message if not changed.ok else "ok"])
+	# The Tab board draws dot-match's records, not whatever the roster says: the client builds
+	# it before the match node is in the tree, and it once kept the null scoreboard it was
+	# handed and drew the server's roster (the local player alone, no K or D) for ever.
+	var present := client.game.match_node.scoreboard.present_count()
+	menu.close_all()
+	menu.scoreboard.open()
+	_check(present >= 1 and menu.scoreboard.rows().size() == present and menu.scoreboard.rows().all(func(r: Dictionary) -> bool: return r.has("kills")),
+		"the Tab board lists every record with its kills", "%d rows, %d present" % [menu.scoreboard.rows().size(), present])
+	menu.scoreboard.close()
+	# The summary board comes up with nobody holding Tab, so the next match closes it.
+	client._on_match({"state": DotMatch.State.MATCH_END, "round": 1, "remaining_ticks": 0})
+	_check(menu.scoreboard.is_open(), "the end of the match raises the board by itself")
+	client._on_match({"state": DotMatch.State.WARMUP, "round": 2, "remaining_ticks": 0})
+	_check(not menu.scoreboard.is_open(), "and the next match takes it down again")
 	remove_child(client)
 	client.free()
 	await get_tree().process_frame

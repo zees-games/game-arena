@@ -181,7 +181,11 @@ func _run() -> void:
 			img.save_png(ProjectSettings.globalize_path("%s/f%03d.png" % [OUT, n]))
 		n += 1
 		var p = _client.get("player")
-		print("t=%.0f alive=%s" % [elapsed, p.is_alive() if p != null else "no player"])
+		var sb = _client.get("game").match_node.scoreboard if _client.get("game") != null else null
+		var gm = _client.get("game_menu")
+		print("t=%.0f alive=%s state=%s board_open=%s records=%d present=%d" % [elapsed, p.is_alive() if p != null else "no player",
+			_client.get("game").match_node.state, gm.scoreboard.is_open() if gm != null else "?",
+			sb.ranked().size() if sb != null else -1, sb.ranked().filter(func(r): return r.present).size() if sb != null else -1])
 	link.disconnect_from_server("done")
 	OS.kill(_server_pid)
 	get_tree().quit(0)

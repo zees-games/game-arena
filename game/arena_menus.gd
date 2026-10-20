@@ -237,10 +237,18 @@ class Board extends RefCounted:
 	var _records: DotScoreboard = null
 	var _teams: DotTeamManager = null
 	var _me: String = ""
+	var _game: Object = null
 
-	func _init(p_board: DotMenuScoreboard, records: DotScoreboard, link: Object = null, teams: DotTeamManager = null) -> void:
+	## With [param p_game] (an `ArenaGame`) the records and teams are read off its current
+	## match each time, because [param records] cannot be trusted to last: a client builds its
+	## board before the match node has entered the tree (`DotMatch` makes its scoreboard only
+	## then, so a null was held for ever and the server's roster, the local player alone with
+	## K and D dashes, was drawn in place of every record), and a change of mode builds a new
+	## match node, leaving the old scoreboard to be freed.
+	func _init(p_board: DotMenuScoreboard, records: DotScoreboard, link: Object = null, teams: DotTeamManager = null, p_game: Object = null) -> void:
 		board = p_board
 		_records = records
+		_game = p_game
 		_teams = teams
 		board.title_text = "Arena"
 		board.columns = [
@@ -267,6 +275,12 @@ class Board extends RefCounted:
 		_me = key
 
 	func _rows_from_match(snap: Dictionary) -> void:
+		# Looked up every time, for the reasons at `_init`.
+		if _game != null and is_instance_valid(_game):
+			var match_node: DotMatch = _game.get(&"match_node")
+			if match_node != null and match_node.scoreboard != null:
+				_records = match_node.scoreboard
+				_teams = match_node.teams
 		if _records == null:
 			return
 		var roster := {}
