@@ -653,6 +653,18 @@ func _test_surf_rides() -> void:
 	if not roamer.is_alive():
 		_game.respawn_player(5)
 	roamer.controller.teleport(edge.from, 0.0, 0.0)
+	# The roamer alone on the map, and the others back afterwards. The ride check above parked them
+	# on this same start platform (pushed about by each other's hulls, so where each ends up
+	# depends on where the deathmatch left it), and a roamer that sees one fights instead of
+	# roaming: it strafes off the platform's lip onto the ramp with no ride, falls, and the map's
+	# fall-out teleport puts it on a closed ledge above the spawns that no route leaves. Whether
+	# this check passed hung on where four idle bots stood. It is about routes, not fights.
+	var others: Array[int] = []
+	for other in _game.players():
+		if other.player_id != 5:
+			others.append(other.player_id)
+	for id in others:
+		_game.remove_player(id)
 	var roam_mind := ArenaBots.Mind.new()
 	roam_mind.seed = 5
 	var begun_before := surf.begun
@@ -664,6 +676,8 @@ func _test_surf_rides() -> void:
 			await get_tree().physics_frame
 		if surf.begun > begun_before and roam_mind.ride == null:
 			break
+	for id in others:
+		_game.add_player(id, "bot%d" % id)
 	# Whether it lands is the check above; this one is that its own route hands it a ride.
 	_check(surf.begun > begun_before,
 		"a roaming bot's own route hands it a ride (%d begun, %d landed)" % [surf.begun - begun_before, surf.landed - landed_before])
