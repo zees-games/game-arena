@@ -1,0 +1,7 @@
+# Surface kinds this game vendors (dot-map tools/sync-surfaces.sh); one per line.
+brick
+concrete
+concrete_clean
+metal
+plaster
+wood_planks

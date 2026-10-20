@@ -1916,13 +1916,15 @@ func to_scene() -> Node3D:
 			Vector3(-extent - 2.0, floor_y - 1.0, -extent - 2.0),
 			Vector3(extent * 2.0 + 4.0, 1.0, extent * 2.0 + 4.0)
 		),
-		painter.ground(),
+		painter.photo_ground(),
 		"Floor"
 	))
 
 	for index in range(boxes.size()):
 		root.add_child(_make_box(
-			boxes[index], painter.box(ArenaMapPaint.colour_of(self, index)), "Box%02d" % index
+			boxes[index],
+			painter.role_box(ArenaMapPaint.role_of(boxes[index], extent), ArenaMapPaint.colour_of(self, index)),
+			"Box%02d" % index
 		))
 
 	_add_contact_shade(root)

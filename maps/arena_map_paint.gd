@@ -23,6 +23,8 @@ const ArenaPaths := preload("../game/arena_paths.gd")
 ## lines, tinted per material. Tinting one light texture keeps the grid identical on every
 ## surface, which is what lets the grid measure distance the same everywhere.
 
+enum Role { WALL, STRUCTURE, SLAB, TREAD, COVER }
+
 ## The zone colours. Albedo, sRGB; the grid texture under them is about 0.82 grey, so they
 ## land a step darker. Saturated pastels rather than pale ones: the first play test's
 ## frames were near white everywhere (pale paint, a white floor, a full ambient), and a
@@ -62,6 +64,30 @@ const SLAB_PALE := 0.3
 ## one colour drowns the rest.
 const WALL_PALE := 0.12
 
+## Photographic surfaces (ambientCG, CC0) by role, from dot-map's `DotMapSurfaces`, vendored into
+## `assets/surfaces` (client-only in `sides.json`). The zone colour still says where a thing is:
+## it multiplies the photograph, paled toward white by `PHOTO_PALE` because the colours were
+## chosen against a light grid and a photograph under a full pastel went muddy. A build without
+## the textures (a checkout not imported, an older shell) draws the Kenney grid as it did.
+const SURFACES_SCRIPT := "res://addons/dot_map/surfaces/dot_map_surfaces.gd"
+const SURFACES_ROOT := "res://assets/surfaces"
+const KIND_OF_ROLE := {
+	Role.WALL: &"brick",
+	Role.STRUCTURE: &"plaster",
+	Role.SLAB: &"concrete_clean",
+	Role.TREAD: &"metal",
+	Role.COVER: &"wood_planks",
+}
+const KIND_GROUND := &"concrete"
+const PHOTO_PALE := {
+	Role.WALL: 0.82, Role.STRUCTURE: 0.62, Role.SLAB: 0.7, Role.TREAD: 0.85, Role.COVER: 0.35,
+}
+const PHOTO_PALE_GROUND := 0.8
+## A photograph is darker than the 0.82 grey grid, so the tint is lifted a little too.
+const PHOTO_GAIN := 1.2
+## Concrete slabs are the brightest photograph and a walkway fills the frame from above.
+const PHOTO_GAIN_SLAB := 0.9
+
 const GRID_PATH := "res://assets/prototype/grid.png"
 const TILES_PATH := "res://assets/prototype/tiles.png"
 
@@ -70,8 +96,6 @@ const TILES_PATH := "res://assets/prototype/tiles.png"
 ## The texture has two major cells across, so a tile of 4 m puts a major line every 2 m and
 ## a faint one every 0.5 m: the 0.5 m is what a crate gap and a stair tread are measured in.
 const TILE_METRES := 4.0
-
-enum Role { WALL, STRUCTURE, SLAB, TREAD, COVER }
 
 
 ## The role a box plays, from its shape and where it stands.
@@ -151,6 +175,45 @@ class Painter:
 	func _init() -> void:
 		_grid = _texture(GRID_PATH)
 		_tiles = _texture(TILES_PATH)
+
+	var _surfaces: Object = null
+	var _surfaces_tried := false
+
+	## The material for a box of [param role] painted [param colour]: a photograph tinted by the
+	## colour when this build has the textures, else the grid ([method box]).
+	func role_box(role: Role, colour: Color) -> StandardMaterial3D:
+		var kind: StringName = KIND_OF_ROLE.get(role, &"")
+		return _photo(kind, colour, PHOTO_PALE[role], PHOTO_GAIN_SLAB if role == Role.SLAB else PHOTO_GAIN) if kind != &"" else box(colour)
+
+	func photo_ground() -> StandardMaterial3D:
+		var m := _photo(KIND_GROUND, GROUND, PHOTO_PALE_GROUND)
+		return m if m != null else ground()
+
+	func _photo(kind: StringName, colour: Color, pale_by: float, gain: float = PHOTO_GAIN) -> StandardMaterial3D:
+		var key := "photo:%s:%s:%s:%s" % [kind, colour.to_html(false), pale_by, gain]
+		if _cache.has(key):
+			return _cache[key]
+		var lib := _library()
+		var made: StandardMaterial3D = null
+		if lib != null:
+			var pale := colour.lerp(Color.WHITE, pale_by) * gain
+			pale.a = 1.0
+			var res: DotResult = lib.try_material(kind, pale)
+			if res.ok:
+				made = res.value
+		if made == null:
+			made = box(colour)
+		_cache[key] = made
+		return made
+
+	func _library() -> Object:
+		if _surfaces_tried:
+			return _surfaces
+		_surfaces_tried = true
+		if ResourceLoader.exists(SURFACES_SCRIPT) \
+				and ResourceLoader.exists(ArenaPaths.rebase(SURFACES_ROOT) + "/concrete/albedo.jpg"):
+			_surfaces = (load(SURFACES_SCRIPT) as GDScript).new(ArenaPaths.rebase(SURFACES_ROOT))
+		return _surfaces
 
 	func box(colour: Color) -> StandardMaterial3D:
 		var key := "box:" + colour.to_html(false)
