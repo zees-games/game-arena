@@ -75,9 +75,9 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 19
+const SECTIONS := 20
 ## 102 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 106
+const CHECKS_FIXED := 109
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -127,6 +127,7 @@ func _run() -> void:
 	_test_mechanics()
 	await _test_hurt()
 	await _test_surf_rides()
+	await _test_fallout()
 	await _test_rotation_rides()
 	await _test_every_map()
 	await _test_collision_audit()
@@ -965,6 +966,61 @@ func _test_pits() -> void:
 	var spawn: Transform3D = _game.map.spawns[0]
 	_check(player.controller.state.position.distance_to(spawn.origin) < 0.5,
 		"fallen out of the bottom of the map, back at a spawn")
+
+	_done()
+
+
+# --- The fall-out cell ---------------------------------------------------------------
+
+## surf_ski_2's catch-all floor teleport aims at a roofed cell whose only way out is a door
+## that the map's button opens. The importer runs no outputs, so the door stayed shut and
+## whoever fell (a bot, in the ride check) was stuck there for good; the map's zones file now
+## opens it (`open_doors`). Armed: with the door back in the import nobody leaves the cell.
+func _test_fallout() -> void:
+	_section("surf_ski_2: a fall into the floor catch-all lands in the cell, and the way out is open")
+
+	var changed := _game.change_map(ArenaMap.by_id(RIDE_MAP))
+	_check(changed.ok, "the map loads")
+	if not changed.ok:
+		_done()
+		return
+
+	var catch_all := -1
+	var biggest := 0.0
+	for index in range(_game.map.pits.size()):
+		var volume: float = (_game.map.pits[index]["box"] as AABB).get_volume()
+		if volume > biggest:
+			biggest = volume
+			catch_all = index
+	var pit: Dictionary = _game.map.pits[catch_all]
+	var cell: Vector3 = pit["to"]
+
+	var player := _fresh(2)
+	player.controller.teleport((pit["box"] as AABB).get_center(), 0.0, 0.0)
+	_game.tick({})
+	var at := player.controller.state.position
+	_check(at.distance_to(cell) < 0.5,
+		"the floor catch-all puts a faller in the cell (%.2f m off)" % at.distance_to(cell))
+
+	# The cell's door is in its +z wall (Source's -y): walk at it, yaw 180 being +z.
+	var door_z := cell.z + 6.2
+	var out_at := -1
+	# Four seconds: the shut door was walked round in about twelve, sliding along it to a
+	# corner, which is not a way out a bot's route would take.
+	for tick in range(TICK_RATE * 4):
+		var move := DotFpsCommand.new()
+		move.yaw = 180.0
+		move.move = Vector2(0.0, 1.0)
+		move.sanitise()
+		_game.tick({player.player_id: [move, DotWeaponCommand.new()]})
+		if player.controller.state.position.z > door_z:
+			out_at = tick
+			break
+	_check(out_at >= 0,
+		"walked out through the door (%s; ended %.1f, %.1f, %.1f)" % [
+			"after %d ticks" % out_at if out_at >= 0 else "never",
+			player.controller.state.position.x, player.controller.state.position.y,
+			player.controller.state.position.z])
 
 	_done()
 
