@@ -75,9 +75,9 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 20
+const SECTIONS := 21
 ## 102 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 109
+const CHECKS_FIXED := 110
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -128,6 +128,7 @@ func _run() -> void:
 	await _test_hurt()
 	await _test_surf_rides()
 	await _test_fallout()
+	await _test_fallout_all()
 	await _test_rotation_rides()
 	await _test_every_map()
 	await _test_collision_audit()
@@ -1021,6 +1022,103 @@ func _test_fallout() -> void:
 			"after %d ticks" % out_at if out_at >= 0 else "never",
 			player.controller.state.position.x, player.controller.state.position.y,
 			player.controller.state.position.z])
+
+	_done()
+
+
+## How far from a fall-out destination a faller must get to count as out, in metres: the
+## ski_2 cell is about 12 m across, and the ground past its door is open for far more.
+const FALLOUT_OUT_AT := 12.0
+## Seconds spent walking each of eight headings from a destination.
+const FALLOUT_WALK := 4.0
+## Destinations tried per map, biggest volume first: the catch-all under the map is the one
+## everybody reaches, and a second is the jail or pit someone is sent to on purpose.
+const FALLOUT_PER_MAP := 2
+
+## [b]General detector for a destination nobody can leave.[/b] The importer runs no outputs,
+## so a door or floor that only a button moves stays as it rests, and a teleport aimed behind
+## one seals whoever lands there. For every combat surf map this takes its biggest volumes
+## (the floor catch-all first), drops a player on each destination and walks the eight
+## headings in turn; the destination is open when some heading carries the player
+## [constant FALLOUT_OUT_AT] metres off along the ground or off an edge, three metres down. A map listed
+## here that fails wants an `open_doors` entry in game-g2gfast's zones file (README there) or
+## a note saying why not. The scan that finds candidates in the .bsp is
+## `game-g2gfast/tools/teleport_traps.py`.
+func _test_fallout_all() -> void:
+	_section("every combat surf map: a faller at a big teleport destination can walk away")
+
+	var sealed: Array[String] = []
+	var report: Array[String] = []
+	var player := _fresh(2)
+
+	for id in ArenaMap.imported_ids():
+		var changed := _game.change_map(ArenaMap.by_id(id))
+		if not changed.ok:
+			sealed.append("%s (does not load)" % id)
+			continue
+
+		var order: Array[int] = []
+		for index in range(_game.map.pits.size()):
+			order.append(index)
+		order.sort_custom(func(a: int, b: int) -> bool:
+			return (_game.map.pits[a]["box"] as AABB).get_volume() > (_game.map.pits[b]["box"] as AABB).get_volume())
+
+		var tried: Array[Vector3] = []
+		for index in order:
+			if tried.size() >= FALLOUT_PER_MAP:
+				break
+			var cell: Vector3 = _game.map.pits[index]["to"]
+			var fresh := true
+			for seen in tried:
+				if seen.distance_to(cell) < 1.0:
+					fresh = false
+			if not fresh:
+				continue
+			tried.append(cell)
+
+			var best := 0.0
+			var best_yaw := 0.0
+			for heading in range(8):
+				var yaw := heading * 45.0
+				player = _fresh(2)
+				player.controller.teleport(cell, yaw, 0.0)
+				_game.tick({})
+				var start := player.controller.state.position
+				var reach := 0.0
+				var lowest := start.y
+				for tick in range(int(TICK_RATE * FALLOUT_WALK)):
+					var move := DotFpsCommand.new()
+					move.yaw = yaw
+					move.move = Vector2(0.0, 1.0)
+					move.sanitise()
+					_game.tick({player.player_id: [move, DotWeaponCommand.new()]})
+					var here := player.controller.state.position
+					# Only ground counts: a body walked off a ledge keeps its sideways
+					# speed through the whole fall, which is not a way out of a cell.
+					if player.controller.state.is_grounded():
+						reach = maxf(reach, Vector2(here.x - start.x, here.z - start.z).length())
+					lowest = minf(lowest, here.y)
+					if reach >= FALLOUT_OUT_AT:
+						break
+				# An edge to walk off is out as well: what a cell has is walls all round and a roof,
+				# and a platform open to the sky has a fall, which the map's catch-all makes a
+				# drop back into the fight.
+				if reach < FALLOUT_OUT_AT and start.y - lowest >= 3.0:
+					reach = FALLOUT_OUT_AT
+				if reach > best:
+					best = reach
+					best_yaw = yaw
+				if best >= FALLOUT_OUT_AT:
+					break
+			report.append("%s pit %d -> (%.0f, %.0f, %.0f): got %.1f m (yaw %.0f)" % [
+				id, index, cell.x, cell.y, cell.z, best, best_yaw])
+			if best < FALLOUT_OUT_AT:
+				sealed.append("%s pit %d" % [id, index])
+
+	for line in report:
+		_line("     " + line)
+
+	_check(sealed.is_empty(), "no destination seals its faller in (%s)" % [sealed])
 
 	_done()
 
