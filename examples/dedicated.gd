@@ -44,7 +44,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 157
+const CHECKS := 179
 
 var _passed := 0
 var _failed := 0
@@ -103,6 +103,7 @@ func _run() -> void:
 		_test_client_spawn()
 		await _test_services()
 		await _test_maps_and_vote()
+		_test_map_rotation_file()
 		_test_finish_round_waits_for_a_live_round()
 		_test_query()
 		await _test_browser()
@@ -511,6 +512,107 @@ func _test_services() -> void:
 			"and a stock avatar conforms to the schema it was built from",
 			str(conformed.error)
 		)
+
+
+## maps.yml on the live module: a map outside the active rotation stays installed and is never
+## chosen, balloted or nominated; a rotation switch takes effect; a renamed command exists.
+func _test_map_rotation_file() -> void:
+	print("")
+	print("maps.yml")
+
+	var module := _server.modules.get_module("arena") as ArenaModule
+
+	if not _check(module != null and module.maps != null and module.vote != null, "the module has maps and a vote"):
+		return
+
+	var maps := module.maps
+	var catalogue := maps.session.catalogue
+	var built := DotMapRotationFile.from_trees([{"defaults": {
+		"rotation": "two",
+		"rotations": {
+			"two": {"mode": "cycle", "cooldown": 0, "maps": ["dm_box", "dm_atrium"]},
+			"pit": {"maps": ["dm_pit"]},
+		},
+		"commands": {"names": {"rtv": "rockthevote"}},
+	}}], "game-arena")
+	if not _check(built.ok, "a maps.yml with two rotations and a renamed rtv parses",
+		"" if built.ok else built.error.message):
+		return
+
+	maps.rotation_file = built.value
+	maps.apply_rotation()
+
+	var box := catalogue.get_map(&"dm_box")
+	var pit := catalogue.get_map(&"dm_pit")
+	_check(box.in_rotation and not pit.in_rotation, "the active rotation puts dm_pit out and dm_box in")
+	_check(catalogue.get_map(&"dm_pit") != null and ArenaMap.ids().has(&"dm_pit"),
+		"and dm_pit stays installed and loadable")
+	_check(not catalogue.available().has(pit) and catalogue.available().has(box),
+		"available() leaves it out")
+
+	# next-map: the pool and a hundred draws never show it, and it cannot be forced.
+	var drew_pit := false
+	for i in 100:
+		var chosen := maps.session.rotation.choose(0)
+		if chosen != null and chosen.id == &"dm_pit":
+			drew_pit = true
+	_check(not drew_pit, "100 draws of the next map never choose a map outside the rotation")
+	maps.restrict_rotation()
+	_check(not maps.session.rotation.order.has(&"dm_pit"),
+		"restrict_rotation does not widen the file's list again")
+	_check(not maps.set_next(&"dm_pit"), "and it cannot be forced as the next map")
+	_check(maps.set_next(&"dm_box"), "while one in the rotation can")
+	maps.session.rotation.clear_next()
+
+	# the ballot and nominations
+	var ids := module.vote.source.choices().map(func(c: DotVoteChoice) -> StringName: return c.id)
+	_check(not ids.has(&"map:dm_pit"), "a map outside the rotation is not on the ballot")
+	_check(ids.has(&"map:dm_box") or ids.has(&"map:dm_atrium"), "the maps inside it are")
+	var nominated := module.vote.nominate(&"77", &"dm_pit")
+	_check(not nominated.ok, "nominate refuses a map outside the rotation")
+	_check(not module.vote.director.nominated_ids().has(&"map:dm_pit"), "and nothing was recorded")
+
+	# a switch
+	var switched := maps.rotation_file.switch(maps.session.rotation, "pit")
+	_check(switched.ok and pit.in_rotation and not box.in_rotation,
+		"switching to the pit rotation takes effect")
+	var drew_box := false
+	for i in 50:
+		var chosen := maps.session.rotation.choose(0)
+		if chosen != null and chosen.id != &"dm_pit":
+			drew_box = true
+	_check(not drew_box, "and the next map is drawn from the new one")
+	ids = module.vote.source.choices().map(func(c: DotVoteChoice) -> StringName: return c.id)
+	_check(not ids.has(&"map:dm_box"), "and the ballot follows it")
+	_check(not maps.rotation_file.switch(maps.session.rotation, "nope").ok, "an unknown rotation is refused")
+
+	# a renamed command
+	var rtv := DotVoteCommands.new()
+	rtv.director = module.vote.director
+	rtv.spec_fn = module._rotation_commands
+	rtv.with_map_menu = false
+	var bound := rtv.bind(_server.console)
+	_check(bound.ok and rtv.command_name("rtv") == "rockthevote"
+		and _server.console.find_command("rockthevote") != null,
+		"a renamed rtv command is registered from maps.yml's commands")
+	var session := _server.session_by_userid(77)
+	if _check(session != null, "the adopted player is still here"):
+		var replies := PackedStringArray()
+		var ctx := session.make_context(
+			"rockthevote", PackedStringArray(), DotCmdContext.Source.CHAT,
+			func(line: String) -> void: replies.append(line)
+		)
+		_server.console.execute("rockthevote", ctx)
+		_check(not replies.is_empty(), "and answers", " ".join(replies))
+
+	# No file again: everything back in, as before maps.yml.
+	maps.rotation_file = null
+	maps.apply_rotation()
+	var all_in := true
+	for def in catalogue.maps:
+		all_in = all_in and def.in_rotation
+	_check(all_in, "with no file every map is in rotation again")
+	_check(module._rotation_commands.call().is_empty(), "and no command is renamed")
 
 
 ## dot-map and dot-vote, on a server with a rotation and a ballot.

@@ -89,6 +89,15 @@ var server: Object = null
 var session: ArenaMapSession = null
 var sync: DotMapSyncHost = null
 
+## The server's maps.yml, or null when there is none (every map rotates, as it always did).
+## See [method load_rotation].
+var rotation_file: DotMapRotationFile = null
+
+## The file looked for, without or with an extension: `cfg/maps.yml`. `sv_map_rotation_file`.
+var rotation_file_name: String = DEFAULT_ROTATION_FILE
+
+const DEFAULT_ROTATION_FILE := "cfg/maps.yml"
+
 ## The map running now. Duck-typed by [DotVoteMapSource] through `get("current")`.
 var current: DotMapDef = null
 
@@ -175,7 +184,79 @@ func setup() -> DotResult:
 
 	_ready_for_changes = true
 
+	var _loaded := load_rotation()
+
 	return DotResult.success(self)
+
+
+## Reads maps.yml and applies it: which installed maps the rotation, the next map, the vote's
+## ballot and nominations may choose. Called at boot, by `sv_map_rotation_file` and by
+## [method adopt_server_maps]. A map outside the active rotation stays installed and
+## loadable by `arena_map <id>`; it is only never chosen.
+##
+## The merge, the wildcards and the rules are dot-map's [DotMapRotationFile]; this game
+## supplies the paths. A file that is present and unreadable is an ERROR and changes nothing:
+## rotating every map is a better failure than rotating none.
+func load_rotation() -> DotResult:
+	var dir := DotMapRotationFile.config_dir_arg()
+	var found := DotMapRotationFile.find(rotation_file_name, dir)
+
+	if found == "" and rotation_file_name != "" and (dir != "" or rotation_file_name != DEFAULT_ROTATION_FILE):
+		# The default name being absent is an install with no maps.yml; a name or a directory
+		# somebody chose that finds nothing is a typo they would otherwise never hear about.
+		DotLog.warn(CHANNEL, "the map rotation file was not found; every map rotates", {
+			"file": rotation_file_name, "config_dir": dir,
+		})
+
+	var paths := PackedStringArray()
+	for candidate in ["res://maps.yml", found]:
+		if candidate != "" and not paths.has(candidate) and FileAccess.file_exists(candidate):
+			paths.append(candidate)
+
+	var read := DotMapRotationFile.load_files(paths, "game-arena")
+
+	if not read.ok:
+		DotLog.error(CHANNEL, "the map rotation file could not be read; every map rotates", {
+			"why": read.error.message,
+		})
+		rotation_file = null
+		apply_rotation()
+		return read
+
+	rotation_file = read.value
+	if rotation_file.has_rotations():
+		DotLog.info(CHANNEL, "the map rotation file", {
+			"paths": ", ".join(rotation_file.sources), "active": rotation_file.active_name(),
+		})
+		if session != null and not _rotation_attached:
+			_rotation_attached = true
+			# The file object is replaced on a reload, so the hook reads the current one.
+			session.changed.connect(func(_map: DotMapDef, _world: Node) -> void:
+				apply_rotation())
+
+	apply_rotation()
+	return read
+
+
+var _rotation_attached: bool = false
+
+
+## Marks every catalogue map in or out of rotation ([DotMapDef.in_rotation]) from the file.
+## With no file, or a file with no rotations, every map is in, which is what this game did
+## before maps.yml. The imported maps' own `arena_imported_rotation` is [member DotMapDef.enabled]
+## and is a separate gate: a map must pass both.
+func apply_rotation() -> void:
+	if session == null or session.catalogue == null or session.rotation == null:
+		return
+
+	if rotation_file != null and rotation_file.has_rotations():
+		rotation_file.apply(session.rotation)
+		return
+
+	session.rotation.order = []
+
+	for def in session.catalogue.maps:
+		def.in_rotation = true
 
 
 ## Reads the server's list again and makes the catalogue's delivered maps match it: a map
@@ -189,6 +270,7 @@ func adopt_server_maps() -> Dictionary:
 	var out := ArenaMaps.adopt_delivered(
 		session.catalogue, ArenaMaps.server_map_keys(server), playing
 	)
+	apply_rotation()
 	restrict_rotation()
 	return out
 
@@ -238,8 +320,20 @@ func restrict_rotation() -> void:
 	var mode: ArenaMode = game.mode if game != null else null
 	var allowed: Array[StringName] = []
 
-	for def in session.catalogue.maps:
-		if ArenaMaps.supports_mode(def, mode):
+	# The file's own order (a `cycle` rotation plays in the order written) when it names maps,
+	# else the catalogue's. Never a map outside the active rotation: this list replaces the one
+	# the file set, so it must not widen it.
+	var base: Array[StringName] = []
+	if rotation_file != null and rotation_file.has_rotations():
+		for id in rotation_file.resolve(session.catalogue):
+			base.append(StringName(id))
+	if base.is_empty():
+		for def in session.catalogue.maps:
+			base.append(def.id)
+
+	for id in base:
+		var def := session.catalogue.get_map(id)
+		if def != null and def.in_rotation and ArenaMaps.supports_mode(def, mode):
 			allowed.append(def.id)
 
 	# Never leave it empty. A mode no map can host is a configuration mistake, and the

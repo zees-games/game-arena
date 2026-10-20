@@ -21,6 +21,10 @@ What survives a change:
 
 `DotMatch.setup` collects spawn points with a `DotNodeRef` scoped to the game in `PARENT` mode (not `SELF`, which resolves against the match node and finds only the team manager). Unscoped it walks `current_scene`, so a second game in the process, or the outgoing map's points that `queue_free` has not yet removed, contributed spawns. `setup` passes `announce_empty = false` to `refresh_spawns`, because code-built maps add their points on the next lines and the warning would be noise indistinguishable from the real fault.
 
+## The rotation file
+
+`cfg/maps.yml` (or the `--config` directory's, or `sv_map_rotation_file`) says which installed maps the rotation, the next map, the vote's ballot and nominations may choose: dot-map's `DotMapRotationFile`, the `defaults:` / `games: game-arena:` shape with named rotations, plain `maps:` lists, `owner/collection/*` and name globs. `ArenaMapDirector.load_rotation` reads it and `apply_rotation` sets `DotMapDef.in_rotation`; a map outside the active rotation stays installed (`arena_map <id>`, listed "not in rotation") but is never chosen. `arena_imported_rotation` is a separate gate (`enabled`); a map must pass both. `sv_map_rotation <name>` switches the rotation, `maps_rotations` lists them, and the file's `commands:` block renames the map and vote commands. No file: every map rotates, as before. The mode filter (`restrict_rotation`) narrows the file's own list and never widens it.
+
 ## Reaching the players
 
 `ArenaMapDirector` is a catalogue, a rotation with a cooldown, a map clock with warnings and rtv, and `DotMapSyncHost`: announce, wait for every peer, swap, tell them to load. Without the sync a change is a change in one process and every client plays a world that no longer exists. With the vote loaded, the vote's clock is the one advanced and the director's is the fallback ([services](services.md#the-map-vote)).

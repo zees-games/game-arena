@@ -103,6 +103,10 @@ var director: DotVoteDirector = null
 var source: ArenaVoteSource = null
 var commands: DotVoteCommands = null
 
+## `() -> Dictionary`: maps.yml's `commands:` block, so an operator renames the vote commands
+## without this game naming any. The module points it at the rotation file.
+var commands_spec_fn: Callable = Callable()
+
 ## Says a line to the players. Set by the host; a dedicated server points it at chat.
 var announce_fn: Callable = Callable()
 
@@ -471,6 +475,7 @@ func install_commands(host: Object) -> DotResult:
 	commands = DotVoteCommands.new()
 	commands.director = director
 	commands.names = COMMAND_NAMES
+	commands.spec_fn = commands_spec_fn
 	# A player types `dm_atrium`; the ballot's id is `map:dm_atrium`.
 	commands.resolve_fn = func(text: String) -> StringName:
 		return _qualify(StringName(text))

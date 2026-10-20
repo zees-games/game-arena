@@ -594,7 +594,23 @@ func _build_maps() -> DotResult:
 			log_info("imported rotation changed", {"rotation": new_value})
 	)
 
+	# Which installed maps rotate: cfg/maps.yml, read at boot (the director) and again when
+	# this is set.
+	add_cvar(
+		"sv_map_rotation_file", maps.rotation_file_name,
+		"maps.yml: the maps that rotate, in named rotations. Unlisted maps stay installed.",
+	).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			maps.rotation_file_name = new_value.strip_edges()
+			var _read := maps.load_rotation()
+	)
+
 	return DotResult.success(maps)
+
+
+## maps.yml's `commands:` block (prefix and names), or empty with no file.
+func _rotation_commands() -> Dictionary:
+	return maps.rotation_file.commands() if maps != null and maps.rotation_file != null else {}
 
 
 ## Both map clocks follow the server's hibernation: they stop while nobody is here and start
@@ -615,6 +631,7 @@ func _build_vote() -> DotResult:
 	vote.name = "Vote"
 	vote.game = game
 	vote.maps = maps
+	vote.commands_spec_fn = _rotation_commands
 	vote.authoritative = true
 	add_child(vote)
 
@@ -1574,6 +1591,9 @@ func _add_extra_commands() -> void:
 		map_commands.changer = maps.sync
 		map_commands.player_count_fn = func() -> int:
 			return game.players().size() if game != null else 0
+		map_commands.rotation_file_fn = func() -> DotMapRotationFile:
+			return maps.rotation_file if maps != null else null
+		map_commands.spec_fn = _rotation_commands
 		map_commands.bind(self)
 
 	if vote != null:
@@ -1776,7 +1796,10 @@ func _cmd_maps(ctx: DotCmdContext) -> void:
 	var current := game.map.display_name if game.map != null else "?"
 
 	for id in ArenaMap.ids():
-		ctx.reply("%s %s" % ["*" if String(id) == current else " ", String(id)])
+		ctx.reply("%s %s%s" % [
+			"*" if String(id) == current else " ", String(id),
+			"" if _in_rotation(id) else "  (not in rotation)",
+		])
 
 	# The imported combat surf maps, marked by whether the rotation offers them.
 	# The imported combat surf maps, with their author (somebody else's work, and the
@@ -1785,7 +1808,7 @@ func _cmd_maps(ctx: DotCmdContext) -> void:
 		var author := str(ArenaMap.ArenaImportedMaps.manifest(id).get("author", "?"))
 		ctx.reply("%s %s  (combat surf by %s%s)" % [
 			"*" if String(id) == current else " ", String(id), author,
-			"" if ArenaMaps.in_rotation(id) else ", not in rotation",
+			"" if ArenaMaps.in_rotation(id) and _in_rotation(id) else ", not in rotation",
 		])
 
 	# The maps the server names as packs: fetched the first time one is changed to.
@@ -1798,10 +1821,20 @@ func _cmd_maps(ctx: DotCmdContext) -> void:
 				"*" if game.map != null and game.map.id == def.id else " ", String(def.id),
 				str(def.meta.get("key", "")),
 				", mounted" if ArenaMap.ArenaImportedMaps.is_mounted(def.id) else ", fetched on change",
-				"" if def.enabled else ", not in rotation",
+				"" if def.enabled and def.in_rotation else ", not in rotation",
 			])
 
 	ctx.reply("`arena_map <id>` changes it under the players. `arena_maps` lists them.")
+
+
+## Whether maps.yml's active rotation plays [param id]. A map the catalogue lacks is not.
+func _in_rotation(id: StringName) -> bool:
+	if maps == null or maps.session == null or maps.session.catalogue == null:
+		return true
+
+	var def := maps.session.catalogue.get_map(id)
+
+	return def != null and def.in_rotation
 
 
 func _cmd_score(ctx: DotCmdContext) -> void:

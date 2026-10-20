@@ -81,7 +81,7 @@ func choices() -> Array[DotVoteChoice]:
 	var mode: ArenaMode = game.mode if game != null else null
 
 	for def in catalogue.maps:
-		if not def.enabled:
+		if not def.enabled or not def.in_rotation:
 			continue
 
 		# A map that cannot host what is being played is not on the ballot. Offering
