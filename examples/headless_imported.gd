@@ -77,7 +77,7 @@ const HURT_MAP := &"surf_xiv_v2a"
 
 const SECTIONS := 21
 ## 102 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 118
+const CHECKS_FIXED := 124
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -623,7 +623,7 @@ const ROAM_SECONDS := 90.0
 ## The rotation's maps with planned rides, each ridden as [constant RIDE_MAP] is (one edge,
 ## [constant ROTATION_RIDE_STARTS] starts). Their rides are several flights long, which is why they were
 ## the last to get any; see docs/imported-maps.md, "Which maps have rides".
-const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island"]
+const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island", &"surf_the_flow"]
 ## Their starts, and how many must land. Wider than [constant RIDE_STARTS] on purpose: 10x's
 ## edge lands 55% of live rides (`tools/surf_rides.tscn --measure`; the misses clip a
 ## teleport near the end), so 2 of 3 would fail a working ride two runs in five, while
@@ -637,6 +637,9 @@ const ROTATION_RIDE_LANDING: Array = [2, 2, 2]
 ## island with the spawns (0.6 to 1.7 s, 64 to 107 m); they land 100% of simulated and live rides
 ## (`--measure`), so five of six is the bar and one miss is tolerated.
 const SNIPERS_RIDE_LANDING: Array = [5, 5, 5]
+## surf_the_flow's two edges go from each spawn platform (16 spawns on each) down to the floor island
+## the teleports land on (3.2 to 3.5 s); 100% simulated and 95% to 100% live (`--measure`), so five of six.
+const FLOW_RIDE_LANDING: Array = [5, 5]
 
 
 ## Bots ride the ramps (`game/arena_surf.gd`): the edges are linked into the mesh, a route to a
@@ -699,11 +702,15 @@ func _test_rotation_rides() -> void:
 	_section("bots ride the rotation maps' ramps across the map")
 	var tick := 0
 	for map_id in ROTATION_RIDE_MAPS:
-		var need: Array = SNIPERS_RIDE_LANDING if map_id == &"surf_snipers_island" else ROTATION_RIDE_LANDING
+		var need: Array = ROTATION_RIDE_LANDING
+		if map_id == &"surf_snipers_island":
+			need = SNIPERS_RIDE_LANDING
+		elif map_id == &"surf_the_flow":
+			need = FLOW_RIDE_LANDING
 		var rode := await _ride_on(map_id, tick, ROTATION_RIDE_STARTS, need)
 		tick = int(rode.get("tick", tick)) + 64
 
-		if map_id == &"surf_snipers_island" and not rode.is_empty():
+		if (map_id == &"surf_snipers_island" or map_id == &"surf_the_flow") and not rode.is_empty():
 			# The way in is the other half of the loop: from a spawn on the island a bot walks into a
 			# teleport, lands on a pad and rides down, so its own route must hand it a ride.
 			tick = await _roam_takes_ride(rode["surf"], _game.map.spawns[0].origin, tick)
