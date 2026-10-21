@@ -546,7 +546,9 @@ func _frame_overview() -> void:
 	_overview_box = _staged_map.bounds
 	_overview_reach = _staged_map.extent
 
-	if not _staged_map.is_imported() or not bool((ArenaMap.ArenaImportedMaps.manifest(_staged_map.id).get("skybox", {}) as Dictionary).get("drawn", false)):
+	# A map with no 3D skybox writes `"skybox": null`, which does not cast to a Dictionary.
+	var sky: Variant = ArenaMap.ArenaImportedMaps.manifest(_staged_map.id).get("skybox", null) if _staged_map.is_imported() else null
+	if not (sky is Dictionary) or not bool((sky as Dictionary).get("drawn", false)):
 		return
 
 	var drawn := _staged_map.to_scene()

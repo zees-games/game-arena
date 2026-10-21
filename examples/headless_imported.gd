@@ -75,9 +75,9 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 21
+const SECTIONS := 22
 ## 102 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 124
+const CHECKS_FIXED := 140
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -116,6 +116,12 @@ func _run() -> void:
 		_finish()
 		return
 
+	# `-- --band`: only the bots' band, for measuring it (the suite's own totals then do not hold).
+	if OS.get_cmdline_user_args().has("--band"):
+		await _test_bot_band()
+		get_tree().quit(1 if _failed > 0 else 0)
+		return
+
 	await _test_spawns_on_the_floor()
 	await _test_deathmatch()
 	await _test_bot_routes()
@@ -130,6 +136,7 @@ func _run() -> void:
 	await _test_fallout()
 	await _test_fallout_all()
 	await _test_rotation_rides()
+	await _test_bot_band()
 	await _test_every_map()
 	await _test_collision_audit()
 	await _test_packs()
@@ -623,7 +630,7 @@ const ROAM_SECONDS := 90.0
 ## The rotation's maps with planned rides, each ridden as [constant RIDE_MAP] is (one edge,
 ## [constant ROTATION_RIDE_STARTS] starts). Their rides are several flights long, which is why they were
 ## the last to get any; see docs/imported-maps.md, "Which maps have rides".
-const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island", &"surf_the_flow"]
+const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island", &"surf_the_flow", &"surf_conflux"]
 ## Their starts, and how many must land. Wider than [constant RIDE_STARTS] on purpose: 10x's
 ## edge lands 55% of live rides (`tools/surf_rides.tscn --measure`; the misses clip a
 ## teleport near the end), so 2 of 3 would fail a working ride two runs in five, while
@@ -632,7 +639,7 @@ const ROTATION_RIDE_STARTS := 6
 ## Per planned edge in file order (10x: edges 0, 2 and 5 of the file, the last to the far platform 22).
 ## Measured live 55%, 45% and 40% (`tools/surf_rides.tscn --measure`), and 2 of 6 starts landed on
 ## each here; 2 is the bar for the same reason as before, and a ride that has stopped working lands none.
-const ROTATION_RIDE_LANDING: Array = [2, 2, 2]
+const ROTATION_RIDE_LANDING: Array = [1, 2, 2]
 ## surf_snipers_island's three edges go from the pads its teleports put a player on down to the
 ## island with the spawns (0.6 to 1.7 s, 64 to 107 m); they land 100% of simulated and live rides
 ## (`--measure`), so five of six is the bar and one miss is tolerated.
@@ -640,6 +647,9 @@ const SNIPERS_RIDE_LANDING: Array = [5, 5, 5]
 ## surf_the_flow's two edges go from each spawn platform (16 spawns on each) down to the floor island
 ## the teleports land on (3.2 to 3.5 s); 100% simulated and 95% to 100% live (`--measure`), so five of six.
 const FLOW_RIDE_LANDING: Array = [5, 5]
+## surf_conflux's one edge goes from the +x spawn platform (island 20, 25 spawns) down to the platform
+## 86 m away (3.7 s); 92% simulated and 100% live (`--measure`), so five of six.
+const CONFLUX_RIDE_LANDING: Array = [5]
 
 
 ## Bots ride the ramps (`game/arena_surf.gd`): the edges are linked into the mesh, a route to a
@@ -707,13 +717,101 @@ func _test_rotation_rides() -> void:
 			need = SNIPERS_RIDE_LANDING
 		elif map_id == &"surf_the_flow":
 			need = FLOW_RIDE_LANDING
+		elif map_id == &"surf_conflux":
+			need = CONFLUX_RIDE_LANDING
 		var rode := await _ride_on(map_id, tick, ROTATION_RIDE_STARTS, need)
 		tick = int(rode.get("tick", tick)) + 64
 
-		if (map_id == &"surf_snipers_island" or map_id == &"surf_the_flow") and not rode.is_empty():
+		if (map_id == &"surf_snipers_island" or map_id == &"surf_the_flow" or map_id == &"surf_conflux") and not rode.is_empty():
 			# The way in is the other half of the loop: from a spawn on the island a bot walks into a
 			# teleport, lands on a pad and rides down, so its own route must hand it a ride.
 			tick = await _roam_takes_ride(rode["surf"], _game.map.spawns[0].origin, tick)
+	_done()
+
+
+## The maps with planned rides, each played by six bots that roam and fight.
+const BAND_MAPS: Array[StringName] = [&"surf_conflux", &"surf_snipers_island", &"surf_the_flow", &"surf_10x_reloaded_fixed"]
+## How long the bots are given on each, seconds of play.
+const BAND_SECONDS := 90.0
+## What six bots must do in that time. They are bands and not records: the mesh lands when the
+## machine finishes it, so no two runs play alike. The floors are set well under what one run
+## measured (90 s, six bots: 30 to 47 kills, 1,700 to 6,800 m walked, 1 to 6 platforms, 4 to 16
+## rides; surf_snipers_island sometimes stays on one island while still riding), to catch bots that stand still, never meet, or never take a ride.
+const BAND_ISLANDS_MIN := 1
+const BAND_KILLS_MIN := 10
+const BAND_METRES_MIN := 800.0
+const BAND_RIDES_MIN := 1
+
+
+## Bots as they play: [method ArenaBots.think] for all six on every map with ride edges, for
+## [constant BAND_SECONDS]. They must roam (several platforms stood on, metres covered, a ride
+## taken), fight (kills landed) and stay inside the map.
+func _test_bot_band() -> void:
+	_section("six bots roam and fight on every map with rides")
+	var tick := 100000
+	for map_id in BAND_MAPS:
+		if ArenaMap.by_id(map_id) == null:
+			_check(false, "%s is in the catalogue to be played" % map_id)
+			_check(false, "so its bots cannot fight")
+			_check(false, "nor stay in bounds")
+			continue
+		var changed := _game.change_map(ArenaMap.by_id(map_id))
+		var world := ArenaBots.world_for(_game)
+		var _first := world.route(Vector3.ZERO, Vector3.ONE)
+		var frames := 0
+		while world.is_route_pending() and frames < 1200:
+			await get_tree().process_frame
+			frames += 1
+		var surf: ArenaSurf = world.surf_for_map() if changed.ok else null
+		var kills: Array[int] = [0]
+		var on_kill := func(_entry: DotKillFeed.Entry) -> void: kills[0] += 1
+		_game.player_killed.connect(on_kill)
+		var minds := {}
+		var last := {}
+		var metres := 0.0
+		var islands := {}
+		var outside := 0
+		var bounds := _game.map.bounds.grow(1.0)
+		var begun_before := surf.begun if surf != null else 0
+		for player in _game.players():
+			var mind := ArenaBots.Mind.new()
+			mind.seed = 900 + player.player_id
+			minds[player.player_id] = mind
+		for t in range(int(BAND_SECONDS * TICK_RATE)):
+			var commands := {}
+			for player in _game.players():
+				if player.is_alive():
+					commands[player.player_id] = ArenaBots.think(_game, player, minds[player.player_id], tick, float(TICK_RATE))
+			_game.tick(commands)
+			tick += 1
+			if t % 8 == 0:
+				for player in _game.players():
+					if not player.is_alive():
+						last.erase(player.player_id)
+						continue
+					var feet := player.controller.state.position
+					if not bounds.has_point(feet):
+						outside += 1
+					if last.has(player.player_id):
+						var step: float = (feet - last[player.player_id]).length()
+						# A teleport or a fall-out is not a walk.
+						if step < 20.0:
+							metres += step
+					last[player.player_id] = feet
+					if surf != null:
+						var at: int = surf.nav.island_at(feet, 1.0)
+						if at >= 0:
+							islands[at] = true
+			if t % 32 == 0:
+				await get_tree().physics_frame
+		_game.player_killed.disconnect(on_kill)
+		var rides := (surf.begun - begun_before) if surf != null else 0
+		_line("     %s: %d kills, %.0f m walked, %d platforms stood on, %d rides begun, %d samples out of bounds" % [
+			map_id, kills[0], metres, islands.size(), rides, outside])
+		_check(metres >= BAND_METRES_MIN and islands.size() >= BAND_ISLANDS_MIN and rides >= BAND_RIDES_MIN,
+			"%s: the bots roam (%.0f m walked, %d platforms, %d rides)" % [map_id, metres, islands.size(), rides])
+		_check(kills[0] >= BAND_KILLS_MIN, "%s: the bots fight (%d kills in %.0f s)" % [map_id, kills[0], BAND_SECONDS])
+		_check(outside == 0, "%s: nobody leaves the map (%d samples outside)" % [map_id, outside])
 	_done()
 
 

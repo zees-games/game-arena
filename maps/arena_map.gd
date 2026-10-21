@@ -1776,6 +1776,54 @@ func add_perimeter(thickness: float = 2.0) -> ArenaMap:
 
 # --- The three representations ---------------------------------------------
 
+## The solid the bots' walking mesh is baked from: [member collision_root], less any slab that
+## spans the whole map (a mapper's sealed bounding box, six hulls of 500 m by 430 m and 60 cm
+## thick). Recast, handed that box with the islands inside it, found nowhere to walk at all
+## (surf_conflux: 0 polygons of 63,000 vertices; 7,400 once the box was left out), and the
+## box's floor and ceiling are not places anybody stands to fight. Returns a holder added beside
+## [member collision_root] that the caller frees after parsing (a bake parses at once), or
+## null when there is no such slab and [member collision_root] itself is the source.
+func nav_source() -> Node3D:
+	if collision_root == null or not collision_root.is_inside_tree() or collision_root.get_parent() == null:
+		return null
+
+	var body := StaticBody3D.new()
+	var skipped := 0
+
+	for child in collision_root.get_children():
+		var shape_node := child as CollisionShape3D
+		var hull := shape_node.shape as ConvexPolygonShape3D if shape_node != null else null
+
+		if hull != null and not hull.points.is_empty():
+			var box := AABB(hull.points[0], Vector3.ZERO)
+
+			for point in hull.points:
+				box = box.expand(point)
+
+			var dims := [box.size.x, box.size.y, box.size.z]
+			dims.sort()
+
+			if float(dims[0]) < 1.5 and float(dims[1]) > 150.0:
+				skipped += 1
+				continue
+
+		if shape_node != null:
+			var copy := shape_node.duplicate() as CollisionShape3D
+			copy.transform = shape_node.transform
+			body.add_child(copy)
+
+	if skipped == 0:
+		body.free()
+		return null
+
+	var holder := Node3D.new()
+	holder.name = &"NavSource"
+	holder.add_child(body)
+	collision_root.get_parent().add_child(holder)
+	return holder
+
+
+
 ## The movement backend the game hands every player on this map.
 ##
 ## [method to_fps_body] for a built-in map, unchanged. For an imported one, a

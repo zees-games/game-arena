@@ -261,7 +261,10 @@ class World:
 		_surf = null
 		_surf_looked = false
 		var body := _body_tunables()
-		var started := _nav.bake_in_background(root, {"radius": body.radius, "height": body.stand_height, "climb": body.step_height})
+		var source: Node3D = (map as Object).call(&"nav_source") if (map as Object).has_method(&"nav_source") else null
+		var started := _nav.bake_in_background(source if source != null else root as Node3D, {"radius": body.radius, "height": body.stand_height, "climb": body.step_height})
+		if source != null:
+			source.free()
 		if not started.ok:
 			DotLog.warn(CHANNEL, "bots cannot route on this map", {"map": str((map as Object).get("id")), "error": started.error.message})
 		return _nav

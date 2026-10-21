@@ -178,7 +178,10 @@ func _load() -> bool:
 	await get_tree().physics_frame
 	var tunables := bot.controller.tunables
 	nav = DotBotNav.new()
-	var baked := nav.bake(game.map.collision_root, {"radius": tunables.radius, "height": tunables.stand_height, "climb": tunables.step_height})
+	var source := game.map.nav_source()
+	var baked := nav.bake(source if source != null else game.map.collision_root, {"radius": tunables.radius, "height": tunables.stand_height, "climb": tunables.step_height})
+	if source != null:
+		source.free()
 	if not baked.ok:
 		print("[surf] the mesh did not bake: %s" % baked.error.message)
 		return false
