@@ -534,6 +534,36 @@ func _stage_imported(map: ArenaMap, id: StringName) -> void:
 
 
 var _staged_map: ArenaMap = null
+var _overview_box := AABB()
+var _overview_reach := 1.0
+
+
+## What the overview frames: the map's bounds, but for an imported map only what is drawn. The
+## manifest's bounds take in the 3D skybox (the backdrop of a map built to float in one, scaled
+## far outside the play space, and never drawn here), which put surf_snipers_island's whole island
+## in a corner of an empty frame.
+func _frame_overview() -> void:
+	_overview_box = _staged_map.bounds
+	_overview_reach = _staged_map.extent
+
+	if not _staged_map.is_imported() or not bool((ArenaMap.ArenaImportedMaps.manifest(_staged_map.id).get("skybox", {}) as Dictionary).get("drawn", false)):
+		return
+
+	var drawn := _staged_map.to_scene()
+	var box := AABB()
+	var first := true
+
+	for child in drawn.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).mesh != null:
+			var part: AABB = (child as MeshInstance3D).transform * (child as MeshInstance3D).mesh.get_aabb()
+			box = part if first else box.merge(part)
+			first = false
+
+	drawn.free()
+
+	if not first:
+		_overview_box = box
+		_overview_reach = maxf(box.size.x, box.size.z) * 0.5
 var _staged_id: StringName = &""
 
 
@@ -601,6 +631,7 @@ func _play_imported() -> void:
 			first = player
 			break
 
+	_frame_overview()
 	var feet := first.controller.state.position
 	var facing := Basis(Vector3.UP, deg_to_rad(first.controller.state.yaw)) * Vector3.FORWARD
 	var centre := Vector3.ZERO
@@ -653,8 +684,8 @@ func _play_imported() -> void:
 		},
 		{
 			"name": "%s_overview" % String(_staged_id),
-			"from": _staged_map.bounds.get_center() + Vector3(-1.0, 0.6, -1.0) * _staged_map.extent,
-			"at": _staged_map.bounds.get_center(),
+			"from": _overview_box.get_center() + Vector3(-1.0, 0.6, -1.0) * _overview_reach,
+			"at": _overview_box.get_center(),
 		},
 	]
 

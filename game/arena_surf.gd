@@ -271,6 +271,19 @@ func landing_points() -> PackedVector3Array:
 	for edge in edges:
 		if edge.linked:
 			out.append(edge.to)
+	# The way up to a ride that starts away from the spawns (a pad a teleport puts a player on, the
+	# landing back on the spawn island) is a place to roam to as well: the teleport's door. Nothing
+	# else sends a bot there, so that ride was never taken. The pad itself is no goal: a route to
+	# a point on it ends on the floor beneath, never through the teleport's link.
+	var spawn_islands := PackedInt32Array()
+	for spawn: Transform3D in map.get("spawns"):
+		spawn_islands.append(nav.island_at(spawn.origin, 2.0))
+	for id in teleports:
+		var link: Array = teleports[id]
+		for edge in edges:
+			if edge.linked and edge.from.distance_to(link[1]) < 3.0 and not spawn_islands.has(nav.island_at(edge.from, 2.5)):
+				out.append(link[0])
+				break
 	return out
 
 

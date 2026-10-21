@@ -77,7 +77,7 @@ const HURT_MAP := &"surf_xiv_v2a"
 
 const SECTIONS := 21
 ## 102 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 110
+const CHECKS_FIXED := 118
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -623,7 +623,7 @@ const ROAM_SECONDS := 90.0
 ## The rotation's maps with planned rides, each ridden as [constant RIDE_MAP] is (one edge,
 ## [constant ROTATION_RIDE_STARTS] starts). Their rides are several flights long, which is why they were
 ## the last to get any; see docs/imported-maps.md, "Which maps have rides".
-const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed"]
+const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island"]
 ## Their starts, and how many must land. Wider than [constant RIDE_STARTS] on purpose: 10x's
 ## edge lands 55% of live rides (`tools/surf_rides.tscn --measure`; the misses clip a
 ## teleport near the end), so 2 of 3 would fail a working ride two runs in five, while
@@ -633,6 +633,10 @@ const ROTATION_RIDE_STARTS := 6
 ## Measured live 55%, 45% and 40% (`tools/surf_rides.tscn --measure`), and 2 of 6 starts landed on
 ## each here; 2 is the bar for the same reason as before, and a ride that has stopped working lands none.
 const ROTATION_RIDE_LANDING: Array = [2, 2, 2]
+## surf_snipers_island's three edges go from the pads its teleports put a player on down to the
+## island with the spawns (0.6 to 1.7 s, 64 to 107 m); they land 100% of simulated and live rides
+## (`--measure`), so five of six is the bar and one miss is tolerated.
+const SNIPERS_RIDE_LANDING: Array = [5, 5, 5]
 
 
 ## Bots ride the ramps (`game/arena_surf.gd`): the edges are linked into the mesh, a route to a
@@ -648,13 +652,17 @@ func _test_surf_rides() -> void:
 		return
 	var surf: ArenaSurf = rode["surf"]
 	var edge: ArenaSurf.Edge = rode["edge"]
-	var tick: int = rode["tick"]
+	await _roam_takes_ride(surf, edge.from, int(rode["tick"]))
+	_done()
 
+
+## A bot alone on the map, put at [param start], roams until its own route hands it a ride.
+func _roam_takes_ride(surf: ArenaSurf, start: Vector3, tick: int) -> int:
 	# Of its own accord: a bot on a spawn platform roams, and its routes cross the edges.
 	var roamer := _game.player_for(5)
 	if not roamer.is_alive():
 		_game.respawn_player(5)
-	roamer.controller.teleport(edge.from, 0.0, 0.0)
+	roamer.controller.teleport(start, 0.0, 0.0)
 	# The roamer alone on the map, and the others back afterwards. The ride check above parked them
 	# on this same start platform (pushed about by each other's hulls, so where each ends up
 	# depends on where the deathmatch left it), and a roamer that sees one fights instead of
@@ -683,7 +691,7 @@ func _test_surf_rides() -> void:
 	# Whether it lands is the check above; this one is that its own route hands it a ride.
 	_check(surf.begun > begun_before,
 		"a roaming bot's own route hands it a ride (%d begun, %d landed)" % [surf.begun - begun_before, surf.landed - landed_before])
-	_done()
+	return tick
 
 
 ## The rotation's own rides: [constant ROTATION_RIDE_MAPS], each map's first planned edge.
@@ -691,8 +699,14 @@ func _test_rotation_rides() -> void:
 	_section("bots ride the rotation maps' ramps across the map")
 	var tick := 0
 	for map_id in ROTATION_RIDE_MAPS:
-		var rode := await _ride_on(map_id, tick, ROTATION_RIDE_STARTS, ROTATION_RIDE_LANDING)
+		var need: Array = SNIPERS_RIDE_LANDING if map_id == &"surf_snipers_island" else ROTATION_RIDE_LANDING
+		var rode := await _ride_on(map_id, tick, ROTATION_RIDE_STARTS, need)
 		tick = int(rode.get("tick", tick)) + 64
+
+		if map_id == &"surf_snipers_island" and not rode.is_empty():
+			# The way in is the other half of the loop: from a spawn on the island a bot walks into a
+			# teleport, lands on a pad and rides down, so its own route must hand it a ride.
+			tick = await _roam_takes_ride(rode["surf"], _game.map.spawns[0].origin, tick)
 	_done()
 
 

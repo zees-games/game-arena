@@ -76,8 +76,12 @@ class Mind:
 	## The ride under way (dot-bot's DotBotSurfRide, untyped so an older shell still compiles
 	## this), or null.
 	var ride: Variant = null
+	## Where the bot was last tick, to see a teleport.
+	var last_position: Vector3 = Vector3.INF
 
 
+## Further than this in one tick is a teleport, metres (a fall at the 3500 u/s limit is under 1).
+const TELEPORT_JUMP := 4.0
 const THROW_DRAW := 1
 const THROW_COOK := 2
 const THROW_RELEASE := 3
@@ -163,13 +167,27 @@ class World:
 			return (trace as DotTrace).line_of_sight(from, to)
 		return true
 
+	const SPAWN_THINNING := 25.0
+
+	static func _near_any(points: PackedVector3Array, at: Vector3, within: float) -> bool:
+		for point in points:
+			if point.distance_to(at) < within:
+				return true
+		return false
+
 	func waypoints() -> PackedVector3Array:
 		var out := PackedVector3Array()
 		var map: Variant = game.get("map")
 		var spawns: Array = (map as Object).get("spawns") if map is Object else []
-		for spawn: Transform3D in spawns:
-			out.append(spawn.origin)
 		var surf := surf_for_map()
+		for spawn: Transform3D in spawns:
+			# A combat surf map has dozens of spawns on one platform (surf_snipers_island: 48 on
+			# one island); each as a waypoint outweighs the few landings and ramp starts that are
+			# the only places a ride is taken from, and the bots never rode. With ride edges
+			# linked, spawns closer than this to one kept are one place.
+			if surf != null and out.size() > 0 and _near_any(out, spawn.origin, SPAWN_THINNING):
+				continue
+			out.append(spawn.origin)
 		if surf != null:
 			out.append_array(surf.call(&"landing_points"))
 		return out
@@ -338,6 +356,12 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	world.brains[bot.player_id] = mind.brain
 
 	var me := world.contact(bot.player_id)
+	# A teleport carries the bot further in a tick than anything walks or flies, and its route was
+	# laid from where it stood: walked on, the old corners lead it off the pad it landed on. The
+	# brain is told as it is when a ride ends, and plans from here (a ride the pilot has is not cut).
+	if mind.ride == null and mind.last_position != Vector3.INF and me.position.distance_to(mind.last_position) > TELEPORT_JUMP:
+		mind.brain.ride_ended(true)
+	mind.last_position = me.position
 	var intent := mind.brain.think(me, world, world.now())
 	var surf := world.surf_for_map()
 	if surf != null:
