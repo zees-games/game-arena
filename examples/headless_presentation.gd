@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 286
+const CHECKS := 288
 
 var _passed := 0
 var _failed := 0
@@ -262,6 +262,22 @@ func _test_audio_is_a_firefight() -> void:
 		),
 		"and a rail is a different noise from a rifle, not a quieter one"
 	)
+
+	# Baked a few recipes a frame under the loading cover, never as one 0.7 s frame: the
+	# sliced bank must hold exactly what the one-shot bank does, in many short calls.
+	var sliced := {}
+	var queue: Array = recipes.keys()
+	var calls := 0
+	var longest := 0
+	while not queue.is_empty() and calls < 10000:
+		var t0 := Time.get_ticks_msec()
+		ArenaPresentation.bake_into(sliced, cat, recipes, queue, 1)
+		longest = maxi(longest, Time.get_ticks_msec() - t0)
+		calls += 1
+	_check(sliced.keys().size() == bank.keys().size() and sliced.has(&"fire_rifle"),
+		"the sound bank baked in slices holds what the one-shot bank does (%d of %d)" % [sliced.size(), bank.size()])
+	_check(calls > 4 and longest < 250,
+		"and it took %d calls, none over 250 ms (longest %d ms)" % [calls, longest])
 
 	p.queue_free()
 	_done()

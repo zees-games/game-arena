@@ -5,6 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
+const StallRecorder := preload("stall_recorder.gd")
 
 ## dot-net's lossy UDP relay, by path (it has no class_name): the latency simulator.
 const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
@@ -17,6 +18,7 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 ## godot --headless --path . res://tools/client_bench.tscn -- --bots 3 --delay 30 --seconds 15
 ## godot --headless --path . res://tools/client_bench.tscn -- --delay 30 --burn 20   # a slow device
 ## xvfb-run -a godot --path . res://tools/client_bench.tscn -- --delay 30            # with drawing
+## ... -- --stall   the frames around the loading cover instead (load_stall's connected twin)
 ## [/codeblock]
 ##
 ## `--delay` is milliseconds EACH WAY (so 30 is a 60 ms round trip). `--burn MS` spends MS of
@@ -249,7 +251,23 @@ func _run() -> void:
 
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("mouse_capture_override", true)
+	var stall: RefCounted = null
+	if "--stall" in OS.get_cmdline_user_args():
+		stall = StallRecorder.new()
+		stall.start(get_tree())
 	add_child(_client)
+	if stall != null:
+		stall.watch(_client.get("gate"))
+		t = 0.0
+		while stall.open_seconds() < 3.0 and t < 60.0:
+			await get_tree().process_frame
+			t += get_process_delta_time()
+		stall.stop()
+		for line in stall.lines(2.0):
+			print(line)
+		link.disconnect_from_server("done")
+		_finish(0)
+		return
 	t = 0.0
 	while t < 40.0:
 		await get_tree().create_timer(0.25).timeout

@@ -187,3 +187,7 @@ No assertion sees the screen. Render and look after any change to the client, a 
 - `~/stack/game-dev/tools/screenshot.sh game-arena out.png --wait 35 -- --offline` is the real offline client. Arena starts in warmup, so an early frame lies.
 
 All need `xvfb-run`: under `--headless` every saved frame is empty, which looks like a screenshot.
+
+## The frames around the loading cover
+
+`tools/load_stall.tscn` (offline) and `client_bench.tscn -- --stall` (connected) record every wall-clock frame from the client's creation and split at the gate's `opened`: how long the cover is up, its worst frame, and the first seconds after it (fps, worst frame as a multiple of the median). Run under `xvfb-run -a godot --path . --rendering-driver opengl3 --resolution 480x270`; software GL is slow, so compare runs back to back and read ratios. `load_stall --budget N` exits 1 when the first seconds hold a frame over N times the median. The synthesised sound bank used to be baked in one 0.7 s frame (one frame of about 1.0 to 1.5 s in the cover, several seconds in a browser); it is now baked 6 ms a frame behind the gate's `sounds` hold, and `headless_presentation` checks the sliced bank equals the one-shot one. What is left in the cover's worst frame (about 0.45 s): `ArenaMap.to_scene` loading the surface texture sets synchronously (0.24 s).

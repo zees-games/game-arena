@@ -772,20 +772,63 @@ func _build_audio() -> DotResult:
 	add_child(ambience)
 	ambience.set_map_bed(bed_for(&""))
 
-	# Only on a real sink, and only after setup: the manager decides whether there is a
-	# device, and on a headless server there is nothing to bake for. Building the bank
-	# anyway would be a few hundred milliseconds of arithmetic per dedicated server
-	# startup for streams no process on that machine can play.
+	# Only on a real sink, and only after setup: a headless server has nothing to bake for.
+	# Baked a few recipes a frame under the cover: all at once it is a 0.7 s frame here and
+	# several seconds in a browser.
 	var godot_sink := audio.sink as DotAudioSinkGodot
 	if godot_sink != null:
-		godot_sink.bank = DotAudioSynth.bank(audio.catalogue, sound_recipes())
+		godot_sink.bank = {}
+		_bake_recipes = sound_recipes()
+		_bake_ids = _bake_recipes.keys()
+		_bake_hold(true)
 		DotLog.info(
 			CHANNEL,
 			"no audio files; synthesised stand-ins are in use",
-			{"ids": sound_recipes().size(), "dir": SOUND_DIR}
+			{"ids": _bake_ids.size(), "dir": SOUND_DIR}
 		)
 
 	return DotResult.success(null)
+
+
+## Longest a frame spends baking sounds, in milliseconds.
+const BAKE_BUDGET_MSEC := 6
+
+var _bake_recipes: Dictionary = {}
+var _bake_ids: Array = []
+
+
+## Bakes the recipes named by [param ids] (consumed from the end) into [param bank] until
+## [param budget_msec] is spent; one recipe is never split, so the call overruns by at most one.
+static func bake_into(bank: Dictionary, catalogue: DotAudioCatalogue, recipes: Dictionary, ids: Array, budget_msec: int) -> void:
+	var until := Time.get_ticks_msec() + budget_msec
+	while not ids.is_empty() and Time.get_ticks_msec() < until:
+		var id: Variant = ids.pop_back()
+		bank.merge(DotAudioSynth.bank(catalogue, {id: recipes[id]}))
+
+
+## Calls [method bake_into] on the sink's bank until the frame's budget is spent, then lets the gate
+## open once none are left. A recipe is one stream (or one per variant), so a frame overruns
+## by at most one of them.
+func _bake_slice() -> void:
+	var sink := audio.sink as DotAudioSinkGodot if audio != null else null
+	if sink == null:
+		_bake_ids.clear()
+		_bake_hold(false)
+		return
+	bake_into(sink.bank, audio.catalogue, _bake_recipes, _bake_ids, BAKE_BUDGET_MSEC)
+	if _bake_ids.is_empty():
+		_bake_hold(false)
+
+
+## The load gate stays closed while sounds bake, so the cover only drops once they are all there.
+func _bake_hold(on: bool) -> void:
+	var gate: Object = client.get(&"gate") if client != null else null
+	if gate == null:
+		return
+	if on:
+		gate.call(&"hold", &"sounds", "Preparing sounds")
+	else:
+		gate.call(&"release", &"sounds")
 
 
 # --- Effects ----------------------------------------------------------------
@@ -1026,6 +1069,8 @@ func _fit_chat() -> void:
 
 
 func _process(_delta: float) -> void:
+	if not _bake_ids.is_empty():
+		_bake_slice()
 	# Polled rather than on `size_changed`: this node can be set up before it is in a tree,
 	# and one Vector2 compare a frame is cheaper than tracking when it enters one.
 	_fit_chat()
