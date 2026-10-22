@@ -4,6 +4,8 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 
 **Run the suites after changing any dot-* addon this game links.** That is what this project is for.
 
+`./game.sh soak [map] [minutes]` is not a suite: it drives dot-bot's `DotBotSoak` (`tools/soak.tscn`) with eight bots on one map, the real `DotSpawnWatch` and the game's kill and hit signals, and fails on a stuck bot, a fall-out, object or memory growth, tick cost or a run with no kills. The report is `.godot/test-logs/soak-<map>.json`.
+
 ## The suites
 
 | Suite | What it drives |
