@@ -136,6 +136,10 @@ var _awaiting_click := false
 ## g2gfast shipped exactly that and a person had to report it.
 var _watch_id: int = -1
 
+## The spectator's free camera while roaming, and the mouse motion not yet turned into a look.
+var _free_cam: DotSpectatorFreeCam = null
+var _roam_look: Vector2 = Vector2.ZERO
+
 ## Bots this client drives, offline only. Session id -> the bot's body.
 var _bots: Dictionary = {}
 
@@ -455,6 +459,7 @@ func _hud_keys() -> void:
 	hud.keys[&"maps"] = table.key_for(&"dot_menu_maps")
 	hud.keys[&"loadout"] = table.key_for(&"dot_menu_loadout") if loadout_menu != null else ""
 	hud.keys[&"launch"] = table.key_for(launch_action())
+	hud.keys[&"roam"] = table.key_for(ArenaBindings.ROAM)
 	for i in range(ArenaBindings.SLOTS.size()):
 		hud.keys[StringName("slot_%d" % (i + 1))] = table.key_for(ArenaBindings.SLOTS[i])
 	hud.keys[&"slide"] = "C" if _slide_on_c() else table.key_for(ArenaBindings.DUCK)
@@ -1688,6 +1693,10 @@ func _physics_step(delta: float) -> void:
 	move.set_button(
 		DotFpsCommand.BUTTON_USER_0, mouse_drives_view() and _held(launch_action())
 	)
+	if is_roaming():
+		# The roaming spectator flies a camera and does not walk the dead player about.
+		move.move = Vector2.ZERO
+		move.buttons = 0
 	_read_fire(move)
 
 	if _offline:
@@ -2074,9 +2083,15 @@ func _drive_spectator_camera() -> void:
 	var id := player.player_id
 
 	if not game.spectate.is_spectating(id):
+		if hud != null:
+			hud.roam_hint = ""
 		if not player.camera.current:
 			player.camera.current = true
 		return
+
+	if hud != null:
+		var roaming := game.spectate.is_roaming(id)
+		hud.roam_hint = "Back to players" if roaming else ("Free camera" if game.spectate.can_roam(id) else "")
 
 	# The chase and death cameras are pulled out of the level by dot-spectate, given it.
 	var manager := game.spectate.manager
@@ -2086,10 +2101,65 @@ func _drive_spectator_camera() -> void:
 
 	var where := game.spectate.camera_for(id)
 
+	if game.spectate.is_roaming(id):
+		where = _fly_free_camera(id, where)
+	else:
+		_free_cam = null
+
 	if where == Transform3D.IDENTITY:
 		return
 
 	player.camera.global_transform = where
+
+
+## The free-roam key: into a free camera while spectating, and back onto a player from it.
+## A line when the server has roaming off (`mp_freeroam 0`) or a restricted camera
+## (`mp_forcecamera`). Local: this game's client manager is authoritative over its own camera.
+func toggle_roam() -> void:
+	if game == null or game.spectate == null or player == null:
+		return
+	var id := player.player_id
+	if not game.spectate.is_spectating(id):
+		return
+	var res := game.spectate.toggle_roam(id)
+	if not res.ok:
+		if hud != null:
+			hud.notice("Free roam is off on this server.")
+		return
+	_free_cam = null
+	_roam_look = Vector2.ZERO
+
+
+func is_roaming() -> bool:
+	return game != null and game.spectate != null and player != null \
+		and game.spectate.is_roaming(player.player_id)
+
+
+## One frame of the free camera: the mouse turn folded in, then the movement keys. Seeded from
+## where the camera was on the first frame of a roam, so it starts where the spectator looked.
+func _fly_free_camera(id: int, current: Transform3D) -> Transform3D:
+	if _free_cam == null:
+		_free_cam = DotSpectatorFreeCam.new()
+		_free_cam.rules = game.spectate_rules
+		_free_cam.seed_from(current)
+	var tunables := player.controller.tunables if player.controller != null else null
+	var sens := deg_to_rad(tunables.mouse_sensitivity) if tunables != null else 0.0025
+	_free_cam.look(Vector2(-_roam_look.x, -_roam_look.y) * sens)
+	_roam_look = Vector2.ZERO
+	var move := Vector3(
+		_strength(&"dot_fps_right") - _strength(&"dot_fps_left"),
+		_strength(&"dot_fps_jump") - _strength(&"dot_fps_crouch"),
+		_strength(&"dot_fps_forward") - _strength(&"dot_fps_back"),
+	)
+	if not mouse_drives_view():
+		move = Vector3.ZERO
+	var pose := _free_cam.step(move, _held(ArenaBindings.DASH), _held(ArenaBindings.WALK), get_process_delta_time())
+	var _kept := game.spectate.manager.move_free(str(id), pose.origin, pose.basis)
+	return pose
+
+
+static func _strength(action: StringName) -> float:
+	return Input.get_action_strength(action) if InputMap.has_action(action) else 0.0
 
 
 ## The fire command, from the keyboard and the mouse.
@@ -2267,8 +2337,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventMouseMotion:
-		if _sampler != null and mouse_drives_view():
-			_sampler.handle_event(event)
+		if mouse_drives_view():
+			if is_roaming():
+				# The free camera turns on the mouse, and the dead body's view stays put.
+				_roam_look += (event as InputEventMouseMotion).relative
+			elif _sampler != null:
+				_sampler.handle_event(event)
 		return
 
 	# A talk key's release is read wherever the pointer is: push to talk may be on a mouse
@@ -2322,6 +2396,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _is(event, ArenaBindings.VIEW):
 		toggle_view()
+		return
+	if _is(event, ArenaBindings.ROAM):
+		toggle_roam()
 		return
 
 	# The slots: requested through the COMMAND, never by calling the arsenal directly. A

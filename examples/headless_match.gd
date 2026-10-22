@@ -58,13 +58,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 604
+const CHECKS := 624
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 41
+const SECTIONS := 42
 
 var _passed := 0
 var _failed := 0
@@ -130,6 +130,7 @@ func _run() -> void:
 
 	await _test_effects()
 	await _test_spectating()
+	await _test_free_roam()
 	await _test_ffa_spawn_sides()
 	await _test_king_of_the_hill()
 	await _test_capture_the_flag()
@@ -1430,6 +1431,12 @@ func _test_spectating() -> void:
 
 	game.start(0)
 	_check(game.spectate != null, "every mode gets a spectate layer")
+	# The operator's own-team-only camera (mp_forcecamera 1): this section is about it. The
+	# default is anybody, with free roam on (`_test_free_roam`).
+	_check(
+		game.spectate_rules.set_cvar("mp_forcecamera", "1"),
+		"mp_forcecamera 1 is read by the rules the manager uses"
+	)
 
 	for index in range(4):
 		var _added := game.add_player(800 + index, "Watcher %d" % index)
@@ -1496,6 +1503,93 @@ func _test_spectating() -> void:
 	remove_child(game)
 	await get_tree().process_frame
 	_done()
+
+
+## Free roam: on by default, off by `mp_freeroam 0`, refused under `mp_forcecamera 1`. The
+## client flies the camera (`ArenaClient._fly_free_camera`); this is the policy under it.
+func _test_free_roam() -> void:
+	_section("free roam")
+
+	var game := ArenaGame.new()
+	game.name = "RoamGame"
+	game.tick_rate = TICK_RATE
+	game.headless = true
+	game.register_service = false
+	game.mode = ArenaMode.team_deathmatch(50)
+	add_child(game)
+
+	var ready := game.setup(ArenaMap.dm_atrium())
+	if not _check(ready.ok, "a roaming game sets up", str(ready.error)):
+		game.queue_free()
+		remove_child(game)
+		return
+	game.start(0)
+	for index in range(4):
+		var _added := game.add_player(900 + index, "Roamer %d" % index)
+	game.match_node.rules.respawn_delay_sec = 120.0
+	_go_live(game)
+
+	var victim := 900
+	var killer := _first_other_team(game, victim)
+	_kill_through_combat(game, killer, victim)
+	for t in range(TICK_RATE * 5):
+		game.tick({})
+
+	var rules := game.spectate_rules
+	_check(
+		rules.force_camera == 0 and rules.allow_roaming,
+		"a team mode spectates with the defaults: anybody, free roam on",
+		"force_camera %d" % rules.force_camera
+	)
+	var mgr := game.spectate.manager
+	_check(game.spectate.can_roam(victim), "a dead player may roam")
+
+	var before := game.spectate.camera_for(victim)
+	var entered := game.spectate.toggle_roam(victim)
+	_check(entered.ok, "the roam key enters a roam", str(entered.error))
+	_check(game.spectate.is_roaming(victim), "and the mode is ROAMING")
+	_check(
+		game.spectate.camera_for(victim).origin.distance_to(before.origin) < 0.01,
+		"seeded where the camera was, not at the origin"
+	)
+
+	var cam := DotSpectatorFreeCam.new()
+	cam.rules = rules
+	cam.seed_from(game.spectate.camera_for(victim))
+	var moved := cam.step(Vector3(0.0, 0.0, 1.0), false, false, 1.0)
+	var _kept := mgr.move_free(str(victim), moved.origin, moved.basis)
+	_check(
+		game.spectate.camera_for(victim).origin.distance_to(before.origin) > rules.roam_speed * 0.9,
+		"flying forward a second moves the camera by the roam speed"
+	)
+	game.tick({})
+	_check(game.spectate.is_roaming(victim), "and a tick leaves the roam alone")
+
+	var left := game.spectate.toggle_roam(victim)
+	_check(left.ok and not game.spectate.is_roaming(victim), "the same key goes back onto a player")
+
+	_check(rules.set_cvar("mp_freeroam", "0"), "mp_freeroam 0 is read")
+	var refused := game.spectate.toggle_roam(victim)
+	_check(not refused.ok, "with mp_freeroam 0 the roam key is refused")
+	_check(not game.spectate.can_roam(victim), "and the hint is not offered")
+	_check(rules.set_cvar("mp_freeroam", "1"), "mp_freeroam 1 is read")
+	_check(game.spectate.toggle_roam(victim).ok, "back on, it enters again")
+	_check(rules.set_cvar("mp_forcecamera", "1"), "mp_forcecamera 1 is read")
+	for t in range(4):
+		game.tick({})
+	_check(
+		not game.spectate.is_roaming(victim),
+		"a restricted camera moves a roamer back onto a player"
+	)
+	_check(not game.spectate.toggle_roam(victim).ok, "and refuses the roam key")
+	_check(rules.set_cvar("mp_freeroam_speed", "20"), "mp_freeroam_speed is read")
+	_check(is_equal_approx(rules.roam_speed, 20.0), "and sets the speed", str(rules.roam_speed))
+
+	game.queue_free()
+	remove_child(game)
+	await get_tree().process_frame
+	_done()
+
 
 
 func _first_other_team(game: ArenaGame, id: int) -> int:

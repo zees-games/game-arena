@@ -63,7 +63,7 @@ func setup() -> DotResult:
 	# can I only watch my own team" has its answer in this line.
 	DotLog.info(CHANNEL, "spectating is set up", {
 		"own_team_only": manager.rules.force_camera == 1,
-		"roaming": manager.rules.allow_roaming,
+		"roaming": manager.rules.roaming_permitted(),
 		"death_cam_ticks": manager.rules.death_cam_ticks,
 		"authoritative": manager.authoritative,
 	})
@@ -80,13 +80,12 @@ func setup() -> DotResult:
 
 
 func _rules() -> DotSpectatorRules:
-	var rules := DotSpectatorRules.new()
-
-	# Free-for-all has no sides to restrict to, and a restriction that means nothing is
-	# a restriction that confuses an operator reading the log. A team mode gets the
-	# restriction, which is what it is for.
-	rules.force_camera = 1 if (game.mode != null and game.mode.is_team_mode()) else 0
-	rules.allow_roaming = rules.force_camera == 0
+	# The game's own object, so the cvars the module binds (and a client follows) are the
+	# rules in use. [b]force_camera and allow_roaming are deliberately not set here[/b]: they
+	# are the operator's (`mp_forcecamera`, `mp_freeroam`) and default to anybody-may-watch
+	# with free roam on. Until 2026-10-21 a team mode forced own-team-only here, which also
+	# switched roaming off with nobody having said so.
+	var rules := game.spectate_rules
 	rules.death_cam_ticks = int(1.0 * float(game.tick_rate))
 	rules.freeze_cam_ticks = int(1.5 * float(game.tick_rate))
 	rules.chase_distance = 3.5
@@ -208,6 +207,27 @@ func cycle_mode(id: int) -> DotResult:
 	elif view.mode == DotSpectatorView.Mode.ROAMING:
 		next = DotSpectatorView.Mode.FIRST_PERSON
 	return manager.set_mode(str(id), next)
+
+
+## The free-roam key. Refused with a line to show when roaming is off (`mp_freeroam 0`) or a
+## restricted camera is set (`mp_forcecamera`). Local to the client that presses it: this
+## game's server sends no spectator views, so the client's manager is authoritative over its
+## own camera and nothing needs telling.
+func toggle_roam(id: int) -> DotResult:
+	if manager == null:
+		return DotResult.fail(DotError.CODE_STATE, "Spectating is not set up.")
+	if not manager.can_roam(str(id)):
+		return DotResult.fail(DotError.CODE_FORBIDDEN, "Free roam is off on this server.")
+	return manager.toggle_roam(str(id))
+
+
+func can_roam(id: int) -> bool:
+	return manager != null and manager.can_roam(str(id))
+
+
+func is_roaming(id: int) -> bool:
+	return manager != null and manager.is_spectating(str(id)) \
+		and manager.view(str(id)).mode == DotSpectatorView.Mode.ROAMING
 
 
 func _on_killed(entry: DotKillFeed.Entry) -> void:

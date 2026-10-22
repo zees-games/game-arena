@@ -55,6 +55,8 @@ const WEAPON_LAST := &"arena_weapon_last"
 const PUNT := &"arena_punt"
 ## First or third person, where the server allows it (`mp_forceview`).
 const VIEW := &"arena_view"
+## The spectator's free camera, on and off (`mp_freeroam`). Its flying keys are the movement keys.
+const ROAM := &"arena_roam"
 ## dot-voice's action (DotVoiceManager.TALK_ACTION), so the talk key is one setting with every
 ## other game's; still stored as bind_voice.
 const VOICE := &"dot_voice_talk"
@@ -89,6 +91,7 @@ static func make() -> DotMenuBindings:
 	keys.add(VOICE, &"bind_voice", "Push to talk", "V", "Chat")
 	keys.add(SCOREBOARD, &"bind_scoreboard", "Scoreboard (hold)", "Tab", "Interface")
 	keys.add(VIEW, &"bind_view", "First or third person, where the server allows it", "F5", "Interface")
+	keys.add(ROAM, &"bind_roam", "Free camera while spectating (move keys fly, Dash fast, Walk slow)", "T", "Interface")
 	# H opens help, in every game of the family (dot-menu's `dot_menu_help`).
 	keys.add_help("Interface")
 	# M is the map menu, in every game of the family (dot-menu's `dot_menu_maps`).

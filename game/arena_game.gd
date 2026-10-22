@@ -417,6 +417,13 @@ var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 ## by the module (REPLICATED) and followed by the client, which is the end with a camera.
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 
+## Who a spectator may watch and whether they may fly a free camera: dot-spectate's
+## `mp_forcecamera`, `mp_freeroam` and `mp_freeroam_speed`. Bound by the module (REPLICATED) and
+## followed by the client, which is the end that flies the camera. One object for the life of
+## the game, shared with [ArenaSpectate]'s manager, so a cvar change reaches the rules in use
+## and a map change keeps the operator's setting.
+var spectate_rules: DotSpectatorRules = DotSpectatorRules.new()
+
 ## Whether players and bots are solid to each other: dot-player-controller's
 ## `mp_solidplayers` (1 by default). Bound by the module (REPLICATED) and followed by the
 ## client, because a client predicts its own player against the others' hulls. Arena's
@@ -540,6 +547,7 @@ func follow_server_cvars(source: Object) -> bool:
 	var _bodies := ragdoll_rules.follow_cvars(source)
 	var _toys := toy_rules.follow_cvars(source)
 	var _view := view_rules.follow_cvars(source)
+	var _spectate := spectate_rules.follow_cvars(source)
 	var _solid := body_rules.follow_cvars(source)
 	var _feel := feel_rules.follow_cvars(source)
 	return _follow_cvar_source()

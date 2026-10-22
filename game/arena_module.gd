@@ -219,6 +219,12 @@ func _module_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules. REPLICATED, because
+	# each client flies its own spectator camera under them (ArenaClient.toggle_roam).
+	var _spectate_cvars := game.spectate_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
 	# mp_solidplayers: whether players and bots stop at each other (1, the default) or pass
 	# through (0). REPLICATED, because each client predicts its own player against the
 	# others' hulls (ArenaGame.solid_hulls_for).

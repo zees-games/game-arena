@@ -57,9 +57,9 @@ A class's loadout is the arsenal's source: `DotWeaponPlayerBridge.give_class_loa
 
 ## Spectating
 
-`ArenaSpectate` moves a dead player's camera off the floor, and the server decides who may watch whom: a team mode gets `force_camera 1`, a free-for-all `0`. The camera is driven once a frame, because a camera moved on the tick timeline steps at the tick rate however smooth the target is.
+`ArenaSpectate` moves a dead player's camera off the floor, and the server decides who may watch whom through dot-spectate's `mp_forcecamera` (default 0, anybody; 1 is own team only and also switches roaming off), and `mp_freeroam` / `mp_freeroam_speed` (free roam is on by default). The rules are `ArenaGame.spectate_rules`, bound by the module (REPLICATED) and followed by the client. The camera is driven once a frame, because a camera moved on the tick timeline steps at the tick rate however smooth the target is.
 
-On a networked client the layer is built by `_build_spectate`, fed the KILL event (`ArenaSpectate.on_kill_event`) and ticked from `client_tick`; a respawn is read off the replicated health. The client's manager is authoritative over its own camera: this server sends no spectator views and a dot-spectate mirror runs no timers.
+On a networked client the layer is built by `_build_spectate`, fed the KILL event (`ArenaSpectate.on_kill_event`) and ticked from `client_tick`; a respawn is read off the replicated health. **Free roam** (T, `ArenaBindings.ROAM`) is local to the client, for the same reason: `ArenaClient.toggle_roam` asks the client's manager (refused with a line when `mp_freeroam 0` or `mp_forcecamera` is set), and `_fly_free_camera` feeds the move keys, Dash (fast), Walk (slow) and the mouse into a `DotSpectatorFreeCam` once a frame while the dead body's command is zeroed. The spectator HUD shows the key as the prompt line (`ArenaHud.roam_hint`). The client's manager is authoritative over its own camera: this server sends no spectator views and a dot-spectate mirror runs no timers.
 
 ## Criticals and bodies
 
