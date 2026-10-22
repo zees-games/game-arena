@@ -154,6 +154,7 @@ func _module_load() -> DotResult:
 	_add_spawn_cvars()
 	_add_unlag_cvar()
 	_add_rate_cvar()
+	var _rides := game.start_ride_recording(add_cvar)
 
 	add_cvar(
 		"arena_streak_rewards", "3:heal,5:haste,7:empowered",

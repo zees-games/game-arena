@@ -5,6 +5,7 @@ const ArenaContent := preload("arena_content.gd")
 const ArenaEffects := preload("arena_effects.gd")
 const ArenaHorde := preload("arena_horde.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaPaths := preload("arena_paths.gd")
 const ArenaSolidBody := preload("arena_solid_body.gd")
 const ArenaMode := preload("arena_mode.gd")
 const ArenaModes := preload("arena_modes.gd")
@@ -296,6 +297,9 @@ var horde: ArenaHorde = null
 ## `npc_reaction_min`; the horde attaches it to each spawner it builds.
 var npc_skill: DotNpcAiSkill = DotNpcAiSkill.new()
 
+## Records and harvests players' surf rides once [method start_ride_recording] has run.
+var surf_rides: RefCounted = null
+
 ## Whether the monsters' learned map traffic is kept on disk across restarts.
 ##
 ## [b]Off unless a server turns it on[/b] — [ArenaModule] does, which only a real server
@@ -449,6 +453,9 @@ var _weapon_defs: Dictionary = {}
 
 
 func _exit_tree() -> void:
+	if surf_rides != null:
+		surf_rides.call(&"release")
+		surf_rides = null
 	if _registered_name != &"":
 		DotRegistry.unregister_instance(_registered_name, self)
 		_registered_name = &""
@@ -1855,7 +1862,11 @@ func tick(commands: Dictionary = {}) -> void:
 
 		if move != null and fire != null:
 			match_node.note_activity(str(id), _tick)
+			if surf_rides != null:
+				surf_rides.call(&"before", id, player)
 			var outcome := player.simulate_tick(_tick, delta, move, fire)
+			if surf_rides != null:
+				surf_rides.call(&"after", id, player, move, _tick)
 			shots.append_array(outcome.shots)
 
 			# Heard by the monsters. Before the horde ticks, so they hear it this tick.
@@ -1944,9 +1955,41 @@ func tick(commands: Dictionary = {}) -> void:
 
 	match_node.tick(_tick)
 
+	if surf_rides != null:
+		surf_rides.call(&"process", delta)
+
 
 func current_tick() -> int:
 	return _tick
+
+
+## Records the surf rides real players take (`arena_surf_rides.gd`), off unless `bot_record` is on in the config, environment, command line or console; a no-op on a shell without dot-bot's recorder.
+func start_ride_recording(add_cvar: Callable = Callable(), config_file: String = "user://bot_record.json") -> DotResult:
+	if surf_rides != null:
+		return DotResult.success(surf_rides)
+	if DotAddonApi.build_level("dot_bot") < 5 or DotAddonApi.build_level("dot_player_controller") < 3 \
+			or not ResourceLoader.exists("res://addons/dot_bot/runtime/surf/dot_bot_ride_harvest.gd"):
+		return DotResult.fail(DotError.CODE_UNSUPPORTED, "This shell has no ride recorder.")
+	var config := DotBotDemoConfig.new()
+	config.record = false
+	var layered := config.load_layered(config_file if FileAccess.file_exists(config_file) else "")
+	if not layered.ok:
+		return layered
+	if add_cvar.is_valid():
+		var _cvars := config.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
+	var made := DotBotDemoStore.from_config(config, null)
+	if not made.ok or made.value == null:
+		return made if not made.ok else DotResult.fail(DotError.CODE_STATE, "bot_record_store is off.")
+	var store: DotBotDemoStore = made.value
+	var opened := store.open()
+	if not opened.ok:
+		return opened
+	var rides: RefCounted = (load(ArenaPaths.rebase("res://game/arena_surf_rides.gd")) as GDScript).new()
+	var ready: DotResult = rides.call(&"setup", self, config, store, float(tick_rate))
+	if not ready.ok:
+		return ready
+	surf_rides = rides
+	return DotResult.success(rides)
 
 
 ## Deals an imported map's hurt volumes (`trigger_hurt`) to everybody standing in one, as

@@ -219,6 +219,10 @@ class World:
 		_surf = surf_script.call(&"load_for", game.get("map"), nav) if surf_script != null else null
 		return _surf
 
+	## The imported map's mesh for the ride recorder (baking it if nothing has asked yet); null on a built-in map.
+	func nav_for_rides() -> DotBotNav:
+		return _nav_for_map()
+
 	## The corners of a way from [param from] to [param to]: over the navigation graph on a
 	## built-in map, over the mesh baked from the brushes on an imported one; empty (walk
 	## straight) off either, with no way, or while an imported map's mesh is still baking.

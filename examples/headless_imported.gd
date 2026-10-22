@@ -13,6 +13,7 @@ const ArenaContent := preload("../game/arena_content.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaSurf := preload("../game/arena_surf.gd")
+const ArenaSurfRides := preload("../game/arena_surf_rides.gd")
 const ArenaDrops := preload("../game/arena_drops.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaJail := preload("../maps/arena_jail.gd")
@@ -75,9 +76,9 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 22
+const SECTIONS := 23
 ## 102 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 140
+const CHECKS_FIXED := 152
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -116,6 +117,12 @@ func _run() -> void:
 		_finish()
 		return
 
+	# `-- --rides`: only the recorded rides, for working on them (the suite's own totals then do not hold).
+	if OS.get_cmdline_user_args().has("--rides"):
+		await _test_recorded_rides()
+		get_tree().quit(1 if _failed > 0 else 0)
+		return
+
 	# `-- --band`: only the bots' band, for measuring it (the suite's own totals then do not hold).
 	if OS.get_cmdline_user_args().has("--band"):
 		await _test_bot_band()
@@ -137,6 +144,7 @@ func _run() -> void:
 	await _test_fallout_all()
 	await _test_rotation_rides()
 	await _test_bot_band()
+	await _test_recorded_rides()
 	await _test_every_map()
 	await _test_collision_audit()
 	await _test_packs()
@@ -704,6 +712,160 @@ func _roam_takes_ride(surf: ArenaSurf, start: Vector3, tick: int) -> int:
 	# Whether it lands is the check above; this one is that its own route hands it a ride.
 	_check(surf.begun > begun_before,
 		"a roaming bot's own route hands it a ride (%d begun, %d landed)" % [surf.begun - begun_before, surf.landed - landed_before])
+	return tick
+
+
+## Players' rides are recorded when the server turns it on, replayed on the real motor, and a bot
+## rides the verified recording: off by default, bots never recorded, one cap and one target.
+func _test_recorded_rides() -> void:
+	_section("players' rides are recorded, harvested on the motor and ridden by a bot")
+	var changed := _game.change_map(ArenaMap.by_id(RIDE_MAP))
+	var world := ArenaBots.world_for(_game)
+	var _first := world.route(Vector3.ZERO, Vector3.ONE)
+	var frames := 0
+	while world.is_route_pending() and frames < 1200:
+		await get_tree().process_frame
+		frames += 1
+	var surf: ArenaSurf = world.surf_for_map() if changed.ok else null
+	var planned: Array = surf.edges.filter(func(e: ArenaSurf.Edge) -> bool: return e.linked) if surf != null else []
+	if planned.is_empty():
+		_check(false, "%s has a linked ride edge to record" % RIDE_MAP)
+		_done()
+		return
+	var edge: ArenaSurf.Edge = planned[0]
+
+	# Off until the config says so, and the two numbers are the recorder's own.
+	var started := _game.start_ride_recording()
+	var rides: RefCounted = _game.surf_rides
+	_check(started.ok and rides != null and not rides.is_on() and not rides.demo.record,
+		"ride recording is off by default (%s)" % ("ok" if started.ok else started.error.message))
+	var cfg := DotBotDemoConfig.new()
+	cfg.store = "memory"
+	cfg.cap = 7
+	cfg.target = 3
+	cfg.record = false
+	var shared := ArenaSurfRides.ride_config_for(cfg)
+	_check(shared.cap == 7 and shared.target == 3, "the harvest's cap and target are bot_record_cap and bot_record_target (%d, %d)" % [shared.cap, shared.target])
+	cfg.cap = DotBotDemoConfig.new().cap
+	cfg.target = DotBotDemoConfig.new().target
+	var store := DotBotDemoStoreMemory.new()
+	var fresh: RefCounted = ArenaSurfRides.new()
+	var ready: DotResult = fresh.call(&"setup", _game, cfg, store, float(TICK_RATE))
+	_check(ready.ok, "a recorder and its ride book are built over a store")
+	_game.surf_rides = fresh
+	rides = fresh
+
+	var human_id := 4
+	var human := _game.player_for(human_id)
+	var aside: Vector3 = edge.to + Vector3(30.0, 0.0, 0.0)
+	for other in _game.players():
+		if other.player_id != human_id and other.player_id != 5 and other.is_alive():
+			other.controller.teleport(aside + Vector3(float(other.player_id), 0.0, 0.0), 0.0, 0.0)
+	var tick := 40000
+	tick = await _ride_as_player(human, edge, surf, tick, 1)
+	_check(rides.recorder.recorded == 0 and rides.kept == 0, "with recording off a ride is recorded by nobody (%d)" % rides.recorder.recorded)
+
+	cfg.record = true
+	var starts := 6
+	tick = await _ride_as_player(human, edge, surf, tick, starts)
+	var flushed: DotResult = await rides.recorder.flush_all()
+	_check(rides.kept >= 2 and rides.recorder.recorded == rides.kept,
+		"real players' rides are recorded when on (%d kept of %d starts, %d discarded %s)" % [rides.kept, starts, rides.discarded, str(rides.why_not)])
+	_check(flushed.ok and rides.recorder.written == rides.kept and rides.recorder.queued() == 0,
+		"and written to the store (%d written)" % rides.recorder.written)
+	var counts: DotResult = await store.counts(rides.recorder.map_id, rides.recorder.map_version, ArenaSurfRides.KIND)
+	var key: String = rides.edge_key(edge)
+	_check(counts.ok and counts.value.has(key), "filed under the edge's island key %s (%s)" % [key, str(counts.value.keys()) if counts.ok else "no counts"])
+
+	var state_back := ArenaSurfRides.decode_state(JSON.parse_string(JSON.stringify(ArenaSurfRides.encode_state(human.controller.state))))
+	_check(state_back.equals(human.controller.state, 0.001) and state_back.mode == human.controller.state.mode,
+		"a motor state survives the store's JSON")
+
+	var harvest: DotBotRideHarvest = rides.harvest_on(human.controller)
+	var done: DotResult = await harvest.harvest(store, rides.recorder.map_id, rides.recorder.map_version, ArenaSurfRides.KIND, key)
+	var verified_total: int = harvest.verified + rides.harvested
+	_check(harvest.ready().ok and done.ok and verified_total >= 1,
+		"replayed on the real motor, %d of %d recorded rides land (%d rejected)" % [verified_total, rides.kept, harvest.rejected])
+
+	# A bot rides the verified recording, and is never recorded itself.
+	var recorded_before: int = rides.recorder.recorded
+	var rebuilt := DotBotRideBook.new(rides.ride_config)
+	rebuilt.set_map(rides.recorder.map_id, rides.recorder.map_version)
+	rides.book = rebuilt
+	var loaded: DotResult = await rebuilt.load_edge(store, ArenaSurfRides.KIND, key, rides.schema, float(TICK_RATE))
+	rides._edge_keys[edge.id] = key
+	_check(loaded.ok and rebuilt.recorded_count(key) >= 1, "the book holds %d verified recordings of the edge" % rebuilt.recorded_count(key))
+	var bot := _game.player_for(5)
+	bot.set_meta(&"bot", true)
+	if not bot.is_alive():
+		_game.respawn_player(5)
+	surf.rides = rides
+	human.controller.teleport(aside + Vector3(-6.0, 0.0, 0.0), 0.0, 0.0)
+	var landed_before := surf.landed
+	var source := ""
+	var ridden := 0
+	# Recordings begin where their players stood, some off-centre or moving, so a bot standing still at the lip lands with some and not others.
+	for attempt in range(8):
+		if surf.landed > landed_before:
+			break
+		bot.controller.teleport(edge.from, edge.course.reference_yaw(), 0.0)
+		var mind := ArenaBots.Mind.new()
+		mind.seed = 9 + attempt
+		var intent := DotBotIntent.new()
+		intent.ride = edge.id
+		ridden = 0
+		while ridden < int(ArenaSurf.RIDE_SECONDS * TICK_RATE) + 4:
+			surf.steer(bot, mind, intent, tick, float(TICK_RATE))
+			if mind.ride == null:
+				break
+			source = str((mind.ride as DotBotSurfRide).picked.get("source", ""))
+			var move := DotFpsCommand.new()
+			intent.write_move(move)
+			_game.tick({5: [move, DotWeaponCommand.new()]})
+			tick += 1
+			ridden += 1
+			if ridden % 32 == 0:
+				await get_tree().physics_frame
+	_check(source == DotBotRideBook.RECORDED and surf.landed > landed_before,
+		"a bot rides a recorded line to the platform below (%s, %s, %d ticks)" % [source, "landed" if surf.landed > landed_before else "did not land", ridden])
+	_check(rides.recorder.recorded == recorded_before and rides.begun == rides.kept + rides.discarded,
+		"and the bot is not recorded (%d recorded before and after)" % recorded_before)
+	bot.remove_meta(&"bot")
+	surf.rides = null
+	_game.surf_rides = null
+	_done()
+
+
+## [param player] rides [param edge] [param count] times on the planned cache, from the lip or (with [param spread]) from perturbed starts, as a person's commands would be.
+func _ride_as_player(player: ArenaPlayer, edge: ArenaSurf.Edge, surf: ArenaSurf, tick: int, count: int, spread: bool = false) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 91
+	for k in range(count):
+		if not player.is_alive():
+			_game.respawn_player(player.player_id)
+		var at := edge.from
+		var velocity := Vector3.ZERO
+		if k > 0 and spread:
+			var forward := DotFpsMotor.forward_for(edge.course.reference_yaw())
+			at += Vector3(-forward.z, 0.0, forward.x) * rng.randf_range(-0.8, 0.8)
+			velocity = DotFpsMotor.forward_for(edge.course.reference_yaw() + rng.randf_range(-60.0, 60.0)) * rng.randf_range(2.0, 8.0)
+		player.controller.teleport(at, edge.course.reference_yaw(), 0.0)
+		player.controller.state.velocity = velocity
+		var mind := ArenaBots.Mind.new()
+		mind.seed = 300 + k
+		mind.ride = DotBotSurfRide.new().begin(edge.cache, edge.course, surf._sim_for(edge, player.controller), tick, float(TICK_RATE))
+		var ticks := 0
+		while mind.ride != null and ticks < int(ArenaSurf.RIDE_SECONDS * TICK_RATE) + 4:
+			_game.tick({player.player_id: ArenaBots.think(_game, player, mind, tick, float(TICK_RATE))})
+			tick += 1
+			ticks += 1
+			if ticks % 32 == 0:
+				await get_tree().physics_frame
+		var st := player.controller.state
+		# A few ticks standing on the far platform, which is where a recorded ride ends.
+		for _s in range(8):
+			_game.tick({player.player_id: ArenaBots.think(_game, player, ArenaBots.Mind.new(), tick, float(TICK_RATE))})
+			tick += 1
 	return tick
 
 

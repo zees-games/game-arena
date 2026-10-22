@@ -6,6 +6,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaSurf := preload("../game/arena_surf.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
+const ArenaSurfRides := preload("../game/arena_surf_rides.gd")
 
 ## Finds a combat surf map's ride edges, plans each on the real motor, and measures the bot that
 ## rides them. Writes `maps/surf/<id>.surf.json`, which `arena_surf.gd` links into the bots' mesh.
@@ -31,6 +32,11 @@ const ArenaBots := preload("../game/arena_bots.gd")
 ## [b]--measure[/b] rides every planned edge `--runs` times on the simulator and `--live` times in
 ## the game itself, from perturbed starts with the view held on a fixed point (a bot that fights
 ## while it rides), and prints how many land and what steering a ride costs.
+##
+## [b]--demos[/b] lists what the recorder's store (`bot_record_store`, `bot_record_path`) holds for the
+## map, per edge. [b]--harvest[/b] replays every stored ride of the map on the real motor
+## ([code]arena_surf_rides.gd[/code]), keeps the ones that land, marks the rest, and prints each edge's
+## rides ranked next to the planned ones.
 ##
 ## For reading a map that finds nothing: `--probe` (eight headings held from each spawn
 ## platform), `--section x0,z0 x1,z1` (the solid under a line), `--hold pos vel yaw mx,my
@@ -145,6 +151,8 @@ func _run() -> void:
 			plan(i, edges[i], _opt(args, "--starts", 6), _opt(args, "--repairs", 32), _opt(args, "--rounds", 3))
 			# Saved after every edge: an edge is twenty minutes, and a run cut short keeps them.
 			_write(path, data)
+	if args.has("--demos") or args.has("--harvest"):
+		await demos(args.has("--harvest"))
 	if args.has("--measure"):
 		await measure(_read(path), _opt(args, "--runs", 40), _opt(args, "--live", 20))
 	get_tree().quit(0)
@@ -664,6 +672,52 @@ func plan(index: int, edge: Dictionary, starts: int, repairs: int, rounds: int) 
 	edge["planned"] = {"starts": starts, "repairs": repairs, "rounds": built["rounds"], "searches": built["searches"],
 		"seconds": snappedf(spent, 0.1), "motor_ticks": sim.steps + repair_sim.steps, "tick_rate": TICK_RATE}
 	edge["entries"] = DotBotSurfPilot.entries_to_rows(built["rides"], ArenaSurf.UNITS)
+
+
+# --- Recorded rides ------------------------------------------------------------------
+
+## Lists the recorded rides of the map per edge and, with [param verify], replays the unchecked ones.
+func demos(verify: bool) -> void:
+	var cfg := DotBotDemoConfig.new()
+	var layered := cfg.load_layered("")
+	var made := DotBotDemoStore.from_config(cfg, null) if layered.ok else layered
+	if not made.ok or made.value == null:
+		print("[surf] no ride store: %s" % ("off" if made.ok else made.error.message))
+		return
+	var store: DotBotDemoStore = made.value
+	var _opened := store.open()
+	var rides := ArenaSurfRides.new()
+	var ready := rides.setup(game, cfg, store, float(TICK_RATE))
+	if not ready.ok:
+		print("[surf] %s" % ready.error.message)
+		return
+	rides.set_map(game.map, nav)
+	var counts: DotResult = await store.counts(rides.recorder.map_id, rides.recorder.map_version, ArenaSurfRides.KIND)
+	if not counts.ok:
+		print("[surf] the store did not answer: %s" % counts.error.message)
+		return
+	for key: String in counts.value:
+		print("[surf] edge %s: %d verified recorded rides" % [key, counts.value[key]])
+	if counts.value.is_empty():
+		print("[surf] nothing recorded for %s@%s" % [rides.recorder.map_id, rides.recorder.map_version])
+	if verify:
+		var harvest := rides.harvest_on(bot.controller)
+		if harvest == null:
+			print("[surf] no simulator to replay on")
+			return
+		for key: String in counts.value:
+			var done: DotResult = await harvest.harvest(store, rides.recorder.map_id, rides.recorder.map_version, ArenaSurfRides.KIND, key)
+			print("[surf] edge %s: %s" % [key, "%d verified now" % done.value if done.ok else done.error.message])
+		for line in harvest.describe_lines():
+			print("[surf] %s" % line)
+	var surf := ArenaSurf.load_for(game.map, nav)
+	if surf != null:
+		await rides.attach_surf(surf)
+	else:
+		for key: String in counts.value:
+			var _loaded: DotResult = await rides.book.load_edge(store, ArenaSurfRides.KIND, key, rides.schema, float(TICK_RATE))
+	for line in rides.book.describe_lines():
+		print("[surf] %s" % line)
 
 
 # --- Measuring -----------------------------------------------------------------------

@@ -91,6 +91,8 @@ class Edge:
 var map: Object = null
 var nav: DotBotNav = null
 var edges: Array[Edge] = []
+## Recorded rides ([code]arena_surf_rides.gd[/code]): an edge with a verified recording rides one of them.
+var rides: RefCounted = null
 ## Teleport link id -> [from, to].
 var teleports: Dictionary = {}
 
@@ -302,8 +304,19 @@ func steer(bot: Object, mind: Object, intent: DotBotIntent, tick: int, tick_rate
 		var edge := edges[id]
 		var sim := _sim_for(edge, controller as DotFpsController) if edge.veto else null
 		ride = DotBotSurfRide.new().begin(edge.cache, edge.course, sim, tick, tick_rate, RIDE_SECONDS)
+		# A recording starts at the takeoff arena_surf_rides.gd saw (airborne above no island), so the pilot runs up and the recording takes over there.
+		var recorded: Dictionary = rides.call(&"pick", edge.id) if rides != null else {}
+		if not recorded.is_empty():
+			ride.set_meta(&"recording", recorded)
 		mind.set(&"ride", ride)
 		begun += 1
+	if ride != null and ride.has_meta(&"recording") and state != null and not state.is_grounded() and nav.island_at(state.position, 1.0) < 0:
+		var entry: Dictionary = ride.get_meta(&"recording")
+		ride.remove_meta(&"recording")
+		ride.picked = entry
+		ride.recorded = entry["data"]
+		ride.decode = Callable(rides, &"decode")
+		ride.ticks = 1
 	var status := DotBotSurfRide.FELL
 	if state != null and bool(bot.call(&"is_alive")):
 		var began := Time.get_ticks_usec()
