@@ -6,6 +6,7 @@ const ArenaImportedMaps := preload("arena_imported_maps.gd")
 const ArenaMapMechanics := preload("arena_map_mechanics.gd")
 const ArenaMapPaint := preload("arena_map_paint.gd")
 const ArenaJail := preload("arena_jail.gd")
+const ArenaPaths := preload("../game/arena_paths.gd")
 
 ## A pack's kind in [member packs]: `ArenaDrops.Kind.HEALTH` and `.AMMO`, written out here so a
 ## map does not depend on the game (a headless check holds the two together).
@@ -13,6 +14,17 @@ const PACK_HEALTH := 1
 const PACK_AMMO := 2
 
 const CONTACT_SHADE_SCRIPT := "res://addons/dot_lighting/runtime/dot_contact_shade.gd"
+
+## Baked light for the built-in maps (dot-lighting API 5): `lightmaps/<id>.res`, made by
+## tools/bake_lightmaps.sh. Reached by path so a shell with an older dot-lighting still draws the map.
+const BAKE_SCRIPT := "res://addons/dot_lighting/bake/dot_light_bake.gd"
+const SHEET_SCRIPT := "res://addons/dot_lighting/bake/dot_lightmap_sheet.gd"
+const BAKE_PATH := "res://lightmaps/%s.res"
+## Bump when what a bake means changes beyond the boxes and the sun (tools/lightmap_scenes.gd).
+const BAKE_VERSION := 1
+
+## Whether a client looks for a map's bake at all.
+static var use_bakes: bool = true
 
 ## A level as a list of boxes, and the three things that list becomes.
 ##
@@ -200,6 +212,9 @@ var mechanics: ArenaMapMechanics = null
 ## the physics backends bind to it, which is why it has to be in the tree before any
 ## player is built or re-bodied on this map.
 var collision_root: Node3D = null
+
+## The bake laid over the level by [method to_scene], or null.
+var baked: LightmapGI = null
 
 ## Where the map's health and ammo packs lie: `{kind, at}` with `kind` an `ArenaDrops.Kind`
 ## ([constant PACK_HEALTH] or [constant PACK_AMMO]) and `at` the floor point under it. Always append through
@@ -1954,6 +1969,7 @@ func to_scene() -> Node3D:
 
 	var root := Node3D.new()
 	root.name = "Level"
+	var bake_floor := floor_y if can_bake() else INF
 
 	# Colour by role and zone, worked out from the box list and never stored in it: see
 	# `arena_map_paint.gd`.
@@ -1965,18 +1981,56 @@ func to_scene() -> Node3D:
 			Vector3(extent * 2.0 + 4.0, 1.0, extent * 2.0 + 4.0)
 		),
 		painter.photo_ground(),
-		"Floor"
+		"Floor",
+		bake_floor
 	))
 
 	for index in range(boxes.size()):
 		root.add_child(_make_box(
 			boxes[index],
 			painter.role_box(ArenaMapPaint.role_of(boxes[index], extent), ArenaMapPaint.colour_of(self, index)),
-			"Box%02d" % index
+			"Box%02d" % index,
+			bake_floor
 		))
 
 	_add_contact_shade(root)
+
+	if bake_floor != INF and use_bakes:
+		_attach_bake(root)
+
 	return root
+
+
+## Whether this host's dot-lighting can lay a bake (API level 5).
+static func can_bake() -> bool:
+	return DotAddonApi.build_level("dot_lighting") >= 5 and ResourceLoader.exists(BAKE_SCRIPT) \
+			and ResourceLoader.exists(SHEET_SCRIPT)
+
+
+## What the bake must have been made from: the boxes, the floor and the sun, plus the versions of
+## everything that lays them out. The same on the machine that baked and on every client.
+func light_fingerprint() -> String:
+	if not can_bake():
+		return ""
+
+	var list: Array = []
+
+	for box in boxes:
+		list.append([box.position.x, box.position.y, box.position.z, box.size.x, box.size.y, box.size.z])
+
+	return (load(BAKE_SCRIPT) as GDScript).call(&"fingerprint", {
+		"arena": BAKE_VERSION, "boxes": list, "extent": extent, "floor_y": floor_y,
+		"sun": lighting.get("sun", {}), "sheet": (load(SHEET_SCRIPT) as GDScript).get("VERSION"),
+	})
+
+
+## The map's bake laid over its level, if the game ships one made from these boxes.
+func _attach_bake(level: Node3D) -> void:
+	var res: DotResult = (load(BAKE_SCRIPT) as GDScript).call(
+		&"attach", level, ArenaPaths.rebase(BAKE_PATH % String(id)), light_fingerprint())
+
+	if res.ok:
+		baked = res.value
 
 
 ## Where a box meets the floor or another box, dot-lighting's contact shade (API 4): the
@@ -2045,16 +2099,22 @@ func to_collision() -> Node3D:
 ## A null material means collision only. Not a separate function, because two functions
 ## that each build a box out of one [AABB] is two descriptions of a box — which is the
 ## exact drift this class exists to prevent, one level down.
-static func _make_box(box: AABB, material: Material, node_name: String) -> StaticBody3D:
+static func _make_box(box: AABB, material: Material, node_name: String, bake_floor_y: float = INF) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.name = node_name
 	body.position = box.position + box.size * 0.5
 
 	if material != null:
 		var mesh := MeshInstance3D.new()
-		var box_mesh := BoxMesh.new()
-		box_mesh.size = box.size
-		mesh.mesh = box_mesh
+		mesh.name = "Mesh"
+
+		if bake_floor_y != INF:
+			mesh.mesh = lightmap_box(box.size, box.position.y <= bake_floor_y + 0.01)
+		else:
+			var box_mesh := BoxMesh.new()
+			box_mesh.size = box.size
+			mesh.mesh = box_mesh
+
 		mesh.material_override = material
 		body.add_child(mesh)
 
@@ -2065,6 +2125,34 @@ static func _make_box(box: AABB, material: Material, node_name: String) -> Stati
 	body.add_child(shape)
 
 	return body
+
+
+## A box as an [ArrayMesh] with the second UV set a lightmap needs ([DotLightmapSheet], the same
+## on every machine). The bottom face is left out when [param hide_bottom] (the box stands on the floor):
+## nobody sees it and it would take as many texels as the top.
+static func lightmap_box(size: Vector3, hide_bottom: bool) -> ArrayMesh:
+	var sheet: RefCounted = (load(SHEET_SCRIPT) as GDScript).new()
+	var h := size * 0.5
+	var faces := [
+		[Vector3.RIGHT, Vector3(h.x, -h.y, -h.z), Vector3(h.x, h.y, -h.z), Vector3(h.x, h.y, h.z), Vector3(h.x, -h.y, h.z)],
+		[Vector3.LEFT, Vector3(-h.x, -h.y, h.z), Vector3(-h.x, h.y, h.z), Vector3(-h.x, h.y, -h.z), Vector3(-h.x, -h.y, -h.z)],
+		[Vector3.UP, Vector3(-h.x, h.y, -h.z), Vector3(-h.x, h.y, h.z), Vector3(h.x, h.y, h.z), Vector3(h.x, h.y, -h.z)],
+		[Vector3.DOWN, Vector3(-h.x, -h.y, h.z), Vector3(-h.x, -h.y, -h.z), Vector3(h.x, -h.y, -h.z), Vector3(h.x, -h.y, h.z)],
+		[Vector3.BACK, Vector3(h.x, -h.y, h.z), Vector3(h.x, h.y, h.z), Vector3(-h.x, h.y, h.z), Vector3(-h.x, -h.y, h.z)],
+		[Vector3.FORWARD, Vector3(-h.x, -h.y, -h.z), Vector3(-h.x, h.y, -h.z), Vector3(h.x, h.y, -h.z), Vector3(h.x, -h.y, -h.z)],
+	]
+
+	for face: Array in faces:
+		if hide_bottom and face[0] == Vector3.DOWN:
+			continue
+		sheet.face(face[1], face[2], face[3], face[4], face[0])
+
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	sheet.commit(tool)
+	var mesh := tool.commit()
+	mesh.lightmap_size_hint = sheet.size
+	return mesh
 
 
 # --- Dev texture -----------------------------------------------------------

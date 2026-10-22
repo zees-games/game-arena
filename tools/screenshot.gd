@@ -63,6 +63,8 @@ func _initialize() -> void:
 
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 
+	# --no-bake draws a built-in map with its live lights, for before/after frames of a bake.
+	ArenaMap.use_bakes = not args.has("--no-bake")
 	root.add_child(map.to_scene())
 	_stage_packs.call_deferred(map)
 	# The map's toys, as a client draws them: frozen where the map puts them. Built in the

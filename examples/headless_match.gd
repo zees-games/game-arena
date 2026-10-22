@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 624
+const CHECKS := 627
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -2436,6 +2436,28 @@ func _test_map_look() -> void:
 		expected += ArenaMap.by_id(id).boxes.size() + 1
 	_check(painted == expected, "every box and the floor is drawn with a material", "%d of %d" % [painted, expected])
 	_check(geometry_kept, "painting a map leaves its box list as it was")
+
+	# Baked light: every built-in map has a lightmap made from these boxes (a stale one is drawn
+	# with live light and a WARN, so the check is what keeps a box edit from shipping unbaked).
+	if ArenaMap.can_bake():
+		var all_baked := true
+		var stale := PackedStringArray()
+
+		for id in ArenaMap.ids():
+			var map := ArenaMap.by_id(id)
+			var data := ResourceLoader.load(ArenaMap.BAKE_PATH % String(id)) as LightmapGIData if ResourceLoader.exists(ArenaMap.BAKE_PATH % String(id)) else null
+
+			if data == null or str(data.get_meta(&"dot_light_fingerprint", "")) != map.light_fingerprint():
+				all_baked = false
+				stale.append(String(id))
+
+		_check(all_baked, "every built-in map has a bake made from its current boxes (tools/bake_lightmaps.sh)", ", ".join(stale))
+		var sample := ArenaMap.lightmap_box(Vector3(2, 3, 4), false)
+		_check(
+			(sample.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2] as PackedVector2Array).size() == 36 and sample.lightmap_size_hint != Vector2i.ZERO,
+			"a lightmapped box carries a second UV set and a size hint"
+		)
+		_check(ArenaMap.dm_box().light_fingerprint() == ArenaMap.dm_box().light_fingerprint(), "a map's bake fingerprint is the same on every build")
 	_check(materials.size() < painted / 4, "boxes of one colour share one material", "%d materials for %d boxes" % [materials.size(), painted])
 	_check(
 		roles.has(ArenaMapPaint.Role.WALL) and roles.has(ArenaMapPaint.Role.TREAD) and roles.has(ArenaMapPaint.Role.COVER),

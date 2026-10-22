@@ -77,6 +77,10 @@ The look is a sunny afternoon over saturated pastel prototype blocks: a mid cool
 
 No SDFGI, no volumetric fog, no baked light: the fog is depth fog at 0.12, for the far side of dm_atrium's yard. An imported map is lit from its own manifest instead ([imported-maps](imported-maps.md#lit-from-the-manifest)).
 
+### Baked light
+
+The three built-in maps ship a lightmap each (`lightmaps/<id>.res`, 1.8 MB together), made from the box list by dot-lighting's `DotLightBake`: every box is an `ArrayMesh` with a deterministic second UV set (`ArenaMap.lightmap_box`), and `to_scene` lays the bake over the level when its fingerprint matches the boxes and the sun. The sun stays live (its shadows are how a player reads a corner) and only its bounce is baked, so the bake adds the occlusion at creases, the shade under ledges and the colour bounced off painted walls. Change a box, the sun or `ArenaMap.BAKE_VERSION` and run `tools/bake_lightmaps.sh` (on a GPU box through `../gpu.sh`, `GPU_BOX=staging02` for the desktop; the box needs the project imported once); `headless_match` fails when a bake is stale. `screenshot.sh <map> --no-bake` draws the live lights for a before/after. The bake also carries light probes (dot-lighting's default subdivision), which the `LightmapGI` uses to light players and props standing in it.
+
 ## Design rules every map follows
 
 These are what the shipped geometry was measured against. A change that breaks one is a design decision, not a tidy-up.

@@ -24,6 +24,10 @@ texture={
 "detect_3d/compress_to": 0
 }
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/dot_lighting/plugin.cfg")
+
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
