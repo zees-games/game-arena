@@ -224,6 +224,9 @@ func _build_platform() -> void:
 	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
 	gate.hold(&"map", "Loading the map")
 	gate.warm_up(_weapon_warm_items())
+	if ArenaFrameProbe.on() and DotWeb.available():
+		# Lets a page script split its own frame log at the cover (window.arena_gate_open, ms).
+		gate.opened.connect(func() -> void: DotWeb.eval("window.arena_gate_open = performance.now()", true))
 	# The chat box and console have the keyboard, and so does the menu: the platform polls
 	# this every frame, so there is no signal to forward from each of them.
 	platform.busy_fn = _input_busy
