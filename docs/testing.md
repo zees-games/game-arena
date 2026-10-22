@@ -4,7 +4,7 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 
 **Run the suites after changing any dot-* addon this game links.** That is what this project is for.
 
-`./game.sh soak [map] [minutes]` is not a suite: it drives dot-bot's `DotBotSoak` (`tools/soak.tscn`) with eight bots on one map, the real `DotSpawnWatch` and the game's kill and hit signals, and fails on a stuck bot, a fall-out, object or memory growth, tick cost or a run with no kills. The report is `.godot/test-logs/soak-<map>.json`.
+`./game.sh soak [map] [minutes]` is not a suite: it drives dot-bot's `DotBotSoak` (`tools/soak.tscn`) with eight bots on one map, the real `DotSpawnWatch` and the game's kill and hit signals, and fails on a stuck bot, a fall-out, object or memory growth, tick cost or a run with no kills. On a map with a navigation mesh the watch also gets the real mesh (off-nav distance, a route to the first spawn for unreachable); a bot mid-ride is not off the mesh. The report is `.godot/test-logs/soak-<map>.json`. Its max tick cost is the surf pilot's forecast on a resync, not the first tick (nightly `surf-pilot-forecast-spike`).
 
 ## The suites
 

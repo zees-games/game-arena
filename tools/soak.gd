@@ -32,6 +32,10 @@ var _damage := 0.0
 var _commands: Dictionary = {}
 var _minds: Dictionary = {}
 var _tick := 0
+## Positions of bots mid-ride: in the air by design, so not off the navigation.
+var _riding := {}
+## Where a lone player would stand: the first spawn, which every bot must be able to reach.
+var _goal := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -83,9 +87,8 @@ func _run() -> void:
 
 	_game.start(0)
 	var world := ArenaBots.world_for(_game)
-	world.route(Vector3.ZERO, Vector3.ONE)
 	var frames := 0
-	while world.is_route_pending() and frames < 1200:
+	while not world.warm() and frames < 1200:
 		await get_tree().process_frame
 		frames += 1
 
@@ -95,6 +98,8 @@ func _run() -> void:
 		if lethal:
 			_deaths += 1)
 
+	if not map.spawns.is_empty():
+		_goal = map.spawns[0].origin
 	var watch := DotSpawnWatch.new()
 	watch.rules.enabled = true
 	watch.rules.kill_y = map.bounds.position.y - 20.0
@@ -109,6 +114,11 @@ func _run() -> void:
 	soak.stats_fn = func() -> Dictionary: return {"kills": _kills, "deaths": _deaths, "damage": _damage}
 	soak.object_count_fn = func() -> int: return int(Performance.get_monitor(Performance.OBJECT_COUNT))
 	soak.step_fn = _step
+	var nav := world.nav_for_rides()
+	if nav != null and nav.is_ready():
+		watch.nav_distance_fn = func(at: Vector3) -> float: return 0.0 if _riding.has(at) else at.distance_to(nav.closest(at))
+		watch.reachable_fn = func(at: Vector3) -> bool: return not nav.route(at, _goal).get("points", PackedVector3Array()).is_empty()
+		soak.players_fn = func() -> PackedVector3Array: return PackedVector3Array([_goal])
 
 	var delta := 1.0 / float(TICK_RATE)
 	while not soak.is_done():
@@ -139,8 +149,11 @@ func _step(_delta: float) -> void:
 
 func _movers() -> Array:
 	var out: Array = []
+	_riding.clear()
 	for player in _game.players():
 		if player.is_alive():
+			if _minds[player.player_id].ride != null:
+				_riding[player.controller.state.position] = true
 			out.append({"id": player.player_id, "position": player.controller.state.position, "kind": &"bot", "has_goal": true})
 	return out
 

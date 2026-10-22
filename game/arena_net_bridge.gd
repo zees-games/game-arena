@@ -617,6 +617,7 @@ func add_bot(display_name: String) -> int:
 	var mind := ArenaBots.Mind.new()
 	mind.seed = session_id
 	_bot_minds[session_id] = mind
+	ArenaBots.world_for(game).warm()
 
 	var payload := join_payload(session_id)
 	player_announced.emit(payload)

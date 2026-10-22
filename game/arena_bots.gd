@@ -219,6 +219,16 @@ class World:
 		_surf = surf_script.call(&"load_for", game.get("map"), nav) if surf_script != null else null
 		return _surf
 
+	## Starts the mesh bake and, once it has landed, loads the ride edges; true when both are done. Called every frame while loading, it keeps that work out of the first bot tick.
+	func warm() -> bool:
+		var nav := _nav_for_map()
+		if nav == null:
+			return true
+		if not nav.is_ready():
+			return false
+		surf_for_map()
+		return true
+
 	## The imported map's mesh for the ride recorder (baking it if nothing has asked yet); null on a built-in map.
 	func nav_for_rides() -> DotBotNav:
 		return _nav_for_map()
