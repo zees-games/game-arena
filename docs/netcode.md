@@ -19,6 +19,10 @@ dot-net's own rules are in [dot-net's CLAUDE.md](../../dot-net/CLAUDE.md) and it
 
 The extent is 512 because the combat surf maps reach 312 m from the origin; at 128 every position on the far half of one was clamped to the quantiser's edge.
 
+## A server declares the rate it ticks at
+
+A server's tick rate is the host's `sv_tickrate` (`ArenaServer.host_tick_rate()`, set before `setup`), never `ArenaGame.tick_rate`'s 64: `ArenaModule` runs one tick per physics frame, and dot-server sets the physics rate (60 by default). Declaring 64 on a 60 Hz server (until 2026-10-21) ran every client's clock 4 ticks a second ahead of the snapshots: `tools/client_bench.gd --tick 64 --play` measured 2051 of 2052 reconciles with no prediction to compare (every snapshot overwrote the player) and 87 clock catch-ups in 25 s; at `--tick 60`, 723 of 749 matched and 14 catch-ups. The snapshot rate is `ArenaGame.snapshot_rate_for(tick_rate)` on both ends (30 at 60 Hz), because dot-net divides with integers and 32 at 60 Hz sent every tick. `dedicated` checks both.
+
 ## The client predicts with the server's collision
 
 The client uses `Mode.HEADLESS` collision, on a client with a screen. `HEADLESS` is `ArenaMap`'s analytic geometry, the same list of boxes the meshes come from, and it gives the same answer on a client replaying a tick as on the server that ran it. **A predicting client must use the same collision backend as the server it is predicting against.** Godot physics on the client is a second solver with its own contact epsilons, and reconciliation would correct a client that had done nothing wrong. (`Mode.PHYSICS` also wants a collision shape on the player node, and `ArenaPlayer` is a plain `Node3D`: the player fell through a floor that was drawn perfectly.)

@@ -55,9 +55,15 @@ const SERVICE := &"arena_game"
 ## bits a position axis at 1 cm, for every map.
 const NET_WORLD_EXTENT := 512.0
 
-## Snapshots a second. 32, because it divides 64 and 128 — an uneven send spacing
-## arrives as jitter no interpolator can remove. Also one number, for the reason above.
+## Snapshots a second aimed at; the rate sent is [method snapshot_rate_for] the tick rate.
 const NET_SNAPSHOT_RATE := 32
+
+
+## The snapshot rate at [param rate] ticks a second: the nearest to [constant NET_SNAPSHOT_RATE]
+## that is a whole number of ticks apart (64 and 128 give 32, 60 gives 30). dot-net divides
+## with integers, so 32 at 60 Hz sent every tick, twice the bytes.
+static func snapshot_rate_for(rate: int) -> int:
+	return rate / maxi(1, roundi(float(rate) / float(NET_SNAPSHOT_RATE)))
 
 ## A player was killed. After the scoreboard and the feed have seen it.
 signal player_killed(entry: DotKillFeed.Entry)

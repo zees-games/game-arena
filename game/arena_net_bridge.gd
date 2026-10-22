@@ -1668,6 +1668,7 @@ func _adopt_tick_rate(rate: int) -> void:
 
 	game.tick_rate = rate
 	net.config.tick_rate = rate
+	net.config.snapshot_rate = ArenaGame.snapshot_rate_for(rate)
 	# A copy taken at setup() that writing the config does not touch.
 	net.clock.tick_rate = rate
 	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap

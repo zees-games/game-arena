@@ -5,6 +5,7 @@ const ArenaBrowser := preload("../game/arena_browser.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
+const ArenaServer := preload("../game/arena_server.gd")
 const ArenaServices := preload("../game/arena_services.gd")
 const ArenaVote := preload("../game/arena_vote.gd")
 const ArenaVoteSource := preload("../game/arena_vote_source.gd")
@@ -44,7 +45,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 179
+const CHECKS := 181
 
 var _passed := 0
 var _failed := 0
@@ -267,6 +268,14 @@ func _test_module_loaded() -> void:
 		return
 
 	_check(module.game == _game, "holding the game it found in the registry")
+	_check(ArenaServer.host_tick_rate() == _server.config.tickrate,
+		"the server scene declares the host's sv_tickrate", "%d vs %d" % [ArenaServer.host_tick_rate(), _server.config.tickrate])
+	var spacing := PackedStringArray()
+	for rate in [30, 60, 64, 120, 128]:
+		var snaps := ArenaGame.snapshot_rate_for(rate)
+		if rate % snaps != 0 or absi(snaps - ArenaGame.NET_SNAPSHOT_RATE) > 6:
+			spacing.append("%d->%d" % [rate, snaps])
+	_check(spacing.is_empty(), "snapshots are a whole number of ticks apart near 32 a second", ", ".join(spacing))
 
 	# The registration helpers exist so that unloading is safe by construction. A
 	# module that registered directly would leave a console command pointing at a

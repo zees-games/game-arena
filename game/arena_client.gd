@@ -788,7 +788,7 @@ func _build_netcode() -> DotResult:
 
 	var config := DotNetConfig.new()
 	config.tick_rate = game.tick_rate
-	config.snapshot_rate = ArenaGame.NET_SNAPSHOT_RATE
+	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
 	config.enable_prediction = true
 	# Off on a client: rewinding is what a server does to resolve somebody else's shot,
 	# and a client resolves nobody's.

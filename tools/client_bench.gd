@@ -41,6 +41,8 @@ var _port := PORT
 var _map := "dm_box"
 var _mode := "ffa"
 var _play := false
+## The server game's tick rate. 60 is dot-server's default `sv_tickrate`; 64 is ArenaGame's.
+var _tick := 60
 
 var _server_pid := -1
 var _relay = null
@@ -60,6 +62,7 @@ func _ready() -> void:
 			"--port": _port = int(args[i + 1])
 			"--map": _map = args[i + 1]
 			"--mode": _mode = args[i + 1]
+			"--tick": _tick = int(args[i + 1])
 	_play = "--play" in args
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("client_bench_" + _role)
@@ -76,7 +79,7 @@ func _serve() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data))
 	var game := ArenaGame.new()
 	game.name = "Arena"
-	game.tick_rate = 60
+	game.tick_rate = _tick
 	game.score_limit = 0
 	game.time_limit_sec = 0.0
 	game.warmup_sec = 0.0
@@ -126,6 +129,30 @@ func _serve() -> void:
 	for i in _bots:
 		var _id: int = module.bridge.add_bot("Bot %d" % (i + 1))
 	print("client_bench server: ready on %d (enet %d) with %d bots" % [_port, config.effective_enet_port(), _bots])
+	_report_server(module.net)
+
+
+## Every 5 s: the server's real tick rate against its declared one, what a tick costs
+## (dot-net's server counters), snapshots and bytes a second per client, entity count.
+func _report_server(net: DotNetManager) -> void:
+	var last: Dictionary = net.perf_counters()
+	var t0 := Time.get_ticks_usec()
+	while true:
+		await get_tree().create_timer(5.0).timeout
+		var now: Dictionary = net.perf_counters()
+		var secs := (Time.get_ticks_usec() - t0) / 1.0e6
+		var ticks := maxi(1, int(now[&"server_ticks"]) - int(last[&"server_ticks"]))
+		var peers := PackedStringArray()
+		for peer in net.budget.peer_ids():
+			var d := net.budget.describe_peer(peer)
+			peers.append("%d B/s %d pkt/s" % [int(d.get("bytes_per_sec", 0)), int(d.get("packets_per_sec", 0))])
+		print("server: %.1f ticks/s (declared %d, engine %d Hz) | sim %.3f ms/tick send %.3f ms/tick | snapshot every %d ticks | entities %d | peers %s" % [
+			ticks / secs, net.config.tick_rate, Engine.physics_ticks_per_second,
+			(int(now[&"server_sim_usec"]) - int(last[&"server_sim_usec"])) / 1000.0 / ticks,
+			(int(now[&"server_send_usec"]) - int(last[&"server_send_usec"])) / 1000.0 / ticks,
+			net.config.ticks_per_snapshot(), net.registry.all().size(), ", ".join(peers)])
+		last = now
+		t0 = Time.get_ticks_usec()
 
 
 # --- The client process ---------------------------------------------------------
@@ -185,7 +212,7 @@ class Pilot extends Node:
 func _run() -> void:
 	var args := PackedStringArray(["--headless", "--path", ProjectSettings.globalize_path("res://"),
 		"res://tools/client_bench.tscn", "--", "--role", "server", "--port", str(_port),
-		"--bots", str(_bots), "--map", _map, "--mode", _mode])
+		"--bots", str(_bots), "--map", _map, "--mode", _mode, "--tick", str(_tick)])
 	_server_pid = OS.create_process(OS.get_executable_path(), args)
 	if _server_pid <= 0:
 		printerr("client_bench: could not start the server")

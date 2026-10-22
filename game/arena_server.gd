@@ -38,6 +38,7 @@ func _ready() -> void:
 	# answer as a client replaying the same tick, which is what makes reconciliation
 	# converge at all.
 	game.headless = true
+	game.tick_rate = host_tick_rate()
 	add_child(game)
 
 	var built := game.setup(startup_map())
@@ -59,6 +60,13 @@ func _ready() -> void:
 ##
 ## An unknown id is refused rather than silently falling back: an operator who typed
 ## `dm_atruim` and got `dm_box` has no way to tell that from a map that failed to build.
+## The rate a server game declares: the host's (sv_tickrate), never the export. The module
+## runs one tick per physics frame, so a declared 64 on a 60 Hz host put every client's
+## clock 4 ticks a second ahead of the snapshots.
+static func host_tick_rate() -> int:
+	return maxi(1, Engine.physics_ticks_per_second)
+
+
 static func startup_map() -> ArenaMap:
 	var args := OS.get_cmdline_user_args()
 	var index := args.find("--map")
