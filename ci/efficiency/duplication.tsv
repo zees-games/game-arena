@@ -1,0 +1,6 @@
+# duplication
+# Baselines only shrink: scripts/<gate> --update lowers or drops entries and refuses to add.
+examples/headless_feel.gd	43
+examples/headless_lossy.gd	43
+tools/client_bench.gd	30
+tools/play_online.gd	30

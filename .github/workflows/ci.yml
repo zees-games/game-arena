@@ -22,6 +22,8 @@ jobs:
         uses: modcommunity/dot-ci/.github/workflows/validate.yml@v1
         with:
             suite-timeout: 900
+            efficiency: true
+            perf: true
             # game.sh's SUITES, so the runner checks what a person checks, and release.yml
             # runs the same list. headless_lossy is in it again since 2026-10-09.
             suites: 'examples/headless_match examples/headless_net examples/headless_presentation examples/headless_stack examples/headless_admin examples/headless_imported examples/dedicated examples/headless_lossy'
