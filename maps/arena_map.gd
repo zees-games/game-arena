@@ -1794,7 +1794,7 @@ func add_perimeter(thickness: float = 2.0) -> ArenaMap:
 ## The solid the bots' walking mesh is baked from: [member collision_root], less any slab that
 ## spans the whole map (a mapper's sealed bounding box, six hulls of 500 m by 430 m and 60 cm
 ## thick). Recast, handed that box with the islands inside it, found nowhere to walk at all
-## (surf_conflux: 0 polygons of 63,000 vertices; 7,400 once the box was left out), and the
+## (one map: 0 polygons of 63,000 vertices; 7,400 once the box was left out), and the
 ## box's floor and ceiling are not places anybody stands to fight. Returns a holder added beside
 ## [member collision_root] that the caller frees after parsing (a bake parses at once), or
 ## null when there is no such slab and [member collision_root] itself is the source.

@@ -645,7 +645,7 @@ const ROAM_SECONDS := 90.0
 ## The rotation's maps with planned rides, each ridden as [constant RIDE_MAP] is (one edge,
 ## [constant ROTATION_RIDE_STARTS] starts). Their rides are several flights long, which is why they were
 ## the last to get any; see docs/imported-maps.md, "Which maps have rides".
-const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island", &"surf_the_flow", &"surf_conflux"]
+const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island", &"surf_the_flow"]
 ## Their starts, and how many must land. Wider than [constant RIDE_STARTS] on purpose: 10x's
 ## edge lands 55% of live rides (`tools/surf_rides.tscn --measure`; the misses clip a
 ## teleport near the end), so 2 of 3 would fail a working ride two runs in five, while
@@ -662,9 +662,6 @@ const SNIPERS_RIDE_LANDING: Array = [5, 5, 5]
 ## surf_the_flow's two edges go from each spawn platform (16 spawns on each) down to the floor island
 ## the teleports land on (3.2 to 3.5 s); 100% simulated and 95% to 100% live (`--measure`), so five of six.
 const FLOW_RIDE_LANDING: Array = [5, 5]
-## surf_conflux's one edge goes from the +x spawn platform (island 20, 25 spawns) down to the platform
-## 86 m away (3.7 s); 92% simulated and 100% live (`--measure`), so five of six.
-const CONFLUX_RIDE_LANDING: Array = [5]
 
 
 ## Bots ride the ramps (`game/arena_surf.gd`): the edges are linked into the mesh, a route to a
@@ -889,12 +886,10 @@ func _test_rotation_rides() -> void:
 			need = SNIPERS_RIDE_LANDING
 		elif map_id == &"surf_the_flow":
 			need = FLOW_RIDE_LANDING
-		elif map_id == &"surf_conflux":
-			need = CONFLUX_RIDE_LANDING
 		var rode := await _ride_on(map_id, tick, ROTATION_RIDE_STARTS, need)
 		tick = int(rode.get("tick", tick)) + 64
 
-		if (map_id == &"surf_snipers_island" or map_id == &"surf_the_flow" or map_id == &"surf_conflux") and not rode.is_empty():
+		if (map_id == &"surf_snipers_island" or map_id == &"surf_the_flow") and not rode.is_empty():
 			# The way in is the other half of the loop: from a spawn on the island a bot walks into a
 			# teleport, lands on a pad and rides down, so its own route must hand it a ride.
 			tick = await _roam_takes_ride(rode["surf"], _game.map.spawns[0].origin, tick)
@@ -902,7 +897,7 @@ func _test_rotation_rides() -> void:
 
 
 ## The maps with planned rides, each played by six bots that roam and fight.
-const BAND_MAPS: Array[StringName] = [&"surf_conflux", &"surf_snipers_island", &"surf_the_flow", &"surf_10x_reloaded_fixed"]
+const BAND_MAPS: Array[StringName] = [&"surf_snipers_island", &"surf_the_flow", &"surf_10x_reloaded_fixed"]
 ## How long the bots are given on each, seconds of play.
 const BAND_SECONDS := 90.0
 ## What six bots must do in that time. They are bands and not records: the mesh lands when the

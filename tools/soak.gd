@@ -11,14 +11,14 @@ const ArenaStats := preload("../game/arena_stats.gd")
 ##
 ## [codeblock]
 ## ./game.sh soak [map] [minutes]
-## godot --headless --path . res://tools/soak.tscn -- --map surf_conflux --bots 8 --minutes 2
+## godot --headless --path . res://tools/soak.tscn -- --map surf_the_flow --bots 8 --minutes 2
 ## [/codeblock]
 ##
 ## Also takes the harness's own flags (--soak-max-stuck-sec and the rest of DotBotSoakConfig).
 ## Writes .godot/test-logs/soak-<map>.json, prints the SOAK line, exits 1 when the run fails.
 
 const TICK_RATE := 64
-const DEFAULT_MAP := &"surf_conflux"
+const DEFAULT_MAP := &"surf_the_flow"
 ## Below the harness's 2 minutes of grace for "no kills", short enough for CI.
 const DEFAULT_MINUTES := 1.0
 const DEFAULT_BOTS := 8
