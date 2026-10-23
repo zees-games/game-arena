@@ -1030,9 +1030,9 @@ func _ride_edge(map_id: StringName, world: ArenaBots.World, surf: ArenaSurf, edg
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 41
 	# A long, chaotic ride lands about half its starts, so a bare 'need of starts' fails on chance alone:
-	# while short of the bar, spend up to twice the starts before judging.
+	# while short of the bar, spend up to four times the starts before judging.
 	var k := -1
-	while k + 1 < starts or (landed < need and k + 1 < starts * 2):
+	while k + 1 < starts or (landed < need and k + 1 < starts * 4):
 		k += 1
 		if not bot.is_alive():
 			_game.respawn_player(id)
