@@ -782,6 +782,9 @@ func apply_match_limits() -> void:
 
 
 func _override_rules(rules: DotMatchRules) -> void:
+	# The final killcam plays inside the match's end, so the end is that much longer.
+	rules.match_end_sec = mode.rules.match_end_sec + rule("killcam")
+
 	# Gun game's limit is the length of its list: a kill is a level, and a limit past the
 	# last gun is kills with the knife nobody is counting ([ArenaMode]).
 	if score_limit > 0 and mode.gun_game.is_empty():
@@ -791,9 +794,6 @@ func _override_rules(rules: DotMatchRules) -> void:
 		rules.time_limit_sec = time_limit_sec
 
 	if warmup_sec >= 0.0:
-	# The final killcam plays inside the match's end, so the end is that much longer.
-	rules.match_end_sec = mode.rules.match_end_sec + rule("killcam")
-
 		rules.warmup_sec = warmup_sec
 
 	if min_players > 0:
@@ -1570,6 +1570,9 @@ func set_movement_rules(rules: Dictionary) -> void:
 			shown_mode = all[index]
 			mode_shown.emit(shown_mode)
 
+	if is_authority and rules.has("killcam"):
+		apply_match_limits()
+
 	movement_rules_changed.emit(movement_rules)
 
 
@@ -1582,9 +1585,6 @@ func set_movement_rules(rules: Dictionary) -> void:
 ## `surf` 1 plays a combat surf map with the genre's air control and 0 with the arena's own
 ## (`arena_surf`), `surf_air_accelerate` is that air control's `sv_airaccelerate`
 ## (`arena_surf_airaccelerate`). See [method map_movement].
-	if is_authority and rules.has("killcam"):
-		apply_match_limits()
-
 ##
 ## `killcam` is the final killcam's seconds (`mp_killcam_time`, 0 off): clients play it, and the
 ## authority adds it to the match's end ([method _override_rules]).

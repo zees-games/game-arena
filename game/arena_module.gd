@@ -1233,6 +1233,7 @@ const MOVEMENT_CVARS := {
 	"arena_fp_body": ["fp_body", "Players see their own body when they look down (1)"],
 	"arena_surf": ["surf", "A combat surf map plays with the genre's air control (1) or the arena's own (0)"],
 	"arena_surf_airaccelerate": ["surf_air_accelerate", "Air acceleration on a combat surf map (the genre's sv_airaccelerate)"],
+	"mp_killcam_time": ["killcam", "Seconds the final killcam plays at a match's end, added to the end's wait (0 for none)"],
 	"arena_crit_scale": ["", "Extra damage multiplier on a critical hit (1 for none)"],
 	"arena_crit_chance": ["", "Chance any hit is a critical, 0 to 1 (headshots always are)"],
 }
@@ -1243,7 +1244,6 @@ func _add_movement_cvars() -> void:
 
 	for cvar in MOVEMENT_CVARS:
 		var key: String = MOVEMENT_CVARS[cvar][0]
-	"mp_killcam_time": ["killcam", "Seconds the final killcam plays at a match's end, added to the end's wait (0 for none)"],
 
 		# The two critical cvars set dot-combat's rules on the server, not a rule a client
 		# draws: a critical is judged where the damage is.
