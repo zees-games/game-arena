@@ -1,0 +1,4 @@
+# Every surf map: the genre's air control. Same value as the cvar's default, so this
+# changes nothing until edited; an operator overrides it in cfg/server/game/game-arena/dot_map/map/.
+arena_surf: 1
+arena_surf_airaccelerate: 150

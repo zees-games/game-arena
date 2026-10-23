@@ -5,6 +5,7 @@ const ArenaPaths := preload("arena_paths.gd")
 const ArenaBoards := preload("arena_boards.gd")
 const ArenaEvents := preload("arena_events.gd")
 const ArenaGame := preload("arena_game.gd")
+const ArenaMapConfig := preload("arena_map_config.gd")
 const ArenaIdentity := preload("arena_identity.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMaps := preload("arena_maps.gd")
@@ -77,6 +78,9 @@ var identity: ArenaIdentity = null
 
 ## Maps as content: a catalogue, a rotation, a clock and a change that reaches clients.
 var maps: ArenaMapDirector = null
+
+## The per-map cvars a map's `cfg/.../dot_map/map/<name>.yml` sets, put back on the next map.
+var map_config: DotMapConfig = null
 
 ## What plays next, decided by the players.
 var vote: ArenaVote = null
@@ -992,6 +996,10 @@ func _module_unload() -> void:
 		loading.clear()
 		loading = null
 
+	if map_config != null:
+		map_config.restore()
+		map_config = null
+
 	if net != null and is_instance_valid(net):
 		net.stop()
 
@@ -1514,6 +1522,11 @@ func _reply_chat(peer: int, text: String) -> void:
 ## change, and both firing means two entries in the play history for one play — a
 ## "not in the last five" cooldown that is quietly a cooldown of two or three.
 func _on_map_changed(map: DotMapDef) -> void:
+	if map_config == null and console != null:
+		map_config = ArenaMapConfig.build(console)
+	if map_config != null:
+		map_config.apply(String(map.id))
+
 	# Every client covers for the new map and says so when it lifts; until it does nobody is
 	# harmed, and one that never re-covers is released after the roster's grace.
 	if loading != null:
