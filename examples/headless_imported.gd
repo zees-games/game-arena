@@ -381,6 +381,7 @@ func _test_loads() -> bool:
 		"its untextured water is drawn as water (%d of %d)" % [water_drawn, water_wanted])
 
 	_game.match_node.rules.warmup_sec = 0.0
+	_game.freeze_sec = 0.0
 	_game.match_node.rules.countdown_sec = 0.0
 
 	for i in range(BOTS):
@@ -1799,6 +1800,7 @@ func _test_hurt() -> void:
 		return
 
 	_game.match_node.rules.warmup_sec = 0.0
+	_game.freeze_sec = 0.0
 	_game.match_node.rules.countdown_sec = 0.0
 	var player := _fresh(5)
 	var idle := {5: [DotFpsCommand.new(), DotWeaponCommand.new()]}

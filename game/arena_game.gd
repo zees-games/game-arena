@@ -141,6 +141,10 @@ signal mode_shown(shown: ArenaMode)
 ## Warmup in seconds. Negative uses the ruleset's own; zero is no warmup.
 @export_range(-1.0, 600.0, 1.0) var warmup_sec: float = -1.0
 
+## Seconds everyone stands frozen at their spawn before a round goes live (`mp_freezetime`).
+## Negative uses the ruleset's own; zero is no freeze.
+@export_range(-1.0, 60.0, 0.5) var freeze_sec: float = -1.0
+
 ## Players needed before a round starts. Zero uses the ruleset's own.
 @export_range(0, 64, 1) var min_players: int = 0
 
@@ -356,6 +360,8 @@ var player_stack: ArenaPlayerStack = null
 
 ## player id -> [ArenaPlayer].
 var _players: Dictionary = {}
+var _round_frozen_ids: Dictionary = {}
+var _freeze_overridden := false
 
 ## Lag compensation: how far back the server will rewind the other players for a shot,
 ## in milliseconds (`arena_max_unlag_ms`; 0 judges every shot against the present).
@@ -769,6 +775,9 @@ func apply_match_limits() -> void:
 	match_node.rules.time_limit_sec = from_mode.time_limit_sec
 	match_node.rules.warmup_sec = from_mode.warmup_sec
 	match_node.rules.min_players = from_mode.min_players
+	if freeze_sec >= 0.0 or _freeze_overridden:
+		match_node.rules.countdown_sec = from_mode.countdown_sec
+	_freeze_overridden = freeze_sec >= 0.0
 	_override_rules(match_node.rules)
 
 
@@ -789,6 +798,9 @@ func _override_rules(rules: DotMatchRules) -> void:
 
 	if min_players > 0:
 		rules.min_players = min_players
+
+	if freeze_sec >= 0.0:
+		rules.countdown_sec = freeze_sec
 
 
 func _build_match() -> DotResult:
@@ -1855,6 +1867,7 @@ func _unlag_restore() -> void:
 
 func tick(commands: Dictionary = {}) -> void:
 	_tick += 1
+	_sync_round_freeze()
 
 	var shots: Array[DotShot] = []
 	var delta := 1.0 / float(tick_rate)
@@ -2219,6 +2232,43 @@ func _on_damage_applied(damage: DotDamage) -> void:
 	match_node.report_damage(attacker, str(damage.victim), damage.health_lost)
 
 
+## Whether the round is waiting to go live with everyone held still. The client reads the
+## state MATCH told it; a countdown only exists when its length is above zero.
+func round_frozen() -> bool:
+	return match_node != null and match_node.state == DotMatch.State.COUNTDOWN \
+			and match_node.rules != null and match_node.rules.freeze_during_countdown
+
+
+## Holds every living player still, unarmed and unhurtable while [method round_frozen], and
+## lets exactly those go afterwards; an admin's own freeze or god mode is left alone.
+func _sync_round_freeze() -> void:
+	var want := round_frozen()
+	for id in player_ids():
+		var player: ArenaPlayer = _players[id]
+		if want and player.is_alive():
+			_freeze_for_round(id, player)
+		elif _round_frozen_ids.has(id):
+			_release_from_round(id, player)
+
+
+func _freeze_for_round(id: int, player: ArenaPlayer) -> void:
+	if _round_frozen_ids.has(id) or DotFpsAdminModifiers.is_frozen(player.controller):
+		return
+	var held := {"god": player.health.invulnerable}
+	_round_frozen_ids[id] = held
+	player.health.invulnerable = true
+	player.arsenal.disabled = true
+	var _r := DotFpsAdminModifiers.set_frozen(player.controller, true)
+
+
+func _release_from_round(id: int, player: ArenaPlayer) -> void:
+	var held: Dictionary = _round_frozen_ids[id]
+	_round_frozen_ids.erase(id)
+	player.health.invulnerable = bool(held["god"])
+	player.arsenal.disabled = false
+	var _r := DotFpsAdminModifiers.set_frozen(player.controller, false)
+
+
 func _on_respawn_due(key: String, spawn: DotSpawnPoint, tick: int) -> void:
 	var id := int(key)
 	var player := player_for(id)
@@ -2256,6 +2306,9 @@ func _on_respawn_due(key: String, spawn: DotSpawnPoint, tick: int) -> void:
 
 	player.hitboxes.enabled = true
 	player.spawn(at, tick, match_node.spawn_protection_ticks())
+	if _round_frozen_ids.has(id):
+		_release_from_round(id, player)
+	_sync_round_freeze()
 
 	# [b]`ArenaEffects.on_spawn` was written, documented, and called by nothing.[/b] It
 	# clears what survived the last life, stands the player up, and applies `PROTECTED` —

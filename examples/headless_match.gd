@@ -58,13 +58,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 627
+const CHECKS := 638
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 42
+const SECTIONS := 43
 
 var _passed := 0
 var _failed := 0
@@ -127,6 +127,7 @@ func _run() -> void:
 
 	await _test_horde()
 	await _test_siege()
+	await _test_freeze_countdown()
 
 	await _test_effects()
 	await _test_spectating()
@@ -1087,6 +1088,88 @@ func _carried(game: ArenaGame, id: int) -> Array[StringName]:
 		var def: DotWeaponDef = game.player_for(id).arsenal.slot_at(slot).def
 		out.append(def.id)
 	return out
+
+
+## The countdown before a round holds everybody still, unarmed and unhurtable, and lets go
+## exactly when the round is live; `mp_freezetime` 0 has no countdown at all.
+func _test_freeze_countdown() -> void:
+	_section("the pre-round freeze")
+	var game := _weapon_mode_game(ArenaMode.free_for_all(25), [960, 961])
+	if not _check(game != null, "a two-player game sets up"):
+		return
+	for _i in range(6):
+		await get_tree().process_frame
+	var a := game.player_for(960)
+	var shots := [0]
+	a.used.connect(func(o: DotWeaponOutcome) -> void: shots[0] += o.shots.size())
+
+	var intent := func() -> Array:
+		var move := DotFpsCommand.new()
+		move.move = Vector2(0.0, 1.0)
+		move.yaw = a.controller.state.yaw
+		move.set_button(DotFpsCommand.BUTTON_JUMP, true)
+		var fire := DotWeaponCommand.new()
+		fire.slot = 0
+		fire.yaw = move.yaw
+		fire.pitch = move.pitch
+		fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
+		return [move, fire]
+	for _k in range(TICK_RATE / 2):
+		game.tick({960: intent.call()})
+	_check(shots[0] > 0, "baseline: a live player shoots", str(shots[0]))
+	shots[0] = 0
+	for slot in a.arsenal.slots():
+		a.arsenal.slot_at(slot).magazine = a.arsenal.slot_at(slot).def.magazine
+
+	game.freeze_sec = 1.0
+	game.apply_match_limits()
+	game.match_node.rules.min_players = 1
+	game.match_node.rules.intermission_sec = 0.1
+	game.match_node.rules.time_limit_sec = 0.0
+	game.match_node.rules.score_limit = 1
+	var guard := 0
+	var cmds := {960: intent.call(), 961: intent.call()}
+
+	# A fresh warmup: a new match, so the countdown is the next thing that happens.
+	game.match_node.rules.warmup_sec = 0.0
+	game.start(game.current_tick())
+	guard = 0
+	while game.match_node.state != DotMatch.State.COUNTDOWN and guard < TICK_RATE * 20:
+		game.tick({})
+		guard += 1
+	_check(game.match_node.state == DotMatch.State.COUNTDOWN, "the match reaches its countdown")
+	game.tick({})
+	var spot := a.controller.state.position
+	for _k in range(TICK_RATE / 2):
+		game.tick(cmds)
+	_check(a.controller.state.position.distance_to(spot) < 0.01,
+		"nobody moves or jumps while frozen", str(a.controller.state.position - spot))
+	_check(shots[0] == 0, "nobody shoots while frozen", str(shots[0]))
+	_check(a.health.invulnerable and game.player_for(961).health.invulnerable, "nobody can be hurt while frozen")
+	guard = 0
+	while game.match_node.state == DotMatch.State.COUNTDOWN and guard < TICK_RATE * 5:
+		game.tick(cmds)
+		guard += 1
+	_check(game.match_node.state == DotMatch.State.LIVE, "the countdown ends in a live round")
+	for _i in range(6):
+		await get_tree().process_frame
+	spot = a.controller.state.position
+	var released := {960: intent.call()}
+	(released[960][1] as DotWeaponCommand).slot = 3
+	for _k in range(TICK_RATE * 2):
+		game.tick(released)
+		(released[960][1] as DotWeaponCommand).slot = 0
+	_check(a.controller.state.position.distance_to(spot) > 0.5, "players move once the round is live")
+	_check(shots[0] > 0, "and shoot once live", "%d alive=%s dis=%s state=%d" % [shots[0], a.is_alive(), a.arsenal.disabled, game.match_node.state])
+	_check(not a.health.invulnerable and not DotFpsAdminModifiers.is_frozen(a.controller),
+		"and are released exactly: no god mode, no freeze left")
+
+	game.freeze_sec = 0.0
+	game.apply_match_limits()
+	_check(game.match_node.rules.countdown_sec == 0.0, "mp_freezetime 0 leaves no countdown")
+	remove_child(game)
+	game.queue_free()
+	_done()
 
 
 ## Lag compensation: a shot is traced against the other players where the shooter saw

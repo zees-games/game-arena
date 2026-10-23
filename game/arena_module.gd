@@ -919,6 +919,16 @@ func _add_match_cvars() -> void:
 			_apply_match_limits()
 			log_info("warmup changed", {"warmup_sec": game.match_node.rules.warmup_sec})
 	)
+	add_cvar(
+		"mp_freezetime", str(game.freeze_sec),
+		"Seconds everyone is frozen at their spawn before a round; 0 for none, -1 for the mode's own",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+	).with_min(-1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.freeze_sec = new_value.to_float()
+			_apply_match_limits()
+			log_info("freeze time changed", {"countdown_sec": game.match_node.rules.countdown_sec})
+	)
 
 
 ## Puts the game's limits on the running match and tells every client: MATCH carries the
