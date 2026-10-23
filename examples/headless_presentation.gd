@@ -1803,8 +1803,10 @@ func _check_loadout_accounts(client: ArenaClient) -> void:
 	if not _check(menu != null, "the client has a loadout menu to key"):
 		return
 	_check(menu.get(&"remember_account") == "local", "with no auth client in the registry the loadout is filed under local")
-	_check(ArenaClient.loadout_account_key(null) == "local" and ArenaClient.loadout_account_key(Node.new()) == "local",
+	var bare := Node.new()
+	_check(ArenaClient.loadout_account_key(null) == "local" and ArenaClient.loadout_account_key(bare) == "local",
 		"no auth, or an auth with no account_key, is local")
+	bare.free()
 	var auth := FakeAuth.new()
 	add_child(auth)
 	client.follow_account(auth)
