@@ -1626,7 +1626,8 @@ func _test_bodies_fall() -> void:
 	var player := ArenaPlayer.new()
 	player.setup(ArenaPlayer.Mode.HEADLESS, ArenaMap.dm_box(), 6, "Faller")
 	add_child(player)
-	player.spawn(Transform3D(Basis(), Vector3(0.0, 0.0, 0.0)), 0)
+	# Away from the origin: the game above keeps a collision copy of the level there.
+	player.spawn(Transform3D(Basis(), Vector3(20.0, 0.0, 20.0)), 0)
 	player.attach_body_mesh(Color.WHITE, ArenaAvatars.stock_avatar(&"faller"))
 	player.present(0.016)
 	player.make_dead()
