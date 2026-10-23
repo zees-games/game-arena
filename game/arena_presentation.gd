@@ -28,6 +28,9 @@ const CHANNEL := "arena.presentation"
 
 const SCHEMA_VERSION := 1
 
+## Default `viewmodel_fov`: horizontal degrees on a 4:3 frame, the same convention as `field_of_view`.
+const VIEWMODEL_FOV := 65
+
 ## Where the player's settings document lives. Only a suite or a render tool changes it,
 ## through [method use_scratch_settings]; see that.
 const PLAYER_SETTINGS := "user://arena_settings"
@@ -203,6 +206,11 @@ static func schema() -> DotSettingsSchema:
 	# fingerprint that survives a new account and every ban a moderator issues.
 	s.add(DotSettingsDef.integer(&"field_of_view", 100, 70, 120, &"video").with_scope(
 		DotSettingsDef.Scope.SERVER_CLAMPED
+	))
+	# The hands' own lens (horizontal on 4:3, like `field_of_view`), so widening the world does
+	# not stretch the gun. Cosmetic and local: no server reason to read or clamp it.
+	s.add(DotSettingsDef.integer(&"viewmodel_fov", VIEWMODEL_FOV, 50, 100, &"video").with_description(
+		"How wide the lens that draws your hands and gun is. Lower is a larger, flatter gun; higher is a smaller one."
 	))
 	s.add(DotSettingsDef.boolean(&"view_model", true, &"video").with_scope(
 		DotSettingsDef.Scope.SERVER_CLAMPED
