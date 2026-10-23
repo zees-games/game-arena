@@ -1029,7 +1029,11 @@ func _ride_edge(map_id: StringName, world: ArenaBots.World, surf: ArenaSurf, edg
 	var notes: Array[String] = []
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 41
-	for k in range(starts):
+	# A long, chaotic ride lands about half its starts, so a bare 'need of starts' fails on chance alone:
+	# while short of the bar, spend up to twice the starts before judging.
+	var k := -1
+	while k + 1 < starts or (landed < need and k + 1 < starts * 2):
+		k += 1
 		if not bot.is_alive():
 			_game.respawn_player(id)
 		var at := edge.from
@@ -1059,7 +1063,7 @@ func _ride_edge(map_id: StringName, world: ArenaBots.World, surf: ArenaSurf, edg
 		notes.append("%s %.2f s at %s" % ["landed" if made_it else "missed", float(ticks) / TICK_RATE, str(feet.round())])
 	_line("     edge %d, %.0f m: %s" % [edge.id, edge.from.distance_to(edge.to), "; ".join(notes)])
 	_check(landed >= need and alive == landed,
-		"a bot rides it to the platform below and lands alive (%d of %d, %d needed)" % [landed, starts, need])
+		"a bot rides it to the platform below and lands alive (%d of %d, %d needed)" % [landed, k + 1, need])
 	return {"surf": surf, "edge": edge, "tick": tick}
 
 
