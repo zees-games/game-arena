@@ -77,8 +77,8 @@ const SCORE_LIMIT := 4
 const HURT_MAP := &"surf_xiv_v2a"
 
 const SECTIONS := 23
-## 102 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 152
+## 145 fixed, plus one audit check per imported map: the catalogue grows without this changing.
+const CHECKS_FIXED := 145
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
