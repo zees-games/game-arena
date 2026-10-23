@@ -413,11 +413,11 @@ func apply_class_movement(def: DotPlayerClassDef) -> void:
 
 ## Movement that feels like an arena shooter rather than a modern one.
 ##
-## Fast, floaty, high air control, and no sprint — the speed is the speed, and the way
-## to go faster is to move well. Every number here is a game's choice; none of it is
-## dot-player-controller's default.
+## Fast, floaty, high air control, and no sprint: the speed is the speed, and the way to go
+## faster is to move well. Built on the library's legacy profile, not its classic default,
+## so the numbers it leaves alone (steps, ceilings, buffers) stay what the maps were made for.
 static func arena_tunables() -> DotFpsTunables:
-	var tunables := DotFpsTunables.new()
+	var tunables := DotFpsTunables.with_profile("legacy")
 	tunables.max_speed = 9.0
 	tunables.accelerate = 12.0
 	tunables.friction = 5.5
