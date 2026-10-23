@@ -32,7 +32,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 298
+const CHECKS := 303
 
 var _passed := 0
 var _failed := 0
@@ -419,6 +419,23 @@ func _test_a_shot_is_drawn() -> void:
 	p.on_died(dead)
 	_check(drawn.get(&"death_burst") is Node3D, "and a death bursts (%s)" % str(drawn.get(&"death_burst")))
 
+	# Gore: on by default, and off live (no restart) takes the blood and nothing else.
+	_check(p.settings.get_bool(&"gore", false) and p.settings.schema.has(&"gore"), "gore is declared and on by default")
+	p.settings.set_value(&"gore", false)
+	drawn.clear()
+	p.present(0.016, eye, aim)
+	p.on_died(dead)
+	p.present(0.016, eye, aim)
+	p.on_used(_outcome(eye, aim, [Vector3(0.0, 0.0, -5.0)]))
+	_check(drawn.get(&"death_burst") == null, "gore off: a death draws no blood")
+	_check(drawn.get(&"bullet_hole") != null, "and gore off still leaves the bullet holes", str(drawn.keys()))
+	var gore_saved := p.settings.flush()
+	var p_gore := _make(false)
+	_check(gore_saved.ok and not p_gore.settings.get_bool(&"gore", true), "gore off is persisted and read back by the next start")
+	p_gore.settings.set_value(&"gore", true)
+	var _gf := p_gore.settings.flush()
+	p_gore.queue_free()
+
 	p.queue_free()
 	_done()
 
@@ -642,6 +659,9 @@ func _test_the_escape_menu() -> void:
 			and menu.screen.find_child("Row_ui_theme", true, false) != null,
 		"the Interface page has the crosshair, the HUD margin and the theme"
 	)
+
+	menu.open(&"video")
+	_check(menu.screen.find_child("Row_gore", true, false) != null, "Video has the Blood splatters row")
 
 	# Solo bot difficulty: a row on General, saved, and onto the match's bots as it changes.
 	menu.open(&"general")

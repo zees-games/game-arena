@@ -1103,6 +1103,9 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 	if not built.ok:
 		push_error("the presentation layer: %s" % built.error.message)
 
+	if OS.get_cmdline_user_args().has("--nogore"):
+		presentation.settings.set_value(&"gore", false)
+
 	var trace := map.to_trace()
 	var aim := (aim_at - eye).normalized()
 	var side := aim.cross(Vector3.UP).normalized()

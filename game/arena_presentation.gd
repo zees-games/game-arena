@@ -212,6 +212,10 @@ static func schema() -> DotSettingsSchema:
 		"A lower tier is missing the most expensive effects, not running all of them badly."
 	))
 
+	s.add(DotSettingsDef.boolean(&"gore", true, &"video").with_description(
+		"Blood when a player dies. Bullet holes stay on either way."
+	))
+
 	# Chat. ACCOUNT scope for all three: which key opens chat and whether a player wants
 	# the box at all is about the person, not about this machine and not about this game.
 	s.add(DotSettingsDef.choice(
@@ -1333,7 +1337,10 @@ func on_hurt(_amount: float) -> void:
 
 func on_died(where: Transform3D) -> void:
 	audio.play(&"died")
-	fx.spawn(&"death_burst", where)
+	# Read at the moment of the death, so the setting needs no apply step. Only the blood is
+	# gated: bullet holes are not gore.
+	if settings.get_bool(&"gore", true):
+		fx.spawn(&"death_burst", where)
 	fx.spawn(&"death_shake", Transform3D.IDENTITY)
 
 

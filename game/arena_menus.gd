@@ -127,6 +127,7 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 	var video := menu.page(&"video")
 	if video != null:
 		video.section("Image").add(DotMenuRow.toggle(&"view_model", "Weapon in view", "Your hands and gun. A server may turn them off."))
+		DotMenuStock.add_gore_row(video)
 
 	var audio := menu.page(&"audio")
 	if audio != null:
