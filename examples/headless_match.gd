@@ -5179,43 +5179,6 @@ func _test_progression() -> void:
 	_done()
 
 
-## A minimal in-process stand-in for the site's leaderboard endpoints (scope ignored), with a frame of
-## latency so a caller that does not await is caught.
-class FakeSite:
-	extends RefCounted
-
-	var tree: SceneTree
-	var kinds := {}
-	var rows := {}
-	var posts := 0
-
-	func post_integration(path: String, body: Dictionary) -> DotResult:
-		await tree.process_frame
-		posts += 1
-		if path.ends_with("define"):
-			for b in body["boards"]:
-				kinds[str(b["key"])] = b["kind"]
-		elif path.ends_with("submit"):
-			for e in body["entries"]:
-				var key := str(e["board"])
-				if not rows.has(key):
-					rows[key] = {}
-				rows[key][e["player"]] = {"name": e["name"], "value": e["value"], "setAt": 1}
-		return DotResult.success({"ok": true, "refused": []})
-
-	func get_integration(_path: String, query: Dictionary) -> DotResult:
-		await tree.process_frame
-		var key := str(query["board"])
-		var out := []
-		var board_rows: Dictionary = rows.get(key, {})
-		var rank := 0
-		for id in board_rows.keys():
-			rank += 1
-			out.append({"rank": rank, "player": id, "name": board_rows[id]["name"],
-				"value": board_rows[id]["value"], "setAt": 1})
-		return DotResult.success({"ok": true, "board": {"entries": out.size()}, "rows": out, "self": null})
-
-
 ## The _async forms against the memory store (the default) and against a remote one.
 func _test_boards_async(progress) -> void:
 	_check(progress.boards.backend == "memory", "the boards backend defaults to memory")
@@ -5234,8 +5197,7 @@ func _test_boards_async(progress) -> void:
 	var memory_page: DotResult = await progress.boards.page_async(ArenaBoards.KILLS, scope, 0, 10)
 	_check(memory_page.ok and (memory_page.value as Array).size() >= 1, "async page reads the memory store")
 
-	var site := FakeSite.new()
-	site.tree = get_tree()
+	var site := DotLeaderboardFakeSite.new(get_tree())
 	var remote := DotLeaderboardManager.new()
 	remote.backend = "backbone"
 	remote.backbone_client = site
@@ -5254,7 +5216,7 @@ func _test_boards_async(progress) -> void:
 		"a remote board takes the session through the async forms",
 		str(remote_page.error) if not remote_page.ok else ""
 	)
-	_check(site.posts > 0, "the fake site received the declare and the submit")
+	_check(site.posts() > 0, "the fake site received the declare and the submit")
 	remove_child(remote)
 	remote.queue_free()
 
