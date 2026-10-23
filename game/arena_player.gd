@@ -1068,6 +1068,9 @@ func _present_health_tag(delta: float) -> void:
 		var back := _tag_quad(Color(0.05, 0.05, 0.05, 0.75), 0.0)
 		_health_tag.add_child(back)
 		_health_fill = _tag_quad(Color(0.9, 0.15, 0.12), 0.001)
+		# Two transparent quads 1 mm apart sort by centre, and the fill drew under the backing:
+		# a full bar read as a dark, nearly empty one. Priority sorts it last, always.
+		(_health_fill.material_override as StandardMaterial3D).render_priority = 1
 		_health_tag.add_child(_health_fill)
 
 	_health_tag.visible = true

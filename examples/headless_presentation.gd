@@ -31,7 +31,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 288
+const CHECKS := 289
 
 var _passed := 0
 var _failed := 0
@@ -2316,6 +2316,10 @@ func _test_criticals_and_the_body() -> void:
 	_check(player._health_tag != null and player._health_tag.visible
 		and is_equal_approx(player._health_fill.scale.x, 0.4),
 		"a hurt player shows a bar over their head, filled to what is left")
+	var fill_on := player._health_fill.material_override as BaseMaterial3D
+	var back_on := player._health_tag.get_child(0).material_override as BaseMaterial3D
+	_check(fill_on != null and back_on != null and fill_on.render_priority > back_on.render_priority,
+		"and the fill draws over its backing, not under it")
 	player.present(ArenaPlayer.HEALTH_TAG_SEC + 0.1)
 	_check(not player._health_tag.visible, "and it goes after a few seconds")
 	player.health.health = player.health.max_health
