@@ -955,6 +955,16 @@ func _stage_feel(map: ArenaMap, id: StringName) -> void:
 
 	_shots = [
 		{
+			# The sniper at the hip: its view model against the vendored art.
+			"name": "%s_feel_sniper_hip" % String(id),
+			"local": true,
+			"arm": func() -> void:
+				arm_hands.call()
+				var _g := _local.arsenal.give(ZeeWeaponIds.SNIPER)
+				hold.call(ZeeWeaponIds.SLOT_HEAVY),
+			"wait": 30,
+		},
+		{
 			"name": "%s_feel_scope" % String(id),
 			"local": true,
 			"arm": func() -> void:
