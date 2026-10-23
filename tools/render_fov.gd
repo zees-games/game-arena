@@ -35,7 +35,7 @@ func _run() -> void:
 	for combo in args:
 		var parts := String(combo).split(":")
 		var fov := int(parts[0])
-		var vm := int(parts[1]) if parts.size() > 1 else ArenaPresentation.VIEWMODEL_FOV
+		var vm := int(parts[1]) if parts.size() > 1 else DotMenuStock.VIEWMODEL_FOV
 		var _r1 = settings.set_value(&"field_of_view", fov)
 		var _r2 = settings.set_value(&"viewmodel_fov", vm)
 		for id in [&"sniper", &"rifle"]:

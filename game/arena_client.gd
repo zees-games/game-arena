@@ -1499,8 +1499,6 @@ func _build_presentation() -> void:
 		# correctly and consumed by nothing" this family keeps finding.
 		if key == &"field_of_view" and player != null:
 			player.attach_camera(_field_of_view())
-		if key == &"viewmodel_fov":
-			_apply_viewmodel_fov()
 	)
 
 
@@ -1613,15 +1611,7 @@ func _arm(body: ArenaPlayer) -> void:
 	view_model.name = "Hands"
 	view_model.feel_rules = game.feel_rules
 	body.camera.add_child(view_model)
-	_apply_viewmodel_fov()
 	body.arm_first_person(view_model, _offline)
-
-
-## The hands' own lens from the setting, so it never moves with `field_of_view` or a zoom.
-func _apply_viewmodel_fov() -> void:
-	if view_model == null or presentation == null:
-		return
-	view_model.set_hands_fov_at_4_3(float(presentation.settings.get_int(&"viewmodel_fov", ArenaPresentation.VIEWMODEL_FOV)))
 
 
 ## The hit drawn on the body the server says was hit: zee's red burst at [param point]. The
