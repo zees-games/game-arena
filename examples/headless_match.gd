@@ -58,7 +58,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 638
+const CHECKS := 645
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -5166,6 +5166,8 @@ func _test_progression() -> void:
 			"a player who scored nothing is not put on a board"
 		)
 
+	await _test_boards_async(progress)
+
 	# Every board this game defines has to be one the manager will accept. A
 	# definition rejected at boot is a board that silently holds nothing.
 	var defined := progress.boards.definitions().size()
@@ -5175,6 +5177,86 @@ func _test_progression() -> void:
 		"%d of %d" % [defined, ArenaBoards.definitions().size()]
 	)
 	_done()
+
+
+## A minimal in-process stand-in for the site's leaderboard endpoints (scope ignored), with a frame of
+## latency so a caller that does not await is caught.
+class FakeSite:
+	extends RefCounted
+
+	var tree: SceneTree
+	var kinds := {}
+	var rows := {}
+	var posts := 0
+
+	func post_integration(path: String, body: Dictionary) -> DotResult:
+		await tree.process_frame
+		posts += 1
+		if path.ends_with("define"):
+			for b in body["boards"]:
+				kinds[str(b["key"])] = b["kind"]
+		elif path.ends_with("submit"):
+			for e in body["entries"]:
+				var key := str(e["board"])
+				if not rows.has(key):
+					rows[key] = {}
+				rows[key][e["player"]] = {"name": e["name"], "value": e["value"], "setAt": 1}
+		return DotResult.success({"ok": true, "refused": []})
+
+	func get_integration(_path: String, query: Dictionary) -> DotResult:
+		await tree.process_frame
+		var key := str(query["board"])
+		var out := []
+		var board_rows: Dictionary = rows.get(key, {})
+		var rank := 0
+		for id in board_rows.keys():
+			rank += 1
+			out.append({"rank": rank, "player": id, "name": board_rows[id]["name"],
+				"value": board_rows[id]["value"], "setAt": 1})
+		return DotResult.success({"ok": true, "board": {"entries": out.size()}, "rows": out, "self": null})
+
+
+## The _async forms against the memory store (the default) and against a remote one.
+func _test_boards_async(progress) -> void:
+	_check(progress.boards.backend == "memory", "the boards backend defaults to memory")
+	_check(ArenaBoardsConfig.new().validate().ok, "the boards config validates")
+
+	var values := DotStatsValues.new()
+	values.values[ArenaStats.KILLS] = 7.0
+	var scope := ArenaBoards.scope_for(&"ffa")
+
+	await ArenaBoards.submit_session(progress.boards, &"ffa", &"async_p", "Ada", values)
+	var mem: DotResult = await progress.boards.entry_for_async(ArenaBoards.KILLS, scope, &"async_p")
+	_check(
+		mem.ok and mem.value is DotLeaderboardEntry and absf((mem.value as DotLeaderboardEntry).value - 7.0) < 0.001,
+		"async submit lands on the memory store"
+	)
+	var memory_page: DotResult = await progress.boards.page_async(ArenaBoards.KILLS, scope, 0, 10)
+	_check(memory_page.ok and (memory_page.value as Array).size() >= 1, "async page reads the memory store")
+
+	var site := FakeSite.new()
+	site.tree = get_tree()
+	var remote := DotLeaderboardManager.new()
+	remote.backend = "backbone"
+	remote.backbone_client = site
+	add_child(remote)
+	for board in ArenaBoards.definitions():
+		remote.define(board)
+
+	var plain := remote.page(ArenaBoards.KILLS, scope, 0, 10)
+	_check(not plain.ok, "the synchronous form refuses a remote store")
+
+	await ArenaBoards.submit_session(remote, &"ffa", &"async_p", "Ada", values)
+	var remote_page: DotResult = await remote.page_async(ArenaBoards.KILLS, scope, 0, 10)
+	_check(
+		remote_page.ok and (remote_page.value as Array).size() == 1
+		and ((remote_page.value as Array)[0] as DotLeaderboardEntry).value == 7.0,
+		"a remote board takes the session through the async forms",
+		str(remote_page.error) if not remote_page.ok else ""
+	)
+	_check(site.posts > 0, "the fake site received the declare and the submit")
+	remove_child(remote)
+	remote.queue_free()
 
 
 # --- Changing the map ------------------------------------------------------

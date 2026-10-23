@@ -82,29 +82,31 @@ static func submit_session(
 	player_name: String,
 	values: DotStatsValues
 ) -> void:
+	# Awaited per board: a remote store suspends, and the memory store never does, so the
+	# default behaviour is the synchronous one. Callers do not await this (see ArenaProgress).
 	if manager == null or values == null:
 		return
 
 	var scope := scope_for(mode_id)
 
-	_submit(manager, KILLS, scope, player_id, player_name,
+	await _submit(manager, KILLS, scope, player_id, player_name,
 		values.get_value(ArenaStats.KILLS, 0.0))
-	_submit(manager, STREAK, scope, player_id, player_name,
+	await _submit(manager, STREAK, scope, player_id, player_name,
 		values.get_value(ArenaStats.BEST_STREAK, 0.0))
-	_submit(manager, WINS, scope, player_id, player_name,
+	await _submit(manager, WINS, scope, player_id, player_name,
 		values.get_value(ArenaStats.ROUNDS_WON, 0.0))
-	_submit(manager, DAMAGE, scope, player_id, player_name,
+	await _submit(manager, DAMAGE, scope, player_id, player_name,
 		values.get_value(ArenaStats.DAMAGE_DEALT, 0.0))
 
 	# A ratio needs a sample size or the top of the board is whoever got one kill and
 	# left. Ten rounds is the smallest number that is not a fluke and the largest that
 	# does not shut a casual player out.
 	if values.get_value(ArenaStats.ROUNDS_PLAYED, 0.0) >= 10.0:
-		_submit(manager, RATIO, scope, player_id, player_name,
+		await _submit(manager, RATIO, scope, player_id, player_name,
 			ArenaStats.ratio_of(values))
 
 		var rounds := values.get_value(ArenaStats.ROUNDS_PLAYED, 0.0)
-		_submit(manager, DEATHS, scope, player_id, player_name,
+		await _submit(manager, DEATHS, scope, player_id, player_name,
 			values.get_value(ArenaStats.DEATHS, 0.0) / rounds)
 
 
@@ -121,7 +123,7 @@ static func _submit(
 		# and a zero filed on the PENALTY board would take first place for ever.
 		return
 
-	var res := manager.submit(board_id, scope, player_id, player_name, value)
+	var res := await manager.submit_async(board_id, scope, player_id, player_name, value)
 
 	if not res.ok:
 		DotLog.debug(CHANNEL, "a board submission was refused", {

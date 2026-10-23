@@ -1689,11 +1689,15 @@ func _cmd_identity(ctx: DotCmdContext) -> void:
 
 
 func _cmd_boards(ctx: DotCmdContext) -> void:
+	# A remote board takes a moment; say so rather than leave the console silent.
+	if game.progress.boards.backend == "backbone":
+		ctx.reply("Fetching the board...")
+
 	var board_id: StringName = (
 		StringName(ctx.args[0]) if not ctx.args.is_empty() else ArenaBoards.KILLS
 	)
 	var scope := ArenaBoards.scope_for(game.mode.id if game.mode != null else &"ffa")
-	var page := game.progress.boards.page(board_id, scope, 0, 10)
+	var page := await game.progress.boards.page_async(board_id, scope, 0, 10)
 
 	if not page.ok:
 		ctx.reply(page.error.message)

@@ -43,6 +43,11 @@ signal award_unlocked(player_id: int, achievement: DotAchievement)
 
 @export_range(0.0, 600.0, 5.0) var report_interval: float = 30.0
 
+## Where the boards live; null builds one layered from [constant BOARDS_CONFIG_PATH].
+var boards_config: ArenaBoardsConfig = null
+
+const BOARDS_CONFIG_PATH := "user://arena_boards.json"
+
 @export_group("Storage")
 
 ## Where achievement progress is kept. Empty keeps it in memory only.
@@ -209,7 +214,15 @@ func _build() -> DotResult:
 	boards.name = "Boards"
 	boards.report_to_backbone = report_to_backbone
 	boards.report_interval = report_interval
-	boards.store = DotLeaderboardStoreMemory.new()
+	if boards_config == null:
+		boards_config = ArenaBoardsConfig.new()
+		var layered := boards_config.load_layered(BOARDS_CONFIG_PATH)
+		if not layered.ok:
+			DotLog.warn(CHANNEL, "the boards configuration is not usable, using memory", {
+				"why": str(layered.error),
+			})
+			boards_config = ArenaBoardsConfig.new()
+	boards.backend = boards_config.backend
 	add_child(boards)
 
 	for board in ArenaBoards.definitions():
@@ -283,6 +296,8 @@ func leave(player_id: int) -> void:
 	var values := stats.end(StringName(key))
 
 	if values != null and _game != null:
+		# Not awaited: a remote board must not hold up the disconnect, and the cleanup
+		# below needs nothing from it. The name is read here, before any suspension.
 		ArenaBoards.submit_session(
 			boards,
 			_game.mode.id if _game.mode != null else &"ffa",
