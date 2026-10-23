@@ -2,7 +2,7 @@ extends RefCounted
 
 ## Arena's per-map settings: dot-game's [DotGameMapConfig] (dot-map's files) over the cvars a map may change.
 ##
-## `cfg/game/game-arena/dot_map/map/<name>.yml` (a glob such as `surf_*.yml` covers a class of maps), overridable from `cfg/server/...`. Only the keys in [constant KEYS] are accepted; anything else a file says is logged and ignored.
+## `cfg/game/game-arena/dot_map/map/<name>.yml` (a glob such as `surf_%.yml` covers a class of maps), overridable from `cfg/server/...`. Only the keys in [constant KEYS] are accepted; anything else a file says is logged and ignored.
 
 const GAME_ID := "game-arena"
 

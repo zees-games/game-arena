@@ -2,7 +2,7 @@ extends Node
 
 const ArenaMapConfig := preload("../game/arena_map_config.gd")
 
-## A surf map gets the shipped `surf_*.yml` and a map that is not a surf map does not.
+## A surf map gets the shipped `surf_%.yml` and a map that is not a surf map does not.
 ##
 ## [codeblock]
 ## godot --headless --path . res://examples/headless_mapcfg.tscn
