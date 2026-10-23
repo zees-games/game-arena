@@ -80,7 +80,7 @@ var identity: ArenaIdentity = null
 var maps: ArenaMapDirector = null
 
 ## The per-map cvars a map's `cfg/.../dot_map/map/<name>.yml` sets, put back on the next map.
-var map_config: DotMapConfig = null
+var map_config: DotGameMapConfig = null
 
 ## What plays next, decided by the players.
 var vote: ArenaVote = null

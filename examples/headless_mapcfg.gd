@@ -32,7 +32,7 @@ func _run() -> void:
 	var cfg := ArenaMapConfig.build(console)
 
 	var got := cfg.apply("surf_beginner")
-	_check(got.ok and got.value.size() == 2, "a surf map applies both keys (%s)" % [got.value if got.ok else got.error.message])
+	_check(got.size() == 2, "a surf map applies both keys (%s)" % [got])
 	_check(console.find_cvar("arena_surf_airaccelerate").get_float() == 150.0, "arena_surf_airaccelerate is 150 on a surf map")
 	_check(console.find_cvar("arena_surf").get_int() == 1, "arena_surf is 1 on a surf map")
 
