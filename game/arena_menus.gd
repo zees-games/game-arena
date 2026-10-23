@@ -115,6 +115,8 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 			var def: DotSettingsDef = menu.settings.schema.find(row[0]) if menu.settings != null else null
 			motion.add(DotMenuRow.slider(row[0], row[1], def.description if def != null else "")
 				.formatted(func(v: float) -> String: return "Off" if v <= 0.0 else "%d%%" % roundi(v * 100.0)))
+		var calm: DotSettingsDef = menu.settings.schema.find(&"reduce_motion") if menu.settings != null else null
+		motion.add(DotMenuRow.toggle(&"reduce_motion", "Reduce motion", calm.description if calm != null else ""))
 
 	# Solo bots: dot-bot's presets, saved. A server's bots follow the server's bot_difficulty.
 	if general != null:

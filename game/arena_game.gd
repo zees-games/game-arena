@@ -782,6 +782,9 @@ func _override_rules(rules: DotMatchRules) -> void:
 		rules.time_limit_sec = time_limit_sec
 
 	if warmup_sec >= 0.0:
+	# The final killcam plays inside the match's end, so the end is that much longer.
+	rules.match_end_sec = mode.rules.match_end_sec + rule("killcam")
+
 		rules.warmup_sec = warmup_sec
 
 	if min_players > 0:
@@ -1567,8 +1570,14 @@ func set_movement_rules(rules: Dictionary) -> void:
 ## `surf` 1 plays a combat surf map with the genre's air control and 0 with the arena's own
 ## (`arena_surf`), `surf_air_accelerate` is that air control's `sv_airaccelerate`
 ## (`arena_surf_airaccelerate`). See [method map_movement].
-const SHOW_RULES: PackedStringArray = ["break_mode", "break_limbs", "break_criticals_only", "fp_body", "mode_index", "surf", "surf_air_accelerate"]
-const SHOW_DEFAULTS := {"break_mode": 1.0, "break_limbs": 1.0, "break_criticals_only": 1.0, "fp_body": 0.0, "surf": 1.0, "surf_air_accelerate": 150.0}
+	if is_authority and rules.has("killcam"):
+		apply_match_limits()
+
+##
+## `killcam` is the final killcam's seconds (`mp_killcam_time`, 0 off): clients play it, and the
+## authority adds it to the match's end ([method _override_rules]).
+const SHOW_RULES: PackedStringArray = ["break_mode", "break_limbs", "break_criticals_only", "fp_body", "mode_index", "surf", "surf_air_accelerate", "killcam"]
+const SHOW_DEFAULTS := {"break_mode": 1.0, "break_limbs": 1.0, "break_criticals_only": 1.0, "fp_body": 0.0, "surf": 1.0, "surf_air_accelerate": 150.0, "killcam": 7.0}
 
 
 ## The movement overrides the current map asks for, after the server's rules.

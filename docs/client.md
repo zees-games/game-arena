@@ -165,6 +165,10 @@ A critical takes a limb off the skin (dot-player-char bakes it out and shrinks i
 
 **Third person is deliberately not here.** The movement is analytic and lag-compensated, and server and clients agree because there is exactly one motor to agree about. game-playground is where third person runs.
 
+## The end of a match: final killcam, winner, scoreboard
+
+When the match ends every client plays, in order, the final killcam, the winner reveal and the scoreboard. `ArenaKillcam` (`game/arena_killcam.gd`) puts every drawn frame (each player's feet, look, life and eye height, as presented) and every kill into dot-replay's `DotKillcamBuffer`, which needs no new traffic; at the end it hands the last kill to `DotKillcam`, places the bodies and puts its own camera at the killer's eye. The length is the server's `mp_killcam_time` (RULES `killcam`, default 7, 0 off), and the authority adds it to the mode's `match_end_sec`, so the server never waits on a client. Then dot-ui's `DotWinnerReveal` names the winner ("MATCH MVP" in a team mode) over a podium of the top three, then the scoreboard opens. Both hide the HUD and the view model, both skip on jump, fire or Escape, and leaving the end state skips whatever is still up. The player setting `reduce_motion` (General, Camera motion) shows the reveal's final frame at once. Look at it with `tools/render_killcam.sh [map] [--reduce-motion]`.
+
 ## Footsteps and the bed
 
 - **Footsteps and a bed per map are dot-audio's stock.** `ArenaPresentation.keep_walkers` keeps every player's steps; a step is grounded by a ray, because a mirrored player's controller is never ticked on a client, so its own grounded flag says nothing. `bed_for` picks the map's ambient bed by map prefix.

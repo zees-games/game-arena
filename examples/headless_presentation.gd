@@ -8,6 +8,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaBindings := preload("../game/arena_bindings.gd")
 const ArenaBrowser := preload("../game/arena_browser.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
+const ArenaKillcam := preload("../game/arena_killcam.gd")
 const ArenaMenus := preload("../game/arena_menus.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -31,7 +32,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 289
+const CHECKS := 298
 
 var _passed := 0
 var _failed := 0
@@ -79,6 +80,7 @@ func _run() -> void:
 	_test_vote_is_heard()
 	_test_blind_and_beacon()
 	_test_a_respawn_faces_its_spawn()
+	_test_the_final_killcam()
 	_test_the_view_turns_every_frame()
 	_test_criticals_and_the_body()
 	await _test_bodies_fall()
@@ -778,9 +780,9 @@ func _test_every_key_is_an_action() -> void:
 	_check(unsound.is_empty(), "requires.floor.json is sound: every floor has a guard behind it", str(unsound))
 	var asked := DotAddonApi.apply_floors(derived, floors.value if floors.ok else {})
 	_check(
-		asked.get("dot_ui") == 4 and asked.get("dot_lighting") == derived.get("dot_lighting") \
+		asked.get("dot_ui") == 9 and asked.get("dot_lighting") == derived.get("dot_lighting") \
 			and int(asked.get("dot_lighting", 0)) >= 3,
-		"so a pack asks a shell for dot-ui 4 (the glance pieces) and the dot-lighting it was built on (3+, painted())", str(asked)
+		"so a pack asks a shell for dot-ui 9 (the winner reveal) and the dot-lighting it was built on (3+, painted())", str(asked)
 	)
 
 	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.
@@ -1745,7 +1747,12 @@ func _test_the_map_menu() -> void:
 	menu.scoreboard.close()
 	# The summary board comes up with nobody holding Tab, so the next match closes it.
 	client._on_match({"state": DotMatch.State.MATCH_END, "round": 1, "remaining_ticks": 0})
-	_check(menu.scoreboard.is_open(), "the end of the match raises the board by itself")
+	var revealed: bool = client.winner_reveal != null and client.winner_reveal.is_active()
+	if client.killcam != null:
+		client.killcam.skip()
+	if client.winner_reveal != null:
+		client.winner_reveal.skip()
+	_check(revealed and menu.scoreboard.is_open(), "the end of the match reveals the winner, then raises the board by itself")
 	client._on_match({"state": DotMatch.State.WARMUP, "round": 2, "remaining_ticks": 0})
 	_check(not menu.scoreboard.is_open(), "and the next match takes it down again")
 	remove_child(client)
@@ -1970,6 +1977,66 @@ func _test_the_weapon_art_is_vendored() -> void:
 	_check(count > 20, "the table names models (%d)" % count)
 	var models := ZeeWeaponArtTable.validate_models()
 	_check(models.ok, "no weapon model is missing", "" if models.ok else models.error.message)
+	_done()
+
+
+func _test_the_final_killcam() -> void:
+	_section("The final killcam replays the last kill from the killer's eye, and 0 turns it off")
+	var g := ArenaGame.new()
+	g.is_authority = true
+	add_child(g)
+	var _set := g.setup(ArenaMap.dm_box())
+	var killer: ArenaPlayer = g.add_player(41, "Killer").value
+	var victim: ArenaPlayer = g.add_player(42, "Victim").value
+	_check(is_equal_approx(g.match_node.rules.match_end_sec, g.mode.rules.match_end_sec + 7.0),
+		"the end of the match waits the killcam's 7 s on top of the mode's")
+
+	var clock := [0.0]
+	var kc := ArenaKillcam.new()
+	kc.players_fn = func() -> Array: return [killer, victim]
+	kc.player_for_fn = g.player_for
+	kc.now_fn = func() -> float: return clock[0]
+	kc.seconds_fn = func() -> float: return g.rule("killcam")
+	add_child(kc)
+	kc.killcam.auto_process = false
+	var ended: Array = []
+	kc.over.connect(func(skipped: bool) -> void: ended.append(skipped))
+	var start := killer.controller.state.position
+	var step := 1.0 / 60.0
+	var at := func(t: float) -> Vector3: return start + Vector3(t, 0.0, 0.0)
+	while clock[0] < 9.5:
+		clock[0] += step
+		killer.controller.state.position = at.call(clock[0])
+		killer.global_position = at.call(clock[0])
+		kc.frame()
+		if absf(clock[0] - 8.0) < step * 0.5:
+			kc.note_kill(41, 42, "rifle")
+	_check(kc.buffer.frame_count() > 400 and int(kc.buffer.last_event(&"kill")["data"]["killer"]) == 41,
+		"every frame drawn and the kill went into the buffer")
+
+	var drawn: Array = []
+	kc.killcam.frame_drawn.connect(func(s: Dictionary) -> void: drawn.append([float(s["time"]), kc.camera.global_position]))
+	_check(kc.match_ended() and kc.is_playing(), "the match's end starts it")
+	kc.killcam.advance(step)
+	_check(not drawn.is_empty() and absf(float(drawn[0][0]) - 4.5) < 0.05, "from 3.5 s before the kill (%.2f)" % (float(drawn[0][0]) if not drawn.is_empty() else NAN))
+	var eye: Vector3 = drawn[0][1] if not drawn.is_empty() else Vector3.INF
+	var want: Vector3 = at.call(4.5)
+	_check(absf(eye.x - want.x) < 0.1 and eye.y > want.y + 0.5, "with the camera at the killer's eye then (%s, feet %s)" % [eye, want])
+	_check(kc.killcam.banner != null and kc.killcam.banner.killer_label.text == "Killer", "under a banner naming the killer")
+	var n := 0
+	while kc.is_playing() and n < 1000:
+		kc.killcam.advance(step)
+		n += 1
+	_check(ended == [false] and n * step < 7.0, "it ends by itself inside the budget (%.2f s)" % (n * step))
+
+	g.set_movement_rules({"killcam": 0.0})
+	ended.clear()
+	_check(not kc.match_ended() and ended == [false] and not kc.is_playing(),
+		"mp_killcam_time 0: nothing plays and the end goes straight on")
+	_check(is_equal_approx(g.match_node.rules.match_end_sec, g.mode.rules.match_end_sec),
+		"and the end of the match is the mode's again")
+	kc.queue_free()
+	g.queue_free()
 	_done()
 
 

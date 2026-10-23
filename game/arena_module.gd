@@ -1233,6 +1233,7 @@ func _add_movement_cvars() -> void:
 
 	for cvar in MOVEMENT_CVARS:
 		var key: String = MOVEMENT_CVARS[cvar][0]
+	"mp_killcam_time": ["killcam", "Seconds the final killcam plays at a match's end, added to the end's wait (0 for none)"],
 
 		# The two critical cvars set dot-combat's rules on the server, not a rule a client
 		# draws: a critical is judged where the damage is.

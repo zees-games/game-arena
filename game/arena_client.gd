@@ -10,6 +10,7 @@ const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
+const ArenaKillcam := preload("arena_killcam.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaMode := preload("arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -83,6 +84,11 @@ var game_menu: DotMenu = null
 var board: ArenaMenus.Board = null
 ## The match summary opened the Tab board (rather than a held Tab), so the client closes it.
 var _summary_board_open: bool = false
+## The final killcam ([ArenaKillcam]): records every frame, plays before the summary.
+var killcam: ArenaKillcam = null
+var winner_reveal: DotWinnerReveal = null
+var _reveal_hid: Dictionary = {}
+var _seen_match_state: int = -1
 ## Applies dot-menu's stock settings this game does not apply itself: the window, V-Sync,
 ## the frame cap and render scale.
 var applier: DotMenuApplier = null
@@ -318,6 +324,7 @@ func _ready() -> void:
 	add_child(projectile_view)
 
 	_build_ragdolls()
+	_build_killcam()
 	if _offline:
 		# Solo, the world is this process's and there is no KILL message: the death the game
 		# decided is on the kill's entry.
@@ -1170,10 +1177,15 @@ func _on_match(info: Dictionary) -> void:
 	# The end of the match: the scoreboard comes up by itself, and the notice line names
 	# the most valuable player, which is the summary the genre shows between matches.
 	if game.match_node.state == DotMatch.State.MATCH_END and was != DotMatch.State.MATCH_END:
-		_show_match_summary()
+		_begin_match_end()
+	elif was == DotMatch.State.MATCH_END and game.match_node.state != DotMatch.State.MATCH_END:
+		if killcam != null:
+			killcam.skip()
+		if winner_reveal != null:
+			winner_reveal.skip()
 	# The summary board came up by itself, so nothing is holding Tab to close it: it goes
 	# when the next match begins, else it covers the whole of the next round.
-	elif was == DotMatch.State.MATCH_END and _summary_board_open:
+	if was == DotMatch.State.MATCH_END and game.match_node.state != DotMatch.State.MATCH_END and _summary_board_open:
 		_summary_board_open = false
 		if game_menu != null:
 			game_menu.scoreboard.close()
@@ -1226,6 +1238,8 @@ func _on_kill(info: Dictionary) -> void:
 	entry.victim_key = str(int(info["victim_id"]))
 	entry.cause = StringName(String(info["weapon"]))
 	entry.headshot = bool(info["headshot"])
+	if killcam != null:
+		killcam.note_kill(int(info["killer_id"]), int(info["victim_id"]), String(info["weapon"]), entry.headshot)
 
 	var killer := game.player_for(int(info["killer_id"]))
 	var victim := game.player_for(int(info["victim_id"]))
@@ -1284,6 +1298,8 @@ func _on_kill(info: Dictionary) -> void:
 func _on_solo_kill(entry: DotKillFeed.Entry) -> void:
 	if game == null or not String(entry.victim_key).is_valid_int():
 		return
+	if killcam != null and String(entry.killer_key).is_valid_int():
+		killcam.note_kill(int(entry.killer_key), int(entry.victim_key), String(entry.cause), entry.headshot)
 	var victim := game.player_for(int(entry.victim_key))
 	if victim == null or victim == player:
 		return
@@ -1422,6 +1438,84 @@ func _on_award(info: Dictionary) -> void:
 	)
 	if presentation != null and int(info.get("killer_id", 0)) == own and own != 0:
 		presentation.on_medals(info.get("medals", []))
+
+
+## The match ended: the final killcam if there is a kill to show, then the summary.
+func _begin_match_end() -> void:
+	if killcam == null:
+		_reveal_winner()
+	elif killcam.match_ended():
+		DotLog.debug(CHANNEL, "the summary waits for the final killcam")
+
+
+func _build_killcam() -> void:
+	killcam = ArenaKillcam.new()
+	killcam.name = "FinalKillcam"
+	killcam.players_fn = func() -> Array: return game.players() if game != null else []
+	killcam.player_for_fn = func(id: int) -> Variant: return game.player_for(id) if game != null else null
+	killcam.seconds_fn = func() -> float: return game.rule("killcam") if game != null else 0.0
+	killcam.weapon_name_fn = func(id: String) -> String:
+		var def: DotWeaponDef = ArenaPlayer.weapon_catalogue().get_def(StringName(id)) if id != "" else null
+		return def.display_name if def != null and def.display_name != "" else id.capitalize()
+	killcam.over.connect(func(_skipped: bool) -> void: _reveal_winner())
+	add_child(killcam)
+	winner_reveal = DotWinnerReveal.new()
+	winner_reveal.name = "WinnerReveal"
+	winner_reveal.skip_actions = ArenaKillcam.SKIP_ACTIONS
+	winner_reveal.finished.connect(_on_reveal_finished)
+	add_child(winner_reveal)
+
+
+func _in_match_end() -> bool:
+	return game != null and game.match_node != null and game.match_node.state == DotMatch.State.MATCH_END
+
+
+## The winner named and the top three on a podium, after the killcam and before the scoreboard.
+func _reveal_winner() -> void:
+	if not _in_match_end():
+		return
+	var ranked: Array = game.match_node.scoreboard.ranked() if game.match_node.scoreboard != null else []
+	if winner_reveal == null or ranked.is_empty():
+		_show_match_summary()
+		return
+	var entries: Array = []
+	for row: DotPlayerScore in ranked.slice(0, 3):
+		entries.append({"name": row.display_name, "score": "%d %s  %d %s" % [
+			row.kills, "kill" if row.kills == 1 else "kills", row.deaths, "death" if row.deaths == 1 else "deaths"]})
+	var team := game.mode != null and game.mode.is_team_mode()
+	winner_reveal.reduced_motion = presentation != null and presentation.settings != null \
+		and presentation.settings.get_bool(&"reduce_motion", false)
+	var shown := winner_reveal.present(entries, {"title": "MATCH MVP" if team else "WINNER",
+		"hint": "Jump or Fire to skip"})
+	if not shown.ok:
+		_show_match_summary()
+		return
+	for n: Variant in [hud, view_model]:
+		if n is Object and is_instance_valid(n):
+			_reveal_hid[n] = bool((n as Object).get(&"visible"))
+			(n as Object).set(&"visible", false)
+
+
+func _on_reveal_finished(_skipped: bool) -> void:
+	for n: Variant in _reveal_hid:
+		if is_instance_valid(n):
+			(n as Object).set(&"visible", _reveal_hid[n])
+	_reveal_hid.clear()
+	if _in_match_end():
+		_show_match_summary()
+
+
+## Records the frame for the killcam, or draws the replay over it. Solo has no MATCH message,
+## so the end of a solo match is seen here.
+func _killcam_frame() -> void:
+	if killcam == null or game == null:
+		return
+	killcam.hide_while_playing = [hud, view_model]
+	killcam.frame()
+	var now := int(game.match_node.state) if game.match_node != null else -1
+	if _offline and now != _seen_match_state and now == DotMatch.State.MATCH_END:
+		_begin_match_end()
+	_seen_match_state = now
 
 
 ## The scoreboard up, and the MVP named: best score, then kills. Client side.
@@ -2004,6 +2098,7 @@ func _present_frame(delta: float) -> void:
 	_watch_projectiles()
 
 	_drive_spectator_camera()
+	_killcam_frame()
 
 
 ## Hands the local player this frame's view, this frame's mouse motion folded in, so a

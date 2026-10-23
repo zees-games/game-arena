@@ -234,6 +234,8 @@ static func schema() -> DotSettingsSchema:
 		.with_description("Zero turns camera shake off entirely."))
 	s.add(DotSettingsDef.boolean(&"allow_flashes", true, &"accessibility")
 		.with_description("Off draws no full-screen flashes at all."))
+	s.add(DotSettingsDef.boolean(&"reduce_motion", false, &"accessibility").with_scope(DotSettingsDef.Scope.ACCOUNT)
+		.with_description("The end-of-match announcement appears at once, with nothing sliding, rising or bursting."))
 
 	# Camera motion, each 0 (off) to 2, 1 being the game's pick (`ArenaPlayer.camera_motion_picks`).
 	# ACCOUNT, like the sensitivity: whether motion makes somebody sick is about the person, not
