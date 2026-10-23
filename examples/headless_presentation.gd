@@ -32,7 +32,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 303
+const CHECKS := 310
 
 var _passed := 0
 var _failed := 0
@@ -68,6 +68,7 @@ func _run() -> void:
 	_test_effects_and_the_player_who_asked_for_none()
 	_test_a_shot_is_drawn()
 	_test_shake_is_computed_not_applied()
+	await _test_blood()
 	_test_console()
 	await _test_console_stops_movement()
 	_test_the_escape_menu()
@@ -464,6 +465,47 @@ func _projects_along(hole: Variant, aim: Vector3) -> bool:
 
 
 # --- 4 ----------------------------------------------------------------------
+
+func _test_blood() -> void:
+	_section("Blood behind a body the server says was hit")
+	var wall := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(40, 10, 0.5)
+	shape.shape = box
+	wall.add_child(shape)
+	add_child(wall)
+	wall.global_position = Vector3(0, 2, -4)
+	var p := _make(false)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var npc := DotEntity.make_id(DotEntity.KIND_NPC, 1)
+	var eye := Vector3(0, 1.7, 8)
+	var chest := Vector3(0, 1.2, -1)
+
+	_check(p.blood != null and p.blood.decals.blood_count() == 0, "the presentation owns a blood layer, empty")
+	p.on_body_hit(DotEntity.make_id(DotEntity.KIND_PROP, 3), chest, eye)
+	_check(p.blood.decals.blood_count() == 0, "a prop bleeds nothing")
+	p.on_body_hit(npc, chest, eye)
+	_check(p.blood.decals.blood_count() == 1, "gore on: a hit body splatters the wall behind it (%d)" % p.blood.decals.blood_count())
+	p.present(0.016, eye, Vector3.FORWARD)
+	p.on_map_changed(&"dm_box")
+	_check(p.blood.decals.blood_count() == 0, "a map change clears the blood")
+
+	p.settings.set_value(&"gore", false)
+	p.on_body_hit(npc, chest, eye)
+	_check(p.blood.decals.blood_count() == 0, "gore off: a hit draws no blood")
+	var saved := p.settings.flush()
+	var p2 := _make(false)
+	_check(saved.ok and not p2.settings.get_bool(&"gore", true), "gore off is persisted and read back")
+	_check(not p2.blood.decals.config.gore, "and the next start's blood layer follows it")
+	p2.settings.set_value(&"gore", true)
+	var _flushed := p2.settings.flush()
+	p2.queue_free()
+	p.queue_free()
+	wall.queue_free()
+	_done()
+
 
 func _test_shake_is_computed_not_applied() -> void:
 	_section("Shake is a value, and an ArenaPlayer is the only thing that writes a camera")

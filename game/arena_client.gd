@@ -1420,6 +1420,7 @@ func _on_hit(info: Dictionary) -> void:
 	hud.note_hit(int(info.get("victim_id", 0)), float(info.get("amount", 0.0)), point, bool(info.get("headshot", false)), lethal)
 	if presentation != null:
 		presentation.on_hit_confirmed(lethal)
+		presentation.on_body_hit(int(info.get("victim_id", 0)), point, camera_position())
 	_draw_body_hit(point)
 
 
@@ -1584,6 +1585,8 @@ func _build_presentation() -> void:
 	presentation.client = self
 	add_child(presentation)
 	DotLog.result(CHANNEL, "the presentation layer", presentation.setup())
+	if presentation.blood != null and game != null:
+		presentation.blood.mask = game.ragdoll_rules.collision_mask
 
 	_wire_chat_window()
 

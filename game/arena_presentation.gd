@@ -3,6 +3,7 @@ extends Node
 const ArenaPaths := preload("arena_paths.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaVote := preload("arena_vote.gd")
+const ArenaBlood := preload("arena_blood.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaBindings := preload("arena_bindings.gd")
 const ArenaHud := preload("arena_hud.gd")
@@ -108,6 +109,8 @@ var audio: DotAudioManager = null
 var steps: DotAudioFootsteps = null
 var ambience: DotAudioAmbience = null
 var fx: DotFxManager = null
+## Blood behind a body the local player hit; drawn only while `gore` is on.
+var blood: ArenaBlood = null
 ## The player's console, built by [method build_console] once the client has a menu.
 var console: DotConsoleController = null
 var console_panel: DotConsolePanel = null
@@ -213,7 +216,7 @@ static func schema() -> DotSettingsSchema:
 	))
 
 	s.add(DotSettingsDef.boolean(&"gore", true, &"video").with_description(
-		"Blood when a player dies. Bullet holes stay on either way."
+		"Blood when a player dies, and on the wall behind a body you hit. Bullet holes stay on either way."
 	))
 
 	# Chat. ACCOUNT scope for all three: which key opens chat and whether a player wants
@@ -941,6 +944,10 @@ func _build_fx() -> DotResult:
 	if not res.ok:
 		return res.wrap("the arena's effects")
 
+	blood = ArenaBlood.new()
+	add_child(blood)
+	blood.follow(settings)
+
 	# [b]Said out loud, because a missing scene is otherwise a DEBUG line.[/b] Until
 	# 2026-09-27 all four scenes this catalogue names were missing and every muzzle flash,
 	# spark, hole and gib in this game was refused for it, with no suite noticing.
@@ -1177,6 +1184,7 @@ func present(delta: float, eye: Vector3, forward: Vector3) -> void:
 	fx.viewer_position = eye
 	fx.viewer_forward = forward
 	fx.advance(delta)
+	blood.advance(delta)
 
 
 ## The camera offset to add this frame, which the rig applies and this does not.
@@ -1315,6 +1323,11 @@ func on_hit_confirmed(lethal: bool = false) -> void:
 	var _v := audio.play(KILL_CONFIRMED if lethal else &"hit_marker")
 
 
+## The server confirmed a hit on [param victim]: blood on the surface behind it, seen from [param eye].
+func on_body_hit(victim: int, point: Vector3, eye: Vector3) -> void:
+	var _splat := blood.on_body_hit(victim, point, eye)
+
+
 ## A kill's medals, each its own sound, staggered as the HUD staggers their popups.
 func on_medals(medals: Array) -> void:
 	if audio == null:
@@ -1383,6 +1396,7 @@ func on_wall_jumped() -> int:
 ## A map changed. Everything drawn for the old one is meaningless now.
 func on_map_changed(map_id: StringName = &"") -> void:
 	fx.clear()
+	blood.clear()
 	if ambience != null:
 		ambience.set_map_bed(bed_for(map_id))
 

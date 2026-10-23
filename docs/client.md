@@ -78,6 +78,7 @@ The death camera is driven once a frame, not once a tick ([modes](modes.md#spect
 - `ArenaPresentation.on_used(outcome)` is the loop, so the suite drives the exact path. The flash is placed `MUZZLE_OFFSET` along the aim and a little below and right, because a shot starts at the eye.
 - The explosion is its own scene; reusing the death burst read as somebody dying.
 - The death burst is dark-red droplets (small spheres that fall and shrink) under a short soft mist, about a second, because the ragdoll is the body now; it was 24 flat red cubes 12 cm across, which the first play test showed as debris. `--fx` adds `<map>_fx_death_near`, the burst from four metres.
+- **Wall blood** (`game/arena_blood.gd`, dot-fx's `DotFxBlood`): the server's HIT, which only the shooter gets, splatters the surface behind the body hit (`ArenaClient._on_hit` to `ArenaPresentation.on_body_hit`), through the world and prop physics mask. Visual only, nothing new on the wire, so other players' clients see none. It follows the `gore` setting (Video, "Blood splatters", default on) and `fx_quality`, is advanced in `present` and cleared in `on_map_changed`. `screenshot.sh <map> --fx <eye> <aim>` adds `<map>_fx_blood`.
 - A one-shot shorter than a frame is not drawn (`CPUParticles3D` ages it by the first frame's whole delta). Irrelevant at 60 fps; it is why `--fx` renders slow the particles.
 
 ## Escape, the pointer and the menu

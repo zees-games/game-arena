@@ -1198,6 +1198,21 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 						(particles as CPUParticles3D).restart(),
 			"wait": 6,
 		},
+		{
+			# Blood behind bodies a hit confirmed, the way the HIT event draws it: a few chest
+			# points spread across the wall, seen from the side a player would stand.
+			"name": "%s_fx_blood" % String(id),
+			"from": wall - aim * 3.5 + side * 1.0 + Vector3.UP * 0.4,
+			"at": wall + Vector3.UP * 0.2,
+			"arm": func() -> void:
+				var victim := DotEntity.make_id(DotEntity.KIND_PLAYER, 2)
+				for i in range(5):
+					var chest := wall - aim * 1.0 + side * (float(i) - 2.0) * 0.45 + Vector3.UP * (-0.3 + 0.3 * float(i % 3))
+					presentation.on_body_hit(victim, chest, eye)
+				presentation.present(0.016, eye, aim)
+				print("fx: %d splatters" % presentation.blood.decals.blood_count()),
+			"wait": 4,
+		},
 	]
 
 
