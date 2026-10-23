@@ -45,6 +45,7 @@ Before and after the 2026-10-11 fixes, same suite: 25 of 33 passed, now 33 (34 c
 ## Traps the suites have hit
 
 - **Read a suite's stderr even when it exits 0.** A script error aborts its section, not the run; four freed-object errors in `headless_match` once left every check passing.
+- **A suite that leaves objects alive fails.** `game.sh` rejects a log with "resources still in use at exit", "ObjectDB instances were leaked" or leaked RIDs. Name the culprit with `godot --headless --verbose --path . res://examples/<suite>.tscn`; bisect with an env-driven early quit between sections. `headless_imported` leaked because it swapped `ArenaGame.surf_rides` without `release()`, which breaks the recorder's callable cycle.
 - **Filter `--check-only` for the lines that mean a parse failed** (`SCRIPT ERROR`, `Parse Error`, `Failed to load script`), not against shutdown noise by exact wording, which goes stale when the engine rewords a line.
 - **A scene whose script fails to parse hangs** rather than exiting. Cap every run with `timeout`.
 - **An adopted session has no peer**, so a suite that adopts one catches what is sent to it, or every send is "Attempt to call RPC with unknown peer ID" in a green run. Either point the netcode's `send_fn` at nothing (`_test_bots`, `headless_admin`) or set the bridge link's `loopback` and check what it caught (`dedicated`'s `_test_client_spawn`: the join's schema event, then a snapshot per tick to 4242 through four sections). The adoption is what starts the sends, so catch before firing `client_spawn`.

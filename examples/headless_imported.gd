@@ -154,6 +154,13 @@ func _run() -> void:
 
 
 func _finish() -> void:
+	# Freed here, not left to the engine at exit: its bots' navigation RIDs and the
+	# resources it holds are then released before the leak report.
+	if _game != null:
+		remove_child(_game)
+		_game.free()
+		_game = null
+
 	_line("")
 	_line("%d sections, %d passed, %d failed" % [_completed, _passed, _failed])
 
@@ -752,6 +759,8 @@ func _test_recorded_rides() -> void:
 	var fresh: RefCounted = ArenaSurfRides.new()
 	var ready: DotResult = fresh.call(&"setup", _game, cfg, store, float(TICK_RATE))
 	_check(ready.ok, "a recorder and its ride book are built over a store")
+	# release() breaks the callables that point back at the recorder, or it outlives the run.
+	rides.call(&"release")
 	_game.surf_rides = fresh
 	rides = fresh
 
@@ -832,6 +841,7 @@ func _test_recorded_rides() -> void:
 		"and the bot is not recorded (%d recorded before and after)" % recorded_before)
 	bot.remove_meta(&"bot")
 	surf.rides = null
+	fresh.call(&"release")
 	_game.surf_rides = null
 	_done()
 
