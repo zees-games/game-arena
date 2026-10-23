@@ -844,6 +844,12 @@ func _build_netcode() -> DotResult:
 
 	var extra := extras.attach(bridge, game)
 	DotLog.result(CHANNEL, "the client's chat, voice and map layers", extra)
+	platform.look_voice = extras.voice
+	platform.look_chat = extras.chat
+	platform.look_gag_action = ArenaBindings.VOICE_GAG
+	platform.look_mute_action = ArenaBindings.VOICE_MUTE
+	platform.look_position_fn = _look_position
+	platform.build_look_mute()
 
 	# The join's map hold (see `_ready`) is let go by the first map the server names; if
 	# that map cannot be had, a cover that never lifts is worse than the level in hand.
@@ -2598,3 +2604,13 @@ func describe() -> Dictionary:
 		"bots": _bots.size(),
 		"net": bridge.describe() if bridge != null else "none",
 	}
+
+
+## Where a roster row's player stands, for dot-game's look-to-gag key (J, K).
+func _look_position(row: Dictionary) -> Variant:
+	if game == null:
+		return null
+	for who: ArenaPlayer in game.players():
+		if who != player and who.display_name == row["name"]:
+			return who.global_position + Vector3.UP * 1.5
+	return null

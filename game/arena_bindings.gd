@@ -60,6 +60,8 @@ const ROAM := &"arena_roam"
 ## dot-voice's action (DotVoiceManager.TALK_ACTION), so the talk key is one setting with every
 ## other game's; still stored as bind_voice.
 const VOICE := &"dot_voice_talk"
+const VOICE_GAG := &"voice_gag"
+const VOICE_MUTE := &"voice_mute"
 
 
 ## The key table. The wheel rows are written by name ("Wheel up" / "Wheel down"): a pack
@@ -89,6 +91,9 @@ static func make() -> DotMenuBindings:
 	keys.add(CHAT, &"chat_open_key", "Chat", "Y", "Chat", DotSettingsDef.Scope.ACCOUNT)
 	keys.add(CHAT_TEAM, &"chat_team_key", "Team chat", "U", "Chat", DotSettingsDef.Scope.ACCOUNT)
 	keys.add(VOICE, &"bind_voice", "Push to talk", "V", "Chat")
+	# Look at a player and press (dot-game's DotGameClient): G is the punt and H is help here.
+	keys.add(VOICE_GAG, &"bind_voice_gag", "Look at a player: stop (or resume) hearing them", "J", "Chat")
+	keys.add(VOICE_MUTE, &"bind_voice_mute", "Look at a player: mute (or unmute) their voice and chat", "K", "Chat")
 	keys.add(SCOREBOARD, &"bind_scoreboard", "Scoreboard (hold)", "Tab", "Interface")
 	keys.add(VIEW, &"bind_view", "First or third person, where the server allows it", "F5", "Interface")
 	keys.add(ROAM, &"bind_roam", "Free camera while spectating (move keys fly, Dash fast, Walk slow)", "T", "Interface")
