@@ -237,6 +237,16 @@ func _module_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# mp_teamblock, mp_enemyblock, mp_blockcmd*, mp_blockscope and the requests' mp_blockstate:
+	# which pairs stop at each other (teammates pass, enemies stop), REPLICATED for the same
+	# reason as mp_solidplayers. `!block` and `!noblock` are dot-team's, on the console and in chat.
+	var _block_cvars := game.block_rules.bind_cvars(
+		add_cvar,
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
+		DotConVar.FLAG_REPLICATED
+	)
+	var _block_commands := DotTeamBlockCommands.new(game.block_rules).install(self)
+
 	# mp_vm_sway, _strafe_tilt, _bob, _landing and _aim_steadiness: zee-dot-weapons' view
 	# model feel. REPLICATED, because the hands are drawn on each client, not on the server.
 	var _feel_cvars := game.feel_rules.bind_cvars(

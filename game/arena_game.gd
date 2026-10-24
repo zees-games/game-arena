@@ -448,6 +448,12 @@ var spectate_rules: DotSpectatorRules = DotSpectatorRules.new()
 ## games give a body.
 var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 
+## Which pairs of players stop at each other: dot-team's `mp_teamblock` / `mp_enemyblock` and the
+## `!block` / `!noblock` requests. Teammates pass through, enemies stop (a free-for-all has no
+## teammates, so it stays solid). Bound and followed beside [member body_rules], which it feeds
+## through `pair_fn`; the same answer on every machine, or the client rubber-bands.
+var block_rules: DotTeamBlockRules = _make_block_rules()
+
 ## The view model's motion amounts: zee-dot-weapons' `mp_vm_*` cvars. Bound by the module
 ## (REPLICATED) and followed by the client, which is the end that draws the hands. The
 ## client's view model is handed this object, so one cvar change reaches the sway.
@@ -568,6 +574,7 @@ func follow_server_cvars(source: Object) -> bool:
 	var _view := view_rules.follow_cvars(source)
 	var _spectate := spectate_rules.follow_cvars(source)
 	var _solid := body_rules.follow_cvars(source)
+	var _blocks := block_rules.follow_cvars(source)
 	var _feel := feel_rules.follow_cvars(source)
 	return _follow_cvar_source()
 
@@ -1501,6 +1508,7 @@ func add_player(
 
 func remove_player(id: int) -> void:
 	_unlag.erase(id)
+	block_rules.forget(id)
 	medals.forget(id)
 	var player := player_for(id)
 
@@ -1672,12 +1680,21 @@ func player_for(id: int) -> ArenaPlayer:
 ## stand now; none while `mp_solidplayers` is 0. Asked per sweep by the movement body, so a
 ## player moved earlier in this tick is met where it moved to (the same on every machine:
 ## players tick in one order).
+func _make_block_rules() -> DotTeamBlockRules:
+	var rules := DotTeamBlockRules.new()
+	rules.side_fn = func(id: Variant) -> Variant:
+		var team := team_of(int(id)) if not teams().is_empty() else 0
+		return str(team) if team > 0 else ""
+	body_rules.pair_fn = rules.blocks
+	return rules
+
+
 func solid_hulls_for(id: int) -> Array:
 	var out: Array = []
 	if not body_rules.solid:
 		return out
 	for key: Variant in _players.keys():
-		if int(key) == id:
+		if int(key) == id or not body_rules.blocks(id, int(key)):
 			continue
 		var other: ArenaPlayer = _players[key]
 		if other == null or not other.is_alive() or other.controller == null or other.controller.state == null:

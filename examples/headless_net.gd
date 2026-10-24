@@ -39,7 +39,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 230
+const CHECKS := 236
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
@@ -2147,6 +2147,57 @@ func _test_solid_players_predicted() -> void:
 	_server_game.body_rules.solid = true
 	for peer_id in _clients:
 		(_clients[peer_id]["bridge"] as ArenaNetBridge).game.body_rules.solid = true
+
+	# Teams: teammates pass through each other by default (mp_teamblock 0), predicted so on the
+	# walker's client; enemies still stop; a player's !block / !noblock request travels as the
+	# mp_blockstate string and flips the pair on both ends.
+	var games: Array[ArenaGame] = [_server_game]
+	for peer_id in _clients:
+		games.append((_clients[peer_id]["bridge"] as ArenaNetBridge).game)
+	var ids := [server_a.player_id, server_b.player_id]
+	var sides := {ids[0]: "1", ids[1]: "1"}
+	for g in games:
+		g.block_rules.side_fn = func(id: Variant) -> Variant: return sides.get(int(id), "")
+	place.call()
+	var mates := _flight_window(2, 96, 0, {2: walk, 3: idle})
+	_check(
+		server_a.controller.state.position.z < server_b.controller.state.position.z - 1.0,
+		"teammates pass through each other by default (mp_teamblock 0)",
+		"A z %.2f, B z %.2f" % [server_a.controller.state.position.z, server_b.controller.state.position.z]
+	)
+	_check(float(mates["worst_aligned"]) < 0.03,
+		"and the walker's client predicted the pass (worst %.3f m)" % float(mates["worst_aligned"]))
+
+	sides[ids[1]] = "2"
+	place.call()
+	var foes := _flight_window(2, 96, 0, {2: walk, 3: idle})
+	_check(server_a.controller.state.position.z > server_b.controller.state.position.z
+		and float(foes["worst_aligned"]) < 0.03, "enemies still stop, predicted",
+		"A z %.2f, B z %.2f" % [server_a.controller.state.position.z, server_b.controller.state.position.z])
+
+	sides[ids[1]] = "1"
+	for g in games:
+		g.block_rules.config.team_block = true
+	place.call()
+	var forced := _flight_window(2, 96, 0, {2: walk, 3: idle})
+	_check(server_a.controller.state.position.z > server_b.controller.state.position.z
+		and float(forced["worst_aligned"]) < 0.03, "mp_teamblock 1 makes teammates stop, predicted")
+
+	_check(_server_game.block_rules.request(ids[0], [DotTeamBlockRules.Relation.TEAM], 0).ok,
+		"a !noblock request is accepted")
+	for g in games:
+		if g != _server_game:
+			g.block_rules.apply_state_string(_server_game.block_rules.state_string())
+	place.call()
+	var asked := _flight_window(2, 96, 0, {2: walk, 3: idle})
+	_check(server_a.controller.state.position.z < server_b.controller.state.position.z - 1.0
+		and float(asked["worst_aligned"]) < 0.03,
+		"and with the state string on the client too, the pair passes, predicted")
+
+	for g in games:
+		g.block_rules.config.team_block = false
+		g.block_rules.clear()
+		g.block_rules.side_fn = Callable()
 	server_a.controller.teleport(saved_a)
 	server_b.controller.teleport(saved_b)
 	var _back := _flight_window(0, 24, 0)
