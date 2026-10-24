@@ -25,12 +25,17 @@ log=.godot/dot-light-bake.log
 mkdir -p .godot
 
 if [[ -z "${BAKE_LOCAL:-}" && -x ../gpu.sh ]]; then
+    GPU_SCENES_TIMEOUT="${GPU_SCENES_TIMEOUT:-900}"
+    [[ "$GPU_SCENES_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || { echo "GPU_SCENES_TIMEOUT must be a positive whole number of seconds, not '$GPU_SCENES_TIMEOUT'" >&2; exit 2; }
     rm -rf lightbake_work
     # A step that hangs must end with a way out, never a silent wait.
-    rc=0; timeout "${GPU_SCENES_TIMEOUT:-900}" ../gpu.sh run "$project" "${scenes[@]}" > "$log.scenes" 2>&1 || rc=$?
+    rc=0; timeout "$GPU_SCENES_TIMEOUT" ../gpu.sh run "$project" "${scenes[@]}" > "$log.scenes" 2>&1 || rc=$?
     grep -E '^LIGHTMAP_SCENE|ERROR' "$log.scenes" || true
     if [[ $rc -eq 124 ]]; then
-        echo "the GPU box did not finish writing scenes in ${GPU_SCENES_TIMEOUT:-900}s (GPU_BOX=${GPU_BOX:-staging}); try GPU_BOX=staging02, or BAKE_LOCAL=1 $0 $*" >&2
+        echo "the GPU box did not finish writing scenes in ${GPU_SCENES_TIMEOUT}s (GPU_BOX=${GPU_BOX:-staging}); the remote scenes step may still be running there, check before retrying. Try GPU_BOX=staging02, or BAKE_LOCAL=1 $0 $*" >&2
+        exit 1
+    elif [[ $rc -ne 0 ]]; then
+        echo "the GPU box step that writes scenes failed (exit $rc; ssh or gpu.sh error, see $log.scenes); fix it or run BAKE_LOCAL=1 $0 $*" >&2
         exit 1
     fi
     # No sync between the steps: the scenes were written there, and a sync would delete them.
