@@ -454,11 +454,14 @@ var spectate_rules: DotSpectatorRules = DotSpectatorRules.new()
 ## games give a body.
 var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 
-## Which pairs of players stop at each other: dot-team's `mp_teamblock` / `mp_enemyblock` and the
-## `!block` / `!noblock` requests. Teammates pass through, enemies stop (a free-for-all has no
-## teammates, so it stays solid). Bound and followed beside [member body_rules], which it feeds
-## through `pair_fn`; the same answer on every machine, or the client rubber-bands.
-var block_rules: DotTeamBlockRules = _make_block_rules()
+## Which pairs of players stop at each other (dot-team's `DotTeamBlockRules`: `mp_teamblock`,
+## `mp_enemyblock`, `!block` / `!noblock`); null until [method make_noblock] or a client's
+## `add_noblock` sets it. Feeds [member body_rules] `pair_fn`; the same answer on every machine,
+## or the client rubber-bands.
+var block_rules: Object = null
+
+## dot-game's wiring of [member block_rules]: its cfg layers, cvars and chat commands.
+var noblock: DotGameNoblock = null
 
 ## The view model's motion amounts: zee-dot-weapons' `mp_vm_*` cvars. Bound by the module
 ## (REPLICATED) and followed by the client, which is the end that draws the hands. The
@@ -580,7 +583,8 @@ func follow_server_cvars(source: Object) -> bool:
 	var _view := view_rules.follow_cvars(source)
 	var _spectate := spectate_rules.follow_cvars(source)
 	var _solid := body_rules.follow_cvars(source)
-	var _blocks := block_rules.follow_cvars(source)
+	if noblock != null:
+		noblock.follow(source)
 	var _feel := feel_rules.follow_cvars(source)
 	return _follow_cvar_source()
 
@@ -605,7 +609,7 @@ func _build_combat() -> DotResult:
 	# set either way; self damage is on in every mode this ships, because rocket
 	# jumping is a movement option and taking it away removes the only reason the
 	# rocket launcher is interesting to hold.
-	rules.friendly_fire = mode.friendly_fire
+	rules.friendly_fire = mode.friendly_fire if config.friendly_fire < 0 else config.friendly_fire == 1
 	rules.self_damage = mode.self_damage
 	rules.hit_groups = true
 	rules.falloff = true
@@ -773,6 +777,15 @@ func apply_drop_rules() -> void:
 		drops.set_packs(map.packs, _tick)
 
 
+## The medal thresholds from [member config], before each judgement so a workbench edit counts.
+func _sync_award_config() -> void:
+	medals.multi_window_sec = config.award_multi_window_sec
+	medals.shutdown_at = config.award_shutdown_at
+	medals.point_blank_m = config.award_point_blank_m
+	medals.long_shot_m = config.award_long_shot_m
+	medals.nemesis_at = config.award_nemesis_at
+
+
 ## Puts [member score_limit], [member time_limit_sec], [member warmup_sec] and
 ## [member min_players] on the match being played, from the next tick (dot-match reads its
 ## rules every tick). The authority's to call; a client is told the score limit and the clock
@@ -788,6 +801,8 @@ func apply_match_limits() -> void:
 	match_node.rules.time_limit_sec = from_mode.time_limit_sec
 	match_node.rules.warmup_sec = from_mode.warmup_sec
 	match_node.rules.min_players = from_mode.min_players
+	match_node.rules.respawn_delay_sec = from_mode.respawn_delay_sec
+	match_node.rules.spawn_protection_sec = from_mode.spawn_protection_sec
 	if freeze_sec >= 0.0 or _freeze_overridden:
 		match_node.rules.countdown_sec = from_mode.countdown_sec
 	_freeze_overridden = freeze_sec >= 0.0
@@ -805,6 +820,11 @@ func _override_rules(rules: DotMatchRules) -> void:
 
 	if time_limit_sec > 0.0:
 		rules.time_limit_sec = time_limit_sec
+
+	if config.respawn_delay_sec >= 0.0:
+		rules.respawn_delay_sec = config.respawn_delay_sec
+	if config.spawn_protection_sec >= 0.0:
+		rules.spawn_protection_sec = config.spawn_protection_sec
 
 	if warmup_sec >= 0.0:
 		rules.warmup_sec = warmup_sec
@@ -1469,6 +1489,7 @@ func add_player(
 	)
 	# Before it enters the tree, so the controller that readies (and logs) is the map's.
 	player.apply_map_movement(map_movement())
+	player.apply_vitals(config.player_health, config.player_armour, config.player_regen, config.fall_out_depth)
 	add_child(player)
 
 	# The layout's player mask, rather than `DotFpsTunables`' default of 1. See
@@ -1514,7 +1535,8 @@ func add_player(
 
 func remove_player(id: int) -> void:
 	_unlag.erase(id)
-	block_rules.forget(id)
+	if block_rules != null:
+		block_rules.forget(id)
 	medals.forget(id)
 	var player := player_for(id)
 
@@ -1682,19 +1704,27 @@ func player_for(id: int) -> ArenaPlayer:
 	return _players.get(id)
 
 
+## Builds [member noblock] over dot-team's rules (its cfg layers; strict fails the boot) for a server or a solo game.
+func make_noblock(strict := DotGameConfigBinder.default_strict()) -> DotResult:
+	var made := DotGameNoblock.create("game-arena", Callable(self, "block_side"), PackedStringArray(), strict)
+	if not made.ok:
+		return made
+	noblock = made.value
+	noblock.feed(body_rules)
+	block_rules = noblock.rules
+	return made
+
+
+## The side a player blocks as: its team, or "" in a free-for-all (no teammates, so it stays solid).
+func block_side(id: Variant) -> Variant:
+	var team := team_of(int(id)) if not teams().is_empty() else 0
+	return str(team) if team > 0 else ""
+
+
 ## The standing hulls player [param id] stops at: every other living player's, where they
 ## stand now; none while `mp_solidplayers` is 0. Asked per sweep by the movement body, so a
 ## player moved earlier in this tick is met where it moved to (the same on every machine:
 ## players tick in one order).
-func _make_block_rules() -> DotTeamBlockRules:
-	var rules := DotTeamBlockRules.new()
-	rules.side_fn = func(id: Variant) -> Variant:
-		var team := team_of(int(id)) if not teams().is_empty() else 0
-		return str(team) if team > 0 else ""
-	body_rules.pair_fn = rules.blocks
-	return rules
-
-
 func solid_hulls_for(id: int) -> Array:
 	var out: Array = []
 	if not body_rules.solid:
@@ -2139,6 +2169,7 @@ func _on_entity_killed(entity_id: int, damage: DotDamage) -> void:
 		if damage.attacker == 0 or damage.attacker == entity_id or player_for(damage.attacker) == null:
 			medals.note_death(entity_id)
 		else:
+			_sync_award_config()
 			awarded = medals.judge(_kill_facts(damage, victim, entry))
 
 	# The streaks: the victim's ends, the killer's grows, and a reward lands on the kill
@@ -2167,7 +2198,7 @@ func _on_entity_killed(entity_id: int, damage: DotDamage) -> void:
 
 	if judged and damage.attacker != 0 and damage.attacker != entity_id and player_for(damage.attacker) != null:
 		medals_awarded.emit(
-			damage.attacker, entity_id, awarded, ArenaAwards.points_for(awarded),
+			damage.attacker, entity_id, awarded, ArenaAwards.points_for(awarded, config.award_kill_points),
 			int(streaks.get(damage.attacker, 0))
 		)
 

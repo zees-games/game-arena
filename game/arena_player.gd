@@ -557,7 +557,7 @@ func _follow_map_volumes() -> void:
 		_forget_drawn()
 		return
 
-	if feet.y < _map.bounds.position.y - FALL_OUT_DEPTH and not _map.spawns.is_empty():
+	if feet.y < _map.bounds.position.y - _fall_out_depth and not _map.spawns.is_empty():
 		var at: Transform3D = _map.spawns[0]
 		controller.teleport(at.origin, rad_to_deg(at.basis.get_euler().y), 0.0)
 		_forget_drawn()
@@ -585,6 +585,24 @@ func _forget_drawn() -> void:
 
 ## How far under an imported map's bounds a player is counted as out of it, metres.
 const FALL_OUT_DEPTH := 10.0
+
+var _max_health := 100.0
+var _max_armour := 100.0
+var _regen := 0.0
+var _fall_out_depth := FALL_OUT_DEPTH
+
+
+## ArenaConfig's player numbers, given before the first spawn resets health to the maximum.
+func apply_vitals(max_health: float, max_armour: float, regen: float, fall_out_depth: float) -> void:
+	_max_health = max_health
+	_max_armour = max_armour
+	_regen = regen
+	_fall_out_depth = fall_out_depth
+	if health != null:
+		health.max_health = max_health
+		health.max_armour = max_armour
+		health.regen_per_second = regen
+		health.health = minf(health.health, max_health) if health.alive else health.health
 
 ## One unit of the engine the combat surf maps come from, in metres.
 const GENRE_UNIT := 0.01905
@@ -702,11 +720,11 @@ static func _set_rule(tunables: DotFpsTunables, key: String, value: Variant) -> 
 func _build_health() -> void:
 	health = DotHealth.new()
 	health.name = "Health"
-	health.max_health = 100.0
-	health.max_armour = 100.0
+	health.max_health = _max_health
+	health.max_armour = _max_armour
 	# No regeneration. An arena shooter's health is a resource you pick up, and
 	# regeneration turns every fight into a question of who disengages first.
-	health.regen_per_second = 0.0
+	health.regen_per_second = _regen
 	health.set_tick_rate(_tick_rate)
 	add_child(health)
 

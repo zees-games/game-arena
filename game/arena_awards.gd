@@ -109,8 +109,8 @@ static func medal_sound(medal: int) -> StringName:
 
 
 ## A kill's points: [constant KILL_POINTS] and every medal's.
-static func points_for(medals: Array) -> int:
-	var total := KILL_POINTS
+static func points_for(medals: Array, kill_points := KILL_POINTS) -> int:
+	var total := kill_points
 	for medal in medals:
 		total += int(MEDALS.get(int(medal), {}).get("points", 0))
 	return total
@@ -167,6 +167,13 @@ class MedalBook:
 			if int(pair[0]) == player_id or int(pair[1]) == player_id:
 				runs.erase(key)
 
+	## The thresholds, from [ArenaConfig] on a server; the constants are the defaults.
+	var multi_window_sec := MULTI_WINDOW_SEC
+	var shutdown_at := SHUTDOWN_AT
+	var point_blank_m := POINT_BLANK_M
+	var long_shot_m := LONG_SHOT_M
+	var nemesis_at := NEMESIS_AT
+
 	## Somebody died to the world, or to themselves: no medal, and their chain ends.
 	func note_death(victim: int) -> void:
 		chains.erase(victim)
@@ -185,7 +192,7 @@ class MedalBook:
 			out.append(Medal.FIRST_BLOOD)
 
 		# The chain: a kill within the window of the killer's last one extends it.
-		var window := int(ceil(MULTI_WINDOW_SEC * float(maxi(1, k.tick_rate))))
+		var window := int(ceil(multi_window_sec * float(maxi(1, k.tick_rate))))
 		var chain: Array = chains.get(k.killer, [0, -window - 1])
 		var count := int(chain[0]) + 1 if k.tick - int(chain[1]) <= window else 1
 		chains[k.killer] = [count, k.tick]
@@ -204,7 +211,7 @@ class MedalBook:
 			last_killer.erase(k.killer)
 		last_killer[k.victim] = k.killer
 
-		if k.victim_streak >= SHUTDOWN_AT:
+		if k.victim_streak >= shutdown_at:
 			out.append(Medal.SHUTDOWN)
 
 		# Range, for a gun. A knife is always close and a grenade lands where it lands,
@@ -212,9 +219,9 @@ class MedalBook:
 		var melee := k.tags.has(ZeeWeaponIds.TAG_MELEE)
 		var thrown := k.tags.has(ZeeWeaponIds.TAG_THROWN) or k.tags.has(ZeeWeaponIds.TAG_EXPLOSIVE)
 		if not melee and not thrown:
-			if k.distance < POINT_BLANK_M:
+			if k.distance < point_blank_m:
 				out.append(Medal.POINT_BLANK)
-			elif k.distance >= LONG_SHOT_M:
+			elif k.distance >= long_shot_m:
 				out.append(Medal.LONG_SHOT)
 			if k.tags.has(ZeeWeaponIds.TAG_SCOPED) and not k.aiming:
 				out.append(Medal.NO_SCOPE)
@@ -224,7 +231,7 @@ class MedalBook:
 		var key := "%d:%d" % [k.killer, k.victim]
 		var run := int(runs.get(key, 0)) + 1
 		runs[key] = run
-		if run == NEMESIS_AT:
+		if run == nemesis_at:
 			out.append(Medal.NEMESIS)
 
 		return out

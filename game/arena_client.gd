@@ -112,6 +112,9 @@ var extras: ArenaClientExtras = null
 @export_range(0, 15, 1) var offline_bots: int = 3
 
 var _offline := true
+var _solo_binder: DotGameConfigBinder = null
+var _workbench: Node = null
+var _workbench_open := false
 var _sampler: DotFpsSampler = null
 var _fire := DotWeaponCommand.new()
 
@@ -279,6 +282,8 @@ func _ready() -> void:
 	# collides against it.
 	game.headless = true
 	game.register_service = _offline
+	if _offline:
+		_load_solo_config()
 	add_child(game)
 
 	# Connected here, before anything can create a player, rather than inside
@@ -731,8 +736,41 @@ static func _startup_map() -> ArenaMap:
 	return map
 
 
+## Solo: the same cfg/ layers as a server (lenient here), so shipped defaults and a yml reach a
+## solo game; the noblock rules come from their own layers.
+func _load_solo_config() -> void:
+	_solo_binder = DotGameConfigBinder.create(game.config, "game-arena", "arena", "user://cfg/arena.json")
+	DotLog.result(CHANNEL, "solo config", _solo_binder.load_layers())
+	game.config_binder = _solo_binder
+	DotLog.result(CHANNEL, "solo noblock", game.make_noblock())
+
+
+## Solo: F9 opens dot-workbench over the config and noblock sets (nothing without the addon).
+func _start_solo_workbench() -> void:
+	var wb := DotGameWorkbench.new()
+	wb.name = "Workbench"
+	wb.listen_host_fn = func() -> bool: return true
+	wb.add_set(_solo_binder.profile_set(), "Game settings")
+	if game.noblock != null:
+		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
+	add_child(wb)
+	var started := wb.start()
+	DotLog.result(CHANNEL, "the workbench", started)
+	if not started.ok or wb.api == null:
+		return
+	_solo_binder.attach(wb.api.runtime)
+	if game.noblock != null:
+		game.noblock.binder.attach(wb.api.runtime)
+	wb.open_changed.connect(func(open: bool) -> void:
+		_workbench_open = open
+		if open:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE)
+	_workbench = wb
+
+
 func _start_offline() -> void:
 	game.start(0)
+	_start_solo_workbench()
 
 	# Offline this game is the authority, so the confirmations come off it directly; the
 	# same handlers a server's HIT, AWARD and KILL reach. The feed is the HUD's own
@@ -788,6 +826,9 @@ func _build_netcode() -> DotResult:
 	# The server's `mp_teammate_passthrough` through the link (ArenaGame.follow_server_cvars).
 	if link != null:
 		var _following := game.follow_server_cvars(link)
+		platform.map_config_game = "game-arena"
+		DotLog.result(CHANNEL, "noblock", platform.add_noblock(game, Callable(game, "block_side")))
+		game.noblock = platform.noblock
 
 	net = DotNetManager.new()
 	net.name = "Net"
@@ -945,7 +986,7 @@ func _wire_chat_window() -> void:
 
 ## Something other than the cover has the keyboard or the screen.
 func _input_busy() -> bool:
-	return (presentation != null and presentation.swallows_input()) \
+	return _workbench_open or (presentation != null and presentation.swallows_input()) \
 		or (game_menu != null and game_menu.any_open())
 
 
@@ -960,7 +1001,7 @@ func _suspend_input(blocked: bool) -> void:
 
 ## Whether the menu, its help or the console is up, in which case the mouse is a pointer.
 func _menu_open() -> bool:
-	return game_menu != null and game_menu.any_open()
+	return _workbench_open or game_menu != null and game_menu.any_open()
 
 
 ## What a player typed, on its way to the server.

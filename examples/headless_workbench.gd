@@ -8,7 +8,7 @@ extends Node
 ## [/codeblock]
 
 const ArenaGame := preload("../game/arena_game.gd")
-const CHECKS := 9
+const CHECKS := 10
 
 var _passed := 0
 var _failed := 0
@@ -50,6 +50,19 @@ func _run() -> void:
 	var files: Dictionary = wb.exporter.call("collect")
 	var text: String = files.get("cfg/game/game-arena/config/game.yml", "")
 	_check(text == "horde_cap: 12\n", "the export holds just the changed field in the cfg layout")
+	var root := "user://cfgtest_arena_export"
+	var dir := root.path_join("game/game-arena/config")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var out := FileAccess.open(dir.path_join("game.yml"), FileAccess.WRITE)
+	out.store_string(text)
+	out.close()
+	var again := ArenaGame.new()
+	var reload := DotGameConfigBinder.create(again.config, "game-arena", "arena")
+	reload.strict = true
+	reload.roots = PackedStringArray([root])
+	_check(reload.load_layers().ok and again.config.horde_cap == 12, "the export loads back as the defaults")
+	again.free()
+	DirAccess.remove_absolute(dir.path_join("game.yml"))
 	var other: Variant = wb.api.handle("somebody", {"op": "set", "kind": set.rel_path, "id": binder.profile_id, "key": "horde_cap", "value": 13})
 	_check(not other.ok, "another actor is refused without a permit")
 	wb.permit_fn = func(actor: Variant, _flag: String) -> bool: return actor == "mod"

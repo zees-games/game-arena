@@ -42,3 +42,50 @@ func validate() -> DotResult:
 	if horde_spawn_max_distance <= horde_spawn_min_distance:
 		return DotResult.fail(DotError.CODE_INVALID, "horde_spawn_max_distance must exceed horde_spawn_min_distance")
 	return DotResult.success(null)
+
+
+@export_group("Players")
+## Health a player spawns with and heals up to.
+@export_range(1.0, 1000.0, 1.0) var player_health: float = 100.0
+
+## Armour a player can carry.
+@export_range(0.0, 1000.0, 1.0) var player_armour: float = 100.0
+
+## Health regained per second; 0 keeps health a pickup.
+@export_range(0.0, 100.0, 0.5) var player_regen: float = 0.0
+
+## How far under an imported map's bounds a player is counted as out of it, metres.
+@export_range(1.0, 200.0, 1.0) var fall_out_depth: float = 10.0
+
+@export_group("Match")
+## Seconds before a dead player respawns; -1 keeps each mode's own.
+@export_range(-1.0, 60.0, 0.5) var respawn_delay_sec: float = -1.0
+
+## Seconds of protection after a spawn; -1 keeps each mode's own.
+@export_range(-1.0, 60.0, 0.5) var spawn_protection_sec: float = -1.0
+
+## Friendly fire: -1 keeps each mode's own, 0 off, 1 on.
+@export_range(-1, 1, 1) var friendly_fire: int = -1
+
+@export_group("Awards")
+## Points a kill is worth before its medals.
+@export_range(0, 1000, 1) var award_kill_points: int = 100
+
+## Kills by one player this close together (seconds) chain into a double, a triple, a multi kill.
+@export_range(0.5, 30.0, 0.5) var award_multi_window_sec: float = 4.0
+
+## Ending a streak at least this long is a shutdown.
+@export_range(2, 50, 1) var award_shutdown_at: int = 5
+
+## Kills closer than this (metres) are point blank.
+@export_range(0.5, 50.0, 0.5) var award_point_blank_m: float = 3.0
+
+## Kills from at least this far (metres) are long shots.
+@export_range(5.0, 500.0, 1.0) var award_long_shot_m: float = 30.0
+
+## Kills of one victim without being killed back that make you their nemesis.
+@export_range(2, 20, 1) var award_nemesis_at: int = 3
+
+@export_group("Bots")
+## Players a server fills to with bots when nothing else sets bot_quota.
+@export_range(0, 32, 1) var bot_quota: int = 4

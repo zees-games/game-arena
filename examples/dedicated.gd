@@ -45,7 +45,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 181
+const CHECKS := 183
 
 var _passed := 0
 var _failed := 0
@@ -1485,6 +1485,13 @@ func _test_bots() -> void:
 
 	# They fight: within a few seconds one of them has fired at somebody it can see.
 	var fired := false
+	# The first map of a fresh server: a pressed trigger is not a shot, so count the shots the
+	# arsenal really let go (a bot with no weapon ready pressed the button and fired nothing).
+	var shots := [0]
+	for id in module.bridge.bot_ids():
+		_game.player_for(id).used.connect(func(outcome: DotWeaponOutcome) -> void:
+			if outcome != null and outcome.used:
+				shots[0] += 1)
 	for _i in int(6.0 * Engine.physics_ticks_per_second):
 		await get_tree().physics_frame
 		for id in module.bridge.bot_ids():
@@ -1494,6 +1501,18 @@ func _test_bots() -> void:
 		if fired:
 			break
 	_check(fired, "the bots fight")
+	# The warmup and the frozen countdown come first: nobody shoots in them, by design.
+	var waited := 0.0
+	while _game.match_node.state != DotMatch.State.LIVE and waited < 40.0:
+		await _wait_ticks(1.0)
+		waited += 1.0
+	_check(_game.match_node.state == DotMatch.State.LIVE, "the first round of a fresh server goes live", "%.0f s" % waited)
+	shots[0] = 0
+	for _i in int(10.0 * Engine.physics_ticks_per_second):
+		if shots[0] > 0:
+			break
+		await get_tree().physics_frame
+	_check(shots[0] > 0, "and the bots fire within 10 s of it going live, on the first map of a fresh server", str(shots[0]))
 
 	_server.console.execute("bot_quota_mode off")
 	await _wait_ticks(1.5)

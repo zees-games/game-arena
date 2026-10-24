@@ -49,6 +49,10 @@ func _ready() -> void:
 		DotGameConfigBinder.fail_boot(get_tree(), loaded)
 		return
 	game.config_binder = binder
+	var blocks := game.make_noblock()
+	if not blocks.ok and blocks.error.code != DotError.CODE_UNSUPPORTED:
+		DotGameConfigBinder.fail_boot(get_tree(), blocks)
+		return
 	add_child(game)
 	_start_workbench(binder)
 
@@ -110,7 +114,11 @@ func _start_workbench(binder: DotGameConfigBinder) -> void:
 	wb.name = "Workbench"
 	wb.dedicated = DisplayServer.get_name() == "headless"
 	wb.add_set(binder.profile_set(), "Game settings")
+	if game.noblock != null:
+		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
 	add_child(wb)
 	var started := wb.start()
 	if started.ok and wb.api != null:
 		binder.attach(wb.api.runtime)
+		if game.noblock != null:
+			game.noblock.binder.attach(wb.api.runtime)

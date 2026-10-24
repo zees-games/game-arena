@@ -2157,6 +2157,8 @@ func _test_solid_players_predicted() -> void:
 	var ids := [server_a.player_id, server_b.player_id]
 	var sides := {ids[0]: "1", ids[1]: "1"}
 	for g in games:
+		if g.noblock == null:
+			var _made := g.make_noblock(false)
 		g.block_rules.side_fn = func(id: Variant) -> Variant: return sides.get(int(id), "")
 	place.call()
 	var mates := _flight_window(2, 96, 0, {2: walk, 3: idle})

@@ -240,15 +240,16 @@ func _module_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
-	# mp_teamblock, mp_enemyblock, mp_blockcmd*, mp_blockscope and the requests' mp_blockstate:
-	# which pairs stop at each other (teammates pass, enemies stop), REPLICATED for the same
-	# reason as mp_solidplayers. `!block` and `!noblock` are dot-team's, on the console and in chat.
-	var _block_cvars := game.block_rules.bind_cvars(
-		add_cvar,
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
-		DotConVar.FLAG_REPLICATED
-	)
-	var _block_commands := DotTeamBlockCommands.new(game.block_rules).install(self)
+	# mp_teamblock, mp_enemyblock, mp_blockcmd*, mp_blockscope, mp_blockstate and !block / !noblock:
+	# dot-game's DotGameNoblock, REPLICATED for the same reason as mp_solidplayers. The server
+	# scene builds it (strict cfg layers); a suite that only builds a module gets a lenient one.
+	# A module loaded again over the same game gets fresh rules: the old ones are bound to the
+	# old console.
+	if game.noblock == null or game.noblock == _noblock_bound:
+		DotLog.result(CHANNEL, "noblock", game.make_noblock(false))
+	if game.noblock != null:
+		DotLog.result(CHANNEL, "noblock cvars", game.noblock.bind(add_cvar, self))
+		_noblock_bound = game.noblock
 
 	# mp_vm_sway, _strafe_tilt, _bob, _landing and _aim_steadiness: zee-dot-weapons' view
 	# model feel. REPLICATED, because the hands are drawn on each client, not on the server.
@@ -278,7 +279,7 @@ func _module_load() -> DotResult:
 	# four, and every person who joins takes a bot's place. dot-server's DotBotQuota is the
 	# rule and its three cvars (bot_quota, bot_quota_mode, bot_quota_empty) are the
 	# operator's; `bot_quota_mode off` is a server with no bots.
-	_bot_quota = DotBotQuota.install(self, DEFAULT_BOT_QUOTA)
+	_bot_quota = DotBotQuota.install(self, game.config.bot_quota)
 
 	# [b]How the bots play[/b]: dot-bot's `bot_difficulty` (easy, medium, hard, nightmare;
 	# medium by default) and every `bot_*` setting it bundles, each overridable. On the game,
@@ -722,14 +723,12 @@ func _build_vote() -> DotResult:
 	return DotResult.success(vote)
 
 
-## Players the default quota fills a server to.
-const DEFAULT_BOT_QUOTA := 4
-
 ## How often the bot count is put right, seconds. Not every tick: adding a player is a
 ## spawn, a loadout and a JOIN to everybody, and nobody notices a bot arriving a second late.
 const BOT_CHECK_SEC := 1.0
 
 var _bot_quota: DotBotQuota = null
+var _noblock_bound: DotGameNoblock = null
 var _bot_roster := DotBotRoster.new()
 var _since_bot_check := 0.0
 
