@@ -463,6 +463,9 @@ var block_rules: Object = null
 ## dot-game's wiring of [member block_rules]: its cfg layers, cvars and chat commands.
 var noblock: DotGameNoblock = null
 
+## Whether a module has bound [member noblock]'s cvars and commands (they cannot be bound twice).
+var noblock_bound := false
+
 ## The view model's motion amounts: zee-dot-weapons' `mp_vm_*` cvars. Bound by the module
 ## (REPLICATED) and followed by the client, which is the end that draws the hands. The
 ## client's view model is handed this object, so one cvar change reaches the sway.
@@ -1710,6 +1713,7 @@ func make_noblock(strict := DotGameConfigBinder.default_strict()) -> DotResult:
 	if not made.ok:
 		return made
 	noblock = made.value
+	noblock_bound = false
 	noblock.feed(body_rules)
 	block_rules = noblock.rules
 	return made

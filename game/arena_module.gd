@@ -245,11 +245,11 @@ func _module_load() -> DotResult:
 	# scene builds it (strict cfg layers); a suite that only builds a module gets a lenient one.
 	# A module loaded again over the same game gets fresh rules: the old ones are bound to the
 	# old console.
-	if game.noblock == null or game.noblock == _noblock_bound:
+	if game.noblock == null or game.noblock_bound:
 		DotLog.result(CHANNEL, "noblock", game.make_noblock(false))
 	if game.noblock != null:
 		DotLog.result(CHANNEL, "noblock cvars", game.noblock.bind(add_cvar, self))
-		_noblock_bound = game.noblock
+		game.noblock_bound = true
 
 	# mp_vm_sway, _strafe_tilt, _bob, _landing and _aim_steadiness: zee-dot-weapons' view
 	# model feel. REPLICATED, because the hands are drawn on each client, not on the server.
@@ -728,7 +728,6 @@ func _build_vote() -> DotResult:
 const BOT_CHECK_SEC := 1.0
 
 var _bot_quota: DotBotQuota = null
-var _noblock_bound: DotGameNoblock = null
 var _bot_roster := DotBotRoster.new()
 var _since_bot_check := 0.0
 
