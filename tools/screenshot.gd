@@ -94,6 +94,11 @@ func _initialize() -> void:
 		_stage_feel(map, id)
 		return
 
+	var action_at := args.find("--action")
+	if action_at >= 0 and action_at + 2 < args.size():
+		_stage_action(map, id, StringName(args[action_at + 1]), args[action_at + 2])
+		return
+
 	var glance_at := args.find("--glance")
 	if glance_at >= 0:
 		var mode := StringName(args[glance_at + 1]) if glance_at + 1 < args.size() and not args[glance_at + 1].begins_with("--") else &"ffa"
@@ -205,6 +210,7 @@ var _armed := false
 ## truthy, so the tree quits on the first frame and writes nothing. That is what the
 ## first version of this file did, and its symptom was a clean exit with an empty
 ## `screenshots/`.
+var _action_figure: DotHumanoidFigure = null
 var _toy_box: DotPropToyBox = null
 var _toy_placements: Array = []
 
@@ -225,6 +231,11 @@ func _process(delta: float) -> bool:
 
 	for body in _players:
 		body.present(delta)
+
+	# `--action`: a body in this stage is not presented as a client's is, so the figure is driven here.
+	if _action_figure != null:
+		_action_figure.set_motion({"on_floor": true, "vertical": 0.0, "crouched": false, "alive": true, "aim": 0.0})
+		_action_figure.animate(0.0, delta)
 
 	if _index >= _shots.size():
 		return true
@@ -1213,6 +1224,23 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 				print("fx: %d splatters" % presentation.blood.decals.blood_count()),
 			"wait": 4,
 		},
+	]
+
+
+## `--action <kind> <id>` (`--action emote dance`, `--action pose sit`): a figure playing an avatar
+## action from the front, early and later in the clip. The id goes through dot-user-avatar's own list.
+func _stage_action(map: ArenaMap, id: StringName, kind: StringName, action: String) -> void:
+	var body := _cast(map, 1, "Actor", Vector3(0.0, 1.3, 0.0), 0.0)
+	_action_figure = body.figure
+	var entry := DotAvatarActions.defaults().find(kind, action)
+	var play := func() -> void:
+		var ok: bool = body.figure != null and body.figure.play_action(StringName(action), bool(entry.get("loop", false)), 0.0)
+		print("action %s/%s: figure=%s played=%s" % [kind, action, body.figure != null, ok])
+	var from := Vector3(0.0, 2.7, -3.2)
+	var at := Vector3(0.0, 2.2, 0.0)
+	_shots = [
+		{"name": "%s_action_%s_a" % [String(id), action], "from": from, "at": at, "arm": play, "wait": 12},
+		{"name": "%s_action_%s_b" % [String(id), action], "from": from, "at": at, "wait": 30},
 	]
 
 

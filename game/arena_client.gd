@@ -361,7 +361,19 @@ func _ready() -> void:
 
 	_grab_mouse()
 	DotLog.result(CHANNEL, "the platform", platform.setup())
+	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
+	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
 	_suspend_input(platform.is_input_blocked())
+
+
+## The figure an avatar action plays on: that peer's player, or the local one offline.
+func _avatar_figure(peer_id: int) -> Object:
+	var who: ArenaPlayer = null
+	if bridge != null and peer_id != 0:
+		who = game.player_for(bridge.session_for_peer(peer_id))
+	if who == null and player != null and (net == null or peer_id == net.local_peer_id):
+		who = player
+	return who.figure if who != null else null
 
 
 func _exit_tree() -> void:
@@ -882,6 +894,8 @@ func _build_netcode() -> DotResult:
 
 	# Under the link, and NAMED the same as the server's — the name is the routing.
 	bridge.open_link(link)
+	# Before the seal and in the server's order (after the bridge), or the actions stay local.
+	DotLog.result(CHANNEL, "avatar action message", DotGameAvatarActionMessage.register(net))
 	net.messages.seal()
 
 	# The client halves. Built here rather than in `_ready` because every one of them
