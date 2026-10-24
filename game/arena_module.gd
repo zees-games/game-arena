@@ -441,6 +441,11 @@ func _build_netcode() -> DotResult:
 	# and figure once dot-platform has them. See `_wire_identity`.
 	_wire_identity()
 
+	# Avatar actions: the relay, and the loadouts the join/leave handlers below tell.
+	var avatar := DotGameAvatarActionRelay.serve(net, self, server)
+	if not avatar.ok:
+		log_warn("avatar actions not served", {"why": avatar.error.message})
+
 	# Sealed once, on both ends, after every type is registered: the table each end sends
 	# the other is a promise about what it has, and a type registered after it went out is
 	# one the peer was told this end does not have.
@@ -1160,6 +1165,10 @@ func _add(session: DotClientSession) -> void:
 
 	_joined[session.userid] = true
 
+	var loadouts := DotGameAvatarActionRelay.loadouts_of(net)
+	if loadouts != null:
+		loadouts.add_peer(session.peer_id)
+
 	if loading != null:
 		var _seated := loading.add(session)
 
@@ -1185,6 +1194,10 @@ func _on_client_disconnected(session: DotClientSession, _reason: String) -> void
 	# its acknowledgement record as well as taking the player out of the match.
 	bridge.remove_peer(session.peer_id)
 	_joined.erase(session.userid)
+
+	var loadouts := DotGameAvatarActionRelay.loadouts_of(net)
+	if loadouts != null:
+		loadouts.remove_peer(session.peer_id)
 
 	if loading != null:
 		loading.remove(session)
