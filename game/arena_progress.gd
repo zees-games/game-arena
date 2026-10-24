@@ -44,7 +44,7 @@ signal award_unlocked(player_id: int, achievement: DotAchievement)
 @export_range(0.0, 600.0, 5.0) var report_interval: float = 30.0
 
 ## Where the boards live; null builds one layered from [constant BOARDS_CONFIG_PATH].
-var boards_config: ArenaBoardsConfig = null
+var boards_config: DotBoardsConfig = null
 
 const BOARDS_CONFIG_PATH := "user://arena_boards.json"
 
@@ -215,13 +215,13 @@ func _build() -> DotResult:
 	boards.report_to_backbone = report_to_backbone
 	boards.report_interval = report_interval
 	if boards_config == null:
-		boards_config = ArenaBoardsConfig.new()
+		boards_config = DotBoardsConfig.for_game("arena")
 		var layered := boards_config.load_layered(BOARDS_CONFIG_PATH)
 		if not layered.ok:
 			DotLog.warn(CHANNEL, "the boards configuration is not usable, using memory", {
 				"why": str(layered.error),
 			})
-			boards_config = ArenaBoardsConfig.new()
+			boards_config = DotBoardsConfig.for_game("arena")
 	boards.backend = boards_config.backend
 	add_child(boards)
 

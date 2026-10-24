@@ -5182,7 +5182,7 @@ func _test_progression() -> void:
 ## The _async forms against the memory store (the default) and against a remote one.
 func _test_boards_async(progress) -> void:
 	_check(progress.boards.backend == "memory", "the boards backend defaults to memory")
-	_check(ArenaBoardsConfig.new().validate().ok, "the boards config validates")
+	_check(DotBoardsConfig.for_game("arena").validate().ok, "the boards config validates")
 
 	var values := DotStatsValues.new()
 	values.values[ArenaStats.KILLS] = 7.0
