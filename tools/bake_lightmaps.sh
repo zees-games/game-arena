@@ -26,7 +26,13 @@ mkdir -p .godot
 
 if [[ -z "${BAKE_LOCAL:-}" && -x ../gpu.sh ]]; then
     rm -rf lightbake_work
-    ../gpu.sh run "$project" "${scenes[@]}" 2>&1 | grep -E '^LIGHTMAP_SCENE|ERROR' || true
+    # A step that hangs must end with a way out, never a silent wait.
+    rc=0; timeout "${GPU_SCENES_TIMEOUT:-900}" ../gpu.sh run "$project" "${scenes[@]}" > "$log.scenes" 2>&1 || rc=$?
+    grep -E '^LIGHTMAP_SCENE|ERROR' "$log.scenes" || true
+    if [[ $rc -eq 124 ]]; then
+        echo "the GPU box did not finish writing scenes in ${GPU_SCENES_TIMEOUT:-900}s (GPU_BOX=${GPU_BOX:-staging}); try GPU_BOX=staging02, or BAKE_LOCAL=1 $0 $*" >&2
+        exit 1
+    fi
     # No sync between the steps: the scenes were written there, and a sync would delete them.
     ../gpu.sh exec timeout "${GPU_TIMEOUT:-1800}" xvfb-run -a -s "-screen 0 1280x720x24" \
         gpu/bin/godot --path "gpu/godot/$project" --rendering-driver vulkan --gpu-index "${GPU_INDEX:-0}" \
