@@ -293,6 +293,12 @@ var progress: ArenaProgress = null
 ## simulated them.
 var horde: ArenaHorde = null
 
+## The server's tunables; the server scene replaces it with the layered one.
+var config := ArenaConfig.new()
+
+## Binds [member config] to cvars and the workbench; set by the server scene.
+var config_binder: DotGameConfigBinder = null
+
 ## How good the monsters are, server-wide, on top of each kind's character.
 ##
 ## [b]On the game rather than on the horde, because the horde does not outlive a mode

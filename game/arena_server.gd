@@ -39,7 +39,18 @@ func _ready() -> void:
 	# converge at all.
 	game.headless = true
 	game.tick_rate = host_tick_rate()
+
+	# Strict on a dedicated server: a typo in a config file or an unknown --map stops the boot.
+	var binder := DotGameConfigBinder.create(game.config, "game-arena", "arena", "user://cfg/arena.json")
+	var loaded := binder.load_layers()
+	if loaded.ok:
+		loaded = binder.check_map(asked_map(), ArenaMap.ids() + ArenaMap.imported_ids())
+	if not loaded.ok:
+		DotGameConfigBinder.fail_boot(get_tree(), loaded)
+		return
+	game.config_binder = binder
 	add_child(game)
+	_start_workbench(binder)
 
 	var built := game.setup(startup_map())
 
@@ -67,14 +78,20 @@ static func host_tick_rate() -> int:
 	return maxi(1, Engine.physics_ticks_per_second)
 
 
-static func startup_map() -> ArenaMap:
+## The id after `--map`, or "".
+static func asked_map() -> String:
 	var args := OS.get_cmdline_user_args()
 	var index := args.find("--map")
+	return args[index + 1] if index >= 0 and index + 1 < args.size() else ""
 
-	if index < 0 or index + 1 >= args.size():
+
+static func startup_map() -> ArenaMap:
+	var asked := asked_map()
+
+	if asked == "":
 		return ArenaMap.dm_box()
 
-	var id := StringName(args[index + 1])
+	var id := StringName(asked)
 	var map := ArenaMap.by_id(id)
 
 	if map == null:
@@ -85,3 +102,15 @@ static func startup_map() -> ArenaMap:
 		return ArenaMap.dm_box()
 
 	return map
+
+
+## dot-workbench: the F9 panel in the editor and debug builds, the loopback page when `workbench.enabled` is set in cfg/server.yml.
+func _start_workbench(binder: DotGameConfigBinder) -> void:
+	var wb := DotGameWorkbench.new()
+	wb.name = "Workbench"
+	wb.dedicated = DisplayServer.get_name() == "headless"
+	wb.add_set(binder.profile_set(), "Game settings")
+	add_child(wb)
+	var started := wb.start()
+	if started.ok and wb.api != null:
+		binder.attach(wb.api.runtime)

@@ -290,10 +290,10 @@ func rebuild_navigation() -> DotResult:
 func _rules() -> DotNpcDirectorRules:
 	var rules := DotNpcDirectorRules.new()
 
-	rules.peak_per_player = 8.0
-	rules.build_up_per_player = 3.5
-	rules.relax_per_player = 1.0
-	rules.absolute_cap = 36
+	rules.peak_per_player = game.config.horde_peak_per_player
+	rules.build_up_per_player = game.config.horde_build_up_per_player
+	rules.relax_per_player = game.config.horde_relax_per_player
+	rules.absolute_cap = game.config.horde_cap
 
 	rules.peak_stress = 0.7
 	rules.sustain_seconds = 5.0
@@ -305,14 +305,14 @@ func _rules() -> DotNpcDirectorRules:
 	# there is no route to spawn ahead along — a deathmatch has no direction of
 	# travel, which is why `spawn_ahead` is small rather than absent: the director
 	# still prefers to put a wave where the fight is going rather than behind it.
-	rules.spawn_min_distance = 12.0
-	rules.spawn_max_distance = 34.0
+	rules.spawn_min_distance = game.config.horde_spawn_min_distance
+	rules.spawn_max_distance = game.config.horde_spawn_max_distance
 	rules.spawn_ahead = 8.0
 	rules.behind_fraction = 0.35
 	rules.spawn_out_of_sight = false
 
-	rules.spawn_burst = 3
-	rules.spawn_interval = 0.6
+	rules.spawn_burst = game.config.horde_spawn_burst
+	rules.spawn_interval = game.config.horde_spawn_interval
 	rules.reclaim_interval = 3.0
 
 	rules.stress_per_damage = 1.1

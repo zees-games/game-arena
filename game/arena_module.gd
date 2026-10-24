@@ -158,6 +158,9 @@ func _module_load() -> DotResult:
 	_add_spawn_cvars()
 	_add_unlag_cvar()
 	_add_rate_cvar()
+	if game.config_binder != null:
+		game.config_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
+		game.config_binder.bind_commands(add_command)
 	var _rides := game.start_ride_recording(add_cvar)
 
 	add_cvar(
