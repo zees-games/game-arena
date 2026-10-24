@@ -80,4 +80,5 @@ Thumbs.db
 # it is vendored under assets/, because a delivered pack has to carry it.
 /addons/zee_weapons
 /addons/dot_game
+/addons/dot_workbench
 /lightbake_work/
