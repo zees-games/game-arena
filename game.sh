@@ -13,7 +13,8 @@
 #   ./game.sh test NAME...         run only these suites (e.g. ./game.sh test headless_net)
 #   ./game.sh soak [MAP] [MIN]     bot soak on tools/soak.tscn (report in .godot/test-logs/soak-MAP.json)
 #   ./game.sh suites               list the test suites
-#   ./game.sh shot [ARGS]          save a screenshot to screenshots/ (tools/shot.sh or tools/screenshot.sh)
+#   ./game.sh visual [--update] [MAP...]  compare map frames to tests/golden (tools/visual_check.sh)
+#   ./game.sh shot [ARGS]        save a screenshot to screenshots/ (tools/shot.sh or tools/screenshot.sh)
 #
 # Options (before the command):
 #   --godot PATH     the Godot 4.7 binary to use (default: $GODOT, then godot on PATH)
@@ -263,6 +264,10 @@ case "$cmd" in
             exec "$tool" "$@"
         done
         die "$GAME_NAME has no screenshot tool." 2
+        ;;
+    visual)
+        [ -x tools/visual_check.sh ] || die "$GAME_NAME has no visual check." 2
+        exec tools/visual_check.sh "$@"
         ;;
     *)
         usage

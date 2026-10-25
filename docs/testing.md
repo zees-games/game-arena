@@ -67,6 +67,8 @@ The family's rule is that an exported setting whose name occurs once in its repo
 
 No suite reaches the screen. The render tools are in [client.md](client.md#looking-at-it).
 
+**`tools/visual_check.sh [--update] [MAP...]`** is the one thing that compares frames: it renders overview, eye and roof of each built-in map at 800x450 through `tools/screenshot.sh` (so on a GPU box) and compares them to `tests/golden/<map>_<shot>.png`. A frame fails when more than `VISUAL_MAX_PCT` (0.5) percent of its pixels move by more than `VISUAL_PIXEL_TOL` (12) in a channel, or its mean absolute difference exceeds `VISUAL_MAX_MEAN` (0.5); a failure leaves golden, frame and an 8x amplified diff side by side in `.godot/test-logs/visual/`. A missing golden fails. Re-record with `--update` after looking at the frames, and only on the same kind of GPU the goldens came from (the laptop's GTX 1660 Ti); llvmpipe frames will differ. Two renders of one map are identical except for under 100 pixels in the eye and roof frames (a toy settling), far below the tolerance. Imported maps are not covered: they are played for a while and move.
+
 ## Timing a frame
 
 No suite measures a browser's frame either. A threadless web export is the case that matters, and `cl_perf` is how it reports: export the shell, serve a pack, open `embed.html?server=ws://127.0.0.1:6074&cl_perf=10` in a browser, and read the `arena.perf` lines in its console. What they hold and what they showed is in [netcode.md](netcode.md#a-frames-cost). A machine busy with other work moves the frame times by a factor of three between runs, so compare the work counts (`snapshot`, `replay_n`) or runs taken back to back.
