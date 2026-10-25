@@ -91,6 +91,13 @@ func _sanitise() -> void:
 	view_lag_q = clampi(view_lag_q, -1, MAX_VIEW_LAG_Q)
 
 
+## Stands still and holds fire, looking where it looked (DotNetConfig.starved_input_hold_sec).
+func _neutralise() -> void:
+	move.move = Vector2.ZERO
+	move.buttons = 0
+	fire.buttons = 0
+
+
 ## The view lag in ticks, or -1 for none sent.
 func view_lag_ticks() -> float:
 	return float(view_lag_q) * 0.25 if view_lag_q >= 0 else -1.0

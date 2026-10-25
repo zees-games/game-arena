@@ -147,7 +147,8 @@ for b in "${USE[@]}"; do tc_box "$b" check "${BOXDEV[$b]}" || die "$b not clean 
 for b in "${USE[@]}"; do
 	say "syncing the project to $b"
 	GPU_BOX=$b "$ROOT/../gpu.sh" sync game-arena >/dev/null || die "sync to $b failed"
-	rssh "$b" '[ -f ~/gpu/godot/game-arena/.godot/global_script_class_cache.cfg ] || (cd ~/gpu/godot/game-arena && timeout 900 ~/gpu/bin/godot --headless --path . --import >/dev/null 2>&1 </dev/null); mkdir -p /tmp/netchaos'
+	# Every run, not only without a cache: a class that moved addon leaves a stale cache.
+	rssh "$b" '(cd ~/gpu/godot/game-arena && timeout 900 ~/gpu/bin/godot --headless --path . --import >/dev/null 2>&1 </dev/null); mkdir -p /tmp/netchaos'
 done
 
 # Clock offsets: a box's unix time minus this machine's, corrected for half the ssh round trip.

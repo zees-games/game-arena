@@ -14,6 +14,8 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 ## active windows overlap and the settle comes after all of them.
 
 const READY_SECONDS := 45.0
+## Seconds a client stays connected after its report, so every report sees the full roster.
+const LINGER_SEC := 3.0
 
 var _server := "127.0.0.1:27210"
 var _name := "A"
@@ -44,6 +46,8 @@ var _never_ready := false
 var _gate_open := true
 var _errors: PackedStringArray = []
 var _sess_base := {"corrections": 0, "replays": 0}
+var _spikes: Array = []
+var _roster_seen: Dictionary = {}
 
 
 func _ready() -> void:
@@ -177,6 +181,43 @@ func _sample() -> void:
 	})
 
 
+## Each correction over SPIKE_M with what the link and clock looked like, so a spike in the
+## report says whether it was a respawn, a blackout or a bump. Reads and clears the predictor's
+## worst each frame, which keeps [member _worst_error] the run's maximum.
+const SPIKE_M := 0.5
+
+
+func _watch_corrections() -> void:
+	var cnet: DotNetManager = _client.get("net") if _client != null else null
+	if cnet == null or cnet.predictor == null:
+		return
+	var e: float = cnet.predictor.get("_worst_error")
+	if e <= 0.0:
+		return
+	cnet.predictor.set("_worst_error", 0.0)
+	_worst_error = maxf(_worst_error, e)
+	if e < SPIKE_M or _spikes.size() >= 40 or _now() < _start_at:
+		return
+	var p := cnet.predictor.describe()
+	var c := cnet.clock.describe()
+	var player = _client.get("player")
+	_spikes.append({"t": snappedf(_now() - _start_at, 0.01), "error_m": snappedf(e, 0.001),
+		"replayed": p.get("last_replay_ticks"), "snaps": p.get("snaps"), "alive": player != null and player.is_alive(),
+		"tick": c.get("tick"), "received_tick": c.get("received_tick"), "lead": c.get("lead"),
+		"catch_ups": c.get("catch_ups"), "clock_snaps": c.get("snaps"), "lost_ms": c.get("lost_ms"),
+		"snap_lost": cnet.stats.snapshots_lost, "out_of_order": cnet.stats.out_of_order,
+		"gap_s": snappedf(_gap_clock, 0.01), "last_mismatch": str(p.get("last_mismatch"))})
+
+
+func _watch_roster() -> void:
+	var game = _client.get("game") if _client != null else null
+	if game == null:
+		return
+	for who: ArenaPlayer in game.players():
+		if not _roster_seen.has(who.display_name):
+			_roster_seen[who.display_name] = snappedf(_now() - _start_at, 0.01)
+
+
 func _watch_gap(delta: float) -> void:
 	if _client == null:
 		return
@@ -199,6 +240,8 @@ func _wait_until(unix: float) -> void:
 		await get_tree().process_frame
 		var now := Time.get_ticks_usec()
 		_watch_gap((now - last) / 1e6)
+		_watch_corrections()
+		_watch_roster()
 		last = now
 		next_sample -= (now - last) / 1e6 + get_process_delta_time()
 		if next_sample <= 0.0:
@@ -239,6 +282,10 @@ func _run() -> void:
 			else:
 				_rejoin_seconds.append(snappedf(_now() - drops_started, 0.1))
 	_report(t0)
+	# Clients finish up to a few hundred ms apart; leaving at once had the first one's LEAVE
+	# reach the others before their own report, which read as a lost roster entry.
+	if ok:
+		await get_tree().create_timer(LINGER_SEC).timeout
 	get_tree().quit()
 
 
@@ -246,7 +293,7 @@ func _report(t0: float) -> void:
 	var out := {"name": _name, "server": _server, "unix": _now(), "start_at": _start_at,
 		"connected": not _never_ready and _client != null, "sessions": _sessions,
 		"join_seconds": _join_seconds, "disconnects": _disconnects, "rejoin_seconds": _rejoin_seconds,
-		"errors": _errors, "timeline": _timeline}
+		"errors": _errors, "timeline": _timeline, "spikes": _spikes, "roster_seen": _roster_seen}
 	if _client != null:
 		_fold_prediction()
 		var cnet: DotNetManager = _client.get("net")

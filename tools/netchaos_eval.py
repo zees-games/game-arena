@@ -133,6 +133,8 @@ def judge(run, profile, names):
         lim = tun("POS_OTHER_M", POS_OTHER_M)
         c["pos_error_others_m"] = round(worst, 3)
         check(name, "sees all %d other players" % (want - 1), len(rep.get("others", {})) >= want - 1, "saw %d" % len(rep.get("others", {})))
+        if "roster_seen" in rep:
+            check(name, "was told of all %d players" % want, len(rep["roster_seen"]) >= want, "seen %s" % sorted(rep["roster_seen"]))
         check(name, "settled view of the others within %.2f m of the server" % lim, worst <= lim, "%.3f m over %d" % (worst, seen))
         log = os.path.join(run, "client-%s.log" % name)
         _, races = grep(log, re.compile(r'Node not found: "Netchaos/Server/Arena"'))
