@@ -2,6 +2,7 @@
 extends Node
 
 const ArenaAmbience := preload("arena_ambience.gd")
+const ArenaConfig := preload("arena_config.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaEffects := preload("arena_effects.gd")
 const ArenaHorde := preload("arena_horde.gd")

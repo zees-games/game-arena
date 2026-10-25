@@ -1,4 +1,3 @@
-class_name ArenaConfig
 extends DotConfig
 
 ## Arena's server tunables for [DotGameConfigBinder]: `arena_<field>` cvars, a `config` profile at
