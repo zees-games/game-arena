@@ -1,0 +1,14 @@
+# game-arena: every key of this file at its code default, commented out. Uncomment a line to change it;
+# an operator overrides in cfg/server/game/game-arena/config_match/game.yml. Layers: defaults < this < env < argv.
+
+# --- Match
+# Seconds before a dead player respawns; -1 keeps each mode's own. [-1.0..60.0]
+# respawn_delay_sec: -1.0
+# Seconds of protection after a spawn; -1 keeps each mode's own. [-1.0..60.0]
+# spawn_protection_sec: -1.0
+# Friendly fire: -1 keeps each mode's own, 0 off, 1 on. [-1..1]
+# friendly_fire: -1
+
+# --- Bots
+# Players a server fills to with bots when nothing else sets bot_quota. [0..32]
+# bot_quota: 4

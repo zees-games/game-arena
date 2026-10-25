@@ -4,7 +4,10 @@ const ArenaPaths := preload("arena_paths.gd")
 
 const ArenaBoards := preload("arena_boards.gd")
 const ArenaEvents := preload("arena_events.gd")
+const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaGame := preload("arena_game.gd")
+## The workbench kind of the ambience cvar set (saved to cfg/.../ambience/server.yml).
+const AMBIENT_KIND := "ambience"
 const ArenaMapConfig := preload("arena_map_config.gd")
 const ArenaIdentity := preload("arena_identity.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -263,6 +266,8 @@ func _module_load() -> DotResult:
 	var _feel_cvars := game.feel_rules.bind_cvars(
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
+
+	_start_workbench()
 
 	# A real server keeps what its monsters learn of each map across restarts. Here and
 	# not in ArenaGame, because every suite builds an ArenaGame and only a server loads this.
@@ -1001,6 +1006,31 @@ func _on_cover_report(peer_id: int, payload: Dictionary) -> void:
 
 	if loading != null and covered is bool:
 		loading.report_cover(peer_id, covered)
+
+
+## Starts the workbench the server scene built: the config files, noblock and the arena_ambient* cvars as sets.
+func _start_workbench() -> void:
+	var wb := game.workbench
+	if wb == null:
+		return
+	var ambient_set := DotGameWorkbench.cvar_set(console, ArenaAmbience.cvar_types(), AMBIENT_KIND)
+	if ambient_set != null:
+		wb.add_set(ambient_set, "Ambience (arena_ambient*)")
+	var started := wb.start()
+	if not started.ok:
+		DotLog.result(CHANNEL, "the workbench", started)
+		return
+	if wb.api == null:
+		return
+	var rt := wb.api.runtime as DotProfileRuntime
+	if rt == null:
+		return
+	if game.config_binder != null:
+		game.config_binder.attach(rt)
+	if game.noblock != null:
+		game.noblock.binder.attach(rt)
+	if ambient_set != null:
+		var _applied := DotGameWorkbench.bind_cvar_set(ambient_set, rt, console)
 
 
 func _module_unload() -> void:

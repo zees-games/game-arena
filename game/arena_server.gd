@@ -1,5 +1,6 @@
 extends Node
 
+const ArenaConfig := preload("arena_config.gd")
 const ArenaGame := preload("arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 
@@ -41,7 +42,7 @@ func _ready() -> void:
 	game.tick_rate = host_tick_rate()
 
 	# Strict on a dedicated server: a typo in a config file or an unknown --map stops the boot.
-	var binder := DotGameConfigBinder.create(game.config, "game-arena", "arena", "user://cfg/arena.json")
+	var binder := ArenaConfig.make_binder(game.config, "user://cfg/arena.json")
 	var loaded := binder.load_layers()
 	if loaded.ok:
 		loaded = binder.check_map(asked_map(), ArenaMap.ids() + ArenaMap.imported_ids())
@@ -113,12 +114,10 @@ func _start_workbench(binder: DotGameConfigBinder) -> void:
 	var wb := DotGameWorkbench.new()
 	wb.name = "Workbench"
 	wb.dedicated = DisplayServer.get_name() == "headless"
-	wb.add_set(binder.profile_set(), "Game settings")
+	for set: DotProfileSet in binder.profile_sets():
+		wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
 	if game.noblock != null:
 		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
 	add_child(wb)
-	var started := wb.start()
-	if started.ok and wb.api != null:
-		binder.attach(wb.api.runtime)
-		if game.noblock != null:
-			game.noblock.binder.attach(wb.api.runtime)
+	# Started by ArenaModule once the arena_ambient* cvars exist, so they are a set beside the config.
+	game.workbench = wb

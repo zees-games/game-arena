@@ -11,6 +11,7 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
 const ArenaKillcam := preload("arena_killcam.gd")
+const ArenaConfig := preload("arena_config.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaMode := preload("arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -755,7 +756,7 @@ static func _startup_map() -> ArenaMap:
 ## Solo: the same cfg/ layers as a server (lenient here), so shipped defaults and a yml reach a
 ## solo game; the noblock rules come from their own layers.
 func _load_solo_config() -> void:
-	_solo_binder = DotGameConfigBinder.create(game.config, "game-arena", "arena", "user://cfg/arena.json")
+	_solo_binder = ArenaConfig.make_binder(game.config, "user://cfg/arena.json")
 	DotLog.result(CHANNEL, "solo config", _solo_binder.load_layers())
 	game.config_binder = _solo_binder
 	DotLog.result(CHANNEL, "solo noblock", game.make_noblock())
@@ -766,7 +767,8 @@ func _start_solo_workbench() -> void:
 	var wb := DotGameWorkbench.new()
 	wb.name = "Workbench"
 	wb.listen_host_fn = func() -> bool: return true
-	wb.add_set(_solo_binder.profile_set(), "Game settings")
+	for set: DotProfileSet in _solo_binder.profile_sets():
+		wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
 	if game.noblock != null:
 		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
 	add_child(wb)

@@ -1,0 +1,16 @@
+# game-arena: every key of this file at its code default, commented out. Uncomment a line to change it;
+# an operator overrides in cfg/server/game/game-arena/config_awards/game.yml. Layers: defaults < this < env < argv.
+
+# --- Awards
+# Points a kill is worth before its medals. [0..1000]
+# award_kill_points: 100
+# Kills by one player this close together (seconds) chain into a double, a triple, a multi kill. [0.5..30.0]
+# award_multi_window_sec: 4.0
+# Ending a streak at least this long is a shutdown. [2..50]
+# award_shutdown_at: 5
+# Kills closer than this (metres) are point blank. [0.5..50.0]
+# award_point_blank_m: 3.0
+# Kills from at least this far (metres) are long shots. [5.0..500.0]
+# award_long_shot_m: 30.0
+# Kills of one victim without being killed back that make you their nemesis. [2..20]
+# award_nemesis_at: 3

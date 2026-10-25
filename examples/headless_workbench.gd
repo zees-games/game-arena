@@ -7,6 +7,7 @@ extends Node
 ## godot --headless --path . res://examples/headless_workbench.tscn
 ## [/codeblock]
 
+const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const CHECKS := 10
 
@@ -30,12 +31,13 @@ func _check(ok: bool, what: String) -> void:
 func _run() -> void:
 	print("arena: workbench")
 	var game := ArenaGame.new()
-	var binder := DotGameConfigBinder.create(game.config, "game-arena", "arena")
+	var binder := ArenaConfig.make_binder(game.config)
 	_check(binder.load_layers().ok, "defaults load")
 	var wb := DotGameWorkbench.new()
 	wb.panel_mode = 2
 	wb.config = {"enabled": false}
-	wb.add_set(binder.profile_set(), "Game settings")
+	var set: DotProfileSet = binder.profile_sets()[0]
+	wb.add_set(set, "Game settings")
 	add_child(wb)
 	var started := wb.start()
 	_check(started.ok and started.value == true, "the workbench starts with a panel")
@@ -44,20 +46,19 @@ func _run() -> void:
 	wb.open()
 	_check(wb.is_open(), "F9 or the command opens it")
 	_check(wb.console_command(PackedStringArray(["close"])) == "workbench closed", "the console command closes it")
-	var set: DotProfileSet = binder.profile_set()
 	var res: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": set.rel_path, "id": binder.profile_id, "key": "horde_cap", "value": 12})
 	_check(res.ok and game.config.horde_cap == 12, "an edit in the window reaches the live config")
 	var files: Dictionary = wb.exporter.call("collect")
-	var text: String = files.get("cfg/game/game-arena/config/game.yml", "")
+	var text: String = files.get("cfg/game/game-arena/config_horde/game.yml", "")
 	_check(text == "horde_cap: 12\n", "the export holds just the changed field in the cfg layout")
 	var root := "user://cfgtest_arena_export"
-	var dir := root.path_join("game/game-arena/config")
+	var dir := root.path_join("game/game-arena/config_horde")
 	DirAccess.make_dir_recursive_absolute(dir)
 	var out := FileAccess.open(dir.path_join("game.yml"), FileAccess.WRITE)
 	out.store_string(text)
 	out.close()
 	var again := ArenaGame.new()
-	var reload := DotGameConfigBinder.create(again.config, "game-arena", "arena")
+	var reload := ArenaConfig.make_binder(again.config)
 	reload.strict = true
 	reload.roots = PackedStringArray([root])
 	_check(reload.load_layers().ok and again.config.horde_cap == 12, "the export loads back as the defaults")

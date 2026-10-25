@@ -1,0 +1,12 @@
+# game-arena: every key of this file at its code default, commented out. Uncomment a line to change it;
+# an operator overrides in cfg/server/game/game-arena/config_players/game.yml. Layers: defaults < this < env < argv.
+
+# --- Players
+# Health a player spawns with and heals up to. [1.0..1000.0]
+# player_health: 100.0
+# Armour a player can carry. [0.0..1000.0]
+# player_armour: 100.0
+# Health regained per second; 0 keeps health a pickup. [0.0..100.0]
+# player_regen: 0.0
+# How far under an imported map's bounds a player is counted as out of it, metres. [1.0..200.0]
+# fall_out_depth: 10.0

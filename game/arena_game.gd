@@ -299,6 +299,8 @@ var config := ArenaConfig.new()
 
 ## Binds [member config] to cvars and the workbench; set by the server scene.
 var config_binder: DotGameConfigBinder = null
+## The workbench the server scene built; [ArenaModule] starts it once the cvars it offers exist.
+var workbench: DotGameWorkbench = null
 
 ## How good the monsters are, server-wide, on top of each kind's character.
 ##

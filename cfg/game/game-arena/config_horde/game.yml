@@ -1,0 +1,20 @@
+# game-arena: every key of this file at its code default, commented out. Uncomment a line to change it;
+# an operator overrides in cfg/server/game/game-arena/config_horde/game.yml. Layers: defaults < this < env < argv.
+
+# --- Horde
+# Horde monsters per player at the most intense moment. [0.0..40.0]
+# horde_peak_per_player: 8.0
+# Horde monsters per player while the pressure builds. [0.0..40.0]
+# horde_build_up_per_player: 3.5
+# Horde monsters per player in a lull. [0.0..40.0]
+# horde_relax_per_player: 1.0
+# Most horde monsters alive at once, whatever the player count. [1..200]
+# horde_cap: 36
+# Nearest metres from a player the horde spawns a monster. [1.0..100.0]
+# horde_spawn_min_distance: 12.0
+# Farthest metres from a player the horde spawns a monster. [2.0..200.0]
+# horde_spawn_max_distance: 34.0
+# Monsters spawned per burst. [1..20]
+# horde_spawn_burst: 3
+# Seconds between spawn bursts. [0.1..30.0]
+# horde_spawn_interval: 0.6
