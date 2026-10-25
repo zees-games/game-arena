@@ -150,7 +150,9 @@ func _run() -> void:
 				continue
 			plan(i, edges[i], _opt(args, "--starts", 6), _opt(args, "--repairs", 32), _opt(args, "--rounds", 3))
 			# Saved after every edge: an edge is twenty minutes, and a run cut short keeps them.
-			_write(path, data)
+			# `--out FILE` writes there instead, so edges planned in parallel processes can be merged (surf_rides_all.py).
+			var out_at := args.find("--out")
+			_write(ProjectSettings.globalize_path(args[out_at + 1]) if out_at >= 0 else path, data)
 	if args.has("--demos") or args.has("--harvest"):
 		await demos(args.has("--harvest"))
 	if args.has("--measure"):
