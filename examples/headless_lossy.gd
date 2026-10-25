@@ -77,7 +77,7 @@ const RELIABLE_SECONDS := 35.0
 
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 36
+const OTHER_CHECKS := 39
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -149,6 +149,7 @@ func _run() -> void:
 				await _play_window(window)
 			await _test_wall_moves()
 			await _test_server_cvars_reach_the_client()
+			await _test_ambient_cvars_reach_the_client()
 			await _test_view_feel_and_packs_reach_the_client()
 			await _test_loading_cover()
 			await _test_leave()
@@ -458,6 +459,36 @@ func _test_server_cvars_reach_the_client() -> void:
 	var _one := _server.console.set_cvar("mp_teammate_passthrough", "1")
 	# The leave section reuses A's link; a listener left behind would outlive this section.
 	link.replicated_cvar_changed.disconnect(hear)
+	_done()
+
+
+## [b]`arena_ambient*` on a client.[/b] The server's ambience intent rides the replicated cvars, and a
+## director that follows the game's rules (as `ArenaClient` wires it) has it in its layer's config.
+func _test_ambient_cvars_reach_the_client() -> void:
+	_section("the server's arena_ambient* reaches a client's ambience director, live")
+	var a: Dictionary = _clients["A"]
+	var link: DotClientLink = a["link"]
+	var a_game: ArenaGame = a["game"]
+	var director := DotAmbienceDirector.new()
+	director.ambient = DotAmbience.new()
+	director.follow_settings(null, a_game.ambient_rules)
+	_check(link.replicated_cvar("arena_ambient_volume", "") != "" and link.replicated_cvar("arena_ambient_dir", "x") == "x",
+		"the join carried arena_ambient_volume, and the machine-local arena_ambient_dir stayed home", str(link.replicated_cvars))
+	var _vol := _server.console.set_cvar("arena_ambient_volume", "0.8")
+	var _mood := _server.console.set_cvar("arena_ambient_mood", "swamp")
+	var _off := _server.console.set_cvar("arena_ambient", "0")
+	_check(await _until(func() -> bool:
+		return is_equal_approx(director.ambient.config.volume, 0.8) and director.ambient.config.mood == "swamp" \
+			and not director.ambient.config.enabled, RELIABLE_SECONDS),
+		"a change of volume, mood and the switch reaches A's director live", str(a_game.ambient_rules.describe()))
+	var _back_vol := _server.console.set_cvar("arena_ambient_volume", "0.3")
+	var _back_mood := _server.console.set_cvar("arena_ambient_mood", "")
+	var _back_on := _server.console.set_cvar("arena_ambient", "1")
+	_check(await _until(func() -> bool:
+		return a_game.ambient_rules.is_on() and a_game.ambient_rules.mood == "", RELIABLE_SECONDS),
+		"and back", str(a_game.ambient_rules.describe()))
+	director.ambient.free()
+	director.free()
 	_done()
 
 

@@ -1,5 +1,6 @@
 extends Node
 
+const ArenaAmbience := preload("../game/arena_ambience.gd")
 const ArenaAvatars := preload("../game/arena_avatars.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
@@ -199,7 +200,7 @@ func _test_ambience_is_quiet_and_obeys_settings() -> void:
 	_check(a.ambient.target_level() < 0.5, "and the layer's target level is under half (%.2f)" % a.ambient.target_level())
 
 	var _r1 := p.settings.set_value(&"ambient_volume", 0.5)
-	_check(is_equal_approx(a.ambient.config.volume, ArenaPresentation.AMBIENT_LEVEL * 0.5), "the player's slider turns it down")
+	_check(is_equal_approx(a.ambient.config.volume, ArenaAmbience.LEVEL * 0.5), "the player's slider turns it down")
 	var _r2 := p.settings.set_value(&"ambient", false)
 	_check(not a.ambient.config.enabled, "the player's switch turns it off")
 	var _r3 := p.settings.set_value(&"ambient", true)

@@ -4,6 +4,7 @@ const ArenaPaths := preload("arena_paths.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaVote := preload("arena_vote.gd")
 const ArenaBlood := preload("arena_blood.gd")
+const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaBindings := preload("arena_bindings.gd")
 const ArenaHud := preload("arena_hud.gd")
@@ -789,9 +790,7 @@ func _build_audio() -> DotResult:
 	ambient.manager = audio
 	ambient.default_mood = &"industrial"
 	ambient.prefix_moods = AMBIENT_PREFIXES
-	ambient.rules.prefix = "arena"
-	ambient.rules.volume = AMBIENT_LEVEL
-	ambient.rules.frequency = AMBIENT_RATE
+	ambient.rules = ArenaAmbience.make_rules()
 	add_child(ambient)
 	var _moods := ambient.setup()
 	ambient.follow_settings(settings)
@@ -1427,10 +1426,6 @@ const AMBIENT_PREFIXES := {
 	"surf_": &"snow_wind", "kz_": &"cave_tunnel", "climb_": &"cave_tunnel", "xc_": &"cave_tunnel",
 	"bhop_": &"outdoor_night", "bunnyhop": &"outdoor_night",
 }
-
-## A deathmatch wants the ambience felt, not heard: under the layer's own level, and fewer one-shots.
-const AMBIENT_LEVEL := 0.3
-const AMBIENT_RATE := 0.5
 
 
 ## A map's bed, from its name: the built-in arenas are halls of machinery, a surf map is ramps

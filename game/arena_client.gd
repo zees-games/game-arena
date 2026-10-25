@@ -359,6 +359,10 @@ func _ready() -> void:
 		var netted := _build_netcode()
 		DotLog.result(CHANNEL, "netcode", netted)
 
+	# The server's arena_ambient* (a link tells them) drive the quiet layer; the player's sliders multiply on top.
+	if presentation != null and presentation.ambient != null:
+		presentation.ambient.follow_settings(presentation.settings, game.ambient_rules)
+
 	_grab_mouse()
 	DotLog.result(CHANNEL, "the platform", platform.setup())
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).

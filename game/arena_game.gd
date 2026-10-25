@@ -1,6 +1,7 @@
 @tool
 extends Node
 
+const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaEffects := preload("arena_effects.gd")
 const ArenaHorde := preload("arena_horde.gd")
@@ -439,6 +440,9 @@ var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 ## by the module (REPLICATED) and followed by the client, which is the end with a camera.
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 
+## The ambience cvars (`arena_ambient*`): bound by the module (REPLICATED), followed by a client through its link.
+var ambient_rules: DotAmbienceRules = ArenaAmbience.make_rules()
+
 ## Who a spectator may watch and whether they may fly a free camera: dot-spectate's
 ## `mp_forcecamera`, `mp_freeroam` and `mp_freeroam_speed`. Bound by the module (REPLICATED) and
 ## followed by the client, which is the end that flies the camera. One object for the life of
@@ -584,6 +588,7 @@ func follow_server_cvars(source: Object) -> bool:
 	var _bodies := ragdoll_rules.follow_cvars(source)
 	var _toys := toy_rules.follow_cvars(source)
 	var _view := view_rules.follow_cvars(source)
+	var _ambient := ambient_rules.follow_cvars(source)
 	var _spectate := spectate_rules.follow_cvars(source)
 	var _solid := body_rules.follow_cvars(source)
 	if noblock != null:

@@ -227,6 +227,13 @@ func _module_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# arena_ambient*: dot-audio's DotAmbienceRules. REPLICATED, because each client plays its own
+	# ambience under the server's intent; the directory cvar stays local.
+	var _ambient_cvars := game.ambient_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+	)
+
 	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules. REPLICATED, because
 	# each client flies its own spectator camera under them (ArenaClient.toggle_roam).
 	var _spectate_cvars := game.spectate_rules.bind_cvars(
