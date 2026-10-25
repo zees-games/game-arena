@@ -39,7 +39,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 236
+const CHECKS := 240
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
@@ -2125,6 +2125,43 @@ func _test_solid_players_predicted() -> void:
 		float(solid["worst_aligned"]) < 0.03,
 		"and the walker's client predicted the stop (worst %.3f m from the server)" % float(solid["worst_aligned"])
 	)
+	# The newest command in each packet is the encoded one, and the server keeps the first copy.
+	var walker_lag := _server_bridge.behaviour_for(session_a).last_view_lag
+	_check(
+		walker_lag >= 0.0,
+		"a walker that never fires still sends its view lag while solid (%.2f ticks)" % walker_lag
+	)
+	var saved_unlag := _server_game.max_unlag_ms
+	var cap := _server_game.collision_lag(127.0)
+	_check(
+		cap > 0.0 and cap <= ArenaGame.COLLISION_LAG_MAX_TICKS and _server_game.collision_lag(2.5) == 2.5,
+		"a claimed view lag of 127 ticks collides at most %.0f back" % cap
+	)
+	# No event link here: RULES handed over as the link would carry it.
+	var relay := func(rules: Dictionary) -> void:
+		var bytes := _server_bridge.encode_event(ArenaEvents.Kind.RULES, ArenaEvents.write_rules(rules))
+		for peer_id in _clients:
+			var _r: DotResult = _clients[peer_id]["bridge"].receive_event(bytes)
+	_server_game.movement_rules_changed.connect(relay)
+	_server_game.max_unlag_ms = 0.0
+	_check(
+		_server_game.collision_lag(4.0) < 0.0 and client_game.collision_lag(4.0) < 0.0,
+		"with arena_max_unlag_ms 0 both ends collide with the present (the limit travels in RULES)",
+		"client limit %.0f" % client_game.max_unlag_ms
+	)
+	_server_game.max_unlag_ms = saved_unlag
+	_server_game.movement_rules_changed.disconnect(relay)
+	var fresh_ticks := PackedInt32Array()
+	fresh_ticks.resize(ArenaGame.UNLAG_HISTORY)
+	fresh_ticks.fill(-1)
+	var fresh_positions := PackedVector3Array()
+	fresh_positions.resize(ArenaGame.UNLAG_HISTORY)
+	_server_game._unlag[-77] = [fresh_positions, fresh_ticks]
+	_check(
+		_server_game.unlag_position_at(-77, -0.5) == null,
+		"a view tick below 0 finds no history, not the unfilled last slot at the origin"
+	)
+	_server_game._unlag.erase(-77)
 
 	_server_game.body_rules.solid = false
 	client_game.body_rules.solid = false

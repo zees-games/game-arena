@@ -392,9 +392,19 @@ var max_unlag_ms: float = 1000.0:
 		if combat != null and combat.config != null:
 			combat.config.max_rewind_ms = max_unlag_ms
 			combat.config.lag_compensation = max_unlag_ms > 0.0
+		# A client collides with the same limit (collision_lag), so it travels in RULES.
+		if is_authority and float(movement_rules.get("max_unlag_ms", -1.0)) != max_unlag_ms:
+			set_movement_rules({"max_unlag_ms": max_unlag_ms})
 
 ## Ticks of position history kept per player for a rewind: two seconds at 64 ticks.
 const UNLAG_HISTORY := 128
+
+## The most ticks back a mover collides with the others: inside both the server's ring and a
+## client's interpolation buffer (32 snapshots), so both ends always find the same answer.
+const COLLISION_LAG_MAX_TICKS := 32.0
+
+## A jump this far in one tick (metres) is a teleport or respawn: nothing rewinds across it.
+const TELEPORT_CUT := 10.0
 
 ## id -> [PackedVector3Array positions, PackedInt32Array ticks], a ring per player.
 var _unlag: Dictionary = {}
@@ -1625,6 +1635,9 @@ func set_movement_rules(rules: Dictionary) -> void:
 	if is_authority and rules.has("killcam"):
 		apply_match_limits()
 
+	if not is_authority and rules.has("max_unlag_ms"):
+		max_unlag_ms = float(rules["max_unlag_ms"])
+
 	movement_rules_changed.emit(movement_rules)
 
 
@@ -1640,7 +1653,7 @@ func set_movement_rules(rules: Dictionary) -> void:
 ##
 ## `killcam` is the final killcam's seconds (`mp_killcam_time`, 0 off): clients play it, and the
 ## authority adds it to the match's end ([method _override_rules]).
-const SHOW_RULES: PackedStringArray = ["break_mode", "break_limbs", "break_criticals_only", "fp_body", "mode_index", "surf", "surf_air_accelerate", "killcam"]
+const SHOW_RULES: PackedStringArray = ["break_mode", "break_limbs", "break_criticals_only", "fp_body", "mode_index", "surf", "surf_air_accelerate", "killcam", "max_unlag_ms"]
 const SHOW_DEFAULTS := {"break_mode": 1.0, "break_limbs": 1.0, "break_criticals_only": 1.0, "fp_body": 0.0, "surf": 1.0, "surf_air_accelerate": 150.0, "killcam": 7.0}
 
 
@@ -1886,10 +1899,8 @@ func _unlag_record() -> void:
 		var ticks: PackedInt32Array = ring[1]
 		var slot := _tick % UNLAG_HISTORY
 		var before := (_tick - 1) % UNLAG_HISTORY
-		# A respawn or a teleport: ten metres in one tick is 640 m/s at 64 ticks, which
-		# nothing moves at. Rewinding across it would stand a player's hitboxes where they
-		# died, or at the far end of a pit, so the history starts again from here.
-		if ticks[before] == _tick - 1 and positions[before].distance_to(player.global_position) > 10.0:
+		# A respawn or a teleport: rewinding across it would stand hitboxes where they died.
+		if ticks[before] == _tick - 1 and positions[before].distance_to(player.global_position) > TELEPORT_CUT:
 			ticks.fill(-1)
 		positions[slot] = player.global_position
 		ticks[slot] = _tick
@@ -1902,7 +1913,8 @@ func _unlag_record() -> void:
 ## recorded ticks either side; null when the history does not reach that far.
 func unlag_position_at(id: int, at: float) -> Variant:
 	var ring: Array = _unlag.get(id, [])
-	if ring.is_empty():
+	# Below tick 0, -1 % 128 indexes the last slot, whose unfilled tag is -1 too.
+	if ring.is_empty() or at < 0.0:
 		return null
 	var positions: PackedVector3Array = ring[0]
 	var ticks: PackedInt32Array = ring[1]
@@ -1914,6 +1926,14 @@ func unlag_position_at(id: int, at: float) -> Variant:
 	if ticks[b] != lo + 1:
 		return positions[a]
 	return positions[a].lerp(positions[b], at - float(lo))
+
+
+## A mover's view lag in ticks as both ends collide with it: -1 (the present) when none was sent
+## or compensation is off, else at most `max_unlag_ms` and [constant COLLISION_LAG_MAX_TICKS].
+func collision_lag(view_lag: float) -> float:
+	if view_lag < 0.0 or max_unlag_ms <= 0.0:
+		return -1.0
+	return minf(view_lag, minf(max_unlag_ms * 0.001 * float(tick_rate), COLLISION_LAG_MAX_TICKS))
 
 
 ## dot-combat's rewind: every other living player, put where they were at [param view_tick].

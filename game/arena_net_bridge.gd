@@ -459,19 +459,22 @@ func _build_identity(player: ArenaPlayer, peer_id: int) -> DotNetIdentity:
 
 
 ## Where [param other_id] stands for [param mover_id]'s movement on [param tick]: where the
-## mover's client drew them, the command's view lag behind (lag-compensated collision, on
-## both ends alike). Null without a view lag (a bot, a client not yet synced): now.
+## mover's client drew them, the command's view lag behind ([method ArenaGame.collision_lag]),
+## the same on both ends. Null is now: no lag sent (a bot), compensation off, or past a teleport.
 func remote_feet(other_id: int, mover_id: int, tick: int) -> Variant:
 	var mover: ArenaPlayerNet = _behaviours.get(mover_id)
-	if mover == null or mover.last_view_lag < 0.0:
+	if mover == null or game == null:
 		return null
-	var view_tick := float(tick) - mover.last_view_lag
+	var lag := game.collision_lag(mover.last_view_lag)
+	if lag < 0.0:
+		return null
+	var view_tick := float(tick) - lag
 	if net.is_server:
 		return game.unlag_position_at(other_id, view_tick)
 	var other: ArenaPlayerNet = _behaviours.get(other_id)
 	if other == null or other.identity == null or net.interpolator == null or not net.interpolator.has_method(&"value_at"):
 		return null
-	return net.interpolator.call(&"value_at", other.identity.net_id, &"net_position", view_tick)
+	return net.interpolator.call(&"value_at", other.identity.net_id, &"net_position", view_tick, ArenaGame.TELEPORT_CUT)
 
 
 ## Drops a peer's player from the game and from replication.
@@ -693,14 +696,7 @@ func client_tick(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> void
 	if game != null and game.projectiles != null:
 		game.projectiles.tick(net.clock.tick_duration())
 
-	var command := ArenaNetCommand.new()
-	command.tick = tick
-	command.delta = net.clock.tick_duration()
-	command.move = move
-	command.fire = fire
-	command.view_lag_q = view_lag_q(tick)
-	command.lag_always = game != null and game.body_rules.solid
-
+	var command := _command_for(tick, move, fire)
 	net.local_inputs().push(command)
 
 	var t := Time.get_ticks_usec()
@@ -827,12 +823,7 @@ func probe_replays_after(before: int) -> void:
 ## replay history, so they are exactly what it predicted with, and the server skips the
 ## ones it has already simulated.
 func encode_input(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> PackedByteArray:
-	var command := ArenaNetCommand.new()
-	command.tick = tick
-	command.delta = net.clock.tick_duration()
-	command.move = move
-	command.fire = fire
-	command.view_lag_q = view_lag_q(tick)
+	var command := _command_for(tick, move, fire)
 
 	# The ones before this tick from the replay history; this one from the arguments,
 	# because a caller may encode before or after `client_tick` recorded it.
@@ -846,6 +837,19 @@ func encode_input(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> Pac
 	var out := net.encode_ack()
 	out.append_array(writer.to_bytes())
 	return out
+
+
+## The command for [param tick], the same whether [method client_tick] or [method encode_input] made
+## it: the server keeps the first copy of a tick to arrive, which is usually the encoded one.
+func _command_for(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> ArenaNetCommand:
+	var command := ArenaNetCommand.new()
+	command.tick = tick
+	command.delta = net.clock.tick_duration()
+	command.move = move
+	command.fire = fire
+	command.view_lag_q = view_lag_q(tick)
+	command.lag_always = game != null and game.body_rules.solid
+	return command
 
 
 ## How far behind [param tick] this client is drawing everybody else, in quarter ticks:
