@@ -108,6 +108,9 @@ var audio: DotAudioManager = null
 ## and generated beds, CC0; the addon's stock/CREDITS.md).
 var steps: DotAudioFootsteps = null
 var ambience: DotAudioAmbience = null
+
+## Quiet moods under the map (dot-audio's stock set); the bed above plays only when none loaded.
+var ambient: DotAmbienceDirector = null
 var fx: DotFxManager = null
 ## Blood behind a body the local player hit; drawn only while `gore` is on.
 var blood: ArenaBlood = null
@@ -178,6 +181,8 @@ static func schema() -> DotSettingsSchema:
 	s.add(DotSettingsDef.number(&"sfx_volume", 1.0, 0.0, 1.0, &"audio"))
 	s.add(DotSettingsDef.number(&"voice_volume", 1.0, 0.0, 1.0, &"audio"))
 	s.add(DotSettingsDef.boolean(&"push_to_talk", true, &"audio"))
+	s.add(DotSettingsDef.boolean(&"ambient", true, &"audio").with_description("Quiet sounds under the map."))
+	s.add(DotSettingsDef.number(&"ambient_volume", 1.0, 0.0, 1.0, &"audio"))
 
 	# ACCOUNT scope: sensitivity is about the person's hand, not about this machine and
 	# not about this game. A player who has found their number should never type it twice.
@@ -779,7 +784,21 @@ func _build_audio() -> DotResult:
 	ambience.manager = audio
 	ambience.fallback_bed = &"amb_industrial"
 	add_child(ambience)
-	ambience.set_map_bed(bed_for(&""))
+	ambient = DotAmbienceDirector.new()
+	ambient.name = "Ambient"
+	ambient.manager = audio
+	ambient.default_mood = &"industrial"
+	ambient.prefix_moods = AMBIENT_PREFIXES
+	ambient.rules.prefix = "arena"
+	ambient.rules.volume = AMBIENT_LEVEL
+	ambient.rules.frequency = AMBIENT_RATE
+	add_child(ambient)
+	var _moods := ambient.setup()
+	ambient.follow_settings(settings)
+	if ambient.has_moods():
+		ambient.on_map(&"")
+	else:
+		ambience.set_map_bed(bed_for(&""))
 
 	# Only on a real sink, and only after setup: a headless server has nothing to bake for.
 	# Baked a few recipes a frame under the cover: all at once it is a 0.7 s frame here and
@@ -1397,8 +1416,21 @@ func on_wall_jumped() -> int:
 func on_map_changed(map_id: StringName = &"") -> void:
 	fx.clear()
 	blood.clear()
-	if ambience != null:
+	if ambient != null and ambient.has_moods():
+		ambient.on_map(map_id)
+	elif ambience != null:
 		ambience.set_map_bed(bed_for(map_id))
+
+
+## Moods by map name prefix (see [method bed_for]); anything else is a hall of machinery.
+const AMBIENT_PREFIXES := {
+	"surf_": &"snow_wind", "kz_": &"cave_tunnel", "climb_": &"cave_tunnel", "xc_": &"cave_tunnel",
+	"bhop_": &"outdoor_night", "bunnyhop": &"outdoor_night",
+}
+
+## A deathmatch wants the ambience felt, not heard: under the layer's own level, and fewer one-shots.
+const AMBIENT_LEVEL := 0.3
+const AMBIENT_RATE := 0.5
 
 
 ## A map's bed, from its name: the built-in arenas are halls of machinery, a surf map is ramps
@@ -1422,6 +1454,12 @@ func keep_walkers(bodies: Array) -> void:
 		steps.keep(bodies)
 
 
+## The listener's roof, once a frame: under one the ambience crosses to its indoor mood.
+func follow_roof(delta: float, eye: Vector3, space: PhysicsDirectSpaceState3D, world_mask: int) -> void:
+	if ambient != null:
+		ambient.follow_roof(delta, eye, space, world_mask)
+
+
 func on_server_clamps(request: Dictionary) -> PackedStringArray:
 	return settings.apply_server_clamps(request)
 
@@ -1431,6 +1469,8 @@ func describe_lines() -> PackedStringArray:
 	out.append("the arena's presentation layer")
 	out.append_array(settings.describe_lines())
 	out.append_array(audio.describe_lines())
+	if ambient != null:
+		out.append("ambience: %s" % str(ambient.describe()))
 	out.append_array(fx.describe_lines())
 	out.append_array(console.describe_lines())
 

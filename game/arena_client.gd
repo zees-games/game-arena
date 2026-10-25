@@ -2122,6 +2122,9 @@ func _present_frame(delta: float) -> void:
 		presentation.present(delta, eye, forward)
 		_apply_shake()
 		presentation.keep_walkers(game.players())
+		var stack_now := game.player_stack
+		if stack_now != null and stack_now.physics != null and stack_now.physics.layout != null:
+			presentation.follow_roof(delta, eye, get_viewport().world_3d.direct_space_state, stack_now.physics.layout.mask_of([&"world"]))
 
 	# A position report, once a second, for as long as the client has a player.
 	#
