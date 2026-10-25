@@ -461,6 +461,11 @@ var spectate_rules: DotSpectatorRules = DotSpectatorRules.new()
 ## games give a body.
 var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 
+## `(other_id, mover_id, tick) -> Vector3 or null`: where [param other_id]'s hull stands when
+## a networked player moves on [param tick]: where that player's client drew them, on both
+## ends (`ArenaNetBridge.remote_feet`). Null, or unset, is where the other stands now.
+var remote_feet_fn: Callable = Callable()
+
 ## Which pairs of players stop at each other (dot-team's `DotTeamBlockRules`: `mp_teamblock`,
 ## `mp_enemyblock`, `!block` / `!noblock`); null until [method make_noblock] or a client's
 ## `add_noblock` sets it. Feeds [member body_rules] `pair_fn`; the same answer on every machine,
@@ -1737,7 +1742,7 @@ func block_side(id: Variant) -> Variant:
 ## stand now; none while `mp_solidplayers` is 0. Asked per sweep by the movement body, so a
 ## player moved earlier in this tick is met where it moved to (the same on every machine:
 ## players tick in one order).
-func solid_hulls_for(id: int) -> Array:
+func solid_hulls_for(id: int, tick: int = -1) -> Array:
 	var out: Array = []
 	if not body_rules.solid:
 		return out
@@ -1747,8 +1752,13 @@ func solid_hulls_for(id: int) -> Array:
 		var other: ArenaPlayer = _players[key]
 		if other == null or not other.is_alive() or other.controller == null or other.controller.state == null:
 			continue
+		var feet := other.controller.state.position
+		if remote_feet_fn.is_valid() and tick >= 0:
+			var at: Variant = remote_feet_fn.call(int(key), id, tick)
+			if at is Vector3:
+				feet = at
 		var tunables := other.controller.tunables
-		out.append(ArenaSolidBody.hull_at(other.controller.state.position, tunables.stand_height, tunables.radius))
+		out.append(ArenaSolidBody.hull_at(feet, tunables.stand_height, tunables.radius))
 	return out
 
 

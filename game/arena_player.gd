@@ -300,12 +300,16 @@ class HeadlessController extends DotFpsController:
 ## left out; empty while `mp_solidplayers` is 0). Set by the game that holds the player
 ## ([method ArenaGame.solid_hulls_for]); unset, nobody is solid to this player. Read through
 ## [method _solid_hulls] by the movement body ([code]arena_solid_body.gd[/code]), so a game
-## that sets it after the body was built still reaches it.
+## that sets it after the body was built still reaches it. Called with `(player_id, tick)`.
 var solid_hulls_fn: Callable = Callable()
+
+## The tick [method simulate_tick] is running, replays included: where a predicting client
+## places the remotes it collides with ([method ArenaGame.solid_hulls_for]).
+var _hull_tick: int = -1
 
 
 func _solid_hulls() -> Array:
-	return solid_hulls_fn.call(player_id) if solid_hulls_fn.is_valid() else []
+	return solid_hulls_fn.call(player_id, _hull_tick) if solid_hulls_fn.is_valid() else []
 
 
 ## The map's movement body, wrapped so the other players' hulls stop its sweeps.
@@ -1297,6 +1301,7 @@ func simulate_tick(
 	# The previous state's position before this tick replaces it: two ticks back after it.
 	_position_two_back = controller.render_state(0.0).position
 	ladder.now = tick
+	_hull_tick = tick
 	controller.apply_command(movement_command)
 	controller.simulate_tick(tick, delta)
 	_run_map_mechanics(start, delta)

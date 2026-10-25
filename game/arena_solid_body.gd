@@ -36,6 +36,9 @@ const HULL_ID_BASE := 1 << 24
 
 var _hulls := DotFpsFlatBody.new()
 
+## Sweeps in this process a player's hull stopped, replays included: how much bumping a run had.
+static var hull_stops: int = 0
+
 
 func _init() -> void:
 	# No floor of its own: the map's floor is the inner body's.
@@ -81,6 +84,7 @@ func sweep(from: Vector3, motion: Vector3, height: float, radius: float) -> Hit:
 	if not other.hit or (world.hit and world.fraction <= other.fraction):
 		return world
 
+	hull_stops += 1
 	other.collider_id = HULL_ID_BASE + (other.collider_id - DotFpsFlatBody.box_id(0))
 	return other
 

@@ -37,6 +37,10 @@ var fire: DotWeaponCommand = DotWeaponCommand.new()
 ## trusted: [constant MAX_VIEW_LAG_Q] here, and the combat config's rewind limit there.
 var view_lag_q: int = -1
 
+## Send [member view_lag_q] on every command, not only a firing one: while players are solid
+## the server rewinds the others to it for this command's movement too. Not on the wire.
+var lag_always: bool = false
+
 ## 1023 quarter ticks: four seconds at 64 ticks and two at 128, past any rewind limit.
 ##
 ## It was 255 in 8 bits, commented as "just under four seconds" -- which is 255 TICKS.
@@ -52,7 +56,7 @@ func _write(writer: DotNetWriter) -> void:
 	# Slot and buttons only. The angles come from `move`; see the class notes.
 	writer.write_uint(clampi(fire.slot, 0, 15), 4)
 	writer.write_uint(fire.buttons, DotWeaponCommand.BUTTON_BITS)
-	var lagged := fire.buttons != 0 and view_lag_q >= 0
+	var lagged := (fire.buttons != 0 or lag_always) and view_lag_q >= 0
 	writer.write_bool(lagged)
 	if lagged:
 		writer.write_uint(clampi(view_lag_q, 0, MAX_VIEW_LAG_Q), VIEW_LAG_BITS)

@@ -268,6 +268,8 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 	net.messages.on(ArenaEvent.NAME, _on_event)
 	net.messages.on(ArenaRequest.NAME, _on_request)
 
+	game.remote_feet_fn = remote_feet
+
 	# The map's toys: the server's leave the registry before their nodes go and the new ones are
 	# named; a client's mirrors stay registered and are handed this end's toys when they exist.
 	if net.is_server:
@@ -454,6 +456,22 @@ func _build_identity(player: ArenaPlayer, peer_id: int) -> DotNetIdentity:
 
 	_behaviours[player.player_id] = behaviour
 	return identity
+
+
+## Where [param other_id] stands for [param mover_id]'s movement on [param tick]: where the
+## mover's client drew them, the command's view lag behind (lag-compensated collision, on
+## both ends alike). Null without a view lag (a bot, a client not yet synced): now.
+func remote_feet(other_id: int, mover_id: int, tick: int) -> Variant:
+	var mover: ArenaPlayerNet = _behaviours.get(mover_id)
+	if mover == null or mover.last_view_lag < 0.0:
+		return null
+	var view_tick := float(tick) - mover.last_view_lag
+	if net.is_server:
+		return game.unlag_position_at(other_id, view_tick)
+	var other: ArenaPlayerNet = _behaviours.get(other_id)
+	if other == null or other.identity == null or net.interpolator == null or not net.interpolator.has_method(&"value_at"):
+		return null
+	return net.interpolator.call(&"value_at", other.identity.net_id, &"net_position", view_tick)
 
 
 ## Drops a peer's player from the game and from replication.
@@ -681,6 +699,7 @@ func client_tick(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> void
 	command.move = move
 	command.fire = fire
 	command.view_lag_q = view_lag_q(tick)
+	command.lag_always = game != null and game.body_rules.solid
 
 	net.local_inputs().push(command)
 
