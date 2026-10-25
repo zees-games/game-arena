@@ -55,7 +55,7 @@ var net_modifiers: int = 0
 ## so the declaration comes from the pack on both ends, whatever addon the client's shell has.
 var net_exact: PackedFloat32Array = PackedFloat32Array()
 
-const EXACT_FLOATS := 7
+const EXACT_FLOATS := 10
 
 # --- Health from DotCombatNetSync, weapons from DotWeaponNetSync ---
 var net_health: int = 0
@@ -333,6 +333,10 @@ func _pull_exact(state: DotFpsState) -> void:
 	exact[4] = state.velocity.y
 	exact[5] = state.velocity.z
 	exact[6] = state.crouch_fraction
+	# The jump timers: a rewind that kept the client's own coyote and buffer jumped where the server did not.
+	exact[7] = state.time_since_grounded
+	exact[8] = state.time_since_jump
+	exact[9] = state.time_since_jump_pressed
 	net_exact = exact
 
 
@@ -344,6 +348,9 @@ func _push_exact(state: DotFpsState) -> void:
 	state.position = Vector3(net_exact[0], net_exact[1], net_exact[2])
 	state.velocity = Vector3(net_exact[3], net_exact[4], net_exact[5])
 	state.crouch_fraction = net_exact[6]
+	state.time_since_grounded = net_exact[7]
+	state.time_since_jump = net_exact[8]
+	state.time_since_jump_pressed = net_exact[9]
 
 
 static func _write_exact(writer: DotNetWriter, value: Variant) -> void:

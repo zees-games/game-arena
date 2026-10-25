@@ -77,7 +77,7 @@ const RELIABLE_SECONDS := 35.0
 
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 39
+const OTHER_CHECKS := 44
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -130,6 +130,7 @@ var _w_seen_up: Dictionary = {}
 ## the tick it went idle at the wall's foot before that. See [method _test_wall_moves].
 var _wall_from := -1
 var _wall_idle := false
+var _hop_from := -1
 
 
 func _ready() -> void:
@@ -148,6 +149,7 @@ func _run() -> void:
 			for window in WINDOWS:
 				await _play_window(window)
 			await _test_wall_moves()
+			await _test_wall_hops()
 			await _test_server_cvars_reach_the_client()
 			await _test_ambient_cvars_reach_the_client()
 			await _test_view_feel_and_packs_reach_the_client()
@@ -617,6 +619,8 @@ func _connect_everyone() -> bool:
 ## A runs forward, strafes left and right, and turns: a constant input is not an input.
 func _command_a(tick: int) -> DotFpsCommand:
 	if _wall_idle:
+		if _hop_from >= 0:
+			return _hop_command(tick - _hop_from)
 		return _wall_command(tick - _wall_from if _wall_from >= 0 else -1)
 	var move := DotFpsCommand.new()
 	var strafe := 1.0 if (tick / 24) % 2 == 0 else -1.0
@@ -640,6 +644,29 @@ func _wall_command(k: int) -> DotFpsCommand:
 		move.buttons |= DotFpsCommand.BUTTON_JUMP
 	if k == 15:
 		move.buttons |= DotFpsCommand.BUTTON_SPRINT
+	return move
+
+
+## A holds forward into dm_box's east wall and hops, jump held and let go in uneven stretches.
+## Read off the tick alone, so the server runs the commands A predicted with.
+func _hop_command(k: int) -> DotFpsCommand:
+	var move := DotFpsCommand.new()
+	move.yaw = -90.0
+	if k < 0:
+		return move
+	move.move = Vector2(0.0, 1.0)
+	var at := 0
+	var i := 0
+	while true:
+		var hold := 20 + (i * 7) % 30
+		var rest := 5 + (i * 3) % 9
+		if k < at + hold:
+			move.buttons |= DotFpsCommand.BUTTON_JUMP
+			return move
+		if k < at + hold + rest:
+			return move
+		at += hold + rest
+		i += 1
 	return move
 
 
@@ -1376,3 +1403,95 @@ func _teardown() -> void:
 		_server_side.queue_free()
 
 	await get_tree().process_frame
+
+
+## Hopping pinned against a wall replays the jump timers (coyote, buffer, cooldown): a rewind
+## that kept the client's own jumped where the server had not, a correction metres high. So A
+## hops into the east wall for six seconds, its prediction stays on the server's, and a rewind
+## carries the timers.
+func _test_wall_hops() -> void:
+	_section("hopping pinned against a wall through 20% loss")
+
+	var a: Dictionary = _clients["A"]
+	var net: DotNetManager = a["net"]
+	var session := int(a["session"])
+	var server_a := _game.player_for(session)
+	var own: ArenaPlayer = (a["game"] as ArenaGame).player_for(session)
+	if not _check(server_a != null and own != null, "A is on both ends to hop with"):
+		_done()
+		return
+
+	_wall_idle = true
+	_hop_from = -1
+	for _i in range(2):
+		server_a.controller.teleport(Vector3(21.0, 0.1, -21.0), -90.0, 0.0)
+		await _until(func() -> bool: return false, 0.75)
+
+	var replays := int(net.predictor.get("_replays"))
+	var corrections := int(net.predictor.get("_corrections_applied"))
+
+	_hop_from = net.clock.input_tick() + 4
+	var worst_before := float(net.predictor.get("_worst_error"))
+	net.predictor.set("_worst_error", 0.0)
+	await _until(func() -> bool: return false, 6.0)
+	var last := net.clock.input_tick()
+	_wall_idle = false
+	await _until(func() -> bool: return false, 0.5)
+
+	replays = int(net.predictor.get("_replays")) - replays
+	corrections = int(net.predictor.get("_corrections_applied")) - corrections
+	var worst := float(net.predictor.get("_worst_error"))
+	net.predictor.set("_worst_error", maxf(worst, worst_before))
+
+	var track: Dictionary = _server_track.get(session, {})
+	var diffs: Array[float] = []
+	var pinned := 0
+	var hops := 0
+	var low := true
+	for tick in range(_hop_from, last):
+		if _predicted.has(tick) and track.has(tick):
+			var at: Vector3 = track[tick]
+			diffs.append((_predicted[tick] as Vector3).distance_to(at))
+			if at.x > 23.0:
+				pinned += 1
+			if low and at.y > 0.5:
+				hops += 1
+			low = at.y < 0.1 if not low else low and at.y <= 0.5
+	diffs.sort()
+	var d95 := diffs[int(diffs.size() * 0.95)] if not diffs.is_empty() else -1.0
+	var dmax := diffs[diffs.size() - 1] if not diffs.is_empty() else -1.0
+	print("    the server's A left the floor %d times; %d of %d ticks at the wall" % [hops, pinned, diffs.size()])
+	print("    A's prediction: p95 %.3f / max %.3f m; %d of %d replays corrected, the worst by %.3f m" % [
+		d95, dmax, corrections, replays, worst])
+
+	_check(hops >= 5 and pinned > diffs.size() / 2,
+		"the server's A hopped against the wall", "%d hops, %d of %d ticks there" % [hops, pinned, diffs.size()])
+	_check(diffs.size() > 4 * Engine.physics_ticks_per_second and d95 >= 0.0 and d95 <= 0.05 and dmax <= 0.5,
+		"A's prediction of it within 5 cm for 95% of its ticks, never half a metre off",
+		"%d ticks, p95 %.3f, max %.3f" % [diffs.size(), d95, dmax])
+	_check(replays >= 30 and corrections <= 1 and worst <= 0.25,
+		"and every replay from the middle of a hop lands where the server's A is",
+		"%d of %d replays corrected, the worst by %.3f m" % [corrections, replays, worst])
+
+	# A rewind lands on a tick in the middle of a hop only rarely in six seconds, so the timers'
+	# trip through A's own exact copy is checked directly too.
+	var behaviour: Object = ((a["bridge"] as Object).get("_behaviours") as Dictionary).get(session)
+	var said := own.controller.state.duplicate_state()
+	said.time_since_grounded = 0.375
+	said.time_since_jump = 1.25
+	said.time_since_jump_pressed = 0.5
+	var kept: PackedFloat32Array = behaviour.get("net_exact")
+	behaviour.call("_pull_exact", said)
+	var rewound := said.duplicate_state()
+	rewound.time_since_grounded = 0.0
+	rewound.time_since_jump = 0.0
+	rewound.time_since_jump_pressed = 1000.0
+	behaviour.call("_push_exact", rewound)
+	behaviour.set("net_exact", kept)
+	_check(rewound.time_since_grounded == 0.375 and rewound.time_since_jump == 1.25
+			and rewound.time_since_jump_pressed == 0.5,
+		"a rewind restores the jump timers, not the client's own",
+		"%.3f %.3f %.3f" % [rewound.time_since_grounded, rewound.time_since_jump, rewound.time_since_jump_pressed])
+
+	_hop_from = -1
+	_done()
