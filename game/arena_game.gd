@@ -1928,6 +1928,21 @@ func unlag_position_at(id: int, at: float) -> Variant:
 	return positions[a].lerp(positions[b], at - float(lo))
 
 
+## Where player [param id] was at [param at], blended between the recorded ticks [param older]
+## and [param newer] (the snapshots the client drew between); null when either is not recorded.
+func unlag_position_between(id: int, older: int, newer: int, at: float, snap := Callable()) -> Variant:
+	var a: Variant = unlag_position_at(id, float(older))
+	var b: Variant = unlag_position_at(id, float(newer))
+	if a == null or b == null:
+		return null
+	if snap.is_valid():
+		a = snap.call(a)
+		b = snap.call(b)
+	if newer <= older:
+		return a
+	return (a as Vector3).lerp(b, clampf((at - float(older)) / float(newer - older), 0.0, 1.0))
+
+
 ## A mover's view lag in ticks as both ends collide with it: -1 (the present) when none was sent
 ## or compensation is off, else at most `max_unlag_ms` and [constant COLLISION_LAG_MAX_TICKS].
 func collision_lag(view_lag: float) -> float:

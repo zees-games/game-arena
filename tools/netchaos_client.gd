@@ -1,5 +1,6 @@
 extends DotGameNetchaosClient
 
+const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaSolidBody := preload("../game/arena_solid_body.gd")
 
@@ -7,6 +8,7 @@ const ArenaSolidBody := preload("../game/arena_solid_body.gd")
 
 
 func _configure() -> void:
+	ArenaNetBridge.solid_trace = OS.get_environment("NC_SOLID_TRACE") == "1"
 	client_scene = "res://game/arena.tscn"
 	fire_action = &"arena_fire"
 

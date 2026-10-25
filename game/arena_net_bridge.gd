@@ -75,6 +75,9 @@ var avatar_fn: Callable = Callable()
 var game: ArenaGame = null
 var net: DotNetManager = null
 
+## Debug: print every [method remote_feet] answer near a contact (netchaos `NC_SOLID_TRACE=1`).
+static var solid_trace := false
+
 ## player id -> ArenaPlayerNet, for the ones this process knows about.
 var _behaviours: Dictionary = {}
 
@@ -466,15 +469,71 @@ func remote_feet(other_id: int, mover_id: int, tick: int) -> Variant:
 	if mover == null or game == null:
 		return null
 	var lag := game.collision_lag(mover.last_view_lag)
-	if lag < 0.0:
-		return null
-	var view_tick := float(tick) - lag
+	var at: Variant = null
+	if lag >= 0.0:
+		var older := tick - mover.last_view_back if mover.last_view_back >= 0 else -1
+		at = _remote_feet_at(other_id, float(tick) - lag, older, mover.last_view_span)
+	if solid_trace:
+		_trace_feet(other_id, mover, tick, lag, at)
+	return at
+
+
+## Between the snapshot ticks [param older] and older + [param span] when the command named them
+## (-1 for none), else at [param view_tick] as the ring or buffer has it.
+func _remote_feet_at(other_id: int, view_tick: float, older: int, span: int) -> Variant:
+	var bracketed := older >= 0
 	if net.is_server:
+		if bracketed:
+			# Snapped to the wire, as the client's two samples are: half a centimetre is a contact.
+			var wire := _position_wire(other_id)
+			return game.unlag_position_between(other_id, older, older + span, view_tick, wire)
 		return game.unlag_position_at(other_id, view_tick)
 	var other: ArenaPlayerNet = _behaviours.get(other_id)
 	if other == null or other.identity == null or net.interpolator == null or not net.interpolator.has_method(&"value_at"):
 		return null
+	if bracketed and net.interpolator.has_method(&"value_between"):
+		return net.interpolator.call(&"value_between", other.identity.net_id, &"net_position", older, older + span, view_tick, ArenaGame.TELEPORT_CUT)
 	return net.interpolator.call(&"value_at", other.identity.net_id, &"net_position", view_tick, ArenaGame.TELEPORT_CUT)
+
+
+## Rounds a position the way `net_position` reaches a client, or an invalid Callable.
+func _position_wire(other_id: int) -> Callable:
+	var other: ArenaPlayerNet = _behaviours.get(other_id)
+	var spec: DotNetVar = other.find_var(&"net_position") if other != null else null
+	if spec == null or not spec.has_method(&"wire_value"):
+		return Callable()
+	return Callable(spec, &"wire_value")
+
+
+## Prints what [method remote_feet] answered while the two are within 3 m, so a netchaos run
+## can line the server's answers up with the client's (`tools/solid_trace.py`).
+func _trace_feet(other_id: int, mover: ArenaPlayerNet, tick: int, lag: float, at: Variant) -> void:
+	var other: ArenaPlayerNet = _behaviours.get(other_id)
+	if mover.player == null or other == null or other.player == null:
+		return
+	var from: Vector3 = mover.player.controller.state.position
+	var now: Vector3 = other.player.controller.state.position
+	var feet: Vector3 = at if at is Vector3 else now
+	if Vector2(feet.x - from.x, feet.z - from.z).length() > 3.0:
+		return
+	var newest := -1
+	var near := ""
+	var view := floori(float(tick) - lag)
+	if net.is_server:
+		for k in range(view - 2, view + 3):
+			var p: Variant = game.unlag_position_at(other_id, float(k))
+			near += " %d:%s" % [k, ("%.3f" % (p as Vector3).x) if p is Vector3 else "-"]
+	elif other.identity != null:
+		var track: Variant = (net.interpolator.get(&"_tracks") as Dictionary).get(other.identity.net_id)
+		newest = track.newest_tick() if track != null else -1
+		if track != null:
+			for sample: Dictionary in track.samples:
+				if absi(int(sample["tick"]) - view) <= 4:
+					var p: Variant = (sample["values"] as Dictionary).get(&"net_position")
+					near += " %d:%s" % [int(sample["tick"]), ("%.3f" % (p as Vector3).x) if p is Vector3 else "-"]
+	print("SOLIDTRACE %s t=%d mover=%d other=%d lag=%.2f raw=%.2f null=%d feet=%.3f,%.3f,%.3f mover_at=%.3f,%.3f,%.3f newest=%d near=%s" % [
+		"S" if net.is_server else "C", tick, mover.player.player_id, other_id, lag, mover.last_view_lag,
+		1 if at == null else 0, feet.x, feet.y, feet.z, from.x, from.y, from.z, newest, near])
 
 
 ## Drops a peer's player from the game and from replication.
@@ -591,6 +650,7 @@ func _commands() -> Dictionary:
 		behaviour.last_move = made[0]
 		behaviour.last_fire = made[1]
 		behaviour.last_view_lag = -1.0
+		behaviour.last_view_back = -1
 
 	for session_id in _behaviours:
 		var behaviour: ArenaPlayerNet = _behaviours[session_id]
@@ -839,6 +899,12 @@ func encode_input(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> Pac
 	return out
 
 
+var _lag_for_tick := -1
+var _lag_for_q := -1
+var _back_for := -1
+var _span_for := 0
+
+
 ## The command for [param tick], the same whether [method client_tick] or [method encode_input] made
 ## it: the server keeps the first copy of a tick to arrive, which is usually the encoded one.
 func _command_for(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> ArenaNetCommand:
@@ -847,7 +913,22 @@ func _command_for(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> Are
 	command.delta = net.clock.tick_duration()
 	command.move = move
 	command.fire = fire
-	command.view_lag_q = view_lag_q(tick)
+	# Measured once per tick: a snapshot read between the two calls moved the receive clock,
+	# the server kept one lag and the replay used the other, and bumps diverged.
+	if tick != _lag_for_tick:
+		_lag_for_tick = tick
+		_lag_for_q = view_lag_q(tick)
+		_back_for = -1
+		_span_for = 0
+		var lag := game.collision_lag(float(_lag_for_q) * 0.25) if game != null and _lag_for_q >= 0 else -1.0
+		if lag >= 0.0 and net.interpolator.has_method(&"bracket_at"):
+			var pair: Vector2i = net.interpolator.call(&"bracket_at", float(tick) - lag)
+			if pair.x >= 0 and tick - pair.x < (1 << ArenaNetCommand.VIEW_BACK_BITS) and pair.y - pair.x < (1 << ArenaNetCommand.VIEW_SPAN_BITS):
+				_back_for = tick - pair.x
+				_span_for = pair.y - pair.x
+	command.view_lag_q = _lag_for_q
+	command.view_back = _back_for
+	command.view_span = _span_for
 	command.lag_always = game != null and game.body_rules.solid
 	return command
 

@@ -16,6 +16,7 @@ const ArenaNetLink := preload("../game/arena_net_link.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerNet := preload("../game/arena_player_net.gd")
+const ArenaSolidBody := preload("../game/arena_solid_body.gd")
 const ArenaHorde := preload("../game/arena_horde.gd")
 const ArenaNpcs := preload("../game/arena_npcs.gd")
 const WallRouteDriver := preload("wall_route_driver.gd")
@@ -39,7 +40,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 240
+const CHECKS := 241
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
@@ -1368,6 +1369,15 @@ func _test_monsters_reach_a_client() -> void:
 	_check(client_bridge.monster_count() == 1, "the client builds it from the NPC event")
 
 	_pump(40)
+	# The mirror is drawn a buffer behind, so a turning monster is compared once it holds a
+	# heading: how many ticks the run took before here decides whether it is mid-turn.
+	var steady := 0
+	for _i in range(160):
+		var was := DotNpcNetSync.yaw_of(monster)
+		_pump(1)
+		steady = steady + 1 if absf(angle_difference(was, DotNpcNetSync.yaw_of(monster))) < 0.01 else 0
+		if steady >= 12:
+			break
 	var mirror: Node3D = client_bridge.get("_monster_mirrors")[net_id].body
 	var gap := mirror.global_position.distance_to(monster.position())
 	_check(gap < 1.0, "and draws it where the server has it", "%.2f m apart" % gap)
@@ -2124,6 +2134,32 @@ func _test_solid_players_predicted() -> void:
 	_check(
 		float(solid["worst_aligned"]) < 0.03,
 		"and the walker's client predicted the stop (worst %.3f m from the server)" % float(solid["worst_aligned"])
+	)
+	# A blocker that strafes across the lane and jumps, changing direction on odd ticks, between
+	# the client's snapshots: both ends must meet it at the same place.
+	server_a.controller.teleport(Vector3(lane_x, 0.1, 19.0), 0.0)
+	server_b.controller.teleport(Vector3(lane_x, 0.1, 16.5), 0.0)
+	var _settle_moving := _flight_window(0, 24, 0, {2: idle, 3: idle})
+	var stops_before := ArenaSolidBody.hull_stops
+	var moving_worst := 0.0
+	ArenaNetBridge.solid_trace = OS.get_environment("NC_SOLID_TRACE") == "1"
+	for leg in range(14):
+		var strafe := DotFpsCommand.new()
+		strafe.move = Vector2(1.0 if leg % 2 == 0 else -1.0, 0.0)
+		strafe.yaw = 0.0
+		strafe.buttons = DotFpsCommand.BUTTON_JUMP if leg % 3 == 1 else 0
+		var lean := DotFpsCommand.new()
+		lean.move = Vector2(0.0, 1.0)
+		lean.yaw = 0.0
+		var window := _flight_window(2, 7, 0, {2: lean, 3: strafe})
+		moving_worst = maxf(moving_worst, float(window["worst_aligned"]))
+	ArenaNetBridge.solid_trace = false
+	var moving_stops := ArenaSolidBody.hull_stops - stops_before
+	print("  measured: a strafing, jumping blocker, %d hull stops, worst prediction gap %.3f m" % [moving_stops, moving_worst])
+	_check(
+		moving_stops > 0 and moving_worst < 0.03,
+		"a walk into a blocker that strafes and jumps is predicted where the server stopped it",
+		"%d stops, worst %.3f m" % [moving_stops, moving_worst]
 	)
 	# The newest command in each packet is the encoded one, and the server keeps the first copy.
 	var walker_lag := _server_bridge.behaviour_for(session_a).last_view_lag

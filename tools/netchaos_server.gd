@@ -3,6 +3,7 @@ extends DotGameNetchaosServer
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
+const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
 ## The arena's side of `tools/netchaos.sh` (dot-game's DotGameNetchaosServer): no bots, no limits.
@@ -11,6 +12,7 @@ var _game: ArenaGame = null
 
 
 func _configure() -> void:
+	ArenaNetBridge.solid_trace = OS.get_environment("NC_SOLID_TRACE") == "1"
 	map_id = "dm_box"
 
 

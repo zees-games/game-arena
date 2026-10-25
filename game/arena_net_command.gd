@@ -50,6 +50,14 @@ var lag_always: bool = false
 const MAX_VIEW_LAG_Q := 1023
 const VIEW_LAG_BITS := 10
 
+## The snapshot ticks the client drew the others between at the view tick, as this command's tick
+## less [member view_back] and that plus [member view_span]; -1 for none. Sent with the lag while
+## players are solid, so the server rewinds between the same two samples, a lost one included.
+var view_back: int = -1
+var view_span: int = 0
+const VIEW_BACK_BITS := 7
+const VIEW_SPAN_BITS := 5
+
 
 func _write(writer: DotNetWriter) -> void:
 	move.write(writer)
@@ -60,6 +68,11 @@ func _write(writer: DotNetWriter) -> void:
 	writer.write_bool(lagged)
 	if lagged:
 		writer.write_uint(clampi(view_lag_q, 0, MAX_VIEW_LAG_Q), VIEW_LAG_BITS)
+		var bracketed := lag_always and view_back >= 0
+		writer.write_bool(bracketed)
+		if bracketed:
+			writer.write_uint(clampi(view_back, 0, (1 << VIEW_BACK_BITS) - 1), VIEW_BACK_BITS)
+			writer.write_uint(clampi(view_span, 0, (1 << VIEW_SPAN_BITS) - 1), VIEW_SPAN_BITS)
 
 
 func _read(reader: DotNetReader) -> void:
@@ -71,7 +84,14 @@ func _read(reader: DotNetReader) -> void:
 	fire.buttons = reader.read_uint(DotWeaponCommand.BUTTON_BITS)
 	fire.yaw = move.yaw
 	fire.pitch = move.pitch
-	view_lag_q = reader.read_uint(VIEW_LAG_BITS) if reader.read_bool() else -1
+	view_lag_q = -1
+	view_back = -1
+	view_span = 0
+	if reader.read_bool():
+		view_lag_q = reader.read_uint(VIEW_LAG_BITS)
+		if reader.read_bool():
+			view_back = reader.read_uint(VIEW_BACK_BITS)
+			view_span = reader.read_uint(VIEW_SPAN_BITS)
 
 
 ## Clamps what a client could exaggerate.
@@ -93,6 +113,8 @@ func _sanitise() -> void:
 	fire.yaw = move.yaw
 	fire.pitch = move.pitch
 	view_lag_q = clampi(view_lag_q, -1, MAX_VIEW_LAG_Q)
+	view_back = clampi(view_back, -1, (1 << VIEW_BACK_BITS) - 1)
+	view_span = clampi(view_span, 0, (1 << VIEW_SPAN_BITS) - 1)
 
 
 ## Stands still and holds fire, looking where it looked (DotNetConfig.starved_input_hold_sec).
@@ -114,7 +136,8 @@ func _equals(other: DotNetInput) -> bool:
 	if them == null:
 		return false
 
-	return move.equals(them.move) and fire.equals(them.fire) and view_lag_q == them.view_lag_q
+	return move.equals(them.move) and fire.equals(them.fire) and view_lag_q == them.view_lag_q \
+		and view_back == them.view_back and view_span == them.view_span
 
 
 ## Bits one command costs, before dot-net's own framing.
@@ -128,4 +151,5 @@ func describe() -> Dictionary:
 		"move": move.describe(),
 		"fire": fire.describe(),
 		"view_lag_ticks": view_lag_ticks(),
+		"view_bracket": [view_back, view_span],
 	}
