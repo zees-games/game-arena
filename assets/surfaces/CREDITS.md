@@ -21,3 +21,24 @@ Each folder holds `albedo.jpg` (the Color map), `normal.jpg` (NormalGL, the Open
 | corrugated | CorrugatedSteel009 | https://ambientcg.com/view?id=CorrugatedSteel009 |
 | grass | Grass004 | https://ambientcg.com/view?id=Grass004 |
 | ground | Ground037 | https://ambientcg.com/view?id=Ground037 |
+| carpet_grey | Carpet001 | https://ambientcg.com/view?id=Carpet001 |
+| carpet_pattern | Carpet004 | https://ambientcg.com/view?id=Carpet004 |
+| carpet_red | Carpet013 | https://ambientcg.com/view?id=Carpet013 |
+| carpet_blue | Carpet012 | https://ambientcg.com/view?id=Carpet012 |
+| snow | Snow004 | https://ambientcg.com/view?id=Snow004 |
+| rock | Rock023 | https://ambientcg.com/view?id=Rock023 |
+| sand | Ground080 | https://ambientcg.com/view?id=Ground080 |
+| stone_block | Bricks076A | https://ambientcg.com/view?id=Bricks076A |
+| roof_clay | RoofingTiles014A | https://ambientcg.com/view?id=RoofingTiles014A |
+| ceiling_tile | OfficeCeiling005 | https://ambientcg.com/view?id=OfficeCeiling005 |
+| plaster_worn | Plaster003 | https://ambientcg.com/view?id=Plaster003 |
+| wallpaper | Wallpaper002A | https://ambientcg.com/view?id=Wallpaper002A |
+| wallpaper_decrepit | decrepit_wallpaper (Poly Haven, Rob Tuytel, CC0) | https://polyhaven.com/a/decrepit_wallpaper |
+
+The carpet and snow kinds were added 2026-10-22 from the same source, author and licence (CC0 1.0, read on each asset page); all are 1024x1024 1K-JPG, re-encoded at quality 85.
+
+The rock, sand, stone_block, roof_clay, ceiling_tile and plaster_worn kinds were added 2026-10-23 for the Zombie Zone maps (cliff faces, dunes, cut stone, clay roofs, office ceilings, weathered plaster); same source, author and licence (CC0 1.0, read on each asset page), 1024x1024 1K-JPG, NormalGL, re-encoded at quality 85.
+
+The wallpaper kind was added 2026-10-23 from ambientCG Wallpaper002A (https://ambientcg.com/view?id=Wallpaper002A, Lennart Demes and contributors, CC0 1.0), 1024x1024 1K-JPG, NormalGL, re-encoded at quality 85.
+
+The wallpaper_decrepit kind (2026-10-23) is Poly Haven `decrepit_wallpaper` by Rob Tuytel (https://polyhaven.com/a/decrepit_wallpaper, CC0 1.0): 1k diffuse, nor_gl and roughness, re-encoded as JPEG at quality 85.
