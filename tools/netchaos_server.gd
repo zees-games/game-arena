@@ -18,6 +18,7 @@ var _map := "dm_box"
 var _module: ArenaModule = null
 var _game: ArenaGame = null
 var _next_truth := 1.0
+var _solid := ""
 var _clock := 0.0
 var _worst_frame := 0.0
 var _frames := 0
@@ -31,6 +32,7 @@ func _ready() -> void:
 			"--port": _port = int(args[i + 1])
 			"--data": _data = args[i + 1]
 			"--map": _map = args[i + 1]
+			"--solid": _solid = args[i + 1]
 	name = "Netchaos"  # RPC paths must match the client's root name
 	DotLog.set_level(DotLog.Level.WARN)
 	var _scratch := ArenaPresentation.use_scratch_settings("netchaos_server")
@@ -86,6 +88,12 @@ func _boot() -> void:
 	var quota: DotBotQuota = _module.get("_bot_quota")
 	if quota != null and quota.mode_cvar != null:
 		quota.mode_cvar.force_set("off")
+	if _solid != "":
+		# NC_SOLID=0 on netchaos.sh: players pass through each other, which attributes the
+		# corrections a bump causes (the client predicts against interpolated hulls).
+		var cv: DotConVar = server.console.find_cvar("mp_solidplayers")
+		if cv != null:
+			cv.force_set(_solid)
 	_game.start(0)
 	print("netchaos server: ready on udp/%d" % _port)
 
@@ -94,8 +102,13 @@ func _truth() -> Dictionary:
 	var players := {}
 	for p: ArenaPlayer in _game.players():
 		var pos: Vector3 = p.controller.state.position
-		players[p.display_name] = [snappedf(pos.x, 0.001), snappedf(pos.y, 0.001), snappedf(pos.z, 0.001), p.is_alive()]
+		players[p.display_name] = [snappedf(pos.x, 0.001), snappedf(pos.y, 0.001), snappedf(pos.z, 0.001), p.is_alive(), _net_alive(p)]
 	return {"unix": Time.get_unix_time_from_system(), "players": players}
+
+
+func _net_alive(p: ArenaPlayer) -> Variant:
+	var b = _module.bridge.behaviour_for(p.player_id) if _module.bridge != null else null
+	return b.net_alive if b != null else null
 
 
 func _process(delta: float) -> void:

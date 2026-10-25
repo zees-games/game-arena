@@ -100,6 +100,8 @@ def judge(run, profile, names):
         first = rep["join_seconds"][0] if rep["join_seconds"] else 1e9
         lim = tun("JOIN_S", JOIN_S, profile)
         check(name, "first join under %.0f s" % lim, first <= lim, "%.1f s" % first)
+        if rep.get("join_attempts", 1) > 1:
+            print("    NOTE %s: needed %d connect attempts (%.1f s to get in)" % (name, rep["join_attempts"], first))
         if profile == "blackout":
             check(name, "after the blackout it is playing again (%d drop(s), rejoin %s)" % (len(rep["disconnects"]), rep["rejoin_seconds"]),
                   all(s <= tun("REJOIN_S", REJOIN_S) for s in rep["rejoin_seconds"]), "")
@@ -126,16 +128,29 @@ def judge(run, profile, names):
             check(name, "own player present in the server truth", me is not None and pname in tp, "self=%s" % (me or {}).get("name"))
         worst = 0.0
         seen = 0
+        stale_alive = 0
         for oname, o in rep.get("others", {}).items():
-            if oname in tp and tp[oname][3] and o[3]:
+            # The server's truth decides who counts. A mirror's own alive flag is not read: it
+            # stays false when the health the server sent before this client knew the entity
+            # was dropped (see the alive check below), which used to leave seen == 0.
+            if oname in tp and tp[oname][3]:
                 worst = max(worst, dist(o, tp[oname]))
                 seen += 1
+                if not o[3]:
+                    stale_alive += 1
+        c["mirrors_dead_but_alive"] = stale_alive
         lim = tun("POS_OTHER_M", POS_OTHER_M)
         c["pos_error_others_m"] = round(worst, 3)
         check(name, "sees all %d other players" % (want - 1), len(rep.get("others", {})) >= want - 1, "saw %d" % len(rep.get("others", {})))
         if "roster_seen" in rep:
             check(name, "was told of all %d players" % want, len(rep["roster_seen"]) >= want, "seen %s" % sorted(rep["roster_seen"]))
         check(name, "settled view of the others within %.2f m of the server" % lim, worst <= lim, "%.3f m over %d" % (worst, seen))
+        check(name, "sees at least one other player alive in the truth to judge", seen >= 1 or want < 2, "seen %d" % seen)
+        # A known bug, kept visible without turning every profile red: NC_STRICT_ALIVE=1 makes it fail.
+        if stale_alive and not os.environ.get("NC_STRICT_ALIVE"):
+            print("    NOTE %s: %d of %d living players are mirrored as dead (replicated health never arrived)" % (name, stale_alive, seen))
+        else:
+            check(name, "every living player is mirrored alive", stale_alive == 0, "%d of %d mirrored dead" % (stale_alive, seen))
         log = os.path.join(run, "client-%s.log" % name)
         _, races = grep(log, re.compile(r'Node not found: "Netchaos/Server/Arena"'))
         check(name, "join race under %d engine errors per session" % tun("JOIN_RACE_MAX", JOIN_RACE_MAX),

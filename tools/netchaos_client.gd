@@ -16,6 +16,8 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 const READY_SECONDS := 45.0
 ## Seconds a client stays connected after its report, so every report sees the full roster.
 const LINGER_SEC := 3.0
+## Connect attempts before the first join counts as failed (each one a refused or timed-out connect).
+const JOIN_ATTEMPTS := 4
 
 var _server := "127.0.0.1:27210"
 var _name := "A"
@@ -32,6 +34,7 @@ var _dropped := false
 var _gone_reason := ""
 
 var _sessions := 0
+var _join_attempts := 1
 var _disconnects: Array = []
 var _join_seconds: Array = []
 var _rejoin_seconds: Array = []
@@ -48,6 +51,8 @@ var _errors: PackedStringArray = []
 var _sess_base := {"corrections": 0, "replays": 0}
 var _spikes: Array = []
 var _roster_seen: Dictionary = {}
+var _dbg: Dictionary = {}
+var _dbg_log: Array = []
 
 
 func _ready() -> void:
@@ -209,6 +214,18 @@ func _watch_corrections() -> void:
 		"gap_s": snappedf(_gap_clock, 0.01), "last_mismatch": str(p.get("last_mismatch"))})
 
 
+## The replicated behaviour a player is mirrored by, found through the registry.
+func _net_behaviour(who: ArenaPlayer) -> Variant:
+	var cnet: DotNetManager = _client.get("net")
+	if cnet == null:
+		return null
+	for identity in cnet.registry.all():
+		for b in identity.behaviours:
+			if b.get("player") == who:
+				return b
+	return null
+
+
 func _watch_roster() -> void:
 	var game = _client.get("game") if _client != null else null
 	if game == null:
@@ -216,6 +233,12 @@ func _watch_roster() -> void:
 	for who: ArenaPlayer in game.players():
 		if not _roster_seen.has(who.display_name):
 			_roster_seen[who.display_name] = snappedf(_now() - _start_at, 0.01)
+		var nb = _net_behaviour(who)
+		if nb != null and who != _client.get("player"):
+			var key := "%s %s %s %s" % [who.display_name, nb.net_alive, nb.net_health, who.health.alive]
+			if _dbg.get(who.display_name, "") != key:
+				_dbg[who.display_name] = key
+				_dbg_log.append([snappedf(_now() - _start_at, 0.01), key, nb.last_state_tick])
 
 
 func _watch_gap(delta: float) -> void:
@@ -253,6 +276,17 @@ func _run() -> void:
 	var finish := _start_at + _active + _settle
 	var t0 := _now()
 	var ok := await _join()
+	# A refused connect is retried like a player pressing Connect again; the attempts are
+	# counted, and the first join's seconds run from the first attempt, so a
+	# handshake that a bandwidth cap breaks is still visible in the report.
+	var tries := 1
+	while not ok and tries < JOIN_ATTEMPTS and _now() < _start_at:
+		tries += 1
+		await _teardown()
+		ok = await _join()
+	_join_attempts = tries
+	if ok and tries > 1 and not _join_seconds.is_empty():
+		_join_seconds[0] = _now() - t0
 	if not ok:
 		_never_ready = true
 	var drops_started := 0.0
@@ -291,9 +325,9 @@ func _run() -> void:
 
 func _report(t0: float) -> void:
 	var out := {"name": _name, "server": _server, "unix": _now(), "start_at": _start_at,
-		"connected": not _never_ready and _client != null, "sessions": _sessions,
+		"connected": not _never_ready and _client != null, "sessions": _sessions, "join_attempts": _join_attempts,
 		"join_seconds": _join_seconds, "disconnects": _disconnects, "rejoin_seconds": _rejoin_seconds,
-		"errors": _errors, "timeline": _timeline, "spikes": _spikes, "roster_seen": _roster_seen}
+		"errors": _errors, "timeline": _timeline, "spikes": _spikes, "roster_seen": _roster_seen, "dbg": _dbg_log}
 	if _client != null:
 		_fold_prediction()
 		var cnet: DotNetManager = _client.get("net")
@@ -310,7 +344,9 @@ func _report(t0: float) -> void:
 			for who: ArenaPlayer in game.players():
 				if who != player:
 					var gp: Vector3 = who.global_position
-					others[who.display_name] = [gp.x, gp.y, gp.z, who.is_alive()]
+					var nb = _net_behaviour(who)
+					others[who.display_name] = [gp.x, gp.y, gp.z, who.is_alive(),
+						nb != null and nb.net_alive, nb.net_health if nb != null else -1, who.hitboxes.enabled, nb.last_state_tick if nb != null else -2, nb.identity.is_authoritative if nb != null and nb.identity != null else null]
 		out["others"] = others
 		if cnet != null:
 			out["stats"] = {"snap_recv": cnet.stats.snapshots_received, "snap_lost": cnet.stats.snapshots_lost,
@@ -318,6 +354,14 @@ func _report(t0: float) -> void:
 				"decode_failures": cnet.stats.decode_failures, "rtt_p50": cnet.stats.rtt_percentile(0.5),
 				"rtt_p95": cnet.stats.rtt_percentile(0.95)}
 	out["prediction"] = {"corrections": _corrections, "replays": _replays, "worst_error_m": _worst_error}
+	for who: ArenaPlayer in (_client.get("game").players() if _client != null else []):
+		var nb = _net_behaviour(who)
+		if nb != null:
+			var rows := []
+			for d in nb.net_vars:
+				if d.property in [&"net_alive", &"net_health", &"net_slot"]:
+					rows.append([str(d.property), int(d.audience), d.max_rate, d.interpolate])
+			out["vars_" + who.display_name] = rows
 	out["max_snapshot_gap_s"] = _max_gap
 	var f := FileAccess.open(_out, FileAccess.WRITE)
 	f.store_string(JSON.stringify(out))

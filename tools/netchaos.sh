@@ -8,6 +8,10 @@
 #   tools/netchaos.sh selftest [staging|staging02]    the tc filter on one box with a harmless profile
 #   tools/netchaos.sh profiles                        list the profiles
 #
+# NC_SOLID=1 keeps mp_solidplayers on (the default is 0 here): a client predicts against the other
+# players' interpolated hulls, so every bump is a correction (3 players in 50 m: 6-32% of replays,
+# 0.4-0.6 m worst) and the profiles then measure the bumping, not the link.
+#
 # Exit 1 when any assertion of any profile fails. docs/testing.md "Network chaos" says what it
 # proves and why impairing only the game's ip:port is safe on a WiFi box.
 set -u
@@ -166,7 +170,7 @@ for prof in ${PROFILES//,/ }; do
 	say "=== profile $prof: ${NETEM:-no impairment} (each way), $REMOTE_N remote + $LOCAL_N local clients"
 	MAXSEC=$((LEAD + ACTIVE + SETTLE + 150))
 
-	"$GODOT" --headless --path "$ROOT" res://tools/netchaos_server.tscn -- --port "$PORT" --data "$RUN/srv" >"$RUN/server.log" 2>&1 &
+	"$GODOT" --headless --path "$ROOT" res://tools/netchaos_server.tscn -- --port "$PORT" --data "$RUN/srv" --solid "${NC_SOLID:-0}" >"$RUN/server.log" 2>&1 &
 	SERVER_PID=$!
 	for _ in $(seq 1 120); do grep -q "netchaos server: ready" "$RUN/server.log" 2>/dev/null && break; kill -0 "$SERVER_PID" 2>/dev/null || break; sleep 1; done
 	grep -q "netchaos server: ready" "$RUN/server.log" || { say "server did not start"; tail -5 "$RUN/server.log"; overall=1; continue; }
