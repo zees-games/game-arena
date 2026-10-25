@@ -14,6 +14,8 @@ const ArenaStats := preload("../game/arena_stats.gd")
 ## godot --headless --path . res://tools/soak.tscn -- --map surf_the_flow --bots 8 --minutes 2
 ## [/codeblock]
 ##
+## --seed N makes the run a pure function of N: bot count (4 to 12, unless --bots), difficulty preset and every bot's brain come from it. tools/fuzz.sh sweeps it.
+##
 ## Also takes the harness's own flags (--soak-max-stuck-sec and the rest of DotBotSoakConfig).
 ## Writes .godot/test-logs/soak-<map>.json, prints the SOAK line, exits 1 when the run fails.
 
@@ -64,6 +66,15 @@ func _run() -> void:
 	cfg.apply_cli()
 	cfg.minutes = float(_arg("minutes", str(cfg.minutes)))
 	cfg.bots = int(_arg("bots", str(cfg.bots)))
+	var difficulty := ""
+	if not _arg("seed", "").is_empty():
+		cfg.seed_value = int(_arg("seed", "1"))
+		var rng := RandomNumberGenerator.new()
+		rng.seed = cfg.seed_value
+		var drawn_bots := rng.randi_range(4, 12)
+		difficulty = String(DotBotProfile.PRESETS[rng.randi() % DotBotProfile.PRESETS.size()])
+		if _arg("bots", "").is_empty():
+			cfg.bots = drawn_bots
 
 	_game = ArenaGame.new()
 	_game.tick_rate = TICK_RATE
@@ -73,6 +84,8 @@ func _run() -> void:
 	_game.mode = ArenaMode.free_for_all(SCORE_LIMIT)
 	_game.score_limit = SCORE_LIMIT
 	add_child(_game)
+	if not difficulty.is_empty():
+		DotBotSettings.of(_game).set_difficulty(difficulty)
 	var res := _game.setup(map)
 	if not res.ok:
 		_fail("setup: %s" % res.error.message)
@@ -129,9 +142,12 @@ func _run() -> void:
 
 	var report := soak.finish()
 	report["map"] = String(map_id)
+	report["seed"] = cfg.seed_value
+	report["difficulty"] = difficulty
 	print(DotBotSoak.summary(report))
 	print(DotBotSoak.report_line(report))
-	var path := ProjectSettings.globalize_path("res://.godot/test-logs/soak-%s.json" % map_id)
+	var tag := "%s-s%d" % [map_id, cfg.seed_value] if not difficulty.is_empty() else String(map_id)
+	var path := _arg("report", ProjectSettings.globalize_path("res://.godot/test-logs/soak-%s.json" % tag))
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	if soak.write_report(report, path) != OK:
 		push_error("could not write %s" % path)

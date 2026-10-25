@@ -72,3 +72,7 @@ No suite reaches the screen. The render tools are in [client.md](client.md#looki
 ## Timing a frame
 
 No suite measures a browser's frame either. A threadless web export is the case that matters, and `cl_perf` is how it reports: export the shell, serve a pack, open `embed.html?server=ws://127.0.0.1:6074&cl_perf=10` in a browser, and read the `arena.perf` lines in its console. What they hold and what they showed is in [netcode.md](netcode.md#a-frames-cost). A machine busy with other work moves the frame times by a factor of three between runs, so compare the work counts (`snapshot`, `replay_n`) or runs taken back to back.
+
+## Fuzz sweep
+
+`tools/fuzz.sh [--seeds N] [--minutes M] [--maps a,b|all] [--out DIR]` runs the soak for every (map, seed) pair one after another through `heavy` with a per-run timeout, for overnight use. `--seed` on `tools/soak.tscn` makes a run a pure function of the seed: bot count (4 to 12), difficulty preset and every brain come from it, and the same pair gave identical totals and tick count twice (dm_box seed 2). Each pair writes `<map>-s<seed>.json` (exit code, SOAK line, error lines, stuck lines) and `.log`, the sweep `summary.json` and `summary.txt` (failures first, each with `tools/fuzz.sh --repro MAP SEED`); a pair fails on a nonzero exit, a missing SOAK line or any ERROR, SCRIPT ERROR or leaked line. Default output is `.godot/fuzz/<timestamp>`; the exit code is 1 when any pair failed. It is not part of `./game.sh test` (game.sh is the same file in every game).
