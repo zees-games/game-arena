@@ -53,7 +53,8 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 
 const PORT := 27094
 const DATA := "user://arena_lossy"
-const TICK_RATE := 64
+## `-- --tick-rate=30` (or ARENA_TICK_RATE) runs the same suite at another rate; tick-count thresholds scale with it.
+var TICK_RATE := _tick_rate_arg()
 const DUMMY_ID := 9001
 
 ## The windows: name, loss each way, delay, jitter (so 30..80 ms), seconds.
@@ -131,6 +132,18 @@ var _w_seen_up: Dictionary = {}
 var _wall_from := -1
 var _wall_idle := false
 var _hop_from := -1
+
+
+static func _tick_rate_arg() -> int:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--tick-rate="):
+			return clampi(int(arg.trim_prefix("--tick-rate=")), 10, 240)
+	return clampi(int(OS.get_environment("ARENA_TICK_RATE")), 10, 240) if OS.has_environment("ARENA_TICK_RATE") else 64
+
+
+## A tick-count threshold written for 64 Hz, scaled to the rate this run uses.
+func _ticks(at_64: int) -> int:
+	return at_64 * TICK_RATE / 64
 
 
 func _ready() -> void:
@@ -1149,7 +1162,7 @@ func _measure_window(
 	print("    A's prediction against the server's A, %d ticks: p50 %.3f / p95 %.3f / max %.3f m; %d of %d replays corrected (%.1f%%), worst ever %s" % [
 		diffs.size(), d50, d95, dmax, corrections, replays, rate * 100.0,
 		net.predictor.describe()["worst_error"]])
-	_check(diffs.size() > 200, "%s: A predicted, and the server ran the same ticks" % title,
+	_check(diffs.size() > _ticks(200), "%s: A predicted, and the server ran the same ticks" % title,
 		"%d" % diffs.size())
 	_check(d95 >= 0.0 and d95 <= 0.05 and dmax <= 1.5 and rate <= 0.1,
 		"%s: A's prediction within 5 cm of the server's for 95%% of ticks, corrected in %.0f%% of replays" % [title, rate * 100.0],
@@ -1274,7 +1287,7 @@ func _test_wall_moves() -> void:
 	_check(heard["runs"] == 1 and heard["jumps"] == 1,
 		"and A predicted both, heard once each, never again from a replay",
 		"%d runs, %d jumps" % [heard["runs"], heard["jumps"]])
-	_check(diffs.size() > 100 and d95 >= 0.0 and d95 <= 0.05 and dmax <= 1.5,
+	_check(diffs.size() > _ticks(100) and d95 >= 0.0 and d95 <= 0.05 and dmax <= 1.5,
 		"A's prediction of it within 5 cm of the server's for 95% of its ticks",
 		"%d ticks, p95 %.3f, max %.3f" % [diffs.size(), d95, dmax])
 	_check(corrections <= maxi(3, replays / 10),
