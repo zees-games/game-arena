@@ -1,0 +1,54 @@
+{
+  "gpu": "NVIDIA GeForce GTX 1660 Ti",
+  "resolution": "1152x648",
+  "tolerance": 0.1,
+  "caps": {
+    "p50_ms": 25.0,
+    "p95_ms": 33.3,
+    "p99_ms": 40.0,
+    "stall_ms": 120.0,
+    "load_s": 20.0,
+    "rss_mb": 3000.0,
+    "pack_mb": 100.0
+  },
+  "slack": {
+    "p50_ms": 0.5,
+    "p95_ms": 1.0,
+    "p99_ms": 2.0,
+    "stall_ms": 10.0,
+    "load_s": 1.0,
+    "rss_mb": 50.0,
+    "pack_mb": 0.2
+  },
+  "recorded": "2026-10-25T00:39:21-0400",
+  "commit": "71b60533de7150d13a5085362a5912c003104bc1",
+  "maps": {
+    "dm_atrium": {
+      "p50_ms": 10.775,
+      "p95_ms": 14.481,
+      "p99_ms": 15.273,
+      "stall_ms": 18.778,
+      "load_s": 5.018,
+      "rss_mb": 1353.762,
+      "pack_mb": 0.804
+    },
+    "dm_pit": {
+      "p50_ms": 10.69,
+      "p95_ms": 14.192,
+      "p99_ms": 14.721,
+      "stall_ms": 15.83,
+      "load_s": 4.969,
+      "rss_mb": 1350.543,
+      "pack_mb": 0.304
+    },
+    "surf_adverse": {
+      "p50_ms": 11.73,
+      "p95_ms": 13.696,
+      "p99_ms": 17.293,
+      "stall_ms": 19.75,
+      "load_s": 4.521,
+      "rss_mb": 1347.395,
+      "pack_mb": 3.189
+    }
+  }
+}

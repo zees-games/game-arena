@@ -49,6 +49,11 @@ var _tick := 60
 var _server_pid := -1
 var _relay = null
 var _client: Node = null
+## `--json`: the numbers perf_budget.sh compares, printed as one `PERF {...}` line.
+var _json := false
+var _t_load0 := 0
+var _gate_open_s := -1.0
+var _rec: RefCounted = null
 
 
 func _ready() -> void:
@@ -66,6 +71,7 @@ func _ready() -> void:
 			"--mode": _mode = args[i + 1]
 			"--tick": _tick = int(args[i + 1])
 	_play = "--play" in args
+	_json = "--json" in args
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("client_bench_" + _role)
 	if _role == "server":
@@ -252,11 +258,16 @@ func _run() -> void:
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("mouse_capture_override", true)
 	var stall: RefCounted = null
-	if "--stall" in OS.get_cmdline_user_args():
+	if "--stall" in OS.get_cmdline_user_args() or _json:
 		stall = StallRecorder.new()
 		stall.start(get_tree())
+		_rec = stall
+	_t_load0 = Time.get_ticks_usec()
 	add_child(_client)
-	if stall != null:
+	var open_gate: Object = _client.get("gate")
+	if _json and open_gate != null:
+		var _o := open_gate.connect(&"opened", func() -> void: _gate_open_s = (Time.get_ticks_usec() - _t_load0) / 1.0e6)
+	if stall != null and not _json:
 		stall.watch(_client.get("gate"))
 		t = 0.0
 		while stall.open_seconds() < 3.0 and t < 60.0:
@@ -268,13 +279,15 @@ func _run() -> void:
 		link.disconnect_from_server("done")
 		_finish(0)
 		return
+	if _json and stall != null:
+		stall.watch(_client.get("gate"))
 	t = 0.0
 	while t < 40.0:
-		await get_tree().create_timer(0.25).timeout
-		t += 0.25
+		await get_tree().create_timer(0.05).timeout
+		t += 0.05
 		var p = _client.get("player")
 		var net = _client.get("net")
-		if p != null and p.is_alive() and net != null and net.clock.is_synced():
+		if p != null and p.is_alive() and net != null and net.clock.is_synced() and (not _json or _gate_open_s >= 0.0):
 			break
 	# `--raw-input`: predict on the sampled command rather than the one the wire carries
 	# (DotNetConfig.predict_wire_input), to measure what the rounding is worth.
@@ -443,6 +456,8 @@ func _measure() -> void:
 		_print_mismatches()
 	print("client_bench: delay %d ms each way, burn %.1f ms, %d bots, %.0f s" % [roundi(_delay), _burn_ms, _bots, elapsed])
 	print("  fps %.1f | frame p50 %.1f p95 %.1f max %.1f ms" % [n / elapsed, sorted[n / 2], sorted[int(n * 0.95)], sorted[n - 1]])
+	if _json:
+		_print_perf(sorted, elapsed)
 	var fs := fclock.summary(elapsed + 1.0)
 	fclock.stop()
 	print("  physics %.2f ms/frame (%.2f ms/step) | script %.2f | render %.2f | wait %.2f | steps %.2f/frame (max %d) | draw calls %.0f objects %.0f" % [
@@ -540,6 +555,29 @@ func _print_render() -> void:
 	for k: String in by:
 		if int(by[k]) >= 3:
 			print("      %4d  %s" % [by[k], k])
+
+
+## One machine-readable line: frame percentiles of the measured window, the worst frame
+## either side of the cover dropping, seconds until the loading cover drops, peak resident memory, GPU name.
+func _print_perf(sorted: PackedFloat32Array, elapsed: float) -> void:
+	var n := sorted.size()
+	var rss_kb := 0
+	var status := FileAccess.open("/proc/self/status", FileAccess.READ)
+	while status != null and not status.eof_reached():
+		var line := status.get_line()
+		if line.begins_with("VmHWM:"):
+			rss_kb = int(line.get_slice(":", 1).strip_edges().get_slice(" ", 0))
+	var after_open: Dictionary = _rec.summary(2.0) if _rec != null else {}
+	var vp := get_viewport().get_visible_rect().size
+	var d := {
+		"map": _map, "bots": _bots, "seconds": elapsed, "frames": n,
+		"p50_ms": sorted[n / 2], "p95_ms": sorted[int(n * 0.95)], "p99_ms": sorted[int(n * 0.99)],
+		"stall_ms": maxf(sorted[n - 1], float(after_open.get("window_worst_ms", 0.0))),
+		"load_s": _gate_open_s, "rss_mb": rss_kb / 1024.0,
+		"gpu": RenderingServer.get_video_adapter_name(), "driver": RenderingServer.get_current_rendering_driver_name(),
+		"resolution": "%dx%d" % [vp.x, vp.y], "godot": Engine.get_version_info().get("string", ""),
+	}
+	print("PERF " + JSON.stringify(d))
 
 
 func _fail(why: String) -> void:
