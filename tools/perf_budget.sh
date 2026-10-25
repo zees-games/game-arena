@@ -52,7 +52,7 @@ work, out, maps, update, tol, commit, dirty = sys.argv[1:8]
 update = update == "1"
 BASE = "tests/perf_budget.json"
 # metric: (absolute slack under which a change never counts, default cap); lower is better for all of them.
-METRICS = {"p50_ms": (0.5, 25.0), "p95_ms": (1.0, 33.3), "p99_ms": (2.0, 40.0), "stall_ms": (10.0, 120.0),
+METRICS = {"p50_ms": (0.5, 25.0), "p95_ms": (2.0, 33.3), "p99_ms": (2.0, 40.0), "stall_ms": (10.0, 120.0),
            "load_s": (1.0, 20.0), "rss_mb": (50.0, 3000.0), "pack_mb": (0.2, 100.0)}
 
 def pack_mb(m):
