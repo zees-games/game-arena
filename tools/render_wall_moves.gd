@@ -22,7 +22,8 @@ const WallRouteDriver := preload("../examples/wall_route_driver.gd")
 ## `screenshots/wall_moves/`, and a CSV of every frame (the eye, the roll, the lean the
 ## wall run asked for), which `render_wall_moves.sh` reads for steps and reversals.
 ##
-## Scenarios: `run`, the north gallery's gap run on the wall by a slide-jump; `runjump`, the
+## Scenarios: `run`, the north gallery's gap run on the wall by a slide-jump; `jumprun`, the same
+## route with the automatic run out of reach and a jump press beside the wall starting it; `runjump`, the
 ## same run kicked off the wall half a second in; `chimney`, the two wall jumps up onto
 ## the gallery.
 
@@ -51,7 +52,7 @@ var _third := false
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	_third = args.has("third")
-	for name in ["run", "runjump", "chimney"]:
+	for name in ["run", "runjump", "jumprun", "chimney"]:
 		if args.is_empty() or args.has(name):
 			_scenarios.append(name)
 
@@ -95,6 +96,9 @@ func _next_scenario() -> void:
 		start = Vector3(start.x, start.y, start.z) + forward * 5.5
 
 	_player.controller.teleport(start, _driver.yaw, 0.0)
+	# `jumprun`: the automatic run is out of reach, so only a press beside the wall starts one.
+	_player.controller.tunables.wall_run_min_speed = 99.0 if _scenario == "jumprun" else ArenaPlayer.arena_tunables().wall_run_min_speed
+	_player.controller.tunables.wall_run_on_jump = _scenario == "jumprun" or ArenaPlayer.arena_tunables().wall_run_on_jump
 	if route["kind"] == &"run":
 		_player.controller.state.velocity = DotFpsMotor.forward_for(_driver.yaw) * 9.0
 	_settle = 0 if route["kind"] == &"run" else 24
@@ -124,6 +128,9 @@ func _physics_process(_delta: float) -> bool:
 			command.buttons |= DotFpsCommand.BUTTON_JUMP
 			_kicked = true
 
+	var air := _player.controller.state
+	if _scenario == "jumprun" and _driven >= 0 and air.mode == DotFpsState.Mode.AIR and not air.is_wall_running() and _tick % 2 == 0:
+		command.buttons |= DotFpsCommand.BUTTON_JUMP
 	var _outcome := _player.simulate_tick(_tick, 1.0 / float(TICK_RATE), command, DotWeaponCommand.new())
 	_tick += 1
 	return false

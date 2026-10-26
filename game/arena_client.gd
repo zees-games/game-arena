@@ -2126,7 +2126,7 @@ func _present_frame(delta: float) -> void:
 
 	# Your own body when you look down, if the server's `fp_body` rule is on.
 	if player != null and game != null and player.controller != null:
-		player.present_own_body(game.view_rules.first_person_legs or game.rule("fp_body") != 0.0,
+		player.present_own_body(game.view_rules.shows_own_legs(game.rule("fp_body") != 0.0),
 			(player.view_now as Vector2).x if player.view_now != null else player.controller.state.yaw)
 
 	_face_a_respawn()
@@ -2650,6 +2650,7 @@ func _hear_the_local_player() -> void:
 	if controller != null and not controller.wall_run_changed.is_connected(_on_local_wall_run):
 		controller.wall_run_changed.connect(_on_local_wall_run)
 		controller.wall_jumped.connect(_on_local_wall_jumped)
+		controller.view_turned.connect(_on_local_view_turned)
 
 	if not player.used.is_connected(_on_local_used):
 		# The PREDICTED use, on the client that made it. Waiting for the server's
@@ -2696,6 +2697,12 @@ func _on_local_used(outcome: DotWeaponOutcome) -> void:
 func _on_local_wall_run(running: bool) -> void:
 	if presentation != null:
 		var _voice := presentation.on_wall_run(running)
+
+
+## The jump-started run turns the look input along the wall.
+func _on_local_view_turned(degrees: float) -> void:
+	if _sampler != null:
+		_sampler.look_at_angles(_sampler.yaw + degrees, _sampler.pitch)
 
 
 func _on_local_wall_jumped() -> void:

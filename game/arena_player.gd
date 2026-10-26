@@ -469,7 +469,8 @@ static func arena_tunables() -> DotFpsTunables:
 	tunables.wall_run_enabled = true
 	tunables.wall_run_min_speed = 9.5
 	# A jump press beside a wall starts a run (the heading turns along it); a second press jumps off.
-	tunables.wall_run_on_jump = false
+	tunables.wall_run_on_jump = true
+	tunables.wall_run_turn_view = true
 	tunables.wall_run_cooldown = 0.4
 	tunables.wall_jump_enabled = true
 	tunables.wall_slide_speed = 2.5
@@ -489,7 +490,7 @@ const MOVEMENT_RULES: PackedStringArray = [
 	"wall_run_end_speed", "wall_run_vertical_damping", "wall_run_max_fall_speed",
 	"wall_run_max_approach_angle", "wall_jump_look_blend", "wall_jump_max_per_wall",
 	"wall_run_body_roll", "wall_run_body_yaw",
-	"wall_run_on_jump", "wall_run_jump_min_speed", "wall_run_jump_max_angle", "wall_run_cooldown",
+	"wall_run_on_jump", "wall_run_turn_view", "wall_run_jump_min_speed", "wall_run_jump_max_angle", "wall_run_cooldown",
 	"wall_max_angle_from_vertical",
 ]
 

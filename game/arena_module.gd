@@ -1308,6 +1308,7 @@ const MOVEMENT_CVARS := {
 	"arena_wall_run_body_roll": ["wall_run_body_roll", "Degrees a drawn body rolls (feet to the wall) while wall running"],
 	"arena_wall_run_body_yaw": ["wall_run_body_yaw", "Degrees a drawn body turns toward the wall while wall running"],
 	"arena_wall_run_on_jump": ["wall_run_on_jump", "A jump press beside a wall starts a run and turns the heading along it (1) or only jumps off (0)"],
+	"arena_wall_run_turn_view": ["wall_run_turn_view", "The view turns along the wall when a jump starts a run (1) or only the heading does (0)"],
 	"arena_wall_run_jump_speed": ["wall_run_jump_min_speed", "Horizontal speed a jump-started wall run needs, m/s"],
 	"arena_wall_run_jump_angle": ["wall_run_jump_max_angle", "Widest angle off the wall's plane a jump-started run accepts, degrees"],
 	"arena_wall_run_cooldown": ["wall_run_cooldown", "Seconds after a wall run ends before another may start"],

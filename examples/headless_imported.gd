@@ -764,6 +764,9 @@ func _test_recorded_rides() -> void:
 
 	var human_id := 4
 	var human := _game.player_for(human_id)
+	# A ride is a line along a ramp beside walls; a jump tap there is not a wall-run.
+	for rider_id in [4, 5]:
+		_game.player_for(rider_id).controller.tunables.wall_run_on_jump = false
 	var aside: Vector3 = edge.to + Vector3(30.0, 0.0, 0.0)
 	for other in _game.players():
 		if other.player_id != human_id and other.player_id != 5 and other.is_alive():
