@@ -8,6 +8,8 @@ const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaGame := preload("arena_game.gd")
 ## The workbench kind of the ambience cvar set (saved to cfg/.../ambience/server.yml).
 const AMBIENT_KIND := "ambience"
+## The workbench kind of the wall-move cvar set (arena_wall*).
+const WALL_KIND := "wallmoves"
 const ArenaMapConfig := preload("arena_map_config.gd")
 const ArenaIdentity := preload("arena_identity.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -1016,6 +1018,13 @@ func _start_workbench() -> void:
 	var ambient_set := DotGameWorkbench.cvar_set(console, ArenaAmbience.cvar_types(), AMBIENT_KIND)
 	if ambient_set != null:
 		wb.add_set(ambient_set, "Ambience (arena_ambient*)")
+	var wall_types := {}
+	for cvar: String in MOVEMENT_CVARS:
+		if cvar.begins_with("arena_wall"):
+			wall_types[cvar] = "float"
+	var wall_set := DotGameWorkbench.cvar_set(console, wall_types, WALL_KIND)
+	if wall_set != null:
+		wb.add_set(wall_set, "Wall moves (arena_wall*)")
 	var started := wb.start()
 	if not started.ok:
 		DotLog.result(CHANNEL, "the workbench", started)
@@ -1031,6 +1040,8 @@ func _start_workbench() -> void:
 		game.noblock.binder.attach(rt)
 	if ambient_set != null:
 		var _applied := DotGameWorkbench.bind_cvar_set(ambient_set, rt, console)
+	if wall_set != null:
+		var _wall_applied := DotGameWorkbench.bind_cvar_set(wall_set, rt, console)
 
 
 func _module_unload() -> void:
@@ -1296,6 +1307,11 @@ const MOVEMENT_CVARS := {
 	"arena_wall_jumps_per_wall": ["wall_jump_max_per_wall", "Wall jumps off the same wall before landing again"],
 	"arena_wall_run_body_roll": ["wall_run_body_roll", "Degrees a drawn body rolls (feet to the wall) while wall running"],
 	"arena_wall_run_body_yaw": ["wall_run_body_yaw", "Degrees a drawn body turns toward the wall while wall running"],
+	"arena_wall_run_on_jump": ["wall_run_on_jump", "A jump press beside a wall starts a run and turns the heading along it (1) or only jumps off (0)"],
+	"arena_wall_run_jump_speed": ["wall_run_jump_min_speed", "Horizontal speed a jump-started wall run needs, m/s"],
+	"arena_wall_run_jump_angle": ["wall_run_jump_max_angle", "Widest angle off the wall's plane a jump-started run accepts, degrees"],
+	"arena_wall_run_cooldown": ["wall_run_cooldown", "Seconds after a wall run ends before another may start"],
+	"arena_wall_angle": ["wall_max_angle_from_vertical", "Steepest lean from vertical a wall may have and still be run on, degrees"],
 	"arena_break": ["break_mode", "On a death the body: 0 stays whole, 1 loses limbs, 2 explodes"],
 	"arena_break_limbs": ["break_limbs", "How many limbs come off when arena_break is 1"],
 	"arena_break_criticals": ["break_criticals_only", "Only a critical (a headshot) breaks a body (1), or any kill (0)"],

@@ -2126,7 +2126,7 @@ func _present_frame(delta: float) -> void:
 
 	# Your own body when you look down, if the server's `fp_body` rule is on.
 	if player != null and game != null and player.controller != null:
-		player.present_own_body(game.rule("fp_body") != 0.0,
+		player.present_own_body(game.view_rules.first_person_legs or game.rule("fp_body") != 0.0,
 			(player.view_now as Vector2).x if player.view_now != null else player.controller.state.yaw)
 
 	_face_a_respawn()

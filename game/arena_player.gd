@@ -468,6 +468,9 @@ static func arena_tunables() -> DotFpsTunables:
 	# The wall jump needs no speed at all, and the slide catches a fall against a wall.
 	tunables.wall_run_enabled = true
 	tunables.wall_run_min_speed = 9.5
+	# A jump press beside a wall starts a run (the heading turns along it); a second press jumps off.
+	tunables.wall_run_on_jump = false
+	tunables.wall_run_cooldown = 0.4
 	tunables.wall_jump_enabled = true
 	tunables.wall_slide_speed = 2.5
 	return tunables
@@ -486,6 +489,8 @@ const MOVEMENT_RULES: PackedStringArray = [
 	"wall_run_end_speed", "wall_run_vertical_damping", "wall_run_max_fall_speed",
 	"wall_run_max_approach_angle", "wall_jump_look_blend", "wall_jump_max_per_wall",
 	"wall_run_body_roll", "wall_run_body_yaw",
+	"wall_run_on_jump", "wall_run_jump_min_speed", "wall_run_jump_max_angle", "wall_run_cooldown",
+	"wall_max_angle_from_vertical",
 ]
 
 ## The rules in [constant MOVEMENT_RULES] that pose a drawn body rather than move one: they
@@ -704,6 +709,11 @@ func _pose_body(drawn: DotFpsState, yaw: float, delta: float) -> void:
 		body_motion.wall_run_body_roll = BODY_RULES.wall_run_body_roll
 		body_motion.wall_run_body_yaw = BODY_RULES.wall_run_body_yaw
 		_apply_body_rules()
+	# The wall is not replicated: a body drawn from the wire finds it with two rays.
+	if drawn.is_wall_running() and drawn.wall_normal == Vector3.ZERO and body_mesh.is_inside_tree():
+		drawn.wall_normal = DotFpsWallProbe.find(
+			body_mesh.get_world_3d().direct_space_state, drawn.position, drawn.velocity,
+			controller.tunables.collision_mask if controller != null else 1)
 	body_motion.advance(drawn, delta)
 	body_mesh.global_basis = (
 		Basis(Vector3.UP, deg_to_rad(yaw + body_motion.body_yaw()))
@@ -712,7 +722,7 @@ func _pose_body(drawn: DotFpsState, yaw: float, delta: float) -> void:
 
 
 static func _set_rule(tunables: DotFpsTunables, key: String, value: Variant) -> void:
-	if key.ends_with("_enabled"):
+	if key.ends_with("_enabled") or typeof(tunables.get(key)) == TYPE_BOOL:
 		tunables.set(key, float(value) != 0.0)
 	elif typeof(tunables.get(key)) == TYPE_INT:
 		# RULES carries every value as a float32; a count (wall_jump_max_per_air) is an int.
@@ -1449,6 +1459,7 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 		"swimming": drawn.mode == swim.mode_id,
 		"climbing": drawn.mode == ladder.mode_id,
 		"alive": is_alive(),
+		"wall_running": drawn.is_wall_running(),
 		# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
 		# reads where this player is aiming.
 		"aim": deg_to_rad(drawn.pitch),
