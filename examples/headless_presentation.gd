@@ -33,7 +33,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 320
+const CHECKS := 324
 
 var _passed := 0
 var _failed := 0
@@ -93,6 +93,7 @@ func _run() -> void:
 	_test_hud_makes_room_for_a_ballot()
 	await _test_the_map_menu()
 	await _test_the_loadout_menu()
+	_test_click_keeps_modal_pointer()
 	await _test_the_hud_follows_the_theme()
 
 	print("")
@@ -1542,6 +1543,40 @@ func _test_mouse_drives_view() -> void:
 
 	client.player = null
 	stand_in.free()
+	client.free()
+	_done()
+
+
+## A click while a modal has the pointer must not capture it: the workbench, or a ballot that freed the mouse.
+func _test_click_keeps_modal_pointer() -> void:
+	_section("A click does not recapture the pointer under a modal")
+
+	var client := ArenaClient.new()
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+
+	client._awaiting_click = true
+	client._unhandled_input(click)
+	_check(not client._awaiting_click, "with nothing open a click takes the pointer")
+
+	client._awaiting_click = true
+	client._workbench_open = true
+	client._unhandled_input(click)
+	_check(client._awaiting_click and client._menu_open(), "a click with the workbench open leaves it alone")
+	client._workbench_open = false
+
+	var ballot := Control.new()
+	ballot.set_script(preload("res://examples/pointer_modal_stub.gd"))
+	add_child(ballot)
+	ballot.set(&"on", true)
+	client._awaiting_click = true
+	client._unhandled_input(click)
+	_check(client._awaiting_click and client._menu_open(), "a click with a ballot in pointer mode leaves it alone")
+	ballot.set(&"on", false)
+	_check(not client._menu_open(), "and the ballot closing hands the pointer back")
+
+	ballot.free()
 	client.free()
 	_done()
 

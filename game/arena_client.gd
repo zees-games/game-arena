@@ -782,7 +782,11 @@ func _start_solo_workbench() -> void:
 	wb.open_changed.connect(func(open: bool) -> void:
 		_workbench_open = open
 		if open:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE)
+			platform.hold_pointer(&"workbench")
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		else:
+			platform.release_pointer(&"workbench")
+			_apply_mouse())
 	_workbench = wb
 
 
@@ -1019,9 +1023,20 @@ func _suspend_input(blocked: bool) -> void:
 		_sampler.suspended = blocked
 
 
-## Whether the menu, its help or the console is up, in which case the mouse is a pointer.
+## Whether the menu, its help, the console, the workbench or a ballot in pointer mode is up, in which case the mouse is a pointer.
 func _menu_open() -> bool:
-	return _workbench_open or game_menu != null and game_menu.any_open()
+	return _workbench_open or game_menu != null and game_menu.any_open() or _pointer_modal_up()
+
+
+## A `dot_pointer_modal` node (dot-ui's ballot) that has freed the mouse; a click must not recapture it.
+func _pointer_modal_up() -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return false
+	for node in tree.get_nodes_in_group(&"dot_pointer_modal"):
+		if node.has_method(&"is_pointer_mode") and bool(node.call(&"is_pointer_mode")):
+			return true
+	return false
 
 
 ## What a player typed, on its way to the server.
