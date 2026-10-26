@@ -83,3 +83,7 @@ Thumbs.db
 /addons/dot_game
 /addons/dot_workbench
 /lightbake_work/
+
+# Generated
+__pycache__/
+/tests/golden/*.import
