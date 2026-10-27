@@ -103,8 +103,7 @@ static func scan(from: String = "") -> void:
 
 		var source := StringName(SOURCE_PREFIX + dir)
 		var me := _me()
-		ZeeWeaponPack.add_source(source, Callable(me, &"_defs").bind(script))
-		ZeeWeaponArtTable.add_source(source, Callable(me, &"_art").bind(script))
+		ZeePackSource.register(source, script, Callable(me, &"_defs").bind(script))
 		_sources.append(source)
 		packs.append(dir)
 		DotLog.info(CHANNEL, "weapon pack registered", {"pack": dir, "weapons": kept.size()})
@@ -119,8 +118,7 @@ static func ensure() -> void:
 
 static func clear() -> void:
 	for source in _sources:
-		ZeeWeaponPack.remove_source(source)
-		ZeeWeaponArtTable.remove_source(source)
+		ZeePackSource.unregister(source)
 
 	_sources.clear()
 	packs = PackedStringArray()
@@ -202,33 +200,3 @@ static func _me() -> GDScript:
 static func _defs(types: Dictionary, provider: GDScript) -> Array[DotWeaponDef]:
 	return provider.call(&"weapon_defs", types)
 
-
-## The pack's art: its `weapon_art()` when it has one, else the zee gun of the same slot under the pack weapon's id, dressed from `art_rows()`.
-static func _art(provider: GDScript) -> Array[ZeeWeaponArt]:
-	if provider.has_method(&"weapon_art"):
-		return provider.call(&"weapon_art")
-
-	var out: Array[ZeeWeaponArt] = []
-	var rows: Dictionary = provider.call(&"art_rows") if provider.has_method(&"art_rows") else {}
-
-	for def in provider.call(&"weapon_defs", ZeeWeaponDamage.table()):
-		var copy: ZeeWeaponArt
-
-		# Built, never read from the table: this runs while the table is being built.
-		match def.slot:
-			ZeeWeaponIds.SLOT_SIDEARM:
-				copy = ZeeWeaponArtTable.pistol()
-			ZeeWeaponIds.SLOT_HEAVY:
-				copy = ZeeWeaponArtTable.launcher()
-			ZeeWeaponIds.SLOT_MELEE:
-				copy = ZeeWeaponArtTable.knife()
-			ZeeWeaponIds.SLOT_THROWN:
-				copy = ZeeWeaponArtTable.frag()
-			_:
-				copy = ZeeWeaponArtTable.rifle()
-
-		copy.id = def.id
-		ZeeArtDress.apply(copy, rows.get(def.id, {}))
-		out.append(copy)
-
-	return out
