@@ -28,6 +28,9 @@ var now_fn: Callable = func() -> float: return Time.get_ticks_usec() / 1000000.0
 ## Shown as-is in the banner: the weapon id's words.
 var weapon_name_fn: Callable = func(id: String) -> String: return id.capitalize()
 
+## Weapon id -> Texture2D or null: the picture beside the weapon's name in the banner.
+var weapon_icon_fn: Callable = Callable()
+
 ## Nodes hidden while the replay runs (the HUD, the view model): anything with `visible`.
 var hide_while_playing: Array = []
 
@@ -44,6 +47,8 @@ func _ready() -> void:
 	killcam = DotKillcam.new()
 	killcam.name = "Killcam"
 	killcam.skip_actions = SKIP_ACTIONS
+	killcam.icon_provider = func(id: String) -> Texture2D:
+		return weapon_icon_fn.call(id) if weapon_icon_fn.is_valid() else null
 	add_child(killcam)
 	killcam.started.connect(_on_started)
 	killcam.frame_drawn.connect(_apply)
@@ -91,6 +96,7 @@ func match_ended() -> bool:
 		"killer": String(killer.get(&"display_name")),
 		"victim": String(victim.get(&"display_name")) if victim != null else "",
 		"weapon": weapon_name_fn.call(String(kill["data"].get("weapon", ""))),
+		"weapon_id": String(kill["data"].get("weapon", "")),
 		"hint": "Jump or Fire to skip",
 	})
 	if not played.ok:

@@ -1550,6 +1550,8 @@ func _build_killcam() -> void:
 	killcam.weapon_name_fn = func(id: String) -> String:
 		var def: DotWeaponDef = ArenaPlayer.weapon_catalogue().get_def(StringName(id)) if id != "" else null
 		return def.display_name if def != null and def.display_name != "" else id.capitalize()
+	killcam.weapon_icon_fn = func(id: String) -> Texture2D:
+		return ArenaWeaponIcons.shared.menu_texture(StringName(id))
 	killcam.over.connect(func(_skipped: bool) -> void: _reveal_winner())
 	add_child(killcam)
 	winner_reveal = DotWinnerReveal.new()

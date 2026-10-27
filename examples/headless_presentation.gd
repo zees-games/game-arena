@@ -33,7 +33,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 326
+const CHECKS := 327
 
 var _passed := 0
 var _failed := 0
@@ -2169,6 +2169,11 @@ func _test_the_final_killcam() -> void:
 	var want: Vector3 = at.call(4.5)
 	_check(absf(eye.x - want.x) < 0.1 and eye.y > want.y + 0.5, "with the camera at the killer's eye then (%s, feet %s)" % [eye, want])
 	_check(kc.killcam.banner != null and kc.killcam.banner.killer_label.text == "Killer", "under a banner naming the killer")
+	var icon_tex := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8))
+	kc.weapon_icon_fn = func(id: String) -> Texture2D: return icon_tex if id == "rifle" else null
+	kc.killcam.banner.present({"killer": "Killer", "weapon": "Rifle", "weapon_id": "rifle"})
+	_check(kc.killcam.banner.icon_rect.visible and kc.killcam.banner.icon_rect.texture == icon_tex,
+		"the banner shows the weapon's icon from weapon_icon_fn")
 	var n := 0
 	while kc.is_playing() and n < 1000:
 		kc.killcam.advance(step)
