@@ -2273,6 +2273,11 @@ func _present_frame(delta: float) -> void:
 		var stack_now := game.player_stack
 		if stack_now != null and stack_now.physics != null and stack_now.physics.layout != null:
 			presentation.follow_roof(delta, eye, get_viewport().world_3d.direct_space_state, stack_now.physics.layout.mask_of([&"world"]))
+			var shot_rig: Object = player.weapons if player != null else null
+			if shot_rig != null and is_instance_valid(shot_rig) and shot_rig.has_method(&"shot_fx"):
+				var shot_fx: Object = shot_rig.call(&"shot_fx")
+				if shot_fx != null:
+					shot_fx.set(&"roof", presentation.shot_roof)
 
 	# A position report, once a second, for as long as the client has a player.
 	#
