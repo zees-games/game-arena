@@ -181,6 +181,9 @@ var browser: ArenaBrowser = null
 ## keyboard rather than to the match.
 var presentation: ArenaPresentation = null
 
+## State of the load-gate warm-up, see [method _prewarm_tick]; empty when idle.
+var _warm := {}
+
 ## Whether this client believes it is holding a prop.
 ##
 ## [b]A belief, not a fact, and the distinction is the whole reason props are not
@@ -1842,20 +1845,61 @@ func _prewarm_weapons(body: ArenaPlayer) -> void:
 	spare.visible = false
 	body.camera.add_child(spare)
 	gate.hold(&"weapons", "Preparing weapons")
-	var arts: Array = ZeeWeaponArtTable.table().values()
-	var next := 0
-	while next < arts.size() and is_instance_valid(spare):
-		var until := Time.get_ticks_msec() + 8
-		while next < arts.size() and Time.get_ticks_msec() < until:
-			spare.prewarm(arts[next] as ZeeWeaponArt)
-			next += 1
-		await get_tree().process_frame
-		if not is_instance_valid(self):
-			return
-	if is_instance_valid(spare):
-		spare.queue_free()
-	gate.warm_up(ZeeViewModel.prepared_materials())
-	gate.release(&"weapons")
+	_warm = {"body": body, "spare": spare, "arts": ZeeWeaponArtTable.table().values(), "next": 0, "phase": 0, "frames": 0, "rig": null}
+	# A tick on process_frame, not an await: a coroutine resumed after this client was freed is an
+	# engine error, while a connection to a method dies with the object.
+	get_tree().process_frame.connect(_prewarm_tick)
+
+
+## One frame of the warm-up: weapon views, then the flash scenes, then one draw of every flash and
+## the explosion in front of the camera (the first shot cost 375-420 ms, the first explosion 95).
+func _prewarm_tick() -> void:
+	var body: Variant = _warm.get("body")
+	if not is_instance_valid(body) or body.camera == null:
+		_prewarm_end()
+		return
+	match int(_warm.phase):
+		0:
+			var arts: Array = _warm.arts
+			var until := Time.get_ticks_msec() + 8
+			while _warm.next < arts.size() and Time.get_ticks_msec() < until:
+				if not is_instance_valid(_warm.spare):
+					break
+				(_warm.spare as ZeeViewModel).prewarm(arts[_warm.next] as ZeeWeaponArt)
+				_warm.next += 1
+			if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
+				if is_instance_valid(_warm.spare):
+					(_warm.spare as Node).queue_free()
+				_warm.erase("spare")
+				gate.warm_up(ZeeViewModel.prepared_materials())
+				_warm.phase = 1
+		1:
+			if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
+				var rig: Node3D = DotMuzzleFlash.prewarm(body.camera)
+				if rig != null:
+					rig.position = Vector3(0.0, 0.0, -1.5)
+				_warm.rig = rig
+				if presentation != null and presentation.fx != null:
+					var cam: Transform3D = body.camera.global_transform
+					var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
+					presentation.fx.warm([ArenaPresentation.EXPLOSION, &"impact_spark"], at)
+				_warm.phase = 2
+		_:
+			_warm.frames += 1
+			if _warm.frames >= 3:
+				_prewarm_end()
+
+
+func _prewarm_end() -> void:
+	if get_tree().process_frame.is_connected(_prewarm_tick):
+		get_tree().process_frame.disconnect(_prewarm_tick)
+	if is_instance_valid(_warm.get("spare")):
+		(_warm.spare as Node).queue_free()
+	if is_instance_valid(_warm.get("rig")):
+		(_warm.rig as Node).queue_free()
+	_warm = {}
+	if gate != null:
+		gate.release(&"weapons")
 
 
 ## The hit drawn on the body the server says was hit: zee's red burst at [param point]. The
