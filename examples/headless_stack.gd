@@ -23,8 +23,8 @@ const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 const TICK_RATE := 64
 const BOTS := 4
 
-const SECTIONS := 6
-const CHECKS := 60
+const SECTIONS := 7
+const CHECKS := 67
 
 var _passed := 0
 var _failed := 0
@@ -51,6 +51,7 @@ func _run() -> void:
 	_test_sides()
 	_test_life_and_death()
 	_test_classes_and_spawns()
+	_test_class_immunity()
 	_test_leaving()
 
 	_line("")
@@ -376,6 +377,50 @@ func _test_classes_and_spawns() -> void:
 		"and the whole stack describes itself for a console command or a bug report"
 	)
 	_check(int(_stack().describe().get("players", 0)) == BOTS, "briefly, too")
+
+
+func _test_class_immunity() -> void:
+	_section("class immunity")
+
+	var stack := _stack()
+	var cat := stack.classes.catalogue
+	var hardy := DotPlayerClassDef.make(&"hardy", 100.0, 1.0)
+	hardy.immune_to = [&"fall"]
+	cat.classes.append(hardy)
+	var _rebuilt := cat.build()
+
+	var player = _game.players()[0]
+	var id: int = player.player_id
+	var key := str(id)
+	var fall := _game.combat.damage_type(&"fall")
+	_check(fall != null, "arena registers a fall damage type, so immune: [fall] can match")
+
+	var _f := stack.classes.force(key, &"hardy")
+	stack.apply_class_numbers(player)
+	var imm := DotGameClassImmunity.ensure(_game.combat, false)
+	_check(imm.is_immune(id, &"fall"), "the class's immune_to reaches the resolver at spawn")
+	var hit := DotDamage.make(0, id, 10.0, fall)
+	_check(_game.combat.resolver.resolve(hit).refused, "an immune class takes no fall damage")
+
+	_f = stack.classes.force(key, &"default")
+	stack.apply_class_numbers(player)
+	hit = DotDamage.make(0, id, 10.0, fall)
+	# The resolver is not asked here: a fresh spawn is also invulnerable, which refuses too.
+	_check(not imm.is_immune(id, &"fall"), "respawning as the plain class clears it")
+
+	var other = _game.players()[1]
+	hit = DotDamage.make(0, other.player_id, 10.0, fall)
+	_check(not _game.combat.resolver.resolve(hit).refused, "and a plain class is unchanged by another's immunity")
+
+	_f = stack.classes.force(key, &"hardy")
+	stack.apply_class_numbers(player)
+	hit = DotDamage.make(0, id, 10.0, fall)
+	_check(_game.combat.resolver.resolve(hit).refused, "and it comes back with the class")
+	hit = DotDamage.make(id, other.player_id, 10.0, _game.combat.damage_type(&"bullet"))
+	_check(not _game.combat.resolver.resolve(hit).refused, "immunity is per kind: bullets still land")
+
+	_f = stack.classes.force(key, &"default")
+	stack.apply_class_numbers(player)
 
 
 func _test_leaving() -> void:

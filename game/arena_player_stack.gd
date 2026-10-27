@@ -685,6 +685,9 @@ func apply_class_numbers(player: ArenaPlayer) -> void:
 
 	var def := classes.def_of(str(player.player_id))
 
+	# Before the null return: no class must clear what the last spawn wrote.
+	var _kinds := DotGameClassImmunity.apply(game.combat, def, player.player_id)
+
 	if def == null:
 		return
 
