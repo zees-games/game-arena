@@ -77,6 +77,7 @@ func _run() -> void:
 	victim.health.invulnerable_until_tick = -1
 	var type = game.combat.damage_type(&"")
 	var damage := DotDamage.make(killer.player_id, victim.player_id, victim.health.health + victim.health.armour + 50.0, type)
+	damage.weapon_id = &"rifle"
 	damage.tick = game.current_tick()
 	var applied = victim.health.apply(damage)
 	game.combat.entity_killed.emit(victim.player_id, applied)
