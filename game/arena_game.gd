@@ -412,6 +412,10 @@ var _unlag: Dictionary = {}
 var _unlag_moved: Dictionary = {}
 ## The shooter, whom a rewind leaves where they are.
 var _unlag_shooter: int = 0
+## Flies simulated bullets when `sv_ballistics` is on; null without dot-weapon's ballistics rules.
+var bullet_bridge: DotWeaponBulletBridge = null
+## Draws their tracers (client side of a local or listen game).
+var tracers: DotWeaponTracers = null
 
 ## Movement keys changed from [method ArenaPlayer.arena_tunables]' defaults, key -> number.
 ##
@@ -634,6 +638,35 @@ func _follow_cvar_source() -> bool:
 	return bool(combat.call(&"follow_cvars", _cvar_source))
 
 
+## One bridge per combat manager, so a new map's manager gets its own. Inert while sv_ballistics is 0.
+func _build_bullets() -> void:
+	if bullet_bridge != null:
+		bullet_bridge.queue_free()
+		bullet_bridge = null
+	var rules := combat_feel.ballistics as DotWeaponBallisticsRules
+	if rules == null:
+		return
+	bullet_bridge = DotWeaponBulletBridge.new()
+	bullet_bridge.name = "Bullets"
+	add_child(bullet_bridge)
+	bullet_bridge.setup(combat, rules, tick_rate)
+	bullet_bridge.rewinding.connect(func(owner_id: int) -> void: _unlag_shooter = owner_id)
+	if tracers == null:
+		tracers = DotWeaponTracers.new()
+		tracers.name = "Tracers"
+		add_child(tracers)
+	tracers.follow(bullet_bridge.bullets)
+
+
+func _resolve_shot(shot: DotShot, view_tick: float) -> void:
+	if bullet_bridge == null:
+		combat.resolve_shot(shot, view_tick)
+		return
+	var catalogue := ArenaPlayer.weapon_catalogue()
+	var def: DotWeaponDef = catalogue.get_def(shot.weapon_id) if catalogue.has(shot.weapon_id) else null
+	var _resolved := bullet_bridge.resolve_shot(shot, def.tuning as DotWeaponBallistics if def != null else null, view_tick)
+
+
 func _build_combat() -> DotResult:
 	combat = DotCombatManager.new()
 	combat.name = "Combat"
@@ -681,6 +714,8 @@ func _build_combat() -> DotResult:
 
 	combat.entity_killed.connect(_on_entity_killed)
 	combat.damage_applied.connect(_on_damage_applied)
+
+	_build_bullets()
 
 	# A manager built for a new map starts on dot-combat's defaults; a client puts it back on
 	# the server's cvars here (see follow_server_cvars).
@@ -2119,7 +2154,9 @@ func tick(commands: Dictionary = {}) -> void:
 			var pair: Array = commands.get(shot.attacker, [])
 			var lag: float = float(pair[2]) if pair.size() > 2 else -1.0
 			_unlag_shooter = shot.attacker
-			combat.resolve_shot(shot, float(_tick) - lag if lag >= 0.0 else -1.0)
+			_resolve_shot(shot, float(_tick) - lag if lag >= 0.0 else -1.0)
+		if bullet_bridge != null:
+			bullet_bridge.tick(float(_tick))
 
 	# After the shots, before everything that can end the round: a hurt volume that kills
 	# somebody is a death the win check below has to count this tick.
