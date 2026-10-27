@@ -2026,6 +2026,10 @@ func aim_direction() -> Vector3:
 ## and a behaviour is only stepped on a tick. A weapon whose tuning is not ballistic
 ## has no cone to draw and gets zero.
 func spread_degrees() -> float:
+	var rules: Variant = arsenal.spread_rules
+	if rules != null and rules.enabled:
+		return arsenal.spread_now()
+
 	var slot := arsenal.current()
 
 	if slot == null or not (slot.def.tuning is DotWeaponBallistics):

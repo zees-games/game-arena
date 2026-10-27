@@ -269,6 +269,8 @@ func _module_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	game.combat_feel.bind_cvars(add_cvar)
+
 	_start_workbench()
 
 	# A real server keeps what its monsters learn of each map across restarts. Here and

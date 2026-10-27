@@ -2013,6 +2013,7 @@ func _bind_bot_console() -> void:
 		return
 	var local := presentation.local_console
 	var _bound := settings.bind_console(local)
+	var _crosshair_bound := game.combat_feel.bind_console(local, hud.crosshair if hud != null else null)
 	local.add_var(&"bot_quota", "Players in a solo match, you included; the rest are bots (0 to 16).",
 		func() -> Variant: return _bots.size() + 1,
 		func(v: Variant) -> Variant:

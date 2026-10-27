@@ -493,6 +493,9 @@ var noblock_bound := false
 ## client's view model is handed this object, so one cvar change reaches the sway.
 var feel_rules: ZeeViewFeel = ZeeViewFeel.new()
 
+## Movement-dependent spread, recoil patterns and the spread crosshair (dot-game's opt-in; sv_spread_*, sv_recoil_*, on here).
+var combat_feel: DotGameCombatFeel = DotGameCombatFeel.new(true)
+
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.
 var _weapon_defs: Dictionary = {}
@@ -612,6 +615,7 @@ func follow_server_cvars(source: Object) -> bool:
 	if noblock != null:
 		noblock.follow(source)
 	var _feel := feel_rules.follow_cvars(source)
+	combat_feel.follow_cvars(source)
 	return _follow_cvar_source()
 
 
@@ -1525,6 +1529,7 @@ func add_player(
 		player.use_collision_mask(player_stack.player_collision_mask())
 
 	player.join_combat(combat)
+	combat_feel.attach(player.arsenal)
 	player.apply_movement_rules(movement_rules)
 	player.solid_hulls_fn = solid_hulls_for
 	_players[id] = player
