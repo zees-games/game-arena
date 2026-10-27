@@ -58,13 +58,13 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 645
+const CHECKS := 654
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 43
+const SECTIONS := 44
 
 var _passed := 0
 var _failed := 0
@@ -143,6 +143,7 @@ func _run() -> void:
 	_test_medal_rules()
 	await _test_medals_from_a_game()
 	await _test_toys()
+	await _test_instant_loadout()
 
 	# Last, and it has to be. It replaces the combat manager, the match node and the
 	# map, so everything above that reads any of them — the kill feed a HUD catches
@@ -7070,4 +7071,61 @@ func _test_atrium() -> void:
 	remove_child(walker)
 
 	await get_tree().process_frame
+	_done()
+
+
+## The instant weapon change after a spawn (dot-loadout's DotLoadoutInstantSwap): at once when
+## nobody is near and nobody fired, and the reasons it is refused.
+func _test_instant_loadout() -> void:
+	_section("instant loadout after spawn")
+	var game := ArenaGame.new()
+	game.name = "InstantGame"
+	game.tick_rate = TICK_RATE
+	game.headless = true
+	game.register_service = false
+	game.mode = ArenaMode.team_deathmatch(50)
+	add_child(game)
+	var ready := game.setup(ArenaMap.dm_atrium())
+	if not _check(ready.ok, "an instant-loadout game sets up", str(ready.error)):
+		game.queue_free()
+		remove_child(game)
+		return
+	game.start(0)
+	var cmd: Object = game.loadout_command
+	if not _check(cmd != null and cmd.get(&"instant") != null, "the game has the instant-swap rule"):
+		game.queue_free()
+		remove_child(game)
+		return
+	_check(bool(cmd.get(&"instant").get(&"enabled")), "it is on by default in Arena")
+	var _a := game.add_player(900, "Swapper")
+	var _b := game.add_player(901, "Other")
+	game.match_node.rules.respawn_delay_sec = 120.0
+	_go_live(game)
+	var key := ArenaGame.storage_key(900)
+	var other := game.player_for(901)
+	var me := game.player_for(900)
+	other.global_position = me.global_position + Vector3(200.0, 0.0, 0.0)
+	var facts: Dictionary = game.loadout_instant_facts(key)
+	_check(float(facts["enemy_dist"]) > 100.0 and float(facts["since_spawn"]) >= 0.0, "facts: far enemy, recent spawn", str(facts))
+	cmd.set(&"applied_fn", Callable())
+	var rule: Object = cmd.get(&"instant")
+	rule.set(&"cooldown", 10.0)
+	var res: Dictionary = await cmd.call(&"choose", null, key, {"primary": "rifle"})
+	_check(bool(res["ok"]) and bool(res["now"]), "a change with nobody near applies at once", str(res))
+	res = await cmd.call(&"choose", null, key, {"primary": "rifle"})
+	_check(not bool(res["now"]) and "cooldown" in str(res["text"]), "a second one is on cooldown", str(res))
+	rule.call(&"forget", key)
+	other.global_position = me.global_position + Vector3(3.0, 0.0, 0.0)
+	res = await cmd.call(&"choose", null, key, {"primary": "rifle"})
+	_check(not bool(res["now"]) and "enemy" in str(res["text"]), "an enemy near refuses it", str(res))
+	other.global_position = me.global_position + Vector3(200.0, 0.0, 0.0)
+	game._fired_tick[900] = game._tick
+	res = await cmd.call(&"choose", null, key, {"primary": "rifle"})
+	_check(not bool(res["now"]) and "fired" in str(res["text"]), "having just fired refuses it", str(res))
+	game._fired_tick.erase(900)
+	rule.set(&"enabled", false)
+	res = await cmd.call(&"choose", null, key, {"primary": "rifle"})
+	_check(not bool(res["now"]), "with the cvar off it waits for the next spawn", str(res))
+	game.queue_free()
+	remove_child(game)
 	_done()

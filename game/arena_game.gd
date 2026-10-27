@@ -433,6 +433,9 @@ var _spawn_points: Array[DotSpawnPoint] = []
 var _world_collision: Node3D = null
 
 var _tick: int = 0
+## Player id to the tick of their last spawn and last shot, for the instant loadout swap.
+var _spawned_tick: Dictionary = {}
+var _fired_tick: Dictionary = {}
 var _registered_name: StringName = &""
 
 ## The tick each (player, hurt volume) pair is next hurt on, kept after the player leaves
@@ -992,6 +995,13 @@ func _build_loadout_command() -> void:
 		var session: Variant = ctx.get(&"session") if ctx != null else null
 		return storage_key(int((session as Object).get(&"userid"))) if session is Object else "")
 	loadout_command.set(&"closed_fn", func(_key: String) -> String: return loadout_closed_reason())
+	# Default ON here (sv_loadout_instant_after_spawn); the addon's own default is off.
+	var instant: Variant = loadout_command.get(&"instant")
+	if instant is Object:
+		(instant as Object).set(&"enabled", true)
+	loadout_command.set(&"instant_facts_fn", loadout_instant_facts)
+	loadout_command.set(&"instant_apply_fn", func(_ctx: Object, key: String) -> bool:
+		return await rearm_instant(player_id_of_key(key)))
 	loadout_command.set(&"applied_fn", func(_ctx: Object, key: String) -> bool:
 		return await rearm_if_allowed(player_id_of_key(key)))
 
@@ -1020,6 +1030,43 @@ func loadout_now_allowed(id: int) -> bool:
 	if match_node != null and match_node.state == DotMatch.State.WARMUP:
 		return true
 	return player.health != null and player.health.is_protected(_tick)
+
+
+## The facts DotLoadoutInstantSwap judges for a loadout key: seconds since spawn and last shot
+## (-1: none) and metres to the nearest living enemy (-1: none).
+func loadout_instant_facts(key: String) -> Dictionary:
+	var id := player_id_of_key(key)
+	var rate := float(maxi(tick_rate, 1))
+	var out := {"now": float(_tick) / rate, "since_spawn": -1.0, "since_fire": -1.0, "enemy_dist": -1.0}
+	var me := player_for(id)
+	if me == null or not me.is_alive():
+		return out
+	if _spawned_tick.has(id):
+		out["since_spawn"] = float(_tick - int(_spawned_tick[id])) / rate
+	if _fired_tick.has(id):
+		out["since_fire"] = float(_tick - int(_fired_tick[id])) / rate
+	var my_team := team_of(id)
+	var best := -1.0
+	for other in players():
+		if other == me or not other.is_alive():
+			continue
+		var oid: int = other.player_id
+		if my_team != 0 and team_of(oid) == my_team:
+			continue
+		var d := me.global_position.distance_to(other.global_position)
+		if best < 0.0 or d < best:
+			best = d
+	out["enemy_dist"] = best
+	return out
+
+
+## Hands [param id]'s saved loadout over now (the instant-swap rule has already agreed).
+func rearm_instant(id: int) -> bool:
+	var player := player_for(id)
+	if not is_authority or player == null or not player.is_alive():
+		return false
+	await apply_loadout(id)
+	return true
 
 
 ## Puts [param id]'s saved loadout in their hands when [method loadout_now_allowed]. True when it
@@ -2026,6 +2073,7 @@ func tick(commands: Dictionary = {}) -> void:
 			# Traced against the other players where the shooter saw them: the command
 			# that fired carries how far behind its tick the client was drawing (-1 from
 			# a local player or a bot, who see the present, and nothing is rewound).
+			_fired_tick[shot.attacker] = _tick
 			var pair: Array = commands.get(shot.attacker, [])
 			var lag: float = float(pair[2]) if pair.size() > 2 else -1.0
 			_unlag_shooter = shot.attacker
@@ -2422,6 +2470,8 @@ func _on_respawn_due(key: String, spawn: DotSpawnPoint, tick: int) -> void:
 
 	player.hitboxes.enabled = true
 	player.spawn(at, tick, match_node.spawn_protection_ticks())
+	_spawned_tick[id] = _tick
+	_fired_tick.erase(id)
 	if _round_frozen_ids.has(id):
 		_release_from_round(id, player)
 	_sync_round_freeze()
