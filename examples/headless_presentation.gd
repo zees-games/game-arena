@@ -33,7 +33,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 327
+const CHECKS := 328
 
 var _passed := 0
 var _failed := 0
@@ -187,6 +187,8 @@ func _test_schema() -> void:
 		var stock_stream := ZeeWeaponSound.stream(sound)
 		stock_streams = stock_streams and stock_stream is AudioStreamOggVorbis and stock_stream.resource_path.begins_with(DotWeaponSound.DIR)
 	_check(stock_streams, "weapon shots, dry, equip and reloads play the stock recordings, not the synth fallback")
+	var stock_problems := DotWeaponSound.check_stock()
+	_check(stock_problems.is_empty(), "every weapon class resolves a non-silent, unclipped stock voice (%s)" % ", ".join(stock_problems))
 	_done()
 
 
