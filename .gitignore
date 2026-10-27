@@ -87,3 +87,7 @@ Thumbs.db
 # Generated
 __pycache__/
 /tests/golden/*.import
+
+# An OPTIONAL weapon pack (arena-weapons): linked when present, absent is supported, so it is deliberately not a
+# `/addons/<name>` line (game.sh and bootstrap read those as required).
+addons/arena_weapons

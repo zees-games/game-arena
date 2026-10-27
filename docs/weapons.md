@@ -1,6 +1,8 @@
 # Weapons: zee-dot-weapons in the arena
 
 Every weapon a player carries is zee-dot-weapons'. `ArenaContent.weapons()` is `ZeeWeaponPack.weapons(damage_table())`. The damage table is the pack's types plus this game's `bullet` (the horde's gunner), `fall` and `world`, built once and handed to the pack and to dot-combat, so the launcher's splash and the registered `blast` are one object. `addons/zee_weapons` is linked. The CC0 art is vendored in `assets/`, because a delivered pack has to carry it, and the client points `ZeeModelCache.set_asset_root` at `ArenaPaths.root()` on `_ready` and back at `res://` on `_exit_tree`. View-model rules are in zee-dot-weapons' own [CLAUDE.md](../../zee-dot-weapons/CLAUDE.md).
+**Skin packs.** `ArenaWeaponSkins` (client, after `set_asset_root`) scans `addons/*/spawn_provider.gd` for a static `role_art()` (role -> `{model, muzzle, motion, view}`) and dresses zee's art for that role with `ZeeArtDress`; the game names no pack, model or weapon id. `arena_weapons` (Styloo's CC0 guns, optional, linked as `addons/arena_weapons`, ignored without a leading slash so it is not a required dependency) is the one provider today. With it absent, swapped for a pack with no `role_art` (the zz packs) or `--arena-no-weapon-skins`, the zee art stays; `headless_skins` holds all three. Gameplay (stats, rig, ids) is untouched: only the model changes. `tools/render_weapons.sh` renders a hip and aim frame per role into `screenshots/weapons/`.
+
 
 ## The rig drives the player's own arsenal
 
