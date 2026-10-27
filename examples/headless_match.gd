@@ -4833,6 +4833,9 @@ func _test_interface() -> void:
 	subject.controller.state.mode = DotFpsState.Mode.GROUND
 	subject.controller.state.crouch_fraction = 0.0
 
+	# The state-driven cone: with the combat-feel rules attached the cone is the last tick's (headless_combatfeel).
+	var rules_was := subject.arsenal.spread_rules
+	subject.arsenal.spread_rules = null
 	subject.controller.state.velocity = Vector3.ZERO
 	hud.refresh_all()
 	var still := hud.crosshair.gap_pixels()
@@ -4849,6 +4852,7 @@ func _test_interface() -> void:
 				else "nothing"
 		]
 	)
+	subject.arsenal.spread_rules = rules_was
 	subject.controller.state.mode = posture_was
 	subject.controller.state.crouch_fraction = crouch_was
 
