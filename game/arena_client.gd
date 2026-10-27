@@ -118,6 +118,9 @@ var _solo_binder: DotGameConfigBinder = null
 var _workbench: Node = null
 var _workbench_open := false
 var _sampler: DotFpsSampler = null
+## Degrees of a wall-run attach turn not yet applied to the view.
+var _view_turn_left := 0.0
+const VIEW_TURN_RATE := 22.0
 var _fire := DotWeaponCommand.new()
 
 ## A weapon slot the player asked for this tick, or 0 for "no change". Cleared once
@@ -2125,13 +2128,15 @@ func _present_frame(delta: float) -> void:
 	if extras != null:
 		extras.pump_voice(delta)
 
+	_ease_view_turn(delta)
 	_fold_look()
 	_fold_correction()
 	_fold_alpha()
 
 	# Your own body when you look down, if the server's `fp_body` rule is on.
 	if player != null and game != null and player.controller != null:
-		player.present_own_body(game.view_rules.shows_own_legs(game.rule("fp_body") != 0.0),
+		var legs_ok := presentation == null or presentation.settings == null or presentation.settings.get_bool(&"first_person_legs", true)
+		player.present_own_body(legs_ok and game.view_rules.shows_own_legs(game.rule("fp_body") != 0.0),
 			(player.view_now as Vector2).x if player.view_now != null else player.controller.state.yaw)
 
 	_face_a_respawn()
@@ -2706,8 +2711,16 @@ func _on_local_wall_run(running: bool) -> void:
 
 ## The jump-started run turns the look input along the wall.
 func _on_local_view_turned(degrees: float) -> void:
-	if _sampler != null:
-		_sampler.look_at_angles(_sampler.yaw + degrees, _sampler.pitch)
+	_view_turn_left += degrees
+
+
+## Settles the view along the wall over about a tenth of a second instead of snapping it.
+func _ease_view_turn(delta: float) -> void:
+	if _sampler == null or is_zero_approx(_view_turn_left):
+		return
+	var step := _view_turn_left if absf(_view_turn_left) < 0.1 else _view_turn_left * (1.0 - exp(-VIEW_TURN_RATE * delta))
+	_view_turn_left -= step
+	_sampler.look_at_angles(_sampler.yaw + step, _sampler.pitch)
 
 
 func _on_local_wall_jumped() -> void:

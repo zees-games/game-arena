@@ -182,6 +182,7 @@ static func schema() -> DotSettingsSchema:
 	s.add(DotSettingsDef.number(&"sfx_volume", 1.0, 0.0, 1.0, &"audio"))
 	s.add(DotSettingsDef.number(&"voice_volume", 1.0, 0.0, 1.0, &"audio"))
 	s.add(DotSettingsDef.boolean(&"push_to_talk", true, &"audio"))
+	s.add(DotSettingsDef.boolean(&"first_person_legs", true, &"video").with_description("See your own legs when you look down. Only where the server allows it (mp_firstperson_legs)."))
 	s.add(DotSettingsDef.boolean(&"ambient", true, &"audio").with_description("Quiet sounds under the map."))
 	s.add(DotSettingsDef.number(&"ambient_volume", 1.0, 0.0, 1.0, &"audio"))
 
