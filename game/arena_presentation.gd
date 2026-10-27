@@ -108,8 +108,6 @@ var audio: DotAudioManager = null
 ## Everybody's footsteps by surface and a bed per map: dot-audio's stock (Kenney's footsteps
 ## and generated beds, CC0; the addon's stock/CREDITS.md).
 var steps: DotAudioFootsteps = null
-## Everybody's slide scrape, by surface (dot-audio's stock loops).
-var slide: DotAudioSlide = null
 var ambience: DotAudioAmbience = null
 
 ## Quiet moods under the map (dot-audio's stock set); the bed above plays only when none loaded.
@@ -183,7 +181,7 @@ static func schema() -> DotSettingsSchema:
 	s.add(DotSettingsDef.number(&"master_volume", 0.8, 0.0, 1.0, &"audio"))
 	s.add(DotSettingsDef.number(&"sfx_volume", 1.0, 0.0, 1.0, &"audio"))
 	s.add(DotSettingsDef.number(&"voice_volume", 1.0, 0.0, 1.0, &"audio"))
-	s.add(DotSettingsDef.number(&"slide_volume", 1.0, 0.0, 1.0, &"audio").with_description("How loud sliding scrapes the ground."))
+	DotGameClient.declare_slide_setting(s)
 	s.add(DotSettingsDef.boolean(&"push_to_talk", true, &"audio"))
 	s.add(DotSettingsDef.boolean(&"first_person_legs", true, &"video").with_description("See your own legs when you look down. Only where the server allows it (mp_firstperson_legs)."))
 	s.add(DotSettingsDef.boolean(&"ambient", true, &"audio").with_description("Quiet sounds under the map."))
@@ -362,9 +360,6 @@ func _on_setting_changed(key: StringName, value: Variant, _why: StringName) -> v
 			audio.mixer.apply_to_buses()
 		&"voice_volume":
 			audio.mixer.voice = float(value)
-		&"slide_volume":
-			if slide != null:
-				slide.volume = float(value)
 		&"push_to_talk":
 			_apply_push_to_talk()
 			audio.mixer.apply_to_buses()
@@ -787,11 +782,6 @@ func _build_audio() -> DotResult:
 	steps.name = "Footsteps"
 	steps.manager = audio
 	add_child(steps)
-	slide = DotAudioSlide.new()
-	slide.name = "Slide"
-	slide.manager = audio
-	slide.volume = settings.get_float(&"slide_volume", 1.0)
-	add_child(slide)
 	ambience = DotAudioAmbience.new()
 	ambience.name = "Ambience"
 	ambience.manager = audio
@@ -1457,14 +1447,9 @@ static func bed_for(map_id: StringName) -> StringName:
 
 ## Everybody on the map steps, once a frame: players and bots, each grounded by a ray (a
 ## mirrored player's controller is never ticked here, so its own answer is stale).
-func keep_walkers(bodies: Array, slide_sounds: bool = true) -> void:
+func keep_walkers(bodies: Array) -> void:
 	if steps != null:
 		steps.keep(bodies)
-	if slide != null:
-		slide.enabled = slide_sounds
-		slide.keep(bodies, func(b: Variant) -> bool:
-			var c: Variant = b.get("controller")
-			return c != null and c.state != null and c.state.is_sliding())
 
 
 ## The listener's roof, once a frame: under one the ambience crosses to its indoor mood.

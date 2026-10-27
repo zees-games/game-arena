@@ -169,13 +169,6 @@ func _module_load() -> DotResult:
 	var _rides := game.start_ride_recording(add_cvar)
 
 	add_cvar(
-		"sv_slide_sounds", "1", "Whether sliding scrapes the ground audibly (1) or is silent (0)",
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	).changed.connect(
-		func(_old: String, new_value: String) -> void: game.slide_sounds = new_value != "0"
-	)
-
-	add_cvar(
 		"arena_streak_rewards", "3:heal,5:haste,7:empowered",
 		"Kill streak rewards, as streak:reward pairs (heal, armour, haste, empowered); empty for none",
 		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY

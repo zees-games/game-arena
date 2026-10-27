@@ -374,6 +374,7 @@ func _ready() -> void:
 	DotLog.result(CHANNEL, "the platform", platform.setup())
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
+	platform.slide_settings = presentation.settings
 	_suspend_input(platform.is_input_blocked())
 
 
@@ -2152,7 +2153,7 @@ func _present_frame(delta: float) -> void:
 			forward = -player.camera.global_transform.basis.z
 		presentation.present(delta, eye, forward)
 		_apply_shake()
-		presentation.keep_walkers(game.players(), game.slide_sounds)
+		presentation.keep_walkers(game.players())
 		var stack_now := game.player_stack
 		if stack_now != null and stack_now.physics != null and stack_now.physics.layout != null:
 			presentation.follow_roof(delta, eye, get_viewport().world_3d.direct_space_state, stack_now.physics.layout.mask_of([&"world"]))
