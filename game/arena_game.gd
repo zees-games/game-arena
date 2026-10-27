@@ -476,7 +476,7 @@ var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 
 ## `sv_falldamage*`: landing hard hurts, except on a surf map (ramps land fast by design).
 ## On here, off in dot-combat's default; the server applies it, a client never does.
-var fall_rules: DotFallDamageRules = _make_fall_rules()
+var fall_rules: DotFallDamageRules = make_fall_rules()
 
 ## `(other_id, mover_id, tick) -> Vector3 or null`: where [param other_id]'s hull stands when
 ## a networked player moves on [param tick]: where that player's client drew them, on both
@@ -1555,9 +1555,13 @@ func _teardown_world() -> void:
 
 # --- Players ---------------------------------------------------------------
 
-static func _make_fall_rules() -> DotFallDamageRules:
+static func make_fall_rules() -> DotFallDamageRules:
 	var rules := DotFallDamageRules.new()
 	rules.enabled = true
+	# Wall-runs and ramps make drops routine here: a higher threshold, a cap, and no lethal speed.
+	rules.threshold = 16.0
+	rules.scale = 3.0
+	rules.max_damage = 50.0
 	return rules
 
 
@@ -1580,7 +1584,10 @@ func _add_fall_damage(player: ArenaPlayer) -> void:
 	fall.controller.mode = DotNodeRef.Mode.ABSOLUTE
 	fall.combat = DotNodeRef.of_path(combat.get_path())
 	fall.combat.mode = DotNodeRef.Mode.ABSOLUTE
-	fall.context_checks[&"protected"] = func() -> bool: return map != null and map.movement_profile == &"surf"
+	fall.context_checks[&"protected"] = func() -> bool:
+		if map != null and map.movement_profile == &"surf":
+			return true
+		return match_node != null and match_node.state != DotMatch.State.LIVE
 	player.add_child(fall)
 
 

@@ -13,7 +13,7 @@ const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ROOT := "user://arena_cfgtest"
 const GAME := "game-arena"
-const CHECKS := 33
+const CHECKS := 35
 
 var _passed := 0
 var _failed := 0
@@ -75,6 +75,9 @@ func _run() -> void:
 	var faller := game.player_for(1)
 	var fall := faller.get_node_or_null("FallDamage") as DotFallDamage
 	_check(game.fall_rules.enabled and fall != null, "fall damage is on, a component per player")
+	faller.controller.landed.emit(game.fall_rules.threshold + 5.0)
+	_check(faller.health.health == 150.0, "warmup or intermission: the landing is absorbed")
+	game.match_node.state = DotMatch.State.LIVE
 	faller.controller.landed.emit(game.fall_rules.threshold - 1.0)
 	_check(faller.health.health == 150.0, "a landing under the threshold costs nothing")
 	faller.controller.landed.emit(game.fall_rules.threshold + 5.0)
@@ -88,6 +91,8 @@ func _run() -> void:
 	faller.controller.landed.emit(game.fall_rules.threshold + 5.0)
 	_check(faller.health.health == 150.0, "a surf map absorbs the landing")
 	game.map.movement_profile = &""
+	faller.controller.landed.emit(60.0)
+	_check(150.0 - faller.health.health <= game.fall_rules.max_damage and faller.health.health > 0.0, "a huge drop is capped, never lethal")
 	game.apply_match_limits()
 	_check(game.match_node.rules.respawn_delay_sec == 7.0, "the respawn delay overrides the mode's")
 	game._sync_award_config()
