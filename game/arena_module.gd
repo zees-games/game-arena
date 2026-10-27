@@ -61,6 +61,8 @@ var _combat_cvars: Array = []
 var net: DotNetManager = null
 var _cv_maxrate: DotConVar = null
 var bridge: ArenaNetBridge = null
+## Carries the workbench's profile runtime (rows down) over this manager; null without a workbench.
+var profile_link: DotNetProfileLink = null
 
 ## Chat, voice and moderation. See [ArenaServices] for why it is not this file.
 var services: ArenaServices = null
@@ -466,6 +468,17 @@ func _build_netcode() -> DotResult:
 	if not avatar.ok:
 		log_warn("avatar actions not served", {"why": avatar.error.message})
 
+	# The remote workbench's frame, inert until sv_workbench_remote is 1 and the workbench serves it; and the
+	# profile rows, so an admin's edit reaches every client (nothing else sets the runtime's broadcast).
+	var bench := DotGameWorkbenchRemote.serve(net)
+	if not bench.ok:
+		log_warn("remote workbench not served", {"why": bench.error.message})
+	var wb_runtime: DotProfileRuntime = game.workbench.api.runtime as DotProfileRuntime if game.workbench != null and game.workbench.api != null else null
+	if wb_runtime != null:
+		profile_link = DotNetProfileLink.attach(net, wb_runtime)
+		if bench.ok and game.workbench.serve_remote(net) == null:
+			log_warn("remote workbench not bound", {})
+
 	# Sealed once, on both ends, after every type is registered: the table each end sends
 	# the other is a promise about what it has, and a type registered after it went out is
 	# one the peer was told this end does not have.
@@ -626,6 +639,8 @@ func _build_maps() -> DotResult:
 	bridge.peer_ready_fn = func(peer: int) -> void:
 		if maps != null:
 			maps.admit_peer(peer)
+		if profile_link != null:
+			profile_link.peer_joined(peer)
 
 	maps.map_changed.connect(_on_map_changed)
 	maps.map_over.connect(_on_map_over)
@@ -1051,6 +1066,10 @@ func _start_workbench() -> void:
 
 
 func _module_unload() -> void:
+	# The link and the runtime hold each other through broadcast.
+	if profile_link != null:
+		profile_link.release()
+		profile_link = null
 	if _handles_cover and server != null:
 		var env: Object = server.get(&"envelope")
 
