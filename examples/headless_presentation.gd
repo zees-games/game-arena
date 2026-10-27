@@ -33,7 +33,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 324
+const CHECKS := 326
 
 var _passed := 0
 var _failed := 0
@@ -177,6 +177,16 @@ func _test_schema() -> void:
 		ArenaPresentation.fx_catalogue().validate().ok,
 		"and so does the effect catalogue, which loads no scene to validate"
 	)
+	var stock_ok := true
+	for sound: StringName in DotAudioWeaponStock.COUNTS:
+		stock_ok = stock_ok and ArenaPresentation.sound_catalogue().find(DotAudioWeaponStock.id_of(sound)) != null
+	_check(stock_ok, "the game's sound catalogue carries every stock weapon sound")
+	var stock_streams := true
+	for sound in [ZeeWeaponSound.LIGHT, ZeeWeaponSound.SHOTGUN, ZeeWeaponSound.DRY, ZeeWeaponSound.EQUIP,
+			ZeeWeaponSound.RELOAD_OUT, ZeeWeaponSound.RELOAD_SHELL, ZeeWeaponSound.SUPPRESSED]:
+		var stock_stream := ZeeWeaponSound.stream(sound)
+		stock_streams = stock_streams and stock_stream is AudioStreamOggVorbis and stock_stream.resource_path.begins_with(DotWeaponSound.DIR)
+	_check(stock_streams, "weapon shots, dry, equip and reloads play the stock recordings, not the synth fallback")
 	_done()
 
 
