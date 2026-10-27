@@ -13,7 +13,7 @@ const ClientBench := preload("client_bench.gd")
 ##
 ## `--score N` / `--time S` (default 6 kills, 45 s) end the match so MATCH_END and the kill-cam are reached;
 ## `--threshold MS` (default 33); `--tail S` seconds kept after the end (default 8);
-## `--no-pilot` leaves the local player still.
+## `--no-pilot` leaves the local player still; `--boom S` (default 10) calls the presentation's explosion 6 m ahead of the camera S seconds in, marked "explosion" in the report (-1 skips it).
 
 var _bots := 3
 var _score := 6
@@ -22,6 +22,8 @@ var _threshold := 33.0
 var _tail := 8.0
 var _time := 45.0
 var _pilot := true
+var _boom := 10.0
+var _boomed := false
 var _hitch := DotHitchLog.new()
 var _client: Node = null
 var _state := -2
@@ -39,6 +41,7 @@ func _ready() -> void:
 			"--threshold": _threshold = float(args[i + 1])
 			"--time": _time = float(args[i + 1])
 			"--tail": _tail = float(args[i + 1])
+			"--boom": _boom = float(args[i + 1])
 	_pilot = not "--no-pilot" in args
 	var _scratch := ArenaPresentation.use_scratch_settings("hitch_match")
 	_run.call_deferred()
@@ -69,6 +72,8 @@ func _run() -> void:
 			var pilot := ClientBench.Pilot.new()
 			pilot.process_priority = -999
 			add_child(pilot)
+		if _boom >= 0.0 and not _boomed and t >= _boom:
+			_boom_now()
 		if g != null and g.match_node != null:
 			if g.match_node.rules != null and g.match_node.rules.time_limit_sec != _time:
 				g.match_node.rules.score_limit = _score
@@ -101,3 +106,17 @@ func _watch() -> void:
 		_cam = playing
 		_hitch.mark("killcam %s" % ("start" if playing else "end"))
 		print("EVENT t=%.1fs killcam %s" % [t, "start" if playing else "end"])
+
+
+## One explosion through the presentation, the way a rocket's hit draws it, to see what its first draw costs.
+func _boom_now() -> void:
+	var pres = _client.get("presentation")
+	var body = _client.get("player")
+	if pres == null or body == null or body.camera == null:
+		return
+	_boomed = true
+	var cam: Transform3D = body.camera.global_transform
+	var at: Vector3 = cam.origin - cam.basis.z * 6.0
+	_hitch.mark("explosion")
+	print("EVENT t=%.1fs explosion" % [(Time.get_ticks_usec() - _t0) / 1.0e6])
+	pres.on_explosion(at, cam.origin)

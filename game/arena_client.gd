@@ -1879,6 +1879,11 @@ func _prewarm_tick() -> void:
 				if rig != null:
 					rig.position = Vector3(0.0, 0.0, -1.5)
 				_warm.rig = rig
+				# One pool per size and view, built a node a frame, for the first real shot to take.
+				var host: Node = player.weapons.call(&"shot_fx") if weapon_draws_shots() else self
+				for category in ["pistol", "smg", "rifle", "shotgun"]:
+					for fp in [true, false]:
+						DotWeaponMuzzle.warm(host, category, null, fp)
 				if presentation != null and presentation.fx != null:
 					var cam: Transform3D = body.camera.global_transform
 					var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
@@ -1886,7 +1891,7 @@ func _prewarm_tick() -> void:
 				_warm.phase = 2
 		_:
 			_warm.frames += 1
-			if _warm.frames >= 3:
+			if _warm.frames >= 3 and DotWeaponMuzzle.warm_done():
 				_prewarm_end()
 
 
