@@ -1,6 +1,8 @@
 extends SceneTree
 
 const ArenaAvatars := preload("../game/arena_avatars.gd")
+const ArenaWeaponIcons := preload("../game/arena_weapon_icons.gd")
+const ArenaSpriteWeapon := preload("../game/arena_sprite_weapon.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaDrops := preload("../game/arena_drops.gd")
@@ -357,6 +359,13 @@ func _play_glance() -> void:
 	_local.camera.add_child(hands)
 	_local.arm_first_person(hands, true)
 	var _given := _local.weapons.give_everything()
+	if OS.get_cmdline_user_args().has("--sprites"):
+		# `cl_weapon_sprites 1`: the flat sprite under the camera in place of the hands.
+		ArenaWeaponIcons.sprites = true
+		hands.visible = false
+		var flat = ArenaSpriteWeapon.make(ArenaSpriteWeapon.Mode.VIEW)
+		_local.camera.add_child(flat)
+		flat.show_weapon(&"marksman")
 	var ask := DotWeaponCommand.new()
 	ask.slot = ZeeWeaponIds.SLOT_PRIMARY
 	for tick in range(game.current_tick() + 1, game.current_tick() + 60):
@@ -1094,6 +1103,31 @@ func _stage_feel(map: ArenaMap, id: StringName) -> void:
 			"wait": 12,
 		},
 	]
+	if OS.get_cmdline_user_args().has("--muzzle"):
+		_stage_muzzle(id, arm_hands, hold)
+
+
+## `--feel --muzzle`: only the muzzle flash, first-person, one frame per weapon, grabbed two frames after the trigger (a flash lives about 0.1 s).
+func _stage_muzzle(id: StringName, arm_hands: Callable, hold: Callable) -> void:
+	_shots = []
+	for pick: Array in [[ZeeWeaponIds.PISTOL, ZeeWeaponIds.SLOT_SIDEARM], [ZeeWeaponIds.RIFLE, ZeeWeaponIds.SLOT_PRIMARY],
+			[ZeeWeaponIds.SHOTGUN, ZeeWeaponIds.SLOT_PRIMARY], [ZeeWeaponIds.SNIPER, ZeeWeaponIds.SLOT_HEAVY]]:
+		var weapon: StringName = pick[0]
+		var slot: int = pick[1]
+		_shots.append({
+			"name": "%s_muzzle_%s" % [String(id), String(weapon)],
+			"local": true,
+			"arm": func() -> void:
+				arm_hands.call()
+				var _g := _local.arsenal.give(weapon)
+				hold.call(slot),
+			"late": [[2, func() -> void:
+				var fire := DotWeaponCommand.new()
+				fire.buttons = DotWeaponCommand.BUTTON_ATTACK
+				var _o := _local.simulate_tick(_feel_tick, 1.0 / 64.0, DotFpsCommand.new(), fire)
+				_feel_tick += 1]],
+			"wait": 6,
+		})
 
 
 # --- --fx -------------------------------------------------------------------
