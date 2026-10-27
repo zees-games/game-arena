@@ -468,8 +468,9 @@ static func arena_tunables() -> DotFpsTunables:
 	# The wall jump needs no speed at all, and the slide catches a fall against a wall.
 	tunables.wall_run_enabled = true
 	tunables.wall_run_min_speed = 9.5
-	# A jump press beside a wall starts a run (the heading turns along it); a second press jumps off.
-	tunables.wall_run_on_jump = true
+	# Touching a wall in the air starts a run (the heading turns along it); a press jumps off.
+	tunables.wall_run_auto = true
+	tunables.wall_run_on_jump = false
 	tunables.wall_run_turn_view = true
 	tunables.wall_run_cooldown = 0.4
 	tunables.wall_jump_enabled = true
@@ -490,7 +491,7 @@ const MOVEMENT_RULES: PackedStringArray = [
 	"wall_run_end_speed", "wall_run_vertical_damping", "wall_run_max_fall_speed",
 	"wall_run_max_approach_angle", "wall_jump_look_blend", "wall_jump_max_per_wall",
 	"wall_run_body_roll", "wall_run_body_yaw",
-	"wall_run_on_jump", "wall_run_turn_view", "wall_run_jump_min_speed", "wall_run_jump_max_angle", "wall_run_cooldown",
+	"wall_run_auto", "wall_run_on_jump", "wall_run_turn_view", "wall_run_jump_min_speed", "wall_run_jump_max_angle", "wall_run_cooldown",
 	"wall_max_angle_from_vertical",
 ]
 
@@ -1412,7 +1413,8 @@ func present(delta: float) -> void:
 			lean = camera_motion.roll()
 			widen = camera_motion.fov_added()
 
-		camera.global_position = view.global_position + camera_offset + Vector3(0.0, dip, 0.0)
+		var shift := camera_motion.eye_shift() if camera_motion != null else Vector3.ZERO
+		camera.global_position = view.global_position + camera_offset + Vector3(0.0, dip, 0.0) + shift
 		camera.global_rotation = Vector3(
 			deg_to_rad(drawn.pitch + punch.x + nod), deg_to_rad(drawn.yaw + punch.y),
 			camera_roll + deg_to_rad(lean)
@@ -1615,9 +1617,10 @@ static func camera_motion_picks() -> DotFpsViewMotion:
 	m.strafe_roll_reference = 9.0
 	m.strafe_roll_response = 8.0
 	m.slide_roll = 1.5
-	m.wall_run_roll = 6.0
+	m.wall_run_roll = 3.5
+	m.wall_run_eye_shift = 0.3
 	m.wall_run_roll_response = 6.0
-	m.roll_limit = 7.0
+	m.roll_limit = 5.0
 	m.fov_speed_gain = 4.0
 	m.fov_speed_floor = 9.0
 	m.fov_speed_reference = 15.0
@@ -1639,6 +1642,7 @@ func set_camera_motion_scales(landing: float, strafe: float, wall: float, widen:
 	camera_motion.strafe_roll = picks.strafe_roll * maxf(strafe, 0.0)
 	camera_motion.slide_roll = picks.slide_roll * maxf(strafe, 0.0)
 	camera_motion.wall_run_roll = picks.wall_run_roll * maxf(wall, 0.0)
+	camera_motion.wall_run_eye_shift = picks.wall_run_eye_shift * clampf(wall, 0.0, 1.0)
 	camera_motion.roll_limit = picks.roll_limit * maxf(maxf(strafe, wall), 0.0)
 	camera_motion.fov_speed_gain = picks.fov_speed_gain * maxf(widen, 0.0)
 	camera_motion.slide_fov_gain = picks.slide_fov_gain * maxf(widen, 0.0)
@@ -1695,7 +1699,8 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 		Vector2(drawn.yaw, drawn.pitch),
 		drawn.horizontal_speed(),
 		drawn.is_grounded(),
-		drawn.is_crouched()
+		drawn.is_crouched(),
+		0.0 if drawn.is_wall_running() else NAN
 	)
 
 	# Aiming down: the hands come up, and the lens zooms by what the weapon's art says,

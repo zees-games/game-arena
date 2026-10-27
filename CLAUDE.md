@@ -92,7 +92,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 **Modes and the round**
 
-- Wall run, jump and slide are on (`arena_wall_*`, in RULES); `wall_run_min_speed` stays above `max_speed`, or a jump beside a wall becomes a run. [modes](docs/modes.md#movement-is-a-games-choice)
+- Wall run, jump and slide are on (`arena_wall_*`, in RULES); `wall_run_auto` starts a run on touching a wall in the air and a press wall-jumps; `wall_run_min_speed` (the no-press run) stays above `max_speed`. [modes](docs/modes.md#movement-is-a-games-choice)
 - Modes are `ArenaMode` resources; `team_count` and `team_based` must agree; the rules are duplicated before use. [modes](docs/modes.md#modes-are-data)
 - Build the team manager before `add_child(match_node)`; assign `resolver.team_of` after `add_child(combat)`. [modes](docs/modes.md#modes-are-data)
 - Whether there are sides is the mode's answer (`is_team_mode()`), not the team manager's. [modes](docs/modes.md#modes-are-data)
