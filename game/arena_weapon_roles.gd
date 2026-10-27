@@ -7,14 +7,11 @@ extends RefCounted
 ## Off by default: with `weapons.packs` empty nothing is registered and zee-dot-weapons fills every role. Tuned in
 ## `cfg/addons/game_arena_weapons/*.yml` (dot-core's DotAddonConfig, so an operator's cfg/server tier wins).
 
-const ArenaPaths := preload("arena_paths.gd")
-
 const CHANNEL := "arena.roles"
 const ADDON := "game_arena_weapons"
 const PROVIDER := "spawn_provider.gd"
 const SOURCE_PREFIX := "arenapack:"
 const OFF_ARG := "--arena-no-weapon-packs"
-const SELF_PATH := "res://game/arena_weapon_roles.gd"
 
 ## Role -> the arsenal slot it fills (the pack's own `slot` decides, not its tags, which no two packs agree on).
 const ROLE_SLOT := {
@@ -76,34 +73,32 @@ static func scan(from: String = "") -> void:
 	var base := from if from != "" else root
 	var wanted: Array = force_packs if not force_packs.is_empty() else DotAddonConfig.get_value(config, "weapons.packs", [])
 	var excluded: Array = DotAddonConfig.get_value(config, "weapons.exclude", [])
-	var dirs := DirAccess.get_directories_at(base)
-	dirs.sort()
+	var taken: Array = ZeeWeaponIds.all().duplicate()
 
-	for dir in dirs:
-		var path := base.path_join(dir).path_join(PROVIDER)
-
-		if not wanted.has(dir) or not ResourceLoader.exists(path):
+	for dir in ZeePackScan.provider_dirs(base, PROVIDER):
+		if not wanted.has(dir):
 			continue
 
-		var script := load(path) as GDScript
+		var script := ZeePackScan.load_provider(CHANNEL, dir, base.path_join(dir).path_join(PROVIDER), true)
 
-		if script == null or not script.has_method(&"weapon_defs"):
-			DotLog.warn(CHANNEL, "a weapon pack has no weapon_defs", {"pack": dir})
+		if script == null:
 			continue
 
 		var kept := PackedStringArray()
 
-		for def in _defs(ZeeWeaponDamage.table(), script):
-			if not excluded.has(String(def.id)) and not ZeeWeaponIds.all().has(def.id) and not pack_ids.has(def.id):
-				pack_ids.append(def.id)
-				kept.append(String(def.id))
+		for def in ZeePackScan.kept(ZeePackScan.defs_of(ZeeWeaponDamage.table(), script), excluded, taken):
+			if taken.has(def.id):
+				continue
+
+			taken.append(def.id)
+			pack_ids.append(def.id)
+			kept.append(String(def.id))
 
 		if kept.is_empty():
 			continue
 
 		var source := StringName(SOURCE_PREFIX + dir)
-		var me := _me()
-		ZeePackSource.register(source, script, Callable(me, &"_defs").bind(script))
+		ZeePackSource.register(source, script, Callable(ZeePackScan, &"defs_of").bind(script))
 		_sources.append(source)
 		packs.append(dir)
 		DotLog.info(CHANNEL, "weapon pack registered", {"pack": dir, "weapons": kept.size()})
@@ -174,29 +169,4 @@ static func _settle() -> void:
 
 ## The first registered pack weapon for [param role]'s slot, one called `<prefix>_<default's name>` before the rest.
 static func _auto(role: StringName, by_id: Dictionary) -> StringName:
-	var first := &""
-	var suffix := "_" + String(ROLE_DEFAULT[role])
-
-	for id in pack_ids:
-		var def: DotWeaponDef = by_id.get(id)
-
-		if def == null or def.slot != int(ROLE_SLOT[role]):
-			continue
-
-		if String(id).ends_with(suffix):
-			return id
-
-		if first == &"":
-			first = id
-
-	return first
-
-
-static func _me() -> GDScript:
-	return load(ArenaPaths.rebase(SELF_PATH)) as GDScript
-
-
-## A source Callable must be a static method, never a lambda.
-static func _defs(types: Dictionary, provider: GDScript) -> Array[DotWeaponDef]:
-	return provider.call(&"weapon_defs", types)
-
+	return ZeePackRoles.first_for_slot(pack_ids, by_id, int(ROLE_SLOT[role]), ROLE_DEFAULT[role])
