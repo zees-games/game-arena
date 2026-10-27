@@ -26,6 +26,7 @@ const ArenaProps := preload("../game/arena_props.gd")
 const ArenaStats := preload("../game/arena_stats.gd")
 const ArenaVote := preload("../game/arena_vote.gd")
 const WallRouteDriver := preload("wall_route_driver.gd")
+const ArenaWeaponIcons := preload("res://game/arena_weapon_icons.gd")
 
 ## A whole deathmatch, played out headlessly, with nothing called by hand.
 ##
@@ -58,7 +59,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 654
+const CHECKS := 657
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -4941,6 +4942,20 @@ func _test_interface() -> void:
 		if weapon != ZeeWeaponIds.FISTS and ArenaHudGlance.Ink.weapon_icon(weapon) == null:
 			no_icon.append(String(weapon))
 	_check(no_icon.is_empty(), "every weapon but the fists has a silhouette for the feed and the slots", ", ".join(no_icon))
+
+	var no_sprite := PackedStringArray()
+	for weapon in ArenaWeaponIcons.TAGS:
+		if not ArenaWeaponIcons.icon_set().has_icon(weapon):
+			no_sprite.append(String(weapon))
+	_check(no_sprite.is_empty() and ArenaWeaponIcons.texture(&"pistol") is AtlasTexture, "every mapped weapon draws a Jestan sprite by default", ", ".join(no_sprite))
+	_check(ArenaWeaponIcons.set_style(&"silhouette") and ArenaWeaponIcons.texture(&"pistol") == null and ArenaHudGlance.Ink.weapon_icon(&"pistol") != null,
+		"the silhouette style turns the sprites off and the old outline answers")
+	var _style_back := ArenaWeaponIcons.set_style(&"pixel")
+	ArenaWeaponIcons.icon_set().override(&"pistol", ArenaHudGlance.Ink.texture("res://assets/weapon_icons/knife.png"), &"test")
+	ArenaWeaponIcons.set_profile(&"test")
+	var overridden := ArenaWeaponIcons.texture(&"pistol") == ArenaHudGlance.Ink.texture("res://assets/weapon_icons/knife.png")
+	ArenaWeaponIcons.set_profile(&"")
+	_check(overridden and ArenaWeaponIcons.texture(&"pistol") is AtlasTexture, "a profile's override replaces one weapon's picture and only for that profile")
 
 	# The Escape menu and the Tab board are dot-menu's (since 2026-10-10), built with no
 	# presentation layer here: no settings document, so only rows that need none draw.

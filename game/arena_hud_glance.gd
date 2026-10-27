@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ArenaPaths := preload("arena_paths.gd")
+const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 
 ## The HUD laid out for a glance: the pieces [ArenaHud] places round the edge of the screen.
 ##
@@ -29,7 +30,7 @@ const ArenaPaths := preload("arena_paths.gd")
 ## `docs/hud.md`, "The glance pieces"); [ArenaHud] places them beside these. The colours
 ## below are the same as `DotHudPiece.DEFAULTS`, so the two sets read as one HUD.
 ##
-## Art: the weapon silhouettes are rendered from zee's models by
+## Art: the weapon pictures are Jestan's CC0 sprites ([ArenaWeaponIcons]); the older silhouettes are rendered from zee's models by
 ## `tools/build_weapon_icons.sh` (Kenney's CC0 blaster and tool kits); the ability icons are
 ## Kenney's CC0 game and mobile-control icons (`assets/hud_icons/`). A missing file draws
 ## the words instead.
@@ -139,6 +140,9 @@ class Ink:
 		return _textures[path]
 
 	static func weapon_icon(id: StringName) -> Texture2D:
+		var sprite := ArenaWeaponIcons.texture(id)
+		if sprite != null:
+			return sprite
 		return texture("%s/%s.png" % [WEAPON_ICON_DIR, String(id)]) if id != &"" else null
 
 	## [param icon] scaled to [param height], its left edge at [param at].x and centred on
@@ -247,6 +251,7 @@ class KillFeed extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
+		ArenaWeaponIcons.filter(self)
 		var y := 0.0
 		for e in entries:
 			var fade := 1.0 if lifetime_sec <= 0.0 else clampf((lifetime_sec - float(e["age"])) / 0.6, 0.0, 1.0)
@@ -305,6 +310,7 @@ class KillFeed extends Control:
 			Ink.text(self, Vector2(x, base), killer, NAME_SIZE, Color(e["killer_colour"], fade), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 4)
 			x += killer_w + 10.0
 		if tex != null:
+			ArenaWeaponIcons.halo(self, e["weapon"], Vector2(x, y + ROW_H * 0.5), ICON_H, fade, 64.0)
 			x += Ink.icon(self, tex, Vector2(x, y + ROW_H * 0.5), ICON_H, Color(1, 1, 1, fade), 64.0)
 		else:
 			Ink.text(self, Vector2(x, base), "[%s]" % str(e["weapon_text"]), 13, Color(Ink.c(self, &"dim"), fade), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 3)
@@ -392,6 +398,7 @@ class WeaponSlots extends Control:
 		return Rect2(left, top, size.x + 4.0 - left, float(shown.size() - 1) * pitch + plate_h)
 
 	func _draw() -> void:
+		ArenaWeaponIcons.filter(self)
 		# From the bottom up, so the carried guns sit on the ammunition counter however few
 		# there are, and the top of the box is the one that stays clear of the shell's column.
 		var laid := layout()
@@ -417,6 +424,7 @@ class WeaponSlots extends Control:
 				var w := minf(s.x * h / maxf(s.y, 1.0), 90.0)
 				var at := Vector2(cap_x - 10.0 - w, y)
 				# A shadow first, so a white gun reads on a white wall.
+				ArenaWeaponIcons.halo(self, r["id"], at, h, alpha, 90.0)
 				var _s := Ink.icon(self, tex, at + Vector2(1.5, 1.5), h, Color(0, 0, 0, 0.55 * alpha), 90.0)
 				var _d := Ink.icon(self, tex, at, h, Color(1, 1, 1, alpha), 90.0)
 			else:

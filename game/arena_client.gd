@@ -25,6 +25,8 @@ const ArenaPaths := preload("arena_paths.gd")
 const ArenaProjectileView := preload("arena_projectile_view.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaPresentation := preload("arena_presentation.gd")
+const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
+const ArenaSpriteWeapon := preload("arena_sprite_weapon.gd")
 
 ## A playable game-arena: one local player, a camera, a HUD, menus and the keys.
 ##
@@ -194,6 +196,7 @@ var last_prop_asked: int = -1
 
 ## The local player's hands, under their camera. Built on adoption.
 var view_model: ZeeViewModel = null
+var _sprite_view: ArenaSpriteWeapon = null
 
 ## Every rocket and grenade in the air, drawn.
 var projectile_view: ArenaProjectileView = null
@@ -371,10 +374,10 @@ func _ready() -> void:
 		presentation.ambient.follow_settings(presentation.settings, game.ambient_rules)
 
 	_grab_mouse()
+	platform.slide_settings = presentation.settings
 	DotLog.result(CHANNEL, "the platform", platform.setup())
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
-	platform.slide_settings = presentation.settings
 	_suspend_input(platform.is_input_blocked())
 
 
@@ -658,7 +661,9 @@ func choose_loadout(picks: Dictionary) -> Variant:
 func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
 	var id := StringName(str(choice.get("id", "")))
 	var out: Dictionary = {}
-	var icon := ArenaHudGlance.Ink.weapon_icon(id)
+	var icon: Texture2D = ArenaWeaponIcons.menu_texture(id)
+	if icon == null:
+		icon = ArenaHudGlance.Ink.weapon_icon(id)
 	if icon != null:
 		out["icon"] = icon
 	if id == &"armour":
@@ -1778,6 +1783,24 @@ func _weapon_warm_items() -> Array:
 	return out
 
 
+## `cl_weapon_sprites 1`: the held weapon as a flat sprite under the camera in place of the hands.
+func _present_sprite_view() -> void:
+	if view_model == null or player == null or player.camera == null:
+		return
+	if not ArenaWeaponIcons.sprites:
+		if _sprite_view != null:
+			_sprite_view.queue_free()
+			_sprite_view = null
+			view_model.visible = true
+		return
+	if _sprite_view == null:
+		_sprite_view = ArenaSpriteWeapon.make(ArenaSpriteWeapon.Mode.VIEW)
+		player.camera.add_child(_sprite_view)
+	var def: Variant = player.arsenal.current_def() if player.arsenal != null else null
+	_sprite_view.show_weapon(def.id if def != null else &"")
+	view_model.visible = _sprite_view.texture == null
+
+
 ## The hands under the camera, and the player's rig rebuilt to draw them.
 ##
 ## [b]With the authority only offline.[/b] Connected, the server's rig is the one whose
@@ -2141,6 +2164,7 @@ func _present_frame(delta: float) -> void:
 			(player.view_now as Vector2).x if player.view_now != null else player.controller.state.yaw)
 
 	_face_a_respawn()
+	_present_sprite_view()
 
 	if presentation != null:
 		# dot-audio culls by distance from the listener and dot-fx ages what it spawned;

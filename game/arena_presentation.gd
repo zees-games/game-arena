@@ -8,6 +8,7 @@ const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaBindings := preload("arena_bindings.gd")
 const ArenaHud := preload("arena_hud.gd")
+const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 
 ## Settings, audio, effects and a console, on the client.
 ##
@@ -1183,6 +1184,25 @@ func _local_commands() -> DotConsoleLocal:
 				return DotResult.fail(DotError.CODE_INVALID, "cl_perf takes a number of seconds")
 			ArenaFrameProbe.set_interval(text.to_float())
 			return DotResult.success(ArenaFrameProbe.interval)
+	)
+	local.add_var(&"cl_weapon_icons", "Weapon pictures: pixel (Jestan's sprites), flat (one colour) or silhouette (the old outlines).",
+		func() -> Variant: return String(ArenaWeaponIcons.style),
+		func(v: Variant) -> Variant:
+			if not ArenaWeaponIcons.set_style(StringName(str(v).strip_edges())):
+				return DotResult.fail(DotError.CODE_INVALID, "cl_weapon_icons is pixel, flat or silhouette")
+			return DotResult.success(String(ArenaWeaponIcons.style))
+	)
+	local.add_var(&"cl_weapon_icon_profile", "Icon override profile from user://weapon_icons.json; empty for the shared overrides.",
+		func() -> Variant: return String(ArenaWeaponIcons.icon_set().profile),
+		func(v: Variant) -> Variant:
+			ArenaWeaponIcons.set_profile(StringName(str(v).strip_edges()))
+			return DotResult.success(str(v))
+	)
+	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",
+		func() -> Variant: return 1 if ArenaWeaponIcons.sprites else 0,
+		func(v: Variant) -> Variant:
+			ArenaWeaponIcons.sprites = str(v).strip_edges() == "1"
+			return DotResult.success(1 if ArenaWeaponIcons.sprites else 0)
 	)
 	local.add_command(&"where", "Where this client thinks it is", func(_a: PackedStringArray) -> Variant:
 		# The one thing no assertion and no screenshot can give you, and the reason

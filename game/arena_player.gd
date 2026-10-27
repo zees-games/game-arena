@@ -7,6 +7,8 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaLadderMode := preload("../maps/arena_ladder_mode.gd")
 const ArenaMapMechanics := preload("../maps/arena_map_mechanics.gd")
 const ArenaSolidBody := preload("arena_solid_body.gd")
+const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
+const ArenaSpriteWeapon := preload("arena_sprite_weapon.gd")
 
 ## One player: movement, weapons, health and hitboxes, assembled.
 ##
@@ -78,6 +80,7 @@ var weapons: ZeeWeaponRig = null
 
 ## Somebody else's gun, in their hand. Client side, on every player but the local one.
 var held: ZeeWorldModel = null
+var _held_sprite: ArenaSpriteWeapon = null
 
 ## What a MIRROR knows of this player's weapon: written from the snapshot by
 ## `ArenaPlayerNet`, read by [method _present_held]. A simulated player — the authority's,
@@ -1726,6 +1729,23 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 ## ([member mirror_weapon], the counter); a player this machine simulates — an offline
 ## bot, or everybody on a listen server — from its own rig. Drawing the second from a
 ## counter as well is what keeps both on one code path.
+## The optional flat held sprite (`cl_weapon_sprites 1`), on the hand the model hangs from.
+func _present_held_sprite(id: StringName) -> void:
+	if not ArenaWeaponIcons.sprites:
+		if _held_sprite != null:
+			_held_sprite.queue_free()
+			_held_sprite = null
+		return
+	if _held_sprite == null:
+		var hand := attachment(&"right_hand")
+		if hand == null:
+			return
+		_held_sprite = ArenaSpriteWeapon.make(ArenaSpriteWeapon.Mode.HELD)
+		hand.add_child(_held_sprite)
+	_held_sprite.show_weapon(id)
+	_held_sprite.visible = _held_sprite.visible and is_alive()
+
+
 func _present_held() -> void:
 	if held == null:
 		return
@@ -1742,7 +1762,8 @@ func _present_held() -> void:
 		kind = weapons.fire_kind
 		switching = arsenal.is_switching()
 
-	held.visible = is_alive()
+	held.visible = is_alive() and not ArenaWeaponIcons.sprites
+	_present_held_sprite(id)
 
 	if id != held.equipped():
 		var art: Variant = ZeeWeaponArtTable.table().get(id)
@@ -1971,6 +1992,7 @@ func rewear(next: DotAvatar) -> void:
 	# The hand and the gun in it hung off the old body and went with it.
 	_hand = null
 	held = null
+	_held_sprite = null
 	figure = null
 	attach_body_mesh(Color.WHITE, next)
 

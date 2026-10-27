@@ -82,7 +82,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - Full-screen overlays are sized to the viewport; HUD pieces draw handed values; judge them with `screenshot.sh --glance` at 16:9, 4:3 and 854x480. [client](docs/client.md#the-hud)
 - The HUD follows dot-menu's theme and `hud_scale`; a HUD colour is a theme name (`Ink.c`), never a literal, except side, medal and weapon colours. [client](docs/client.md#the-hud)
 - Below 1280x720 the HUD is scaled (`fit_design`), never re-laid out; a new piece gets a `footprint()`. [client](docs/client.md#the-hud)
-- Half the HUD is dot-ui's glance pieces and the winner reveal is `DotWinnerReveal`, so the pack needs dot-ui 9 (`requires.floor.json`). [client](docs/client.md#the-hud)
+- Half the HUD is dot-ui's glance pieces and the winner reveal is `DotWinnerReveal`, so the pack needs dot-ui 12 (the weapon icons) (`requires.floor.json`). [client](docs/client.md#the-hud)
 - Nothing of the HUD on the right edge from 110 px down (the shell's column); below a ballot a piece reads `dot_hud_cover`. [client](docs/client.md#the-hud)
 - The streak meter ends above a full chat log; the chat box is scaled with the HUD and clear of the slide prompt. [client](docs/client.md#the-chat-box)
 - Hit marker, damage numbers, medals, points and nemesis come only from the server's HIT and AWARD, never a predicted shot. [client](docs/client.md#kill-feedback)
