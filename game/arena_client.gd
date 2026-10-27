@@ -1816,6 +1816,46 @@ func _arm(body: ArenaPlayer) -> void:
 	view_model.feel_rules = game.feel_rules
 	body.camera.add_child(view_model)
 	body.arm_first_person(view_model, _offline)
+	_prewarm_weapons.call_deferred(body)
+
+
+## Builds every weapon's first-person view once on a spare view model, under the loading cover.
+## The first equip of each weapon measures its hands (50 ms) and loads a model nobody warmed
+## (90 ms), and every equip of a knife or grenade made its materials afresh (60 ms): a hitch on
+## each switch, in the middle of a fight. The materials are kept by [ZeeViewModel] and handed to
+## the gate to draw once.
+func _prewarm_weapons(body: ArenaPlayer) -> void:
+	if gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
+		return
+	var spare := ZeeViewModel.new()
+	spare.name = "WeaponPrewarm"
+	spare.feel_rules = view_model.feel_rules
+	spare.ads_rules = view_model.ads_rules
+	spare.feel = view_model.feel
+	spare.view_layer = view_model.view_layer
+	spare.finish_materials = view_model.finish_materials
+	spare.finish_metal = view_model.finish_metal
+	spare.finish_metal_roughness = view_model.finish_metal_roughness
+	spare.finish_polymer_roughness = view_model.finish_polymer_roughness
+	spare.finish_wood_roughness = view_model.finish_wood_roughness
+	spare.finish_lift = view_model.finish_lift
+	spare.visible = false
+	body.camera.add_child(spare)
+	gate.hold(&"weapons", "Preparing weapons")
+	var arts: Array = ZeeWeaponArtTable.table().values()
+	var next := 0
+	while next < arts.size() and is_instance_valid(spare):
+		var until := Time.get_ticks_msec() + 8
+		while next < arts.size() and Time.get_ticks_msec() < until:
+			spare.prewarm(arts[next] as ZeeWeaponArt)
+			next += 1
+		await get_tree().process_frame
+		if not is_instance_valid(self):
+			return
+	if is_instance_valid(spare):
+		spare.queue_free()
+	gate.warm_up(ZeeViewModel.prepared_materials())
+	gate.release(&"weapons")
 
 
 ## The hit drawn on the body the server says was hit: zee's red burst at [param point]. The
