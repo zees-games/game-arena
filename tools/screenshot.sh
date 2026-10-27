@@ -3,6 +3,7 @@
 #
 #   tools/screenshot.sh dm_atrium
 #   tools/screenshot.sh dm_box --admin   # a beacon, a beacon behind a wall, a blind
+#   tools/screenshot.sh dm_box --feel --muzzle --weapons=smg:3,knife:1   # first-person frames of chosen weapons (id:slot)
 #   tools/screenshot.sh dm_box --action emote dance   # a figure playing an avatar action (pose sit, gesture wave)
 #   RENDERER=gl_compatibility tools/screenshot.sh dm_box   # what the client shell draws
 #   tools/screenshot.sh dm_atrium --glance [tdm]   # the whole HUD over a real match

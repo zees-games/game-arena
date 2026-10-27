@@ -945,8 +945,11 @@ func _stage_feel(map: ArenaMap, id: StringName) -> void:
 	# before anything is in the tree, so the rig's `get_path()` of the hands failed ("Cannot
 	# get path of node") and every frame showed empty hands.
 	var arm_hands := func() -> void:
-		if _local.get_node_or_null(^"Camera/Hands") != null or _local.weapons == null:
-			pass
+		# A second set of hands from an earlier frame would draw its weapon too.
+		var old_hands := _local.get_node_or_null(^"Camera/Hands")
+		if old_hands != null:
+			old_hands.get_parent().remove_child(old_hands)
+			old_hands.free()
 		var hands := ZeeViewModel.new()
 		hands.name = "Hands"
 		_local.camera.add_child(hands)
@@ -1110,8 +1113,16 @@ func _stage_feel(map: ArenaMap, id: StringName) -> void:
 ## `--feel --muzzle`: only the muzzle flash, first-person, one frame per weapon, grabbed two frames after the trigger (a flash lives about 0.1 s).
 func _stage_muzzle(id: StringName, arm_hands: Callable, hold: Callable) -> void:
 	_shots = []
-	for pick: Array in [[ZeeWeaponIds.PISTOL, ZeeWeaponIds.SLOT_SIDEARM], [ZeeWeaponIds.RIFLE, ZeeWeaponIds.SLOT_PRIMARY],
-			[ZeeWeaponIds.SHOTGUN, ZeeWeaponIds.SLOT_PRIMARY], [ZeeWeaponIds.SNIPER, ZeeWeaponIds.SLOT_HEAVY]]:
+	var picks: Array = [[ZeeWeaponIds.PISTOL, ZeeWeaponIds.SLOT_SIDEARM], [ZeeWeaponIds.RIFLE, ZeeWeaponIds.SLOT_PRIMARY],
+			[ZeeWeaponIds.SHOTGUN, ZeeWeaponIds.SLOT_PRIMARY], [ZeeWeaponIds.SNIPER, ZeeWeaponIds.SLOT_HEAVY]]
+	# `--weapons=smg:3,knife:1` (id:slot) replaces the default four with any weapon in any slot.
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--weapons="):
+			picks = []
+			for pair: String in arg.trim_prefix("--weapons=").split(",", false):
+				var parts := pair.split(":")
+				picks.append([StringName(parts[0]), int(parts[1]) if parts.size() > 1 else ZeeWeaponIds.SLOT_PRIMARY])
+	for pick: Array in picks:
 		var weapon: StringName = pick[0]
 		var slot: int = pick[1]
 		_shots.append({
