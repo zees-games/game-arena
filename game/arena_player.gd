@@ -1688,6 +1688,11 @@ func _kick_landing(drawn: DotFpsState) -> void:
 	_landing_impact = 0.0
 
 
+## The field-of-view fraction the sights give now (1 unaimed); the mouse look scales by it.
+func aim_zoom() -> float:
+	return _aim_fov_scale
+
+
 ## Sway, bob and the recoil's camera half, for the hands under the camera. Returns the
 ## punch in degrees (x pitch up, y yaw), which [method present] adds to the camera.
 ##

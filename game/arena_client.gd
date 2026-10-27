@@ -118,8 +118,15 @@ var extras: ArenaClientExtras = null
 var _offline := true
 var _solo_binder: DotGameConfigBinder = null
 var _workbench: Node = null
+## Asks a server whether this player may edit it (sv_workbench_remote); null offline.
+var _workbench_remote: DotGameWorkbenchRemoteClient = null
+## The profile rows the server broadcasts (an admin's edit reaches every client); null offline.
+var _profile_link: DotNetProfileLink = null
+var _profile_runtime: DotProfileRuntime = null
 var _workbench_open := false
 var _sampler: DotFpsSampler = null
+## Refuses the sights for a moment after the local player is hit (sv_unscope_hit).
+var _aim_break := DotFpsAimBreak.new()
 ## Degrees of a wall-run attach turn not yet applied to the view.
 var _view_turn_left := 0.0
 const VIEW_TURN_RATE := 22.0
@@ -371,6 +378,8 @@ func _ready() -> void:
 	else:
 		var netted := _build_netcode()
 		DotLog.result(CHANNEL, "netcode", netted)
+		if netted.ok and link != null:
+			_start_remote_workbench()
 
 	# The server's arena_ambient* (a link tells them) drive the quiet layer; the player's sliders multiply on top.
 	if presentation != null and presentation.ambient != null:
@@ -806,6 +815,31 @@ func _start_solo_workbench() -> void:
 	_workbench = wb
 
 
+## Online: no local trust and no panel until the server names this player an admin (sv_workbench_remote).
+func _start_remote_workbench() -> void:
+	if _workbench_remote == null:
+		return
+	var wb := DotGameWorkbench.new()
+	wb.name = "Workbench"
+	wb.remote_client = _workbench_remote
+	wb.remote_fn = func() -> bool: return true
+	add_child(wb)
+	var started := wb.start(_profile_runtime)
+	DotLog.result(CHANNEL, "the remote workbench", started)
+	if not started.ok:
+		wb.queue_free()
+		return
+	wb.open_changed.connect(func(open: bool) -> void:
+		_workbench_open = open
+		if open:
+			platform.hold_pointer(&"workbench")
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		else:
+			platform.release_pointer(&"workbench")
+			_apply_mouse())
+	_workbench = wb
+
+
 func _start_offline() -> void:
 	game.start(0)
 	_start_solo_workbench()
@@ -922,6 +956,10 @@ func _build_netcode() -> DotResult:
 	bridge.open_link(link)
 	# Before the seal and in the server's order (after the bridge), or the actions stay local.
 	DotLog.result(CHANNEL, "avatar action message", DotGameAvatarActionMessage.register(net))
+	# The server's order again (after the avatar frame): the remote workbench's frame and the profile rows.
+	_workbench_remote = DotGameWorkbenchRemoteClient.attach(net)
+	_profile_runtime = DotProfileRuntime.new()
+	_profile_link = DotNetProfileLink.attach(net, _profile_runtime)
 	net.messages.seal()
 
 	# The client halves. Built here rather than in `_ready` because every one of them
@@ -995,6 +1033,8 @@ func _build_netcode() -> DotResult:
 
 
 func _say_ready() -> void:
+	if _workbench_remote != null:
+		_workbench_remote.ask()
 	if bridge != null:
 		bridge.send_request(ArenaEvents.Ask.READY)
 
@@ -2496,7 +2536,8 @@ func _read_fire(move: DotFpsCommand) -> void:
 	# the `right_mouse_aims` setting off. Same guard as the trigger, so a right click on a
 	# menu neither zooms nor swings a rifle butt. In a mode where the Bash key is the prop
 	# tool's freeze, the bash is the Aim key's whatever the setting says.
-	var right := mouse_drives_view() and _held(ArenaBindings.AIM)
+	var right := mouse_drives_view() and _held(ArenaBindings.AIM) \
+		and not _aim_break.blocked(Time.get_ticks_msec() * 0.001)
 	var aims := right_mouse_aims() and not props_on_e()
 	var bash := (right and not aims) or (
 		not props_on_e() and mouse_drives_view() and _held(ArenaBindings.BASH)
@@ -2504,6 +2545,8 @@ func _read_fire(move: DotFpsCommand) -> void:
 	_fire.set_button(DotWeaponCommand.BUTTON_ALT, bash)
 	if player != null:
 		player.aim_held = right and aims
+	if _sampler != null:
+		_sampler.look_scale = player.aim_zoom() if player != null else 1.0
 	# On the wire as well, for the server's No Scope medal; nothing simulated reads it.
 	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
 	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and _held(ArenaBindings.RELOAD))
@@ -2851,6 +2894,8 @@ func _on_local_wall_jumped() -> void:
 
 
 func _on_local_damaged(damage: DotDamage) -> void:
+	if player != null and player.controller != null:
+		_aim_break.note_hit(Time.get_ticks_msec() * 0.001, player.controller.tunables)
 	if presentation != null:
 		presentation.on_hurt(damage.amount)
 
