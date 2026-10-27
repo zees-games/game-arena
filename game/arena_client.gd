@@ -6,6 +6,7 @@ const ArenaBots := preload("arena_bots.gd")
 const ArenaBrowser := preload("arena_browser.gd")
 const ArenaClientExtras := preload("arena_client_extras.gd")
 const ArenaEvents := preload("arena_events.gd")
+const ArenaWeaponSkins := preload("arena_weapon_skins.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
@@ -248,6 +249,8 @@ func _ready() -> void:
 	# delivered pack sits under `res://dot_cloud/<id>/<version>/`, and the pack's art table
 	# names `res://assets/...` — so without this every gun loads invisible, one WARN each.
 	ZeeModelCache.set_asset_root(ArenaPaths.root())
+	# Before anything reads the art table: the first read caches it.
+	ArenaWeaponSkins.apply()
 	ArenaFrameProbe.from_launch()
 
 	# Closed before anything else is built, so no frame shows a half-made world.
@@ -385,6 +388,7 @@ func _exit_tree() -> void:
 	# A static outlives this game: the next one a shell loads must not look for its art
 	# under this game's mount.
 	ZeeModelCache.set_asset_root("res://")
+	ArenaWeaponSkins.clear()
 
 
 ## The map's own sun, sky and air, replacing whatever the last map had.
@@ -2160,7 +2164,7 @@ func _present_frame(delta: float) -> void:
 	if _report_timer >= 1.0 and player != null:
 		_report_timer = 0.0
 		var st := player.controller.state
-		DotLog.info(CHANNEL, "where the local player is", {
+		DotLog.debug(CHANNEL, "where the local player is", {
 			"position": st.position,
 			"node": player.global_position,
 			"camera": camera_position(),
