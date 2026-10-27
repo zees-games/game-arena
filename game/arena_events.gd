@@ -76,6 +76,11 @@ enum Kind {
 	##
 	## After TOYS, for the reason VOTE gives.
 	JAIL,
+	## A simulated bullet left a muzzle (`sv_ballistics` on): its id, owner, weapon, origin and velocity.
+	## The client flies the same path with DotWeaponTrajectory to draw a tracer; no position follows.
+	BULLET,
+	## A bullet hit or expired on the server: its id. The client's copy ends there rather than at its own range.
+	BULLET_END,
 }
 
 enum Ask {
@@ -553,6 +558,46 @@ static func spawn_from_launch(launch: Dictionary, id: StringName) -> DotWeaponSp
 	spawn.life_ticks = int(launch["life"])
 	spawn.tick = int(launch["tick"])
 	return spawn
+
+
+# --- BULLET ----------------------------------------------------------------
+
+## A bullet's speed bound on the wire (m/s): 16 bits over this span is 0.05 m/s a step.
+const BULLET_SPEED := 1500.0
+
+
+static func write_bullet(id: int, owner: int, weapon_index: int, origin: Vector3, velocity: Vector3) -> PackedByteArray:
+	var writer := _w()
+	writer.write_varint(maxi(0, id))
+	writer.write_varint(maxi(0, owner))
+	writer.write_varint(maxi(0, weapon_index))
+	writer.write_vector3_range(origin, -LAUNCH_EXTENT, LAUNCH_EXTENT, 24)
+	writer.write_vector3_range(velocity, -BULLET_SPEED, BULLET_SPEED, 16)
+	return writer.to_bytes()
+
+
+static func read_bullet(reader: DotNetReader) -> Dictionary:
+	var out := {
+		"id": reader.read_varint(),
+		"owner": reader.read_varint(),
+		"weapon": reader.read_varint(),
+		"origin": reader.read_vector3_range(-LAUNCH_EXTENT, LAUNCH_EXTENT, 24),
+		"velocity": reader.read_vector3_range(-BULLET_SPEED, BULLET_SPEED, 16),
+	}
+	out["ok"] = reader.ok()
+	return out
+
+
+static func write_bullet_end(id: int) -> PackedByteArray:
+	var writer := _w()
+	writer.write_varint(maxi(0, id))
+	return writer.to_bytes()
+
+
+static func read_bullet_end(reader: DotNetReader) -> Dictionary:
+	var out := {"id": reader.read_varint()}
+	out["ok"] = reader.ok()
+	return out
 
 
 # --- HIT -------------------------------------------------------------------

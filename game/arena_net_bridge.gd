@@ -611,6 +611,7 @@ func server_tick(tick: int) -> void:
 	_watch_horde()
 	_watch_projectiles()
 	_watch_drops()
+	_watch_bullets()
 
 	if net != null:
 		net.server_tick(tick)
@@ -755,6 +756,8 @@ func client_tick(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> void
 	# Here for the same reason: nothing else ticks anything on a mirroring client.
 	if game != null and game.projectiles != null:
 		game.projectiles.tick(net.clock.tick_duration())
+	if game != null:
+		game.step_bullet_mirrors(float(tick))
 
 	var command := _command_for(tick, move, fire)
 	net.local_inputs().push(command)
@@ -1200,6 +1203,9 @@ func send_signon(peer_id: int) -> void:
 
 var _watched_projectiles: RefCounted = null
 
+## The bullet bridge this bridge last connected to. See [method _watch_bullets].
+var _watched_bullets: DotWeaponBulletBridge = null
+
 ## The drops layer this bridge last connected to. See [method _watch_drops].
 var _watched_drops: Node = null
 
@@ -1230,6 +1236,26 @@ func _on_dropped(id: int, kind: int, at: Vector3, from: Vector3, value: int) -> 
 
 func _on_taken(id: int, taker: int) -> void:
 	send_event(0, ArenaEvents.Kind.TAKEN, ArenaEvents.write_taken(id, taker))
+
+
+## The bullet bridge a map change rebuilds, so checked every tick. Sends nothing while sv_ballistics is 0,
+## because nothing is then spawned.
+func _watch_bullets() -> void:
+	if net == null or not net.is_server or game == null:
+		return
+	var bridge := game.bullet_bridge
+	if bridge == _watched_bullets:
+		return
+	_watched_bullets = bridge
+	if bridge == null:
+		return
+	bridge.bullet_spawned.connect(func(id: int, owner_id: int, weapon_id: StringName, origin: Vector3, velocity: Vector3) -> void:
+		send_event(0, ArenaEvents.Kind.BULLET, ArenaEvents.write_bullet(
+			id, owner_id, ArenaContent.weapon_index(weapon_id), origin, velocity)))
+	bridge.bullets.hit.connect(func(id: int, _o: int, _i: Dictionary, _d: float, _m: float, _t: DotWeaponBallistics) -> void:
+		send_event(0, ArenaEvents.Kind.BULLET_END, ArenaEvents.write_bullet_end(id)))
+	bridge.bullets.expired.connect(func(id: int) -> void:
+		send_event(0, ArenaEvents.Kind.BULLET_END, ArenaEvents.write_bullet_end(id)))
 
 
 func _watch_projectiles() -> void:
@@ -1644,6 +1670,15 @@ func _on_event(message: DotNetMessage) -> void:
 			var launch := ArenaEvents.read_launch(reader)
 			if bool(launch["ok"]):
 				_mirror_launch(launch)
+		ArenaEvents.Kind.BULLET:
+			var bullet := ArenaEvents.read_bullet(reader)
+			if bool(bullet["ok"]):
+				game.mirror_bullet(int(bullet["id"]), ArenaContent.weapon_at(int(bullet["weapon"])),
+					bullet["origin"], bullet["velocity"], int(bullet["owner"]))
+		ArenaEvents.Kind.BULLET_END:
+			var ended := ArenaEvents.read_bullet_end(reader)
+			if bool(ended["ok"]):
+				game.end_bullet_mirror(int(ended["id"]))
 		ArenaEvents.Kind.TOYS:
 			var told := ArenaEvents.read_toys(reader)
 			if bool(told["ok"]):

@@ -41,7 +41,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 259
+const CHECKS := 271
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
@@ -54,7 +54,7 @@ var _skipped_checks := 0
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 22
+const SECTIONS := 23
 
 var _passed := 0
 var _failed := 0
@@ -120,6 +120,7 @@ func _run() -> void:
 	_test_monsters_reach_a_client()
 	await _test_toys_reach_a_client()
 	_test_the_remote_workbench()
+	_test_bullets_reach_a_client()
 
 	OS.remove_logger(errors)
 	# Engine errors go to stderr and change no exit code: a toy pulled out of the tree after a
@@ -1356,6 +1357,112 @@ func _test_hits_and_medals_reach_clients() -> void:
 	link.free()
 	target.spawn(_server_game.map.spawns[0], _server_game.current_tick())
 	_pump(2)
+	_done()
+
+
+## sv_ballistics: the server announces each bullet it flies (BULLET), a client flies the same path
+## for a tracer and ends it on BULLET_END; with the cvar off nothing goes out and nothing exists.
+func _test_bullets_reach_a_client() -> void:
+	print("")
+	_section("[simulated bullets reach a client]")
+	var client_game: ArenaGame = _clients[2]["game"]
+	var sent: Array = []
+	var previous := _server_bridge.link
+	var link := ArenaNetLink.new()
+	link.bridge = _server_bridge
+	link.is_server = true
+	link.loopback = func(method: StringName, peer: int, payload: PackedByteArray) -> void:
+		if method == &"event":
+			sent.append([peer, payload])
+	_server_bridge.link = link
+	for peer in _clients:
+		if not _server_bridge._ready_peers.has(peer):
+			_server_bridge.mark_ready(peer)
+
+	var shooter := _server_game.player_for(11)
+	shooter.give_default_loadout()
+	var weapon_id := shooter.arsenal.current_def().id
+	var tuning := ArenaPlayer.weapon_catalogue().get_def(weapon_id).tuning as DotWeaponBallistics
+	var was := [tuning.muzzle_velocity, tuning.max_range, tuning.tracer_interval, tuning.pellets]
+	tuning.muzzle_velocity = 40.0
+	tuning.max_range = 30.0
+	tuning.tracer_interval = 1
+	tuning.pellets = 1
+	_pump(2)
+	sent.clear()
+
+	var fire := func() -> void:
+		var shot := DotShot.new()
+		shot.attacker = 11
+		shot.weapon_id = weapon_id
+		shot.tick = _server_game.current_tick()
+		shot.origin = Vector3(0.0, 8.0, 0.0)
+		shot.direction = Vector3(0.3, 0.2, -0.9).normalized()
+		shot.pellets = [shot.direction] as Array[Vector3]
+		shot.deferred = true
+		var _r := _server_game.bullet_bridge.resolve_shot(shot, tuning, -1.0)
+	var kinds := func(kind: int) -> Array:
+		var out: Array = []
+		for item in sent:
+			var decoded: DotResult = _clients[2]["net"].messages.decode(DotNetReader.new(item[1]), 1, false)
+			var event := decoded.value as ArenaEvent if decoded.ok else null
+			if event != null and event.kind == kind:
+				out.append(item)
+		return out
+	var deliver := func() -> void:
+		for item in sent:
+			if int(item[0]) == 2:
+				var _r: DotResult = _clients[2]["bridge"].receive_event(item[1])
+		sent.clear()
+
+	_check(not _server_game.combat_feel.ballistics.enabled, "sv_ballistics is off by default")
+	fire.call()
+	_pump(2)
+	_check(kinds.call(ArenaEvents.Kind.BULLET).is_empty() and kinds.call(ArenaEvents.Kind.BULLET_END).is_empty(),
+		"off: a shot sends no bullet event at all", str(sent.size()))
+	_check(client_game.bullet_mirrors == null or client_game.bullet_mirrors.count() == 0, "off: the client has no bullet")
+	sent.clear()
+
+	_server_game.combat_feel.ballistics.set(&"enabled", true)
+	client_game.combat_feel.ballistics.set(&"enabled", true)
+	fire.call()
+	var spawned: Array = kinds.call(ArenaEvents.Kind.BULLET)
+	_check(spawned.size() >= 1 and int(spawned[0][0]) == 2, "on: a BULLET goes to the ready client", str(spawned.size()))
+	var read := ArenaEvents.read_bullet(DotNetReader.new(ArenaEvents.write_bullet(7, 11, ArenaContent.weapon_index(weapon_id), Vector3(1.0, 8.0, -2.0), Vector3(10.0, 5.0, -30.0))))
+	_check(bool(read["ok"]) and int(read["id"]) == 7 and ArenaContent.weapon_at(int(read["weapon"])) == weapon_id
+		and (read["velocity"] as Vector3).distance_to(Vector3(10.0, 5.0, -30.0)) < 0.1, "a BULLET round-trips")
+	deliver.call()
+	_check(client_game.bullet_mirrors != null and client_game.bullet_mirrors.count() == 1, "the client flies a copy of it")
+	var local_vel: Vector3 = client_game.bullet_mirrors.velocity_of(int(client_game._mirror_ids.values()[0])) if not client_game._mirror_ids.is_empty() else Vector3.ZERO
+	_check(absf(local_vel.length() - 40.0) < 0.5, "flying at the server's speed", str(local_vel.length()))
+	_pump(3)
+	_check(client_game.tracers != null and client_game.tracers.count() > 0, "and its tracer exists",
+		str(client_game.tracers.count() if client_game.tracers != null else -1))
+	_pump(100)
+	_check(not kinds.call(ArenaEvents.Kind.BULLET_END).is_empty(), "the server says when it ended")
+	deliver.call()
+	_check(client_game.bullet_mirrors.count() == 0, "and the client's copy is gone")
+
+	fire.call()
+	deliver.call()
+	var live := client_game.bullet_mirrors.count()
+	var server_id := int(client_game._mirror_ids.keys()[0]) if not client_game._mirror_ids.is_empty() else -1
+	_deliver_event(2, ArenaEvents.Kind.BULLET_END, ArenaEvents.write_bullet_end(server_id))
+	_check(live == 1 and client_game.bullet_mirrors.count() == 0, "a BULLET_END ends a copy early", "%d then %d" % [live, client_game.bullet_mirrors.count()])
+
+	_server_game.combat_feel.ballistics.set(&"enabled", false)
+	client_game.combat_feel.ballistics.set(&"enabled", false)
+	_pump(100)
+	sent.clear()
+	fire.call()
+	_pump(2)
+	_check(sent.is_empty(), "off again: nothing is sent", str(sent.size()))
+	tuning.muzzle_velocity = was[0]
+	tuning.max_range = was[1]
+	tuning.tracer_interval = was[2]
+	tuning.pellets = was[3]
+	_server_bridge.link = previous
+	link.free()
 	_done()
 
 

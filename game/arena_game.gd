@@ -416,6 +416,10 @@ var _unlag_shooter: int = 0
 var bullet_bridge: DotWeaponBulletBridge = null
 ## Draws their tracers (client side of a local or listen game).
 var tracers: DotWeaponTracers = null
+## Client side: flies the server's announced bullets for drawing only; nothing here decides a hit.
+var bullet_mirrors: DotWeaponBullets = null
+## Server bullet id -> the local id in [member bullet_mirrors].
+var _mirror_ids: Dictionary = {}
 
 ## Movement keys changed from [method ArenaPlayer.arena_tunables]' defaults, key -> number.
 ##
@@ -656,6 +660,69 @@ func _build_bullets() -> void:
 		tracers.name = "Tracers"
 		add_child(tracers)
 	tracers.follow(bullet_bridge.bullets)
+
+
+## A bullet the server announced (BULLET): flies the same path here for a tracer. False when
+## ballistics is off here, the weapon is unknown, or the mirror is full. Client side.
+func mirror_bullet(server_id: int, weapon_id: StringName, origin: Vector3, velocity: Vector3, owner_id: int = 0) -> bool:
+	var rules := combat_feel.ballistics as DotWeaponBallisticsRules
+	var catalogue := ArenaPlayer.weapon_catalogue()
+	if is_authority or rules == null or combat == null or not catalogue.has(weapon_id) or velocity.length() < 0.001:
+		return false
+	var tuning := catalogue.get_def(weapon_id).tuning as DotWeaponBallistics
+	if tuning == null:
+		return false
+	if bullet_mirrors == null:
+		bullet_mirrors = DotWeaponBullets.new()
+		bullet_mirrors.name = "BulletMirrors"
+		bullet_mirrors.tick_rate = tick_rate
+		bullet_mirrors.cast_fn = _mirror_cast
+		bullet_mirrors.expired.connect(func(id: int) -> void: _forget_mirror(id))
+		bullet_mirrors.hit.connect(func(id: int, _o: int, _i: Dictionary, _d: float, _m: float, _t: DotWeaponBallistics) -> void:
+			_forget_mirror(id))
+		add_child(bullet_mirrors)
+	bullet_mirrors.rules = rules
+	if tracers == null:
+		tracers = DotWeaponTracers.new()
+		tracers.name = "Tracers"
+		add_child(tracers)
+		tracers.follow(bullet_mirrors)
+	elif not bullet_mirrors.tracer.is_connected(tracers.add):
+		tracers.follow(bullet_mirrors)
+	var id := bullet_mirrors.spawn(owner_id, origin, velocity, tuning)
+	if id > 0:
+		_mirror_ids[server_id] = id
+	return id > 0
+
+
+## The server ended bullet [param server_id] (BULLET_END). Client side.
+func end_bullet_mirror(server_id: int) -> void:
+	if bullet_mirrors != null and _mirror_ids.has(server_id):
+		var _gone := bullet_mirrors.despawn(int(_mirror_ids[server_id]))
+	_mirror_ids.erase(server_id)
+
+
+## Advances the mirrored bullets one tick. Client side, from the bridge's client tick.
+func step_bullet_mirrors(now_tick: float) -> void:
+	if bullet_mirrors != null and bullet_mirrors.count() > 0:
+		bullet_mirrors.step(now_tick)
+
+
+func _forget_mirror(local_id: int) -> void:
+	for sid in _mirror_ids.keys():
+		if int(_mirror_ids[sid]) == local_id:
+			_mirror_ids.erase(sid)
+
+
+func _mirror_cast(from: Vector3, to: Vector3, owner_id: int) -> Dictionary:
+	var offset := to - from
+	var dist := offset.length()
+	if dist <= 0.0 or combat == null:
+		return {}
+	var shooter := combat.hitboxes_of(owner_id)
+	combat.trace.exclude = [shooter] if shooter != null else []
+	var hit := combat.trace.ray(from, offset / dist, dist, combat.hitbox_sets())
+	return {"position": hit.point} if hit.ok() else {}
 
 
 func _resolve_shot(shot: DotShot, view_tick: float) -> void:
