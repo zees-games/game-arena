@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaMapConfig := preload("../game/arena_map_config.gd")
 
@@ -11,10 +11,6 @@ const ArenaMapConfig := preload("../game/arena_map_config.gd")
 ## The cvars start away from the file's values, so "got them" cannot be the default showing through.
 
 const CHECKS := 8
-
-var _passed := 0
-var _failed := 0
-var _failures := PackedStringArray()
 
 
 func _ready() -> void:
@@ -45,22 +41,4 @@ func _run() -> void:
 	_check(console.find_cvar("arena_surf_airaccelerate").get_float() == 150.0, "another surf map gets the same wildcard file")
 	_check(console.find_cvar("arena_other").get_int() == 5, "a cvar outside the whitelist is untouched")
 
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-	for line in _failures:
-		print("  FAIL  %s" % line)
-	if _passed + _failed != CHECKS:
-		print("ERROR: %d checks ran, %d expected." % [_passed + _failed, CHECKS])
-		get_tree().quit(1)
-		return
-	get_tree().quit(1 if _failed > 0 else 0)
-
-
-func _check(ok: bool, what: String) -> void:
-	if ok:
-		_passed += 1
-		print("  ok    %s" % what)
-	else:
-		_failed += 1
-		_failures.append(what)
-		print("  FAIL  %s" % what)
+	_report(CHECKS)

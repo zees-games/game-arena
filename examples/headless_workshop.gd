@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -26,11 +26,8 @@ const BAD_ID := &"fixture_wrong_id"
 const NO_SPAWN := &"fixture_no_spawn"
 const DIR := "user://workshop_fixture/"
 
-var _passed := 0
-var _failed := 0
 var _entered := 0
 var _completed := 0
-var _failures: Array[String] = []
 
 
 func _ready() -> void:
@@ -247,14 +244,3 @@ func _test_bad() -> void:
 	var gone := ArenaMaps.build_workshop(null)
 	_check(not gone.ok, "a null def is a refusal, not a crash")
 	_completed += 1
-
-
-func _check(condition: bool, what: String, detail: String = "") -> bool:
-	if condition:
-		_passed += 1
-		print("  ok    %s" % what)
-	else:
-		_failed += 1
-		_failures.append(what if detail == "" else "%s — %s" % [what, detail])
-		print("  FAIL  %s%s" % [what, "" if detail == "" else " — " + detail])
-	return condition

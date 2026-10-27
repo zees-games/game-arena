@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 ## ArenaConfig through DotGameConfigBinder: fields, cvars, the horde reading them, strict refusal, the diff.
 ##
@@ -15,21 +15,10 @@ const ROOT := "user://arena_cfgtest"
 const GAME := "game-arena"
 const CHECKS := 35
 
-var _passed := 0
-var _failed := 0
-
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.FATAL)
 	_run.call_deferred()
-
-
-func _check(ok: bool, what: String) -> void:
-	if ok:
-		_passed += 1
-	else:
-		_failed += 1
-		print("FAIL: ", what)
 
 
 func _run() -> void:
