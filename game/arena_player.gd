@@ -1731,7 +1731,7 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 ## counter as well is what keeps both on one code path.
 ## The optional flat held sprite (`cl_weapon_sprites 1`), on the hand the model hangs from.
 func _present_held_sprite(id: StringName) -> void:
-	if not ArenaWeaponIcons.sprites:
+	if not ArenaWeaponIcons.shared.sprites:
 		if _held_sprite != null:
 			_held_sprite.queue_free()
 			_held_sprite = null
@@ -1762,7 +1762,7 @@ func _present_held() -> void:
 		kind = weapons.fire_kind
 		switching = arsenal.is_switching()
 
-	held.visible = is_alive() and not ArenaWeaponIcons.sprites
+	held.visible = is_alive() and not ArenaWeaponIcons.shared.sprites
 	_present_held_sprite(id)
 
 	if id != held.equipped():

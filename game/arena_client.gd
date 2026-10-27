@@ -664,7 +664,7 @@ func choose_loadout(picks: Dictionary) -> Variant:
 func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
 	var id := StringName(str(choice.get("id", "")))
 	var out: Dictionary = {}
-	var icon: Texture2D = ArenaWeaponIcons.menu_texture(id)
+	var icon: Texture2D = ArenaWeaponIcons.shared.menu_texture(id)
 	if icon == null:
 		icon = ArenaHudGlance.Ink.weapon_icon(id)
 	if icon != null:
@@ -1790,7 +1790,7 @@ func _weapon_warm_items() -> Array:
 func _present_sprite_view() -> void:
 	if view_model == null or player == null or player.camera == null:
 		return
-	if not ArenaWeaponIcons.sprites:
+	if not ArenaWeaponIcons.shared.sprites:
 		if _sprite_view != null:
 			_sprite_view.queue_free()
 			_sprite_view = null

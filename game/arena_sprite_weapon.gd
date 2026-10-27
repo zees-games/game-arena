@@ -32,11 +32,11 @@ static func make(p_mode: Mode) -> Variant:
 
 ## Draws weapon [param id]; hidden when the set has no sprite for it.
 func show_weapon(id: StringName) -> void:
-	var key := StringName("%s/%s" % [id, ArenaWeaponIcons.style])
+	var key := StringName("%s/%s" % [id, ArenaWeaponIcons.shared.style])
 	if key == _shown:
 		return
 	_shown = key
-	var tex := ArenaWeaponIcons.icon_set().texture_for(id)
+	var tex := ArenaWeaponIcons.shared.icon_set().texture_for(id)
 	texture = tex
 	visible = tex != null
 	if tex != null:

@@ -4945,17 +4945,17 @@ func _test_interface() -> void:
 
 	var no_sprite := PackedStringArray()
 	for weapon in ArenaWeaponIcons.TAGS:
-		if not ArenaWeaponIcons.icon_set().has_icon(weapon):
+		if not ArenaWeaponIcons.shared.icon_set().has_icon(weapon):
 			no_sprite.append(String(weapon))
-	_check(no_sprite.is_empty() and ArenaWeaponIcons.texture(&"pistol") is AtlasTexture, "every mapped weapon draws a Jestan sprite by default", ", ".join(no_sprite))
-	_check(ArenaWeaponIcons.set_style(&"silhouette") and ArenaWeaponIcons.texture(&"pistol") == null and ArenaHudGlance.Ink.weapon_icon(&"pistol") != null,
+	_check(no_sprite.is_empty() and ArenaWeaponIcons.shared.texture(&"pistol") is AtlasTexture, "every mapped weapon draws a Jestan sprite by default", ", ".join(no_sprite))
+	_check(ArenaWeaponIcons.shared.set_style(&"silhouette") and ArenaWeaponIcons.shared.texture(&"pistol") == null and ArenaHudGlance.Ink.weapon_icon(&"pistol") != null,
 		"the silhouette style turns the sprites off and the old outline answers")
-	var _style_back := ArenaWeaponIcons.set_style(&"pixel")
-	ArenaWeaponIcons.icon_set().override(&"pistol", ArenaHudGlance.Ink.texture("res://assets/weapon_icons/knife.png"), &"test")
-	ArenaWeaponIcons.set_profile(&"test")
-	var overridden := ArenaWeaponIcons.texture(&"pistol") == ArenaHudGlance.Ink.texture("res://assets/weapon_icons/knife.png")
-	ArenaWeaponIcons.set_profile(&"")
-	_check(overridden and ArenaWeaponIcons.texture(&"pistol") is AtlasTexture, "a profile's override replaces one weapon's picture and only for that profile")
+	var _style_back := ArenaWeaponIcons.shared.set_style(&"pixel")
+	ArenaWeaponIcons.shared.icon_set().override(&"pistol", ArenaHudGlance.Ink.texture("res://assets/weapon_icons/knife.png"), &"test")
+	ArenaWeaponIcons.shared.set_profile(&"test")
+	var overridden := ArenaWeaponIcons.shared.texture(&"pistol") == ArenaHudGlance.Ink.texture("res://assets/weapon_icons/knife.png")
+	ArenaWeaponIcons.shared.set_profile(&"")
+	_check(overridden and ArenaWeaponIcons.shared.texture(&"pistol") is AtlasTexture, "a profile's override replaces one weapon's picture and only for that profile")
 
 	# The Escape menu and the Tab board are dot-menu's (since 2026-10-10), built with no
 	# presentation layer here: no settings document, so only rows that need none draw.

@@ -361,7 +361,7 @@ func _play_glance() -> void:
 	var _given := _local.weapons.give_everything()
 	if OS.get_cmdline_user_args().has("--sprites"):
 		# `cl_weapon_sprites 1`: the flat sprite under the camera in place of the hands.
-		ArenaWeaponIcons.sprites = true
+		ArenaWeaponIcons.shared.sprites = true
 		hands.visible = false
 		var flat = ArenaSpriteWeapon.make(ArenaSpriteWeapon.Mode.VIEW)
 		_local.camera.add_child(flat)
