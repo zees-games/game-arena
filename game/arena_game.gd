@@ -494,7 +494,7 @@ var noblock_bound := false
 var feel_rules: ZeeViewFeel = ZeeViewFeel.new()
 
 ## Movement-dependent spread, recoil patterns and the spread crosshair (dot-game's opt-in; sv_spread_*, sv_recoil_*, on here).
-var combat_feel: DotGameCombatFeel = DotGameCombatFeel.new(true)
+var combat_feel: DotGameCombatFeel = DotGameCombatFeel.new(true, false)
 
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.

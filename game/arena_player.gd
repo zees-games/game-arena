@@ -1343,6 +1343,8 @@ func simulate_tick(
 	ctx.speed = state.horizontal_speed()
 	ctx.airborne = not state.is_grounded()
 	ctx.crouched = state.is_crouched()
+	ctx.sliding = state.is_sliding()
+	ctx.sprinting = state.sprinting
 	ctx.authority = arsenal.authority
 
 	# Through the rig, which runs the arsenal and then the bash. It keeps the previous
