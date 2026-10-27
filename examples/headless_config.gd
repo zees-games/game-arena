@@ -13,7 +13,7 @@ const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ROOT := "user://arena_cfgtest"
 const GAME := "game-arena"
-const CHECKS := 28
+const CHECKS := 33
 
 var _passed := 0
 var _failed := 0
@@ -71,6 +71,23 @@ func _run() -> void:
 	game.setup(ArenaMap.dm_box())
 	game.add_player(1, "A")
 	_check(game.player_for(1).health.max_health == 150.0, "a new player has the configured health")
+	# sv_falldamage: on in this game; the controller's landed(impact) is what the component hears.
+	var faller := game.player_for(1)
+	var fall := faller.get_node_or_null("FallDamage") as DotFallDamage
+	_check(game.fall_rules.enabled and fall != null, "fall damage is on, a component per player")
+	faller.controller.landed.emit(game.fall_rules.threshold - 1.0)
+	_check(faller.health.health == 150.0, "a landing under the threshold costs nothing")
+	faller.controller.landed.emit(game.fall_rules.threshold + 5.0)
+	_check(faller.health.health < 150.0, "a landing over it costs health")
+	faller.health.health = 150.0
+	game.fall_rules.enabled = false
+	faller.controller.landed.emit(game.fall_rules.threshold + 5.0)
+	_check(faller.health.health == 150.0, "sv_falldamage 0: no damage")
+	game.fall_rules.enabled = true
+	game.map.movement_profile = &"surf"
+	faller.controller.landed.emit(game.fall_rules.threshold + 5.0)
+	_check(faller.health.health == 150.0, "a surf map absorbs the landing")
+	game.map.movement_profile = &""
 	game.apply_match_limits()
 	_check(game.match_node.rules.respawn_delay_sec == 7.0, "the respawn delay overrides the mode's")
 	game._sync_award_config()

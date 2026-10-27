@@ -212,6 +212,10 @@ func _module_load() -> DotResult:
 			(cv as DotConVar).changed.connect(_reapply_combat_cvars.unbind(2))
 		game.map_changed.connect(_reapply_combat_cvars.unbind(1))
 
+	# sv_falldamage and its tunables: dot-combat's, on here (not on surf maps). Server-side only:
+	# the damage is the server's and arrives as health.
+	var _fall := game.fall_rules.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
+
 	# Dead bodies: dot-player-char's sv_ragdoll, sv_ragdoll_style, _time, _max, _force and
 	# _reactions. The server only picks each death's reaction from them (ArenaGame.decide_death);
 	# REPLICATED, because the clients are what draw the bodies and need the style, the

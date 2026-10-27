@@ -474,6 +474,10 @@ var spectate_rules: DotSpectatorRules = DotSpectatorRules.new()
 ## games give a body.
 var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 
+## `sv_falldamage*`: landing hard hurts, except on a surf map (ramps land fast by design).
+## On here, off in dot-combat's default; the server applies it, a client never does.
+var fall_rules: DotFallDamageRules = _make_fall_rules()
+
 ## `(other_id, mover_id, tick) -> Vector3 or null`: where [param other_id]'s hull stands when
 ## a networked player moves on [param tick]: where that player's client drew them, on both
 ## ends (`ArenaNetBridge.remote_feet`). Null, or unset, is where the other stands now.
@@ -1368,6 +1372,7 @@ func change_map(new_map: ArenaMap, new_mode: ArenaMode = null) -> DotResult:
 		player.apply_map_movement(map_movement())
 		player.rebind_map(map)
 		player.join_combat(combat)
+		_add_fall_damage(player)
 
 		var added := match_node.add_player(str(id), String(row["name"]), _tick, 0)
 
@@ -1550,6 +1555,35 @@ func _teardown_world() -> void:
 
 # --- Players ---------------------------------------------------------------
 
+static func _make_fall_rules() -> DotFallDamageRules:
+	var rules := DotFallDamageRules.new()
+	rules.enabled = true
+	return rules
+
+
+## One [DotFallDamage] per player, rebuilt when the combat manager is (a map change).
+func _add_fall_damage(player: ArenaPlayer) -> void:
+	var old := player.get_node_or_null("FallDamage")
+
+	if old != null:
+		player.remove_child(old)
+		old.queue_free()
+
+	if combat == null or player.controller == null:
+		return
+
+	var fall := DotFallDamage.new()
+	fall.name = "FallDamage"
+	fall.rules = fall_rules
+	fall.victim = player.player_id
+	fall.controller = DotNodeRef.of_path(player.controller.get_path())
+	fall.controller.mode = DotNodeRef.Mode.ABSOLUTE
+	fall.combat = DotNodeRef.of_path(combat.get_path())
+	fall.combat.mode = DotNodeRef.Mode.ABSOLUTE
+	fall.context_checks[&"protected"] = func() -> bool: return map != null and map.movement_profile == &"surf"
+	player.add_child(fall)
+
+
 ## Adds a player, builds their body, and puts them in the match.
 func add_player(
 	id: int, display_name: String, wanted_team: int = 0
@@ -1576,6 +1610,7 @@ func add_player(
 		player.use_collision_mask(player_stack.player_collision_mask())
 
 	player.join_combat(combat)
+	_add_fall_damage(player)
 	combat_feel.attach(player.arsenal)
 	player.apply_movement_rules(movement_rules)
 	player.solid_hulls_fn = solid_hulls_for
