@@ -4,8 +4,8 @@ extends RefCounted
 
 const PREFIX := "arena"
 ## A deathmatch wants the ambience felt, not heard: under the layer's own level, and fewer one-shots.
-const LEVEL := 0.3
-const RATE := 0.5
+const LEVEL := 0.15
+const RATE := 0.4
 
 
 static func make_rules() -> DotAmbienceRules:
