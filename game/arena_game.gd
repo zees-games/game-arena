@@ -233,6 +233,9 @@ var streaks: Dictionary = {}
 ## Streak -> what reaching it gives: `heal` (full health), `armour`, `haste`,
 ## `empowered` (more damage, a while). Set by `arena_streak_rewards` as "3:heal,5:haste";
 ## empty gives nothing. Applied on the kill that reaches the streak, server side.
+## sv_slide_sounds: whether a slide is audible. A cvar, so the server decides for everyone.
+var slide_sounds: bool = true
+
 var streak_rewards: Dictionary = {3: "heal", 5: "haste", 7: "empowered"}
 
 ## Somebody reached a streak with a reward. Server side; the module announces it.
