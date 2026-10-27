@@ -1872,6 +1872,7 @@ func _prewarm_tick() -> void:
 					(_warm.spare as Node).queue_free()
 				_warm.erase("spare")
 				gate.warm_up(ZeeViewModel.prepared_materials())
+				gate.warm_up(ZeeShotFx.warm())
 				_warm.phase = 1
 		1:
 			if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
