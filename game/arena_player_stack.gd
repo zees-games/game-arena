@@ -47,9 +47,8 @@ const LOADOUT_STANDARD := &"arena_standard"
 ## A loadout id and a weapon id are two different id spaces and joining them is a content
 ## decision — a mode that swapped the rifle for a shotgun would edit this and nothing
 ## else. `DotWeaponLoadoutBridge` carries the same argument for dot-loadout.
-const LOADOUT_WEAPONS := {
-	"arena_standard": ArenaContent.DEFAULT_LOADOUT,
-}
+static func loadout_weapons() -> Dictionary:
+	return {"arena_standard": ArenaContent.default_loadout()}
 
 ## Somebody's class changed, after a spawn honoured a pending choice.
 signal class_applied(id: int, class_id: StringName)
@@ -710,7 +709,7 @@ func give_class_loadout(player: ArenaPlayer) -> bool:
 		return false
 
 	var res := DotWeaponPlayerBridge.give_class_loadout(
-		player.arsenal, def, LOADOUT_WEAPONS
+		player.arsenal, def, loadout_weapons()
 	)
 
 	if not res.ok:

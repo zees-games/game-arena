@@ -1,5 +1,7 @@
 extends RefCounted
 
+const Roles := preload("arena_weapon_roles.gd")
+
 ## Every weapon, item, damage type and ruleset the game ships, built in code.
 ##
 ## [b]In code rather than as `.tres` files, deliberately, and only for this
@@ -99,12 +101,23 @@ const DEFAULT_LOADOUT: Array[StringName] = [
 	ZeeWeaponIds.KNIFE, ZeeWeaponIds.PISTOL, ZeeWeaponIds.RIFLE, ZeeWeaponIds.FRAG,
 ]
 
+
+## [constant DEFAULT_LOADOUT] with each weapon resolved by role (a weapon pack may fill a role); the same list when none does.
+static func default_loadout() -> Array[StringName]:
+	return [Roles.resolve(&"melee"), Roles.resolve(&"secondary"), Roles.resolve(&"primary"), Roles.resolve(&"thrown")]
+
+
+## The melee weapon every player is guaranteed.
+static func melee_id() -> StringName:
+	return Roles.resolve(&"melee")
+
 ## The slot a fresh spawn is holding: the primary.
 const DEFAULT_SLOT := ZeeWeaponIds.SLOT_PRIMARY
 
 
 ## The pack's weapons, against this game's damage types.
 static func weapons() -> Array[DotWeaponDef]:
+	Roles.ensure()
 	return ZeeWeaponPack.weapons(damage_table())
 
 
@@ -113,11 +126,13 @@ static func weapons() -> Array[DotWeaponDef]:
 ## A server checks this at boot, headless, before anybody joins — which is the only
 ## moment anybody is watching.
 static func weapon_catalogue() -> DotWeaponCatalogue:
+	Roles.ensure()
 	return ZeeWeaponPack.catalogue(damage_table())
 
 
 ## Weapons by id, for a module that has an item id and needs the weapon.
 static func weapon_table() -> Dictionary:
+	Roles.ensure()
 	return ZeeWeaponPack.table(damage_table())
 
 
@@ -128,25 +143,25 @@ static func weapon_table() -> Dictionary:
 # the same list on both, and a number is five bits where a StringName would be a string.
 
 ## Bits a weapon index takes: room for the pack's twenty-seven and four more.
-const WEAPON_INDEX_BITS := 5
+const WEAPON_INDEX_BITS := 6
 
 
 ## [param id]'s wire number, or 0 for nothing and for anything the pack does not define.
 static func weapon_index(id: StringName) -> int:
 	if id == &"":
 		return 0
-	return ZeeWeaponIds.all().find(id) + 1
+	return Roles.wire_ids().find(id) + 1
 
 
 ## The weapon [param index] names, or `&""`.
 static func weapon_at(index: int) -> StringName:
-	var ids := ZeeWeaponIds.all()
+	var ids := Roles.wire_ids()
 	return ids[index - 1] if index >= 1 and index <= ids.size() else &""
 
 
 ## Bits the carried set takes: one per weapon in the pack.
 static func carry_bits() -> int:
-	return mini(ZeeWeaponIds.all().size(), 62)
+	return mini(Roles.wire_ids().size(), 62)
 
 
 ## Everything [param arsenal] carries, one bit per weapon.
@@ -155,7 +170,7 @@ static func carry_mask(arsenal: DotWeaponArsenal) -> int:
 		return 0
 
 	var mask := 0
-	var ids := ZeeWeaponIds.all()
+	var ids := Roles.wire_ids()
 
 	for i in range(mini(ids.size(), 62)):
 		if arsenal.carries(ids[i]):
@@ -181,7 +196,7 @@ static func apply_carry(arsenal: DotWeaponArsenal, mask: int) -> int:
 	if arsenal == null or not arsenal.is_ready():
 		return 0
 
-	var ids := ZeeWeaponIds.all()
+	var ids := Roles.wire_ids()
 	var changed := 0
 
 	for i in range(mini(ids.size(), 62)):
@@ -299,7 +314,7 @@ static func loadout_schema() -> DotLoadoutSchema:
 	# these slots existed is not refused for lacking them: this game conforms on load
 	# (`DotLoadoutConfig.conform_on_load`), and conforming fills an empty required slot
 	# with its default before it trims to the budget.
-	var melee := DotLoadoutSlot.make(&"melee", true, ZeeWeaponIds.KNIFE)
+	var melee := DotLoadoutSlot.make(&"melee", true, Roles.resolve(&"melee"))
 	melee.display_name = "Melee"
 	melee.kinds = [DotItem.KIND_WEAPON]
 	melee.arsenal_slot = ZeeWeaponIds.SLOT_MELEE
@@ -308,19 +323,19 @@ static func loadout_schema() -> DotLoadoutSchema:
 	# holds is ArenaPlayer._better_hand's, not the first slot given.
 	melee.order = 22
 
-	var primary := DotLoadoutSlot.make(&"primary", true, ZeeWeaponIds.RIFLE)
+	var primary := DotLoadoutSlot.make(&"primary", true, Roles.resolve(&"primary"))
 	primary.display_name = "Primary"
 	primary.kinds = [DotItem.KIND_WEAPON]
 	primary.arsenal_slot = ZeeWeaponIds.SLOT_PRIMARY
 	primary.order = 10
 
-	var secondary := DotLoadoutSlot.make(&"secondary", true, ZeeWeaponIds.PISTOL)
+	var secondary := DotLoadoutSlot.make(&"secondary", true, Roles.resolve(&"secondary"))
 	secondary.display_name = "Secondary"
 	secondary.kinds = [DotItem.KIND_WEAPON]
 	secondary.arsenal_slot = ZeeWeaponIds.SLOT_SIDEARM
 	secondary.order = 20
 
-	var thrown := DotLoadoutSlot.make(&"thrown", true, ZeeWeaponIds.FRAG)
+	var thrown := DotLoadoutSlot.make(&"thrown", true, Roles.resolve(&"thrown"))
 	thrown.display_name = "Grenades"
 	thrown.kinds = [DotItem.KIND_WEAPON]
 	thrown.arsenal_slot = ZeeWeaponIds.SLOT_THROWN

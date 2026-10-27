@@ -1895,7 +1895,7 @@ func arm_for_mode(player: ArenaPlayer) -> void:
 			# The heaviest gun, never the grenade: the loadout's own rule.
 			hand = ArenaPlayer._better_hand(hand, catalogue.get_def(id).slot)
 	if mode.pool_keeps_melee and not player.arsenal.has_slot(ZeeWeaponIds.SLOT_MELEE):
-		var _knife := player.arsenal.give(ZeeWeaponIds.KNIFE)
+		var _knife := player.arsenal.give(ArenaContent.melee_id())
 	if hand > 0:
 		player.arsenal.select(hand, player.controller.state.tick)
 

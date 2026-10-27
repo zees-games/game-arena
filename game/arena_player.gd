@@ -1021,7 +1021,7 @@ func give_loadout(entries: Array[Dictionary]) -> void:
 	# melee slot names none, and a player whose last magazine runs dry should still have
 	# something to swing.
 	if not arsenal.has_slot(ZeeWeaponIds.SLOT_MELEE):
-		var _knife := arsenal.give(ZeeWeaponIds.KNIFE)
+		var _knife := arsenal.give(ArenaContent.melee_id())
 
 	if hand > 0:
 		arsenal.select(hand, controller.state.tick)
@@ -1044,7 +1044,7 @@ static func _better_hand(have: int, slot: int) -> int:
 func give_default_loadout() -> void:
 	arsenal.clear()
 
-	for id in ArenaContent.DEFAULT_LOADOUT:
+	for id in ArenaContent.default_loadout():
 		var _given := arsenal.give(id)
 
 	arsenal.select(ArenaContent.DEFAULT_SLOT, controller.state.tick)
