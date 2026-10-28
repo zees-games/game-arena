@@ -1408,11 +1408,23 @@ func _test_bots() -> void:
 	if not _check(module != null and module.bridge != null, "the module has a bridge to add bots through"):
 		return
 
+	var bots := await _test_bots_fill(module)
+	await _test_bots_swap(module, bots)
+	await _test_bots_fight(module)
+
+	_server.console.execute("bot_quota_mode off")
+	await _wait_ticks(1.5)
+	_check(module.bridge.bot_ids().is_empty(), "bot_quota_mode off takes them all out",
+		"%d left" % module.bridge.bot_ids().size())
+	_server.console.execute("bot_quota_mode fill")
+
+
+## Fill mode tops the game up to bot_quota; returns the bot ids that were added.
+func _test_bots_fill(module: ArenaModule) -> Array:
 	_check(_server.console.find_cvar("bot_quota") != null and _server.console.get_string("bot_quota_mode", "") == "fill",
 		"bot_quota is the module's and fill is the default", _server.console.get_string("bot_quota_mode", ""))
 
-	# Everything sent between the client spawning and here went to 4242 alone, and the
-	# snapshots did reach it: the loopback caught them rather than nothing being sent.
+	# Everything sent since the client spawned went to 4242 alone, snapshots included.
 	var peers := {}
 	var snapshots := 0
 	for c: Dictionary in _caught:
@@ -1423,8 +1435,7 @@ func _test_bots() -> void:
 		"the adopted session was sent its snapshots, and nobody else was sent anything",
 		"%d snapshots, peers %s" % [snapshots, str(peers.keys())])
 
-	# The sessions this suite adopts have no peer behind them, and seconds of ticking would
-	# send each a snapshot an RPC error at a time; headless_admin does the same.
+	# Adopted sessions have no peer; silence the send so ticking raises no RPC errors.
 	if module.net != null:
 		module.net.send_fn = func(_peer: int, _payload: PackedByteArray, _delivery: int) -> void:
 			pass
@@ -1436,8 +1447,11 @@ func _test_bots() -> void:
 	_check(bots.size() == 4 - people, "fill: bots and people make four", "%d bots, %d people" % [bots.size(), people])
 	_check(bots.size() > 0 and _game.player_for(bots[0]) != null and _game.player_for(bots[0]).has_meta(&"bot"),
 		"a bot is a player in the game, marked as one")
+	return bots
 
-	# A person joins and takes a bot's place.
+
+## A person joining takes a bot's place and leaving gives it back.
+func _test_bots_swap(module: ArenaModule, bots: Array) -> void:
 	var session := DotClientSession.new()
 	session.peer_id = 4343
 	session.userid = 78
@@ -1449,16 +1463,17 @@ func _test_bots() -> void:
 		"%d -> %d" % [bots.size(), module.bridge.bot_ids().size()])
 	_check(not module.bridge.bot_ids().has(bots[bots.size() - 1]), "the newest bot is the one that goes")
 
-	# And the bot comes back when they leave.
 	_server.client_disconnected.emit(session, "test")
 	await _wait_ticks(1.5)
 	_check(module.bridge.bot_ids().size() == bots.size(), "and a bot comes back when they leave",
 		"%d" % module.bridge.bot_ids().size())
 
+
+## Within a few seconds a bot fires at somebody it can see, and fires once the round is live.
+func _test_bots_fight(module: ArenaModule) -> void:
 	# They fight: within a few seconds one of them has fired at somebody it can see.
 	var fired := false
-	# The first map of a fresh server: a pressed trigger is not a shot, so count the shots the
-	# arsenal really let go (a bot with no weapon ready pressed the button and fired nothing).
+	# A pressed trigger is not a shot (no weapon ready fires nothing): count real shots.
 	var shots := [0]
 	for id in module.bridge.bot_ids():
 		_game.player_for(id).used.connect(func(outcome: DotWeaponOutcome) -> void:
@@ -1485,12 +1500,6 @@ func _test_bots() -> void:
 			break
 		await get_tree().physics_frame
 	_check(shots[0] > 0, "and the bots fire within 10 s of it going live, on the first map of a fresh server", str(shots[0]))
-
-	_server.console.execute("bot_quota_mode off")
-	await _wait_ticks(1.5)
-	_check(module.bridge.bot_ids().is_empty(), "bot_quota_mode off takes them all out",
-		"%d left" % module.bridge.bot_ids().size())
-	_server.console.execute("bot_quota_mode fill")
 
 
 func _test_unload() -> void:
