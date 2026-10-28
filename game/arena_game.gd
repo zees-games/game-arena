@@ -264,6 +264,13 @@ var drop_rules := {
 ## The jail's gate and button, drawn. Null on a headless end and on a map without a jail.
 var jail_view: Node3D = null
 
+## The sprint rules start from this game's own tunables, so loading them (for `sv_sprint_shoot` and `sv_sprint_barrel`) leaves the speeds as they were.
+static func _make_combat_feel() -> DotGameCombatFeel:
+	var feel := DotGameCombatFeel.new(true, true)
+	feel.sprint_defaults(ArenaPlayer.arena_tunables())
+	return feel
+
+
 ## The simulation tick the players are on, for what is drawn from it: a player's own state, since
 ## that is the tick the pits are asked about, and the game's own count before there is one.
 func sim_tick() -> int:
@@ -509,7 +516,7 @@ var noblock_bound := false
 var feel_rules: ZeeViewFeel = ZeeViewFeel.new()
 
 ## Movement-dependent spread, recoil patterns and the spread crosshair (dot-game's opt-in; sv_spread_*, sv_recoil_*, on here).
-var combat_feel: DotGameCombatFeel = DotGameCombatFeel.new(true, false)
+var combat_feel: DotGameCombatFeel = _make_combat_feel()
 
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.
@@ -1721,6 +1728,7 @@ func add_player(
 	player.join_combat(combat)
 	_add_fall_damage(player)
 	combat_feel.attach(player.arsenal)
+	combat_feel.track_tunables(player.controller.tunables)
 	player.apply_movement_rules(movement_rules)
 	player.solid_hulls_fn = solid_hulls_for
 	_players[id] = player

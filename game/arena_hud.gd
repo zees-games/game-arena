@@ -1355,7 +1355,8 @@ func present_body() -> void:
 			scope.size = inverse.basis_xform(get_viewport_rect().size)
 	if crosshair != null:
 		# The scope has its own reticle; a crosshair drawn over it is two.
-		crosshair.visible = not scoped
+		# Nor while dead or watching a death cam: there is nothing in hand to aim.
+		crosshair.visible = not scoped and live and player.is_alive()
 		# Down an iron sight the sight is the aiming mark: the crosshair fades out as the gun
 		# comes up and back as it goes down (dot-ui's DotCrosshair, API 5; Christian's first
 		# play test had both on screen at once). Hip fire keeps it.

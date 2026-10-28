@@ -33,7 +33,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 328
+const CHECKS := 331
 
 var _entered := 0
 var _completed := 0
@@ -193,6 +193,11 @@ func _test_ambience_is_quiet_and_obeys_settings() -> void:
 	_check(a.ambient.effective_mood() == &"snow_wind" and a.mood_for_map()["why"] == "name prefix", "a surf map is wind")
 	p.on_map_changed(&"kz_cave")
 	_check(a.ambient.effective_mood() == &"cave_tunnel", "a climb map is a cave")
+	a.map_lookup = func(id: StringName) -> Variant: return {"meta": {"ambient": {"level": 1.6, "lively": true}}} if id == &"zz_doc" else null
+	p.on_map_changed(&"zz_doc")
+	_check(p.ambience != null and is_equal_approx(p.ambience._gain(), p.ambience.level * 1.6), "on_map_changed(id) alone reaches the bed with the map definition's ambient.level through the lookup")
+	p.on_map_changed(&"zz_plain")
+	_check(p.ambience != null and is_equal_approx(p.ambience._gain(), p.ambience.level), "and the next map without one is back at the quiet default")
 	_check(a.ambient.config.enabled and a.ambient.config.volume <= 0.35, "the level is quiet by default (%.2f)" % a.ambient.config.volume)
 	_check(a.ambient.target_level() < 0.5, "and the layer's target level is under half (%.2f)" % a.ambient.target_level())
 
@@ -2591,6 +2596,7 @@ func _test_criticals_and_the_body() -> void:
 	hud.present_body()
 	_check(hud.death_label.visible and hud.death_label.text.contains("Killed by Sniper"),
 		"dead, it says who did it and with what")
+	_check(hud.crosshair != null and not hud.crosshair.visible, "and the crosshair is gone: nothing in hand to aim")
 
 	hud.note_kill({"killer_id": 6, "victim_id": 7, "weapon": "rifle"}, 6, "Broken")
 	hud.note_award({"killer_id": 6, "victim_id": 7, "medals": [ArenaAwards.Medal.REVENGE], "points": 150, "streak": 1}, 6, "Sniper", "Broken")

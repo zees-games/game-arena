@@ -5,7 +5,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 
 ## What dot-game's DotGameCombatFeel does to a real ArenaPlayer: spread widens while moving, airborne and
 ## sliding and narrows crouched; the recoil pattern is the same every run; the cl_crosshair_* cvars restyle
-## the crosshair through the console; the sprint rules stay off (this game has no sprint).
+## the crosshair through the console; the sprint rules are opt-in.
 ##
 ## [codeblock]
 ## godot --headless --path . res://examples/headless_combatfeel.tscn
@@ -13,7 +13,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 
 const TICK_RATE := 64
 const EXPECTED_SECTIONS := 4
-const EXPECTED_CHECKS := 27
+const EXPECTED_CHECKS := 31
 
 var _checks := 0
 var _failed := 0
@@ -183,7 +183,7 @@ func _test_wiring() -> void:
 	_sections += 1
 	print("== the opt-in wiring")
 	_check(_feel.spread != null and _feel.recoil != null, "dot-weapon's rules are loaded by path")
-	_check(_feel.sprint == null, "this game asked for no sprint rules")
+	_check(_feel.sprint == null, "a game may opt out of the sprint rules")
 	var names: Array[String] = []
 	_feel.bind_cvars(func(n: String, d: String, _h: String, _f: int) -> Object:
 		names.append(n)
@@ -196,3 +196,19 @@ func _test_wiring() -> void:
 	with_sprint.track_tunables(tun)
 	with_sprint.sprint.call(&"set_cvar", "sv_sprintspeed", "2.25")
 	_check(is_equal_approx(tun.sprint_speed_scale, 2.25), "a sprint cvar change reaches a tracked player", str(tun.sprint_speed_scale))
+
+	var arena := DotGameCombatFeel.new(true, true)
+	arena.sprint_defaults(ArenaPlayer.arena_tunables())
+	var arena_tun := ArenaPlayer.arena_tunables()
+	arena.track_tunables(arena_tun)
+	_check(arena.sprint != null and is_equal_approx(arena_tun.sprint_speed_scale, 1.0) and arena_tun.sprint_can_shoot, "the arena loads the sprint rules without changing its speeds")
+	var arena_names: Array[String] = []
+	arena.bind_cvars(func(n: String, _d: String, _h: String, _f: int) -> Object:
+		arena_names.append(n)
+		return null)
+	_check(arena_names.has("sv_sprint_shoot") and arena_names.has("sv_sprint_barrel"), "sv_sprint_shoot and sv_sprint_barrel register")
+	arena.sprint.call(&"set_cvar", "sv_sprint_shoot", "0")
+	arena.sprint.call(&"set_cvar", "sv_sprint_barrel", "0")
+	_check(not arena_tun.sprint_can_shoot and not arena_tun.sprint_shot_follows_barrel, "and reach a tracked player's tunables")
+	var fresh := DotFpsTunables.new()
+	_check(fresh.sprint_can_shoot and fresh.sprint_shot_follows_barrel, "both default on: sprint-and-shoot allowed, along the barrel")

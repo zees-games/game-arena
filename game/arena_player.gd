@@ -1352,6 +1352,8 @@ func simulate_tick(
 	ctx.crouched = state.is_crouched()
 	ctx.sliding = state.is_sliding()
 	ctx.sprinting = state.sprinting
+	ctx.sprint_blocks_fire = not controller.tunables.sprint_can_shoot
+	ctx.sprint_shot_follows_barrel = controller.tunables.sprint_shot_follows_barrel
 	ctx.authority = arsenal.authority
 
 	# Through the rig, which runs the arsenal and then the bash. It keeps the previous
