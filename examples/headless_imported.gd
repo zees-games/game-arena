@@ -78,7 +78,7 @@ const HURT_MAP := &"surf_xiv_v2a"
 
 const SECTIONS := 24
 ## 145 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 149
+const CHECKS_FIXED := 150
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -241,10 +241,8 @@ func _test_worlds() -> void:
 	var linked := ArenaBspMap.world_prefix("surf_grave_reloaded") != ""
 	if not linked:
 		_line("  (no res://worlds link: skipped)")
-		_check(true, "skipped without the link")
-		_check(true, "skipped without the link")
-		_check(true, "skipped without the link")
-		_check(true, "skipped without the link")
+		for _i in 5:
+			_check(true, "skipped without the link")
 		_done()
 		return
 	var map := ArenaMap.by_id(&"surf_grave_reloaded")
@@ -259,6 +257,12 @@ func _test_worlds() -> void:
 	_check(legacy.get_node_or_null("World") is MeshInstance3D and legacy.get_children().any(func(c: Node) -> bool: return c is MeshInstance3D), "with worlds off the legacy meshes are drawn")
 	legacy.free()
 	_check(ArenaBspMap.world_prefix("surf_no_such_map") == "", "a map without a world has no prefix")
+	var mount := OS.get_temp_dir().path_join("arena_world_mount")
+	var wdir := mount.path_join("worlds/surf_grave_reloaded")
+	DirAccess.make_dir_recursive_absolute(wdir)
+	for ext in ["json", "bin"]:
+		FileAccess.open(wdir.path_join("surf_grave_reloaded." + ext), FileAccess.WRITE).store_string("x")
+	_check(ArenaBspMap.world_prefix("surf_grave_reloaded", mount) == wdir.path_join("surf_grave_reloaded"), "a delivered map's own worlds/ wins over the linked root")
 	_done()
 
 

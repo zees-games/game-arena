@@ -90,16 +90,22 @@ const DRAWN_WORLD := "res://addons/dot_map/bsp/dot_map_drawn_world.gd"
 const WORLD_ROOT := "res://worlds"
 
 
-## Where [param id]'s converted world is, without extension, or "" when there is none.
-static func world_prefix(id: String) -> String:
-	var prefix := ArenaPaths.rebase(WORLD_ROOT).path_join(id).path_join(id)
-	return prefix if FileAccess.file_exists(prefix + ".json") and FileAccess.file_exists(prefix + ".bin") else ""
+## Where [param id]'s converted world is, without extension, or "" when there is none. A delivered map ([param map_dir], its manifest's directory) carries its own under `worlds/`, which wins over the linked root.
+static func world_prefix(id: String, map_dir: String = "") -> String:
+	var candidates: Array[String] = []
+	if not map_dir.is_empty():
+		candidates.append(map_dir.path_join("worlds").path_join(id).path_join(id))
+	candidates.append(ArenaPaths.rebase(WORLD_ROOT).path_join(id).path_join(id))
+	for prefix in candidates:
+		if FileAccess.file_exists(prefix + ".json") and FileAccess.file_exists(prefix + ".bin"):
+			return prefix
+	return ""
 
 
 ## Replaces [param drawn]'s legacy meshes with the map's dot-map world (free PBR art, same frame
 ## and scale); collision, spawns and mechanics stay the manifest's. False leaves the legacy meshes.
-static func draw_world(drawn: Node3D, id: String) -> bool:
-	var prefix := world_prefix(id)
+static func draw_world(drawn: Node3D, id: String, map_dir: String = "") -> bool:
+	var prefix := world_prefix(id, map_dir)
 	if prefix.is_empty() or not ResourceLoader.exists(DRAWN_WORLD):
 		return false
 	var drawn_world: GDScript = load(DRAWN_WORLD)

@@ -5,6 +5,7 @@ const ArenaWeaponIcons := preload("../game/arena_weapon_icons.gd")
 const ArenaSpriteWeapon := preload("../game/arena_sprite_weapon.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaKillViewClient := preload("../game/arena_killview_client.gd")
+const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaDrops := preload("../game/arena_drops.gd")
 const ArenaJailView := preload("../game/arena_jail_view.gd")
@@ -57,6 +58,12 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	var map_index := args.find("--map")
 	var id := StringName(args[map_index + 1]) if map_index >= 0 and map_index + 1 < args.size() else &"dm_box"
+	var mounted_at := args.find("--mounted")
+	if mounted_at >= 0 and mounted_at + 1 < args.size():
+		# A delivered map's directory (pack files unpacked), as `ensure` mounts it.
+		var added := ArenaImportedMaps.add_mounted(id, args[mounted_at + 1])
+		if not added.ok:
+			push_error("--mounted: %s" % added.error.message)
 	var map := ArenaMap.by_id(id)
 
 	if map == null:

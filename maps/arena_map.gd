@@ -1969,7 +1969,7 @@ func to_scene() -> Node3D:
 		)
 		drawn.name = "Level"
 		if ArenaMap.use_worlds:
-			var _w := ArenaBspMap.draw_world(drawn, String(id))
+			var _w := ArenaBspMap.draw_world(drawn, String(id), manifest_path.get_base_dir())
 		return drawn
 
 	var root := Node3D.new()
