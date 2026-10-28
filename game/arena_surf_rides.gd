@@ -8,8 +8,6 @@ extends RefCounted
 ## never recorded. Loaded by path, and only on a shell that has dot-bot's recorder.
 ## Reasoning: dot-bot docs/demonstration-recorder.md, "The first consumer: surf rides".
 
-const CHANNEL := "arena.surf.rides"
-
 const ArenaBots := preload("arena_bots.gd")
 const ArenaSurf := preload("arena_surf.gd")
 

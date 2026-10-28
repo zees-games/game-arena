@@ -16,8 +16,6 @@ const ArenaProjectiles := preload("arena_projectiles.gd")
 ## at forty metres. On a networked client the list is the copies the server's LAUNCH
 ## events started, flown by `ArenaNetBridge.client_tick`.
 
-const CHANNEL := "arena.projectiles"
-
 ## The round's radius in metres, and its glow.
 const ROUND_RADIUS := 0.11
 const ROUND_COLOUR := Color(1.0, 0.62, 0.22)

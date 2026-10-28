@@ -14,8 +14,6 @@ extends Node3D
 ## any kill drops them, and how long they lie there (all `arena_drop_*` cvars). See
 ## game-arena's docs/modes.md.
 
-const CHANNEL := "arena.drops"
-
 enum Kind { COIN, HEALTH, AMMO }
 
 ## A world pack's wire id is this plus its spot's index, so it can never meet a kill drop's

@@ -24,8 +24,6 @@ extends RefCounted
 ## Found by shape, never by a map's name: a map that has this arrangement gets a jail, and the
 ## suite names the one that has it today.
 
-const CHANNEL := "arena.jail"
-
 ## What a pit is to the jail.
 enum Role { NONE, FALL, BUTTON, EXIT }
 
