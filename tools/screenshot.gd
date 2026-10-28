@@ -68,6 +68,7 @@ func _initialize() -> void:
 
 	# --no-bake draws a built-in map with its live lights, for before/after frames of a bake.
 	ArenaMap.use_bakes = not args.has("--no-bake")
+	ArenaMap.use_worlds = not args.has("--legacy")
 	root.add_child(map.to_scene())
 	_stage_packs.call_deferred(map)
 	# The map's toys, as a client draws them: frozen where the map puts them. Built in the

@@ -83,6 +83,40 @@ const LIGHTMAP_LIFT := 0.55
 const PROTOTYPE_AMBIENT := 0.32
 
 
+## dot-map's drawn world, loaded by path so a shell without it still plays the legacy meshes.
+const DRAWN_WORLD := "res://addons/dot_map/bsp/dot_map_drawn_world.gd"
+
+## Where the converted worlds (`bsp.py regen`, arena-surf-dm-maps/worlds) are linked.
+const WORLD_ROOT := "res://worlds"
+
+
+## Where [param id]'s converted world is, without extension, or "" when there is none.
+static func world_prefix(id: String) -> String:
+	var prefix := ArenaPaths.rebase(WORLD_ROOT).path_join(id).path_join(id)
+	return prefix if FileAccess.file_exists(prefix + ".json") and FileAccess.file_exists(prefix + ".bin") else ""
+
+
+## Replaces [param drawn]'s legacy meshes with the map's dot-map world (free PBR art, same frame
+## and scale); collision, spawns and mechanics stay the manifest's. False leaves the legacy meshes.
+static func draw_world(drawn: Node3D, id: String) -> bool:
+	var prefix := world_prefix(id)
+	if prefix.is_empty() or not ResourceLoader.exists(DRAWN_WORLD):
+		return false
+	var drawn_world: GDScript = load(DRAWN_WORLD)
+	var got: DotResult = DotMapBspMesh.load_prefix(prefix)
+	if not got.ok:
+		DotLog.warn("arena.maps", "a map's world would not read; its legacy meshes are drawn", {"map": id, "why": got.error.message})
+		return false
+	for child in drawn.get_children():
+		drawn.remove_child(child)
+		child.free()
+	var surfaces := ArenaPaths.rebase("res://assets/surfaces")
+	drawn_world.call("attach", drawn, got.value, {
+		"surfaces_root": surfaces if DirAccess.dir_exists_absolute(surfaces) else DotMapSurfaces.DEFAULT_ROOT,
+	})
+	return true
+
+
 ## A manifest, parsed, or empty when the file is missing or is not one.
 static func read_manifest(path: String) -> Dictionary:
 	var text := FileAccess.get_file_as_string(path)

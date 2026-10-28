@@ -91,3 +91,7 @@ __pycache__/
 # An OPTIONAL weapon pack (arena-weapons): linked when present, absent is supported, so it is deliberately not a
 # `/addons/<name>` line (game.sh and bootstrap read those as required).
 addons/arena_weapons
+
+# Converted worlds (dot-map regen) of the combat surf maps, and the art stores they name: a link to arena-surf-dm-maps.
+# bootstrap-link: arena-surf-dm-maps/worlds
+/worlds

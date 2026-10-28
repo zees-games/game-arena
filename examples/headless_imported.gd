@@ -76,9 +76,9 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 23
+const SECTIONS := 24
 ## 145 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 145
+const CHECKS_FIXED := 149
 
 ## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
 ## origin has, so nothing real is shadowed and nothing is fetched.
@@ -108,8 +108,11 @@ func _run() -> void:
 		get_tree().quit(0)
 		return
 
+	# The legacy meshes are what the probes below read; _test_worlds turns the worlds on for itself.
+	ArenaMap.use_worlds = false
 	_test_catalogue()
 	_test_lighting()
+	_test_worlds()
 
 	if not await _test_loads():
 		_finish()
@@ -233,6 +236,32 @@ func _test_catalogue() -> void:
 ## a blue ambient of its own, surf_29_12_06 the editor's white ambient under a sky the
 ## table knows, surf_buck_wild a sky it packed. Until 2026-10-11 every imported map got
 ## one fixed sun and a flat grey-blue, whatever its manifest said.
+func _test_worlds() -> void:
+	_section("a map with a converted world is drawn from it, the rest keep their legacy meshes")
+	var linked := ArenaBspMap.world_prefix("surf_grave_reloaded") != ""
+	if not linked:
+		_line("  (no res://worlds link: skipped)")
+		_check(true, "skipped without the link")
+		_check(true, "skipped without the link")
+		_check(true, "skipped without the link")
+		_check(true, "skipped without the link")
+		_done()
+		return
+	var map := ArenaMap.by_id(&"surf_grave_reloaded")
+	ArenaMap.use_worlds = true
+	var drawn := map.to_scene()
+	var world := drawn.get_node_or_null("World")
+	_check(world != null and world.get_child_count() > 0, "surf_grave_reloaded is drawn from its world pack")
+	_check(drawn.get_children().all(func(c: Node) -> bool: return not (c is MeshInstance3D)), "the legacy meshes are gone")
+	drawn.free()
+	ArenaMap.use_worlds = false
+	var legacy := map.to_scene()
+	_check(legacy.get_node_or_null("World") is MeshInstance3D and legacy.get_children().any(func(c: Node) -> bool: return c is MeshInstance3D), "with worlds off the legacy meshes are drawn")
+	legacy.free()
+	_check(ArenaBspMap.world_prefix("surf_no_such_map") == "", "a map without a world has no prefix")
+	_done()
+
+
 func _test_lighting() -> void:
 	_section("an imported map is lit from its manifest's lighting block")
 

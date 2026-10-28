@@ -26,6 +26,9 @@ const BAKE_VERSION := 1
 ## Whether a client looks for a map's bake at all.
 static var use_bakes: bool = true
 
+## Whether an imported map is drawn from its converted world when one is linked at `res://worlds`.
+static var use_worlds: bool = true
+
 ## A level as a list of boxes, and the three things that list becomes.
 ##
 ## [b]This is the idea the whole project is arranged around.[/b] A dev-textured arena
@@ -1965,6 +1968,8 @@ func to_scene() -> Node3D:
 			ArenaImportedMaps.manifest(id), manifest_path.get_base_dir()
 		)
 		drawn.name = "Level"
+		if ArenaMap.use_worlds:
+			var _w := ArenaBspMap.draw_world(drawn, String(id))
 		return drawn
 
 	var root := Node3D.new()
