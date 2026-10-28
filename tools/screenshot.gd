@@ -402,6 +402,9 @@ func _play_glance() -> void:
 	_local.controller.state.dash_cooldown_left = 1.3
 	_local.controller.state.slide_time = 0.3
 	_local.controller.state.wall_jumps_in_air = 1
+	# `--glance --dead`: the dead state, to look at: no crosshair, no hands.
+	if OS.get_cmdline_user_args().has("--dead"):
+		_local.make_dead()
 
 	var late: Array = []
 	if _glance_chat:
