@@ -1721,6 +1721,12 @@ func _build_presentation() -> void:
 	DotLog.result(CHANNEL, "the presentation layer", presentation.setup())
 	if presentation.blood != null and game != null:
 		presentation.blood.mask = game.ragdoll_rules.collision_mask
+	# on_map(id) alone then finds a map definition's `meta.ambient` (or `meta.doc`).
+	if presentation.ambient != null:
+		presentation.ambient.map_lookup = func(id: StringName) -> Variant:
+			if _menu_catalogue == null:
+				_menu_catalogue = ArenaMaps.catalogue()
+			return _menu_catalogue.get_map(id)
 
 	_wire_chat_window()
 
