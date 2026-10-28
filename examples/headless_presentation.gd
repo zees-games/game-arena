@@ -34,7 +34,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 340
+const CHECKS := 342
 
 var _entered := 0
 var _completed := 0
@@ -2108,6 +2108,13 @@ func _test_the_loadout_menu() -> void:
 		_check(hip > 0.99 and aimed < 0.01 and hud.crosshair.aim_opacity > 0.99,
 			"the crosshair is drawn at the hip, gone down the sights, and back after",
 			"hip %.2f, aimed %.2f (fraction %.2f, scoped %s), after %.2f" % [hip, aimed, hands.aim_fraction(), hands.is_scoped(), hud.crosshair.aim_opacity])
+		# Dead: dot-ui's DotCrosshair hides itself through the alive source the HUD bound.
+		me.health.alive = false
+		hud.crosshair.call(&"_process", 0.016)
+		_check(not hud.crosshair.is_shown(), "a dead player's crosshair is not drawn")
+		me.health.alive = true
+		hud.crosshair.call(&"_process", 0.016)
+		_check(hud.crosshair.is_shown(), "and it is back once alive")
 	remove_child(client)
 	client.free()
 	await get_tree().process_frame
@@ -2658,7 +2665,8 @@ func _test_criticals_and_the_body() -> void:
 	hud.present_body()
 	_check(hud.death_label.visible and hud.death_label.text.contains("Killed by Sniper"),
 		"dead, it says who did it and with what")
-	_check(hud.crosshair != null and not hud.crosshair.visible, "and the crosshair is gone: nothing in hand to aim")
+	hud.crosshair.call(&"_process", 0.016)
+	_check(hud.crosshair != null and not hud.crosshair.is_shown(), "and the crosshair is gone: nothing in hand to aim")
 
 	hud.note_kill({"killer_id": 6, "victim_id": 7, "weapon": "rifle"}, 6, "Broken")
 	hud.note_award({"killer_id": 6, "victim_id": 7, "medals": [ArenaAwards.Medal.REVENGE], "points": 150, "streak": 1}, 6, "Sniper", "Broken")

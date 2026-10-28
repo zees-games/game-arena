@@ -35,6 +35,8 @@ var game: ArenaGame = null
 var crosshair: DotCrosshair = null
 ## Whether the host's DotCrosshair fades while aiming (dot-ui API 5).
 var _crosshair_fades: bool = DotAddonApi.build_level("dot_ui") >= 5
+## Whether DotCrosshair hides itself while the viewer is dead (dot-ui API 14).
+var _crosshair_hides: bool = DotAddonApi.build_level("dot_ui") >= 14
 
 ## Bottom left: health as a bar with its number, armour as a thin bar under it.
 var vitals: DotVitals = null
@@ -877,6 +879,8 @@ func build(p_game: ArenaGame) -> void:
 	crosshair.bind(func() -> Variant:
 		return player.spread_degrees() if _live() else 0.0
 	)
+	if _crosshair_hides:
+		crosshair.set(&"alive_source", func() -> bool: return _live() and player.is_alive())
 	add_child(crosshair)
 
 	# Bottom left: health as a thick bar with its number at the end, armour as a thin one
@@ -1355,8 +1359,8 @@ func present_body() -> void:
 			scope.size = inverse.basis_xform(get_viewport_rect().size)
 	if crosshair != null:
 		# The scope has its own reticle; a crosshair drawn over it is two.
-		# Nor while dead or watching a death cam: there is nothing in hand to aim.
-		crosshair.visible = not scoped and live and player.is_alive()
+		# Dead or in a kill view: DotCrosshair hides itself (alive_source); older dot-ui is hidden here.
+		crosshair.visible = not scoped and (_crosshair_hides or (live and player.is_alive()))
 		# Down an iron sight the sight is the aiming mark: the crosshair fades out as the gun
 		# comes up and back as it goes down (dot-ui's DotCrosshair, API 5; Christian's first
 		# play test had both on screen at once). Hip fire keeps it.
