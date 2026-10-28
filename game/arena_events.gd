@@ -81,6 +81,11 @@ enum Kind {
 	BULLET,
 	## A bullet hit or expired on the server: its id. The client's copy ends there rather than at its own range.
 	BULLET_END,
+	## The victim's kill view (`mp_killview`): the killer's recorded view as a clip, to the victim alone. A
+	## var-encoded dictionary, because dot-replay owns the clip's shape and a copy here would drift from it.
+	##
+	## After BULLET_END, for the reason VOTE gives.
+	KILLVIEW,
 }
 
 enum Ask {
@@ -694,4 +699,37 @@ static func read_award(reader: DotNetReader) -> Dictionary:
 		medals.append(reader.read_uint(MEDAL_BITS))
 	out["medals"] = medals
 	out["ok"] = reader.ok()
+	return out
+
+
+# --- KILLVIEW --------------------------------------------------------------
+
+## Most bytes a KILLVIEW body may take: the event body's cap, less the dictionary's own framing.
+const KILLVIEW_BYTES := 15000
+
+
+static func write_killview(clip: Dictionary, info: Dictionary) -> PackedByteArray:
+	var thin := clip.duplicate()
+	var flat: PackedFloat32Array = thin.get("f", PackedFloat32Array())
+	var stride := DotKillViewRing.STRIDE
+	var bytes := var_to_bytes({"clip": thin, "info": info})
+	# A long clip at a high sample rate is thinned (every other row, again) rather than refused.
+	while bytes.size() > KILLVIEW_BYTES and flat.size() / stride > 4:
+		var kept := PackedFloat32Array()
+		for row in range(0, flat.size() / stride, 2):
+			kept.append_array(flat.slice(row * stride, (row + 1) * stride))
+		flat = kept
+		thin["f"] = flat
+		bytes = var_to_bytes({"clip": thin, "info": info})
+	return bytes
+
+
+static func read_killview(body: PackedByteArray) -> Dictionary:
+	var out := {"ok": false, "clip": {}, "info": {}}
+	var value: Variant = bytes_to_var(body) if not body.is_empty() else null
+	if value is Dictionary and (value as Dictionary).get("clip") is Dictionary:
+		out["clip"] = (value as Dictionary)["clip"]
+		var info: Variant = (value as Dictionary).get("info", {})
+		out["info"] = info if info is Dictionary else {}
+		out["ok"] = true
 	return out

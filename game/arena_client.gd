@@ -12,6 +12,7 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
 const ArenaKillcam := preload("arena_killcam.gd")
+const ArenaKillViewClient := preload("arena_killview_client.gd")
 const ArenaConfig := preload("arena_config.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaMode := preload("arena_mode.gd")
@@ -90,6 +91,9 @@ var board: ArenaMenus.Board = null
 var _summary_board_open: bool = false
 ## The final killcam ([ArenaKillcam]): records every frame, plays before the summary.
 var killcam: ArenaKillcam = null
+
+## The kill view: the killer's replayed eye, in place of the death camera ([ArenaKillViewClient]).
+var killview: ArenaKillViewClient = null
 var winner_reveal: DotWinnerReveal = null
 var _reveal_hid: Dictionary = {}
 var _seen_match_state: int = -1
@@ -350,6 +354,7 @@ func _ready() -> void:
 
 	_build_ragdolls()
 	_build_killcam()
+	_build_killview()
 	if _offline:
 		# Solo, the world is this process's and there is no KILL message: the death the game
 		# decided is on the kill's entry.
@@ -1011,6 +1016,7 @@ func _build_netcode() -> DotResult:
 	bridge.vote_received.connect(_on_vote)
 	bridge.kill_received.connect(_on_kill)
 	bridge.hit_received.connect(_on_hit)
+	bridge.killview_received.connect(_on_killview)
 	bridge.award_received.connect(_on_award)
 	bridge.match_received.connect(_on_match)
 
@@ -1579,6 +1585,29 @@ func _begin_match_end() -> void:
 		_reveal_winner()
 	elif killcam.match_ended():
 		DotLog.debug(CHANNEL, "the summary waits for the final killcam")
+
+
+func _build_killview() -> void:
+	killview = ArenaKillViewClient.new()
+	killview.name = "KillView"
+	add_child(killview)
+	killview.setup(game.killview_rules)
+	killview.hide_fn = func() -> Array: return [hud, view_model]
+	killview.respawn_requested.connect(func() -> void:
+		if bridge != null:
+			bridge.send_request(ArenaEvents.Ask.RESPAWN))
+
+
+## The server sent the replay of the view that killed this player. Not over the final killcam.
+func _on_killview(clip: Dictionary, info: Dictionary) -> void:
+	if killview == null or (killcam != null and killcam.is_playing()):
+		return
+	var shown := info.duplicate()
+	shown["killer"] = String(info.get("killer", ""))
+	var weapon := String(info.get("weapon", ""))
+	var def: DotWeaponDef = ArenaPlayer.weapon_catalogue().get_def(StringName(weapon)) if weapon != "" else null
+	shown["weapon"] = def.display_name if def != null and def.display_name != "" else weapon.capitalize()
+	var _started := killview.play(clip, shown)
 
 
 func _build_killcam() -> void:

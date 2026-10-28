@@ -96,3 +96,14 @@ Players choose their loadout on B by default (Christian's first play test); the 
 - `mp_loadout_fixed "primary=sniper thrown=none"`: slots the server fills for everybody.
 
 The slots are `primary` (rifles and the heavies), `secondary`, `melee`, `thrown` and `gear` (armour), on a 7-point budget (`ArenaContent.loadout_schema`). A value naming a slot or item that does not exist, or that leaves a required slot nothing, is refused at the console and the rules stay. A server sets them in `cfg/content.yml` under the game's `cvars:` (see `game.yml`). A mode that hands out the weapons (`ArenaMode.arms_players`: gun game, Only Snipers) overrides the loadout and closes the menu with that reason; that is the mode, the cvars are the owner's whatever the mode. The give order is `ArenaContent.in_give_order` (melee, primary, sidearm, throwable, gear), not the menu's slot order: the arsenal's order is what a bot's weapon choice walks, and changing it moved `headless_bots`' measurements.
+
+## The kill view
+
+When a player dies, their screen plays the last seconds of the killer's view (dot-replay's kill view, API level 3) instead of the death camera. It is on in arena; `mp_killview*` (replicated, archived) tune it, defaults from the addon.
+
+- Server (`game/arena_killview.gd`, driven from `ArenaNetBridge._tick_killview`): every living player's and bot's eye is recorded each game tick into a `DotKillViewRing`; `_on_player_killed` notes the kill; the clip goes to the victim's peer alone as one `ArenaEvents.Kind.KILLVIEW` (var_to_bytes, rows halved until it fits the 16384 body cap). Bots get nothing. Leaving, and bot removal, forget the ring.
+- The victim's queued respawn is held for the length of the clip (at most `mp_killview` seconds, an estimate in game ticks) so the replay is not cut off by the respawn.
+- Client (`game/arena_killview_client.gd`): the replay camera and the killer's crosshair follow `kv.view`, the HUD and view model are hidden, the previous camera returns when it finishes. The final-killcam of a match end takes precedence.
+- Space (the skip action) sends `Ask.RESPAWN`; the server respawns a held victim at once (`ArenaGame.respawn_player`) and ignores it otherwise.
+- Not recorded: the killer's real FOV (a constant 83.6 is used). Solo/offline play has no bridge, so no kill view.
+- Look at it: `tools/screenshot.sh dm_atrium --glance --killcam` renders a frame during a synthetic replay. `headless_net` (section `killview_reaches_the_victim`) and `headless_presentation` cover the rest.

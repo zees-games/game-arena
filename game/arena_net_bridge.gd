@@ -12,6 +12,7 @@ const ArenaToyNet := preload("arena_toy_net.gd")
 const ArenaNpcNet := preload("arena_npc_net.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaBots := preload("arena_bots.gd")
+const ArenaKillView := preload("arena_killview.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaRequest := preload("arena_request.gd")
 
@@ -191,6 +192,9 @@ var _ready_unseated: Dictionary = {}
 ## Whether this end has had its HELLO. Client side.
 var _hello: Dictionary = {}
 
+## Server: records every view and cuts the victims' clips (null until the first tick).
+var killview: ArenaKillView = null
+
 
 
 ## Emitted on a client when HELLO arrives, with what it said.
@@ -211,6 +215,9 @@ signal match_received(info: Dictionary)
 
 ## Emitted on a client when its own damage landed: [method ArenaEvents.read_hit].
 signal hit_received(info: Dictionary)
+
+## Emitted on a client when the server sent the replay of its killer's view: [method ArenaEvents.read_killview].
+signal killview_received(clip: Dictionary, info: Dictionary)
 
 ## Emitted on a client for every kill's medals and points: [method ArenaEvents.read_award].
 signal award_received(info: Dictionary)
@@ -549,6 +556,8 @@ func remove_peer(peer_id: int) -> void:
 	_players_by_peer.erase(peer_id)
 	_behaviours.erase(session_id)
 	_ready_peers.erase(peer_id)
+	if killview != null:
+		killview.forget(session_id)
 
 	# Announced BEFORE the entity is unregistered, and to everybody still here.
 	# A client that is only told an entity stopped arriving in snapshots has no way to
@@ -630,6 +639,7 @@ func ensure_game_ticked(tick: int) -> void:
 
 	_game_ticked_for = tick
 	game.tick(_commands())
+	_tick_killview()
 
 	# The toys where the physics left them, before the snapshot: a toy's own `_net_simulate`
 	# can run before the player whose turns this tick.
@@ -714,6 +724,8 @@ func remove_bot(session_id: int) -> void:
 
 	_bot_minds.erase(session_id)
 	ArenaBots.forget(game, session_id)
+	if killview != null:
+		killview.forget(session_id)
 	var behaviour: ArenaPlayerNet = _behaviours.get(session_id)
 	_behaviours.erase(session_id)
 
@@ -1484,7 +1496,28 @@ func _on_match_state_changed(_from: int, _to: int) -> void:
 	_send_match_state(0)
 
 
+## Records this tick's views and sends the clips that are ready, each to its victim.
+func _tick_killview() -> void:
+	if net == null or not net.is_server or not game.killview_rules.enabled:
+		return
+	if killview == null:
+		killview = ArenaKillView.new(game)
+	var tick := game.current_tick()
+	var now := float(tick) / float(game.tick_rate)
+	killview.record(now)
+	for ready: Dictionary in killview.collect(now, tick):
+		var peer := peer_for_session(int(ready["victim"]))
+		if peer != 0:
+			send_event(peer, ArenaEvents.Kind.KILLVIEW, ArenaEvents.write_killview(ready["clip"], ready["info"]))
+
+
 func _on_player_killed(entry: DotKillFeed.Entry) -> void:
+	if killview != null and net != null and String(entry.killer_key).is_valid_int() and String(entry.victim_key).is_valid_int():
+		var named: ArenaPlayer = game.player_for(int(entry.killer_key))
+		var res := killview.note_kill(int(entry.killer_key), int(entry.victim_key), float(game.current_tick()) / float(game.tick_rate), {
+			"killer": named.display_name if named != null else "", "weapon": String(entry.cause)})
+		if not res.ok:
+			DotLog.trace(CHANNEL, "no kill view", {"why": res.error.message})
 	# The killer key is a string here and 0-means-the-world on the wire. dot-match
 	# reads an empty killer key as "the world"; this game never writes "0" for it,
 	# because that would create a scoreboard record for a player who does not exist.
@@ -1709,6 +1742,10 @@ func _on_event(message: DotNetMessage) -> void:
 			var award := ArenaEvents.read_award(reader)
 			if bool(award["ok"]):
 				award_received.emit(award)
+		ArenaEvents.Kind.KILLVIEW:
+			var view := ArenaEvents.read_killview(event.body)
+			if bool(view["ok"]):
+				killview_received.emit(view["clip"], view["info"])
 		_:
 			pass
 
@@ -1731,8 +1768,10 @@ func _on_request(message: DotNetMessage) -> void:
 			mark_ready(peer_id)
 		ArenaEvents.Ask.RESPAWN:
 			# Asked for, never taken. dot-match owns respawning and has its own
-			# timer; a client that could respawn itself could respawn instantly.
-			pass
+			# timer; a client that could respawn itself could respawn instantly. The one
+			# exception is a victim watching their kill view, who may skip it.
+			if killview != null:
+				killview.skip(session_for_peer(peer_id), game.current_tick())
 		ArenaEvents.Ask.PROP_TOOL:
 			_on_prop_act(peer_id, ArenaEvents.read_prop_act(request.reader()))
 		_:

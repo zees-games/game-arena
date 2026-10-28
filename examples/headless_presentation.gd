@@ -5,6 +5,7 @@ const ArenaAvatars := preload("../game/arena_avatars.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaClient := preload("../game/arena_client.gd")
+const ArenaKillViewClient := preload("../game/arena_killview_client.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaBindings := preload("../game/arena_bindings.gd")
 const ArenaBrowser := preload("../game/arena_browser.gd")
@@ -33,7 +34,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 331
+const CHECKS := 340
 
 var _entered := 0
 var _completed := 0
@@ -81,6 +82,7 @@ func _run() -> void:
 	_test_blind_and_beacon()
 	_test_a_respawn_faces_its_spawn()
 	_test_the_final_killcam()
+	await _test_the_kill_view()
 	_test_the_view_turns_every_frame()
 	_test_criticals_and_the_body()
 	await _test_bodies_fall()
@@ -1585,6 +1587,66 @@ func _test_click_keeps_modal_pointer() -> void:
 ## A connected client's respawn faces the way its spawn faces. The server's teleport turns
 ## the server's controller, and its next command carries this client's old look; so the
 ## client turns its own sampler when its player comes back alive on a map spawn.
+## The victim's kill view: the clip drives a camera and the killer's crosshair in place of the
+## death camera, Space skips and asks for the respawn, and the finished replay hands the camera back.
+func _test_the_kill_view() -> void:
+	_section("The kill view replaces the death camera, and Space skips it")
+	var rules := DotKillViewRules.new()
+	rules.enabled = true
+	var ring := DotKillViewRing.new(rules)
+	for i in 120:
+		var yaw := float(i) * 0.01
+		var _r := ring.record(7, float(i) / 30.0, Transform3D(Basis(Vector3.UP, yaw), Vector3(float(i) * 0.1, 1.6, 0.0)), 80.0, Vector2(0.5, 0.45))
+	var _n := ring.note_kill(7, 8, 3.0, {"killer": "Bolt", "weapon": "smg"})
+	var clips := ring.collect(4.0)
+
+	# Its own viewport: other sections leave cameras in this one.
+	var port := SubViewport.new()
+	add_child(port)
+	var previous := Camera3D.new()
+	port.add_child(previous)
+	previous.make_current()
+	await get_tree().process_frame
+	var was_current := port.get_camera_3d()
+	var hud_stub := Control.new()
+	port.add_child(hud_stub)
+	var view := ArenaKillViewClient.new()
+	port.add_child(view)
+	view.setup(rules)
+	view.kv.auto_process = false
+	view.hide_fn = func() -> Array: return [hud_stub]
+	var asked := [0]
+	view.respawn_requested.connect(func() -> void: asked[0] += 1)
+	var ended := []
+	view.over.connect(func(skipped: bool) -> void: ended.append(skipped))
+
+	_check(clips.size() == 1 and view.play(clips[0]["clip"], {"killer": "Bolt"}), "a clip from the ring starts the replay")
+	view.kv.advance(0.5)
+	view.kv.advance(0.5)
+	_check(view.is_active() and view.camera.current and not hud_stub.visible, "the replay camera is current and the HUD is hidden")
+	var from_kill := view.camera.global_position
+	view.kv.advance(0.5)
+	_check(view.camera.global_position.distance_to(from_kill) > 0.001 and absf(view.camera.fov - 80.0) < 0.5,
+		"it follows the killer's eye with the killer's field of view")
+	_check(view._cursor.visible and view._cursor.at.distance_to(Vector2(0.5, 0.45)) < 0.01, "and draws the killer's crosshair where it was")
+	view.kv.killcam.skip()
+	_check(ended == [true] and asked[0] == 1, "a skip ends it and asks for the respawn")
+	_check(previous.current and hud_stub.visible and not view._cursor.visible, "the normal camera and HUD come back", "%s %s %s, was %s" % [previous.current, hud_stub.visible, view._cursor.visible, was_current])
+
+	_check(view.play(clips[0]["clip"], {"killer": "Bolt"}), "another death plays again")
+	for _i in 200:
+		view.kv.advance(0.1)
+	_check(ended == [true, false] and asked[0] == 1 and previous.current, "a replay that runs out resumes the flow without a respawn request", "%s %s %s" % [ended, asked, previous.current])
+	var off := DotKillViewRules.new()
+	var quiet := ArenaKillViewClient.new()
+	port.add_child(quiet)
+	quiet.setup(off)
+	_check(not quiet.play(clips[0]["clip"], {}), "with the cvar off nothing plays")
+
+	port.queue_free()
+	_done()
+
+
 func _test_a_respawn_faces_its_spawn() -> void:
 	_section("A connected client's respawn faces the way its spawn faces")
 

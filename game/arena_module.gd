@@ -238,6 +238,12 @@ func _module_load() -> DotResult:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# mp_killview*: dot-replay's kill view, on here. REPLICATED, because each client plays the clip
+	# under the server's seconds, skip key and slow motion.
+	var _killview_cvars := game.killview_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
 	# arena_ambient*: dot-audio's DotAmbienceRules. REPLICATED, because each client plays its own
 	# ambience under the server's intent; the directory cvar stays local.
 	var _ambient_cvars := game.ambient_rules.bind_cvars(

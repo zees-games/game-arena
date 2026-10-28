@@ -471,6 +471,9 @@ var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 ## by the module (REPLICATED) and followed by the client, which is the end with a camera.
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 
+## The kill view (dot-replay's `mp_killview*`): on in this game. Bound by the module (REPLICATED), followed by the client.
+var killview_rules: DotKillViewRules = _make_killview_rules()
+
 ## The ambience cvars (`arena_ambient*`): bound by the module (REPLICATED), followed by a client through its link.
 var ambient_rules: DotAmbienceRules = ArenaAmbience.make_rules()
 
@@ -631,6 +634,7 @@ func follow_server_cvars(source: Object) -> bool:
 	var _bodies := ragdoll_rules.follow_cvars(source)
 	var _toys := toy_rules.follow_cvars(source)
 	var _view := view_rules.follow_cvars(source)
+	var _killview := killview_rules.follow_cvars(source)
 	var _ambient := ambient_rules.follow_cvars(source)
 	var _spectate := spectate_rules.follow_cvars(source)
 	var _solid := body_rules.follow_cvars(source)
@@ -1930,6 +1934,12 @@ func break_rules() -> DotPlayerBreakRules:
 	rules.mode = clampi(int(rule("break_mode")), 0, 2) as DotPlayerBreakRules.Mode
 	rules.limbs = maxi(int(rule("break_limbs")), 1)
 	rules.criticals_only = rule("break_criticals_only") != 0.0
+	return rules
+
+
+static func _make_killview_rules() -> DotKillViewRules:
+	var rules := DotKillViewRules.new()
+	rules.enabled = true
 	return rules
 
 

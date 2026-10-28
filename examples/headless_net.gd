@@ -41,7 +41,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 271
+const CHECKS := 282
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
@@ -54,7 +54,7 @@ var _skipped_checks := 0
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 23
+const SECTIONS := 24
 
 var _entered := 0
 var _completed := 0
@@ -119,6 +119,7 @@ func _run() -> void:
 	await _test_toys_reach_a_client()
 	_test_the_remote_workbench()
 	_test_bullets_reach_a_client()
+	_test_killview_reaches_the_victim()
 
 	OS.remove_logger(errors)
 	# Engine errors go to stderr and change no exit code: a toy pulled out of the tree after a
@@ -1430,6 +1431,85 @@ func _test_bullets_reach_a_client() -> void:
 	tuning.max_range = was[1]
 	tuning.tracer_interval = was[2]
 	tuning.pellets = was[3]
+	_server_bridge.link = previous
+	link.free()
+	_done()
+
+
+## mp_killview: a bot's kill sends its recorded view to the victim alone, the victim's respawn waits for it,
+## and the respawn request of a victim watching it skips the wait. Before the disconnect, which removes a player.
+func _test_killview_reaches_the_victim() -> void:
+	print("")
+	_section("[the kill view reaches the victim]")
+	var sent: Array = []
+	var previous := _server_bridge.link
+	var link := ArenaNetLink.new()
+	link.bridge = _server_bridge
+	link.is_server = true
+	link.loopback = func(method: StringName, peer: int, payload: PackedByteArray) -> void:
+		if method == &"event":
+			sent.append([peer, payload])
+	_server_bridge.link = link
+	for peer in _clients:
+		if not _server_bridge._ready_peers.has(peer):
+			_server_bridge.mark_ready(peer)
+
+	var victim := 11
+	var bot := _server_bridge.add_bot("Bolt")
+	var heard: Array = []
+	var other_heard: Array = []
+	_clients[2]["bridge"].killview_received.connect(func(clip: Dictionary, info: Dictionary) -> void: heard.append([clip, info]))
+	_clients[3]["bridge"].killview_received.connect(func(clip: Dictionary, info: Dictionary) -> void: other_heard.append(clip))
+	_check(bot != 0 and _server_game.killview_rules.enabled, "a bot is in, and the kill view is on in this game")
+
+	var target := _server_game.player_for(victim)
+	if not target.is_alive():
+		target.spawn(_server_game.map.spawns[0], _server_game.current_tick())
+	_pump(TICK_RATE * 2)
+	_check(_server_bridge.killview != null and _server_bridge.killview.ring.sample_count(bot) > 10,
+		"every tick records the bot's eye", str(_server_bridge.killview.ring.sample_count(bot) if _server_bridge.killview != null else -1))
+
+	var usual_delay := _server_game.match_node.rules.respawn_delay_sec
+	_server_game.match_node.rules.respawn_delay_sec = 2.0
+	_server_game.combat.health_of(victim).invulnerable_until_tick = -1
+	var kill := DotDamage.make(bot, victim, 5000.0, _server_game.combat.damage_type(&""))
+	kill.tick = _server_game.current_tick()
+	var _applied := _server_game.combat.apply_damage(kill)
+	var died_at := _server_game.current_tick()
+	_check(not target.is_alive(), "the bot kills the player")
+	sent.clear()
+	_pump(int(_server_game.killview_rules.post_seconds * TICK_RATE) + 6)
+
+	var views: Array = []
+	for item in sent:
+		var decoded: DotResult = _clients[2]["net"].messages.decode(DotNetReader.new(item[1]), 1, false)
+		var event := decoded.value as ArenaEvent if decoded.ok else null
+		if event != null and event.kind == ArenaEvents.Kind.KILLVIEW:
+			views.append(item)
+	_check(views.size() == 1 and int(views[0][0]) == 2, "one KILLVIEW goes out, to the victim's peer alone", str(views.size()))
+	for item in views:
+		var _r: DotResult = _clients[2]["bridge"].receive_event(item[1])
+	_check(heard.size() == 1 and other_heard.is_empty(), "the victim's client hears the clip and nobody else does")
+	var made := DotKillViewClip.to_buffer(heard[0][0]) if not heard.is_empty() else DotResult.fail(DotError.CODE_STATE, "none")
+	_check(made.ok and String(heard[0][1].get("killer", "")) == "Bolt", "the clip is a usable view of the killer", str(heard[0][1] if not heard.is_empty() else {}))
+	_check(heard.size() == 1 and heard[0][0]["f"].size() <= ArenaEvents.KILLVIEW_BYTES / 4, "and fits one event")
+	var respawns := _server_game.match_node.respawns
+	var normal := died_at + int(_server_game.match_node.rules.respawn_delay_sec * TICK_RATE)
+	_check(respawns.is_waiting(str(victim)) and respawns.ready_tick(str(victim)) > normal + TICK_RATE,
+		"the respawn is held past the usual delay while the clip plays", "%d, usual %d" % [respawns.ready_tick(str(victim)), normal])
+
+	# Space: the client's respawn request, taken only from a victim being held.
+	var writer := DotNetWriter.new()
+	var _wrote := _server_net.messages.encode(ArenaRequest.new(ArenaEvents.Ask.RESPAWN), writer)
+	var _asked := _server_bridge.receive_request(2, writer.to_bytes())
+	_pump(2)
+	_check(target.is_alive(), "a respawn request from the victim skips the wait: back in the match at once")
+	var _again := _server_bridge.receive_request(2, writer.to_bytes())
+	_check(not respawns.is_waiting(str(victim)), "and a second request does nothing")
+
+	_server_game.match_node.rules.respawn_delay_sec = usual_delay
+	_server_bridge.remove_bot(bot)
+	_check(_server_bridge.killview.ring.sample_count(bot) == 0, "a bot that leaves is forgotten")
 	_server_bridge.link = previous
 	link.free()
 	_done()

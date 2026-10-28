@@ -4,6 +4,7 @@ const ArenaAvatars := preload("../game/arena_avatars.gd")
 const ArenaWeaponIcons := preload("../game/arena_weapon_icons.gd")
 const ArenaSpriteWeapon := preload("../game/arena_sprite_weapon.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
+const ArenaKillViewClient := preload("../game/arena_killview_client.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaDrops := preload("../game/arena_drops.gd")
 const ArenaJailView := preload("../game/arena_jail_view.gd")
@@ -407,6 +408,10 @@ func _play_glance() -> void:
 		_local.make_dead()
 
 	var late: Array = []
+	# `--glance --killcam`: the kill view, to look at: the local player is dead and watches player 113's eye.
+	if OS.get_cmdline_user_args().has("--killcam"):
+		_local.make_dead()
+		late.append([20, func() -> void: _play_killview(game, 113)])
 	if _glance_chat:
 		_stage_full_chat()
 	if _glance_ballot:
@@ -419,7 +424,7 @@ func _play_glance() -> void:
 		late.append([10, func() -> void: _hud.notice(said)])
 
 	_shots = [{
-		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else "") + ("_" + _glance_theme if _glance_theme != "" else ""),
+		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else "") + ("_killcam" if OS.get_cmdline_user_args().has("--killcam") else "") + ("_" + _glance_theme if _glance_theme != "" else ""),
 		"local": true,
 		"late": [
 			[12, func() -> void:
@@ -436,6 +441,33 @@ func _play_glance() -> void:
 		] + late,
 		"wait": 34,
 	}]
+
+
+## `--killcam`: the kill view as a victim sees it, played from a clip of [param killer_id]'s eye swinging onto the local
+## player, advanced partway so the replay is still on screen. The real client plays the server's clip the same way (ArenaKillViewClient).
+func _play_killview(game: ArenaGame, killer_id: int) -> void:
+	var rules := DotKillViewRules.new()
+	rules.enabled = true
+	var ring := DotKillViewRing.new(rules)
+	var killer := game.player_for(killer_id)
+	var eye := killer.global_position + Vector3(0.0, 1.6, 0.0)
+	var aim := _local.global_position + Vector3(0.0, 1.2, 0.0)
+	var on_target := Basis.looking_at((aim - eye).normalized())
+	for i in range(121):
+		var t := float(i) / 30.0
+		var swing := Basis(Vector3.UP, deg_to_rad(40.0 * clampf(1.0 - t / 3.0, 0.0, 1.0)))
+		var _r := ring.record(killer_id, t, Transform3D(swing * on_target, eye), 83.6, Vector2(0.5, 0.5))
+	var _n := ring.note_kill(killer_id, 112, 3.0, {"killer": killer.display_name, "weapon": "rifle"})
+	var clips := ring.collect(4.0)
+	var view := ArenaKillViewClient.new()
+	view.name = "KillView"
+	root.add_child(view)
+	view.setup(rules)
+	view.kv.auto_process = false
+	view.hide_fn = func() -> Array: return [_hud]
+	var _started := view.play(clips[0]["clip"], {"killer": killer.display_name, "weapon": "Rifle"})
+	for _i in range(15):
+		view.kv.advance(0.1)
 
 
 ## A stand-in for the client shell's notice overlay with the game vote open: its drawn
