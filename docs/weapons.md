@@ -30,4 +30,4 @@ Every weapon a player carries is zee-dot-weapons'. `ArenaContent.weapons()` is `
 - **Melee and the throwable are required slots.** dot-loadout's `default_loadout()` fills required slots only, so optional ones vanished a frame after every spawn. A loadout saved before they existed is filled in on load rather than refused.
 
 
-The loadout menu's pictures are the models rendered at 512x256 with MSAA (`ArenaWeaponPreviews`), not the sprite sheet upscaled; a weapon without a model keeps the sprite. It belongs in zee-dot-weapons for every game.
+The loadout menu's pictures are the models rendered at 512x256 with MSAA (zee-dot-weapons' `ZeeWeaponPreview`, cached per weapon), not the sprite sheet upscaled; a weapon without a model keeps the sprite.

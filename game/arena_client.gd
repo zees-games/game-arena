@@ -27,7 +27,6 @@ const ArenaProjectileView := preload("arena_projectile_view.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaPresentation := preload("arena_presentation.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
-const ArenaWeaponPreviews := preload("arena_weapon_previews.gd")
 const ArenaSpriteWeapon := preload("arena_sprite_weapon.gd")
 
 ## A playable game-arena: one local player, a camera, a HUD, menus and the keys.
@@ -603,6 +602,8 @@ const AUTH_SERVICE := &"dot_auth_client"
 
 const WEAPON_CARDS_SCRIPT := "res://addons/zee_weapons/content/zee_weapon_cards.gd"
 var _weapon_cards: Script = null
+## Older zee_weapons shells lack it; the sprite is the fallback.
+const WEAPON_PREVIEW_SCRIPT := "res://addons/zee_weapons/view/zee_weapon_preview.gd"
 var _weapon_table: Dictionary = {}
 var _previews: Node = null
 
@@ -680,11 +681,11 @@ func choose_loadout(picks: Dictionary) -> Variant:
 func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
 	var id := StringName(str(choice.get("id", "")))
 	var out: Dictionary = {}
-	if _previews == null:
-		_previews = ArenaWeaponPreviews.new()
+	if _previews == null and ResourceLoader.exists(WEAPON_PREVIEW_SCRIPT):
+		_previews = (load(WEAPON_PREVIEW_SCRIPT) as GDScript).new()
 		_previews.name = "WeaponPreviews"
 		add_child(_previews)
-	var icon: Texture2D = _previews.texture(id)
+	var icon: Texture2D = _previews.texture(id) if _previews != null else null
 	if icon == null:
 		icon = ArenaWeaponIcons.shared.menu_texture(id)
 	if icon == null:
