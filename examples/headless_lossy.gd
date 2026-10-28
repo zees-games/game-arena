@@ -78,7 +78,7 @@ const RELIABLE_SECONDS := 35.0
 
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 44
+const OTHER_CHECKS := 45
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -1490,6 +1490,26 @@ func _test_wall_hops() -> void:
 			and rewound.time_since_jump_pressed == 0.5,
 		"a rewind restores the jump timers, not the client's own",
 		"%.3f %.3f %.3f" % [rewound.time_since_grounded, rewound.time_since_jump, rewound.time_since_jump_pressed])
+
+	# Wall-run cooldown and stamina: the same trip, which the quantised copy never carried.
+	var drained := own.controller.state.duplicate_state()
+	drained.wall_run_cooldown_left = 0.3
+	drained.stamina = 0.25
+	drained.stamina_exhausted = true
+	drained.stamina_delay_left = 0.5
+	kept = behaviour.get("net_exact")
+	behaviour.call("_pull_exact", drained)
+	var fresh := drained.duplicate_state()
+	fresh.wall_run_cooldown_left = 0.0
+	fresh.stamina = 1.0
+	fresh.stamina_exhausted = false
+	fresh.stamina_delay_left = 0.0
+	behaviour.call("_push_exact", fresh)
+	behaviour.set("net_exact", kept)
+	_check(is_equal_approx(fresh.wall_run_cooldown_left, 0.3) and is_equal_approx(fresh.stamina, 0.25)
+			and fresh.stamina_exhausted and is_equal_approx(fresh.stamina_delay_left, 0.5),
+		"a rewind restores the wall-run cooldown and the stamina",
+		"%.3f %.3f %s %.3f" % [fresh.wall_run_cooldown_left, fresh.stamina, fresh.stamina_exhausted, fresh.stamina_delay_left])
 
 	_hop_from = -1
 	_done()

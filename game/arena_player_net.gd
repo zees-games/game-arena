@@ -55,7 +55,7 @@ var net_modifiers: int = 0
 ## so the declaration comes from the pack on both ends, whatever addon the client's shell has.
 var net_exact: PackedFloat32Array = PackedFloat32Array()
 
-const EXACT_FLOATS := 10
+const EXACT_FLOATS := 14
 
 # --- Health from DotCombatNetSync, weapons from DotWeaponNetSync ---
 var net_health: int = 0
@@ -337,6 +337,12 @@ func _pull_exact(state: DotFpsState) -> void:
 	exact[7] = state.time_since_grounded
 	exact[8] = state.time_since_jump
 	exact[9] = state.time_since_jump_pressed
+	# Not in the quantised copy: a replay that forgot the wall-run cooldown re-entered the run a
+	# tick the server refused, and stamina (sv_stamina) decides whether a sprint tick moves.
+	exact[10] = state.wall_run_cooldown_left
+	exact[11] = state.stamina
+	exact[12] = 1.0 if state.stamina_exhausted else 0.0
+	exact[13] = state.stamina_delay_left
 	net_exact = exact
 
 
@@ -351,6 +357,10 @@ func _push_exact(state: DotFpsState) -> void:
 	state.time_since_grounded = net_exact[7]
 	state.time_since_jump = net_exact[8]
 	state.time_since_jump_pressed = net_exact[9]
+	state.wall_run_cooldown_left = net_exact[10]
+	state.stamina = net_exact[11]
+	state.stamina_exhausted = net_exact[12] > 0.5
+	state.stamina_delay_left = net_exact[13]
 
 
 static func _write_exact(writer: DotNetWriter, value: Variant) -> void:
