@@ -27,7 +27,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
-	await _wait(25.0)
+	await _wait_gate(120.0)
 	var me = client.get("player")
 	var menu: DotMenu = client.get("game_menu")
 	me.health.invulnerable = true
@@ -104,6 +104,18 @@ func _shot(file: String) -> void:
 	var path := "%s/%s.png" % [OUT_DIR, file]
 	var _saved := root.get_viewport().get_texture().get_image().save_png(path)
 	print("  wrote %s" % path)
+
+
+## Polls the client's load gate until it is open (capped): a fixed wait shows the cover on a loaded box.
+func _wait_gate(cap: float) -> void:
+	var gate: DotLoadGate = client.get("gate")
+	var waited := 0.0
+	while (gate == null or not gate.is_open()) and waited < cap:
+		await _wait(0.25)
+		waited += 0.25
+		gate = client.get("gate")
+	_check(gate != null and gate.is_open(), "load gate open after %.1f s" % waited)
+	await _wait(1.0)
 
 
 func _wait(sec: float) -> void:
