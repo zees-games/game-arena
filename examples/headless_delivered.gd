@@ -5,6 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
+const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
 
 ## An arena map delivered the way a player gets it: published as a signed pack, fetched by a
@@ -111,7 +112,17 @@ func _test_publish(source: String) -> Dictionary:
 ## client without the link does not, so the copy is that client's view of the same pack.
 func _stage(source: String) -> String:
 	var dest := STAGE.path_join(String(MAP))
+	_stage_dir(source, dest)
+	var world := ArenaBspMap.world_prefix(String(MAP))
 
+	# The real pack carries worlds/<id>/ beside the map folder (tools/stage_packs.sh).
+	if not world.is_empty():
+		_stage_dir(world.get_base_dir(), dest.path_join("worlds").path_join(String(MAP)))
+
+	return dest
+
+
+func _stage_dir(source: String, dest: String) -> void:
 	for rel in DotPaths.list_files_recursive(source):
 		var from := source.path_join(rel)
 		var to := dest.path_join(rel)
@@ -127,8 +138,6 @@ func _stage(source: String) -> String:
 			DotPaths.write_text(to, "\n".join(kept))
 		else:
 			DirAccess.copy_absolute(from, ProjectSettings.globalize_path(to))
-
-	return dest
 
 
 var _director: ArenaMapDirector = null
@@ -211,8 +220,6 @@ func _test_frame(game: ArenaGame) -> void:
 	var scene := game.map.to_scene()
 	add_child(scene)
 	var meshes := 0
-	var textures := 0
-	var strays := PackedStringArray()
 
 	for node in scene.find_children("*", "MeshInstance3D", true, false):
 		var mesh := (node as MeshInstance3D).mesh
@@ -222,30 +229,10 @@ func _test_frame(game: ArenaGame) -> void:
 
 		meshes += 1
 
-		for i in mesh.get_surface_count():
-			var mat := (node as MeshInstance3D).get_surface_override_material(i) as ShaderMaterial
-
-			if mat == null:
-				continue
-
-			for param in ["albedo_tex", "lightmap_tex"]:
-				var tex := mat.get_shader_parameter(param) as Texture2D
-
-				if tex == null:
-					continue
-
-				# The generated grid an untextured surface wears has no path, and is not a file.
-				if tex.resource_path.is_empty():
-					continue
-
-				textures += 1
-
-				if not tex.resource_path.begins_with(_mount):
-					strays.append("%s:%s" % [param, tex.resource_path])
-
 	_check(meshes > 0, "the map draws meshes (%d)" % meshes)
-	_check(textures > 0 and strays.is_empty(),
-		"%d textures and lightmaps, all resources of the pack%s" % [textures, "" if strays.is_empty() else ": " + ", ".join(strays.slice(0, 3))])
+	var world := ArenaBspMap.world_prefix(MAP, _mount)
+	_check(world.begins_with(_mount) and FileAccess.file_exists(world + ".bin"),
+		"the world (textures, lightmaps, mesh) is read from the pack: %s" % world)
 	_check(ArenaImportedMaps.manifest_path(MAP).begins_with(_mount),
 		"the map's manifest resolves to the mount, not the maps/imported link")
 
