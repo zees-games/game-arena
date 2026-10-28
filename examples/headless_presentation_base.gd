@@ -251,7 +251,8 @@ class RendezvousStub:
 		while _server.is_connection_available():
 			_open.append({"peer": _server.take_connection(), "bytes": PackedByteArray(), "wait": -1})
 
-		for c in _open.duplicate():
+		for i in range(_open.size() - 1, -1, -1):
+			var c: Dictionary = _open[i]
 			var peer: StreamPeerTCP = c["peer"]
 			peer.poll()
 			var available := peer.get_available_bytes()
@@ -289,23 +290,23 @@ class RendezvousStub:
 				c["wait"] = int(c["wait"]) - 1
 				continue
 
-			var answer := _answer(str(c["route"]), c["body"] as Dictionary)
-			var status := "200 OK" if refuse == 0 else "%d Refused" % refuse
+			var answer := _answer(c["route"] as String, c["body"] as Dictionary)
+			var status := "200 OK" if refuse == 0 else "".join(PackedStringArray([String.num_int64(refuse), " Refused"]))
 			var payload := JSON.stringify(answer).to_utf8_buffer()
-			var head := "HTTP/1.1 %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" % [status, payload.size()]
+			var head := "".join(PackedStringArray(["HTTP/1.1 ", status, "\r\nContent-Type: application/json\r\nContent-Length: ", String.num_int64(payload.size()), "\r\nConnection: close\r\n\r\n"]))
 			peer.put_data(head.to_utf8_buffer())
 			peer.put_data(payload)
 			peer.disconnect_from_host()
-			_open.erase(c)
+			_open.remove_at(i)
 
 	func _answer(route: String, body: Dictionary) -> Dictionary:
 		match route:
 			"host":
-				present.append(str(body.get("id", "")))
+				present.append(body.get("id", "") as String)
 				return {}
 			"join":
-				var here := present.duplicate()
-				present.append(str(body.get("id", "")))
+				var here := present.slice(0)
+				present.append(body.get("id", "") as String)
 				return {"peers": here}
 			"poll":
 				return {"messages": [], "cursor": 0}
