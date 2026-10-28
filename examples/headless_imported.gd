@@ -1,16 +1,11 @@
-extends DotGameCheckSuite
+extends "imported_base.gd"
 
-const ArenaGame := preload("../game/arena_game.gd")
-const ArenaMap := preload("../maps/arena_map.gd")
-const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaModes := preload("../game/arena_modes.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
-const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaContent := preload("../game/arena_content.gd")
-const ArenaMapDirector := preload("../game/arena_map_director.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaSurf := preload("../game/arena_surf.gd")
 const ArenaSurfRides := preload("../game/arena_surf_rides.gd")
@@ -65,9 +60,6 @@ const ArenaJail := preload("../maps/arena_jail.gd")
 const TICK_RATE := 64
 const BOTS := 6
 
-## The map the deathmatch is played on: the first of Christian's two.
-const MAP := &"surf_10x_reloaded_fixed"
-
 const PLAY_SECONDS := 40.0
 
 ## A score limit small enough that six bots reach it inside [constant PLAY_SECONDS].
@@ -79,19 +71,6 @@ const HURT_MAP := &"surf_xiv_v2a"
 const SECTIONS := 24
 ## 145 fixed, plus one audit check per imported map: the catalogue grows without this changing.
 const CHECKS_FIXED := 150
-
-## The fake pack [method _test_server_named] mounts: an id no root has, under an owner no
-## origin has, so nothing real is shadowed and nothing is fetched.
-const DELIVERED_OWNER := "dot-test"
-const DELIVERED_ID := &"dot_test_delivered_surf"
-const DELIVERED_NOT_ARENA := &"dot_test_delivered_course"
-const DELIVERED_VERSION := "1.0.0"
-
-var _entered := 0
-var _completed := 0
-
-var _game: ArenaGame = null
-
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
@@ -335,6 +314,20 @@ func _sky_top(root: Node3D) -> Color:
 	return (env.sky.sky_material as ProceduralSkyMaterial).sky_top_color
 
 
+## Water materials among the meshes a client would draw (the server never builds the visual).
+func _water_drawn() -> int:
+	var drawn := 0
+	var level := _game.map.to_scene()
+	for node: Node in level.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := node as MeshInstance3D
+		for i in range(mesh_instance.get_surface_override_material_count()):
+			var m := mesh_instance.get_surface_override_material(i)
+			if m != null and m.has_meta(&"water"):
+				drawn += 1
+	level.free()
+	return drawn
+
+
 func _test_loads() -> bool:
 	_section("the game loads it, with its solid in the tree")
 
@@ -381,16 +374,7 @@ func _test_loads() -> bool:
 			continue
 		if ArenaBspMap.is_water_material(str(entry.get("material", ""))):
 			water_wanted += 1
-	var water_drawn := 0
-	# Drawn the way a client draws it: the server never builds the visual.
-	var level := _game.map.to_scene()
-	for drawn: Node in level.find_children("*", "MeshInstance3D", true, false):
-		var mesh_instance := drawn as MeshInstance3D
-		for i in range(mesh_instance.get_surface_override_material_count()):
-			var m := mesh_instance.get_surface_override_material(i)
-			if m != null and m.has_meta(&"water"):
-				water_drawn += 1
-	level.free()
+	var water_drawn := _water_drawn()
 	_check(water_wanted > 0 and water_drawn == water_wanted,
 		"its untextured water is drawn as water (%d of %d)" % [water_drawn, water_wanted])
 
@@ -826,6 +810,23 @@ func _test_recorded_rides() -> void:
 	surf.rides = rides
 	human.controller.teleport(aside + Vector3(-6.0, 0.0, 0.0), 0.0, 0.0)
 	var landed_before := surf.landed
+	var run := await _bot_rides(bot, surf, edge, landed_before, tick)
+	tick = run["tick"]
+	var source: String = run["source"]
+	var ridden: int = run["ridden"]
+	_check(source == DotBotRideBook.RECORDED and surf.landed > landed_before,
+		"a bot rides a recorded line to the platform below (%s, %s, %d ticks)" % [source, "landed" if surf.landed > landed_before else "did not land", ridden])
+	_check(rides.recorder.recorded == recorded_before and rides.begun == rides.kept + rides.discarded,
+		"and the bot is not recorded (%d recorded before and after)" % recorded_before)
+	bot.remove_meta(&"bot")
+	surf.rides = null
+	fresh.call(&"release")
+	_game.surf_rides = null
+	_done()
+
+
+## Steers [param bot] down [param edge] up to eight times from the lip until [member ArenaSurf.landed] passes [param landed_before]; returns the final tick, the recording's source and the ticks ridden.
+func _bot_rides(bot: ArenaPlayer, surf: ArenaSurf, edge: ArenaSurf.Edge, landed_before: int, tick: int) -> Dictionary:
 	var source := ""
 	var ridden := 0
 	# Recordings begin where their players stood, some off-centre or moving, so a bot standing still at the lip lands with some and not others.
@@ -850,15 +851,7 @@ func _test_recorded_rides() -> void:
 			ridden += 1
 			if ridden % 32 == 0:
 				await get_tree().physics_frame
-	_check(source == DotBotRideBook.RECORDED and surf.landed > landed_before,
-		"a bot rides a recorded line to the platform below (%s, %s, %d ticks)" % [source, "landed" if surf.landed > landed_before else "did not land", ridden])
-	_check(rides.recorder.recorded == recorded_before and rides.begun == rides.kept + rides.discarded,
-		"and the bot is not recorded (%d recorded before and after)" % recorded_before)
-	bot.remove_meta(&"bot")
-	surf.rides = null
-	fresh.call(&"release")
-	_game.surf_rides = null
-	_done()
+	return {"tick": tick, "source": source, "ridden": ridden}
 
 
 ## [param player] rides [param edge] [param count] times on the planned cache, from the lip or (with [param spread]) from perturbed starts, as a person's commands would be.
@@ -1779,14 +1772,9 @@ func _fresh(id: int) -> ArenaPlayer:
 
 # --- Hurt ----------------------------------------------------------------------------
 
-func _test_hurt() -> void:
-	_section("a hurt volume hurts through dot-combat, kills as the world, and heals")
-
-	var changed := _game.change_map(ArenaMap.by_id(HURT_MAP))
-	var mech := _game.map.mechanics if changed.ok else null
-
-	# Volumes clear of the map's teleports, because a hurt sheet over a pit (most of them,
-	# on most of these maps) sends the player away before a second pulse can land.
+## The largest hurting volume and a healing one, clear of the map's teleports: a hurt sheet
+## over a pit sends the player away before a second pulse can land.
+func _pick_hurt_volumes(mech: Variant) -> Array[Dictionary]:
 	var hurts: Dictionary = {}
 	var heals: Dictionary = {}
 	if mech != null:
@@ -1805,6 +1793,18 @@ func _test_hurt() -> void:
 				hurts = h
 			if amount < 0.0:
 				heals = h
+	return [hurts, heals]
+
+
+func _test_hurt() -> void:
+	_section("a hurt volume hurts through dot-combat, kills as the world, and heals")
+
+	var changed := _game.change_map(ArenaMap.by_id(HURT_MAP))
+	var mech := _game.map.mechanics if changed.ok else null
+
+	var picked := _pick_hurt_volumes(mech)
+	var hurts: Dictionary = picked[0]
+	var heals: Dictionary = picked[1]
 
 	_check(not hurts.is_empty() and not heals.is_empty(),
 		"on %s, a hurt volume and a healing one clear of its teleports (%d volumes)" % [
@@ -2003,130 +2003,6 @@ func _test_collision_audit() -> void:
 	_done()
 
 
-# --- Named by the server ----------------------------------------------------------
-
-## Stands in for a dot-server: `games.current_maps()` is all the director reads.
-class StandInServer:
-	extends RefCounted
-	var games := StandInGames.new()
-
-
-class StandInGames:
-	extends RefCounted
-	var maps := PackedStringArray()
-
-	func current_maps() -> PackedStringArray:
-		return maps
-
-
-func _test_server_named() -> void:
-	_section("a map only the server names is catalogued, built from its pack, and dropped")
-
-	var key := "%s/%s@%s" % [DELIVERED_OWNER, DELIVERED_ID, DELIVERED_VERSION]
-	var not_arena_key := "%s/%s@%s" % [DELIVERED_OWNER, DELIVERED_NOT_ARENA, DELIVERED_VERSION]
-	var mount := "res://dot_cloud/%s/%s/%s" % [DELIVERED_OWNER, DELIVERED_ID, DELIVERED_VERSION]
-	var other := "res://dot_cloud/%s/%s/%s" % [DELIVERED_OWNER, DELIVERED_NOT_ARENA, DELIVERED_VERSION]
-
-	# The pack layout dot-cloud mounts: `<id>.json` and `<id>.bin` directly in the version
-	# directory. MAP's files under a new id (the manifest's own `id` names the mesh), and a
-	# second manifest that says it is a timer course. No lightmap or textures: a dedicated
-	# server builds the solid only.
-	var source := ArenaImportedMaps.manifest_path(MAP)
-	var text := FileAccess.get_file_as_string(source)
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(mount))
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(other))
-	_write(mount.path_join("%s.json" % DELIVERED_ID),
-		text.replace("\"id\": \"%s\"" % MAP, "\"id\": \"%s\"" % DELIVERED_ID))
-	DirAccess.copy_absolute(source.get_basename() + ".bin", mount.path_join("%s.bin" % DELIVERED_ID))
-	_write(other.path_join("%s.json" % DELIVERED_NOT_ARENA),
-		text.replace("\"id\": \"%s\"" % MAP, "\"id\": \"%s\"" % DELIVERED_NOT_ARENA)
-			.replace("\"kind\": \"arena\"", "\"kind\": \"course\""))
-
-	var server := StandInServer.new()
-	server.games.maps = PackedStringArray([key, not_arena_key])
-
-	var director := ArenaMapDirector.new()
-	director.game = _game
-	director.server = server
-	add_child(director)
-	var ready := director.setup()
-	var catalogue := director.session.catalogue if ready.ok else null
-	var def := catalogue.get_map(DELIVERED_ID) if catalogue != null else null
-
-	_check(def != null and not def.is_local() and String(def.content_id) == "%s/%s" % [DELIVERED_OWNER, DELIVERED_ID]
-		and def.version == DELIVERED_VERSION,
-		"it is in the catalogue as delivered content, at its pack version (%s)" % (
-			"%s %s" % [def.content_id, def.version] if def != null else "absent"))
-	_check(def != null and not ArenaImportedMaps.is_mounted(DELIVERED_ID)
-		and not ArenaMap.imported_ids().has(DELIVERED_ID),
-		"and is not read or registered at boot, nor listed as a local import")
-	_check(catalogue != null and not catalogue.has(DELIVERED_NOT_ARENA),
-		"a named pack whose manifest is not kind arena is skipped")
-
-	# What a client that has never heard of it makes of the announce: dot-map takes an unknown
-	# map only when it is delivered and its scene is inside its own mount, and the scene here
-	# is the manifest in the pack. No session, so nothing the client knows can answer first.
-	var client := DotMapSyncClient.new()
-	var accepted: DotResult = client._accept(DotMapMessage.announce(def)["map"]) if def != null \
-		else DotResult.fail(DotError.CODE_STATE, "no def")
-	client.free()
-	_check(accepted.ok and ArenaMaps.is_delivered(accepted.value),
-		"a client that has never heard of it accepts the announce as delivered content%s" % (
-			"" if accepted.ok else ": " + accepted.error.message))
-
-	var changed: DotResult = await director.change_to(DELIVERED_ID)
-	await get_tree().physics_frame
-	_check(changed.ok, "the change to it succeeds%s" % ("" if changed.ok else ": " + changed.error.message))
-	_check(_game.map != null and _game.map.id == DELIVERED_ID and _game.map.is_imported()
-		and _game.map.manifest_path.begins_with(mount + "/"),
-		"the game is on it, built from the mounted manifest (%s)" % (
-			_game.map.manifest_path if _game.map != null else "no map"))
-	var solid := _game.map.collision_root if _game.map != null else null
-	_check(solid != null and solid.is_inside_tree() and solid.get_child_count() > 100,
-		"with its brushes in the tree (%d shapes)" % (solid.get_child_count() if solid != null else -1))
-	_check(_game.map != null and _game.map.movement_profile == &"surf" and _game.map.spawns.size() > 0,
-		"on the surf profile, with the mapper's spawns (%d)" % (_game.map.spawns.size() if _game.map != null else 0))
-
-	# Back to a built-in, then the owner drops it from the list.
-	var _back: DotResult = await director.change_to(&"dm_box")
-	server.games.maps = PackedStringArray()
-	var adopted := director.adopt_server_maps()
-	_check(not catalogue.has(DELIVERED_ID) and int(adopted.get("removed", 0)) == 1
-		and not ArenaImportedMaps.is_mounted(DELIVERED_ID),
-		"and gone when the server stops naming it (removed %d)" % int(adopted.get("removed", 0)))
-
-	remove_child(director)
-	director.free()
-	_remove_tree("res://dot_cloud/%s" % DELIVERED_OWNER)
-	DirAccess.remove_absolute(ProjectSettings.globalize_path("res://dot_cloud"))
-
-	_done()
-
-
-func _write(path: String, text: String) -> void:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-
-	if f != null:
-		f.store_string(text)
-		f.close()
-
-
-## Deletes a directory and everything under it.
-func _remove_tree(path: String) -> void:
-	var dir := DirAccess.open(path)
-
-	if dir == null:
-		return
-
-	for name in dir.get_files():
-		DirAccess.remove_absolute(path.path_join(name))
-
-	for name in dir.get_directories():
-		_remove_tree(path.path_join(name))
-
-	DirAccess.remove_absolute(path)
-
-
 # --- Plumbing ------------------------------------------------------------------
 
 ## Whether a standing hull with its feet at [param feet] is inside solid.
@@ -2141,25 +2017,3 @@ const ISOLATED_LAYER := 1 << 19
 static func _in_solid(body: DotFpsPhysicsBody, feet: Vector3, tunables: DotFpsTunables) -> bool:
 	var height := tunables.stand_height - 0.2
 	return body.overlaps(feet + Vector3.UP * (0.1 + height * 0.5), height, tunables.radius - 0.05)
-
-
-func _ticks(count: int) -> void:
-	for i in range(count):
-		_game.tick({})
-
-		if i % 16 == 0:
-			await get_tree().physics_frame
-
-
-func _section(title: String) -> void:
-	_entered += 1
-	_line("")
-	_line("-- %s" % title)
-
-
-func _done() -> void:
-	_completed += 1
-
-
-func _line(text: String) -> void:
-	print(text)

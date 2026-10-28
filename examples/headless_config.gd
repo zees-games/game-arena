@@ -60,7 +60,28 @@ func _run() -> void:
 	game.setup(ArenaMap.dm_box())
 	game.add_player(1, "A")
 	_check(game.player_for(1).health.max_health == 150.0, "a new player has the configured health")
-	# sv_falldamage: on in this game; the controller's landed(impact) is what the component hears.
+	_falls(game)
+	game.apply_match_limits()
+	_check(game.match_node.rules.respawn_delay_sec == 7.0, "the respawn delay overrides the mode's")
+	game._sync_award_config()
+	_check(game.medals.nemesis_at == 5, "the medal book reads the award thresholds")
+	var schema_path := OS.get_cache_dir().path_join("arena_schema_check.json")
+	_check(binder.write_schema(schema_path).ok, "write_schema writes the schema")
+	DirAccess.remove_absolute(schema_path)
+	_layers()
+	_templates(binder)
+	_workbench(binder, game)
+	print("%d passed, %d failed" % [_passed, _failed])
+	horde.free()
+	game.free()
+	if _passed + _failed != CHECKS:
+		_failed += 1
+		print("FAIL: expected %d checks" % CHECKS)
+	get_tree().quit(1 if _failed > 0 else 0)
+
+
+## sv_falldamage: the controller's landed(impact) is what the component hears.
+func _falls(game: ArenaGame) -> void:
 	var faller := game.player_for(1)
 	var fall := faller.get_node_or_null("FallDamage") as DotFallDamage
 	_check(game.fall_rules.enabled and fall != null, "fall damage is on, a component per player")
@@ -82,23 +103,6 @@ func _run() -> void:
 	game.map.movement_profile = &""
 	faller.controller.landed.emit(60.0)
 	_check(150.0 - faller.health.health <= game.fall_rules.max_damage and faller.health.health > 0.0, "a huge drop is capped, never lethal")
-	game.apply_match_limits()
-	_check(game.match_node.rules.respawn_delay_sec == 7.0, "the respawn delay overrides the mode's")
-	game._sync_award_config()
-	_check(game.medals.nemesis_at == 5, "the medal book reads the award thresholds")
-	var schema_path := OS.get_cache_dir().path_join("arena_schema_check.json")
-	_check(binder.write_schema(schema_path).ok, "write_schema writes the schema")
-	DirAccess.remove_absolute(schema_path)
-	_layers()
-	_templates(binder)
-	_workbench(binder, game)
-	print("%d passed, %d failed" % [_passed, _failed])
-	horde.free()
-	game.free()
-	if _passed + _failed != CHECKS:
-		_failed += 1
-		print("FAIL: expected %d checks" % CHECKS)
-	get_tree().quit(1 if _failed > 0 else 0)
 
 
 ## Child process: loads the layers strictly over the test root and prints what the live config holds.

@@ -40,7 +40,8 @@ func _fire(ticks: int) -> void:
 		await get_tree().physics_frame
 
 
-func _run() -> void:
+## Builds the game with a shooter and a target and lets it settle.
+func _boot() -> void:
 	_game = ArenaGame.new()
 	_game.name = "Arena"
 	_game.tick_rate = TICK_RATE
@@ -60,6 +61,9 @@ func _run() -> void:
 	_game.tick({})
 	await get_tree().physics_frame
 
+
+func _run() -> void:
+	await _boot()
 	var shooter := _game.player_for(1)
 	var victim := _game.player_for(2)
 	shooter.give_default_loadout()
