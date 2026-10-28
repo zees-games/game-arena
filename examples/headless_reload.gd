@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 ## A module reload leaves ONE link under the server, and a real ENet client still hears it.
 ##
 ## The bridge's link sits under the [DotServer] node (RPCs route by path), so nothing freed it
@@ -20,9 +20,6 @@ const TICK_RATE := 64
 const MODULE := "res://game/arena_module.gd"
 const CHECKS := 11
 
-var _passed := 0
-var _failed := 0
-var _failures := PackedStringArray()
 var _entered := 0
 var _completed := 0
 
@@ -51,15 +48,7 @@ func _run() -> void:
 	print("")
 	_check(_completed == _entered and _entered == 3,
 		"every section ran to its last line (%d of %d)" % [_completed, _entered])
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-	for line in _failures:
-		print("  FAIL  %s" % line)
-	if _passed + _failed != CHECKS + 1:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [_passed + _failed, CHECKS + 1])
-		get_tree().quit(1)
-		return
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report(CHECKS + 1)
 
 
 func _section(title: String) -> void:
@@ -70,17 +59,6 @@ func _section(title: String) -> void:
 
 func _done() -> void:
 	_completed += 1
-
-
-func _check(condition: bool, what: String, detail: String = "") -> bool:
-	if condition:
-		_passed += 1
-		print("  ok    %s%s" % [what, "" if detail == "" else "  (%s)" % detail])
-	else:
-		_failed += 1
-		_failures.append(what if detail == "" else "%s: %s" % [what, detail])
-		print("  FAIL  %s%s" % [what, "" if detail == "" else "  (%s)" % detail])
-	return condition
 
 
 func _until(condition: Callable, seconds: float) -> bool:

@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaClientExtras := preload("../game/arena_client_extras.gd")
 const ArenaConfig := preload("../game/arena_config.gd")
@@ -56,8 +56,6 @@ var _skipped_checks := 0
 ## total is the other half — see docs/testing.md.
 const SECTIONS := 23
 
-var _passed := 0
-var _failed := 0
 var _entered := 0
 var _completed := 0
 
@@ -129,26 +127,7 @@ func _run() -> void:
 	_check(seen.is_empty(), "the engine reported no error over the whole run",
 		"%d: %s" % [seen.size(), ", ".join(seen.slice(0, 3))])
 
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-
-	print("%d of %d sections ran to their last line" % [_completed, _entered])
-	if _entered != SECTIONS or _completed != _entered:
-		print("ERROR: %d sections entered and %d completed, %d expected. One aborted or was skipped." % [
-			_entered, _completed, SECTIONS
-		])
-		get_tree().quit(1)
-		return
-	# The total the section counter cannot be. A runtime error inside a section aborts
-	# that function, and the counter is satisfied because the section had already
-	# announced itself. See docs/testing.md.
-	if _passed + _failed != CHECKS - _skipped_checks:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
-			_passed + _failed, CHECKS - _skipped_checks
-		])
-		get_tree().quit(1)
-		return
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report_sections(_entered, _completed, SECTIONS, CHECKS - _skipped_checks)
 
 
 func _section(title: String) -> void:
@@ -273,16 +252,6 @@ func _test_the_remote_workbench() -> void:
 	sgame.free()
 	cgame.free()
 	_done()
-
-
-func _check(condition: bool, what: String, detail: String = "") -> bool:
-	if condition:
-		_passed += 1
-		print("  ok   %s" % what)
-	else:
-		_failed += 1
-		print("  FAIL %s%s" % [what, "" if detail == "" else "  — " + detail])
-	return condition
 
 
 # --- Construction ----------------------------------------------------------

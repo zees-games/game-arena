@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaGame := preload("../game/arena_game.gd")
@@ -69,9 +69,6 @@ const REFERENCE_PROFILE := {
 const CHECKS := 46
 const SECTIONS := 5
 
-var _passed := 0
-var _failed := 0
-var _failures := PackedStringArray()
 var _entered := 0
 var _completed := 0
 
@@ -92,20 +89,7 @@ func _run() -> void:
 
 	_test_order()
 
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-	for line in _failures:
-		print("  FAIL  %s" % line)
-	print("%d of %d sections ran to their last line" % [_completed, _entered])
-	if _entered != SECTIONS or _completed != _entered:
-		print("ERROR: %d sections entered and %d completed, %d expected." % [_entered, _completed, SECTIONS])
-		get_tree().quit(1)
-		return
-	if _passed + _failed != CHECKS:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [_passed + _failed, CHECKS])
-		get_tree().quit(1)
-		return
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
 func _play(preset: String) -> void:
@@ -284,14 +268,3 @@ func _section(title: String) -> void:
 
 func _done() -> void:
 	_completed += 1
-
-
-func _check(condition: bool, what: String, detail: String = "") -> bool:
-	if condition:
-		_passed += 1
-		print("  ok    %s" % what)
-	else:
-		_failed += 1
-		_failures.append(what if detail == "" else "%s — %s" % [what, detail])
-		print("  FAIL  %s%s" % [what, "" if detail == "" else " — " + detail])
-	return condition

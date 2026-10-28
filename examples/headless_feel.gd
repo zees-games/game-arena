@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -100,9 +100,6 @@ const JUMP_EVERY := 52
 var _verbose := false
 var _only := ""
 
-var _passed := 0
-var _failed := 0
-var _failures := PackedStringArray()
 var _entered := 0
 var _completed := 0
 
@@ -209,16 +206,11 @@ func _run() -> void:
 			expected += 4 if bool(window[8]) else 3
 		_check(_passed + _failed == expected, "every check ran (%d of %d)" % [_passed + _failed, expected])
 
-	print("")
-	print("%d passed, %d failed, %d of %d sections ran to their last line" % [
-		_passed, _failed, _completed, _entered])
-	for line in _failures:
-		print("  FAIL  %s" % line)
 	if not _not_judged.is_empty():
 		print("WARNING: %d checks not judged because the machine was starved (load over the cores?); rerun on a quiet machine:" % _not_judged.size())
 		for line in _not_judged:
 			print("  --    %s" % line)
-	get_tree().quit(1 if _failed > 0 or _completed != _entered else 0)
+	_report_sections(_entered, _completed, _entered)
 
 
 func _section(title: String) -> void:

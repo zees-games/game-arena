@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaAvatars := preload("../game/arena_avatars.gd")
 const ArenaBrowser := preload("../game/arena_browser.gd")
@@ -47,9 +47,6 @@ const APP_URL := "arena"
 ## show the difference. See docs/testing.md.
 const CHECKS := 183
 
-var _passed := 0
-var _failed := 0
-var _failures := PackedStringArray()
 
 var _server: DotServer = null
 var _game: ArenaGame = null
@@ -121,37 +118,12 @@ func _run() -> void:
 	_teardown()
 	_cleanup()
 
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-
-	for line in _failures:
-		print("  FAIL  %s" % line)
-
 	# The copy of this suite that the exit probe runs does not run the probe itself.
-	var checks := CHECKS - (EXIT_PROBE_CHECKS if _is_exit_probe() else 0)
-
-	if _passed + _failed != checks:
-		print("ERROR: %d checks ran, %d expected. A test aborted part-way." % [
-			_passed + _failed, checks
-		])
-		get_tree().quit(1)
-		return
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report(CHECKS - (EXIT_PROBE_CHECKS if _is_exit_probe() else 0))
 
 
 func _cleanup() -> void:
 	DotPaths.remove_tree(SERVER_DIR)
-
-
-func _check(condition: bool, what: String, detail: String = "") -> bool:
-	if condition:
-		_passed += 1
-		print("  ok    %s" % what)
-	else:
-		_failed += 1
-		_failures.append(what if detail == "" else "%s — %s" % [what, detail])
-		print("  FAIL  %s%s" % [what, "" if detail == "" else " — " + detail])
-	return condition
 
 
 # --- Bring-up --------------------------------------------------------------

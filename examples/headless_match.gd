@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaBoards := preload("../game/arena_boards.gd")
@@ -67,9 +67,6 @@ const CHECKS := 657
 ## total is the other half — see docs/testing.md.
 const SECTIONS := 44
 
-var _passed := 0
-var _failed := 0
-var _failures := PackedStringArray()
 var _entered := 0
 var _completed := 0
 
@@ -157,29 +154,7 @@ func _run() -> void:
 		_game.queue_free()
 		remove_child(_game)
 
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-
-	for line in _failures:
-		print("  FAIL  %s" % line)
-
-	print("%d of %d sections ran to their last line" % [_completed, _entered])
-	if _entered != SECTIONS or _completed != _entered:
-		print("ERROR: %d sections entered and %d completed, %d expected. One aborted or was skipped." % [
-			_entered, _completed, SECTIONS
-		])
-		get_tree().quit(1)
-		return
-	# The total the section counter cannot be. A runtime error inside a section aborts
-	# that function, and the counter is satisfied because the section had already
-	# announced itself. See docs/testing.md.
-	if _passed + _failed != CHECKS:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
-			_passed + _failed, CHECKS
-		])
-		get_tree().quit(1)
-		return
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
 # --- Modes -----------------------------------------------------------------
@@ -2312,17 +2287,6 @@ func _section(title: String) -> void:
 ## A section reached its last line. See [constant SECTIONS].
 func _done() -> void:
 	_completed += 1
-
-
-func _check(condition: bool, what: String, detail: String = "") -> bool:
-	if condition:
-		_passed += 1
-		print("  ok    %s" % what)
-	else:
-		_failed += 1
-		_failures.append(what if detail == "" else "%s — %s" % [what, detail])
-		print("  FAIL  %s%s" % [what, "" if detail == "" else " — " + detail])
-	return condition
 
 
 func _group(title: String) -> void:

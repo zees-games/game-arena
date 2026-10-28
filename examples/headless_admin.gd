@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -38,9 +38,6 @@ const TICK_RATE := 64
 const SECTIONS := 10
 const CHECKS := 45
 
-var _passed := 0
-var _failed := 0
-var _failures := PackedStringArray()
 var _entered := 0
 var _completed := 0
 
@@ -83,28 +80,13 @@ func _run() -> void:
 	DotPaths.remove_tree(SERVER_DIR)
 
 	print("")
-	_check_raw(
+	_check(
 		_completed == _entered and _entered == SECTIONS,
 		"every section ran to its last line (%d of %d, %d expected)" % [_completed, _entered, SECTIONS]
 	)
 
 	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-
-	for line in _failures:
-		print("  FAIL  %s" % line)
-
-	# The total the section counter cannot be. A runtime error inside a section aborts
-	# that function, and the counter is satisfied because the section had already
-	# announced itself. See docs/testing.md.
-	if _passed + _failed != CHECKS + 1:
-		print("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
-			_passed + _failed, CHECKS + 1
-		])
-		get_tree().quit(1)
-		return
-
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report(CHECKS + 1)
 
 
 func _section(title: String) -> void:
@@ -115,21 +97,6 @@ func _section(title: String) -> void:
 
 func _done() -> void:
 	_completed += 1
-
-
-func _check(condition: bool, what: String, detail: String = "") -> bool:
-	return _check_raw(condition, what, detail)
-
-
-func _check_raw(condition: bool, what: String, detail: String = "") -> bool:
-	if condition:
-		_passed += 1
-		print("  ok    %s" % what)
-	else:
-		_failed += 1
-		_failures.append(what if detail == "" else "%s — %s" % [what, detail])
-		print("  FAIL  %s%s" % [what, "" if detail == "" else " — " + detail])
-	return condition
 
 
 # --- Bring-up ----------------------------------------------------------------

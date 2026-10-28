@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaGame := preload("../game/arena_game.gd")
@@ -82,9 +82,6 @@ const OTHER_CHECKS := 44
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
-var _passed := 0
-var _failed := 0
-var _failures := PackedStringArray()
 var _entered := 0
 var _completed := 0
 var _verbose := false
@@ -179,12 +176,7 @@ func _run() -> void:
 		"every check ran (%d of %d)" % [_passed + _failed + 1, CHECKS],
 		"a section that aborted part-way stops adding checks, and only a total can show it")
 
-	print("")
-	print("%d passed, %d failed" % [_passed, _failed])
-	for line in _failures:
-		print("  FAIL  %s" % line)
-
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report()
 
 
 # --- The harness ------------------------------------------------------------
@@ -197,17 +189,6 @@ func _section(title: String) -> void:
 
 func _done() -> void:
 	_completed += 1
-
-
-func _check(condition: bool, what: String, detail: String = "") -> bool:
-	if condition:
-		_passed += 1
-		print("  ok    %s%s" % [what, "" if detail == "" else "  (%s)" % detail])
-	else:
-		_failed += 1
-		_failures.append(what if detail == "" else "%s — %s" % [what, detail])
-		print("  FAIL  %s%s" % [what, "" if detail == "" else "  (%s)" % detail])
-	return condition
 
 
 func _until(condition: Callable, seconds: float) -> bool:

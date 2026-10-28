@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -87,8 +87,6 @@ const DELIVERED_ID := &"dot_test_delivered_surf"
 const DELIVERED_NOT_ARENA := &"dot_test_delivered_course"
 const DELIVERED_VERSION := "1.0.0"
 
-var _passed := 0
-var _failed := 0
 var _entered := 0
 var _completed := 0
 
@@ -161,24 +159,7 @@ func _finish() -> void:
 		_game.free()
 		_game = null
 
-	_line("")
-	_line("%d sections, %d passed, %d failed" % [_completed, _passed, _failed])
-
-	if _entered != SECTIONS or _completed != SECTIONS:
-		_line("ERROR: %d sections entered and %d completed, %d expected." % [
-			_entered, _completed, SECTIONS
-		])
-		get_tree().quit(1)
-		return
-
-	if _passed + _failed != CHECKS_FIXED + ArenaMap.imported_ids().size():
-		_line("ERROR: %d checks ran, %d expected. A section aborted part-way." % [
-			_passed + _failed, CHECKS_FIXED + ArenaMap.imported_ids().size()
-		])
-		get_tree().quit(1)
-		return
-
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report_sections(_entered, _completed, SECTIONS, CHECKS_FIXED + ArenaMap.imported_ids().size())
 
 
 # --- The catalogue ---------------------------------------------------------
@@ -2145,15 +2126,6 @@ func _section(title: String) -> void:
 
 func _done() -> void:
 	_completed += 1
-
-
-func _check(condition: bool, what: String) -> void:
-	if condition:
-		_passed += 1
-		_line("   ok   %s" % what)
-	else:
-		_failed += 1
-		_line("  FAIL  %s" % what)
 
 
 func _line(text: String) -> void:

@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -37,8 +37,6 @@ const SECTIONS := 4
 ## Without a frame; two more with `--shot`.
 const CHECKS := 17
 
-var _passed := 0
-var _failed := 0
 var _entered := 0
 var _completed := 0
 
@@ -313,22 +311,8 @@ func _cleanup(game: ArenaGame) -> void:
 
 
 func _finish() -> void:
-	_line("")
-	_line("%d sections, %d passed, %d failed" % [_completed, _passed, _failed])
-
-	if _entered != SECTIONS or _completed != SECTIONS:
-		_line("ERROR: %d sections entered and %d completed, %d expected." % [_entered, _completed, SECTIONS])
-		get_tree().quit(1)
-		return
-
 	var expected := CHECKS + (2 if OS.get_cmdline_user_args().has("--shot") and DisplayServer.get_name() != "headless" else 0)
-
-	if _passed + _failed != expected:
-		_line("ERROR: %d checks ran, %d expected." % [_passed + _failed, expected])
-		get_tree().quit(1)
-		return
-
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report_sections(_entered, _completed, SECTIONS, expected)
 
 
 func _section(title: String) -> void:
@@ -339,15 +323,6 @@ func _section(title: String) -> void:
 
 func _done() -> void:
 	_completed += 1
-
-
-func _check(condition: bool, what: String) -> void:
-	if condition:
-		_passed += 1
-		_line("   ok   %s" % what)
-	else:
-		_failed += 1
-		_line("  FAIL  %s" % what)
 
 
 func _line(text: String) -> void:

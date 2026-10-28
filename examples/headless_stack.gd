@@ -1,4 +1,4 @@
-extends Node
+extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
@@ -26,8 +26,6 @@ const BOTS := 4
 const SECTIONS := 7
 const CHECKS := 67
 
-var _passed := 0
-var _failed := 0
 var _section_count := 0
 
 var _game: ArenaGame = null
@@ -54,23 +52,7 @@ func _run() -> void:
 	_test_class_immunity()
 	_test_leaving()
 
-	_line("")
-	_line("%d sections, %d passed, %d failed" % [_section_count, _passed, _failed])
-
-	if _section_count != SECTIONS:
-		_line("ERROR: %d of %d sections ran." % [_section_count, SECTIONS])
-		get_tree().quit(1)
-		return
-
-	if _passed + _failed != CHECKS:
-		_line(
-			"ERROR: %d checks ran, %d expected. A section aborted part-way."
-			% [_passed + _failed, CHECKS]
-		)
-		get_tree().quit(1)
-		return
-
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report_sections(_section_count, _section_count, SECTIONS, CHECKS)
 
 
 func _build() -> bool:
@@ -476,15 +458,6 @@ func _section(title: String) -> void:
 	_section_count += 1
 	_line("")
 	_line("-- %s" % title)
-
-
-func _check(condition: bool, what: String) -> void:
-	if condition:
-		_passed += 1
-		_line("   ok   %s" % what)
-	else:
-		_failed += 1
-		_line("  FAIL  %s" % what)
 
 
 func _line(text: String) -> void:
