@@ -896,18 +896,12 @@ func build(p_game: ArenaGame) -> void:
 	ammo.name = "Ammo"
 	_place(ammo, Control.PRESET_BOTTOM_RIGHT, Rect2(-300.0, -84.0, 290.0, 70.0))
 
-	# [b]The right edge below 110 px belongs to the client shell[/b]: its ballots and lines are
-	# one column there, a third of the frame wide (`SHELL_COLUMN_TOP`). This game cannot see
-	# when one is open, so its right edge stays clear always. The key hints were centre right
-	# and the weapons' top slot just under the middle; rendered with a ballot open
-	# (`screenshot.sh --glance --ballot`) both were under it at 1280x720, the hints at
-	# 1600x900 too. The hints moved to the left edge beside the streak meter, and the weapons
-	# carried sit on the ammunition counter, bottom up, which keeps five of them below a
-	# six-row ballot at 720 tall.
+	# The right edge below 110 px belongs to the client shell's ballot column (`SHELL_COLUMN_TOP`)
+	# and this game cannot see when one is open, so the hints sit left and the weapon slots
+	# stack up from the ammunition counter (checked with `screenshot.sh --glance --ballot`).
 	hints = DotKeyHints.new()
 	hints.name = "KeyHints"
-	# Seven rows since B (the loadout) joined them: started higher, so the last row ends above
-	# the streak meter's words (rendered: at -128 the Slide row sat on "Killstreak").
+	# Seven rows: started high so the last ends above the streak meter's words.
 	_place(hints, Control.PRESET_CENTER_LEFT, Rect2(62.0, -170.0, 200.0, 196.0))
 
 	slots = ArenaHudGlance.WeaponSlots.new()
@@ -1352,8 +1346,7 @@ func present_body() -> void:
 	if scope != null:
 		scope.fraction = hands.aim_fraction() if scoped else 0.0
 		if scoped and is_inside_tree():
-			# The whole viewport, like the blind: sized to the HUD it left the safe area's
-			# strip of world showing round the top and left of the scope (rendered).
+			# The whole viewport, like the blind: the HUD's own size leaves the safe-area strip showing.
 			var inverse := get_global_transform().affine_inverse()
 			scope.position = inverse * Vector2.ZERO
 			scope.size = inverse.basis_xform(get_viewport_rect().size)
@@ -1377,8 +1370,7 @@ func present_body() -> void:
 			hurt = maxf(hurt, minf(flash.a * HURT_PULSE_GAIN, HURT_PULSE_MAX))
 		hurt_overlay.modulate.a = hurt
 		if hurt > 0.0 and is_inside_tree():
-			# The whole viewport, as the blind does: the HUD sits in the safe area and the
-			# first render drew the edge as a rectangle over the top half of the screen.
+			# The whole viewport, as the blind does (the HUD sits in the safe area).
 			var inverse := get_global_transform().affine_inverse()
 			hurt_overlay.position = inverse * Vector2.ZERO
 			hurt_overlay.size = inverse.basis_xform(get_viewport_rect().size)

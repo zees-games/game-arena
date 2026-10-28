@@ -7,6 +7,7 @@ const ArenaBlood := preload("arena_blood.gd")
 const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaBindings := preload("arena_bindings.gd")
+const ArenaFxCatalogue := preload("arena_fx_catalogue.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 
@@ -228,6 +229,20 @@ static func schema() -> DotSettingsSchema:
 		"Blood when a player dies, and on the wall behind a body you hit. Bullet holes stay on either way."
 	))
 
+	_add_chat_and_comfort(s)
+
+	# One binding setting per key in the table. The two chat keys are declared above with
+	# their ACCOUNT scope, which the table leaves alone.
+	ArenaBindings.make().add_to_schema(s)
+
+	# dot-menu's stock video and interface settings: the window, V-Sync, the frame cap,
+	# render scale, the theme, the frame-rate counter and net_stat. Keys already declared
+	# above keep this game's default (a field of view of 100, horizontal at 4:3).
+	# Applied by the client's DotMenuApplier and DotMenu; the console binds them by name.
+	return DotMenuStock.declare(s, [DotMenuStock.GROUP_VIDEO, DotMenuStock.GROUP_INTERFACE] as Array[StringName])
+
+## Chat, accessibility, camera motion, HUD inset and the solo bots, split from [method schema] for length.
+static func _add_chat_and_comfort(s: DotSettingsSchema) -> void:
 	# Chat. ACCOUNT scope for all three: which key opens chat and whether a player wants
 	# the box at all is about the person, not about this machine and not about this game.
 	s.add(DotSettingsDef.choice(
@@ -277,15 +292,6 @@ static func schema() -> DotSettingsSchema:
 		&"gameplay"
 	).with_description("How well the bots play in a solo match. A server sets its own."))
 
-	# One binding setting per key in the table. The two chat keys are declared above with
-	# their ACCOUNT scope, which the table leaves alone.
-	ArenaBindings.make().add_to_schema(s)
-
-	# dot-menu's stock video and interface settings: the window, V-Sync, the frame cap,
-	# render scale, the theme, the frame-rate counter and net_stat. Keys already declared
-	# above keep this game's default (a field of view of 100, horizontal at 4:3).
-	# Applied by the client's DotMenuApplier and DotMenu; the console binds them by name.
-	return DotMenuStock.declare(s, [DotMenuStock.GROUP_VIDEO, DotMenuStock.GROUP_INTERFACE] as Array[StringName])
 
 ## The camera motion settings, in [method ArenaPlayer.set_camera_motion_scales]' order, with
 ## what each moves.
@@ -865,90 +871,7 @@ func _bake_hold(on: bool) -> void:
 # --- Effects ----------------------------------------------------------------
 
 static func fx_catalogue() -> DotFxCatalogue:
-	var c := DotFxCatalogue.new()
-
-	var muzzle := DotFxDef.new()
-	muzzle.id = &"muzzle_flash"
-	muzzle.scene_path = "%s/muzzle_flash.tscn" % FX_DIR
-	muzzle.lifetime_ms = 90
-	muzzle.cost = 1
-	muzzle.priority = 85
-	muzzle.max_distance = 90.0
-	muzzle.max_concurrent = 8
-	c.add(muzzle)
-
-	var spark := DotFxDef.new()
-	spark.id = &"impact_spark"
-	spark.scene_path = "%s/impact_spark.tscn" % FX_DIR
-	spark.lifetime_ms = 500
-	spark.cost = 2
-	spark.priority = 45
-	spark.max_distance = 60.0
-	# The expensive half of a firefight, and the first thing a low tier should not have.
-	spark.min_quality = 1
-	c.add(spark)
-
-	var hole := DotFxDef.new()
-	hole.id = &"bullet_hole"
-	hole.kind = DotFxDef.Kind.DECAL
-	hole.scene_path = "%s/bullet_hole.tscn" % FX_DIR
-	# Ten minutes, and the ring is what actually bounds it. A decal list that grows with
-	# the *round* rather than with the players is invisible in testing and fatal at
-	# minute forty.
-	hole.lifetime_ms = 600000
-	hole.cost = 1
-	hole.priority = 20
-	hole.max_distance = 50.0
-	hole.min_quality = 1
-	c.add(hole)
-
-	var gib := DotFxDef.new()
-	gib.id = &"death_burst"
-	gib.scene_path = "%s/death_burst.tscn" % FX_DIR
-	gib.lifetime_ms = 1500
-	gib.cost = 12
-	gib.priority = 70
-	gib.max_distance = 80.0
-	gib.min_quality = 2
-	c.add(gib)
-
-	# A fireball, smoke, sparks and a light. Drawn at every quality and above everything
-	# but the hurt flash: where something went off is information, not decoration. It
-	# began as the death burst's scene, and the first render of a frag going off was a
-	# spray of dark red gibs twenty metres away — which reads as somebody dying there.
-	var boom := DotFxDef.new()
-	boom.id = EXPLOSION
-	boom.scene_path = "%s/explosion.tscn" % FX_DIR
-	boom.lifetime_ms = 1400
-	boom.cost = 10
-	boom.priority = 85
-	boom.max_distance = 140.0
-	c.add(boom)
-
-	var hurt := DotFxDef.new()
-	hurt.id = &"hurt_flash"
-	hurt.kind = DotFxDef.Kind.SCREEN
-	# Low, and it still goes through the player's own off switch and the three-a-second
-	# rate limit. A damage tint is the effect everybody sets to full strength because it
-	# is "only a tint", and a full-screen flash at high frequency is a hazard.
-	hurt.flash_peak = 0.28
-	hurt.flash_colour = Color(0.85, 0.12, 0.12)
-	hurt.flash_decay_ms = 260
-	c.add(hurt)
-
-	var shake := DotFxDef.new()
-	shake.id = &"hurt_shake"
-	shake.kind = DotFxDef.Kind.SHAKE
-	shake.shake_trauma = 0.35
-	c.add(shake)
-
-	var big_shake := DotFxDef.new()
-	big_shake.id = &"death_shake"
-	big_shake.kind = DotFxDef.Kind.SHAKE
-	big_shake.shake_trauma = 0.7
-	c.add(big_shake)
-
-	return c
+	return ArenaFxCatalogue.make(FX_DIR, EXPLOSION)
 
 
 func _build_fx() -> DotResult:

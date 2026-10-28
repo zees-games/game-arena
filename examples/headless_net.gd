@@ -1,76 +1,4 @@
-extends DotGameCheckSuite
-
-const ArenaClientExtras := preload("../game/arena_client_extras.gd")
-const ArenaConfig := preload("../game/arena_config.gd")
-const ArenaAwards := preload("../game/arena_awards.gd")
-const ArenaEvent := preload("../game/arena_event.gd")
-const ArenaContent := preload("../game/arena_content.gd")
-const ArenaEvents := preload("../game/arena_events.gd")
-const ArenaGame := preload("../game/arena_game.gd")
-const ArenaMap := preload("../maps/arena_map.gd")
-const ArenaModTools := preload("../game/arena_mod_tools.gd")
-const ArenaMapSession := preload("../game/arena_map_session.gd")
-const ArenaMaps := preload("../game/arena_maps.gd")
-const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
-const ArenaNetCommand := preload("../game/arena_net_command.gd")
-const ArenaNetLink := preload("../game/arena_net_link.gd")
-const ArenaHud := preload("../game/arena_hud.gd")
-const ArenaPlayer := preload("../game/arena_player.gd")
-const ArenaPlayerNet := preload("../game/arena_player_net.gd")
-const ArenaSolidBody := preload("../game/arena_solid_body.gd")
-const ArenaHorde := preload("../game/arena_horde.gd")
-const ArenaNpcs := preload("../game/arena_npcs.gd")
-const WallRouteDriver := preload("wall_route_driver.gd")
-const ArenaRequest := preload("../game/arena_request.gd")
-
-## Two clients, one server, one process, and a lossy wire between them.
-##
-## [b]This is the first time anything in this family runs netcode over more than one
-## client.[/b] dot-net's own integration run adds exactly one peer, which is the one
-## shape in which "replicate to everybody" and "replicate to whoever is served first"
-## look identical — and that is precisely how a replication bug survived in dot-net
-## until it was looked for. Two peers here is not thoroughness, it is the minimum that
-## tests the thing at all.
-##
-## Everything is real except the socket: real managers, a real [ArenaGame] on all
-## three sides, real bit-packed commands, real snapshots, real acknowledgements, and
-## one packet in five dropped in each direction.
-
-const TICK_RATE := 64
-const SNAPSHOT_RATE := 16
-const RUN_TICKS := 96
-const LOSS_EVERY := 5
-
-const CHECKS := 282
-
-## The imported combat surf map the map-sync section also follows a client onto, and how
-## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
-## the total expected drops by exactly that many: a skip is allowed, a silent one is not.
-const IMPORTED_MAP := &"surf_10x_reloaded_fixed"
-const IMPORTED_CHECKS := 9
-var _skipped_checks := 0
-
-## Sections entered against sections that ran to their last line, and against this. A
-## runtime error inside a section aborts that function and nothing says so; a section that
-## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
-## total is the other half — see docs/testing.md.
-const SECTIONS := 24
-
-var _entered := 0
-var _completed := 0
-
-var _server_game: ArenaGame = null
-var _server_net: DotNetManager = null
-var _server_bridge: ArenaNetBridge = null
-
-## peer id -> {game, net, bridge}
-var _clients: Dictionary = {}
-
-## Payloads in flight, server -> client. Each is {peer, bytes}.
-var _downstream: Array = []
-var _drop_down := 0
-var _drop_up := 0
-var _joins: Array[PackedByteArray] = []
+extends "headless_net_solid.gd"
 
 
 func _ready() -> void:
@@ -131,16 +59,6 @@ func _run() -> void:
 	_report_sections(_entered, _completed, SECTIONS, CHECKS - _skipped_checks)
 
 
-func _section(title: String) -> void:
-	_entered += 1
-	print(title)
-
-
-## A section reached its last line. See [constant SECTIONS].
-func _done() -> void:
-	_completed += 1
-
-
 ## sv_workbench_remote over the real frames, in the order ArenaModule and ArenaClient register them: an admin gets a
 ## panel and an edit that applies and replicates; a guest, a non-admin, a revoked admin and the cvar off are refused.
 func _test_the_remote_workbench() -> void:
@@ -183,12 +101,7 @@ func _test_the_remote_workbench() -> void:
 	var _c := cnet.start()
 	snet.add_peer(5)
 	slink.peer_joined(5)
-	remote.enabled_fn = func() -> bool: return state["on"]
-	remote.uid_fn = func(_p: int) -> String: return state["uid"]
-	remote.connected_fn = func(_p: int) -> bool: return true
-	remote.permit_uid_fn = func(uid: String, flag: String) -> bool: return (flags.get(uid, []) as Array).has(flag)
-	remote.now_fn = func() -> int: return state["now"]
-	remote.limiter = DotRateLimiter.new(1000.0, 1000.0)
+	_wire_remote(remote, state, flags)
 	var cwb := DotGameWorkbench.new()
 	cwb.panel_mode = 2
 	cwb.config = {"enabled": false}
@@ -217,159 +130,17 @@ func _test_the_remote_workbench() -> void:
 	_check(applied.ok and sgame.config.horde_cap == 11, "an edit from the panel reaches the server's live config", "" if applied.ok else applied.error.message)
 	_check(crt.revision(kind, sbinder.profile_id) > 0 and crt.revision(kind, sbinder.profile_id) == srt.revision(kind, sbinder.profile_id), "and its row replicated to the client")
 
-	state["uid"] = ""
-	var _q2 := cremote.request(edit.merged({"value": 12}))
-	_check(sgame.config.horde_cap == 11, "a guest's forged edit is refused")
-	state["now"] += 2000
-	remote.poll()
-	_check(not cremote.allowed and cwb.overlay == null, "and the panel is taken away from it")
-
-	state["uid"] = "plain"
-	cremote.ask()
-	var _q3 := cremote.request(edit.merged({"value": 13}))
-	_check(not cremote.allowed and sgame.config.horde_cap == 11, "a player holding no flag is told no and refused")
-
-	state["uid"] = "boss"
-	cremote.ask()
-	_check(cremote.allowed and cwb.overlay != null, "an admin is let back in")
-	flags["boss"] = []
-	var _q4 := cremote.request(edit.merged({"value": 14}))
-	_check(sgame.config.horde_cap == 11, "the revoked admin's next edit is refused at once")
-	state["now"] += 2000
-	remote.poll()
-	_check(not cremote.allowed and cwb.overlay == null, "and the panel closes")
-
-	flags["boss"] = ["cvar", "root"]
-	state["on"] = false
-	var _q5 := cremote.request(edit.merged({"value": 15}))
-	_check(sgame.config.horde_cap == 11, "switching the cvar off refuses a restored admin too")
-	_check(not remote.permit_actor("remote:boss", "cvar"), "and revokes the server-made actors")
+	_workbench_revocations({"state": state, "flags": flags, "cremote": cremote, "remote": remote,
+		"edit": edit, "sgame": sgame, "cwb": cwb})
 	slink.release()
 	clink.release()
-	swb.queue_free()
-	cwb.queue_free()
-	snet.queue_free()
-	cnet.queue_free()
+	for node in [swb, cwb, snet, cnet]: node.queue_free()
 	sgame.free()
 	cgame.free()
 	_done()
 
 
 # --- Construction ----------------------------------------------------------
-
-func _make_game(authority: bool) -> ArenaGame:
-	var game := ArenaGame.new()
-	game.name = "Arena%s" % ("Server" if authority else str(_clients.size()))
-	game.tick_rate = TICK_RATE
-	game.score_limit = 50
-	game.time_limit_sec = 0.0
-	game.headless = true
-	game.is_authority = authority
-	game.register_service = false
-	add_child(game)
-
-	var ready := game.setup(ArenaMap.dm_box())
-	_check(ready.ok, "%s game sets up" % ("server" if authority else "client"), str(ready.error))
-
-	game.match_node.rules.warmup_sec = 0.0
-	game.match_node.rules.countdown_sec = 0.0
-	game.match_node.rules.respawn_delay_sec = 1.0
-	game.start(0)
-	return game
-
-
-func _make_manager(is_server: bool, scope: StringName, peer_id: int) -> DotNetManager:
-	var net := DotNetManager.new()
-	net.name = "Net%s" % scope
-	net.is_server = is_server
-	net.service_scope = scope
-	net.local_peer_id = peer_id
-	net.auto_tick = false
-	net.config_file = ""
-	net.config = DotNetConfig.new()
-	net.config.tick_rate = TICK_RATE
-	net.config.snapshot_rate = SNAPSHOT_RATE
-	# From the game, exactly as `ArenaModule` and `ArenaClient` do it. A suite that
-	# left this at dot-net's default would agree with itself on both ends and prove
-	# nothing about the two that actually ship — which is how the 128-against-256
-	# mismatch survived until a browser drew sky in every direction.
-	net.config.world_extent = ArenaGame.NET_WORLD_EXTENT
-	add_child(net)
-
-	_check(net.setup().ok, "%s manager sets up" % scope)
-
-	# NOT started here. `DotNetManager.start` seals the message registry, and
-	# `ArenaNetBridge.attach` registers this game's two message types — registering
-	# after the seal fails, because ids are on the wire and adding a type would
-	# renumber every id above it and silently reinterpret every message. So the order
-	# is setup, attach, start, and it is the same order `ArenaModule` and
-	# `ArenaClient` use. See `_start`.
-	return net
-
-
-## Seals the message registry and starts a manager. Called AFTER its bridge attached.
-func _start(net: DotNetManager) -> void:
-	net.messages.seal()
-	net.start()
-
-
-func _build_server() -> void:
-	print("")
-	print("[server]")
-
-	_server_game = _make_game(true)
-	_server_net = _make_manager(true, &"server", 1)
-
-	_server_bridge = ArenaNetBridge.new()
-	_server_bridge.name = "ServerBridge"
-	add_child(_server_bridge)
-	_check(_server_bridge.attach(_server_game, _server_net).ok, "the bridge attaches")
-	_start(_server_net)
-
-	# A game and a manager that disagree about authority is the one wiring mistake
-	# that produces a server resolving nobody's hits, silently.
-	var wrong := ArenaNetBridge.new()
-	_check(
-		not wrong.attach(_server_game, _make_manager(false, &"stray", 9)).ok,
-		"a client manager behind an authoritative game is refused"
-	)
-	wrong.free()
-
-	_server_bridge.player_announced.connect(func(payload: PackedByteArray) -> void:
-		_joins.append(payload)
-	)
-
-	# The server's payloads land in the addressed client, with loss.
-	_server_net.send_fn = func(peer_id: int, payload: PackedByteArray, _d: int) -> void:
-		_drop_down += 1
-		if _drop_down % LOSS_EVERY == 0:
-			return
-		_downstream.append({"peer": peer_id, "bytes": payload})
-
-
-func _build_client(peer_id: int, session_id: int) -> void:
-	print("")
-	print("[client %d]" % peer_id)
-
-	var game := _make_game(false)
-	var net := _make_manager(false, &"client%d" % peer_id, peer_id)
-
-	var bridge := ArenaNetBridge.new()
-	bridge.name = "Bridge%d" % peer_id
-	add_child(bridge)
-	_check(bridge.attach(game, net).ok, "the bridge attaches")
-	_start(net)
-
-	# The clock is estimated from the server's ticks in a real deployment; this run
-	# drives both sides tick for tick, so it is simply told.
-	net.clock.tick = 0
-
-	_clients[peer_id] = {
-		"game": game, "net": net, "bridge": bridge, "session": session_id
-	}
-
-
-# --- The wire --------------------------------------------------------------
 
 func _test_command_wire() -> void:
 	print("")
@@ -449,146 +220,6 @@ func _test_command_wire() -> void:
 
 
 # --- Joining ---------------------------------------------------------------
-
-func _join_everyone() -> void:
-	print("")
-	print("[joins]")
-
-	# What the identity layer resolved for peer 2: a member's site avatar, translated.
-	var site_doc := DotAvatar.make(&"builtin")
-	site_doc.set_part(&"top", &"top.skin-c")
-	site_doc.set_part(&"face", &"face.skin-k")
-	var dressed: DotAvatar = preload("../game/arena_avatars.gd").from_site(site_doc)
-	var dressed_session := int(_clients[2]["session"])
-	_server_bridge.avatar_fn = func(session_id: int) -> DotAvatar:
-		return dressed if session_id == dressed_session else null
-
-	for peer_id in _clients:
-		var entry: Dictionary = _clients[peer_id]
-		var added := _server_bridge.add_player(
-			peer_id, int(entry["session"]), "Player %d" % peer_id
-		)
-		_check(added.ok, "peer %d joins the server" % peer_id, str(added.error))
-
-	_check(_joins.size() == 2, "both joins were announced", str(_joins.size()))
-	# And the map's toys, one entity each (see [method _test_toys_reach_a_client]).
-	var toys := _server_bridge.toy_count()
-	_check(toys > 0 and _server_net.registry.count() == 2 + toys, "two players are replicated, and the map's toys",
-		"%d entities, %d toys" % [_server_net.registry.count(), toys])
-
-	# Every client learns about every player, itself included.
-	for peer_id in _clients:
-		var bridge: ArenaNetBridge = _clients[peer_id]["bridge"]
-
-		for payload in _joins:
-			_check(bridge.apply_join(payload).ok, "client %d mirrors a join" % peer_id)
-
-		# The TOYS a signon carries; this harness routes no events by itself. Before any
-		# snapshot: a client that has not paired the toys stops reading a snapshot at the
-		# first entity it does not know, players and all (dot-net's `receive_snapshot`).
-		_deliver_event(peer_id, ArenaEvents.Kind.TOYS, _server_bridge.get("_toys_body"))
-		_quiet_client_toys(peer_id)
-
-		var net: DotNetManager = _clients[peer_id]["net"]
-		_check(net.registry.count() == 2 + toys and bridge.toy_count() == toys, "client %d knows both players, and the toys" % peer_id)
-
-		var mine := net.registry.owned_by(peer_id)
-		_check(mine.size() == 1, "client %d owns exactly one" % peer_id)
-		_check(mine[0].is_predicted(), "and predicts it")
-
-	_check(
-		not _clients[2]["bridge"].apply_join(PackedByteArray([1, 2])).ok,
-		"a truncated join is refused"
-	)
-
-	# [b]A member's figure reaches the other screens.[/b] Arena's JOIN carried a name and
-	# no avatar, and its client drew everybody as stock, so nobody's choice was ever seen.
-	var watcher_game: ArenaGame = _clients[3]["game"]
-	var seen := watcher_game.player_for(dressed_session)
-	_check(
-		seen != null and seen.avatar != null and seen.avatar.digest() == dressed.digest(),
-		"another client sees the figure the server resolved for a player",
-		seen.avatar.digest() if seen != null and seen.avatar != null else "no avatar"
-	)
-	var plain := watcher_game.player_for(int(_clients[3]["session"]))
-	_check(plain != null and plain.avatar == null, "and nobody else's is invented")
-
-	# The profile arrives after seating: the server re-describes them, and a client that
-	# already has them takes the new name and figure.
-	var later_doc := DotAvatar.make(&"builtin")
-	later_doc.set_part(&"top", &"skin-e")
-	var later: DotAvatar = preload("../game/arena_avatars.gd").from_site(later_doc)
-	_check(
-		_server_bridge.refresh_player(dressed_session, "Ada", later),
-		"the server re-describes a seated player"
-	)
-	_clients[3]["bridge"].apply_join(_server_bridge.join_payload(dressed_session))
-	_check(
-		seen.display_name == "Ada" and seen.avatar.digest() == later.digest(),
-		"and a client that already has them takes the new name and figure"
-	)
-
-
-# --- Running ---------------------------------------------------------------
-
-func _commands_for(peer_id: int, tick: int) -> Array:
-	var move := DotFpsCommand.new()
-	# Peer 2 runs one way and peer 3 the other, so a client that received only its
-	# own entity's updates would still fail the convergence check below.
-	move.move = Vector2(0.0, 1.0 if peer_id == 2 else -1.0)
-	move.yaw = 0.0 if peer_id == 2 else 180.0
-
-	var fire := DotWeaponCommand.new()
-	fire.slot = 2
-
-	if tick % 8 == 0:
-		fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
-
-	return [move, fire]
-
-
-func _run_ticks() -> void:
-	print("")
-	print("[running %d ticks]" % RUN_TICKS)
-
-	for tick in range(1, RUN_TICKS + 1):
-		# Clients send input for the tick the server is about to run, which is what
-		# "input runs ahead" means in practice.
-		for peer_id in _clients:
-			var entry: Dictionary = _clients[peer_id]
-			var pair := _commands_for(peer_id, tick)
-			var packet: PackedByteArray = entry["bridge"].encode_input(
-				tick, pair[0], pair[1]
-			)
-
-			_drop_up += 1
-			if _drop_up % LOSS_EVERY != 0:
-				_server_bridge.receive_input(peer_id, packet)
-
-		_server_bridge.server_tick(tick)
-
-		for entry_down in _downstream:
-			var peer: int = entry_down["peer"]
-			var targets: Array = _clients.keys() if peer == 0 else [peer]
-
-			for target in targets:
-				if _clients.has(target):
-					_clients[target]["bridge"].receive_snapshot(entry_down["bytes"])
-
-		_downstream.clear()
-
-		for peer_id in _clients:
-			var entry: Dictionary = _clients[peer_id]
-			var pair := _commands_for(peer_id, tick)
-			entry["net"].clock.tick = tick
-			entry["bridge"].client_tick(tick, pair[0], pair[1])
-
-	_check(_server_game.current_tick() == RUN_TICKS, "the server ticked once per tick",
-		str(_server_game.current_tick()))
-	_check(_server_net.stats.packets_sent > 0, "snapshots went out")
-
-
-# --- What it proves --------------------------------------------------------
 
 func _test_convergence() -> void:
 	print("")
@@ -729,446 +360,6 @@ func _test_owner_only() -> void:
 
 # --- Maps and voice over the link -------------------------------------------
 
-## dot-map's announce/ready/load protocol, over this game's own link.
-##
-## [b]dot-map's own suite runs this over a loopback `send_fn` and never over
-## dot-net.[/b] Its notes say so, and they say what follows from it: the seam between
-## a map sync host and a real game's transport is the one nothing has run. This is
-## that seam — two [ArenaNetLink]s, a real [DotMapSyncHost] and a real
-## [DotMapSyncClient], with the payloads going through the same `send_map` a socket
-## would use.
-func _test_map_sync_wire() -> void:
-	print("")
-	_section("[map sync over the link]")
-
-	var server_link := ArenaNetLink.attached_to(self, _server_bridge, true)
-	add_child(server_link)
-	server_link.name = "MapServerLink"
-
-	var client_entry: Dictionary = _clients[_clients.keys()[0]]
-	var client_bridge: ArenaNetBridge = client_entry["bridge"]
-	var client_link := ArenaNetLink.attached_to(self, client_bridge, false)
-	add_child(client_link)
-	client_link.name = "MapClientLink"
-
-	# Both loopbacks, crossed. `send_map` refuses to fall through to an RPC when the
-	# byte loopback is set, so a harness that wired one and not the other would get a
-	# silent no-op rather than a crash — which is why the counters are asserted below
-	# rather than only the outcome.
-	server_link.loopback = func(_m: StringName, _p: int, _b: PackedByteArray) -> void: pass
-	client_link.loopback = func(_m: StringName, _p: int, _b: PackedByteArray) -> void: pass
-
-	server_link.loopback_map = func(m: StringName, peer: int, payload: Dictionary) -> void:
-		client_link.deliver_map(m, peer, payload)
-
-	client_link.loopback_map = func(m: StringName, _peer: int, payload: Dictionary) -> void:
-		server_link.deliver_map(m, 2, payload)
-
-	var catalogue := ArenaMaps.catalogue()
-
-	var session := ArenaMapSession.new()
-	session.name = "MapSession"
-	session.game = _server_game
-	session.catalogue = catalogue
-	add_child(session)
-
-	var host := DotMapSyncHost.new()
-	host.name = "MapHost"
-	host.session = session
-	host.sync_timeout_sec = 5.0
-	host.send_fn = func(peer: int, payload: Dictionary) -> void:
-		server_link.send_map(peer, payload)
-	add_child(host)
-
-	# The FOLLOWER needs a catalogue too, and leaving it out looks exactly like a
-	# trust refusal: `DotMapSyncClient` accepts an announced map only if it is in its
-	# own catalogue at the same version, or is delivered content. With no session it
-	# has no catalogue, so every one of this game's maps was refused with "a host may
-	# not send a map that is not delivered content" — which is the correct answer to
-	# the question it was actually being asked.
-	var client_game: ArenaGame = client_entry["game"]
-
-	var follower_session := ArenaMapSession.new()
-	follower_session.name = "FollowerSession"
-	follower_session.game = client_game
-	follower_session.catalogue = ArenaMaps.catalogue()
-	add_child(follower_session)
-
-	var follower := DotMapSyncClient.new()
-	follower.name = "MapFollower"
-	follower.session = follower_session
-	follower.accept_unknown_maps = true
-	follower.send_fn = func(payload: Dictionary) -> void:
-		client_link.send_map_report(payload)
-	add_child(follower)
-
-	# One argument. `DotMapSyncClient.changed` carries the map and nothing else, unlike
-	# `DotMapSession.changed`, which carries the world as well.
-	var loads: Array[StringName] = []
-	follower.changed.connect(func(map: DotMapDef) -> void: loads.append(map.id))
-
-	_server_bridge.map_report_fn = func(peer: int, payload: Dictionary) -> void:
-		host.handle(peer, payload)
-
-	client_bridge.map_in_fn = func(payload: Dictionary) -> void:
-		follower.handle(payload)
-
-	host.add_peer(2)
-
-	var target: StringName = &"dm_atrium" if _server_game.map.id == &"dm_box" else &"dm_box"
-	var changed: DotResult = await host.change_to(target)
-
-	_check(changed.ok, "the server changes map with a peer following", str(changed.error))
-	_check(
-		server_link.map_sent > 0,
-		"announcements went out on the link",
-		"%d" % server_link.map_sent
-	)
-	_check(
-		client_link.map_received > 0,
-		"and the client received them",
-		"%d" % client_link.map_received
-	)
-
-	# The report going back is the half that makes the wait mean anything. Without it
-	# the host waits out its whole timeout and swaps without the client — which
-	# `swap_without_stragglers` permits, so the change would still "work" and the peer
-	# would still be on the old map.
-	_check(
-		server_link.map_received > 0,
-		"the client reported back, so the host did not wait out its timeout",
-		"%d" % server_link.map_received
-	)
-
-	_check(loads.has(target), "and the client was told to load the new map")
-	_check(_server_game.map.id == target, "the server is on it")
-	_check(
-		client_game.map.id == target,
-		"and so is the client, having rebuilt the world itself",
-		String(client_game.map.id)
-	)
-
-	# [b]Where the player stands is the server's, and the client has to follow it.[/b] A
-	# map change respawns everybody on the authority (`[arena-mapchange-floor-1]`: a
-	# position carried over can be inside a box of the next map) and does nothing of the
-	# kind on a mirror, which only rebuilds its geometry. So the client's own predicted
-	# player is left where it stood in the old map until a snapshot says otherwise, and
-	# this is the check that one does — through the predictor, whose rewind adopts the
-	# server's state and replays on top of it, over the same one-in-five loss.
-	var peer: int = _clients.keys()[0]
-	var session_id := int(client_entry["session"])
-	var on_server: ArenaPlayer = _server_bridge.behaviour_for(session_id).player
-	var on_client: ArenaPlayer = client_bridge.behaviour_for(session_id).player
-	var respawned_at := on_server.controller.state.position
-	var nearest := INF
-
-	for spawn in _server_game.map.spawns:
-		nearest = minf(nearest, spawn.origin.distance_to(respawned_at))
-
-	_check(
-		nearest < 0.5,
-		"the server put this client's player at a spawn of the new map",
-		"%.1f m from the nearest" % nearest
-	)
-
-	var _follow := _flight_window(peer, 48, 0)
-	var gap := on_client.controller.state.position.distance_to(
-		on_server.controller.state.position
-	)
-	_check(
-		gap < 0.1 and on_client.global_position.distance_to(on_server.controller.state.position) < 0.1,
-		"and the client's predicted player followed the respawn, in the state and on the node",
-		"%.2f m apart in the state, %.2f on the node" % [
-			gap, on_client.global_position.distance_to(on_server.controller.state.position)
-		]
-	)
-
-	# The same wire onto an imported combat surf map, and back.
-	if ArenaMap.imported_ids().has(IMPORTED_MAP):
-		await _follow_onto_imported(host, client_game, client_entry, peer, target)
-	else:
-		print("  skip  no imported maps linked (arena-surf-dm-maps); %d checks not run" % IMPORTED_CHECKS)
-		_skipped_checks += IMPORTED_CHECKS
-
-	host.queue_free()
-	follower.queue_free()
-	follower_session.queue_free()
-	remove_child(follower_session)
-	session.queue_free()
-	server_link.queue_free()
-	client_link.queue_free()
-	remove_child(host)
-	remove_child(follower)
-	remove_child(session)
-	remove_child(server_link)
-	remove_child(client_link)
-	_done()
-
-
-## A client follows the server onto an imported combat surf map, and predicts on it.
-##
-## [b]Three things only an imported map exercises over the wire[/b]: the client builds the
-## map's solid itself (its own `change_map`, from its own copy of the files) and its player
-## moves against the physics space; its movement is the surf profile the map asks for,
-## derived on its own end rather than sent; and the map is far bigger than any built-in —
-## its spawns stand 190 m from the origin, past the 128 m `NET_WORLD_EXTENT` was until
-## this map, where every position the server sent was clamped to the edge of the quantiser.
-func _follow_onto_imported(
-	host: DotMapSyncHost, client_game: ArenaGame, client_entry: Dictionary, peer: int,
-	back_to: StringName
-) -> void:
-	var changed: DotResult = await host.change_to(IMPORTED_MAP)
-	_check(changed.ok and _server_game.map.id == IMPORTED_MAP and client_game.map.id == IMPORTED_MAP,
-		"the server changes to an imported combat surf map and the client follows",
-		str(changed.error) if not changed.ok else String(client_game.map.id))
-
-	var solid := client_game.map.collision_root
-	_check(solid != null and solid.is_inside_tree() and solid.get_child_count() > 0
-		and solid != _server_game.map.collision_root,
-		"the client built the map's solid itself",
-		"%d shapes" % (solid.get_child_count() if solid != null else -1))
-
-	var session_id := int(client_entry["session"])
-	var client_bridge: ArenaNetBridge = client_entry["bridge"]
-	var on_server: ArenaPlayer = _server_bridge.behaviour_for(session_id).player
-	var on_client: ArenaPlayer = client_bridge.behaviour_for(session_id).player
-	_check(is_equal_approx(on_client.controller.tunables.gravity, float(ArenaPlayer.SURF_TUNABLES["gravity"]))
-		and is_equal_approx(on_client.controller.tunables.air_accelerate, 150.0),
-		"and moves its player on the genre's air control there, as the server does",
-		"gravity %.2f, air %.0f" % [on_client.controller.tunables.gravity, on_client.controller.tunables.air_accelerate])
-
-	var at := on_server.controller.state.position
-	var nearest := INF
-
-	for spawn in _server_game.map.spawns:
-		nearest = minf(nearest, spawn.origin.distance_to(at))
-
-	_check(nearest < 0.5, "the server put the player at one of the map's spawns, %.0f m out" % Vector2(at.x, at.z).length(),
-		"%.1f m from the nearest" % nearest)
-
-	var _settle := _flight_window(peer, 48, 0)
-	var gap := on_client.controller.state.position.distance_to(on_server.controller.state.position)
-	_check(gap < 0.1, "and the client's predicted player followed it, past the old 128 m extent",
-		"%.2f m apart (client %s, server %s)" % [gap, on_client.controller.state.position, at])
-
-	var start_y := on_server.controller.state.position.y
-	var peak := [start_y]
-	var watch := func(_t: int, state: DotFpsState) -> void: peak[0] = maxf(peak[0], state.position.y)
-	on_server.controller.simulated.connect(watch)
-	var hop := _flight_window(peer, 64, DotFpsCommand.BUTTON_JUMP)
-	on_server.controller.simulated.disconnect(watch)
-	print("  measured: imported map, jump peak %.2f m, worst gap %.2f m (%s)" % [
-		float(peak[0]) - start_y, float(hop["worst_gap"]), hop["worst_at"]
-	])
-	_check(float(peak[0]) - start_y > 0.8 and float(hop["worst_gap"]) < 0.05,
-		"jumping on it, the client predicts the server to within five centimetres",
-		"peak %.2f m, worst %.2f m" % [float(peak[0]) - start_y, float(hop["worst_gap"])])
-
-	# A booster: the map's mechanics run inside prediction on the client exactly as on the
-	# server, from the map each end loaded, so a player thrown at 47 m/s is predicted
-	# thrown. A client that left them to the server would be corrected across the map.
-	var booster := {}
-	for p: Dictionary in _server_game.map.mechanics.pushes:
-		var push: Vector3 = p["push"]
-		if not p["once"] and (p["box"] as AABB).size.y < 0.5 and Vector2(push.x, push.z).length() \
-				> Vector2(booster.get("push", Vector3.ZERO).x, booster.get("push", Vector3.ZERO).z).length():
-			booster = p
-	var pad: AABB = booster["box"]
-	var on_pad := Vector3(pad.get_center().x, pad.end.y + 0.02, pad.get_center().z)
-	on_server.controller.teleport(on_pad, 0.0, 0.0)
-	var boosted := _flight_window(peer, 48, 0)
-	var carried := on_server.controller.state.position.distance_to(on_pad)
-	print("  measured: imported map, booster carried the player %.1f m, worst gap %.2f m, %.3f m against the server's same tick" % [
-		carried, float(boosted["worst_gap"]), float(boosted["worst_aligned"])
-	])
-	_check(carried > 20.0, "a booster on it carries the server's player on at its speed",
-		"%.1f m in 48 ticks" % carried)
-	# Both ends on the same tick (a real link's order); measured 0.02 m at 47 m/s. This
-	# used to allow 0.1 because the harness's tick of lead was 0.74 m by itself.
-	_check(float(boosted["worst_aligned"]) < 0.05,
-		"and the client predicts the push with it, tick for tick",
-		"worst %.3f m against the server's same tick, %.2f m at the same moment" % [
-			float(boosted["worst_aligned"]), float(boosted["worst_gap"])])
-
-	var back: DotResult = await host.change_to(back_to)
-	_check(back.ok and client_game.map.id == back_to and client_game.map.collision_root == null,
-		"and back to %s, with the imported solid gone from the client too" % back_to,
-		str(back.error) if not back.ok else "")
-
-
-## A voice frame, client to server to another client.
-##
-## [b]Deliberately not through [DotNetManager].[/b] dot-net decodes a bit-packed
-## message against a sealed schema; a voice frame is an opaque blob from a codec and
-## putting it through would mean a message type per codec — or a schema that changes
-## when the codec does, and the schema hash is what both ends check to agree they are
-## speaking the same game.
-func _test_voice_wire() -> void:
-	print("")
-	_section("[voice over the link]")
-
-	var relayed: Array[Dictionary] = []
-	var heard: Array[PackedByteArray] = []
-
-	var server_link := ArenaNetLink.attached_to(self, _server_bridge, true)
-	add_child(server_link)
-	server_link.name = "VoiceServerLink"
-
-	var client_entry: Dictionary = _clients[_clients.keys()[0]]
-	var client_bridge: ArenaNetBridge = client_entry["bridge"]
-	var client_link := ArenaNetLink.attached_to(self, client_bridge, false)
-	add_child(client_link)
-	client_link.name = "VoiceClientLink"
-
-	client_link.loopback = func(m: StringName, peer: int, payload: PackedByteArray) -> void:
-		server_link.deliver(m, 2, payload)
-
-	server_link.loopback = func(m: StringName, peer: int, payload: PackedByteArray) -> void:
-		client_link.deliver(m, peer, payload)
-
-	_server_bridge.voice_relay_fn = func(speaker: int, bytes: PackedByteArray) -> void:
-		relayed.append({"speaker": speaker, "bytes": bytes})
-		# Straight back out, which is what DotVoiceRouter does after it has decided
-		# who hears it. The router itself is checked on a real server in `dedicated`.
-		server_link.send_voice(2, bytes)
-
-	client_bridge.voice_in_fn = func(bytes: PackedByteArray) -> void:
-		heard.append(bytes)
-
-	var frame := PackedByteArray([1, 2, 3, 4, 5, 6, 7, 8])
-	client_link.send_voice_frame(frame)
-
-	_check(relayed.size() == 1, "a captured frame reaches the server")
-
-	if not relayed.is_empty():
-		# [b]The speaker is stamped from the transport, never read out of the
-		# payload.[/b] A client that could name its own speaker id could put words in
-		# anybody's mouth, and the only symptom is words coming out of the wrong
-		# player — which nobody would report as a security problem.
-		_check(
-			int(relayed[0]["speaker"]) == 2,
-			"stamped with the peer the transport reported",
-			str(relayed[0]["speaker"])
-		)
-		_check(
-			(relayed[0]["bytes"] as PackedByteArray) == frame,
-			"and the bytes are unchanged"
-		)
-
-	_check(heard.size() == 1, "and the relay reaches a listener")
-
-	# Never a broadcast. `send(bytes, 0)` is how this family last delivered a private
-	# message to every client at once, and a proximity voice packet sent to peer 0
-	# would be exactly that bug with audio in it.
-	var before := server_link.voice_sent
-	server_link.send_voice(0, frame)
-	_check(
-		server_link.voice_sent == before,
-		"and a voice frame addressed to peer 0 is refused rather than broadcast"
-	)
-
-	# [b]The client's own voice reaches the server.[/b] Armed: until 2026-10-11 the client's
-	# manager had `frame_sent.connect(pass)` where its send_fn belonged, so an arena player
-	# holding the talk key was heard by nobody, while every check above handed the link bytes.
-	relayed.clear()
-	# The bridge's own link, as `ArenaNetBridge` sets it on a real client; this harness
-	# attached the looped one by hand.
-	var held_link := client_bridge.link
-	client_bridge.link = client_link
-	var extras := ArenaClientExtras.new()
-	extras.name = "VoiceExtras"
-	add_child(extras)
-	var attached := extras.attach(client_bridge, client_entry["game"])
-	var voice: DotVoiceManager = extras.voice
-	_check(attached.ok and voice != null and not voice.is_capturing(),
-		"the client's voice attaches with no microphone open before the talk key")
-	if voice != null:
-		var mic := DotVoiceSourceBuffer.new()
-		mic.sample_rate = voice.config.sample_rate
-		mic.write(DotVoiceSourceBuffer.tone(440.0, 0.2, mic.sample_rate, 0.4))
-		voice.source = mic
-		extras.set_talking(true)
-		for _i in range(4):
-			await get_tree().process_frame
-		extras.set_talking(false)
-	_check(voice != null and voice.frames_sent > 0 and relayed.size() == voice.frames_sent,
-		"holding it sends the player's speech to the server (%d sent, %d relayed)" % [voice.frames_sent if voice != null else 0, relayed.size()])
-
-	# [b]The player's block list (sm) reaches arena's voice.[/b] dot-chat's DotChatSelfMute
-	# binds whatever is published as dot_voice_client; arena's manager did not publish, so
-	# `sm` muted a player's lines here and never their voice.
-	_check(voice != null and DotRegistry.get_service(&"dot_voice_client") == voice,
-		"the client's voice is published as dot_voice_client")
-	var self_mute := DotChatSelfMute.new()
-	self_mute.path = "user://arena_net_self_mute.json"
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))
-	const TALKER := 1_900_000_001
-	self_mute.set_roster([{"id": 9, "name": "Loud", "key": "loud-key", "peer": TALKER}], 2)
-	self_mute.attach_voice(DotRegistry.get_service(&"dot_voice_client"))
-	var heard_buffer := DotVoiceSinkBuffer.new()
-	if voice != null:
-		heard_buffer.sample_rate = voice.config.sample_rate
-		voice.sink_factory = func(_speaker: int) -> DotVoiceSink: return heard_buffer
-	var talk := func() -> void:
-		var codec := DotVoiceCodec.instance_for(voice.config.codec_id)
-		for i in range(10):
-			var packet := DotVoicePacket.new()
-			packet.speaker = TALKER
-			packet.sequence = i
-			packet.starts_talk_spurt = i == 0
-			packet.sample_count = voice.config.frame_samples()
-			packet.codec_id = voice.config.codec_id
-			packet.payload = codec.encode(DotVoiceSourceBuffer.tone(300.0, voice.config.frame_ms / 1000.0, voice.config.sample_rate, 0.4))
-			var _r := voice.receive(packet.to_bytes())
-	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, true)
-	if voice != null:
-		talk.call()
-		for _i in range(15):
-			await get_tree().process_frame
-	_check(voice != null and voice.is_locally_muted(TALKER) and heard_buffer.frames_written == 0,
-		"sm on a player: their voice frames arrive and are not played (%d played)" % heard_buffer.frames_written)
-	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, false)
-	if voice != null:
-		talk.call()
-		var deadline := Time.get_ticks_msec() + 1000
-		while heard_buffer.frames_written == 0 and Time.get_ticks_msec() < deadline:
-			await get_tree().process_frame
-	_check(heard_buffer.frames_written > 0, "and unmuted, the same frames play (%d)" % heard_buffer.frames_written)
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))
-	extras.queue_free()
-	client_bridge.link = held_link
-
-	server_link.queue_free()
-	client_link.queue_free()
-	remove_child(server_link)
-	remove_child(client_link)
-	_done()
-
-
-## Runs the harness for [param ticks] more ticks: inputs up, the server, snapshots down,
-## the clients. What [method _run_ticks] does, from wherever the server has got to.
-func _pump(ticks: int) -> void:
-	for _i in range(ticks):
-		var tick := _server_game.current_tick() + 1
-		for peer_id in _clients:
-			var entry: Dictionary = _clients[peer_id]
-			var pair := _commands_for(peer_id, tick)
-			_server_bridge.receive_input(peer_id, entry["bridge"].encode_input(tick, pair[0], pair[1]))
-		_server_bridge.server_tick(tick)
-		for entry_down in _downstream:
-			var peer: int = entry_down["peer"]
-			var targets: Array = _clients.keys() if peer == 0 else [peer]
-			for target in targets:
-				if _clients.has(target):
-					_clients[target]["bridge"].receive_snapshot(entry_down["bytes"])
-		_downstream.clear()
-		for peer_id in _clients:
-			var entry: Dictionary = _clients[peer_id]
-			var pair := _commands_for(peer_id, tick)
-			entry["net"].clock.tick = tick
-			entry["bridge"].client_tick(tick, pair[0], pair[1])
-
-
 ## A player dies and THEIR CLIENT draws the death camera, then hands it over.
 ##
 ## [b]Until 2026-09-25 a networked client drew no death camera at all.[/b] The spectate
@@ -1258,16 +449,7 @@ func _test_hits_and_medals_reach_clients() -> void:
 	var killer_peer := 3
 	var sent: Array = []
 	var previous := _server_bridge.link
-	var link := ArenaNetLink.new()
-	link.bridge = _server_bridge
-	link.is_server = true
-	link.loopback = func(method: StringName, peer: int, payload: PackedByteArray) -> void:
-		if method == &"event":
-			sent.append([peer, payload])
-	_server_bridge.link = link
-	for peer in _clients:
-		if not _server_bridge._ready_peers.has(peer):
-			_server_bridge.mark_ready(peer)
+	var link := _capture_link(sent)
 	sent.clear()
 
 	var heard := {}
@@ -1338,39 +520,18 @@ func _test_bullets_reach_a_client() -> void:
 	var client_game: ArenaGame = _clients[2]["game"]
 	var sent: Array = []
 	var previous := _server_bridge.link
-	var link := ArenaNetLink.new()
-	link.bridge = _server_bridge
-	link.is_server = true
-	link.loopback = func(method: StringName, peer: int, payload: PackedByteArray) -> void:
-		if method == &"event":
-			sent.append([peer, payload])
-	_server_bridge.link = link
-	for peer in _clients:
-		if not _server_bridge._ready_peers.has(peer):
-			_server_bridge.mark_ready(peer)
+	var link := _capture_link(sent)
 
 	var shooter := _server_game.player_for(11)
 	shooter.give_default_loadout()
 	var weapon_id := shooter.arsenal.current_def().id
 	var tuning := ArenaPlayer.weapon_catalogue().get_def(weapon_id).tuning as DotWeaponBallistics
 	var was := [tuning.muzzle_velocity, tuning.max_range, tuning.tracer_interval, tuning.pellets]
-	tuning.muzzle_velocity = 40.0
-	tuning.max_range = 30.0
-	tuning.tracer_interval = 1
-	tuning.pellets = 1
+	_tune(tuning, [40.0, 30.0, 1, 1])
 	_pump(2)
 	sent.clear()
 
-	var fire := func() -> void:
-		var shot := DotShot.new()
-		shot.attacker = 11
-		shot.weapon_id = weapon_id
-		shot.tick = _server_game.current_tick()
-		shot.origin = Vector3(0.0, 8.0, 0.0)
-		shot.direction = Vector3(0.3, 0.2, -0.9).normalized()
-		shot.pellets = [shot.direction] as Array[Vector3]
-		shot.deferred = true
-		var _r := _server_game.bullet_bridge.resolve_shot(shot, tuning, -1.0)
+	var fire := func() -> void: _fire_test_shot(weapon_id, tuning)
 	var kinds := func(kind: int) -> Array:
 		var out: Array = []
 		for item in sent:
@@ -1393,8 +554,7 @@ func _test_bullets_reach_a_client() -> void:
 	_check(client_game.bullet_mirrors == null or client_game.bullet_mirrors.count() == 0, "off: the client has no bullet")
 	sent.clear()
 
-	_server_game.combat_feel.ballistics.set(&"enabled", true)
-	client_game.combat_feel.ballistics.set(&"enabled", true)
+	for g in [_server_game, client_game]: g.combat_feel.ballistics.set(&"enabled", true)
 	fire.call()
 	var spawned: Array = kinds.call(ArenaEvents.Kind.BULLET)
 	_check(spawned.size() >= 1 and int(spawned[0][0]) == 2, "on: a BULLET goes to the ready client", str(spawned.size()))
@@ -1420,17 +580,13 @@ func _test_bullets_reach_a_client() -> void:
 	_deliver_event(2, ArenaEvents.Kind.BULLET_END, ArenaEvents.write_bullet_end(server_id))
 	_check(live == 1 and client_game.bullet_mirrors.count() == 0, "a BULLET_END ends a copy early", "%d then %d" % [live, client_game.bullet_mirrors.count()])
 
-	_server_game.combat_feel.ballistics.set(&"enabled", false)
-	client_game.combat_feel.ballistics.set(&"enabled", false)
+	for g in [_server_game, client_game]: g.combat_feel.ballistics.set(&"enabled", false)
 	_pump(100)
 	sent.clear()
 	fire.call()
 	_pump(2)
 	_check(sent.is_empty(), "off again: nothing is sent", str(sent.size()))
-	tuning.muzzle_velocity = was[0]
-	tuning.max_range = was[1]
-	tuning.tracer_interval = was[2]
-	tuning.pellets = was[3]
+	_tune(tuning, was)
 	_server_bridge.link = previous
 	link.free()
 	_done()
@@ -1443,16 +599,7 @@ func _test_killview_reaches_the_victim() -> void:
 	_section("[the kill view reaches the victim]")
 	var sent: Array = []
 	var previous := _server_bridge.link
-	var link := ArenaNetLink.new()
-	link.bridge = _server_bridge
-	link.is_server = true
-	link.loopback = func(method: StringName, peer: int, payload: PackedByteArray) -> void:
-		if method == &"event":
-			sent.append([peer, payload])
-	_server_bridge.link = link
-	for peer in _clients:
-		if not _server_bridge._ready_peers.has(peer):
-			_server_bridge.mark_ready(peer)
+	var link := _capture_link(sent)
 
 	var victim := 11
 	var bot := _server_bridge.add_bot("Bolt")
@@ -1579,30 +726,6 @@ func _test_toys_reach_a_client() -> void:
 	_done()
 
 
-## The server's current TOYS to every client, as a signon or a map change sends it.
-func _deliver_toys() -> void:
-	for peer_id in _clients:
-		_deliver_event(peer_id, ArenaEvents.Kind.TOYS, _server_bridge.get("_toys_body"))
-		_quiet_client_toys(peer_id)
-
-
-## One process, one physics space: a client's frozen copies would stand exactly where the
-## server's balls are and push them off. A real client is another machine.
-func _quiet_client_toys(peer_id: int) -> void:
-	var client_game: ArenaGame = _clients[peer_id]["game"]
-	if client_game.toys != null:
-		for toy in client_game.toys.toys:
-			if toy.body != null:
-				toy.body.collision_layer = 0
-				toy.body.collision_mask = 0
-
-
-func _deliver_event(peer_id: int, kind: int, body: PackedByteArray) -> void:
-	var writer := DotNetWriter.new()
-	var _wrote := _server_net.messages.encode(ArenaEvent.new(kind, body), writer)
-	var _received: DotResult = _clients[peer_id]["bridge"].receive_event(writer.to_bytes())
-
-
 ## The horde reaches a connected client: a monster the server spawns is drawn, follows the
 ## server's, and goes when the server's does.
 ##
@@ -1651,19 +774,7 @@ func _test_monsters_reach_a_client() -> void:
 		if steady >= 12:
 			break
 	var mirror: Node3D = client_bridge.get("_monster_mirrors")[net_id].body
-	var gap := mirror.global_position.distance_to(monster.position())
-	_check(gap < 1.0, "and draws it where the server has it", "%.2f m apart" % gap)
-	_check(absf(angle_difference(mirror.rotation.y, DotNpcNetSync.yaw_of(monster))) < 0.3,
-		"facing the way the server's faces",
-		"client %.2f, server %.2f rad; client faces %s, server faces %s" % [
-			mirror.rotation.y, DotNpcNetSync.yaw_of(monster),
-			str((-mirror.global_basis.z).snapped(Vector3(0.01, 0.01, 0.01))),
-			str(monster.facing().snapped(Vector3(0.01, 0.01, 0.01))),
-		] + " | mirror net (%.2f,%.2f,%.2f) yaw %d, server net (%.2f,%.2f,%.2f) yaw %d" % [
-			client_bridge.get("_monster_mirrors")[net_id].net_x, client_bridge.get("_monster_mirrors")[net_id].net_y,
-			client_bridge.get("_monster_mirrors")[net_id].net_z, client_bridge.get("_monster_mirrors")[net_id].net_yaw,
-			server_net.get("net_x"), server_net.get("net_y"), server_net.get("net_z"), server_net.get("net_yaw"),
-		])
+	_check_monster_mirror(mirror, monster, client_bridge, server_net, net_id)
 
 	horde.spawner.remove(monster.instance_id, DotNpcSpawner.REASON_ADMIN)
 	_check(not _server_bridge.get("_monster_nets").has(monster.instance_id), "the server lets it go")
@@ -1936,113 +1047,6 @@ func _test_wall_moves_predicted() -> void:
 	_done()
 
 
-## [method _flight_window] with [param peer]'s commands from [param driver], read off the
-## client's own predicted state, until the driver has landed (or [param ticks] run out).
-##
-## [b]Played the way a real link plays it, not the way [method _flight_window] does.[/b]
-## Two things differ, and each one alone made the chimney's result depend on nothing but
-## where its presses fell among the harness's snapshots and lost packets -- that is, on
-## which sections ran before this one: CI, without the imported maps, failed it on every
-## run from 2026-10-11 with the same numbers, and a desk with them passed.
-##
-## - The client plays a tick before the server's snapshot of it arrives. Handed over first,
-##   the snapshot rewinds the client to the server's tick T with its clock still on T - 1,
-##   there is nothing to replay, and the client simulates T a second time with T's command.
-##   From then on its tick T + 1 is built from command T: invisible on a held input, a tick
-##   late on every press. Each wall jump came out a tick late on the client and the next
-##   snapshot pulled it back, 0.13 to 0.43 m apart in between.
-## - A command reaches the server a tick before the server runs it, carrying copies of the
-##   ones before it, as [constant ArenaNetBridge.INPUT_COPIES] and the client's input lead
-##   arrange on a real link. With no lead, a lost packet is a command the server never
-##   gets, and a lost jump press is a climb the server never makes.
-##
-## So the loss here is what a real link survives: one packet in five upstream, recovered
-## from the copies, and one snapshot in five downstream.
-func _driven_window(peer: int, driver: WallRouteDriver, ticks: int) -> Dictionary:
-	var first := _server_game.current_tick() + 1
-	var worst_aligned := 0.0
-	var worst_at := ""
-	var session := int(_clients[peer]["session"])
-	var predicted: ArenaPlayer = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(session).player
-	var actual: ArenaPlayer = _server_bridge.behaviour_for(session).player
-	var after_landing := 0
-	var last_aligned := INF
-
-	# Each peer's command for a tick, made and sent the tick before.
-	var send := func(tick: int) -> Dictionary:
-		var made := {}
-		for peer_id in _clients:
-			var pair := _commands_for(peer_id, tick)
-			if peer_id == peer:
-				pair = [driver.next(predicted.controller.state), DotWeaponCommand.new()]
-			made[peer_id] = pair
-
-			var packet: PackedByteArray = _clients[peer_id]["bridge"].encode_input(
-				tick, pair[0], pair[1]
-			)
-			_drop_up += 1
-			if _drop_up % LOSS_EVERY != 0:
-				_server_bridge.receive_input(peer_id, packet)
-		return made
-
-	var commands: Dictionary = send.call(first)
-
-	for tick in range(first, first + ticks):
-		for peer_id in _clients:
-			var pair: Array = commands[peer_id]
-			_clients[peer_id]["net"].clock.tick = tick
-			_clients[peer_id]["bridge"].client_tick(tick, pair[0], pair[1])
-
-		commands = send.call(tick + 1)
-		_server_bridge.server_tick(tick)
-
-		# Both ends have run this tick on this tick's command: what the client predicted,
-		# against what the server did, before the snapshot replaces the prediction.
-		var gap := predicted.controller.state.position.distance_to(actual.controller.state.position)
-		last_aligned = gap
-		if gap > worst_aligned:
-			worst_aligned = gap
-			worst_at = "tick %d client %s server %s" % [
-				tick, predicted.controller.state.position, actual.controller.state.position
-			]
-
-		for entry_down in _downstream:
-			var target_peer: int = entry_down["peer"]
-			var targets: Array = _clients.keys() if target_peer == 0 else [target_peer]
-			for target in targets:
-				if _clients.has(target):
-					_clients[target]["bridge"].receive_snapshot(entry_down["bytes"])
-		_downstream.clear()
-
-		# A dozen ticks standing after the landing, so a late correction is still counted.
-		if driver.finished(predicted.controller.state) and driver.finished(actual.controller.state):
-			after_landing += 1
-			if after_landing > 12:
-				break
-
-	return {"worst_aligned": worst_aligned, "worst_at": worst_at, "last_aligned": last_aligned}
-
-
-## A spawn point with no map box over it, for a launch to go straight up from. Spawns
-## because they are open floor by design — a point picked by geometry alone landed inside
-## the middle structure and under the south arcade's roof.
-static func _open_sky(map: ArenaMap) -> Vector3:
-	for spawn: Transform3D in map.spawns:
-		var at := spawn.origin + Vector3(0.0, 0.1, 0.0)
-		var clear := true
-		for box: AABB in map.boxes:
-			if (
-				at.x > box.position.x - 1.0 and at.x < box.end.x + 1.0
-				and at.z > box.position.z - 1.0 and at.z < box.end.z + 1.0
-				and box.end.y > at.y + 0.2 and box.position.y < at.y + 8.0
-			):
-				clear = false
-				break
-		if clear:
-			return at
-	return map.spawns[0].origin + Vector3(0.0, 0.1, 0.0)
-
-
 ## An administrator's blind and beacon, through the real handlers, over the lossy link.
 ##
 ## [b]The audience is the whole point of both.[/b] Client 2 owns player 11. A blind is
@@ -2244,103 +1248,12 @@ func _test_weapons_over_the_wire() -> void:
 	_done()
 
 
-## Runs [param ticks] more ticks with [param peer] holding [param buttons] and nothing else
-## (0 for nobody), and reports how far that peer's prediction of itself strayed from the
-## server's simulation of it: `{worst_gap, grounded_ticks}`, the second counting ticks the
-## client predicted it out of noclip.
-## [param moves] overrides a peer's command for the whole window (peer -> DotFpsCommand), and
-## `closest` is the nearest the server ever had the two clients' players on the ground plane.
-func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {}) -> Dictionary:
-	var first := _server_game.current_tick() + 1
-	var closest := INF
-	var server_a: ArenaPlayer = _server_bridge.behaviour_for(int(_clients[2]["session"])).player
-	var server_b: ArenaPlayer = _server_bridge.behaviour_for(int(_clients[3]["session"])).player
-	var worst := 0.0
-	var worst_at := ""
-	var grounded := 0
-	var worst_aligned := 0.0
-	# Measured only once a snapshot from inside the window has arrived. Until then the
-	# client cannot know anything the server did at the top of it — the first run of this
-	# measured 159 m, which was the client's copy still where an earlier section had
-	# parked it — and "the client has not heard yet" is latency, not rubber-banding.
-	var heard_before: int = (
-		int(_clients[peer]["net"].stats.packets_received) if peer != 0 else 0
-	)
-
-	# A real link's order, as in _driven_window: each command is made and sent the tick
-	# before the server runs it (with its copies), the client plays tick T before T's
-	# snapshot reaches it, and the gap is read with both ends on T.
-	var send := func(tick: int) -> Dictionary:
-		var made := {}
-		for peer_id in _clients:
-			var pair := _commands_for(peer_id, tick)
-			if peer_id == peer:
-				var held := DotFpsCommand.new()
-				held.buttons = buttons
-				pair = [held, DotWeaponCommand.new()]
-			if moves.has(peer_id):
-				pair = [moves[peer_id], DotWeaponCommand.new()]
-			made[peer_id] = pair
-
-			var packet: PackedByteArray = _clients[peer_id]["bridge"].encode_input(
-				tick, pair[0], pair[1]
-			)
-			_drop_up += 1
-			if _drop_up % LOSS_EVERY != 0:
-				_server_bridge.receive_input(peer_id, packet)
-		return made
-
-	var commands: Dictionary = send.call(first)
-
-	for tick in range(first, first + ticks):
-		for peer_id in _clients:
-			var pair2: Array = commands[peer_id]
-			_clients[peer_id]["net"].clock.tick = tick
-			_clients[peer_id]["bridge"].client_tick(tick, pair2[0], pair2[1])
-
-		# Not past the window's last tick: a command for a tick nobody here runs would sit
-		# in the server's buffer ahead of the next window's own for that tick.
-		if tick < first + ticks - 1:
-			commands = send.call(tick + 1)
-		_server_bridge.server_tick(tick)
-		var apart := server_a.controller.state.position - server_b.controller.state.position
-		closest = minf(closest, Vector2(apart.x, apart.z).length())
-
-		# Both ends have run this tick: what the client predicted, against what the server
-		# did, before this tick's snapshot replaces the prediction.
-		var measure := peer != 0 and int(_clients[peer]["net"].stats.packets_received) != heard_before
-		if measure:
-			var session := int(_clients[peer]["session"])
-			var predicted: ArenaPlayer = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(session).player
-			var actual: ArenaPlayer = _server_bridge.behaviour_for(session).player
-			var gap := predicted.controller.state.position.distance_to(actual.controller.state.position)
-			if gap > worst:
-				worst_at = "tick %d client %s server %s" % [
-					tick, predicted.controller.state.position, actual.controller.state.position
-				]
-			worst = maxf(worst, gap)
-			worst_aligned = worst
-			if predicted.controller.state.mode != DotFpsState.Mode.NOCLIP:
-				grounded += 1
-
-		for entry_down in _downstream:
-			var target_peer: int = entry_down["peer"]
-			var targets: Array = _clients.keys() if target_peer == 0 else [target_peer]
-			for target in targets:
-				if _clients.has(target):
-					_clients[target]["bridge"].receive_snapshot(entry_down["bytes"])
-		_downstream.clear()
-
-	return {"worst_gap": worst, "grounded_ticks": grounded, "worst_at": worst_at,
-		"worst_aligned": worst_aligned, "closest": closest}
-
 ## Players are solid to each other (`mp_solidplayers`, 1 by default): a walk into another
 ## player stops two radii apart on the server, and the walker's own client predicts the same
 ## stop. Then, at 0 on both ends (the cvar is replicated), the same walk passes through.
 ##
 ## [b]Arena's own, not the family's hull.[/b] Movement here is analytic on the server and on
-## every predicting client, so dot-player-controller's physics capsule reached neither, and
-## until 2026-10-12 everybody walked through everybody (fpt-arena-solid-players-1).
+## every predicting client, so dot-player-controller's physics capsule reached neither.
 func _test_solid_players_predicted() -> void:
 	print("")
 	_section("[players are solid, and predicted so]")
@@ -2388,367 +1301,15 @@ func _test_solid_players_predicted() -> void:
 		var _settle := _flight_window(0, 24, 0, {2: idle, 3: idle})
 
 	place.call()
-	var solid := _flight_window(2, 96, 0, {2: walk, 3: idle})
-	var a_z := server_a.controller.state.position.z
-	var b_z := server_b.controller.state.position.z
-	print("  measured: solid, closest %.3f m (two radii %.2f), A at z %.2f, B at z %.2f, worst prediction gap %.3f m" % [
-		float(solid["closest"]), two_radii, a_z, b_z, float(solid["worst_aligned"])])
-	_check(
-		float(solid["closest"]) >= two_radii - 0.02 and float(solid["closest"]) <= two_radii + 0.25,
-		"walked into another player, the server stops the walker two radii from them",
-		"closest %.3f m, two radii %.2f" % [float(solid["closest"]), two_radii]
-	)
-	_check(
-		a_z > b_z,
-		"and never past them",
-		"A z %.2f, B z %.2f" % [a_z, b_z]
-	)
-	_check(
-		float(solid["worst_aligned"]) < 0.03,
-		"and the walker's client predicted the stop (worst %.3f m from the server)" % float(solid["worst_aligned"])
-	)
-	# A blocker that strafes across the lane and jumps, changing direction on odd ticks, between
-	# the client's snapshots: both ends must meet it at the same place.
-	server_a.controller.teleport(Vector3(lane_x, 0.1, 19.0), 0.0)
-	server_b.controller.teleport(Vector3(lane_x, 0.1, 16.5), 0.0)
-	var _settle_moving := _flight_window(0, 24, 0, {2: idle, 3: idle})
-	var stops_before := ArenaSolidBody.hull_stops
-	var moving_worst := 0.0
-	ArenaNetBridge.solid_trace = OS.get_environment("NC_SOLID_TRACE") == "1"
-	for leg in range(14):
-		var strafe := DotFpsCommand.new()
-		strafe.move = Vector2(1.0 if leg % 2 == 0 else -1.0, 0.0)
-		strafe.yaw = 0.0
-		strafe.buttons = DotFpsCommand.BUTTON_JUMP if leg % 3 == 1 else 0
-		var lean := DotFpsCommand.new()
-		lean.move = Vector2(0.0, 1.0)
-		lean.yaw = 0.0
-		var window := _flight_window(2, 7, 0, {2: lean, 3: strafe})
-		moving_worst = maxf(moving_worst, float(window["worst_aligned"]))
-	ArenaNetBridge.solid_trace = false
-	var moving_stops := ArenaSolidBody.hull_stops - stops_before
-	print("  measured: a strafing, jumping blocker, %d hull stops, worst prediction gap %.3f m" % [moving_stops, moving_worst])
-	_check(
-		moving_stops > 0 and moving_worst < 0.03,
-		"a walk into a blocker that strafes and jumps is predicted where the server stopped it",
-		"%d stops, worst %.3f m" % [moving_stops, moving_worst]
-	)
-	# The newest command in each packet is the encoded one, and the server keeps the first copy.
-	var walker_lag := _server_bridge.behaviour_for(session_a).last_view_lag
-	_check(
-		walker_lag >= 0.0,
-		"a walker that never fires still sends its view lag while solid (%.2f ticks)" % walker_lag
-	)
-	var saved_unlag := _server_game.max_unlag_ms
-	var cap := _server_game.collision_lag(127.0)
-	_check(
-		cap > 0.0 and cap <= ArenaGame.COLLISION_LAG_MAX_TICKS and _server_game.collision_lag(2.5) == 2.5,
-		"a claimed view lag of 127 ticks collides at most %.0f back" % cap
-	)
-	# No event link here: RULES handed over as the link would carry it.
-	var relay := func(rules: Dictionary) -> void:
-		var bytes := _server_bridge.encode_event(ArenaEvents.Kind.RULES, ArenaEvents.write_rules(rules))
-		for peer_id in _clients:
-			var _r: DotResult = _clients[peer_id]["bridge"].receive_event(bytes)
-	_server_game.movement_rules_changed.connect(relay)
-	_server_game.max_unlag_ms = 0.0
-	_check(
-		_server_game.collision_lag(4.0) < 0.0 and client_game.collision_lag(4.0) < 0.0,
-		"with arena_max_unlag_ms 0 both ends collide with the present (the limit travels in RULES)",
-		"client limit %.0f" % client_game.max_unlag_ms
-	)
-	_server_game.max_unlag_ms = saved_unlag
-	_server_game.movement_rules_changed.disconnect(relay)
-	var fresh_ticks := PackedInt32Array()
-	fresh_ticks.resize(ArenaGame.UNLAG_HISTORY)
-	fresh_ticks.fill(-1)
-	var fresh_positions := PackedVector3Array()
-	fresh_positions.resize(ArenaGame.UNLAG_HISTORY)
-	_server_game._unlag[-77] = [fresh_positions, fresh_ticks]
-	_check(
-		_server_game.unlag_position_at(-77, -0.5) == null,
-		"a view tick below 0 finds no history, not the unfilled last slot at the origin"
-	)
-	_server_game._unlag.erase(-77)
-
-	_server_game.body_rules.solid = false
-	client_game.body_rules.solid = false
-	for peer_id in _clients:
-		(_clients[peer_id]["bridge"] as ArenaNetBridge).game.body_rules.solid = false
-	place.call()
-	var through := _flight_window(2, 96, 0, {2: walk, 3: idle})
-	print("  measured: mp_solidplayers 0, closest %.3f m, A at z %.2f, worst prediction gap %.3f m" % [
-		float(through["closest"]), server_a.controller.state.position.z, float(through["worst_aligned"])])
-	_check(
-		server_a.controller.state.position.z < server_b.controller.state.position.z - 1.0,
-		"at mp_solidplayers 0 the same walk passes through them",
-		"A z %.2f, B z %.2f" % [server_a.controller.state.position.z, server_b.controller.state.position.z]
-	)
-	_check(
-		float(through["worst_aligned"]) < 0.03,
-		"and is predicted so (worst %.3f m)" % float(through["worst_aligned"])
-	)
-
-	_server_game.body_rules.solid = true
-	for peer_id in _clients:
-		(_clients[peer_id]["bridge"] as ArenaNetBridge).game.body_rules.solid = true
-
-	# Teams: teammates pass through each other by default (mp_teamblock 0), predicted so on the
-	# walker's client; enemies still stop; a player's !block / !noblock request travels as the
-	# mp_blockstate string and flips the pair on both ends.
-	var games: Array[ArenaGame] = [_server_game]
-	for peer_id in _clients:
-		games.append((_clients[peer_id]["bridge"] as ArenaNetBridge).game)
-	var ids := [server_a.player_id, server_b.player_id]
-	var sides := {ids[0]: "1", ids[1]: "1"}
-	for g in games:
-		if g.noblock == null:
-			var _made := g.make_noblock(false)
-		g.block_rules.side_fn = func(id: Variant) -> Variant: return sides.get(int(id), "")
-	place.call()
-	var mates := _flight_window(2, 96, 0, {2: walk, 3: idle})
-	_check(
-		server_a.controller.state.position.z < server_b.controller.state.position.z - 1.0,
-		"teammates pass through each other by default (mp_teamblock 0)",
-		"A z %.2f, B z %.2f" % [server_a.controller.state.position.z, server_b.controller.state.position.z]
-	)
-	_check(float(mates["worst_aligned"]) < 0.03,
-		"and the walker's client predicted the pass (worst %.3f m)" % float(mates["worst_aligned"]))
-
-	sides[ids[1]] = "2"
-	place.call()
-	var foes := _flight_window(2, 96, 0, {2: walk, 3: idle})
-	_check(server_a.controller.state.position.z > server_b.controller.state.position.z
-		and float(foes["worst_aligned"]) < 0.03, "enemies still stop, predicted",
-		"A z %.2f, B z %.2f" % [server_a.controller.state.position.z, server_b.controller.state.position.z])
-
-	sides[ids[1]] = "1"
-	for g in games:
-		g.block_rules.config.team_block = true
-	place.call()
-	var forced := _flight_window(2, 96, 0, {2: walk, 3: idle})
-	_check(server_a.controller.state.position.z > server_b.controller.state.position.z
-		and float(forced["worst_aligned"]) < 0.03, "mp_teamblock 1 makes teammates stop, predicted")
-
-	_check(_server_game.block_rules.request(ids[0], [DotTeamBlockRules.Relation.TEAM], 0).ok,
-		"a !noblock request is accepted")
-	for g in games:
-		if g != _server_game:
-			g.block_rules.apply_state_string(_server_game.block_rules.state_string())
-	place.call()
-	var asked := _flight_window(2, 96, 0, {2: walk, 3: idle})
-	_check(server_a.controller.state.position.z < server_b.controller.state.position.z - 1.0
-		and float(asked["worst_aligned"]) < 0.03,
-		"and with the state string on the client too, the pair passes, predicted")
-
-	for g in games:
-		g.block_rules.config.team_block = false
-		g.block_rules.clear()
-		g.block_rules.side_fn = Callable()
+	var c := {"server_a": server_a, "server_b": server_b, "client_game": client_game, "place": place,
+		"walk": walk, "idle": idle, "lane_x": lane_x, "two_radii": two_radii, "session_a": session_a}
+	_solid_walk_checks(c)
+	_solid_lag_checks(c)
+	_solid_off_checks(c)
+	_solid_team_checks(c)
 	server_a.controller.teleport(saved_a)
 	server_b.controller.teleport(saved_b)
 	var _back := _flight_window(0, 24, 0)
-	_done()
-
-
-func _test_event_wire() -> void:
-	print("")
-	_section("[events]")
-
-	# Every encoder and its decoder, round-tripped. **The two ends of a serialisation
-	# are exactly as capable of never meeting as the two ends of a wire** — this family
-	# has shipped a stored voice mute that loaded back as a warning, and a leaderboard
-	# reporter whose file format was not its wire format. Nothing checks that a pair are
-	# inverses except a test that runs both.
-	var hello := ArenaEvents.read_hello(DotNetReader.new(
-		ArenaEvents.write_hello(128, 4242, 7, 90210, "dm_box", 25, 600.0)
-	))
-	_check(bool(hello["ok"]), "a HELLO round-trips")
-	_check(int(hello["tick_rate"]) == 128, "with the tick rate", str(hello["tick_rate"]))
-	_check(int(hello["session_id"]) == 4242, "the session id it names")
-	_check(int(hello["peer_id"]) == 7, "the peer id")
-	_check(int(hello["server_tick"]) == 90210, "the server's tick")
-	_check(String(hello["map_name"]) == "dm_box", "and the map")
-	_check(int(hello["score_limit"]) == 25, "and the rules")
-
-	var kill := ArenaEvents.read_kill(DotNetReader.new(
-		ArenaEvents.write_kill(11, 12, "rifle", true)
-	))
-	_check(bool(kill["ok"]), "a KILL round-trips")
-	_check(
-		int(kill["killer_id"]) == 11 and int(kill["victim_id"]) == 12,
-		"with both players"
-	)
-	_check(String(kill["weapon"]) == "rifle", "the weapon")
-	_check(bool(kill["headshot"]), "and the headshot flag")
-	_check(not bool(kill["critical"]), "and no critical unless one was written")
-
-	var critical := ArenaEvents.read_kill(DotNetReader.new(
-		ArenaEvents.write_kill(11, 12, "sniper", true, true)
-	))
-	_check(bool(critical["ok"]) and bool(critical["critical"]), "a lethal critical says so")
-
-	# An older server's KILL ends after the headshot. The padding to the byte is zeros, so
-	# the reader finds no critical rather than a garbage one.
-	var old := DotNetWriter.new()
-	old.write_varint(11)
-	old.write_varint(12)
-	old.write_string("rifle", ArenaEvents.WEAPON_BYTES)
-	old.write_bool(true)
-	var older := ArenaEvents.read_kill(DotNetReader.new(old.to_bytes()))
-	_check(bool(older["ok"]) and not bool(older["critical"]), "and an older server's kill reads as no critical")
-
-	var rules := ArenaEvents.read_rules(DotNetReader.new(ArenaEvents.write_rules(
-		{"slide_boost": 2.5, "fp_body": 1.0, "break_mode": 2.0}
-	)))
-	# A drop and its take, through a client's real event handler: the coin a server says
-	# player 11 took is on that client's tally, which is what its HUD reads.
-	var client_game: ArenaGame = _clients[2]["game"]
-	var client_bridge: ArenaNetBridge = _clients[2]["bridge"]
-	if client_game.drops != null:
-		var before := int(client_game.drops.coins.get(11, 0))
-		var _d := client_bridge.receive_event(_server_bridge.encode_event(
-			ArenaEvents.Kind.DROP, ArenaEvents.write_drop(9001, 0, 3, Vector3.ZERO, Vector3(1, 0, 1))
-		))
-		var _t := client_bridge.receive_event(_server_bridge.encode_event(
-			ArenaEvents.Kind.TAKEN, ArenaEvents.write_taken(9001, 11)
-		))
-		_check(int(client_game.drops.coins.get(11, 0)) == before + 3,
-			"a coin taken on the server is on the client's tally (+3)")
-	else:
-		_check(false, "the client has a drops layer")
-
-	_check(
-		bool(rules["ok"]) and is_equal_approx(float(rules["rules"]["slide_boost"]), 2.5)
-			and float(rules["rules"]["fp_body"]) == 1.0 and float(rules["rules"]["break_mode"]) == 2.0,
-		"RULES round-trips movement and presentation rules alike", str(rules["rules"])
-	)
-
-	# The world kills as 0, not as a name. It is the one value with two shapes, and a
-	# string on the wire for it is a string somebody eventually puts a name in.
-	var world := ArenaEvents.read_kill(DotNetReader.new(
-		ArenaEvents.write_kill(0, 12, "fall", false)
-	))
-	_check(int(world["killer_id"]) == 0, "and the world kills as 0")
-
-	var state := ArenaEvents.read_match(DotNetReader.new(
-		ArenaEvents.write_match(3, 1920, 5)
-	))
-	_check(bool(state["ok"]), "a MATCH round-trips")
-	_check(int(state["state"]) == 3 and int(state["round"]) == 5, "with the state and round")
-	_check(int(state["remaining_ticks"]) == 1920, "and the clock, in ticks")
-
-	# Negative, because "no limit" is negative and a match past its clock reports a
-	# negative remainder. A uint here would have wrapped it to four billion.
-	var over := ArenaEvents.read_match(DotNetReader.new(
-		ArenaEvents.write_match(3, -64, 5)
-	))
-	_check(int(over["remaining_ticks"]) == -64, "and a clock past zero stays negative")
-
-	# The score limit rides at the end, because an extend raises it mid-match and HELLO
-	# is sent once. A MATCH without it — an older server — keeps the limit it had.
-	var limited := ArenaEvents.read_match(DotNetReader.new(
-		ArenaEvents.write_match(3, 1920, 5, 35)
-	))
-	_check(
-		bool(limited["ok"]) and int(limited.get("score_limit", -1)) == 35
-			and not state.has("score_limit"),
-		"and the score limit an extend raised, only when it is sent"
-	)
-
-	var leave := ArenaEvents.read_leave(DotNetReader.new(ArenaEvents.write_leave(99)))
-	_check(bool(leave["ok"]) and int(leave["session_id"]) == 99, "a LEAVE round-trips")
-
-	var notice := ArenaEvents.read_notice(DotNetReader.new(
-		ArenaEvents.write_notice("Match point")
-	))
-	_check(
-		bool(notice["ok"]) and String(notice["text"]) == "Match point",
-		"a NOTICE round-trips"
-	)
-
-	# The map vote's cue and countdown. The one event whose two halves are optional each:
-	# a countdown second with no cue, a cue with no second. Both shapes round-trip.
-	var counting := ArenaEvents.read_vote(DotNetReader.new(
-		ArenaEvents.write_vote("vote_count", 7, true)
-	))
-	_check(
-		bool(counting["ok"]) and String(counting["cue"]) == "vote_count"
-			and int(counting["seconds_left"]) == 7 and bool(counting["runoff"]),
-		"a VOTE round-trips, with the cue, the second and the runoff flag"
-	)
-	var opening := ArenaEvents.read_vote(DotNetReader.new(
-		ArenaEvents.write_vote("vote_start", 0, false)
-	))
-	_check(
-		bool(opening["ok"]) and String(opening["cue"]) == "vote_start"
-			and int(opening["seconds_left"]) == 0 and not bool(opening["runoff"]),
-		"and a cue with no countdown second is exactly that"
-	)
-	_check(
-		ArenaEvent.new(ArenaEvents.Kind.VOTE, PackedByteArray()).validate().ok,
-		"and VOTE is a kind the message validates"
-	)
-
-	var hit := ArenaEvents.read_hit(DotNetReader.new(
-		ArenaEvents.write_hit(12, 87.4, Vector3(12.5, 1.4, -30.25), true, false)
-	))
-	_check(
-		bool(hit["ok"]) and int(hit["victim_id"]) == 12 and int(hit["amount"]) == 87
-			and (hit["point"] as Vector3).distance_to(Vector3(12.5, 1.4, -30.25)) < 0.02
-			and bool(hit["headshot"]) and not bool(hit["lethal"]),
-		"a HIT round-trips: victim, whole hit points, where, head, not lethal", str(hit)
-	)
-	var award := ArenaEvents.read_award(DotNetReader.new(
-		ArenaEvents.write_award(11, 12, 225, 6, [0, 1, 10])
-	))
-	_check(
-		bool(award["ok"]) and int(award["killer_id"]) == 11 and int(award["victim_id"]) == 12
-			and int(award["points"]) == 225 and int(award["streak"]) == 6
-			and award["medals"] == [0, 1, 10],
-		"an AWARD round-trips: both players, points, streak and the medals in order", str(award)
-	)
-	_check(
-		ArenaEvents.Kind.HIT == ArenaEvents.Kind.TAKEN + 1 and ArenaEvents.Kind.AWARD == ArenaEvents.Kind.HIT + 1,
-		"and both were appended after TAKEN, so no older kind moved"
-	)
-
-	var score := ArenaEvents.read_score(DotNetReader.new(ArenaEvents.write_score(11, 7, 3)))
-	_check(
-		bool(score["ok"]) and int(score["kills"]) == 7 and int(score["deaths"]) == 3,
-		"a SCORE round-trips"
-	)
-
-	# A truncated body must not read as a valid event of nothing. `StreamPeerBuffer`
-	# reads past its end by returning zeros rather than failing, and dot-timer shipped a
-	# replay that parsed that way; `DotNetReader.ok()` is the equivalent here and it is
-	# sticky, so a decoder that skipped the check gets a plausible value for the field
-	# AFTER the overrun.
-	var truncated := ArenaEvents.read_hello(DotNetReader.new(
-		ArenaEvents.write_hello(128, 1, 1, 1, "dm_box", 25, 600.0).slice(0, 3)
-	))
-	_check(not bool(truncated["ok"]), "and a truncated HELLO is refused, not guessed")
-
-	# Both message types validate their kind, so a peer that disagrees about the schema
-	# is a refusal rather than an out-of-range read.
-	_check(
-		not ArenaEvent.new(ArenaEvents.Kind.size(), PackedByteArray()).validate().ok,
-		"an unknown event kind is refused"
-	)
-	_check(
-		ArenaEvent.new(ArenaEvents.Kind.HELLO, PackedByteArray()).validate().ok,
-		"and a known one is not"
-	)
-
-	# A kind goes out in a fixed field the writer masks without a word, so one past it aliases a
-	# smaller kind: game-zombie-zone sent HURT and AMMO as HELLO and MAP that way.
-	_check(ArenaEvent.fits(), "every event kind fits the event's kind field",
-		"%d kinds in %d bits" % [ArenaEvents.Kind.size(), ArenaEvent.KIND_BITS])
-	_check(ArenaRequest.fits(), "every request kind fits the request's kind field",
-		"%d kinds in %d bits" % [ArenaEvents.Ask.size(), ArenaRequest.KIND_BITS])
-	_check(ArenaEvents.prop_acts_fit(), "every prop act fits the prop request's act field",
-		"%d acts in %d bits" % [ArenaEvents.PropAct.size(), ArenaEvents.PROP_ACT_BITS])
-
 	_done()
 
 
@@ -2979,3 +1540,528 @@ class EngineErrors extends Logger:
 		var out := _seen.duplicate()
 		_lock.unlock()
 		return out
+
+## dot-map's announce/ready/load protocol, over this game's own link.
+##
+## [b]dot-map's own suite runs this over a loopback `send_fn` and never over
+## dot-net.[/b] Its notes say so, and they say what follows from it: the seam between
+## a map sync host and a real game's transport is the one nothing has run. This is
+## that seam — two [ArenaNetLink]s, a real [DotMapSyncHost] and a real
+## [DotMapSyncClient], with the payloads going through the same `send_map` a socket
+## would use.
+func _test_map_sync_wire() -> void:
+	print("")
+	_section("[map sync over the link]")
+
+	var server_link := ArenaNetLink.attached_to(self, _server_bridge, true)
+	add_child(server_link)
+	server_link.name = "MapServerLink"
+
+	var client_entry: Dictionary = _clients[_clients.keys()[0]]
+	var client_bridge: ArenaNetBridge = client_entry["bridge"]
+	var client_link := ArenaNetLink.attached_to(self, client_bridge, false)
+	add_child(client_link)
+	client_link.name = "MapClientLink"
+
+	# Both loopbacks, crossed. `send_map` refuses to fall through to an RPC when the
+	# byte loopback is set, so a harness that wired one and not the other would get a
+	# silent no-op rather than a crash — which is why the counters are asserted below
+	# rather than only the outcome.
+	server_link.loopback = func(_m: StringName, _p: int, _b: PackedByteArray) -> void: pass
+	client_link.loopback = func(_m: StringName, _p: int, _b: PackedByteArray) -> void: pass
+
+	server_link.loopback_map = func(m: StringName, peer: int, payload: Dictionary) -> void:
+		client_link.deliver_map(m, peer, payload)
+
+	client_link.loopback_map = func(m: StringName, _peer: int, payload: Dictionary) -> void:
+		server_link.deliver_map(m, 2, payload)
+
+	var catalogue := ArenaMaps.catalogue()
+
+	var session := ArenaMapSession.new()
+	session.name = "MapSession"
+	session.game = _server_game
+	session.catalogue = catalogue
+	add_child(session)
+
+	var host := DotMapSyncHost.new()
+	host.name = "MapHost"
+	host.session = session
+	host.sync_timeout_sec = 5.0
+	host.send_fn = func(peer: int, payload: Dictionary) -> void:
+		server_link.send_map(peer, payload)
+	add_child(host)
+
+	# The FOLLOWER needs a catalogue too, and leaving it out looks exactly like a
+	# trust refusal: `DotMapSyncClient` accepts an announced map only if it is in its
+	# own catalogue at the same version, or is delivered content. With no session it
+	# has no catalogue, so every one of this game's maps was refused with "a host may
+	# not send a map that is not delivered content" — which is the correct answer to
+	# the question it was actually being asked.
+	var client_game: ArenaGame = client_entry["game"]
+
+	var follower_session := ArenaMapSession.new()
+	follower_session.name = "FollowerSession"
+	follower_session.game = client_game
+	follower_session.catalogue = ArenaMaps.catalogue()
+	add_child(follower_session)
+
+	var follower := DotMapSyncClient.new()
+	follower.name = "MapFollower"
+	follower.session = follower_session
+	follower.accept_unknown_maps = true
+	follower.send_fn = func(payload: Dictionary) -> void:
+		client_link.send_map_report(payload)
+	add_child(follower)
+
+	# One argument. `DotMapSyncClient.changed` carries the map and nothing else, unlike
+	# `DotMapSession.changed`, which carries the world as well.
+	var loads: Array[StringName] = []
+	follower.changed.connect(func(map: DotMapDef) -> void: loads.append(map.id))
+
+	_server_bridge.map_report_fn = func(peer: int, payload: Dictionary) -> void:
+		host.handle(peer, payload)
+
+	client_bridge.map_in_fn = func(payload: Dictionary) -> void:
+		follower.handle(payload)
+
+	host.add_peer(2)
+
+	var target: StringName = &"dm_atrium" if _server_game.map.id == &"dm_box" else &"dm_box"
+	var changed: DotResult = await host.change_to(target)
+
+	_check(changed.ok, "the server changes map with a peer following", str(changed.error))
+	_check(
+		server_link.map_sent > 0,
+		"announcements went out on the link",
+		"%d" % server_link.map_sent
+	)
+	_check(
+		client_link.map_received > 0,
+		"and the client received them",
+		"%d" % client_link.map_received
+	)
+
+	# The report going back is the half that makes the wait mean anything. Without it
+	# the host waits out its whole timeout and swaps without the client — which
+	# `swap_without_stragglers` permits, so the change would still "work" and the peer
+	# would still be on the old map.
+	_check(
+		server_link.map_received > 0,
+		"the client reported back, so the host did not wait out its timeout",
+		"%d" % server_link.map_received
+	)
+
+	_check(loads.has(target), "and the client was told to load the new map")
+	_check(_server_game.map.id == target, "the server is on it")
+	_check(
+		client_game.map.id == target,
+		"and so is the client, having rebuilt the world itself",
+		String(client_game.map.id)
+	)
+
+	# [b]Where the player stands is the server's, and the client has to follow it.[/b] A
+	# map change respawns everybody on the authority (`[arena-mapchange-floor-1]`: a
+	# position carried over can be inside a box of the next map) and does nothing of the
+	# kind on a mirror, which only rebuilds its geometry. So the client's own predicted
+	# player is left where it stood in the old map until a snapshot says otherwise, and
+	# this is the check that one does — through the predictor, whose rewind adopts the
+	# server's state and replays on top of it, over the same one-in-five loss.
+	var peer: int = _clients.keys()[0]
+	var session_id := int(client_entry["session"])
+	var on_server: ArenaPlayer = _server_bridge.behaviour_for(session_id).player
+	var on_client: ArenaPlayer = client_bridge.behaviour_for(session_id).player
+	var respawned_at := on_server.controller.state.position
+	var nearest := INF
+
+	for spawn in _server_game.map.spawns:
+		nearest = minf(nearest, spawn.origin.distance_to(respawned_at))
+
+	_check(
+		nearest < 0.5,
+		"the server put this client's player at a spawn of the new map",
+		"%.1f m from the nearest" % nearest
+	)
+
+	var _follow := _flight_window(peer, 48, 0)
+	var gap := on_client.controller.state.position.distance_to(
+		on_server.controller.state.position
+	)
+	_check(
+		gap < 0.1 and on_client.global_position.distance_to(on_server.controller.state.position) < 0.1,
+		"and the client's predicted player followed the respawn, in the state and on the node",
+		"%.2f m apart in the state, %.2f on the node" % [
+			gap, on_client.global_position.distance_to(on_server.controller.state.position)
+		]
+	)
+
+	# The same wire onto an imported combat surf map, and back.
+	if ArenaMap.imported_ids().has(IMPORTED_MAP):
+		await _follow_onto_imported(host, client_game, client_entry, peer, target)
+	else:
+		print("  skip  no imported maps linked (arena-surf-dm-maps); %d checks not run" % IMPORTED_CHECKS)
+		_skipped_checks += IMPORTED_CHECKS
+
+	host.queue_free()
+	follower.queue_free()
+	follower_session.queue_free()
+	remove_child(follower_session)
+	session.queue_free()
+	server_link.queue_free()
+	client_link.queue_free()
+	remove_child(host)
+	remove_child(follower)
+	remove_child(session)
+	remove_child(server_link)
+	remove_child(client_link)
+	_done()
+
+
+## A voice frame, client to server to another client.
+##
+## [b]Deliberately not through [DotNetManager].[/b] dot-net decodes a bit-packed
+## message against a sealed schema; a voice frame is an opaque blob from a codec and
+## putting it through would mean a message type per codec — or a schema that changes
+## when the codec does, and the schema hash is what both ends check to agree they are
+## speaking the same game.
+func _test_voice_wire() -> void:
+	print("")
+	_section("[voice over the link]")
+
+	var relayed: Array[Dictionary] = []
+	var heard: Array[PackedByteArray] = []
+
+	var server_link := ArenaNetLink.attached_to(self, _server_bridge, true)
+	add_child(server_link)
+	server_link.name = "VoiceServerLink"
+
+	var client_entry: Dictionary = _clients[_clients.keys()[0]]
+	var client_bridge: ArenaNetBridge = client_entry["bridge"]
+	var client_link := ArenaNetLink.attached_to(self, client_bridge, false)
+	add_child(client_link)
+	client_link.name = "VoiceClientLink"
+
+	client_link.loopback = func(m: StringName, peer: int, payload: PackedByteArray) -> void:
+		server_link.deliver(m, 2, payload)
+
+	server_link.loopback = func(m: StringName, peer: int, payload: PackedByteArray) -> void:
+		client_link.deliver(m, peer, payload)
+
+	_server_bridge.voice_relay_fn = func(speaker: int, bytes: PackedByteArray) -> void:
+		relayed.append({"speaker": speaker, "bytes": bytes})
+		# Straight back out, which is what DotVoiceRouter does after it has decided
+		# who hears it. The router itself is checked on a real server in `dedicated`.
+		server_link.send_voice(2, bytes)
+
+	client_bridge.voice_in_fn = func(bytes: PackedByteArray) -> void:
+		heard.append(bytes)
+
+	var frame := PackedByteArray([1, 2, 3, 4, 5, 6, 7, 8])
+	client_link.send_voice_frame(frame)
+
+	_check(relayed.size() == 1, "a captured frame reaches the server")
+
+	if not relayed.is_empty():
+		# [b]The speaker is stamped from the transport, never read out of the
+		# payload.[/b] A client that could name its own speaker id could put words in
+		# anybody's mouth, and the only symptom is words coming out of the wrong
+		# player — which nobody would report as a security problem.
+		_check(
+			int(relayed[0]["speaker"]) == 2,
+			"stamped with the peer the transport reported",
+			str(relayed[0]["speaker"])
+		)
+		_check(
+			(relayed[0]["bytes"] as PackedByteArray) == frame,
+			"and the bytes are unchanged"
+		)
+
+	_check(heard.size() == 1, "and the relay reaches a listener")
+
+	# Never a broadcast. `send(bytes, 0)` is how this family last delivered a private
+	# message to every client at once, and a proximity voice packet sent to peer 0
+	# would be exactly that bug with audio in it.
+	var before := server_link.voice_sent
+	server_link.send_voice(0, frame)
+	_check(
+		server_link.voice_sent == before,
+		"and a voice frame addressed to peer 0 is refused rather than broadcast"
+	)
+
+	# [b]The client's own voice reaches the server.[/b] Armed: until 2026-10-11 the client's
+	# manager had `frame_sent.connect(pass)` where its send_fn belonged, so an arena player
+	# holding the talk key was heard by nobody, while every check above handed the link bytes.
+	relayed.clear()
+	# The bridge's own link, as `ArenaNetBridge` sets it on a real client; this harness
+	# attached the looped one by hand.
+	var held_link := client_bridge.link
+	client_bridge.link = client_link
+	var extras := ArenaClientExtras.new()
+	extras.name = "VoiceExtras"
+	add_child(extras)
+	var attached := extras.attach(client_bridge, client_entry["game"])
+	var voice: DotVoiceManager = extras.voice
+	_check(attached.ok and voice != null and not voice.is_capturing(),
+		"the client's voice attaches with no microphone open before the talk key")
+	if voice != null:
+		var mic := DotVoiceSourceBuffer.new()
+		mic.sample_rate = voice.config.sample_rate
+		mic.write(DotVoiceSourceBuffer.tone(440.0, 0.2, mic.sample_rate, 0.4))
+		voice.source = mic
+		extras.set_talking(true)
+		for _i in range(4):
+			await get_tree().process_frame
+		extras.set_talking(false)
+	_check(voice != null and voice.frames_sent > 0 and relayed.size() == voice.frames_sent,
+		"holding it sends the player's speech to the server (%d sent, %d relayed)" % [voice.frames_sent if voice != null else 0, relayed.size()])
+
+	# [b]The player's block list (sm) reaches arena's voice.[/b] dot-chat's DotChatSelfMute
+	# binds whatever is published as dot_voice_client; arena's manager did not publish, so
+	# `sm` muted a player's lines here and never their voice.
+	_check(voice != null and DotRegistry.get_service(&"dot_voice_client") == voice,
+		"the client's voice is published as dot_voice_client")
+	var self_mute := DotChatSelfMute.new()
+	self_mute.path = "user://arena_net_self_mute.json"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))
+	const TALKER := 1_900_000_001
+	self_mute.set_roster([{"id": 9, "name": "Loud", "key": "loud-key", "peer": TALKER}], 2)
+	self_mute.attach_voice(DotRegistry.get_service(&"dot_voice_client"))
+	var heard_buffer := DotVoiceSinkBuffer.new()
+	if voice != null:
+		heard_buffer.sample_rate = voice.config.sample_rate
+		voice.sink_factory = func(_speaker: int) -> DotVoiceSink: return heard_buffer
+	var talk := func() -> void:
+		var codec := DotVoiceCodec.instance_for(voice.config.codec_id)
+		for i in range(10):
+			var packet := DotVoicePacket.new()
+			packet.speaker = TALKER
+			packet.sequence = i
+			packet.starts_talk_spurt = i == 0
+			packet.sample_count = voice.config.frame_samples()
+			packet.codec_id = voice.config.codec_id
+			packet.payload = codec.encode(DotVoiceSourceBuffer.tone(300.0, voice.config.frame_ms / 1000.0, voice.config.sample_rate, 0.4))
+			var _r := voice.receive(packet.to_bytes())
+	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, true)
+	if voice != null:
+		talk.call()
+		for _i in range(15):
+			await get_tree().process_frame
+	_check(voice != null and voice.is_locally_muted(TALKER) and heard_buffer.frames_written == 0,
+		"sm on a player: their voice frames arrive and are not played (%d played)" % heard_buffer.frames_written)
+	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, false)
+	if voice != null:
+		talk.call()
+		var deadline := Time.get_ticks_msec() + 1000
+		while heard_buffer.frames_written == 0 and Time.get_ticks_msec() < deadline:
+			await get_tree().process_frame
+	_check(heard_buffer.frames_written > 0, "and unmuted, the same frames play (%d)" % heard_buffer.frames_written)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))
+	extras.queue_free()
+	client_bridge.link = held_link
+
+	server_link.queue_free()
+	client_link.queue_free()
+	remove_child(server_link)
+	remove_child(client_link)
+	_done()
+
+
+func _test_event_wire() -> void:
+	print("")
+	_section("[events]")
+
+	# Every encoder and its decoder, round-tripped. **The two ends of a serialisation
+	# are exactly as capable of never meeting as the two ends of a wire** — this family
+	# has shipped a stored voice mute that loaded back as a warning, and a leaderboard
+	# reporter whose file format was not its wire format. Nothing checks that a pair are
+	# inverses except a test that runs both.
+	var hello := ArenaEvents.read_hello(DotNetReader.new(
+		ArenaEvents.write_hello(128, 4242, 7, 90210, "dm_box", 25, 600.0)
+	))
+	_check(bool(hello["ok"]), "a HELLO round-trips")
+	_check(int(hello["tick_rate"]) == 128, "with the tick rate", str(hello["tick_rate"]))
+	_check(int(hello["session_id"]) == 4242, "the session id it names")
+	_check(int(hello["peer_id"]) == 7, "the peer id")
+	_check(int(hello["server_tick"]) == 90210, "the server's tick")
+	_check(String(hello["map_name"]) == "dm_box", "and the map")
+	_check(int(hello["score_limit"]) == 25, "and the rules")
+
+	var kill := ArenaEvents.read_kill(DotNetReader.new(
+		ArenaEvents.write_kill(11, 12, "rifle", true)
+	))
+	_check(bool(kill["ok"]), "a KILL round-trips")
+	_check(
+		int(kill["killer_id"]) == 11 and int(kill["victim_id"]) == 12,
+		"with both players"
+	)
+	_check(String(kill["weapon"]) == "rifle", "the weapon")
+	_check(bool(kill["headshot"]), "and the headshot flag")
+	_check(not bool(kill["critical"]), "and no critical unless one was written")
+
+	var critical := ArenaEvents.read_kill(DotNetReader.new(
+		ArenaEvents.write_kill(11, 12, "sniper", true, true)
+	))
+	_check(bool(critical["ok"]) and bool(critical["critical"]), "a lethal critical says so")
+
+	# An older server's KILL ends after the headshot. The padding to the byte is zeros, so
+	# the reader finds no critical rather than a garbage one.
+	var old := DotNetWriter.new()
+	old.write_varint(11)
+	old.write_varint(12)
+	old.write_string("rifle", ArenaEvents.WEAPON_BYTES)
+	old.write_bool(true)
+	var older := ArenaEvents.read_kill(DotNetReader.new(old.to_bytes()))
+	_check(bool(older["ok"]) and not bool(older["critical"]), "and an older server's kill reads as no critical")
+
+	var rules := ArenaEvents.read_rules(DotNetReader.new(ArenaEvents.write_rules(
+		{"slide_boost": 2.5, "fp_body": 1.0, "break_mode": 2.0}
+	)))
+	# A drop and its take, through a client's real event handler: the coin a server says
+	# player 11 took is on that client's tally, which is what its HUD reads.
+	var client_game: ArenaGame = _clients[2]["game"]
+	var client_bridge: ArenaNetBridge = _clients[2]["bridge"]
+	if client_game.drops != null:
+		var before := int(client_game.drops.coins.get(11, 0))
+		var _d := client_bridge.receive_event(_server_bridge.encode_event(
+			ArenaEvents.Kind.DROP, ArenaEvents.write_drop(9001, 0, 3, Vector3.ZERO, Vector3(1, 0, 1))
+		))
+		var _t := client_bridge.receive_event(_server_bridge.encode_event(
+			ArenaEvents.Kind.TAKEN, ArenaEvents.write_taken(9001, 11)
+		))
+		_check(int(client_game.drops.coins.get(11, 0)) == before + 3,
+			"a coin taken on the server is on the client's tally (+3)")
+	else:
+		_check(false, "the client has a drops layer")
+
+	_check(
+		bool(rules["ok"]) and is_equal_approx(float(rules["rules"]["slide_boost"]), 2.5)
+			and float(rules["rules"]["fp_body"]) == 1.0 and float(rules["rules"]["break_mode"]) == 2.0,
+		"RULES round-trips movement and presentation rules alike", str(rules["rules"])
+	)
+
+	# The world kills as 0, not as a name. It is the one value with two shapes, and a
+	# string on the wire for it is a string somebody eventually puts a name in.
+	var world := ArenaEvents.read_kill(DotNetReader.new(
+		ArenaEvents.write_kill(0, 12, "fall", false)
+	))
+	_check(int(world["killer_id"]) == 0, "and the world kills as 0")
+
+	var state := ArenaEvents.read_match(DotNetReader.new(
+		ArenaEvents.write_match(3, 1920, 5)
+	))
+	_check(bool(state["ok"]), "a MATCH round-trips")
+	_check(int(state["state"]) == 3 and int(state["round"]) == 5, "with the state and round")
+	_check(int(state["remaining_ticks"]) == 1920, "and the clock, in ticks")
+
+	# Negative, because "no limit" is negative and a match past its clock reports a
+	# negative remainder. A uint here would have wrapped it to four billion.
+	var over := ArenaEvents.read_match(DotNetReader.new(
+		ArenaEvents.write_match(3, -64, 5)
+	))
+	_check(int(over["remaining_ticks"]) == -64, "and a clock past zero stays negative")
+
+	# The score limit rides at the end, because an extend raises it mid-match and HELLO
+	# is sent once. A MATCH without it — an older server — keeps the limit it had.
+	var limited := ArenaEvents.read_match(DotNetReader.new(
+		ArenaEvents.write_match(3, 1920, 5, 35)
+	))
+	_check(
+		bool(limited["ok"]) and int(limited.get("score_limit", -1)) == 35
+			and not state.has("score_limit"),
+		"and the score limit an extend raised, only when it is sent"
+	)
+
+	var leave := ArenaEvents.read_leave(DotNetReader.new(ArenaEvents.write_leave(99)))
+	_check(bool(leave["ok"]) and int(leave["session_id"]) == 99, "a LEAVE round-trips")
+
+	var notice := ArenaEvents.read_notice(DotNetReader.new(
+		ArenaEvents.write_notice("Match point")
+	))
+	_check(
+		bool(notice["ok"]) and String(notice["text"]) == "Match point",
+		"a NOTICE round-trips"
+	)
+
+	# The map vote's cue and countdown. The one event whose two halves are optional each:
+	# a countdown second with no cue, a cue with no second. Both shapes round-trip.
+	var counting := ArenaEvents.read_vote(DotNetReader.new(
+		ArenaEvents.write_vote("vote_count", 7, true)
+	))
+	_check(
+		bool(counting["ok"]) and String(counting["cue"]) == "vote_count"
+			and int(counting["seconds_left"]) == 7 and bool(counting["runoff"]),
+		"a VOTE round-trips, with the cue, the second and the runoff flag"
+	)
+	var opening := ArenaEvents.read_vote(DotNetReader.new(
+		ArenaEvents.write_vote("vote_start", 0, false)
+	))
+	_check(
+		bool(opening["ok"]) and String(opening["cue"]) == "vote_start"
+			and int(opening["seconds_left"]) == 0 and not bool(opening["runoff"]),
+		"and a cue with no countdown second is exactly that"
+	)
+	_check(
+		ArenaEvent.new(ArenaEvents.Kind.VOTE, PackedByteArray()).validate().ok,
+		"and VOTE is a kind the message validates"
+	)
+
+	var hit := ArenaEvents.read_hit(DotNetReader.new(
+		ArenaEvents.write_hit(12, 87.4, Vector3(12.5, 1.4, -30.25), true, false)
+	))
+	_check(
+		bool(hit["ok"]) and int(hit["victim_id"]) == 12 and int(hit["amount"]) == 87
+			and (hit["point"] as Vector3).distance_to(Vector3(12.5, 1.4, -30.25)) < 0.02
+			and bool(hit["headshot"]) and not bool(hit["lethal"]),
+		"a HIT round-trips: victim, whole hit points, where, head, not lethal", str(hit)
+	)
+	var award := ArenaEvents.read_award(DotNetReader.new(
+		ArenaEvents.write_award(11, 12, 225, 6, [0, 1, 10])
+	))
+	_check(
+		bool(award["ok"]) and int(award["killer_id"]) == 11 and int(award["victim_id"]) == 12
+			and int(award["points"]) == 225 and int(award["streak"]) == 6
+			and award["medals"] == [0, 1, 10],
+		"an AWARD round-trips: both players, points, streak and the medals in order", str(award)
+	)
+	_check(
+		ArenaEvents.Kind.HIT == ArenaEvents.Kind.TAKEN + 1 and ArenaEvents.Kind.AWARD == ArenaEvents.Kind.HIT + 1,
+		"and both were appended after TAKEN, so no older kind moved"
+	)
+
+	var score := ArenaEvents.read_score(DotNetReader.new(ArenaEvents.write_score(11, 7, 3)))
+	_check(
+		bool(score["ok"]) and int(score["kills"]) == 7 and int(score["deaths"]) == 3,
+		"a SCORE round-trips"
+	)
+
+	# A truncated body must not read as a valid event of nothing. `StreamPeerBuffer`
+	# reads past its end by returning zeros rather than failing, and dot-timer shipped a
+	# replay that parsed that way; `DotNetReader.ok()` is the equivalent here and it is
+	# sticky, so a decoder that skipped the check gets a plausible value for the field
+	# AFTER the overrun.
+	var truncated := ArenaEvents.read_hello(DotNetReader.new(
+		ArenaEvents.write_hello(128, 1, 1, 1, "dm_box", 25, 600.0).slice(0, 3)
+	))
+	_check(not bool(truncated["ok"]), "and a truncated HELLO is refused, not guessed")
+
+	# Both message types validate their kind, so a peer that disagrees about the schema
+	# is a refusal rather than an out-of-range read.
+	_check(
+		not ArenaEvent.new(ArenaEvents.Kind.size(), PackedByteArray()).validate().ok,
+		"an unknown event kind is refused"
+	)
+	_check(
+		ArenaEvent.new(ArenaEvents.Kind.HELLO, PackedByteArray()).validate().ok,
+		"and a known one is not"
+	)
+
+	# A kind goes out in a fixed field the writer masks without a word, so one past it aliases a
+	# smaller kind: game-zombie-zone sent HURT and AMMO as HELLO and MAP that way.
+	_check(ArenaEvent.fits(), "every event kind fits the event's kind field",
+		"%d kinds in %d bits" % [ArenaEvents.Kind.size(), ArenaEvent.KIND_BITS])
+	_check(ArenaRequest.fits(), "every request kind fits the request's kind field",
+		"%d kinds in %d bits" % [ArenaEvents.Ask.size(), ArenaRequest.KIND_BITS])
+	_check(ArenaEvents.prop_acts_fit(), "every prop act fits the prop request's act field",
+		"%d acts in %d bits" % [ArenaEvents.PropAct.size(), ArenaEvents.PROP_ACT_BITS])
+
+	_done()

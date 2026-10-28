@@ -31,21 +31,9 @@ static var use_worlds: bool = true
 
 ## A level as a list of boxes, and the three things that list becomes.
 ##
-## [b]This is the idea the whole project is arranged around.[/b] A dev-textured arena
-## is a floor and some boxes. Those boxes have to exist in three places:
-##
-## - as [MeshInstance3D]s, so a player can see them,
-## - as [StaticBody3D]s, so Godot's physics can collide with them,
-## - as analytic [AABB]s, so [DotFpsFlatBody] and [DotTraceFlat] can — on a headless
-##   server and in a test, where there is no physics space and no renderer.
-##
-## Building them independently means three descriptions that drift, and the drift is
-## invisible: the server's idea of a wall moves a metre and shots start passing through
-## something clients can see. So the boxes are declared once, here, and everything else
-## is generated from them.
-##
-## The same reason a game like this ships with dev textures in the first place. A
-## grey-box level whose geometry is its gameplay is a level you can reason about.
+## The boxes are declared once here and become a [MeshInstance3D] set to see, [StaticBody3D]s for physics, and analytic [AABB]s for
+## [DotFpsFlatBody] and [DotTraceFlat] (a headless server has no physics space). Three separate descriptions would drift invisibly:
+## the server's wall moves a metre and shots pass through something clients can see.
 
 # No `CHANNEL`: a map is content and says nothing at runtime — it is built, turned into
 # three representations, and checked in `headless_match`. The session that loads it logs.

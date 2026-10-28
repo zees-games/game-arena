@@ -60,18 +60,9 @@ class StandInGames:
 		return maps
 
 
-func _test_server_named() -> void:
-	_section("a map only the server names is catalogued, built from its pack, and dropped")
-
-	var key := "%s/%s@%s" % [DELIVERED_OWNER, DELIVERED_ID, DELIVERED_VERSION]
-	var not_arena_key := "%s/%s@%s" % [DELIVERED_OWNER, DELIVERED_NOT_ARENA, DELIVERED_VERSION]
-	var mount := "res://dot_cloud/%s/%s/%s" % [DELIVERED_OWNER, DELIVERED_ID, DELIVERED_VERSION]
-	var other := "res://dot_cloud/%s/%s/%s" % [DELIVERED_OWNER, DELIVERED_NOT_ARENA, DELIVERED_VERSION]
-
-	# The pack layout dot-cloud mounts: `<id>.json` and `<id>.bin` directly in the version
-	# directory. MAP's files under a new id (the manifest's own `id` names the mesh), and a
-	# second manifest that says it is a timer course. No lightmap or textures: a dedicated
-	# server builds the solid only.
+## The pack layout dot-cloud mounts: `<id>.json` and `<id>.bin` in the version directory. MAP's
+## files under a new id, and a second manifest that says it is a timer course; no lightmap.
+func _deliver_packs(mount: String, other: String) -> void:
 	var source := ArenaImportedMaps.manifest_path(MAP)
 	var text := FileAccess.get_file_as_string(source)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(mount))
@@ -82,6 +73,17 @@ func _test_server_named() -> void:
 	_write(other.path_join("%s.json" % DELIVERED_NOT_ARENA),
 		text.replace("\"id\": \"%s\"" % MAP, "\"id\": \"%s\"" % DELIVERED_NOT_ARENA)
 			.replace("\"kind\": \"arena\"", "\"kind\": \"course\""))
+
+
+func _test_server_named() -> void:
+	_section("a map only the server names is catalogued, built from its pack, and dropped")
+
+	var key := "%s/%s@%s" % [DELIVERED_OWNER, DELIVERED_ID, DELIVERED_VERSION]
+	var not_arena_key := "%s/%s@%s" % [DELIVERED_OWNER, DELIVERED_NOT_ARENA, DELIVERED_VERSION]
+	var mount := "res://dot_cloud/%s/%s/%s" % [DELIVERED_OWNER, DELIVERED_ID, DELIVERED_VERSION]
+	var other := "res://dot_cloud/%s/%s/%s" % [DELIVERED_OWNER, DELIVERED_NOT_ARENA, DELIVERED_VERSION]
+
+	_deliver_packs(mount, other)
 
 	var server := StandInServer.new()
 	server.games.maps = PackedStringArray([key, not_arena_key])

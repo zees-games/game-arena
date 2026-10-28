@@ -7,26 +7,9 @@ const ArenaPlayer := preload("arena_player.gd")
 
 ## The player-facing addons, stood up once and bound to the game.
 ##
-## [b]Seven addons that each know nothing about the arena, and this is the file where
-## they meet it.[/b] The same job [ArenaGame] does for dot-match, dot-combat and
-## dot-loadout, for the layer that arrived later: who is in the session, which side they
-## are on, what class they are, where they enter the world, and what the physics is set
-## to while they are in it.
-##
-## [codeblock]
-## dot-physics   the collision layout and the engine numbers, applied and restorable
-## dot-player    the one row per participant everything else reads
-## dot-team      sides that outlive the match, DRIVING dot-match's manager
-## dot-player-class  what a player is, with the change landing on the next spawn
-## dot-spawn     where they enter, with areas, conditions and protection
-## dot-team the side policy over dot-spectate
-## [/codeblock]
-##
-## [b]It adds no authority and takes none away.[/b] dot-match still decides the round,
-## dot-combat still decides damage, and `ArenaGame` still owns the tick. What this does
-## is keep one set of records in step with them, so that a scoreboard, a spectator
-## camera, a class screen and a spawn selector are all reading the same thing rather
-## than four dictionaries that agree until somebody reconnects.
+## Seven addons that each know nothing about the arena, met here: session roster, sides, classes, spawns and physics settings.
+## Adds no authority: dot-match decides the round, dot-combat damage, `ArenaGame` owns the tick; this keeps one set of records in step.
+## dot-physics (collision layout), dot-player (one row per participant), dot-team, dot-player-class, dot-spawn, dot-spectate.
 ##
 ## [b]Why dot-team drives dot-match rather than replacing it.[/b] `ArenaGame` assigns a
 ## side through `DotTeamManager`, which balances and refuses a full team — behaviour

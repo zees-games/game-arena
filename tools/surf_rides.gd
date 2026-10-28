@@ -38,16 +38,8 @@ const ArenaSurfRides := preload("../game/arena_surf_rides.gd")
 ## ([code]arena_surf_rides.gd[/code]), keeps the ones that land, marks the rest, and prints each edge's
 ## rides ranked next to the planned ones.
 ##
-## For reading a map that finds nothing: `--probe` (eight headings held from each spawn
-## platform), `--section x0,z0 x1,z1` (the solid under a line), `--hold pos vel yaw mx,my
-## [--action N]` (one command held), `--search pos vel island[,island...] [--width W --seconds S
-## --guide "x,y,z;..." --progress P --trace]` (one search, its best line traced), `--wander`
-## (from every teleport landing to wherever the ramps lead), `--islands` (every island and
-## teleport, as text), `--picture out.png` (the map from above: ramps, platforms, teleports,
-## spawns). `--measure --think` drives the live
-## rides through `ArenaBots.think`, the brain and all.
-##
-## Everything is seeded, so two runs print the same numbers.
+## For a map that finds nothing: `--probe`, `--section`, `--hold`, `--search`, `--wander`, `--islands` and `--picture` (read the code for arguments).
+## `--measure --think` drives the live rides through `ArenaBots.think`. Everything is seeded, so two runs print the same numbers.
 
 const TICK_RATE := 64
 

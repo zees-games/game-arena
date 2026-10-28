@@ -210,6 +210,10 @@ func _build() -> DotResult:
 	if not linked.ok:
 		return linked.wrap("The stats-to-achievements link could not start")
 
+	return _build_boards()
+
+
+func _build_boards() -> DotResult:
 	boards = DotLeaderboardManager.new()
 	boards.name = "Boards"
 	boards.report_to_backbone = report_to_backbone

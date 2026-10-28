@@ -1,267 +1,4 @@
-extends Node
-
-const ArenaAvatars := preload("arena_avatars.gd")
-const ArenaBindings := preload("arena_bindings.gd")
-const ArenaBots := preload("arena_bots.gd")
-const ArenaBrowser := preload("arena_browser.gd")
-const ArenaClientExtras := preload("arena_client_extras.gd")
-const ArenaEvents := preload("arena_events.gd")
-const ArenaWeaponSkins := preload("arena_weapon_skins.gd")
-const ArenaFrameProbe := preload("arena_frame_probe.gd")
-const ArenaGame := preload("arena_game.gd")
-const ArenaHud := preload("arena_hud.gd")
-const ArenaHudGlance := preload("arena_hud_glance.gd")
-const ArenaKillcam := preload("arena_killcam.gd")
-const ArenaKillViewClient := preload("arena_killview_client.gd")
-const ArenaConfig := preload("arena_config.gd")
-const ArenaContent := preload("arena_content.gd")
-const ArenaMode := preload("arena_mode.gd")
-const ArenaMap := preload("../maps/arena_map.gd")
-const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
-const ArenaMenus := preload("arena_menus.gd")
-const ArenaMaps := preload("arena_maps.gd")
-const ArenaModes := preload("arena_modes.gd")
-const ArenaNetBridge := preload("arena_net_bridge.gd")
-const ArenaPaths := preload("arena_paths.gd")
-const ArenaProjectileView := preload("arena_projectile_view.gd")
-const ArenaPlayer := preload("arena_player.gd")
-const ArenaPresentation := preload("arena_presentation.gd")
-const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
-const ArenaSpriteWeapon := preload("arena_sprite_weapon.gd")
-
-## A playable game-arena: one local player, a camera, a HUD, menus and the keys.
-##
-## [b]Separate from [ArenaGame], which is the simulation and runs headless.[/b] A
-## dedicated server never loads this. That split is the reason `headless_match` can play
-## a whole deathmatch with no renderer and no window, and it is the reason this file is
-## the only one in the project that mentions a `Camera3D` or an `InputEvent`.
-##
-## Until this existed, game-arena was the reference game with nothing to sit down at:
-## `ArenaNetBridge` ran, `headless_net` drove it, and there was no camera rig, no input
-## sampling, no renderer and no sound. Everything here is modelled on `G2GClient`,
-## which is the one in this family proven over a real socket and in a browser.
-##
-## [codeblock]
-## WASD          move                Space   jump (hold; auto-hop is on)
-## Ctrl          crouch              Mouse1  fire
-## R             reload              1..4    weapon slots  (wheel cycles)
-## Tab (hold)    scoreboard          Esc     release the mouse, then the menu
-## H             help
-## [/codeblock]
-
-const CHANNEL := "arena.client"
-
-## The player pressed Leave on the Escape menu.
-##
-## [b]Announced, and acted on by dot-menu's stock Leave[/b] ([member DotMenu.leave_on_its_own],
-## set in [ArenaMenus]): connected, it disconnects the client link, and the shell that loaded
-## this client goes back to its own menu on the disconnect; solo on a desktop it quits. This
-## signal is for an embedder that wants to know. Until 2026-10-11 nothing listened to it and
-## the button did nothing.
-signal leave_requested()
-
-## The level and the local player's camera exist, so the frame shows the game and not an
-## empty room. A shell that knows the contract (dot-server-deploy's `_watch_game_ready`)
-## keeps its loading screen up until this, then draws every material once under it so the
-## shaders compile there rather than at the first shot; see [method warm_up_items]. Emitted
-## again after each map change. Nothing here depends on anyone listening.
-signal ready_to_show()
-
-## dot-game's platform layer: the load gate and its cover (held until the level, the local
-## body and the camera exist, then the weapon materials drawn once under it), the browser
-## filesystem flush, and [signal DotGameClient.input_blocked_changed] for the sampler. Not its
-## settings, menu, console, pointer or board: arena's are [ArenaMenus] and
-## [ArenaPresentation], see [method _build_platform]. The root keeps `ready_to_show` and
-## `warm_up_items` only because it declares its own signal (the gate then leaves it alone) and
-## because a shell older than the gate asks the root's methods, not the gate.
-var platform: DotGameClient = null
-var gate: DotLoadGate
-
-## Field of view, horizontal at 4:3. An arena shooter's number, not Godot's.
-const FIELD_OF_VIEW := 100.0
-
-var game: ArenaGame = null
-var player: ArenaPlayer = null
-var hud: ArenaHud = null
-## The Escape menu, its pages and the Tab board: dot-menu's ([ArenaMenus]).
-var game_menu: DotMenu = null
-## The Tab board's rows from dot-match. See [ArenaMenus.Board].
-var board: ArenaMenus.Board = null
-## The match summary opened the Tab board (rather than a held Tab), so the client closes it.
-var _summary_board_open: bool = false
-## The final killcam ([ArenaKillcam]): records every frame, plays before the summary.
-var killcam: ArenaKillcam = null
-
-## The kill view: the killer's replayed eye, in place of the death camera ([ArenaKillViewClient]).
-var killview: ArenaKillViewClient = null
-var winner_reveal: DotWinnerReveal = null
-var _reveal_hid: Dictionary = {}
-var _seen_match_state: int = -1
-## Applies dot-menu's stock settings this game does not apply itself: the window, V-Sync,
-## the frame cap and render scale.
-var applier: DotMenuApplier = null
-var net: DotNetManager = null
-var bridge: ArenaNetBridge = null
-var link: Node = null
-
-## Chat, voice and map changes: the client halves of what [ArenaServices] and
-## [ArenaMapDirector] run on the server.
-##
-## [b]Null offline, deliberately.[/b] All three are about a server that is telling this
-## client something, and an offline game has nobody to be told by. Building them anyway
-## would open a microphone in a single-player match.
-var extras: ArenaClientExtras = null
-
-## Play alone even when a link is available. `--offline`.
-@export var force_offline: bool = false
-
-## How many bots to add when playing offline. Zero is an empty arena. `bot_quota` at the
-## console changes it while playing (people + bots, as on a server); `-- --bots N` at launch.
-@export_range(0, 15, 1) var offline_bots: int = 3
-
-var _offline := true
-var _solo_binder: DotGameConfigBinder = null
-var _workbench: Node = null
-## Asks a server whether this player may edit it (sv_workbench_remote); null offline.
-var _workbench_remote: DotGameWorkbenchRemoteClient = null
-## The profile rows the server broadcasts (an admin's edit reaches every client); null offline.
-var _profile_link: DotNetProfileLink = null
-var _profile_runtime: DotProfileRuntime = null
-var _workbench_open := false
-var _sampler: DotFpsSampler = null
-## Refuses the sights for a moment after the local player is hit (sv_unscope_hit).
-var _aim_break := DotFpsAimBreak.new()
-## Degrees of a wall-run attach turn not yet applied to the view.
-var _view_turn_left := 0.0
-const VIEW_TURN_RATE := 22.0
-var _fire := DotWeaponCommand.new()
-
-## A weapon slot the player asked for this tick, or 0 for "no change". Cleared once
-## sent — see [method _read_fire].
-var _wanted_slot: int = 0
-
-## What the server last said was left on the clock, in seconds. Negative for "no
-## limit", which is what `DotMatch.seconds_remaining` returns and what the HUD reads as
-## "show the state name instead".
-var _match_seconds_remaining: float = -1.0
-
-## Seconds since the last position report. See `_process`.
-var _report_timer: float = 0.0
-
-## Whether the cursor is waiting for a click before it can be captured. Web only.
-var _awaiting_click := false
-
-## Who [member player] should be, whether or not that player exists yet.
-##
-## [b]HELLO names you and JOIN creates you, in that order.[/b] A client that resolved
-## the player here and never tried again holds null for the whole session — and the
-## list of what that breaks is the interesting part: the HUD binds by id and works, the
-## camera follows the entity and works, movement works because `DotFpsSampler.sample`
-## polls the `InputMap` rather than reading events, and *everything below the
-## `player == null` guard in `_unhandled_input` does not*. A client that connects,
-## draws, shows a live HUD and walks around, with a dead mouse and a dead keyboard.
-## g2gfast shipped exactly that and a person had to report it.
-var _watch_id: int = -1
-
-## The spectator's free camera while roaming, and the mouse motion not yet turned into a look.
-var _free_cam: DotSpectatorFreeCam = null
-var _roam_look: Vector2 = Vector2.ZERO
-
-## Bots this client drives, offline only. Session id -> the bot's body.
-var _bots: Dictionary = {}
-
-## Their minds (ArenaBots.Mind), by session id: the same brain a server's bots run.
-var _bot_minds: Dictionary = {}
-
-## Names offline bots from dot-bot's pool, and keeps their number.
-var _bot_roster := DotBotRoster.new()
-
-## The next offline bot's session id.
-var _next_bot_id: int = 100
-
-## The meshes of the map currently drawn. Replaced on a map change.
-var _level: Node3D = null
-
-## The map's sun and environment (`ArenaMapLighting.build`), replaced with the level.
-var _lighting: Node3D = null
-
-## dot-browser's client half, and the screen over it.
-var browser: ArenaBrowser = null
-
-## Settings, audio, effects and the console. Everything that belongs to the person at the
-## keyboard rather than to the match.
-var presentation: ArenaPresentation = null
-
-## State of the load-gate warm-up, see [method _prewarm_tick]; empty when idle.
-var _warm := {}
-
-## Whether this client believes it is holding a prop.
-##
-## [b]A belief, not a fact, and the distinction is the whole reason props are not
-## predicted.[/b] The server decides whether a grab happened; this is only what the
-## next press of the same key should ask for. A rigid body's contact solver is not
-## reproducible across machines, so a client that tracked a held prop's position
-## locally would be corrected on every snapshot.
-var _holding: bool = false
-
-## The last `ArenaEvents.PropAct` a key asked the prop tool for, or -1. Noted before the
-## request goes anywhere, so a suite with no server can see which key did what.
-var last_prop_asked: int = -1
-
-## The local player's hands, under their camera. Built on adoption.
-var view_model: ZeeViewModel = null
-var _sprite_view: ArenaSpriteWeapon = null
-
-## Every rocket and grenade in the air, drawn.
-var projectile_view: ArenaProjectileView = null
-
-## Where the dead lie: dot-player-char's ragdolls, built from each KILL's death (the server's
-## pick) under [member ArenaGame.ragdoll_rules]. Client side.
-var ragdolls: DotPlayerRagdolls = null
-
-## The projectile layer whose detonations are being heard, so a new one is noticed.
-var _heard_projectiles: RefCounted = null
-
-## The slot in hand and the one before it, for Q. Read off the arsenal each tick, because
-## the server decides what is in hand and a client that kept its own idea would switch
-## "back" to a weapon the server already took away.
-var _held_slot: int = 0
-var _last_slot: int = 0
-
-
-## dot-game's platform layer, added first so the cover is the first thing drawn.
-##
-## [b]Only the pieces that remove duplicate code without moving a documented rule.[/b] Taken:
-## the gate (with the map hold and the weapon warm-up on it), the link and the offline
-## answer, the browser flush, and the input-blocked signal. Left off, each for a reason:
-## [code]use_settings[/code] and [code]use_console[/code], because the settings document is
-## [ArenaPresentation]'s plain manager with a menu built round it by [ArenaMenus] (the
-## Servers page, the camera rows) and the console must be built after that menu;
-## [code]capture_pointer[/code], because Escape releases and then opens, and "Click to play"
-## is arena's ([method _unhandled_input]); the Tab board, because [ArenaMenus].Board merges
-## dot-match's records with the roster.
-func _build_platform() -> void:
-	platform = DotGameClient.new()
-	platform.name = "Platform"
-	platform.force_offline = force_offline
-	platform.use_settings = false
-	platform.use_console = false
-	platform.capture_pointer = false
-	platform.scoreboard_action = &""
-	platform.spawned_fn = func() -> bool: return player != null and player.camera != null
-	add_child(platform)
-	gate = platform.gate
-	link = platform.link as Node
-	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
-	gate.hold(&"map", "Loading the map")
-	gate.warm_up(_weapon_warm_items())
-	if ArenaFrameProbe.on() and DotWeb.available():
-		# Lets a page script split its own frame log at the cover (window.arena_gate_open, ms).
-		gate.opened.connect(func() -> void: DotWeb.eval("window.arena_gate_open = performance.now()", true))
-	# The chat box and console have the keyboard, and so does the menu: the platform polls
-	# this every frame, so there is no signal to forward from each of them.
-	platform.busy_fn = _input_busy
-	platform.input_blocked_changed.connect(_suspend_input)
+extends "arena_client_view.gd"
 
 
 func _ready() -> void:
@@ -281,29 +18,9 @@ func _ready() -> void:
 	game.name = "Game"
 	game.is_authority = _offline
 
-	# [b]HEADLESS collision, on a client with a screen.[/b] It reads like the wrong
-	# setting and it is the only correct one here.
-	#
-	# `Mode.HEADLESS` is not a degraded mode — it is `ArenaMap`'s analytic geometry, and
-	# `ArenaMap`'s whole design is that the meshes, the physics bodies and the analytic
-	# boxes come from ONE list of `AABB`s so they cannot drift. What matters for a
-	# client is the last clause of dot-player-controller's own note on it: *it gives the
-	# same answer on a client replaying a tick and a server that ran it.*
-	#
-	# A predicting client MUST use the same collision backend as the server it is
-	# predicting against. The server is headless and analytic; a client on Godot physics
-	# is a second solver with its own contact epsilons and its own idea of a step, so
-	# every replay would land somewhere slightly different and reconciliation would
-	# correct a client that had done nothing wrong. That is the 0.500 correction rate
-	# this project already paid for once.
-	#
-	# Measured the first time it was tried the other way: `Mode.PHYSICS` needs a
-	# collision shape on the player node, `ArenaPlayer` is a plain `Node3D`, and the
-	# player fell through a floor that was drawn perfectly — a void with one box in it
-	# and no error anywhere.
-	#
-	# The visible level below is still added: it is what the player SEES, and nothing
-	# collides against it.
+	# HEADLESS collision on a client with a screen: a predicting client must use the
+	# server's analytic backend, or replays land differently and reconciliation corrects
+	# a client that did nothing wrong. The visible level below is only what the player sees.
 	game.headless = true
 	game.register_service = _offline
 	if _offline:
@@ -338,13 +55,8 @@ func _ready() -> void:
 	_classify_level()
 	add_child(_level)
 	_light()
-	# **Connected, this level is a placeholder and the cover stays up over it** (2026-10-19).
-	# The server names its map only once the client says READY (`ArenaModule` admits the peer
-	# to the map sync then), and the first `_on_map_changed` releases this hold. Released here,
-	# the cover lifted on dm_box while the server's map was still a round trip (or a download)
-	# away: the player saw and walked the wrong level, and the cover report told the server
-	# the seat was loaded, so it could be shot behind the second cover the map change put up.
-	# `client_bench` with a probe, dm_atrium at 100 ms each way: open on dm_box for 140 ms.
+	# Connected, this level is a placeholder: the first `_on_map_changed` releases the
+	# hold, since the server names its map only after READY (lifting it here showed dm_box).
 	if _offline:
 		gate.release(&"map")
 
@@ -396,38 +108,6 @@ func _ready() -> void:
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
 	_suspend_input(platform.is_input_blocked())
-
-
-## The figure an avatar action plays on: that peer's player, or the local one offline.
-func _avatar_figure(peer_id: int) -> Object:
-	var who: ArenaPlayer = null
-	if bridge != null and peer_id != 0:
-		who = game.player_for(bridge.session_for_peer(peer_id))
-	if who == null and player != null and (net == null or peer_id == net.local_peer_id):
-		who = player
-	return who.figure if who != null else null
-
-
-func _exit_tree() -> void:
-	# A static outlives this game: the next one a shell loads must not look for its art
-	# under this game's mount.
-	ZeeModelCache.set_asset_root("res://")
-	ArenaWeaponSkins.clear()
-
-
-## The map's own sun, sky and air, replacing whatever the last map had.
-##
-## [b]Per map, and replaced with the level[/b], because a built-in map carries its lighting
-## as a dot-lighting document (`ArenaMap.lighting`) and the next map may be lit differently.
-## Two `WorldEnvironment`s in one tree is the second one ignored with a warning, so the old
-## one goes first, with `free()` for the same reason the level does.
-func _light() -> void:
-	if _lighting != null and is_instance_valid(_lighting):
-		remove_child(_lighting)
-		_lighting.free()
-
-	_lighting = ArenaMapLighting.build(game.map)
-	add_child(_lighting)
 
 
 func _build_interface() -> void:
@@ -504,235 +184,6 @@ func _build_interface() -> void:
 	_hud_keys()
 
 
-## The keys the HUD's buttons, hints and prompts name, from the key table as the player
-## has it bound. Slide says C while Duck is on its default, because that is where C slides.
-func _hud_keys() -> void:
-	if hud == null or presentation == null or presentation.bindings == null:
-		return
-	var table: DotMenuBindings = presentation.bindings
-	hud.keys[&"jump"] = table.key_for(&"dot_fps_jump")
-	hud.keys[&"dash"] = table.key_for(ArenaBindings.DASH)
-	hud.keys[&"chat"] = table.key_for(ArenaBindings.CHAT)
-	hud.keys[&"scoreboard"] = table.key_for(ArenaBindings.SCOREBOARD)
-	hud.keys[&"reload"] = table.key_for(ArenaBindings.RELOAD)
-	hud.keys[&"help"] = table.key_for(DotMenuBindings.HELP_ACTION)
-	hud.keys[&"maps"] = table.key_for(&"dot_menu_maps")
-	hud.keys[&"loadout"] = table.key_for(&"dot_menu_loadout") if loadout_menu != null else ""
-	hud.keys[&"launch"] = table.key_for(launch_action())
-	hud.keys[&"roam"] = table.key_for(ArenaBindings.ROAM)
-	for i in range(ArenaBindings.SLOTS.size()):
-		hud.keys[StringName("slot_%d" % (i + 1))] = table.key_for(ArenaBindings.SLOTS[i])
-	hud.keys[&"slide"] = "C" if _slide_on_c() else table.key_for(ArenaBindings.DUCK)
-
-
-## The movement sampler, with dot-player-controller's default actions registered for any
-## the key table has not made yet.
-##
-## [b]No noclip key.[/b] The addon's default for it is V, which is push to talk here, and
-## arena's noclip is an administrator's modifier (`noclip` at the console or in chat; the
-## motor ignores the bit unless the server granted it). The role is taken off before the
-## defaults are registered, so `dot_fps_noclip` is never created on V and V does one thing.
-static func make_sampler() -> DotFpsSampler:
-	var sampler := DotFpsSampler.new(ArenaPlayer.arena_tunables())
-	sampler.actions["noclip"] = &""
-	var _registered := DotFpsSampler.register_default_actions(sampler)
-	return sampler
-
-
-## C slides as well as Duck, while Duck is on its default key and no other row has been
-## given C. A slide IS a duck at a run, and C is where the genre puts it. Deferred after a
-## rebind: the table applies the row after the setting changes, and that apply would take
-## C off again.
-##
-## [b]Taken off again when another row gets C.[/b] C is not a stored binding, so the
-## table's swap cannot see it: binding Last weapon to C would otherwise have one press
-## switch weapons and slide.
-func _add_slide_key() -> void:
-	if _sampler == null:
-		return
-	var duck := _sampler.actions.get("crouch", &"") as StringName
-	if _slide_on_c():
-		_add_key(duck, KEY_C)
-	elif presentation != null and presentation.bindings != null:
-		var row := presentation.bindings.row_for_action(duck)
-		if not row.is_empty():
-			var _bound := presentation.bindings.apply_row(row, presentation.bindings.stored(row, presentation.settings))
-
-
-## Whether C is Duck's second key now: Duck on its default and C on no other row.
-func _slide_on_c() -> bool:
-	if presentation == null or presentation.settings == null or presentation.bindings == null:
-		return true
-	var table: DotMenuBindings = presentation.bindings
-	var duck := table.row_for_action(ArenaBindings.DUCK)
-	if duck.is_empty() or table.stored(duck, presentation.settings) != str(duck["default"]):
-		return false
-	return table.row_using("C", &"bind_duck", presentation.settings).is_empty()
-
-
-## A fresh map by id: the game's own, else a subscribed pack's from the catalogue the menu
-## lists (so only a solo, accepted, valid one). Null value with ok is not returned: an unknown
-## id is a failure here, as the menu's own refusal.
-func _build_map(id: StringName) -> DotResult:
-	var own := ArenaMap.by_id(id)
-	if own != null:
-		return DotResult.success(own)
-	if _menu_catalogue == null:
-		_menu_catalogue = ArenaMaps.catalogue()
-	var def := _menu_catalogue.get_map(id)
-	if ArenaMaps.is_workshop(def):
-		return ArenaMaps.build_workshop(def)
-	return DotResult.fail(DotError.CODE_INVALID, "There is no map called '%s'." % id)
-
-
-# --- Offline ---------------------------------------------------------------
-# --- The map menu (M) ------------------------------------------------------
-
-# --- The loadout menu (B) -----------------------------------------------------
-
-## dot-menu's loadout menu, or null on a host whose dot-menu predates it (API 6).
-var loadout_menu: Object = null
-var _loadout_restored := false
-var _loadout_scratch := false
-var _account_auth: Object = null
-
-## dot-auth's client, as the shell that signed the player in registers it. Absent solo
-## without a shell, or from a shell that predates it: then every loadout is "local".
-const AUTH_SERVICE := &"dot_auth_client"
-
-const WEAPON_CARDS_SCRIPT := "res://addons/zee_weapons/content/zee_weapon_cards.gd"
-var _weapon_cards: Script = null
-## Older zee_weapons shells lack it; the sprite is the fallback.
-const WEAPON_PREVIEW_SCRIPT := "res://addons/zee_weapons/view/zee_weapon_preview.gd"
-var _weapon_table: Dictionary = {}
-var _previews: Node = null
-
-
-## B: primary, sidearm, melee, grenades and gear, as cards with each weapon's picture and
-## numbers. Solo the game's own loadouts answer; connected the server does (dot-loadout's
-## `/loadout`), under the owner's `mp_loadout_*` rules. Guarded on the host's dot-menu and
-## dot-loadout levels, so an older client shell still runs the game without it.
-func _use_loadout_menu() -> void:
-	if DotAddonApi.build_level("dot_menu") < 6 or DotAddonApi.build_level("dot_loadout") < 2:
-		return
-	if not game_menu.has_method(&"use_loadout"):
-		return
-	loadout_menu = game_menu.call(&"use_loadout", loadout_offer, choose_loadout, decorate_loadout_choice)
-	if loadout_menu != null:
-		# Remembered under the signed-in site account (or "local" as a guest), and never
-		# from a suite or a render on scratch settings: those must not write, or read back, a
-		# player's real choice.
-		_loadout_scratch = ArenaPresentation.settings_directory.begins_with("user://scratch/")
-		follow_account(DotRegistry.get_node_service(AUTH_SERVICE))
-
-
-## The key a loadout is remembered under for [param auth] (a DotAuthClient, or null): its
-## account's public id when signed in, "local" for a guest or a client with no auth. Never a
-## token. Untyped because a shell older than dot-auth's `account_key` has no such method.
-static func loadout_account_key(auth: Object) -> String:
-	if auth == null or not is_instance_valid(auth) or not auth.has_method(&"account_key"):
-		return "local"
-	var key := str(auth.call(&"account_key"))
-	return key if key != "" else "local"
-
-
-## Files the loadout under [param auth]'s account from now on, and again whenever the player
-## signs in or out mid-session (a different account's choice is then the one restored).
-func follow_account(auth: Object) -> void:
-	if _account_auth != null and is_instance_valid(_account_auth):
-		for sig: StringName in [&"signed_in", &"signed_out"]:
-			if _account_auth.is_connected(sig, _on_account_changed):
-				_account_auth.disconnect(sig, _on_account_changed)
-	_account_auth = auth
-	if auth != null and is_instance_valid(auth):
-		for sig: StringName in [&"signed_in", &"signed_out"]:
-			if auth.has_signal(sig):
-				auth.connect(sig, _on_account_changed)
-	_rekey_loadout()
-
-
-func _on_account_changed(_identity: Variant = null) -> void:
-	_rekey_loadout()
-	if _loadout_restored:
-		_loadout_restored = false
-		_restore_loadout()
-
-
-func _rekey_loadout() -> void:
-	if loadout_menu != null:
-		loadout_menu.call(&"remember_as", "" if _loadout_scratch else "arena", loadout_account_key(_account_auth))
-
-
-## Solo: what this player may pick, from the game's own manager.
-func loadout_offer() -> Variant:
-	if game == null or game.loadout_command == null or player == null:
-		return DotResult.fail(DotError.CODE_STATE, "Join the match first.")
-	return await game.loadout_command.call(&"offer", ArenaGame.storage_key(player.player_id))
-
-
-## Solo: saves [param picks], and hands them over now in warmup or spawn protection.
-func choose_loadout(picks: Dictionary) -> Variant:
-	if game == null or game.loadout_command == null or player == null:
-		return DotResult.fail(DotError.CODE_STATE, "Join the match first.")
-	return await game.loadout_command.call(&"choose", null, ArenaGame.storage_key(player.player_id), picks)
-
-
-## A card's picture (the HUD's rendered weapon silhouettes) and numbers (zee's cards).
-func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
-	var id := StringName(str(choice.get("id", "")))
-	var out: Dictionary = {}
-	if _previews == null and ResourceLoader.exists(WEAPON_PREVIEW_SCRIPT):
-		_previews = (load(WEAPON_PREVIEW_SCRIPT) as GDScript).new()
-		_previews.name = "WeaponPreviews"
-		add_child(_previews)
-	var icon: Texture2D = _previews.texture(id) if _previews != null else null
-	if icon == null:
-		icon = ArenaWeaponIcons.shared.menu_texture(id)
-	if icon == null:
-		icon = ArenaHudGlance.Ink.weapon_icon(id)
-	if icon != null:
-		out["icon"] = icon
-	if id == &"armour":
-		out["detail"] = "Takes half of every hit until it wears through."
-		out["kind"] = "Gear"
-		out["stats"] = [{"label": "Armour", "value": 1.0, "text": "100"}]
-		return out
-	if _weapon_cards == null and DotAddonApi.build_level("zee_weapons") >= 3 and ResourceLoader.exists(WEAPON_CARDS_SCRIPT):
-		_weapon_cards = load(WEAPON_CARDS_SCRIPT) as Script
-	if _weapon_table.is_empty():
-		_weapon_table = ArenaContent.weapon_table()
-	if _weapon_cards != null and _weapon_table.has(id):
-		var card: Variant = _weapon_cards.call(&"card", _weapon_table[id])
-		if card is Dictionary:
-			out.merge(card as Dictionary)
-	return out
-
-
-## Sends the choice this player saved last time (dot-menu remembers it on this device), once
-## per join: solo into the game's own manager, connected to the server.
-func _restore_loadout() -> void:
-	if loadout_menu == null or _loadout_restored:
-		return
-	_loadout_restored = true
-	var _sent: Variant = await loadout_menu.call(&"restore")
-
-
-## Built once: making the catalogue builds every map, the imported ones included.
-var _menu_catalogue: DotMapCatalogue = null
-
-
-## What M lists solo, in the ballot's ids so a server's list reads the same: every map that
-## can host the mode being played (`map:<id>`), then every mode the map being played can host
-## (`mode:<id>`).
-func map_menu_rows() -> Array:
-	if game == null:
-		return []
-	if _menu_catalogue == null:
-		_menu_catalogue = ArenaMaps.catalogue()
-	var here := game.map.id if game.map != null else &""
-	return ArenaMaps.menu_rows(_menu_catalogue, here, game.mode, ArenaModes.all())
-
-
 ## Solo: a map (`map:<id>`) or a mode on this map (`mode:<id>`), now. The game changes and the
 ## level is rebuilt as a server's change would have it rebuilt ([method _on_map_changed]).
 func change_from_menu(id: StringName) -> DotResult:
@@ -769,144 +220,6 @@ func change_from_menu(id: StringName) -> DotResult:
 
 # --- Offline ---------------------------------------------------------------
 
-## The map an offline client starts on: `-- --map <id>`, else `dm_box`.
-##
-## An unknown id is said out loud and the default played, because a person who typed a
-## map name and got a different room has nothing else to tell the two apart by.
-static func _startup_map() -> ArenaMap:
-	var args := OS.get_cmdline_user_args()
-	var index := args.find("--map")
-
-	if index < 0 or index + 1 >= args.size():
-		return ArenaMap.dm_box()
-
-	var map := ArenaMap.by_id(StringName(args[index + 1]))
-
-	if map == null:
-		DotLog.warn(CHANNEL, "no such map, playing dm_box", {
-			"asked": args[index + 1],
-			"known": ArenaMap.ids() + ArenaMap.imported_ids(),
-		})
-		return ArenaMap.dm_box()
-
-	return map
-
-
-## Solo: the same cfg/ layers as a server (lenient here), so shipped defaults and a yml reach a
-## solo game; the noblock rules come from their own layers.
-func _load_solo_config() -> void:
-	_solo_binder = ArenaConfig.make_binder(game.config, "user://cfg/arena.json")
-	DotLog.result(CHANNEL, "solo config", _solo_binder.load_layers())
-	game.config_binder = _solo_binder
-	DotLog.result(CHANNEL, "solo noblock", game.make_noblock())
-
-
-## Solo: F9 opens dot-workbench over the config and noblock sets (nothing without the addon).
-func _start_solo_workbench() -> void:
-	var wb := DotGameWorkbench.new()
-	wb.name = "Workbench"
-	wb.listen_host_fn = func() -> bool: return true
-	for set: DotProfileSet in _solo_binder.profile_sets():
-		wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
-	if game.noblock != null:
-		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
-	add_child(wb)
-	var started := wb.start()
-	DotLog.result(CHANNEL, "the workbench", started)
-	if not started.ok or wb.api == null:
-		return
-	_solo_binder.attach(wb.api.runtime)
-	if game.noblock != null:
-		game.noblock.binder.attach(wb.api.runtime)
-	wb.open_changed.connect(func(open: bool) -> void:
-		_workbench_open = open
-		if open:
-			platform.hold_pointer(&"workbench")
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		else:
-			platform.release_pointer(&"workbench")
-			_apply_mouse())
-	_workbench = wb
-
-
-## Online: no local trust and no panel until the server names this player an admin (sv_workbench_remote).
-func _start_remote_workbench() -> void:
-	if _workbench_remote == null:
-		return
-	var wb := DotGameWorkbench.new()
-	wb.name = "Workbench"
-	wb.remote_client = _workbench_remote
-	wb.remote_fn = func() -> bool: return true
-	add_child(wb)
-	var started := wb.start(_profile_runtime)
-	DotLog.result(CHANNEL, "the remote workbench", started)
-	if not started.ok:
-		wb.queue_free()
-		return
-	wb.open_changed.connect(func(open: bool) -> void:
-		_workbench_open = open
-		if open:
-			platform.hold_pointer(&"workbench")
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		else:
-			platform.release_pointer(&"workbench")
-			_apply_mouse())
-	_workbench = wb
-
-
-func _start_offline() -> void:
-	game.start(0)
-	_start_solo_workbench()
-
-	# Offline this game is the authority, so the confirmations come off it directly; the
-	# same handlers a server's HIT, AWARD and KILL reach. The feed is the HUD's own
-	# `player_killed` connection, so this one leaves the feed alone.
-	game.hit_confirmed.connect(
-		func(attacker: int, victim: int, amount: float, point: Vector3, headshot: bool, lethal: bool) -> void:
-			if player != null and attacker == player.player_id:
-				_on_hit({
-					"victim_id": victim, "amount": amount, "point": point,
-					"headshot": headshot, "lethal": lethal,
-				})
-	)
-	game.medals_awarded.connect(
-		func(killer: int, victim: int, medals: Array, points: int, streak: int) -> void:
-			_on_award({
-				"killer_id": killer, "victim_id": victim, "medals": medals,
-				"points": points, "streak": streak,
-			})
-	)
-	game.player_killed.connect(func(entry: DotKillFeed.Entry) -> void:
-		if hud != null:
-			hud.note_kill(
-				{
-					"killer_id": int(entry.killer_key) if entry.killer_key.is_valid_int() else 0,
-					"victim_id": int(entry.victim_key) if entry.victim_key.is_valid_int() else 0,
-					"weapon": ArenaHud.cause_label(entry.cause),
-				},
-				player.player_id if player != null else 0,
-				entry.killer_name
-			)
-	)
-
-	# [b]Named as ours BEFORE it exists.[/b] `add_player` emits `player_added`
-	# synchronously, and `_on_player_added` gives every player it does not recognise as
-	# ours a body to be seen as. With `_watch_id` still -1 that was this one: the local
-	# player wore a capsule and a nose with the camera inside it, and the nose was a pale
-	# slab across the bottom of every offline frame. A networked client never had it,
-	# because HELLO names the session before JOIN creates it.
-	_watch_id = 1
-
-	var added := game.add_player(1, "Player")
-
-	if added.ok:
-		_adopt(added.value as ArenaPlayer)
-
-	_bind_bot_console()
-	_keep_offline_bots(_launch_bots())
-
-
-# --- Networked -------------------------------------------------------------
 
 func _build_netcode() -> DotResult:
 	# The server's `mp_teammate_passthrough` through the link (ArenaGame.follow_server_cvars).
@@ -927,33 +240,21 @@ func _build_netcode() -> DotResult:
 	config.tick_rate = game.tick_rate
 	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
 	config.enable_prediction = true
-	# Off on a client: rewinding is what a server does to resolve somebody else's shot,
-	# and a client resolves nobody's.
+	# Off on a client: rewinding is what a server does to resolve somebody else's shot.
 	config.enable_lag_compensation = false
 	config.max_entities_per_snapshot = 64
-	# From the game, not written here. See ArenaGame.NET_WORLD_EXTENT — this line said
-	# 256 while the server said 128, and a quantised position decoded against the wrong
-	# range is a different position rather than a less precise one.
+	# From the game: a quantised position decoded against the wrong range is a different position.
 	config.world_extent = ArenaGame.NET_WORLD_EXTENT
-	# One reconciliation a frame, against the newest snapshot, however many arrived: each
-	# replays the whole input lead, and a browser that read a stall's worth of queued
-	# snapshots in one frame replayed them all and never caught up (docs/netcode.md, "A
-	# frame's cost"). By name, because a pack runs on whatever dot-net its shell carries.
-	# `cl_reconcile_per_snapshot 1` at launch is the old way, kept so the two can be
-	# measured against each other in one build under the same load.
+	# One reconciliation a frame, against the newest snapshot (docs/netcode.md, "A frame's cost").
+	# By name, as a pack runs on whatever dot-net its shell carries; launch cl_reconcile_per_snapshot 1 is the old way.
 	if &"reconcile_once_per_frame" in config:
 		config.set(&"reconcile_once_per_frame", ArenaFrameProbe.launch_value("cl_reconcile_per_snapshot") != "1")
-	# And none at all when the snapshot says what this client already predicted, which is
-	# most of them: the replay's cost is the lead, a round trip of ticks, so without this a
-	# higher ping was a slower frame (docs/netcode.md, "A frame's cost"). By name for the
-	# same reason; `cl_replay_always 1` at launch replays every one, for an A/B.
+	# And no replay when the snapshot matches the prediction; `cl_replay_always 1` replays every one.
 	if &"skip_matching_replays" in config:
 		config.set(&"skip_matching_replays", ArenaFrameProbe.launch_value("cl_replay_always") != "1")
 	net.config = config
 	add_child(net)
-
 	var started := net.setup()
-
 	if not started.ok:
 		return started
 
@@ -962,7 +263,6 @@ func _build_netcode() -> DotResult:
 	add_child(bridge)
 
 	var attached := bridge.attach(game, net)
-
 	if not attached.ok:
 		return attached
 
@@ -976,8 +276,7 @@ func _build_netcode() -> DotResult:
 	_profile_link = DotNetProfileLink.attach(net, _profile_runtime)
 	net.messages.seal()
 
-	# The client halves. Built here rather than in `_ready` because every one of them
-	# needs the bridge, and there is no bridge offline.
+	# The client halves, built here because each needs the bridge.
 	extras = ArenaClientExtras.new()
 	extras.name = "Extras"
 	add_child(extras)
@@ -991,8 +290,7 @@ func _build_netcode() -> DotResult:
 	platform.look_position_fn = _look_position
 	platform.build_look_mute()
 
-	# The join's map hold (see `_ready`) is let go by the first map the server names; if
-	# that map cannot be had, a cover that never lifts is worse than the level in hand.
+	# A map that cannot be had must not leave the cover up forever: let the hold go.
 	if extras.maps != null:
 		extras.maps.fetch_failed.connect(func(_map: DotMapDef, _error: DotError) -> void:
 			gate.release(&"map"))
@@ -1002,7 +300,6 @@ func _build_netcode() -> DotResult:
 		gate.release(&"map")
 
 	extras.said.connect(_on_said)
-
 	# What the server says is carrying chat. It decides whether the box is drawn at all
 	# when the player's setting is `auto`.
 	extras.chat_relay_changed.connect(func(relayed: bool) -> void:
@@ -1010,11 +307,8 @@ func _build_netcode() -> DotResult:
 			presentation.set_chat_relayed(relayed)
 	)
 
-	# [b]Where chat actually arrives.[/b] `ArenaServices` routes a line through
-	# dot-chat and then hands it to dot-server's manager to put on the wire, so on
-	# this end it lands on `DotClientLink.chat_received` — not on anything dot-chat
-	# owns. Without this connection the client's `DotChatClient` is a history nothing
-	# feeds: empty scrollback, zero unread, and chat working perfectly on screen.
+	# Chat arrives on `DotClientLink.chat_received`, not on anything dot-chat owns; unconnected
+	# the client's DotChatClient is a history nothing feeds.
 	if link != null and link.has_signal("chat_received"):
 		link.connect("chat_received", extras.receive_wire)
 	extras.map_changing.connect(_on_map_changing)
@@ -1029,138 +323,17 @@ func _build_netcode() -> DotResult:
 	bridge.award_received.connect(_on_award)
 	bridge.match_received.connect(_on_match)
 
-	# The one thing that writes an RTT sample. dot-net never touches a transport, so
-	# nothing in it can; without this the clock's input lead omits the flight time and
-	# past ~30 ms every command arrives after its tick and is discarded as late.
-	# ENet's own round trip when on ENet, the heartbeat's otherwise: see `link_rtt_ms`.
+	# The one thing that writes an RTT sample: without it the input lead omits flight time
+	# and past ~30 ms every command arrives late.
 	if link != null:
 		bridge.rtt_source = func() -> float: return ArenaNetBridge.link_rtt_ms(link)
-
-	# READY, and not one byte before the scene exists. dot-server's signon finishes and
-	# THEN the client builds this; anything the server sent in between landed on a node
-	# that did not exist and was lost, one "Node not found" per call.
+	# READY only once the scene exists, or what the server sent in between hits a missing node.
 	if link != null and link.has_method("is_playing") and bool(link.call("is_playing")):
 		_say_ready()
 	elif link != null and link.has_signal("spawned"):
 		link.connect("spawned", _say_ready, CONNECT_ONE_SHOT)
 
 	return net.start()
-
-
-func _say_ready() -> void:
-	if _workbench_remote != null:
-		_workbench_remote.ask()
-	if bridge != null:
-		bridge.send_request(ArenaEvents.Ask.READY)
-
-
-## A chat line, on the HUD's notice line.
-##
-## The HUD is the whole chat window this game has, which is a level of ambition rather
-## than an oversight: a scrolling window with an input field is a screen, and a screen
-## is [DotScreenStack]'s. [DotChatClient] is holding the history the moment somebody
-## writes one.
-# --- Chat ------------------------------------------------------------------
-
-## Joins the chat box to the two things it needs: a way out, and a way to stop the player.
-##
-## [b]The sampler is the half that is easy to forget.[/b] `swallows_input` keeps typed keys
-## out of `_unhandled_input`, but movement here is POLLED — `DotFpsSampler.sample` reads
-## the device every physics frame and does not care what consumed an event. Without
-## `suspended`, typing "sw" walks you backwards off whatever you were standing on.
-## `DotFpsSampler.suspended` is documented "for a chat box or a menu" and until now
-## nothing in this game had ever set it.
-func _wire_chat_window() -> void:
-	var window: DotChatWindow = presentation.chat_window if presentation != null else null
-
-	if window == null:
-		return
-
-	window.submitted.connect(_on_chat_submitted)
-
-
-## Something other than the cover has the keyboard or the screen.
-func _input_busy() -> bool:
-	return _workbench_open or (presentation != null and presentation.swallows_input()) \
-		or (game_menu != null and game_menu.any_open())
-
-
-## Movement stops while anything has the keyboard or the screen: the cover, the chat box,
-## the console, or dot-menu's menu ([member platform]'s [code]busy_fn[/code] says which). Only
-## when none does is it given back, so the console closing while the chat box is still open
-## does not walk the player.
-func _suspend_input(blocked: bool) -> void:
-	if _sampler != null:
-		_sampler.suspended = blocked
-
-
-## Whether the menu, its help, the console, the workbench or a ballot in pointer mode is up, in which case the mouse is a pointer.
-func _menu_open() -> bool:
-	return _workbench_open or game_menu != null and game_menu.any_open() or _pointer_modal_up()
-
-
-## A `dot_pointer_modal` node (dot-ui's ballot) that has freed the mouse; a click must not recapture it.
-func _pointer_modal_up() -> bool:
-	var tree := Engine.get_main_loop() as SceneTree
-	if tree == null:
-		return false
-	for node in tree.get_nodes_in_group(&"dot_pointer_modal"):
-		if node.has_method(&"is_pointer_mode") and bool(node.call(&"is_pointer_mode")):
-			return true
-	return false
-
-
-## What a player typed, on its way to the server.
-##
-## [b]Nothing is filtered here.[/b] The server decides what a line may contain and its
-## answer is the only one that counts; a client that filtered first would be a second
-## filter that drifts from the real one.
-func _on_chat_submitted(text: String, channel: StringName) -> void:
-	if _offline:
-		# Offline there is no server to decide anything, so the line goes straight to the
-		# log. Saying nothing at all would read as a chat box that does not work.
-		if presentation != null and presentation.chat_window != null:
-			presentation.chat_window.add_said(
-				_local_display_name(), text, Color(0.62, 0.78, 1.0)
-			)
-		return
-
-	if link != null and link.has_method("send_chat"):
-		link.send_chat(text, channel == &"team")
-
-
-## What to draw beside an offline player's own line.
-func _local_display_name() -> String:
-	if player != null and player.display_name != "":
-		return player.display_name
-
-	return "You"
-
-
-## A line somebody said, in the chat box, with the name drawn apart from the text.
-func _on_said(speaker: String, text: String, kind: String) -> void:
-	# The server's own lines also go on the HUD's centre notice. Only those: every line
-	# used to, which put whatever anybody typed in the middle of the screen.
-	if kind == "system" and hud != null:
-		hud.notice(text)
-
-	if presentation == null or presentation.chat_window == null:
-		return
-
-	# The server has already decided who hears a team line; the colour is only so that a
-	# player can see which of their own lines went where.
-	var speaker_colour := Color(0.55, 0.85, 0.60) if kind == "team" else Color(0.62, 0.78, 1.0)
-
-	if speaker == "":
-		presentation.chat_window.add_text(text, Color(0.80, 0.82, 0.86))
-		return
-
-	presentation.chat_window.add_said(speaker, text, speaker_colour)
-
-
-func _on_map_changing(map: DotMapDef) -> void:
-	if hud != null:
-		hud.notice("Changing map to %s…" % map.name_or_id())
 
 
 ## The world was replaced under this client.
@@ -1253,222 +426,6 @@ func _on_map_changed(map: DotMapDef) -> void:
 			if game.map != null and game.map.is_imported() and game.map.author != "" else ""
 		)
 		hud.notice("Now playing %s%s." % [map.name_or_id(), by])
-
-
-## Asks the server to do something with a prop.
-##
-## [b]An intent over the wire, and the aim is the only thing on it.[/b] The server
-## already knows where this player is — it simulated them — and a client that could
-## name its own origin could grab a prop from across the map. What it cannot know is
-## where they were looking between two ticks, so that is the claim, and
-## `DotPropTool.may_act_on` is what decides whether it reaches.
-func _ask_prop(action: int) -> void:
-	last_prop_asked = action
-	if _offline or bridge == null or player == null:
-		return
-
-	var state := player.controller.state
-
-	bridge.send_request(
-		ArenaEvents.Ask.PROP_TOOL,
-		ArenaEvents.write_prop_act(action, state.yaw, state.pitch)
-	)
-
-
-## The player picked a server.
-##
-## [b]It does not connect, and that is honest rather than lazy.[/b] Joining means
-## tearing down this client's netcode, opening a transport at a new address and going
-## through dot-server's signon again — which is a launcher's job, and this game is
-## loaded BY one. What this does is note the visit, so the server lands in the
-## player's history, and say where to go.
-func _on_join_requested(entry: DotBrowserEntry) -> void:
-	if browser != null:
-		browser.note_connected(entry.key())
-
-	if hud != null:
-		hud.notice("Join %s at %s" % [entry.name, entry.join_address()])
-
-	DotLog.info(CHANNEL, "the player picked a server", {
-		"name": entry.name, "address": entry.join_address()
-	})
-
-
-func _on_hello(info: Dictionary) -> void:
-	_watch(int(info["session_id"]))
-
-	if hud != null:
-		hud.notice("Connected to %s" % String(info["map_name"]))
-
-
-## The server's match state, put where the HUD already reads it.
-##
-## [b]The client's own `DotMatch` never runs.[/b] Nothing ticks it, it has no spawn
-## points and its scoreboard is fed by replication, so every value on it is whatever it
-## was constructed with — and `ArenaHud` reads `match_node.state` and
-## `seconds_remaining()` directly. Before this, a connected browser client showed
-## "IDLE" for ever while the server was playing a round: not a stale value, a value
-## nothing had ever written.
-##
-## Written onto the node rather than into a parallel copy so the HUD stays one code
-## path. A HUD that read one field on a server and another on a client would be two
-## HUDs, and only one of them would ever be looked at.
-func _on_match(info: Dictionary) -> void:
-	if game == null or game.match_node == null:
-		return
-
-	var was := game.match_node.state
-	game.match_node.state = int(info["state"]) as DotMatch.State
-	game.match_node.round_number = int(info["round"])
-
-	# The end of the match: the scoreboard comes up by itself, and the notice line names
-	# the most valuable player, which is the summary the genre shows between matches.
-	if game.match_node.state == DotMatch.State.MATCH_END and was != DotMatch.State.MATCH_END:
-		_begin_match_end()
-	elif was == DotMatch.State.MATCH_END and game.match_node.state != DotMatch.State.MATCH_END:
-		if killcam != null:
-			killcam.skip()
-		if winner_reveal != null:
-			winner_reveal.skip()
-	# The summary board came up by itself, so nothing is holding Tab to close it: it goes
-	# when the next match begins, else it covers the whole of the next round.
-	if was == DotMatch.State.MATCH_END and game.match_node.state != DotMatch.State.MATCH_END and _summary_board_open:
-		_summary_board_open = false
-		if game_menu != null:
-			game_menu.scoreboard.close()
-
-	# What the HUD's "24 / 35" divides by. This match's rules are its own copy
-	# (`ArenaGame` duplicates the mode's), so writing them touches nothing shared.
-	if info.has("score_limit") and game.match_node.rules != null:
-		game.match_node.rules.score_limit = int(info["score_limit"])
-
-	# Ticks, divided by OUR rate — which HELLO set to the server's, so the two agree.
-	# Sending seconds instead would have been a number derived from the sender's rate
-	# and read as though it were derived from the receiver's.
-	var ticks := int(info["remaining_ticks"])
-	_match_seconds_remaining = (
-		-1.0 if ticks < 0 else float(ticks) / float(maxi(game.tick_rate, 1))
-	)
-
-	if hud != null:
-		hud.remaining_override = _match_seconds_remaining
-
-
-func _on_notice(text: String) -> void:
-	if hud != null:
-		hud.notice(text)
-
-
-## The map vote's cue and countdown. The ballot itself arrives as chat, which is where
-## `announce_fn` sends it; this is what chat cannot carry.
-func _on_vote(info: Dictionary) -> void:
-	var seconds_left := int(info.get("seconds_left", 0))
-
-	if seconds_left > 0 and hud != null:
-		hud.notice(
-			"%s in %d…" % ["Runoff" if bool(info.get("runoff", false)) else "Map vote", seconds_left]
-		)
-
-	if presentation != null:
-		presentation.on_vote_cue(StringName(str(info.get("cue", ""))))
-
-
-func _on_kill(info: Dictionary) -> void:
-	# The feed is dot-ui's and takes an entry, not a dictionary. Rebuilt here rather
-	# than replicated as one, because a `DotKillFeed.Entry` has ten fields and three of
-	# them are only meaningful on the server that scored it.
-	if hud == null or game == null:
-		return
-
-	var entry := DotKillFeed.Entry.new()
-	entry.killer_key = str(int(info["killer_id"])) if int(info["killer_id"]) != 0 else ""
-	entry.victim_key = str(int(info["victim_id"]))
-	entry.cause = StringName(String(info["weapon"]))
-	entry.headshot = bool(info["headshot"])
-	if killcam != null:
-		killcam.note_kill(int(info["killer_id"]), int(info["victim_id"]), String(info["weapon"]), entry.headshot)
-
-	var killer := game.player_for(int(info["killer_id"]))
-	var victim := game.player_for(int(info["victim_id"]))
-	entry.killer_name = killer.display_name if killer != null else "the world"
-	entry.victim_name = victim.display_name if victim != null else "?"
-
-	hud.show_kill(entry)
-	hud.note_kill(info, player.player_id if player != null else 0, entry.killer_name)
-
-	# A headshot you made says so over the body, briefly, rising: the bullseye the genre
-	# draws. A Label3D, because it belongs where the victim is, not on the HUD.
-	if (
-		player != null and victim != null and int(info["killer_id"]) == player.player_id
-		and bool(info["headshot"])
-	):
-		var tag := Label3D.new()
-		tag.text = "HEADSHOT!"
-		tag.modulate = Color(1.0, 0.25, 0.2)
-		tag.outline_modulate = Color(0.0, 0.0, 0.0, 0.8)
-		tag.font_size = 48
-		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		tag.no_depth_test = true
-		victim.get_parent().add_child(tag)
-		tag.global_position = victim.global_position + Vector3(0.0, 2.3, 0.0)
-		var rise := tag.create_tween()
-		rise.tween_property(tag, "global_position:y", tag.global_position.y + 0.8, 1.2)
-		rise.parallel().tween_property(tag, "modulate:a", 0.0, 1.2)
-		rise.tween_callback(tag.queue_free)
-
-	# The body comes apart, if the server's rules say this death breaks one. Seeded from
-	# the victim and the tick so every client breaks it the same way; pushed away from
-	# the killer, which every client knows. Then what is left of it falls, the way the
-	# server picked (`death_*` on the KILL), so every client draws the same fall.
-	if victim != null and victim != player:
-		var away := Vector3.ZERO
-		if killer != null:
-			away = victim.global_position - killer.global_position
-			away.y = 0.0
-		var _broke := victim.break_body(
-			game.break_rules(),
-			away,
-			# Not the tick: each client receives this at its own tick, and a seed that
-			# differs per client breaks a different arm on every screen.
-			int(info["victim_id"]) * 7919 + int(info["killer_id"]),
-			bool(info.get("critical", false))
-		)
-		var death := DotPlayerDeath.from_dict(info)
-		if death.direction == Vector3.ZERO and away != Vector3.ZERO:
-			# An older server sent no direction: away from the killer is the honest guess.
-			death.direction = away.normalized()
-		var _fell := victim.fall_body(ragdolls, death)
-
-
-## A kill in a solo game: the same fall a connected client draws from the KILL message, from
-## the death [method ArenaGame.decide_death] put on the entry.
-func _on_solo_kill(entry: DotKillFeed.Entry) -> void:
-	if game == null or not String(entry.victim_key).is_valid_int():
-		return
-	if killcam != null and String(entry.killer_key).is_valid_int():
-		killcam.note_kill(int(entry.killer_key), int(entry.victim_key), String(entry.cause), entry.headshot)
-	var victim := game.player_for(int(entry.victim_key))
-	if victim == null or victim == player:
-		return
-	var death: DotPlayerDeath = entry.get_meta(&"death", null)
-	var _fell := victim.fall_body(ragdolls, death if death != null else DotPlayerDeath.new())
-
-
-## The dead bodies' yard: the game's ragdoll rules, the world's collision layers, and the
-## presentation's sound. Built once; cleared on a map change.
-func _build_ragdolls() -> void:
-	ragdolls = DotPlayerRagdolls.new()
-	ragdolls.name = "Ragdolls"
-	ragdolls.rules = game.ragdoll_rules
-	var stack := game.player_stack
-	if stack != null and stack.physics != null and stack.physics.layout != null:
-		# The level is classified onto `world` (see `_classify_level`); props are on `prop`.
-		game.ragdoll_rules.collision_mask = stack.physics.layout.mask_of([&"world", &"prop"])
-	ragdolls.sound_fn = _ragdoll_sound
-	add_child(ragdolls)
-	# The map's toys are heard the same way: a bounce, a knock, a barrel's roll.
-	if not game.toy_sound.is_connected(_ragdoll_sound):
-		var _toys := game.toy_sound.connect(_ragdoll_sound)
 
 
 ## The level's layers: what the third-person and spectator cameras stop against.
@@ -2311,9 +1268,7 @@ func _probe_extra() -> Dictionary:
 
 func _present_frame(delta: float) -> void:
 	if net != null and not _offline:
-		# Once a frame, and it is not optional: `DotNetInterpolator` blends two
-		# snapshots perfectly and the result sits in a property nothing reads unless
-		# this runs. Remote players otherwise step at the snapshot rate.
+		# Every frame: remote players otherwise step at the snapshot rate.
 		var t := Time.get_ticks_usec()
 		var replays := bridge.probe_replays_before() if bridge != null else -1
 		net.interpolate_frame()
@@ -2322,9 +1277,6 @@ func _present_frame(delta: float) -> void:
 		ArenaFrameProbe.add(&"interpolate", t)
 
 	# Where every speaker is, so a proximity voice comes from the player who said it.
-	# The server already decided who hears whom by distance; playing the result from
-	# nowhere in particular throws away the only thing that made the distance worth
-	# computing.
 	if extras != null:
 		extras.pump_voice(delta)
 
@@ -2343,10 +1295,7 @@ func _present_frame(delta: float) -> void:
 	_present_sprite_view()
 
 	if presentation != null:
-		# dot-audio culls by distance from the listener and dot-fx ages what it spawned;
-		# neither ticks itself, for the reason everything tickable in this family is
-		# explicit -- `_process` does not run while a tree is paused, and a pause menu is
-		# exactly when nothing finishes.
+		# Neither dot-audio nor dot-fx ticks itself: `_process` stops while paused.
 		var eye := camera_position()
 		var forward := Vector3.FORWARD
 		if player != null and player.camera != null:
@@ -2363,13 +1312,7 @@ func _present_frame(delta: float) -> void:
 				if shot_fx != null:
 					shot_fx.set(&"roof", presentation.shot_roof)
 
-	# A position report, once a second, for as long as the client has a player.
-	#
-	# [b]There is no other way to see where a browser client thinks it is.[/b] Every
-	# assertion available runs headless and has no camera; a screenshot shows what was
-	# drawn and not the number it was drawn from. When a client renders sky in every
-	# direction, this is the line that says whether the player is somewhere wrong or
-	# the world is somewhere wrong, and those have completely different fixes.
+	# A position report once a second: the only way to see where a browser client thinks it is.
 	_report_timer += delta
 
 	if _report_timer >= 1.0 and player != null:
@@ -2653,7 +1596,6 @@ func _grab_mouse() -> void:
 
 	if hud != null:
 		hud.notice("Click to play")
-
 
 
 ## Puts the drawn level on the layout's `world` layer.
@@ -3027,3 +1969,281 @@ func _look_position(row: Dictionary) -> Variant:
 		if who != player and who.display_name == row["name"]:
 			return who.global_position + Vector3.UP * 1.5
 	return null
+
+
+## dot-game's platform layer, added first so the cover is the first thing drawn.
+##
+## [b]Only the pieces that remove duplicate code without moving a documented rule.[/b] Taken:
+## the gate (with the map hold and the weapon warm-up on it), the link and the offline
+## answer, the browser flush, and the input-blocked signal. Left off, each for a reason:
+## [code]use_settings[/code] and [code]use_console[/code], because the settings document is
+## [ArenaPresentation]'s plain manager with a menu built round it by [ArenaMenus] (the
+## Servers page, the camera rows) and the console must be built after that menu;
+## [code]capture_pointer[/code], because Escape releases and then opens, and "Click to play"
+## is arena's ([method _unhandled_input]); the Tab board, because [ArenaMenus].Board merges
+## dot-match's records with the roster.
+func _build_platform() -> void:
+	platform = DotGameClient.new()
+	platform.name = "Platform"
+	platform.force_offline = force_offline
+	platform.use_settings = false
+	platform.use_console = false
+	platform.capture_pointer = false
+	platform.scoreboard_action = &""
+	platform.spawned_fn = func() -> bool: return player != null and player.camera != null
+	add_child(platform)
+	gate = platform.gate
+	link = platform.link as Node
+	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
+	gate.hold(&"map", "Loading the map")
+	gate.warm_up(_weapon_warm_items())
+	if ArenaFrameProbe.on() and DotWeb.available():
+		# Lets a page script split its own frame log at the cover (window.arena_gate_open, ms).
+		gate.opened.connect(func() -> void: DotWeb.eval("window.arena_gate_open = performance.now()", true))
+	# The chat box and console have the keyboard, and so does the menu: the platform polls
+	# this every frame, so there is no signal to forward from each of them.
+	platform.busy_fn = _input_busy
+	platform.input_blocked_changed.connect(_suspend_input)
+
+
+## The keys the HUD's buttons, hints and prompts name, from the key table as the player
+## has it bound. Slide says C while Duck is on its default, because that is where C slides.
+func _hud_keys() -> void:
+	if hud == null or presentation == null or presentation.bindings == null:
+		return
+	var table: DotMenuBindings = presentation.bindings
+	hud.keys[&"jump"] = table.key_for(&"dot_fps_jump")
+	hud.keys[&"dash"] = table.key_for(ArenaBindings.DASH)
+	hud.keys[&"chat"] = table.key_for(ArenaBindings.CHAT)
+	hud.keys[&"scoreboard"] = table.key_for(ArenaBindings.SCOREBOARD)
+	hud.keys[&"reload"] = table.key_for(ArenaBindings.RELOAD)
+	hud.keys[&"help"] = table.key_for(DotMenuBindings.HELP_ACTION)
+	hud.keys[&"maps"] = table.key_for(&"dot_menu_maps")
+	hud.keys[&"loadout"] = table.key_for(&"dot_menu_loadout") if loadout_menu != null else ""
+	hud.keys[&"launch"] = table.key_for(launch_action())
+	hud.keys[&"roam"] = table.key_for(ArenaBindings.ROAM)
+	for i in range(ArenaBindings.SLOTS.size()):
+		hud.keys[StringName("slot_%d" % (i + 1))] = table.key_for(ArenaBindings.SLOTS[i])
+	hud.keys[&"slide"] = "C" if _slide_on_c() else table.key_for(ArenaBindings.DUCK)
+
+
+## C slides as well as Duck, while Duck is on its default key and no other row has been
+## given C. A slide IS a duck at a run, and C is where the genre puts it. Deferred after a
+## rebind: the table applies the row after the setting changes, and that apply would take
+## C off again.
+##
+## [b]Taken off again when another row gets C.[/b] C is not a stored binding, so the
+## table's swap cannot see it: binding Last weapon to C would otherwise have one press
+## switch weapons and slide.
+func _add_slide_key() -> void:
+	if _sampler == null:
+		return
+	var duck := _sampler.actions.get("crouch", &"") as StringName
+	if _slide_on_c():
+		_add_key(duck, KEY_C)
+	elif presentation != null and presentation.bindings != null:
+		var row := presentation.bindings.row_for_action(duck)
+		if not row.is_empty():
+			var _bound := presentation.bindings.apply_row(row, presentation.bindings.stored(row, presentation.settings))
+
+
+## Solo: F9 opens dot-workbench over the config and noblock sets (nothing without the addon).
+func _start_solo_workbench() -> void:
+	var wb := DotGameWorkbench.new()
+	wb.name = "Workbench"
+	wb.listen_host_fn = func() -> bool: return true
+	for set: DotProfileSet in _solo_binder.profile_sets():
+		wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
+	if game.noblock != null:
+		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
+	add_child(wb)
+	var started := wb.start()
+	DotLog.result(CHANNEL, "the workbench", started)
+	if not started.ok or wb.api == null:
+		return
+	_solo_binder.attach(wb.api.runtime)
+	if game.noblock != null:
+		game.noblock.binder.attach(wb.api.runtime)
+	wb.open_changed.connect(func(open: bool) -> void:
+		_workbench_open = open
+		if open:
+			platform.hold_pointer(&"workbench")
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		else:
+			platform.release_pointer(&"workbench")
+			_apply_mouse())
+	_workbench = wb
+
+
+## Online: no local trust and no panel until the server names this player an admin (sv_workbench_remote).
+func _start_remote_workbench() -> void:
+	if _workbench_remote == null:
+		return
+	var wb := DotGameWorkbench.new()
+	wb.name = "Workbench"
+	wb.remote_client = _workbench_remote
+	wb.remote_fn = func() -> bool: return true
+	add_child(wb)
+	var started := wb.start(_profile_runtime)
+	DotLog.result(CHANNEL, "the remote workbench", started)
+	if not started.ok:
+		wb.queue_free()
+		return
+	wb.open_changed.connect(func(open: bool) -> void:
+		_workbench_open = open
+		if open:
+			platform.hold_pointer(&"workbench")
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		else:
+			platform.release_pointer(&"workbench")
+			_apply_mouse())
+	_workbench = wb
+
+
+func _start_offline() -> void:
+	game.start(0)
+	_start_solo_workbench()
+
+	# Offline this game is the authority, so the confirmations come off it directly; the
+	# same handlers a server's HIT, AWARD and KILL reach. The feed is the HUD's own
+	# `player_killed` connection, so this one leaves the feed alone.
+	game.hit_confirmed.connect(
+		func(attacker: int, victim: int, amount: float, point: Vector3, headshot: bool, lethal: bool) -> void:
+			if player != null and attacker == player.player_id:
+				_on_hit({
+					"victim_id": victim, "amount": amount, "point": point,
+					"headshot": headshot, "lethal": lethal,
+				})
+	)
+	game.medals_awarded.connect(
+		func(killer: int, victim: int, medals: Array, points: int, streak: int) -> void:
+			_on_award({
+				"killer_id": killer, "victim_id": victim, "medals": medals,
+				"points": points, "streak": streak,
+			})
+	)
+	game.player_killed.connect(func(entry: DotKillFeed.Entry) -> void:
+		if hud != null:
+			hud.note_kill(
+				{
+					"killer_id": int(entry.killer_key) if entry.killer_key.is_valid_int() else 0,
+					"victim_id": int(entry.victim_key) if entry.victim_key.is_valid_int() else 0,
+					"weapon": ArenaHud.cause_label(entry.cause),
+				},
+				player.player_id if player != null else 0,
+				entry.killer_name
+			)
+	)
+
+	# [b]Named as ours BEFORE it exists.[/b] `add_player` emits `player_added`
+	# synchronously, and `_on_player_added` gives every player it does not recognise as
+	# ours a body to be seen as. With `_watch_id` still -1 that was this one: the local
+	# player wore a capsule and a nose with the camera inside it, and the nose was a pale
+	# slab across the bottom of every offline frame. A networked client never had it,
+	# because HELLO names the session before JOIN creates it.
+	_watch_id = 1
+
+	var added := game.add_player(1, "Player")
+
+	if added.ok:
+		_adopt(added.value as ArenaPlayer)
+
+	_bind_bot_console()
+	_keep_offline_bots(_launch_bots())
+
+
+# --- Networked -------------------------------------------------------------
+
+
+## Joins the chat box to the two things it needs: a way out, and a way to stop the player.
+##
+## [b]The sampler is the half that is easy to forget.[/b] `swallows_input` keeps typed keys
+## out of `_unhandled_input`, but movement here is POLLED — `DotFpsSampler.sample` reads
+## the device every physics frame and does not care what consumed an event. Without
+## `suspended`, typing "sw" walks you backwards off whatever you were standing on.
+## `DotFpsSampler.suspended` is documented "for a chat box or a menu" and until now
+## nothing in this game had ever set it.
+func _wire_chat_window() -> void:
+	var window: DotChatWindow = presentation.chat_window if presentation != null else null
+
+	if window == null:
+		return
+
+	window.submitted.connect(_on_chat_submitted)
+
+
+func _on_hello(info: Dictionary) -> void:
+	_watch(int(info["session_id"]))
+
+	if hud != null:
+		hud.notice("Connected to %s" % String(info["map_name"]))
+
+
+## The server's match state, put where the HUD already reads it.
+##
+## [b]The client's own `DotMatch` never runs.[/b] Nothing ticks it, it has no spawn
+## points and its scoreboard is fed by replication, so every value on it is whatever it
+## was constructed with — and `ArenaHud` reads `match_node.state` and
+## `seconds_remaining()` directly. Before this, a connected browser client showed
+## "IDLE" for ever while the server was playing a round: not a stale value, a value
+## nothing had ever written.
+##
+## Written onto the node rather than into a parallel copy so the HUD stays one code
+## path. A HUD that read one field on a server and another on a client would be two
+## HUDs, and only one of them would ever be looked at.
+func _on_match(info: Dictionary) -> void:
+	if game == null or game.match_node == null:
+		return
+
+	var was := game.match_node.state
+	game.match_node.state = int(info["state"]) as DotMatch.State
+	game.match_node.round_number = int(info["round"])
+
+	# The end of the match: the scoreboard comes up by itself, and the notice line names
+	# the most valuable player, which is the summary the genre shows between matches.
+	if game.match_node.state == DotMatch.State.MATCH_END and was != DotMatch.State.MATCH_END:
+		_begin_match_end()
+	elif was == DotMatch.State.MATCH_END and game.match_node.state != DotMatch.State.MATCH_END:
+		if killcam != null:
+			killcam.skip()
+		if winner_reveal != null:
+			winner_reveal.skip()
+	# The summary board came up by itself, so nothing is holding Tab to close it: it goes
+	# when the next match begins, else it covers the whole of the next round.
+	if was == DotMatch.State.MATCH_END and game.match_node.state != DotMatch.State.MATCH_END and _summary_board_open:
+		_summary_board_open = false
+		if game_menu != null:
+			game_menu.scoreboard.close()
+
+	# What the HUD's "24 / 35" divides by. This match's rules are its own copy
+	# (`ArenaGame` duplicates the mode's), so writing them touches nothing shared.
+	if info.has("score_limit") and game.match_node.rules != null:
+		game.match_node.rules.score_limit = int(info["score_limit"])
+
+	# Ticks, divided by OUR rate — which HELLO set to the server's, so the two agree.
+	# Sending seconds instead would have been a number derived from the sender's rate
+	# and read as though it were derived from the receiver's.
+	var ticks := int(info["remaining_ticks"])
+	_match_seconds_remaining = (
+		-1.0 if ticks < 0 else float(ticks) / float(maxi(game.tick_rate, 1))
+	)
+
+	if hud != null:
+		hud.remaining_override = _match_seconds_remaining
+
+
+## The dead bodies' yard: the game's ragdoll rules, the world's collision layers, and the
+## presentation's sound. Built once; cleared on a map change.
+func _build_ragdolls() -> void:
+	ragdolls = DotPlayerRagdolls.new()
+	ragdolls.name = "Ragdolls"
+	ragdolls.rules = game.ragdoll_rules
+	var stack := game.player_stack
+	if stack != null and stack.physics != null and stack.physics.layout != null:
+		# The level is classified onto `world` (see `_classify_level`); props are on `prop`.
+		game.ragdoll_rules.collision_mask = stack.physics.layout.mask_of([&"world", &"prop"])
+	ragdolls.sound_fn = _ragdoll_sound
+	add_child(ragdolls)
+	# The map's toys are heard the same way: a bounce, a knock, a barrel's roll.
+	if not game.toy_sound.is_connected(_ragdoll_sound):
+		var _toys := game.toy_sound.connect(_ragdoll_sound)

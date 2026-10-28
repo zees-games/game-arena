@@ -187,6 +187,30 @@ func _module() -> ArenaModule:
 
 # --- Boot -------------------------------------------------------------------
 
+## The dual-stack config: its own UDP port, no query listener, no console.
+func _server_config() -> DotServerConfig:
+	var config := DotServerConfig.new()
+	config.hostname = "arena lossy"
+	config.port = PORT
+	config.bind_address = "127.0.0.1"
+	config.transport_mode = "dual"
+	config.rcon_password = ""
+	config.admins_path = "%s/admins.json" % DATA
+	config.bans_path = "%s/bans.json" % DATA
+	config.audit_log_path = "%s/audit.jsonl" % DATA
+	config.hibernate_when_empty = false
+	config.startup_config = ""
+	config.autoexec_config = ""
+	# No query listener: with one the UDP port is shared through a demux, which is its own
+	# measurement (dual-stack-follow-1, point 2). This one is about the game's traffic.
+	config.query_enabled = false
+	# Its own UDP port, not shared through the demux: that relay is its own measurement too.
+	config.enet_share_udp_port = false
+	config.stdin_console_enabled = false
+	config.log_level = "debug" if _verbose else "error"
+	return config
+
+
 func _boot() -> bool:
 	_section("a dual-stack arena server, and the relay in front of its UDP port")
 
@@ -211,25 +235,7 @@ func _boot() -> bool:
 		_done()
 		return false
 
-	var config := DotServerConfig.new()
-	config.hostname = "arena lossy"
-	config.port = PORT
-	config.bind_address = "127.0.0.1"
-	config.transport_mode = "dual"
-	config.rcon_password = ""
-	config.admins_path = "%s/admins.json" % DATA
-	config.bans_path = "%s/bans.json" % DATA
-	config.audit_log_path = "%s/audit.jsonl" % DATA
-	config.hibernate_when_empty = false
-	config.startup_config = ""
-	config.autoexec_config = ""
-	# No query listener: with one the UDP port is shared through a demux, which is its own
-	# measurement (dual-stack-follow-1, point 2). This one is about the game's traffic.
-	config.query_enabled = false
-	# Its own UDP port, not shared through the demux: that relay is its own measurement too.
-	config.enet_share_udp_port = false
-	config.stdin_console_enabled = false
-	config.log_level = "debug" if _verbose else "error"
+	var config := _server_config()
 
 	# The server's ENet is dot-core's own: DotTransportENet no longer advertises the engine's
 	# channel count as its incoming bandwidth (which throttled every client's commands to
@@ -276,46 +282,8 @@ func _boot() -> bool:
 	return relayed.ok
 
 
-## A client: a DotClientLink on ENet only, and the netcode `ArenaClient._build_netcode`
-## builds, minus everything that draws.
-func _connect_client(label: String, udp_port: int, lift_cover: bool = true) -> Dictionary:
-	var side := Node.new()
-	side.name = "Client%s" % label
-	add_child(side)
-	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), side.get_path())
-
-	var link := DotClientLink.new()
-	link.name = "Server"
-	link.player_name = "Runner %s" % label
-	link.transport_preference = "udp"
-	link.udp_address = "127.0.0.1:%d" % udp_port
-	side.add_child(link)
-
-	var record := {
-		"label": label, "side": side, "link": link, "game": null, "net": null,
-		"bridge": null, "session": 0, "spawned": [false], "gone": [""], "hello": [{}],
-	}
-	link.spawned.connect(func() -> void: record["spawned"][0] = true)
-	link.disconnected.connect(func(reason: String) -> void: record["gone"][0] = reason)
-
-	# Started without `await`, so a failed join is read off the link rather than waited on.
-	link.connect_to_server("127.0.0.1:%d" % PORT)
-
-	await _until(func() -> bool:
-		return record["spawned"][0] or record["gone"][0] != "" \
-			or link.phase == DotClientLink.Phase.FAILED, 30.0)
-	if link.last_error != null and not record["spawned"][0]:
-		record["error"] = str(link.last_error)
-		return record
-	if not record["spawned"][0]:
-		record["error"] = "never spawned: %s" % record["gone"][0]
-		return record
-
-	# What DotGameClient does when its gate opens. A client that never says so is held
-	# unharmable by the server for its load timeout, which would change every other section.
-	if lift_cover:
-		DotGameClient.report_cover(link, false)
-
+## What `ArenaClient._build_netcode` builds, minus everything that draws; fills `record`.
+func _client_netcode(record: Dictionary, side: Node, link: DotClientLink, label: String) -> DotNetManager:
 	var game := ArenaGame.new()
 	game.name = "Game"
 	game.is_authority = false
@@ -366,7 +334,50 @@ func _connect_client(label: String, udp_port: int, lift_cover: bool = true) -> D
 	record["bridge"] = bridge
 	net.start()
 	bridge.send_request(ArenaEvents.Ask.READY)
+	return net
 
+
+## A client: a DotClientLink on ENet only, and the netcode `ArenaClient._build_netcode`
+## builds, minus everything that draws.
+func _connect_client(label: String, udp_port: int, lift_cover: bool = true) -> Dictionary:
+	var side := Node.new()
+	side.name = "Client%s" % label
+	add_child(side)
+	get_tree().set_multiplayer(MultiplayerAPI.create_default_interface(), side.get_path())
+
+	var link := DotClientLink.new()
+	link.name = "Server"
+	link.player_name = "Runner %s" % label
+	link.transport_preference = "udp"
+	link.udp_address = "127.0.0.1:%d" % udp_port
+	side.add_child(link)
+
+	var record := {
+		"label": label, "side": side, "link": link, "game": null, "net": null,
+		"bridge": null, "session": 0, "spawned": [false], "gone": [""], "hello": [{}],
+	}
+	link.spawned.connect(func() -> void: record["spawned"][0] = true)
+	link.disconnected.connect(func(reason: String) -> void: record["gone"][0] = reason)
+
+	# Started without `await`, so a failed join is read off the link rather than waited on.
+	link.connect_to_server("127.0.0.1:%d" % PORT)
+
+	await _until(func() -> bool:
+		return record["spawned"][0] or record["gone"][0] != "" \
+			or link.phase == DotClientLink.Phase.FAILED, 30.0)
+	if link.last_error != null and not record["spawned"][0]:
+		record["error"] = str(link.last_error)
+		return record
+	if not record["spawned"][0]:
+		record["error"] = "never spawned: %s" % record["gone"][0]
+		return record
+
+	# What DotGameClient does when its gate opens. A client that never says so is held
+	# unharmable by the server for its load timeout, which would change every other section.
+	if lift_cover:
+		DotGameClient.report_cover(link, false)
+
+	var net: DotNetManager = _client_netcode(record, side, link, label)
 	await _until(func() -> bool: return int(record["session"]) != 0 and net.clock.is_synced(), 20.0)
 	return record
 
@@ -488,6 +499,35 @@ func _test_view_feel_and_packs_reach_the_client() -> void:
 	_done()
 
 
+## A's side of every delivery check: what it was told, collected for the sections.
+func _listen_as_a(a: Dictionary) -> void:
+	var a_game: ArenaGame = a["game"]
+	a_game.player_added.connect(func(p: ArenaPlayer) -> void: _a_saw_added.append(p.player_id))
+	(a["bridge"] as ArenaNetBridge).notice_received.connect(func(text: String) -> void:
+		if text.begins_with("seq-"):
+			_got_notices.append(text)
+	)
+	(a["bridge"] as ArenaNetBridge).kill_received.connect(func(info: Dictionary) -> void:
+		_got_kills.append("%d>%d" % [int(info["killer_id"]), int(info["victim_id"])])
+	)
+	(a["link"] as DotClientLink).chat_received.connect(func(payload: Dictionary) -> void:
+		# dot-server's own line carries `text`; one routed through dot-chat carries `m`.
+		var text := str(payload.get("text", payload.get("m", "")))
+		if text.begins_with("chat-"):
+			_got_chat.append(text)
+		elif text.contains("a-says-"):
+			# dot-chat puts the speaker in front of a player's line.
+			_got_a_chat.append(text.substr(text.find("a-says-")))
+		elif _verbose:
+			print("    (A got chat %s)" % payload)
+	)
+
+	(a["net"] as DotNetManager).snapshot_applied.connect(func(tick: int) -> void:
+		if _verbose and not _w.is_empty():
+			_w["down_ticks"] = _w.get("down_ticks", []) + [_game.current_tick() - tick]
+	)
+
+
 func _connect_everyone() -> bool:
 	_section("two clients connect, A through the relay at %s" % WINDOWS[0][0])
 
@@ -524,30 +564,7 @@ func _connect_everyone() -> bool:
 		"its clock's round trip %d ms" % int((a["net"] as DotNetManager).clock.rtt_ms()))
 
 	var a_game: ArenaGame = a["game"]
-	a_game.player_added.connect(func(p: ArenaPlayer) -> void: _a_saw_added.append(p.player_id))
-	(a["bridge"] as ArenaNetBridge).notice_received.connect(func(text: String) -> void:
-		if text.begins_with("seq-"):
-			_got_notices.append(text)
-	)
-	(a["bridge"] as ArenaNetBridge).kill_received.connect(func(info: Dictionary) -> void:
-		_got_kills.append("%d>%d" % [int(info["killer_id"]), int(info["victim_id"])])
-	)
-	(a["link"] as DotClientLink).chat_received.connect(func(payload: Dictionary) -> void:
-		# dot-server's own line carries `text`; one routed through dot-chat carries `m`.
-		var text := str(payload.get("text", payload.get("m", "")))
-		if text.begins_with("chat-"):
-			_got_chat.append(text)
-		elif text.contains("a-says-"):
-			# dot-chat puts the speaker in front of a player's line.
-			_got_a_chat.append(text.substr(text.find("a-says-")))
-		elif _verbose:
-			print("    (A got chat %s)" % payload)
-	)
-
-	(a["net"] as DotNetManager).snapshot_applied.connect(func(tick: int) -> void:
-		if _verbose and not _w.is_empty():
-			_w["down_ticks"] = _w.get("down_ticks", []) + [_game.current_tick() - tick]
-	)
+	_listen_as_a(a)
 
 	var b := await _connect_client("B", _server.config.effective_enet_port())
 	_clients["B"] = b

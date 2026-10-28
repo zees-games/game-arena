@@ -1,48 +1,4 @@
-extends DotGameCheckSuite
-
-const ArenaAmbience := preload("../game/arena_ambience.gd")
-const ArenaAvatars := preload("../game/arena_avatars.gd")
-const ArenaAwards := preload("../game/arena_awards.gd")
-const ArenaEvents := preload("../game/arena_events.gd")
-const ArenaClient := preload("../game/arena_client.gd")
-const ArenaKillViewClient := preload("../game/arena_killview_client.gd")
-const ArenaGame := preload("../game/arena_game.gd")
-const ArenaBindings := preload("../game/arena_bindings.gd")
-const ArenaBrowser := preload("../game/arena_browser.gd")
-const ArenaHud := preload("../game/arena_hud.gd")
-const ArenaKillcam := preload("../game/arena_killcam.gd")
-const ArenaMenus := preload("../game/arena_menus.gd")
-const ArenaMode := preload("../game/arena_mode.gd")
-const ArenaMap := preload("../maps/arena_map.gd")
-const ArenaParty := preload("../game/arena_party.gd")
-const ArenaPlayer := preload("../game/arena_player.gd")
-const ArenaPresentation := preload("../game/arena_presentation.gd")
-const ArenaVote := preload("../game/arena_vote.gd")
-
-## Settings, audio, effects, the console and the private-match party.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_presentation.tscn
-## [/codeblock]
-##
-## [b]None of this is reachable from `headless_match` or `dedicated`.[/b] The first plays
-## a whole deathmatch with no client in it; the second boots a real server and never
-## connects one. That is exactly the shape this game has already been bitten by — its
-## module looked a session up by the wrong key and **nobody could ever join a dedicated
-## arena server**, silently, while `dedicated.tscn` passed its twenty-one checks
-## throughout, because it never connected a client.
-##
-## Exits non-zero on any failure.
-
-const CHECKS := 342
-
-var _entered := 0
-var _completed := 0
-
-
-## The player's own settings file as it was before this run: its modification time, or -1
-## for none. Checked at the end; see [method ArenaPresentation.use_scratch_settings].
-var _player_file_was: int = -1
+extends "headless_presentation_base.gd"
 
 
 func _ready() -> void:
@@ -109,26 +65,315 @@ func _run() -> void:
 	_report(CHECKS)
 
 
-## A presentation layer, set up. [param console] builds its console with no menu, which is
-## what a suite that wants the console alone needs; the client builds it after its menu
-## ([method ArenaPresentation.build_console]).
-## When the player's own settings document was last written, or -1 when there is none.
-static func _player_file_stamp() -> int:
-	var path := ProjectSettings.globalize_path(ArenaPresentation.PLAYER_SETTINGS).path_join("game_arena.local.json")
-	return FileAccess.get_modified_time(path) if FileAccess.file_exists(path) else -1
+## Every key `ArenaClient` reads is a row in `ArenaBindings`; the action names are written out here
+## so a missing row fails the check rather than shrinking the table.
+func _test_every_key_is_an_action() -> void:
+	_section("Every key the client reads is an action in the table, rebound live and kept")
+
+	var p := _make(false)
+	var expected := {
+		&"arena_fire": "Mouse 1", &"arena_aim": "Mouse 2", &"arena_bash": "F",
+		&"arena_reload": "R", &"arena_slot_1": "1", &"arena_slot_2": "2", &"arena_slot_3": "3",
+		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Wheel up",
+		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Q", &"arena_launch": "E",
+		&"arena_launch_props": "X", &"arena_punt": "G", &"dot_voice_talk": "V",
+		&"dot_fps_walk": "Alt",
+	}
+	var wrong: Array[String] = []
+	for action: StringName in expected:
+		if p.bindings.row_for_action(action).is_empty() \
+				or DotInputBinding.describe_action(action) != str(expected[action]):
+			wrong.append("%s=%s" % [action, DotInputBinding.describe_action(action)])
+	_check(wrong.is_empty(), "each is a row and on its default key in the InputMap", str(wrong))
+
+	# The wheel rows by name: a pack asks for dot-ui 4, which names the wheel (level 2).
+	var named := ArenaBindings.make().row_for_action(&"arena_weapon_previous")
+	_check(
+		str(named["label"]) == "Previous weapon" and str(named["default"]) == "Wheel up",
+		"the wheel rows say Wheel up / Wheel down", str(named)
+	)
+
+	# A branch only matters if an older shell gets to run it. A pack asks for the level of
+	# every addon it was built against; dot-lighting is asked at that level (the maps are lit
+	# with `DotLightProfile.painted()`, API 3, and the level-1 `sky_top` repaint went with
+	# the floor that lowered it to 1); dot-ui's floor is 4, because the HUD names dot-ui's glance
+	# pieces (`DotVitals` and the rest, API 4) and a class name cannot be guarded (the
+	# wheel's level-1 branch went with it). dot-core's floor_audit refuses
+	# a floor once a guard it relies on is gone, here rather than at the release.
+	var floors := DotAddonApi.parse(FileAccess.get_file_as_string("res://" + DotAddonApi.FLOOR_FILE), DotAddonApi.FLOOR_FILE)
+	var derived := DotAddonApi.derive()
+	var unsound := DotAddonApi.floor_audit(floors.value if floors.ok else {}, derived, DotAddonApi.guarded()) \
+		if floors.ok else PackedStringArray([str(floors.error)])
+	_check(unsound.is_empty(), "requires.floor.json is sound: every floor has a guard behind it", str(unsound))
+	var asked := DotAddonApi.apply_floors(derived, floors.value if floors.ok else {})
+	_check(
+		asked.get("dot_ui") == 13 and asked.get("dot_lighting") == derived.get("dot_lighting") \
+			and int(asked.get("dot_lighting", 0)) >= 3,
+		"so a pack asks a shell for dot-ui 13 (the weapon icons) and the dot-lighting it was built on (3+, painted())", str(asked)
+	)
+
+	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.
+	var sampler := ArenaClient.make_sampler()
+	_check(
+		str(sampler.actions.get("noclip", &"")) == "" and not InputMap.has_action(&"dot_fps_noclip"),
+		"the sampler has no noclip key, so V is not dot_fps_noclip's",
+		str(sampler.actions.get("noclip"))
+	)
+	var on_v: Array[String] = []
+	for row in p.bindings.rows:
+		if p.bindings.stored(row, p.settings) == "V":
+			on_v.append(str(row["action"]))
+	_check(on_v == ["dot_voice_talk"], "and V is on one row, push to talk (dot-voice's action)", str(on_v))
+
+	# A client with this presentation and a stand-in player, not in the tree (see
+	# `_test_mouse_drives_view`); the pointer counts as captured.
+	var client := ArenaClient.new()
+	var stand_in := ArenaPlayer.new()
+	client.player = stand_in
+	client.presentation = p
+	client._sampler = sampler
+	client.mouse_capture_override = true
+
+	# Fire, moved to K: K fires and Mouse 1 no longer does.
+	var res := p.bindings.rebind(p.bindings.row_for_action(&"arena_fire"), "K", p.settings)
+	_check(res.ok and p.settings.get_string(&"bind_fire") == "K", "Fire rebinds to K and is stored", str(res))
+	_press(DotInputBinding.from_text("K"), true)
+	client._read_fire(DotFpsCommand.new())
+	var k_fires := client._fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK)
+	_press(DotInputBinding.from_text("K"), false)
+	_press(DotInputBinding.from_text("Mouse 1"), true)
+	client._read_fire(DotFpsCommand.new())
+	var mouse_fires := client._fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK)
+	_press(DotInputBinding.from_text("Mouse 1"), false)
+	_check(k_fires and not mouse_fires, "then K pulls the trigger and Mouse 1 does not",
+		"K %s, Mouse 1 %s" % [k_fires, mouse_fires])
+
+	# Reload, through the same polling path.
+	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_reload"), "Z", p.settings)
+	_press(DotInputBinding.from_text("Z"), true)
+	client._read_fire(DotFpsCommand.new())
+	var z_reloads := client._fire.is_pressed(DotWeaponCommand.BUTTON_RELOAD)
+	_press(DotInputBinding.from_text("Z"), false)
+	_check(res.ok and z_reloads, "Reload rebound to Z reloads on Z")
+
+	# A slot, through `_unhandled_input`: J asks for slot 3, and 3 asks for nothing.
+	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_slot_3"), "J", p.settings)
+	client._wanted_slot = 0
+	client._unhandled_input(_key_event("J", true))
+	var j_slot := client._wanted_slot
+	client._wanted_slot = 0
+	client._unhandled_input(_key_event("3", true))
+	_check(res.ok and j_slot == 3 and client._wanted_slot == 0,
+		"Slot 3 rebound to J: J asks for slot 3 and 3 asks for nothing",
+		"J %d, 3 %d" % [j_slot, client._wanted_slot])
+
+	# The props-mode remap: in Siege the Launch key grabs, the Bash key freezes and the
+	# launch moves to its own row; anywhere else the Launch key launches and grabs nothing.
+	var g := ArenaGame.new()
+	client.game = g
+	g.shown_mode = ArenaMode.free_for_all()
+	client.last_prop_asked = -1
+	client._unhandled_input(_key_event("E", true))
+	_check(client.launch_action() == &"arena_launch" and client.last_prop_asked == -1,
+		"outside a props mode E is the launch and asks the prop tool for nothing")
+	g.shown_mode = ArenaMode.siege()
+	client._holding = false
+	client._unhandled_input(_key_event("E", true))
+	var e_grabs := client.last_prop_asked == ArenaEvents.PropAct.GRAB
+	client._unhandled_input(_key_event("F", true))
+	var f_freezes := client.last_prop_asked == ArenaEvents.PropAct.FREEZE
+	client._unhandled_input(_key_event("G", true))
+	var g_punts := client.last_prop_asked == ArenaEvents.PropAct.PUNT
+	_check(e_grabs and f_freezes and g_punts and client.launch_action() == &"arena_launch_props",
+		"in Siege E grabs, F freezes, G punts and the launch is X's",
+		"grab %s freeze %s punt %s launch %s" % [e_grabs, f_freezes, g_punts, client.launch_action()])
+	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_launch"), "T", p.settings)
+	client._holding = false
+	client.last_prop_asked = -1
+	client._unhandled_input(_key_event("E", true))
+	var e_after := client.last_prop_asked
+	client._unhandled_input(_key_event("T", true))
+	_check(res.ok and e_after == -1 and client.last_prop_asked == ArenaEvents.PropAct.GRAB,
+		"and with Launch moved to T, the grab moves with it",
+		"E %d, T %d" % [e_after, client.last_prop_asked])
+	client.game = null
+	g.free()
+
+	# Kept: what was rebound is in the document, and a new presentation reading it puts it
+	# back on the InputMap. The InputMap is put on the default first, so only the load can
+	# have moved it.
+	var flushed := p.settings.flush()
+	DotInputBinding.apply(&"arena_reload", "R")
+	var p2 := _make(false)
+	_check(
+		flushed.ok and p2.settings.get_string(&"bind_reload") == "Z"
+			and DotInputBinding.describe_action(&"arena_reload") == "Z",
+		"a saved binding is read back and applied by the next start",
+		"stored %s, bound %s" % [p2.settings.get_string(&"bind_reload"), DotInputBinding.describe_action(&"arena_reload")]
+	)
+
+	p2.bindings.reset_all(p2.settings)
+	var _flushed := p2.settings.flush()
+	_check(DotInputBinding.describe_action(&"arena_fire") == "Mouse 1", "and Reset puts Fire back on Mouse 1")
+
+	client.player = null
+	client.presentation = null
+	stand_in.free()
+	client.free()
+	p.queue_free()
+	p2.queue_free()
+	_done()
 
 
-func _make(console: bool = true) -> ArenaPresentation:
-	var p := ArenaPresentation.new()
-	p.name = "P%d" % _entered
-	add_child(p)
-	p.setup()
-	if console:
-		var _built := p.build_console()
-	return p
+func _test_party_is_sandboxed() -> void:
+	_section("A private match files nothing anywhere")
+
+	DotP2PSignallerLoopback.reset_all()
+
+	var party := ArenaParty.new()
+	party.name = "Party"
+	add_child(party)
+	_check(party.setup().ok, "a party sets up")
+
+	# The decision this game makes and the lobby does not: arena reports to dot-stats,
+	# unlocks dot-achievements and files to dot-leaderboard, and a peer-to-peer host is a
+	# player's own machine that can lie about all of it.
+	_check(
+		party.session.config.trust == DotP2PConfig.Trust.SANDBOXED,
+		"a private arena match is sandboxed, because a host who can cheat and a "
+		+ "leaderboard are one exploit rather than two features"
+	)
+	_check(
+		not party.session.config.migrate_host,
+		"and does not migrate: the host holds the match clock, the score and every hitbox, "
+		+ "and handing that over mid-round produces a round nobody can agree about"
+	)
+
+	_check(party.reporting_allowed(), "an ordinary match files what it likes")
+	party.session.lobby.add_member(&"me", "Me", 0)
+	party.session.lobby.host_id = &"me"
+	party.session._state = &"hosting"
+	_check(
+		not party.reporting_allowed(),
+		"and a live private match files nothing, asked in one place rather than by four reporters"
+	)
+
+	party.queue_free()
+	_done()
 
 
-# --- 1 ----------------------------------------------------------------------
+## `[p2p-await-games]`: a private match over the HTTP rendezvous, host and join, each
+## awaited end to end — through `ArenaParty`, `DotP2PSession` and `DotP2PSignallerHttp` to
+## a socket and back.
+##
+## [b]What "awaited" is asserted as.[/b] The answer the caller gets back is the one the
+## stub sent, and it arrives at least [member RendezvousStub.delay] frames after the call:
+## a link in the chain that dropped its `await` hands its caller null or returns before
+## the stub has answered, and either fails here.
+##
+## [b]What differs from playground's copy.[/b] Arena's party is `Trust.SANDBOXED` with
+## migration off. dot-peer-to-peer's session does not branch on trust when it signals, so
+## every assertion playground makes applies here unchanged; the one thing added is that a
+## private match hosted over HTTP still files nothing (`reporting_allowed()`), because a
+## real rendezvous is the path a real private match takes. "Does not elect itself" is not
+## about migration: with migration off or on, a joiner that has just been told the host is
+## there must not think it is the host.
+func _test_party_over_http() -> void:
+	_section("A private match that meets over HTTP waits for the answer")
+
+	var stub := RendezvousStub.new()
+	stub.name = "Rendezvous"
+	add_child(stub)
+	var listening := stub.start()
+	_check(listening, "a stand-in rendezvous listens on a local port", str(stub.port))
+
+	if not listening:
+		stub.queue_free()
+		_done()
+		return
+
+	var url := "http://127.0.0.1:%d/p2p" % stub.port
+	var ada := ArenaParty.new()
+	ada.name = "PartyAda"
+	ada.signalling_url = url
+	add_child(ada)
+	var bob := ArenaParty.new()
+	bob.name = "PartyBob"
+	bob.signalling_url = url
+	add_child(bob)
+
+	_check(
+		ada.setup().ok and bob.setup().ok
+			and ada.session.signaller is DotP2PSignallerHttp
+			and bob.session.signaller is DotP2PSignallerHttp,
+		"two parties set up with a URL, and both meet over HTTP rather than the loopback"
+	)
+
+	var opened: Array[String] = []
+	ada.open.connect(func(code: String) -> void: opened.append(code))
+
+	var before := Engine.get_process_frames()
+	var hosted: DotResult = await ada.host("Ada")
+	var took := Engine.get_process_frames() - before
+	var code := str(hosted.value) if hosted != null and hosted.ok else ""
+
+	_check(
+		hosted != null and hosted.ok and DotP2PLobby.is_code_shaped(code, ada.session.config.code_length),
+		"host() hands back a join code",
+		str(hosted.error.message) if hosted != null and not hosted.ok else "null"
+	)
+	_check(took >= stub.delay,
+		"only once the rendezvous has answered: %d frames, the stub waits %d" % [took, stub.delay])
+	_check(
+		stub.seen.size() >= 1 and stub.seen[0]["route"] == "host"
+			and str((stub.seen[0]["body"] as Dictionary).get("code", "")) == code
+			and str(((stub.seen[0]["body"] as Dictionary).get("info", {}) as Dictionary).get("name", "")) == "Ada",
+		"and it is the code the rendezvous was told, under the host's name",
+		str(stub.seen)
+	)
+	_check(ada.active() and ada.session.is_host() and opened == [code],
+		"the match is open, hosted, and says so once",
+		"state %s, opened %s" % [ada.session.state(), str(opened)])
+	_check(not ada.reporting_allowed(),
+		"and a private match that met over a real rendezvous files nothing either")
+
+	before = Engine.get_process_frames()
+	var joined: DotResult = await bob.join(code.to_lower(), "Bob")
+	took = Engine.get_process_frames() - before
+
+	_check(joined != null and joined.ok and took >= stub.delay,
+		"join() waits for the rendezvous too (%d frames) and succeeds" % took,
+		str(joined.error.message) if joined != null and not joined.ok else "null")
+	_check(
+		stub.seen.size() >= 2 and stub.seen[1]["route"] == "join"
+			and str((stub.seen[1]["body"] as Dictionary).get("code", "")) == code,
+		"under the code as the host has it, not as it was typed",
+		str(stub.seen)
+	)
+	_check(
+		bob.session.lobby.has(ada.session.local_id) and not bob.session.is_host(),
+		"and the joiner learns who is already there from the answer, and does not elect itself",
+		str(bob.session.lobby.member_ids())
+	)
+
+	# A refusal arrives as a failure the caller can read, not as null and not as success.
+	bob.leave()
+	var carol := ArenaParty.new()
+	carol.name = "PartyCarol"
+	carol.signalling_url = url
+	add_child(carol)
+	var _set := carol.setup()
+	stub.refuse = 403
+	var refused: DotResult = await carol.host("Carol")
+	_check(refused != null and not refused.ok and not carol.active(),
+		"and a rendezvous that refuses leaves the match closed with a reason",
+		"null" if refused == null else ("ok" if refused.ok else refused.error.message))
+
+	ada.leave()
+	for node: Node in [ada, bob, carol, stub]:
+		node.queue_free()
+	_done()
+
 
 func _test_schema() -> void:
 	_section("What a player may change, and what a server may cap")
@@ -265,14 +510,8 @@ func _test_audio_is_a_firefight() -> void:
 		"and a shot four hundred metres away costs nothing at all"
 	)
 
-	# --- Every id has a noise, and every noise has an id --------------------
-	#
-	# This game shipped a complete, argued-over catalogue pointing at nine `.ogg` files
-	# nobody has produced, and was therefore silent while every check about its audio
-	# passed. The two directions below are the ones that can go wrong without erroring:
-	# an id with no recipe is one sound that stays silent for ever, and a recipe naming an
-	# id the catalogue does not have is a decision that reaches nothing. Neither is
-	# visible from any assertion about the catalogue on its own.
+	# Every id has a noise, and every noise has an id: an id with no recipe stays silent for ever,
+	# and a recipe naming no id reaches nothing; neither errors, so check both directions.
 	var recipes := ArenaPresentation.sound_recipes()
 	var uncovered: Array[String] = []
 	for id in cat.ids():
@@ -386,7 +625,6 @@ func _test_effects_and_the_player_who_asked_for_none() -> void:
 ## way the client takes one, put nodes in the world.
 func _test_a_shot_is_drawn() -> void:
 	_section("A shot is drawn: a flash at the gun, a spark and a hole where it stopped")
-
 	var missing := ArenaPresentation.fx_catalogue().missing_scenes()
 	_check(
 		missing.is_empty(),
@@ -440,10 +678,8 @@ func _test_a_shot_is_drawn() -> void:
 		"whose decal projects along the shot, so it lands on the wall it hit"
 	)
 
-	# Straight up is an aim parallel to the up vector `facing` would otherwise hand
-	# `looking_at`. 4.7 copes (with a WARNING, which `facing` avoids), so this holds the
-	# answer rather than the path: the hole goes on the ceiling. The ceiling rather than
-	# the floor, because a decal that ignored the aim entirely would still project down.
+	# Straight up is an aim parallel to the up vector `facing` hands `looking_at`; the hole must
+	# still land on the ceiling (not the floor, which an aim-blind decal would also hit).
 	drawn.clear()
 	var up := Vector3.UP
 	p.present(0.016, eye, up)
@@ -460,51 +696,11 @@ func _test_a_shot_is_drawn() -> void:
 	p.on_died(dead)
 	_check(drawn.get(&"death_burst") is Node3D, "and a death bursts (%s)" % str(drawn.get(&"death_burst")))
 
-	# Gore: on by default, and off live (no restart) takes the blood and nothing else.
-	_check(p.settings.get_bool(&"gore", false) and p.settings.schema.has(&"gore"), "gore is declared and on by default")
-	p.settings.set_value(&"gore", false)
-	drawn.clear()
-	p.present(0.016, eye, aim)
-	p.on_died(dead)
-	p.present(0.016, eye, aim)
-	p.on_used(_outcome(eye, aim, [Vector3(0.0, 0.0, -5.0)]))
-	_check(drawn.get(&"death_burst") == null, "gore off: a death draws no blood")
-	_check(drawn.get(&"bullet_hole") != null, "and gore off still leaves the bullet holes", str(drawn.keys()))
-	var gore_saved := p.settings.flush()
-	var p_gore := _make(false)
-	_check(gore_saved.ok and not p_gore.settings.get_bool(&"gore", true), "gore off is persisted and read back by the next start")
-	p_gore.settings.set_value(&"gore", true)
-	var _gf := p_gore.settings.flush()
-	p_gore.queue_free()
+	_check_gore_toggle(p, eye, aim, dead, drawn)
 
 	p.queue_free()
 	_done()
 
-
-func _outcome(from: Vector3, aim: Vector3, impacts: Array[Vector3]) -> DotWeaponOutcome:
-	var out := DotWeaponOutcome.new()
-	out.used = true
-	var shot := DotShot.new()
-	shot.weapon_id = &"rifle"
-	shot.origin = from
-	shot.direction = aim
-	shot.impacts = impacts
-	out.add_shot(shot)
-	return out
-
-
-## Whether [param hole] holds a [Decal] whose projection (its -Y) runs along [param aim].
-func _projects_along(hole: Variant, aim: Vector3) -> bool:
-	if not hole is Node:
-		return false
-	var decals := (hole as Node).find_children("*", "Decal")
-	if decals.is_empty():
-		return false
-	var decal := decals[0] as Decal
-	return (-decal.global_basis.y).dot(aim.normalized()) > 0.99
-
-
-# --- 4 ----------------------------------------------------------------------
 
 func _test_blood() -> void:
 	_section("Blood behind a body the server says was hit")
@@ -723,8 +919,7 @@ func _test_the_escape_menu() -> void:
 	p.console.close()
 	_check(not menu.any_open(), "and closed, it does not")
 
-	# The settings round trip, through the slider the page draws: no Apply, and the value
-	# lands in the document AND the mixer.
+	# The settings round trip, through the slider the page draws: no Apply, lands in document and mixer.
 	menu.open(&"audio")
 	var row := menu.screen.find_child("Row_master_volume", true, false)
 	var slider := row.find_child("Slider", true, false) as HSlider if row != null else null
@@ -745,7 +940,6 @@ func _test_the_escape_menu() -> void:
 	menu.open(&"video")
 	_check(menu.screen.find_child("Row_gore", true, false) != null, "Video has the Blood splatters row")
 
-	# Solo bot difficulty: a row on General, saved, and onto the match's bots as it changes.
 	menu.open(&"general")
 	_check(menu.screen.find_child("Row_solo_bot_difficulty", true, false) != null, "General has the solo bots' difficulty")
 	var _saved := p.settings.set_value(&"solo_bot_difficulty", &"easy")
@@ -804,8 +998,7 @@ func _test_the_escape_menu() -> void:
 	)
 	menu.close()
 
-	# The family's rule since the first play test: H is help, nothing else is on H, and the
-	# Escape menu has Help & commands and a Leave that does something.
+	# H is help, nothing else is on H; the Escape menu has Help & commands and a working Leave.
 	_check(p.bindings.key_for(DotMenuBindings.HELP_ACTION) == "H" and p.bindings.defaults_on("H").size() == 1,
 		"help is on H, and nothing else in the table is",
 		str(p.bindings.defaults_on("H").map(func(r: Dictionary) -> String: return str(r["label"]))))
@@ -831,449 +1024,6 @@ func _test_the_escape_menu() -> void:
 	p.queue_free()
 	_done()
 
-
-# --- 5b ---------------------------------------------------------------------
-
-## Every key `ArenaClient` reads is a row in `ArenaBindings`, read through its action: a key
-## rebound on the Controls page moves what the client does, the props-mode remap follows the
-## Launch and Bash keys, and a saved binding is on the InputMap after a restart.
-##
-## [b]The action names are written out here, not taken from the table[/b], so the check
-## fails if a row goes missing rather than shrinking with it. Until 2026-10-11 fire, aim,
-## reload, the slots, the launch, the bash, the prop keys and push to talk were keycodes in
-## `_unhandled_input` and `_read_fire`, listed on the Controls page as fixed.
-func _test_every_key_is_an_action() -> void:
-	_section("Every key the client reads is an action in the table, rebound live and kept")
-
-	var p := _make(false)
-	var expected := {
-		&"arena_fire": "Mouse 1", &"arena_aim": "Mouse 2", &"arena_bash": "F",
-		&"arena_reload": "R", &"arena_slot_1": "1", &"arena_slot_2": "2", &"arena_slot_3": "3",
-		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Wheel up",
-		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Q", &"arena_launch": "E",
-		&"arena_launch_props": "X", &"arena_punt": "G", &"dot_voice_talk": "V",
-		&"dot_fps_walk": "Alt",
-	}
-	var wrong: Array[String] = []
-	for action: StringName in expected:
-		if p.bindings.row_for_action(action).is_empty() \
-				or DotInputBinding.describe_action(action) != str(expected[action]):
-			wrong.append("%s=%s" % [action, DotInputBinding.describe_action(action)])
-	_check(wrong.is_empty(), "each is a row and on its default key in the InputMap", str(wrong))
-
-	# The wheel rows by name: a pack asks for dot-ui 4, which names the wheel (level 2).
-	var named := ArenaBindings.make().row_for_action(&"arena_weapon_previous")
-	_check(
-		str(named["label"]) == "Previous weapon" and str(named["default"]) == "Wheel up",
-		"the wheel rows say Wheel up / Wheel down", str(named)
-	)
-
-	# A branch only matters if an older shell gets to run it. A pack asks for the level of
-	# every addon it was built against; dot-lighting is asked at that level (the maps are lit
-	# with `DotLightProfile.painted()`, API 3, and the level-1 `sky_top` repaint went with
-	# the floor that lowered it to 1); dot-ui's floor is 4, because the HUD names dot-ui's glance
-	# pieces (`DotVitals` and the rest, API 4) and a class name cannot be guarded (the
-	# wheel's level-1 branch went with it). dot-core's floor_audit refuses
-	# a floor once a guard it relies on is gone, here rather than at the release.
-	var floors := DotAddonApi.parse(FileAccess.get_file_as_string("res://" + DotAddonApi.FLOOR_FILE), DotAddonApi.FLOOR_FILE)
-	var derived := DotAddonApi.derive()
-	var unsound := DotAddonApi.floor_audit(floors.value if floors.ok else {}, derived, DotAddonApi.guarded()) \
-		if floors.ok else PackedStringArray([str(floors.error)])
-	_check(unsound.is_empty(), "requires.floor.json is sound: every floor has a guard behind it", str(unsound))
-	var asked := DotAddonApi.apply_floors(derived, floors.value if floors.ok else {})
-	_check(
-		asked.get("dot_ui") == 13 and asked.get("dot_lighting") == derived.get("dot_lighting") \
-			and int(asked.get("dot_lighting", 0)) >= 3,
-		"so a pack asks a shell for dot-ui 13 (the weapon icons) and the dot-lighting it was built on (3+, painted())", str(asked)
-	)
-
-	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.
-	var sampler := ArenaClient.make_sampler()
-	_check(
-		str(sampler.actions.get("noclip", &"")) == "" and not InputMap.has_action(&"dot_fps_noclip"),
-		"the sampler has no noclip key, so V is not dot_fps_noclip's",
-		str(sampler.actions.get("noclip"))
-	)
-	var on_v: Array[String] = []
-	for row in p.bindings.rows:
-		if p.bindings.stored(row, p.settings) == "V":
-			on_v.append(str(row["action"]))
-	_check(on_v == ["dot_voice_talk"], "and V is on one row, push to talk (dot-voice's action)", str(on_v))
-
-	# A client with this presentation and a stand-in player, not in the tree (see
-	# `_test_mouse_drives_view`); the pointer counts as captured.
-	var client := ArenaClient.new()
-	var stand_in := ArenaPlayer.new()
-	client.player = stand_in
-	client.presentation = p
-	client._sampler = sampler
-	client.mouse_capture_override = true
-
-	# Fire, moved to K: K fires and Mouse 1 no longer does.
-	var res := p.bindings.rebind(p.bindings.row_for_action(&"arena_fire"), "K", p.settings)
-	_check(res.ok and p.settings.get_string(&"bind_fire") == "K", "Fire rebinds to K and is stored", str(res))
-	_press(DotInputBinding.from_text("K"), true)
-	client._read_fire(DotFpsCommand.new())
-	var k_fires := client._fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK)
-	_press(DotInputBinding.from_text("K"), false)
-	_press(DotInputBinding.from_text("Mouse 1"), true)
-	client._read_fire(DotFpsCommand.new())
-	var mouse_fires := client._fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK)
-	_press(DotInputBinding.from_text("Mouse 1"), false)
-	_check(k_fires and not mouse_fires, "then K pulls the trigger and Mouse 1 does not",
-		"K %s, Mouse 1 %s" % [k_fires, mouse_fires])
-
-	# Reload, through the same polling path.
-	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_reload"), "Z", p.settings)
-	_press(DotInputBinding.from_text("Z"), true)
-	client._read_fire(DotFpsCommand.new())
-	var z_reloads := client._fire.is_pressed(DotWeaponCommand.BUTTON_RELOAD)
-	_press(DotInputBinding.from_text("Z"), false)
-	_check(res.ok and z_reloads, "Reload rebound to Z reloads on Z")
-
-	# A slot, through `_unhandled_input`: J asks for slot 3, and 3 asks for nothing.
-	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_slot_3"), "J", p.settings)
-	client._wanted_slot = 0
-	client._unhandled_input(_key_event("J", true))
-	var j_slot := client._wanted_slot
-	client._wanted_slot = 0
-	client._unhandled_input(_key_event("3", true))
-	_check(res.ok and j_slot == 3 and client._wanted_slot == 0,
-		"Slot 3 rebound to J: J asks for slot 3 and 3 asks for nothing",
-		"J %d, 3 %d" % [j_slot, client._wanted_slot])
-
-	# The props-mode remap: in Siege the Launch key grabs, the Bash key freezes and the
-	# launch moves to its own row; anywhere else the Launch key launches and grabs nothing.
-	var g := ArenaGame.new()
-	client.game = g
-	g.shown_mode = ArenaMode.free_for_all()
-	client.last_prop_asked = -1
-	client._unhandled_input(_key_event("E", true))
-	_check(client.launch_action() == &"arena_launch" and client.last_prop_asked == -1,
-		"outside a props mode E is the launch and asks the prop tool for nothing")
-	g.shown_mode = ArenaMode.siege()
-	client._holding = false
-	client._unhandled_input(_key_event("E", true))
-	var e_grabs := client.last_prop_asked == ArenaEvents.PropAct.GRAB
-	client._unhandled_input(_key_event("F", true))
-	var f_freezes := client.last_prop_asked == ArenaEvents.PropAct.FREEZE
-	client._unhandled_input(_key_event("G", true))
-	var g_punts := client.last_prop_asked == ArenaEvents.PropAct.PUNT
-	_check(e_grabs and f_freezes and g_punts and client.launch_action() == &"arena_launch_props",
-		"in Siege E grabs, F freezes, G punts and the launch is X's",
-		"grab %s freeze %s punt %s launch %s" % [e_grabs, f_freezes, g_punts, client.launch_action()])
-	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_launch"), "T", p.settings)
-	client._holding = false
-	client.last_prop_asked = -1
-	client._unhandled_input(_key_event("E", true))
-	var e_after := client.last_prop_asked
-	client._unhandled_input(_key_event("T", true))
-	_check(res.ok and e_after == -1 and client.last_prop_asked == ArenaEvents.PropAct.GRAB,
-		"and with Launch moved to T, the grab moves with it",
-		"E %d, T %d" % [e_after, client.last_prop_asked])
-	client.game = null
-	g.free()
-
-	# Kept: what was rebound is in the document, and a new presentation reading it puts it
-	# back on the InputMap. The InputMap is put on the default first, so only the load can
-	# have moved it.
-	var flushed := p.settings.flush()
-	DotInputBinding.apply(&"arena_reload", "R")
-	var p2 := _make(false)
-	_check(
-		flushed.ok and p2.settings.get_string(&"bind_reload") == "Z"
-			and DotInputBinding.describe_action(&"arena_reload") == "Z",
-		"a saved binding is read back and applied by the next start",
-		"stored %s, bound %s" % [p2.settings.get_string(&"bind_reload"), DotInputBinding.describe_action(&"arena_reload")]
-	)
-
-	p2.bindings.reset_all(p2.settings)
-	var _flushed := p2.settings.flush()
-	_check(DotInputBinding.describe_action(&"arena_fire") == "Mouse 1", "and Reset puts Fire back on Mouse 1")
-
-	client.player = null
-	client.presentation = null
-	stand_in.free()
-	client.free()
-	p.queue_free()
-	p2.queue_free()
-	_done()
-
-
-## A key or mouse button down or up, through `Input`, so `Input.is_action_pressed` sees it.
-static func _press(event: InputEvent, down: bool) -> void:
-	if event is InputEventKey:
-		(event as InputEventKey).pressed = down
-	elif event is InputEventMouseButton:
-		(event as InputEventMouseButton).pressed = down
-	Input.parse_input_event(event)
-	Input.flush_buffered_events()
-
-
-static func _key_event(text: String, down: bool) -> InputEventKey:
-	var key := DotInputBinding.from_text(text) as InputEventKey
-	key.pressed = down
-	return key
-
-
-# --- 6 ----------------------------------------------------------------------
-
-func _test_party_is_sandboxed() -> void:
-	_section("A private match files nothing anywhere")
-
-	DotP2PSignallerLoopback.reset_all()
-
-	var party := ArenaParty.new()
-	party.name = "Party"
-	add_child(party)
-	_check(party.setup().ok, "a party sets up")
-
-	# The decision this game makes and the lobby does not: arena reports to dot-stats,
-	# unlocks dot-achievements and files to dot-leaderboard, and a peer-to-peer host is a
-	# player's own machine that can lie about all of it.
-	_check(
-		party.session.config.trust == DotP2PConfig.Trust.SANDBOXED,
-		"a private arena match is sandboxed, because a host who can cheat and a "
-		+ "leaderboard are one exploit rather than two features"
-	)
-	_check(
-		not party.session.config.migrate_host,
-		"and does not migrate: the host holds the match clock, the score and every hitbox, "
-		+ "and handing that over mid-round produces a round nobody can agree about"
-	)
-
-	_check(party.reporting_allowed(), "an ordinary match files what it likes")
-	party.session.lobby.add_member(&"me", "Me", 0)
-	party.session.lobby.host_id = &"me"
-	party.session._state = &"hosting"
-	_check(
-		not party.reporting_allowed(),
-		"and a live private match files nothing, asked in one place rather than by four reporters"
-	)
-
-	party.queue_free()
-	_done()
-
-
-# --- 6b ---------------------------------------------------------------------
-
-## A stand-in rendezvous: the four routes `DotP2PSignallerHttp` speaks, on a real socket,
-## answering each request [member delay] frames after it arrives.
-##
-## [b]The delay is the point.[/b] The other party check here uses the loopback signaller,
-## which answers inside the call — and a coroutine that never suspends is
-## indistinguishable from a function, so a caller that forgot `await` passes against it.
-## A rendezvous that answers frames later is the shape the real one has.
-##
-## Ported from game-playground's headless_presentation (d4ff040), on ports 38800-38860
-## rather than playground's 38700-38760 so the two suites can run at the same time.
-class RendezvousStub:
-	extends Node
-
-	var port := 0
-	var delay := 4
-	## An HTTP status to answer everything with instead of 200, to see a refusal arrive.
-	var refuse := 0
-	## What arrived, in order: `{route, body}`.
-	var seen: Array[Dictionary] = []
-	## The ids that announced themselves, so a join answers with who is here.
-	var present: Array[String] = []
-
-	var _server := TCPServer.new()
-	var _open: Array[Dictionary] = []
-
-	func start() -> bool:
-		for candidate in range(38800, 38860):
-			if _server.listen(candidate, "127.0.0.1") == OK:
-				port = candidate
-				return true
-		return false
-
-	func _exit_tree() -> void:
-		_server.stop()
-
-	func _process(_delta: float) -> void:
-		while _server.is_connection_available():
-			_open.append({"peer": _server.take_connection(), "bytes": PackedByteArray(), "wait": -1})
-
-		for c in _open.duplicate():
-			var peer: StreamPeerTCP = c["peer"]
-			peer.poll()
-			var available := peer.get_available_bytes()
-			if available > 0:
-				var got := peer.get_data(available)
-				if int(got[0]) == OK:
-					# Written back: a packed array is a value, so appending to the one read
-					# out of the dictionary appends to a copy and the bytes are lost.
-					var buffer: PackedByteArray = c["bytes"]
-					buffer.append_array(got[1] as PackedByteArray)
-					c["bytes"] = buffer
-
-			if int(c["wait"]) < 0:
-				var text := (c["bytes"] as PackedByteArray).get_string_from_utf8()
-				var split := text.find("\r\n\r\n")
-				if split < 0:
-					continue
-				var length := 0
-				for line in text.substr(0, split).split("\r\n"):
-					if line.to_lower().begins_with("content-length:"):
-						length = line.get_slice(":", 1).strip_edges().to_int()
-				if (c["bytes"] as PackedByteArray).size() < split + 4 + length:
-					continue
-				var first := text.get_slice("\r\n", 0)
-				var target := first.get_slice(" ", 1)
-				var route := target.get_slice("?", 0).get_file()
-				var body: Variant = JSON.parse_string(text.substr(split + 4)) if length > 0 else {}
-				c["route"] = route
-				c["body"] = body if body is Dictionary else {}
-				seen.append({"route": route, "body": c["body"]})
-				c["wait"] = delay
-				continue
-
-			if int(c["wait"]) > 0:
-				c["wait"] = int(c["wait"]) - 1
-				continue
-
-			var answer := _answer(str(c["route"]), c["body"] as Dictionary)
-			var status := "200 OK" if refuse == 0 else "%d Refused" % refuse
-			var payload := JSON.stringify(answer).to_utf8_buffer()
-			var head := "HTTP/1.1 %s\r\nContent-Type: application/json\r\nContent-Length: %d\r\nConnection: close\r\n\r\n" % [status, payload.size()]
-			peer.put_data(head.to_utf8_buffer())
-			peer.put_data(payload)
-			peer.disconnect_from_host()
-			_open.erase(c)
-
-	func _answer(route: String, body: Dictionary) -> Dictionary:
-		match route:
-			"host":
-				present.append(str(body.get("id", "")))
-				return {}
-			"join":
-				var here := present.duplicate()
-				present.append(str(body.get("id", "")))
-				return {"peers": here}
-			"poll":
-				return {"messages": [], "cursor": 0}
-		return {}
-
-
-## `[p2p-await-games]`: a private match over the HTTP rendezvous, host and join, each
-## awaited end to end — through `ArenaParty`, `DotP2PSession` and `DotP2PSignallerHttp` to
-## a socket and back.
-##
-## [b]What "awaited" is asserted as.[/b] The answer the caller gets back is the one the
-## stub sent, and it arrives at least [member RendezvousStub.delay] frames after the call:
-## a link in the chain that dropped its `await` hands its caller null or returns before
-## the stub has answered, and either fails here.
-##
-## [b]What differs from playground's copy.[/b] Arena's party is `Trust.SANDBOXED` with
-## migration off. dot-peer-to-peer's session does not branch on trust when it signals, so
-## every assertion playground makes applies here unchanged; the one thing added is that a
-## private match hosted over HTTP still files nothing (`reporting_allowed()`), because a
-## real rendezvous is the path a real private match takes. "Does not elect itself" is not
-## about migration: with migration off or on, a joiner that has just been told the host is
-## there must not think it is the host.
-func _test_party_over_http() -> void:
-	_section("A private match that meets over HTTP waits for the answer")
-
-	var stub := RendezvousStub.new()
-	stub.name = "Rendezvous"
-	add_child(stub)
-	var listening := stub.start()
-	_check(listening, "a stand-in rendezvous listens on a local port", str(stub.port))
-
-	if not listening:
-		stub.queue_free()
-		_done()
-		return
-
-	var url := "http://127.0.0.1:%d/p2p" % stub.port
-	var ada := ArenaParty.new()
-	ada.name = "PartyAda"
-	ada.signalling_url = url
-	add_child(ada)
-	var bob := ArenaParty.new()
-	bob.name = "PartyBob"
-	bob.signalling_url = url
-	add_child(bob)
-
-	_check(
-		ada.setup().ok and bob.setup().ok
-			and ada.session.signaller is DotP2PSignallerHttp
-			and bob.session.signaller is DotP2PSignallerHttp,
-		"two parties set up with a URL, and both meet over HTTP rather than the loopback"
-	)
-
-	var opened: Array[String] = []
-	ada.open.connect(func(code: String) -> void: opened.append(code))
-
-	var before := Engine.get_process_frames()
-	var hosted: DotResult = await ada.host("Ada")
-	var took := Engine.get_process_frames() - before
-	var code := str(hosted.value) if hosted != null and hosted.ok else ""
-
-	_check(
-		hosted != null and hosted.ok and DotP2PLobby.is_code_shaped(code, ada.session.config.code_length),
-		"host() hands back a join code",
-		str(hosted.error.message) if hosted != null and not hosted.ok else "null"
-	)
-	_check(took >= stub.delay,
-		"only once the rendezvous has answered: %d frames, the stub waits %d" % [took, stub.delay])
-	_check(
-		stub.seen.size() >= 1 and stub.seen[0]["route"] == "host"
-			and str((stub.seen[0]["body"] as Dictionary).get("code", "")) == code
-			and str(((stub.seen[0]["body"] as Dictionary).get("info", {}) as Dictionary).get("name", "")) == "Ada",
-		"and it is the code the rendezvous was told, under the host's name",
-		str(stub.seen)
-	)
-	_check(ada.active() and ada.session.is_host() and opened == [code],
-		"the match is open, hosted, and says so once",
-		"state %s, opened %s" % [ada.session.state(), str(opened)])
-	_check(not ada.reporting_allowed(),
-		"and a private match that met over a real rendezvous files nothing either")
-
-	before = Engine.get_process_frames()
-	var joined: DotResult = await bob.join(code.to_lower(), "Bob")
-	took = Engine.get_process_frames() - before
-
-	_check(joined != null and joined.ok and took >= stub.delay,
-		"join() waits for the rendezvous too (%d frames) and succeeds" % took,
-		str(joined.error.message) if joined != null and not joined.ok else "null")
-	_check(
-		stub.seen.size() >= 2 and stub.seen[1]["route"] == "join"
-			and str((stub.seen[1]["body"] as Dictionary).get("code", "")) == code,
-		"under the code as the host has it, not as it was typed",
-		str(stub.seen)
-	)
-	_check(
-		bob.session.lobby.has(ada.session.local_id) and not bob.session.is_host(),
-		"and the joiner learns who is already there from the answer, and does not elect itself",
-		str(bob.session.lobby.member_ids())
-	)
-
-	# A refusal arrives as a failure the caller can read, not as null and not as success.
-	bob.leave()
-	var carol := ArenaParty.new()
-	carol.name = "PartyCarol"
-	carol.signalling_url = url
-	add_child(carol)
-	var _set := carol.setup()
-	stub.refuse = 403
-	var refused: DotResult = await carol.host("Carol")
-	_check(refused != null and not refused.ok and not carol.active(),
-		"and a rendezvous that refuses leaves the match closed with a reason",
-		"null" if refused == null else ("ok" if refused.ok else refused.error.message))
-
-	ada.leave()
-	for node: Node in [ada, bob, carol, stub]:
-		node.queue_free()
-	_done()
-
-
-
-# --- Harness ---------------------------------------------------------------
-
-# --- 7 ----------------------------------------------------------------------
 
 func _test_chat_box() -> void:
 	_section("A chat box, and the three answers to whether it is drawn")
@@ -1771,7 +1521,6 @@ func _test_the_view_turns_every_frame() -> void:
 func _test_bodies_fall() -> void:
 	_section("A dead body falls the way the server picked, and gets up on respawn")
 
-	# The server's half: the sniper names the power launch, so its kill is one.
 	var g := ArenaGame.new()
 	g.is_authority = true
 	add_child(g)
@@ -1856,7 +1605,6 @@ func _test_bodies_fall() -> void:
 	_check(player.fall_body(yard, fall) == null and not player.body_mesh.visible,
 		"sv_ragdoll_style hide: nothing, and the figure gone")
 
-	# The solo path: no KILL message, the death is on the entry.
 	var client := ArenaClient.new()
 	client.game = g
 	client._build_ragdolls()
@@ -1963,47 +1711,6 @@ func _test_the_map_menu() -> void:
 ## owner's rules are what the menu offers and what the game takes. Solo, so the game here is the
 ## authority; the server's command and cvars are `dedicated`'s. And the crosshair fades while the
 ## gun is aimed down its sight.
-## A stand-in for dot-auth's client: the three members the loadout key reads.
-class FakeAuth extends Node:
-	signal signed_in(identity: Variant)
-	signal signed_out()
-	var key := ""
-	func account_key() -> String:
-		return key
-
-
-## The loadout is filed per site account: two accounts differ, a guest is "local", and a
-## sign-in or sign-out mid-session re-keys it.
-func _check_loadout_accounts(client: ArenaClient) -> void:
-	var menu: Object = client.loadout_menu
-	if not _check(menu != null, "the client has a loadout menu to key"):
-		return
-	_check(menu.get(&"remember_account") == "local", "with no auth client in the registry the loadout is filed under local")
-	var bare := Node.new()
-	_check(ArenaClient.loadout_account_key(null) == "local" and ArenaClient.loadout_account_key(bare) == "local",
-		"no auth, or an auth with no account_key, is local")
-	bare.free()
-	var auth := FakeAuth.new()
-	add_child(auth)
-	client.follow_account(auth)
-	_check(menu.get(&"remember_account") == "local", "a guest (signed out) is local")
-	auth.key = "backbone:alice"
-	auth.signed_in.emit(null)
-	var alice: String = str(menu.get(&"remember_account"))
-	auth.key = "backbone:bob"
-	auth.signed_in.emit(null)
-	var bob: String = str(menu.get(&"remember_account"))
-	_check(alice == "backbone:alice" and bob == "backbone:bob" and alice != bob,
-		"two accounts on one machine are filed apart", "%s / %s" % [alice, bob])
-	auth.key = ""
-	auth.signed_out.emit()
-	_check(menu.get(&"remember_account") == "local", "signing out falls back to local")
-	_check(not str(menu.get(&"remember_account")).contains("token"), "and no key is ever a token")
-	client.follow_account(null)
-	remove_child(auth)
-	auth.free()
-
-
 func _test_the_loadout_menu() -> void:
 	_section("B is the loadout menu, and the crosshair fades down the sights")
 	var client := ArenaClient.new()
@@ -2082,39 +1789,7 @@ func _test_the_loadout_menu() -> void:
 		"a mode that hands out the weapons says so, and lets nothing be picked", str(closed.get("note", "")))
 	game.mode = was_mode
 
-	# The crosshair, down the sights: hip draws it, aimed hides it, released brings it back.
-	var hud: ArenaHud = client.hud
-	var hands: ZeeViewModel = me.weapons.view_model() as ZeeViewModel if me.weapons != null else null
-	me.arsenal.select(ZeeWeaponIds.SLOT_PRIMARY, game.current_tick())
-	for _i in 30:
-		await get_tree().process_frame
-	if _check(hud != null and hud.crosshair != null and hands != null, "the HUD has a crosshair and the player hands"):
-		hud.present_body()
-		hud.crosshair.follow_aim(1.0)
-		var hip := hud.crosshair.aim_opacity
-		# Fully raised, as the view model's own ramp leaves it (headless there is no pointer to
-		# hold the aim key with, so the fraction is set where the ramp would put it), then
-		# lowered again. The HUD reads it every frame; the render is in tools/screenshot.sh.
-		hands.set(&"_aim_fraction", 1.0)
-		hud.present_body()
-		hud.crosshair.follow_aim(1.0)
-		var aimed := hud.crosshair.aim_opacity
-		hands.set(&"_aim_fraction", 0.0)
-		hud.present_body()
-		hud.crosshair.follow_aim(0.016)
-		var easing := hud.crosshair.aim_opacity
-		hud.crosshair.follow_aim(1.0)
-		_check(easing > 0.0 and easing < 1.0, "lowering the gun fades the crosshair back rather than snapping it", "%.2f" % easing)
-		_check(hip > 0.99 and aimed < 0.01 and hud.crosshair.aim_opacity > 0.99,
-			"the crosshair is drawn at the hip, gone down the sights, and back after",
-			"hip %.2f, aimed %.2f (fraction %.2f, scoped %s), after %.2f" % [hip, aimed, hands.aim_fraction(), hands.is_scoped(), hud.crosshair.aim_opacity])
-		# Dead: dot-ui's DotCrosshair hides itself through the alive source the HUD bound.
-		me.health.alive = false
-		hud.crosshair.call(&"_process", 0.016)
-		_check(not hud.crosshair.is_shown(), "a dead player's crosshair is not drawn")
-		me.health.alive = true
-		hud.crosshair.call(&"_process", 0.016)
-		_check(hud.crosshair.is_shown(), "and it is back once alive")
+	await _check_crosshair_sights(client, me, game)
 	remove_child(client)
 	client.free()
 	await get_tree().process_frame
@@ -2250,18 +1925,6 @@ func _test_the_final_killcam() -> void:
 	g.queue_free()
 	_done()
 
-
-func _section(title: String) -> void:
-	_entered += 1
-	print("")
-	print("-- %s" % title)
-
-
-func _done() -> void:
-	_completed += 1
-
-
-# --- The HUD on a small frame -------------------------------------------------
 
 ## Every piece of the HUD put up at once, as `screenshot.sh --glance` stages it, on five
 ## frames, and no piece's drawn rect may meet another's. Standalone at 854x480 the
@@ -2528,21 +2191,6 @@ func _test_vote_is_heard() -> void:
 
 # --- An administrator's blind and beacon --------------------------------------
 
-## What the two flags `headless_net` delivers turn into on a client: a beacon that rings
-## and pings, and a screen that goes dark. Nothing here can say they LOOK right — that is
-## `tools/screenshot.sh --admin` — but it can say they are built, that they come and go
-## with the flag, and that the ping happens once a period rather than once a frame.
-static func _shrunk_bones(player: ArenaPlayer) -> int:
-	if player.figure == null or player.figure.skeleton() == null:
-		return -1
-	var skel := player.figure.skeleton()
-	var n := 0
-	for i in skel.get_bone_count():
-		if skel.get_bone_pose_scale(i).x < 0.01:
-			n += 1
-	return n
-
-
 ## A lethal critical breaks a body, a respawn mends it, and the HUD shows what a body is
 ## doing: badly hurt, ready to launch, sliding.
 func _test_criticals_and_the_body() -> void:
@@ -2575,21 +2223,7 @@ func _test_criticals_and_the_body() -> void:
 	_check(_shrunk_bones(player) == whole,
 		"and a respawn puts the body back together")
 
-	# Somebody else, hurt: a bar over their head for a few seconds.
-	player.health.health = player.health.max_health
-	player.present(0.016)
-	player.health.health = player.health.max_health * 0.4
-	player.present(0.016)
-	_check(player._health_tag != null and player._health_tag.visible
-		and is_equal_approx(player._health_fill.scale.x, 0.4),
-		"a hurt player shows a bar over their head, filled to what is left")
-	var fill_on := player._health_fill.material_override as BaseMaterial3D
-	var back_on := player._health_tag.get_child(0).material_override as BaseMaterial3D
-	_check(fill_on != null and back_on != null and fill_on.render_priority > back_on.render_priority,
-		"and the fill draws over its backing, not under it")
-	player.present(ArenaPlayer.HEALTH_TAG_SEC + 0.1)
-	_check(not player._health_tag.visible, "and it goes after a few seconds")
-	player.health.health = player.health.max_health
+	_check_health_tag(player)
 
 	var hud := ArenaHud.new()
 	hud.config = DotUiConfig.new()
@@ -2711,6 +2345,24 @@ func _test_criticals_and_the_body() -> void:
 	hud.queue_free()
 	player.queue_free()
 	_done()
+
+
+## Somebody else, hurt: a bar over their head for a few seconds.
+func _check_health_tag(player: ArenaPlayer) -> void:
+	player.health.health = player.health.max_health
+	player.present(0.016)
+	player.health.health = player.health.max_health * 0.4
+	player.present(0.016)
+	_check(player._health_tag != null and player._health_tag.visible
+		and is_equal_approx(player._health_fill.scale.x, 0.4),
+		"a hurt player shows a bar over their head, filled to what is left")
+	var fill_on := player._health_fill.material_override as BaseMaterial3D
+	var back_on := player._health_tag.get_child(0).material_override as BaseMaterial3D
+	_check(fill_on != null and back_on != null and fill_on.render_priority > back_on.render_priority,
+		"and the fill draws over its backing, not under it")
+	player.present(ArenaPlayer.HEALTH_TAG_SEC + 0.1)
+	_check(not player._health_tag.visible, "and it goes after a few seconds")
+	player.health.health = player.health.max_health
 
 
 ## A client turns the server's HIT and AWARD into the hit marker, a damage number, the

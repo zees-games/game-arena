@@ -1,14 +1,12 @@
-extends Node
+extends "arena_net_toys.gd"
 
+const ArenaLinkRtt := preload("arena_link_rtt.gd")
 const ArenaEvent := preload("arena_event.gd")
 const ArenaContent := preload("arena_content.gd")
-const ArenaEvents := preload("arena_events.gd")
-const ArenaGame := preload("arena_game.gd")
 const ArenaNetCommand := preload("arena_net_command.gd")
 const ArenaNetLink := preload("arena_net_link.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaPlayerNet := preload("arena_player_net.gd")
-const ArenaToyNet := preload("arena_toy_net.gd")
 const ArenaNpcNet := preload("arena_npc_net.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaBots := preload("arena_bots.gd")
@@ -40,8 +38,6 @@ const ArenaRequest := preload("arena_request.gd")
 ## bridge.client_tick(tick, move, fire)
 ## [/codeblock]
 
-const CHANNEL := "arena.net"
-
 ## Bytes [method DotNetManager.encode_ack] produces, and the prefix of every input
 ## packet. Fixed width, so the command that follows starts at a known offset.
 const ACK_BYTES := 4
@@ -49,12 +45,9 @@ const ACK_BYTES := 4
 ## Commands in every input packet: this tick's and the four before it, so a packet lost
 ## costs the server no tick unless four more after it are lost too. See [method encode_input].
 ##
-## [b]Five, not three (2026-10-09).[/b] With three, at 20% loss the server was still short
-## of the command on 1.7% of its ticks in a bad run (headless_lossy: "a hole 4 times, not
-## there yet 7 times" of 641), ran each on the previous one while the player was turning,
-## and the prediction was off by over 5 cm on more than one tick in twenty until the
-## correction landed -- one run in twenty failing on it. Two more copies are a few bytes
-## each (a varint tick step and a command that is mostly the one before it).
+## [b]Five, not three:[/b] at 20% loss, three left the server short of the command on 1.7% of
+## ticks and the prediction off by over 5 cm more than once in twenty ticks. Two more copies
+## cost a few bytes each.
 const INPUT_COPIES := 5
 
 ## Input packets taken, per peer. Server side; what `arena_net` reads to tell one client's
@@ -72,9 +65,6 @@ const AVATAR_BYTES := 1024
 ## seated and whenever the module re-announces them. Set by the module, which has the
 ## identity layer; unset or null is the stock figure, which every client derives alike.
 var avatar_fn: Callable = Callable()
-
-var game: ArenaGame = null
-var net: DotNetManager = null
 
 ## Debug: print every [method remote_feet] answer near a contact (netchaos `NC_SOLID_TRACE=1`).
 static var solid_trace := false
@@ -120,57 +110,17 @@ var peer_ready_fn: Callable = Callable()
 
 ## How the client learns its round-trip time, in milliseconds.
 ##
-## [b]Nothing in dot-net writes an RTT sample, and it needs one.[/b]
-## `DotNetStats` has a median and a mean-absolute-deviation behind it, and
-## `receive_snapshot` reads `rtt_percentile(0.5)` on every snapshot to feed the clock —
-## while no caller anywhere in dot-net writes a sample, because dot-net never touches a
-## transport. The host has to feed it and nothing said so. A client points this at
-## `DotClientLink.ping_ms`.
-##
-## What it costs when it is unset: the clock's input lead has to include the flight
-## time, because a command stamped for tick N must be in the server's hands BEFORE it
-## simulates N. With no samples the lead is a guess, and on any link past about 30 ms
-## every input arrives after its tick has passed and is discarded as late — the player
-## moves perfectly on their own screen and nowhere else.
-##
-## [b]Point it at [method link_rtt_ms], not at `ping_ms` alone.[/b] See there.
+## [b]Nothing in dot-net writes an RTT sample, and the clock needs one.[/b] Without it the
+## input lead is a guess, and on a link past about 30 ms every input arrives after its tick and
+## is discarded as late. A client points this at [method link_rtt_ms].
 var rtt_source: Callable = Callable()
 
 
-## A client link's round trip, in milliseconds: ENet's own measurement when the link is on
-## ENet, and dot-server's heartbeat ping otherwise. 0 while neither knows.
-##
-## [b]Why not just `DotClientLink.ping_ms`.[/b] That is one heartbeat every two seconds,
-## sent unreliable, and it is -1 until the first comes back -- once, through a real UDP
-## relay (`headless_lossy`), eight seconds after connecting. Until then the clock believes
-## the link is instant and leaves the flight time out of its input lead, so the commands
-## arrive after their ticks and are thrown away while the player moves perfectly on their
-## own screen: on a steady 55 ms each way, the server had the client's command for 46% of
-## its ticks in the first three seconds, 102 of them late (`--ping-rtt`, the control).
-## ENet times every acknowledged packet from the connect handshake on, so on ENet its
-## number is right before the first snapshot lands (100% in time, 0 late). Read by duck
-## typing, because a web build has no ENet class to name.
+## A client link's round trip in milliseconds, ENet's own measurement or else the heartbeat
+## ping; 0 while neither knows. Why it is not just `ping_ms`: see ArenaLinkRtt.
 static func link_rtt_ms(link: Node) -> float:
-	if link == null or not is_instance_valid(link):
-		return 0.0
+	return ArenaLinkRtt.rtt_ms(link)
 
-	var api := link.multiplayer
-	var peer: Object = api.multiplayer_peer if api != null else null
-
-	if peer != null and peer.has_method("get_peer") and ClassDB.class_exists(&"ENetPacketPeer"):
-		var server: Object = peer.call("get_peer", 1)
-
-		if server != null and server.has_method("get_statistic"):
-			var stat := ClassDB.class_get_integer_constant(&"ENetPacketPeer", &"PEER_ROUND_TRIP_TIME")
-			var rtt := float(server.call("get_statistic", stat))
-
-			if rtt > 0.0:
-				return rtt
-
-	if link.has_method("ping_ms"):
-		return float(maxi(0, int(link.call("ping_ms"))))
-
-	return 0.0
 
 ## Peers that have said they can receive. Server side.
 ##
@@ -194,8 +144,6 @@ var _hello: Dictionary = {}
 
 ## Server: records every view and cuts the victims' clips (null until the first tick).
 var killview: ArenaKillView = null
-
-
 
 ## Emitted on a client when HELLO arrives, with what it said.
 signal hello_received(info: Dictionary)
@@ -1601,15 +1549,8 @@ func receive_request(peer_id: int, payload: PackedByteArray) -> DotResult:
 
 ## A relayed voice frame arrived. Client side.
 ##
-## [b]Deliberately NOT routed through [DotNetManager].[/b] dot-net's `receive` decodes
-## a bit-packed message against a sealed schema and applies the payload cap and the
-## rate limit that go with it; a voice frame is an opaque blob from a codec and has
-## nothing to do with the replication wire. Putting it through would mean either a
-## message type per codec or a schema that changes when the codec does — and the
-## schema hash is what both ends check to agree they are speaking the same game.
-##
-## Handled by whatever the host set [member voice_in_fn] to, which on a client is
-## `DotVoiceManager.receive`.
+## Not through [DotNetManager]: a voice frame is an opaque codec blob, and the replication
+## schema must not change with the codec. Handled by [member voice_in_fn].
 func receive_voice(payload: PackedByteArray) -> DotResult:
 	if not voice_in_fn.is_valid():
 		return DotResult.fail(DotError.CODE_STATE, "Nothing here plays voice.")
@@ -1620,9 +1561,8 @@ func receive_voice(payload: PackedByteArray) -> DotResult:
 
 ## A client's captured audio arrived. Server side.
 ##
-## The speaker is [param peer_id], which the transport reported. It is never read out
-## of the payload: a client that could name its own speaker id could put words in
-## anybody's mouth, and the only symptom is words coming out of the wrong player.
+## The speaker is [param peer_id] as the transport reported it, never read from the payload,
+## or a client could put words in anybody's mouth.
 func receive_voice_frame(peer_id: int, payload: PackedByteArray) -> DotResult:
 	if not voice_relay_fn.is_valid():
 		return DotResult.fail(DotError.CODE_STATE, "This end does not relay voice.")
@@ -1703,6 +1643,25 @@ func _on_event(message: DotNetMessage) -> void:
 			var launch := ArenaEvents.read_launch(reader)
 			if bool(launch["ok"]):
 				_mirror_launch(launch)
+		ArenaEvents.Kind.HIT:
+			var hit := ArenaEvents.read_hit(reader)
+			if bool(hit["ok"]):
+				hit_received.emit(hit)
+		ArenaEvents.Kind.AWARD:
+			var award := ArenaEvents.read_award(reader)
+			if bool(award["ok"]):
+				award_received.emit(award)
+		ArenaEvents.Kind.KILLVIEW:
+			var view := ArenaEvents.read_killview(event.body)
+			if bool(view["ok"]):
+				killview_received.emit(view["clip"], view["info"])
+		_:
+			_on_world_event(event, reader)
+
+
+## The events about the world (bullets, toys, drops, the jail and the rules), split from [method _on_event].
+func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
+	match event.kind:
 		ArenaEvents.Kind.BULLET:
 			var bullet := ArenaEvents.read_bullet(reader)
 			if bool(bullet["ok"]):
@@ -1734,18 +1693,6 @@ func _on_event(message: DotNetMessage) -> void:
 			var rules := ArenaEvents.read_rules(reader)
 			if bool(rules["ok"]) and game != null:
 				game.set_movement_rules(rules["rules"])
-		ArenaEvents.Kind.HIT:
-			var hit := ArenaEvents.read_hit(reader)
-			if bool(hit["ok"]):
-				hit_received.emit(hit)
-		ArenaEvents.Kind.AWARD:
-			var award := ArenaEvents.read_award(reader)
-			if bool(award["ok"]):
-				award_received.emit(award)
-		ArenaEvents.Kind.KILLVIEW:
-			var view := ArenaEvents.read_killview(event.body)
-			if bool(view["ok"]):
-				killview_received.emit(view["clip"], view["info"])
 		_:
 			pass
 
@@ -1878,142 +1825,6 @@ func _drop_session(session_id: int) -> void:
 			_players_by_peer.erase(peer_id)
 
 	game.remove_player(session_id)
-
-
-# --- Both ends: the map's toys ---------------------------------------------------
-
-## The map's toys on the wire, one behaviour per toy in toy order, and the TOYS event that names
-## their net ids (kept for a joiner).
-var _toy_nets: Array = []
-var _toys_body: PackedByteArray = PackedByteArray()
-
-## Client: which map the last TOYS was for. Its mirrors are registered at once and handed their
-## toys when this end's toys for that map exist ([method _pair_pending_toys]).
-var _toys_map: StringName = &""
-
-## Client: where the mirrors live, which is not under the toys: a client registers them the
-## moment TOYS arrives, before its own map may be built, and keeps them through a map change.
-var _toy_holder: Node3D = null
-
-
-## Server: an entity for each of the map's toys, and TOYS naming them.
-func _register_toys() -> void:
-	if net == null or not net.is_server or game == null:
-		return
-	_release_toys()
-	var ids := PackedInt64Array()
-	if game.toys != null:
-		for toy in game.toys.toys:
-			var behaviour := _toy_entity(toy, toy, 0)
-			if behaviour == null:
-				break
-			ids.append(behaviour.identity.net_id)
-	_toys_body = ArenaEvents.write_toys(game.map.id if game.map != null else &"", ids)
-	send_event(0, ArenaEvents.Kind.TOYS, _toys_body)
-
-
-## A toy's behaviour and identity under [param parent], registered under [param net_id] (0
-## allocates: the server); null when the registry refused it. The behaviour before the
-## identity, which collects behaviours in its `_ready`.
-func _toy_entity(toy: DotPropToy, parent: Node, net_id: int) -> ArenaToyNet:
-	var behaviour := ArenaToyNet.new()
-	behaviour.name = "Net"
-	behaviour.toy = toy
-	var holder := Node3D.new() if parent != toy else null
-	if holder != null:
-		holder.name = "Toy%d" % _toy_nets.size()
-		parent.add_child(holder)
-	var at: Node = holder if holder != null else toy
-	at.add_child(behaviour)
-	if net.is_server:
-		behaviour.pull()
-	var identity := DotNetIdentity.new()
-	identity.name = "Identity"
-	identity.owner_peer_id = 0
-	identity.authority = DotNetIdentity.Authority.SERVER
-	at.add_child(identity)
-	var registered := net.registry.register(identity, net_id, net.clock.tick, net.config)
-	if not registered.ok:
-		DotLog.warn(CHANNEL, "could not replicate a toy", {"toy": _toy_nets.size(), "error": str(registered.error)})
-		at.remove_child(behaviour)
-		at.remove_child(identity)
-		behaviour.queue_free()
-		identity.queue_free()
-		if holder != null:
-			parent.remove_child(holder)
-			holder.queue_free()
-		return null
-	_toy_nets.append(behaviour)
-	return behaviour
-
-
-## Every toy entity out of the registry and out of the tree at once: a new identity on the same
-## toy collects every behaviour under it in its `_ready`, and a freed one found there broke the
-## next snapshot (game-playground found it). The server's, on a map change or a new set.
-func _release_toys() -> void:
-	for behaviour: ArenaToyNet in _toy_nets:
-		if not is_instance_valid(behaviour):
-			continue
-		if behaviour.identity != null and net != null and net.registry.has(behaviour.identity.net_id):
-			net.registry.unregister(behaviour.identity.net_id)
-		var at := behaviour.get_parent()
-		for node: Node in [behaviour.identity, behaviour]:
-			if node != null and is_instance_valid(node) and node.get_parent() != null:
-				node.get_parent().remove_child(node)
-				node.queue_free()
-		if at != null and at.get_parent() == _toy_holder and _toy_holder != null:
-			_toy_holder.remove_child(at)
-			at.queue_free()
-	_toy_nets.clear()
-
-
-## Client, on TOYS: a mirror for every id at once, under the holder, whether this end's toys
-## for that map exist yet or not. [b]A client must know every entity a snapshot carries[/b]:
-## dot-net stops reading a snapshot at the first one it does not know (a body cannot be skipped
-## without its declarations), so a toy mirror missing while the client loads the map, or ever,
-## on a client left on another map, was every player after it frozen. Paired with its toy
-## by index as soon as both are here.
-func _apply_toys(told: Dictionary) -> void:
-	if net == null or net.is_server:
-		return
-	_release_toys()
-	if _toy_holder == null:
-		_toy_holder = Node3D.new()
-		_toy_holder.name = "ToyMirrors"
-		add_child(_toy_holder)
-	_toys_map = told["map_id"]
-	for id in (told["ids"] as PackedInt64Array):
-		var _mirror := _toy_entity(null, _toy_holder, int(id))
-	_pair_pending_toys()
-
-
-## Client: each mirror handed this end's toy at its index, once this end's toys are for the map
-## TOYS named; none while they are not (a map change on the way, or another map).
-func _pair_pending_toys() -> void:
-	if net == null or net.is_server or game == null:
-		return
-	var box := game.toys if game.toys != null and game.map != null and game.map.id == _toys_map else null
-	if box != null and box.count() != _toy_nets.size():
-		DotLog.warn(CHANNEL, "the server's map has a different number of toys", {"server": _toy_nets.size(), "here": box.count()})
-	for i in range(_toy_nets.size()):
-		var behaviour: ArenaToyNet = _toy_nets[i]
-		behaviour.toy = box.toy(i) if box != null else null
-
-
-## Client: the old map's toys are about to go; the mirrors stay registered, without them.
-func _unpair_toys() -> void:
-	for behaviour: ArenaToyNet in _toy_nets:
-		if is_instance_valid(behaviour):
-			behaviour.toy = null
-
-
-## How many toys this end replicates (a client: mirrors paired with a toy). For a check.
-func toy_count() -> int:
-	var n := 0
-	for behaviour: ArenaToyNet in _toy_nets:
-		if is_instance_valid(behaviour) and (net.is_server or behaviour.toy != null):
-			n += 1
-	return n
 
 
 func describe() -> Dictionary:

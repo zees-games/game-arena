@@ -217,7 +217,8 @@ class Pilot extends Node:
 				Input.parse_input_event(wheel)
 
 
-func _run() -> void:
+## Starts the server process and gives it time to load; false (and quits) when it cannot start.
+func _start_server() -> bool:
 	var args := PackedStringArray(["--headless", "--path", ProjectSettings.globalize_path("res://"),
 		"res://tools/client_bench.tscn", "--", "--role", "server", "--port", str(_port),
 		"--bots", str(_bots), "--map", _map, "--mode", _mode, "--tick", str(_tick)])
@@ -225,8 +226,26 @@ func _run() -> void:
 	if _server_pid <= 0:
 		printerr("client_bench: could not start the server")
 		get_tree().quit(1)
-		return
+		return false
 	await get_tree().create_timer(6.0).timeout
+	return true
+
+
+## Waits (at most 40 s) for the pilot's player to be alive with a synced clock.
+func _wait_until_playing() -> void:
+	var t := 0.0
+	while t < 40.0:
+		await get_tree().create_timer(0.05).timeout
+		t += 0.05
+		var p = _client.get("player")
+		var net = _client.get("net")
+		if p != null and p.is_alive() and net != null and net.clock.is_synced() and (not _json or _gate_open_s >= 0.0):
+			break
+
+
+func _run() -> void:
+	if not await _start_server():
+		return
 
 	_relay = Relay.new()
 	_relay.seed = 20261016
@@ -281,14 +300,7 @@ func _run() -> void:
 		return
 	if _json and stall != null:
 		stall.watch(_client.get("gate"))
-	t = 0.0
-	while t < 40.0:
-		await get_tree().create_timer(0.05).timeout
-		t += 0.05
-		var p = _client.get("player")
-		var net = _client.get("net")
-		if p != null and p.is_alive() and net != null and net.clock.is_synced() and (not _json or _gate_open_s >= 0.0):
-			break
+	await _wait_until_playing()
 	# `--raw-input`: predict on the sampled command rather than the one the wire carries
 	# (DotNetConfig.predict_wire_input), to measure what the rounding is worth.
 	var client_net = _client.get("net")
@@ -397,13 +409,11 @@ func _measure() -> void:
 	var steps := PackedInt32Array()
 	var calls := 0.0
 	var objs := 0.0
-	var last := Time.get_ticks_usec()
+	var start := Time.get_ticks_usec()
+	var last := start
 	var last_phys := Engine.get_physics_frames()
-	var start := last
 	var net: DotNetManager = _client.get("net")
 	var lead_sum := 0.0
-	# Wall-clock parts of each frame. TIME_PROCESS / TIME_PHYSICS_PROCESS are each second's
-	# slowest frame, not a per-frame figure, so they are no longer averaged here.
 	var fclock := DotMenuFrameClock.new()
 	fclock.start(get_tree())
 	var perf0: Dictionary = net.perf_counters() if net != null and net.has_method(&"perf_counters") else {}

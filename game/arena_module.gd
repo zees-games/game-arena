@@ -1,11 +1,10 @@
-extends DotModule
+extends "arena_module_cvars.gd"
 
 const ArenaPaths := preload("arena_paths.gd")
 
 const ArenaBoards := preload("arena_boards.gd")
 const ArenaEvents := preload("arena_events.gd")
 const ArenaAmbience := preload("arena_ambience.gd")
-const ArenaGame := preload("arena_game.gd")
 ## The workbench kind of the ambience cvar set (saved to cfg/.../ambience/server.yml).
 const AMBIENT_KIND := "ambience"
 ## The workbench kind of the wall-move cvar set (arena_wall*).
@@ -19,7 +18,6 @@ const ArenaModTools := preload("arena_mod_tools.gd")
 const ArenaModes := preload("arena_modes.gd")
 const ArenaModule := preload("arena_module.gd")
 const ArenaNetBridge := preload("arena_net_bridge.gd")
-const ArenaPlayer := preload("arena_player.gd")
 const ArenaServices := preload("arena_services.gd")
 const ArenaStats := preload("arena_stats.gd")
 const ArenaVote := preload("arena_vote.gd")
@@ -50,16 +48,9 @@ const MAP_BALLOT_TOPIC := &"map_ballot"
 ## [code]DotModuleHost.load_module[/code] takes — see [method _build_identity].
 const PLATFORM_MODULE_PATH := "res://addons/dot_platform/dot_platform_module.gd"
 
-var game: ArenaGame = null
-
 ## dot-combat's cvars (mp_teammate_passthrough), kept to put on each map's new combat manager.
 var _combat_cvars: Array = []
 
-## The netcode. Owned here rather than by the game, because a headless match and a
-## dedicated server are different deployments of the same game and only one of them
-## replicates.
-var net: DotNetManager = null
-var _cv_maxrate: DotConVar = null
 var bridge: ArenaNetBridge = null
 ## Carries the workbench's profile runtime (rows down) over this manager; null without a workbench.
 var profile_link: DotNetProfileLink = null
@@ -214,74 +205,7 @@ func _module_load() -> DotResult:
 			(cv as DotConVar).changed.connect(_reapply_combat_cvars.unbind(2))
 		game.map_changed.connect(_reapply_combat_cvars.unbind(1))
 
-	# sv_falldamage and its tunables: dot-combat's, on here (not on surf maps). Server-side only:
-	# the damage is the server's and arrives as health.
-	var _fall := game.fall_rules.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
-
-	# Dead bodies: dot-player-char's sv_ragdoll, sv_ragdoll_style, _time, _max, _force and
-	# _reactions. The server only picks each death's reaction from them (ArenaGame.decide_death);
-	# REPLICATED, because the clients are what draw the bodies and need the style, the
-	# lifetime and the cap. The rules belong to the game, not the map, so one bind lasts.
-	var _ragdoll_cvars := game.ragdoll_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# The map's toys: dot-props' sv_toys, sv_toys_awake, sv_toys_push. REPLICATED, because a
-	# client hides the toys a server took away. The game's, so one bind lasts.
-	var _toy_cvars := game.toy_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# mp_forceview: whether players may switch to third person (0), or are held in first (1)
-	# or third (2). REPLICATED, because each client places its own camera under it.
-	var _view_cvars := game.view_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# mp_killview*: dot-replay's kill view, on here. REPLICATED, because each client plays the clip
-	# under the server's seconds, skip key and slow motion.
-	var _killview_cvars := game.killview_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# arena_ambient*: dot-audio's DotAmbienceRules. REPLICATED, because each client plays its own
-	# ambience under the server's intent; the directory cvar stays local.
-	var _ambient_cvars := game.ambient_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
-	)
-
-	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules. REPLICATED, because
-	# each client flies its own spectator camera under them (ArenaClient.toggle_roam).
-	var _spectate_cvars := game.spectate_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# mp_solidplayers: whether players and bots stop at each other (1, the default) or pass
-	# through (0). REPLICATED, because each client predicts its own player against the
-	# others' hulls (ArenaGame.solid_hulls_for).
-	var _solid_cvars := game.body_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	# mp_teamblock, mp_enemyblock, mp_blockcmd*, mp_blockscope, mp_blockstate and !block / !noblock:
-	# dot-game's DotGameNoblock, REPLICATED for the same reason as mp_solidplayers. The server
-	# scene builds it (strict cfg layers); a suite that only builds a module gets a lenient one.
-	# A module loaded again over the same game gets fresh rules: the old ones are bound to the
-	# old console.
-	if game.noblock == null or game.noblock_bound:
-		DotLog.result(CHANNEL, "noblock", game.make_noblock(false))
-	if game.noblock != null:
-		DotLog.result(CHANNEL, "noblock cvars", game.noblock.bind(add_cvar, self))
-		game.noblock_bound = true
-
-	# mp_vm_sway, _strafe_tilt, _bob, _landing and _aim_steadiness: zee-dot-weapons' view
-	# model feel. REPLICATED, because the hands are drawn on each client, not on the server.
-	var _feel_cvars := game.feel_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
-
-	game.combat_feel.bind_cvars(add_cvar)
+	_bind_rule_cvars()
 
 	_start_workbench()
 
@@ -409,6 +333,78 @@ func _module_load() -> DotResult:
 	return DotResult.success(null)
 
 
+## Binds the cvars of the game's rule sets (fall, ragdoll, toys, views, spectate, bodies, noblock, feel).
+func _bind_rule_cvars() -> void:
+	# sv_falldamage and its tunables: dot-combat's, on here (not on surf maps). Server-side only:
+	# the damage is the server's and arrives as health.
+	var _fall := game.fall_rules.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
+
+	# Dead bodies: dot-player-char's sv_ragdoll, sv_ragdoll_style, _time, _max, _force and
+	# _reactions. The server only picks each death's reaction from them (ArenaGame.decide_death);
+	# REPLICATED, because the clients are what draw the bodies and need the style, the
+	# lifetime and the cap. The rules belong to the game, not the map, so one bind lasts.
+	var _ragdoll_cvars := game.ragdoll_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
+	# The map's toys: dot-props' sv_toys, sv_toys_awake, sv_toys_push. REPLICATED, because a
+	# client hides the toys a server took away. The game's, so one bind lasts.
+	var _toy_cvars := game.toy_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
+	# mp_forceview: whether players may switch to third person (0), or are held in first (1)
+	# or third (2). REPLICATED, because each client places its own camera under it.
+	var _view_cvars := game.view_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
+	# mp_killview*: dot-replay's kill view, on here. REPLICATED, because each client plays the clip
+	# under the server's seconds, skip key and slow motion.
+	var _killview_cvars := game.killview_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
+	# arena_ambient*: dot-audio's DotAmbienceRules. REPLICATED, because each client plays its own
+	# ambience under the server's intent; the directory cvar stays local.
+	var _ambient_cvars := game.ambient_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+	)
+
+	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules. REPLICATED, because
+	# each client flies its own spectator camera under them (ArenaClient.toggle_roam).
+	var _spectate_cvars := game.spectate_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
+	# mp_solidplayers: whether players and bots stop at each other (1, the default) or pass
+	# through (0). REPLICATED, because each client predicts its own player against the
+	# others' hulls (ArenaGame.solid_hulls_for).
+	var _solid_cvars := game.body_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
+	# mp_teamblock, mp_enemyblock, mp_blockcmd*, mp_blockscope, mp_blockstate and !block / !noblock:
+	# dot-game's DotGameNoblock, REPLICATED for the same reason as mp_solidplayers. The server
+	# scene builds it (strict cfg layers); a suite that only builds a module gets a lenient one.
+	# A module loaded again over the same game gets fresh rules: the old ones are bound to the
+	# old console.
+	if game.noblock == null or game.noblock_bound:
+		DotLog.result(CHANNEL, "noblock", game.make_noblock(false))
+	if game.noblock != null:
+		DotLog.result(CHANNEL, "noblock cvars", game.noblock.bind(add_cvar, self))
+		game.noblock_bound = true
+
+	# mp_vm_sway, _strafe_tilt, _bob, _landing and _aim_steadiness: zee-dot-weapons' view
+	# model feel. REPLICATED, because the hands are drawn on each client, not on the server.
+	var _feel_cvars := game.feel_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
+	game.combat_feel.bind_cvars(add_cvar)
+
+
 ## The manager, the bridge and the link.
 ##
 ## [b]The module drives the tick, not the game.[/b] The game's tick has to happen
@@ -428,17 +424,11 @@ func _build_netcode() -> DotResult:
 	config.tick_rate = game.tick_rate
 	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
 	config.enable_prediction = true
-	# On, and it is the reason dot-combat has a rewind hook at all: a player shooting
-	# at where they SEE somebody is shooting at where that player was half a round trip
-	# ago, and without compensation every shot at a moving target misses behind them.
+	# On: a player shoots where they SEE someone, which is where that player was half a round trip ago.
 	config.enable_lag_compensation = true
 	config.max_entities_per_snapshot = 64
-	# Unlimited, both caps. Measured with tools/net_probe.gd (one client, 12 to 31 hunting
-	# bots, real ENet on loopback): the stream is a steady ~6 kB/s at 32 snapshots a second,
-	# ~16 kB/s at the join burst, never above 25% of dot-net's 64 kB/s default, and the
-	# limiter starved nothing, so the cap was never what queued a packet. It can only ever
-	# hold a packet back, and a snapshot is bounded anyway by max_entities_per_snapshot and
-	# the mtu, so a game whose worst case is a few kB/s is better without it.
+	# Unlimited: tools/net_probe.gd measured ~6 kB/s steady and ~16 kB/s at a join, so a cap
+	# could only hold a packet back (see _add_rate_cvar).
 	config.per_client_budget = _cv_maxrate.get_int() if _cv_maxrate != null else 0
 	config.per_client_packet_rate = 0
 	# From the game, so the client cannot be given a different one. See
@@ -474,8 +464,7 @@ func _build_netcode() -> DotResult:
 	if not avatar.ok:
 		log_warn("avatar actions not served", {"why": avatar.error.message})
 
-	# The remote workbench's frame, inert until sv_workbench_remote is 1 and the workbench serves it; and the
-	# profile rows, so an admin's edit reaches every client (nothing else sets the runtime's broadcast).
+	# The remote workbench's frame (inert until sv_workbench_remote) and the profile rows an admin's edit sends.
 	var bench := DotGameWorkbenchRemote.serve(net)
 	if not bench.ok:
 		log_warn("remote workbench not served", {"why": bench.error.message})
@@ -485,15 +474,11 @@ func _build_netcode() -> DotResult:
 		if bench.ok and game.workbench.serve_remote(net) == null:
 			log_warn("remote workbench not bound", {})
 
-	# Sealed once, on both ends, after every type is registered: the table each end sends
-	# the other is a promise about what it has, and a type registered after it went out is
-	# one the peer was told this end does not have.
+	# Sealed after every type is registered: a type added later is one the peer was told is absent.
 	net.messages.seal()
 
-	# [b]A client whose game messages cannot work with this server's is dropped, in words.[/b]
-	# dot-net compares the two schema tables and refuses a pair where either lacks a type
-	# the other REQUIRES, but it owns no socket and can only say so; this is the socket.
-	# The same line DotGameNetcode.refuse_peer is for games built on dot-game.
+	# A client whose schema cannot work with this server's is dropped, in words: dot-net only
+	# says so and owns no socket (as DotGameNetcode.refuse_peer).
 	net.peer_schema_refused.connect(_refuse_peer)
 
 	return net.start()
@@ -1300,229 +1285,6 @@ func _on_client_disconnected(session: DotClientSession, _reason: String) -> void
 		# decides whether the tally shrinks with them, and it cannot do its job if
 		# nothing tells it they went.
 		vote.forget_voter(StringName(str(session.userid)))
-
-
-## cvar -> the movement tunable it sets, with what it means. Each defaults to what
-## `ArenaPlayer.arena_tunables()` already says, so a server that sets none of them plays
-## exactly as before; a change reaches every player now and later and, through RULES,
-## every client, so a client never predicts a slide the server does not make.
-const MOVEMENT_CVARS := {
-	"arena_slide": ["slide_enabled", "Crouch at a run slides (1) or only crouches (0)"],
-	"arena_slide_boost": ["slide_boost", "Speed a slide adds when it starts, m/s (0 for none)"],
-	"arena_slide_min_speed": ["slide_min_speed", "Speed needed to slide, m/s"],
-	"arena_slide_duration": ["slide_duration", "Longest a slide lasts, seconds"],
-	"arena_slide_friction": ["slide_friction", "Friction while sliding (lower carries further)"],
-	"arena_slide_cooldown": ["slide_cooldown", "Seconds between slides"],
-	"arena_launch": ["launch_enabled", "E throws the player into the air (1) or does nothing (0)"],
-	"arena_launch_velocity": ["launch_velocity", "Upward speed of a launch, m/s"],
-	"arena_launch_forward": ["launch_forward", "Forward speed a launch adds, m/s"],
-	"arena_launch_cooldown": ["launch_cooldown", "Seconds between launches"],
-	"arena_dash": ["dash_enabled", "Shift dashes along the way you steer (1) or does nothing (0, the default)"],
-	"arena_dash_speed": ["dash_speed", "Speed of a dash, m/s"],
-	"arena_dash_lift": ["dash_lift", "Upward speed a dash adds, m/s"],
-	"arena_dash_cooldown": ["dash_cooldown", "Seconds between dashes"],
-	"arena_wall_run": ["wall_run_enabled", "A fast jump along a wall runs on it (1) or falls past it (0)"],
-	"arena_wall_run_min_speed": ["wall_run_min_speed", "Speed along a wall needed to run on it, m/s"],
-	"arena_wall_run_time": ["wall_run_max_time", "Longest a wall run lasts, seconds (at most 1.9)"],
-	"arena_wall_run_gravity": ["wall_run_gravity_scale", "Share of gravity felt while wall running, 0 to 1"],
-	"arena_wall_jump": ["wall_jump_enabled", "Jump in the air beside a wall jumps off it (1) or does nothing (0)"],
-	"arena_wall_jump_push": ["wall_jump_push_speed", "Speed a wall jump pushes away from the wall, m/s"],
-	"arena_wall_jump_up": ["wall_jump_up_speed", "Upward speed a wall jump sets, m/s"],
-	"arena_wall_jumps": ["wall_jump_max_per_air", "Wall jumps before landing again, off any walls (0 for no limit)"],
-	"arena_wall_slide": ["wall_slide_speed", "Fastest fall while pressed against a wall, m/s (0 for no wall slide)"],
-	"arena_wall_run_end_speed": ["wall_run_end_speed", "A run ends when the speed along the wall falls under this, m/s"],
-	"arena_wall_run_damping": ["wall_run_vertical_damping", "How fast a run eases the vertical speed away, per second (higher holds you up harder)"],
-	"arena_wall_run_max_fall": ["wall_run_max_fall_speed", "Fastest fall a run can still catch, m/s"],
-	"arena_wall_run_angle": ["wall_run_max_approach_angle", "Widest angle off the wall's plane a run can start at, degrees (running head-on is no run)"],
-	"arena_wall_jump_look": ["wall_jump_look_blend", "How far a wall jump leans from the wall's normal toward the view, 0 to 1"],
-	"arena_wall_jumps_per_wall": ["wall_jump_max_per_wall", "Wall jumps off the same wall before landing again"],
-	"arena_wall_run_body_roll": ["wall_run_body_roll", "Degrees a drawn body rolls (feet to the wall) while wall running"],
-	"arena_wall_run_body_yaw": ["wall_run_body_yaw", "Degrees a drawn body turns toward the wall while wall running"],
-	"arena_wall_run_auto": ["wall_run_auto", "Touching a wall in the air starts a run with no press, and a press wall-jumps (1) or the press starts it (0, with arena_wall_run_on_jump)"],
-	"arena_wall_run_on_jump": ["wall_run_on_jump", "A jump press beside a wall starts a run and turns the heading along it (1) or only jumps off (0)"],
-	"arena_wall_run_turn_view": ["wall_run_turn_view", "The view turns along the wall when a jump starts a run (1) or only the heading does (0)"],
-	"arena_wall_run_jump_speed": ["wall_run_jump_min_speed", "Horizontal speed a jump-started wall run needs, m/s"],
-	"arena_wall_run_jump_angle": ["wall_run_jump_max_angle", "Widest angle off the wall's plane a jump-started run accepts, degrees"],
-	"arena_wall_run_cooldown": ["wall_run_cooldown", "Seconds after a wall run ends before another may start"],
-	"arena_wall_angle": ["wall_max_angle_from_vertical", "Steepest lean from vertical a wall may have and still be run on, degrees"],
-	"arena_break": ["break_mode", "On a death the body: 0 stays whole, 1 loses limbs, 2 explodes"],
-	"arena_break_limbs": ["break_limbs", "How many limbs come off when arena_break is 1"],
-	"arena_break_criticals": ["break_criticals_only", "Only a critical (a headshot) breaks a body (1), or any kill (0)"],
-	"arena_fp_body": ["fp_body", "Players see their own body when they look down (1)"],
-	"arena_surf": ["surf", "A combat surf map plays with the genre's air control (1) or the arena's own (0)"],
-	"arena_surf_airaccelerate": ["surf_air_accelerate", "Air acceleration on a combat surf map (the genre's sv_airaccelerate)"],
-	"mp_killcam_time": ["killcam", "Seconds the final killcam plays at a match's end, added to the end's wait (0 for none)"],
-	"arena_crit_scale": ["", "Extra damage multiplier on a critical hit (1 for none)"],
-	"arena_crit_chance": ["", "Chance any hit is a critical, 0 to 1 (headshots always are)"],
-}
-
-
-func _add_movement_cvars() -> void:
-	var defaults := ArenaPlayer.arena_tunables()
-
-	for cvar in MOVEMENT_CVARS:
-		var key: String = MOVEMENT_CVARS[cvar][0]
-
-		# The two critical cvars set dot-combat's rules on the server, not a rule a client
-		# draws: a critical is judged where the damage is.
-		if key == "":
-			_add_critical_cvar(cvar, MOVEMENT_CVARS[cvar][1])
-			continue
-
-		var value: Variant = (
-			defaults.get(key) if not ArenaGame.SHOW_DEFAULTS.has(key)
-			else ArenaGame.SHOW_DEFAULTS[key]
-		)
-		if value == null:
-			value = ArenaPlayer.BODY_RULES.get(key)
-		var text := ("1" if value else "0") if value is bool else str(value)
-
-		add_cvar(
-			cvar, text, MOVEMENT_CVARS[cvar][1],
-			DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-		).with_min(0.0).changed.connect(
-			func(_old: String, new_value: String) -> void:
-				game.set_movement_rules({key: new_value.to_float()})
-				log_info("movement rule changed", {"rule": key, "value": new_value})
-		)
-
-
-## cvar -> the key in `ArenaGame.jail_rules` it sets, and what it means.
-const JAIL_CVARS := {
-	"arena_jail": ["enabled", "A fall on a map with a jail lands in it, and its gate works (1), or the map's volumes run as shipped (0)"],
-	"arena_jail_open": ["open", "Seconds the jail's gate stays open after its button is pressed"],
-	"arena_jail_cooldown": ["cooldown", "Seconds the gate then stays shut before the button works again"],
-}
-
-
-## cvar -> the key in `ArenaGame.drop_rules` it sets, and what it means.
-const DROP_CVARS := {
-	"arena_drop_coins": ["coins", "Coins a critical kill drops (0 for none)"],
-	"arena_drop_coin_value": ["coin_value", "What one coin adds to its taker's count"],
-	"arena_drop_health": ["health", "Health in the pack a critical kill drops (0 for none)"],
-	"arena_drop_any_kill": ["any_kill", "Every kill drops (1), or only a critical one (0)"],
-	"arena_drop_life": ["life", "Seconds a drop lies there before it goes"],
-	"arena_packs": ["packs", "The map's health and ammo packs are out (1) or not (0)"],
-	"arena_pack_health": ["pack_health", "Health in a map's health pack"],
-	"arena_pack_ammo": ["pack_ammo", "Percent of each weapon's reserve an ammo pack refills"],
-	"arena_pack_respawn": ["pack_respawn", "Seconds a taken pack takes to come back"],
-}
-
-
-## cvar -> the key in `ArenaPlayerStack.spawn_settings` it sets, and what it means.
-const SPAWN_CVARS := {
-	"arena_spawn_mode": ["mode", "How a respawn picks its site: avoid, weighted, furthest or random"],
-	"arena_spawn_min_enemy": ["min_enemy", "In avoid mode, the nearest an enemy may be to a site, in metres"],
-	"arena_spawn_sight_penalty": ["sight_penalty", "What an enemy being able to see a site costs it"],
-	"arena_spawn_enemy_weight": ["enemy_weight", "What each metre from the nearest enemy is worth"],
-}
-
-
-## `arena_max_unlag_ms`: how far back a shot is judged, for a shooter's latency. See
-## [member ArenaGame.max_unlag_ms]; 0 turns lag compensation off.
-func _add_unlag_cvar() -> void:
-	add_cvar("arena_max_unlag_ms", str(game.max_unlag_ms),
-		"How far back lag compensation rewinds the other players for a shot, in ms (0 off)",
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0).changed.connect(
-		func(_old: String, new_value: String) -> void:
-			game.max_unlag_ms = new_value.to_float()
-			log_info("lag compensation limit changed", {"ms": game.max_unlag_ms}))
-
-
-## `sv_maxrate`: bytes a second each client may be sent, 0 for no cap (the default).
-##
-## [b]0, because a cap here can only ever hurt[/b] (2026-10-15, `tools/net_probe.gd`): the
-## stream to one client is ~6 kB/s steady and ~16 kB/s at a join with up to 31 bots, and a
-## snapshot is already bounded by `max_entities_per_snapshot` and the mtu. What a cap does
-## when it bites is hold a snapshot back, which a player reads as a ping spike. It is here
-## for an operator on a metered uplink, and it is dot-net's `per_client_budget`, read live.
-func _add_rate_cvar() -> void:
-	_cv_maxrate = add_cvar("sv_maxrate", "0",
-		"Bytes a second each client may be sent; 0 is no cap (a cap that bites delays snapshots)",
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0)
-	_cv_maxrate.changed.connect(
-		func(_old: String, new_value: String) -> void:
-			if net != null and net.config != null:
-				net.config.per_client_budget = new_value.to_int()
-			log_info("rate cap changed", {"bytes_per_sec": new_value.to_int()}))
-
-
-func _add_spawn_cvars() -> void:
-	var stack: Object = game.get("player_stack")
-
-	if stack == null:
-		return
-
-	for cvar in SPAWN_CVARS:
-		var key: String = SPAWN_CVARS[cvar][0]
-		add_cvar(cvar, str(stack.spawn_settings[key]), SPAWN_CVARS[cvar][1], DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).changed.connect(
-			func(_old: String, new_value: String) -> void:
-				if key == "mode":
-					if not stack.SPAWN_MODES.has(new_value):
-						log_info("unknown spawn mode, kept the old one", {"asked": new_value, "modes": stack.SPAWN_MODES})
-						return
-
-					stack.spawn_settings[key] = new_value
-				else:
-					stack.spawn_settings[key] = maxf(new_value.to_float(), 0.0)
-
-				stack.refresh_spawn_rules()
-				log_info("spawn rule changed", {"rule": key, "value": new_value}))
-
-
-func _add_drop_cvars() -> void:
-	for cvar in DROP_CVARS:
-		var key: String = DROP_CVARS[cvar][0]
-		var value: Variant = game.drop_rules[key]
-		var text := ("1" if value else "0") if value is bool else str(value)
-		add_cvar(
-			cvar, text, DROP_CVARS[cvar][1], DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
-		).with_min(0.0).changed.connect(
-			func(_old: String, new_value: String) -> void:
-				var was: Variant = game.drop_rules[key]
-				game.drop_rules[key] = (
-					new_value.to_float() != 0.0 if was is bool
-					else (new_value.to_int() if was is int else new_value.to_float())
-				)
-				game.apply_drop_rules()
-				log_info("drop rule changed", {"rule": key, "value": new_value})
-		)
-
-
-func _add_jail_cvars() -> void:
-	for cvar in JAIL_CVARS:
-		var key: String = JAIL_CVARS[cvar][0]
-		var value: Variant = game.jail_rules[key]
-		add_cvar(
-			cvar, ("1" if value else "0") if value is bool else str(value),
-			JAIL_CVARS[cvar][1], DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
-		).with_min(0.0).changed.connect(
-			func(_old: String, new_value: String) -> void:
-				game.jail_rules[key] = (
-					new_value.to_float() != 0.0 if game.jail_rules[key] is bool else new_value.to_float()
-				)
-				game.apply_jail_rules()
-				log_info("jail rule changed", {"rule": key, "value": new_value})
-		)
-
-
-func _add_critical_cvar(cvar: String, help: String) -> void:
-	var rules: DotDamageRules = game.combat.resolver.rules if game.combat != null else null
-	if rules == null:
-		return
-
-	var scale := cvar == "arena_crit_scale"
-	add_cvar(
-		cvar, str(rules.critical_scale if scale else rules.critical_chance), help,
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
-	).with_min(0.0).changed.connect(
-		func(_old: String, new_value: String) -> void:
-			if scale:
-				rules.critical_scale = maxf(new_value.to_float(), 0.0)
-			else:
-				rules.critical_chance = clampf(new_value.to_float(), 0.0, 1.0)
-			log_info("critical rule changed", {"cvar": cvar, "value": new_value})
-	)
 
 
 func _on_player_killed(entry: DotKillFeed.Entry) -> void:

@@ -53,14 +53,8 @@ func _arg(name: String, fallback: String) -> String:
 	return fallback
 
 
-func _run() -> void:
-	var map_id := StringName(_arg("map", String(DEFAULT_MAP)))
-	var map := ArenaMap.by_id(map_id)
-	if map == null:
-		_fail("unknown map %s (is arena-surf-dm-maps linked?)" % map_id)
-		return
-
-	var cfg := DotBotSoakConfig.new()
+## Applies the command line to [param cfg]; returns the difficulty a `--seed` draws, or "".
+func _configure(cfg: DotBotSoakConfig) -> String:
 	cfg.minutes = DEFAULT_MINUTES
 	cfg.bots = DEFAULT_BOTS
 	cfg.apply_cli()
@@ -75,7 +69,10 @@ func _run() -> void:
 		difficulty = String(DotBotProfile.PRESETS[rng.randi() % DotBotProfile.PRESETS.size()])
 		if _arg("bots", "").is_empty():
 			cfg.bots = drawn_bots
+	return difficulty
 
+
+func _add_game() -> void:
 	_game = ArenaGame.new()
 	_game.tick_rate = TICK_RATE
 	_game.headless = true
@@ -84,6 +81,19 @@ func _run() -> void:
 	_game.mode = ArenaMode.free_for_all(SCORE_LIMIT)
 	_game.score_limit = SCORE_LIMIT
 	add_child(_game)
+
+
+func _run() -> void:
+	var map_id := StringName(_arg("map", String(DEFAULT_MAP)))
+	var map := ArenaMap.by_id(map_id)
+	if map == null:
+		_fail("unknown map %s (is arena-surf-dm-maps linked?)" % map_id)
+		return
+
+	var cfg := DotBotSoakConfig.new()
+	var difficulty := _configure(cfg)
+
+	_add_game()
 	if not difficulty.is_empty():
 		DotBotSettings.of(_game).set_difficulty(difficulty)
 	var res := _game.setup(map)
