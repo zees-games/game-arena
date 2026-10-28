@@ -78,7 +78,7 @@ const RELIABLE_SECONDS := 35.0
 
 ## Checks per window, and outside them.
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 45
+const OTHER_CHECKS := 59
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -130,6 +130,10 @@ var _wall_from := -1
 var _wall_idle := false
 var _hop_from := -1
 
+## A's input tick its sprint pattern starts on (-1 off), and whether the wall script holds sprint.
+var _stam_from := -1
+var _wall_hold_sprint := false
+
 
 static func _tick_rate_arg() -> int:
 	for arg in OS.get_cmdline_user_args():
@@ -160,6 +164,8 @@ func _run() -> void:
 				await _play_window(window)
 			await _test_wall_moves()
 			await _test_wall_hops()
+			await _test_stamina_under_loss()
+			await _test_teleport_under_loss()
 			await _test_server_cvars_reach_the_client()
 			await _test_ambient_cvars_reach_the_client()
 			await _test_view_feel_and_packs_reach_the_client()
@@ -621,6 +627,12 @@ func _command_a(tick: int) -> DotFpsCommand:
 	move.move = Vector2(strafe * 0.6, 0.8)
 	move.yaw = fmod(float(tick) * 1.4, 360.0)
 	move.pitch = 0.0
+	if _stam_from >= 0 and tick >= _stam_from:
+		var k := (tick - _stam_from) % _ticks(200)
+		if k < _ticks(120):
+			move.buttons |= DotFpsCommand.BUTTON_SPRINT
+		if k % _ticks(70) == 0:
+			move.buttons |= DotFpsCommand.BUTTON_JUMP
 	return move
 
 
@@ -636,7 +648,7 @@ func _wall_command(k: int) -> DotFpsCommand:
 	move.move = Vector2(0.0, 1.0)
 	if k == 12 or k == 50:
 		move.buttons |= DotFpsCommand.BUTTON_JUMP
-	if k == 15:
+	if k == 15 or (_wall_hold_sprint and k > 15 and k < 100):
 		move.buttons |= DotFpsCommand.BUTTON_SPRINT
 	return move
 
@@ -1281,6 +1293,166 @@ func _test_wall_moves() -> void:
 	_wall_from = -1
 	var _dash_off := _server.console.set_cvar("arena_dash", "0")
 	var _auto_on := _server.console.set_cvar("arena_wall_run_auto", "1")
+	_done()
+
+
+## p95 and max distance between A's prediction and the server's A over input ticks [from, to).
+func _prediction_gap(session: int, from: int, to: int) -> Array:
+	var track: Dictionary = _server_track.get(session, {})
+	var diffs: Array[float] = []
+	for tick in range(from, to):
+		if _predicted.has(tick) and track.has(tick):
+			diffs.append((_predicted[tick] as Vector3).distance_to(track[tick]))
+	diffs.sort()
+	if diffs.is_empty():
+		return [0, -1.0, -1.0]
+	return [diffs.size(), diffs[int(diffs.size() * 0.95)], diffs[diffs.size() - 1]]
+
+
+## [b]Stamina on, sprinting and wall-running through 20% loss.[/b] The arena has no stamina cvar (its
+## sprint bit is the dash), so both ends' tunables are set the way a game that turned it on would.
+## A drains to empty, waits out the refill delay and drains again, then runs the wall with sprint held.
+func _test_stamina_under_loss() -> void:
+	_section("sprint stamina and a wall run through 20% loss")
+
+	var a: Dictionary = _clients["A"]
+	var net: DotNetManager = a["net"]
+	var session := int(a["session"])
+	var server_a := _game.player_for(session)
+	var own: ArenaPlayer = (a["game"] as ArenaGame).player_for(session)
+	if not _check(server_a != null and own != null, "A is on both ends to sprint with"):
+		_done()
+		return
+
+	for t: DotFpsTunables in [server_a.controller.tunables, own.controller.tunables]:
+		t.stamina_enabled = true
+		t.stamina_drain = 0.8
+		t.stamina_recover = 0.5
+		t.stamina_resume_at = 0.3
+		t.stamina_exhaust_delay = 0.5
+	var _dash_on := _server.console.set_cvar("arena_dash", "1")
+	var _auto_off := _server.console.set_cvar("arena_wall_run_auto", "0")
+	await _until(func() -> bool: return own.controller.tunables.dash_enabled, RELIABLE_SECONDS)
+
+	var lows := {"min": 1.0, "exhausted": 0, "client_min": 1.0}
+	var sample := func() -> void:
+		lows["min"] = minf(lows["min"], server_a.controller.state.stamina)
+		lows["client_min"] = minf(lows["client_min"], own.controller.state.stamina)
+		if server_a.controller.state.stamina_exhausted:
+			lows["exhausted"] += 1
+	var tick_hook := func() -> void:
+		sample.call()
+	var replays := int(net.predictor.get("_replays"))
+	var corrections := int(net.predictor.get("_corrections_applied"))
+	net.predictor.set("_worst_error", 0.0)
+
+	_stam_from = net.clock.input_tick() + 4
+	var from := _stam_from
+	var until := Time.get_ticks_msec() + 9000
+	while Time.get_ticks_msec() < until:
+		await get_tree().physics_frame
+		tick_hook.call()
+	var last := net.clock.input_tick()
+	_stam_from = -1
+	await _until(func() -> bool: return false, 0.5)
+	replays = int(net.predictor.get("_replays")) - replays
+	corrections = int(net.predictor.get("_corrections_applied")) - corrections
+	var open: Array = _prediction_gap(session, from, last)
+	print("    stamina: the server's A fell to %.2f and was exhausted on %d frames; A's copy fell to %.2f" % [
+		lows["min"], lows["exhausted"], lows["client_min"]])
+	print("    A's prediction over %d ticks: p95 %.3f / max %.3f m; %d of %d replays corrected" % [
+		open[0], open[1], open[2], corrections, replays])
+	_check(lows["min"] < 0.05 and lows["exhausted"] > 10,
+		"the sprint pattern really drained the server's A and exhausted it", "%.2f, %d frames" % [lows["min"], lows["exhausted"]])
+	_check(open[0] > 5 * Engine.physics_ticks_per_second and open[1] >= 0.0 and open[1] <= 0.05 and open[2] <= 1.5,
+		"A's prediction with stamina draining within 5 cm for 95% of its ticks",
+		"%d ticks, p95 %.3f, max %.3f" % [open[0], open[1], open[2]])
+	_check(corrections <= maxi(3, replays / 10),
+		"and corrected in no more than a tenth of the replays (%d of %d)" % [corrections, replays])
+
+	# The wall script, sprint held through the run so stamina and the wall-run cooldown both move.
+	_wall_idle = true
+	_wall_from = -1
+	for _i in range(2):
+		server_a.controller.teleport(Vector3(-7.0, 0.1, -23.6), -90.0, 0.0)
+		await _until(func() -> bool: return false, 0.75)
+	var runs := server_a.controller.motor.wall_runs
+	replays = int(net.predictor.get("_replays"))
+	corrections = int(net.predictor.get("_corrections_applied"))
+	_wall_hold_sprint = true
+	_wall_from = net.clock.input_tick() + 4
+	from = _wall_from
+	await _until(func() -> bool: return false, 2.6)
+	runs = server_a.controller.motor.wall_runs - runs
+	replays = int(net.predictor.get("_replays")) - replays
+	corrections = int(net.predictor.get("_corrections_applied")) - corrections
+	var wall: Array = _prediction_gap(session, from, from + 120)
+	print("    wall run with sprint held: %d runs; prediction over %d ticks p95 %.3f / max %.3f m; %d of %d replays corrected" % [
+		runs, wall[0], wall[1], wall[2], corrections, replays])
+	_check(runs >= 1, "the server's A wall-ran with sprint held", "%d runs" % runs)
+	_check(wall[0] > _ticks(100) and wall[1] >= 0.0 and wall[1] <= 0.05 and wall[2] <= 1.5,
+		"A's prediction of the wall run with stamina on within 5 cm for 95% of its ticks",
+		"%d ticks, p95 %.3f, max %.3f" % [wall[0], wall[1], wall[2]])
+	_check(corrections <= maxi(3, replays / 10),
+		"and corrected in no more than a tenth of the replays (%d of %d)" % [corrections, replays])
+
+	_wall_hold_sprint = false
+	_wall_idle = false
+	_wall_from = -1
+	for t: DotFpsTunables in [server_a.controller.tunables, own.controller.tunables]:
+		t.stamina_enabled = false
+	var _dash_off := _server.console.set_cvar("arena_dash", "0")
+	var _auto_on := _server.console.set_cvar("arena_wall_run_auto", "1")
+	_done()
+
+
+## [b]The server teleports A while it moves.[/b] A hop of 1 m is eased; one of many metres is a snap by
+## design (dot-net's reconcile_snap_distance). Either way A must end where the server's A is and
+## stay there: one snap at most per teleport, then replays that agree.
+func _test_teleport_under_loss() -> void:
+	_section("a server teleport of a moving player through 20% loss")
+
+	var a: Dictionary = _clients["A"]
+	var net: DotNetManager = a["net"]
+	var session := int(a["session"])
+	var server_a := _game.player_for(session)
+	var own: ArenaPlayer = (a["game"] as ArenaGame).player_for(session)
+	if not _check(server_a != null and own != null, "A is on both ends to teleport"):
+		_done()
+		return
+
+	var snap_distance: float = net.config.reconcile_snap_distance
+	var targets: Array[Vector3] = [Vector3(-7.0, 0.1, -23.6), Vector3(21.0, 0.1, -21.0)]
+	for i in range(targets.size()):
+		var near := i == 0
+		await _until(func() -> bool: return false, 1.0)
+		var at: Vector3 = server_a.controller.state.position
+		var to: Vector3 = targets[i]
+		if near:
+			# The first is a hop under the snap distance, from wherever A is: along +X by 1 m.
+			to = at + Vector3(1.0, 0.0, 0.0)
+		var moved := at.distance_to(to)
+		var snaps := int(net.predictor.get("_snaps"))
+		server_a.controller.teleport(to, server_a.controller.state.yaw, 0.0)
+		var input0 := net.clock.input_tick()
+		await _until(func() -> bool: return false, 3.0)
+		snaps = int(net.predictor.get("_snaps")) - snaps
+		var settled := input0 + _ticks(64)
+		var gap: Array = _prediction_gap(session, settled, net.clock.input_tick() - _ticks(8))
+		var track: Dictionary = _server_track.get(session, {})
+		var end := net.clock.input_tick() - _ticks(8)
+		while end > settled and not (_predicted.has(end) and track.has(end)):
+			end -= 1
+		var shown: float = (_predicted[end] as Vector3).distance_to(track[end]) if _predicted.has(end) and track.has(end) else -1.0
+		print("    teleport %.1f m: %d snaps; after settling p95 %.3f / max %.3f m over %d ticks; at the last common tick A is %.3f m from the server's A" % [
+			moved, snaps, gap[1], gap[2], gap[0], shown])
+		_check(snaps <= (1 if moved > snap_distance else 0),
+			"a %.1f m teleport %s" % [moved, "snaps at most once" if moved > snap_distance else "is eased, never snapped"],
+			"%d snaps" % snaps)
+		_check(gap[0] > _ticks(40) and gap[1] <= 0.05 and gap[2] <= 0.5,
+			"and A's prediction is back within 5 cm of the server's A for the ticks after", "%d ticks, p95 %.3f, max %.3f" % [gap[0], gap[1], gap[2]])
+		_check(shown >= 0.0 and shown <= 0.05,
+			"A ends in the same place as the server's A, tick for tick", "%.3f m apart" % shown)
 	_done()
 
 
