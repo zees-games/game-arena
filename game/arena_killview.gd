@@ -52,6 +52,7 @@ func collect(time: float, tick: int) -> Array[Dictionary]:
 		var hold := minf(game.killview_rules.seconds, span + 1.0)
 		var victim := int(c["victim"])
 		_hold(victim, tick + int(ceil(hold * float(game.tick_rate))))
+		DotLog.debug(CHANNEL, "a kill view clip is ready", {"victim": victim, "hold": hold})
 		out.append({"victim": victim, "clip": clip, "info": clip.get("info", {})})
 	return out
 
