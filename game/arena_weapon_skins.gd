@@ -64,6 +64,10 @@ static func describe_lines() -> PackedStringArray:
 
 static func _packs(root: String) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
+
+	if not DirAccess.dir_exists_absolute(root):
+		return out
+
 	var names := DirAccess.get_directories_at(root)
 	names.sort()
 
