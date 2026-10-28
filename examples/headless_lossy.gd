@@ -1219,6 +1219,9 @@ func _test_wall_moves() -> void:
 	# The wall script dashes in the air to get past the wall run's speed, and the dash is off by
 	# default now: turn it on for the server and let RULES carry it to A's prediction.
 	var _dash_on := _server.console.set_cvar("arena_dash", "1")
+	# The script is the classic run (jump, dash, run, jump off); the auto-start run would start a
+	# second one on the first touch.
+	var _auto_off := _server.console.set_cvar("arena_wall_run_auto", "0")
 	await _until(func() -> bool: return own.controller.tunables.dash_enabled, RELIABLE_SECONDS)
 	_wall_idle = true
 	_wall_from = -1
@@ -1277,6 +1280,7 @@ func _test_wall_moves() -> void:
 	_wall_idle = false
 	_wall_from = -1
 	var _dash_off := _server.console.set_cvar("arena_dash", "0")
+	var _auto_on := _server.console.set_cvar("arena_wall_run_auto", "1")
 	_done()
 
 
