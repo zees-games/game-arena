@@ -27,6 +27,7 @@ const ArenaProjectileView := preload("arena_projectile_view.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaPresentation := preload("arena_presentation.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
+const ArenaWeaponPreviews := preload("arena_weapon_previews.gd")
 const ArenaSpriteWeapon := preload("arena_sprite_weapon.gd")
 
 ## A playable game-arena: one local player, a camera, a HUD, menus and the keys.
@@ -603,6 +604,7 @@ const AUTH_SERVICE := &"dot_auth_client"
 const WEAPON_CARDS_SCRIPT := "res://addons/zee_weapons/content/zee_weapon_cards.gd"
 var _weapon_cards: Script = null
 var _weapon_table: Dictionary = {}
+var _previews: Node = null
 
 
 ## B: primary, sidearm, melee, grenades and gear, as cards with each weapon's picture and
@@ -678,7 +680,13 @@ func choose_loadout(picks: Dictionary) -> Variant:
 func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
 	var id := StringName(str(choice.get("id", "")))
 	var out: Dictionary = {}
-	var icon: Texture2D = ArenaWeaponIcons.shared.menu_texture(id)
+	if _previews == null:
+		_previews = ArenaWeaponPreviews.new()
+		_previews.name = "WeaponPreviews"
+		add_child(_previews)
+	var icon: Texture2D = _previews.texture(id)
+	if icon == null:
+		icon = ArenaWeaponIcons.shared.menu_texture(id)
 	if icon == null:
 		icon = ArenaHudGlance.Ink.weapon_icon(id)
 	if icon != null:

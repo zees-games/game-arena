@@ -4,7 +4,7 @@ extends RefCounted
 ## secondary, primary, heavy, thrown), never a pack: any addon with `spawn_provider.gd` and a static `weapon_defs()`
 ## can fill them, so a zz pack can drive the arena and, the other way, arena-weapons can drive Zombie Zone.
 ##
-## Off by default: with `weapons.packs` empty nothing is registered and zee-dot-weapons fills every role. Tuned in
+## arena-weapons is the default provider; with it absent (or `weapons.packs` emptied) zee-dot-weapons fills every role. Tuned in
 ## `cfg/addons/game_arena_weapons/*.yml` (dot-core's DotAddonConfig, so an operator's cfg/server tier wins).
 
 const CHANNEL := "arena.roles"
@@ -33,8 +33,8 @@ const ROLE_DEFAULT := {
 
 const DEFAULTS := {
 	"weapons": {
-		# Pack folders under res://addons whose weapons join the catalogue ([] = none, zee alone).
-		"packs": [],
+		# Pack folders under res://addons whose weapons join the catalogue ([] = none, zee alone); a missing one is skipped.
+		"packs": ["arena_weapons"],
 		# Weapon ids kept out of the catalogue.
 		"exclude": [],
 		# role -> weapon id, over the automatic choice (the first enabled pack's weapon for that slot).

@@ -27,7 +27,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
-	await _wait(6.0)
+	await _wait(25.0)
 	var me = client.get("player")
 	var menu: DotMenu = client.get("game_menu")
 	me.health.invulnerable = true

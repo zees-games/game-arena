@@ -10,6 +10,7 @@ const ArenaHorde := preload("../game/arena_horde.gd")
 const ArenaHud := preload("../game/arena_hud.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
+const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaMapPaint := preload("../maps/arena_map_paint.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
@@ -59,7 +60,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 657
+const CHECKS := 675
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -505,16 +506,16 @@ func _test_zee_weapons() -> void:
 	# The default: something in every slot that matters, and the GUN in hand.
 	p.give_default_loadout()
 	var carried := PackedStringArray()
-	for id in ArenaContent.DEFAULT_LOADOUT:
+	for id in ArenaContent.default_loadout():
 		if p.arsenal.carries(id):
 			carried.append(String(id))
 	_check(
-		carried.size() == ArenaContent.DEFAULT_LOADOUT.size(),
+		carried.size() == ArenaContent.default_loadout().size(),
 		"the default loadout is carried", ", ".join(carried)
 	)
 	_settle(game, 900, TICK_RATE)
 	_check(
-		p.arsenal.current_def() != null and p.arsenal.current_def().id == ZeeWeaponIds.RIFLE,
+		p.arsenal.current_def() != null and p.arsenal.current_def().id == ArenaWeaponRoles.resolve(&"primary"),
 		"and a spawn holds the rifle, not the grenade in the highest slot",
 		str(p.arsenal.current_def().id if p.arsenal.current_def() != null else &"")
 	)
@@ -2361,14 +2362,14 @@ func _test_content() -> void:
 	saved.set_item(&"secondary", ZeeWeaponIds.PISTOL)
 	var _changes := DotLoadoutValidator.conform(saved, schema, everything)
 	_check(
-		saved.item_in(&"melee") == ZeeWeaponIds.KNIFE
-		and saved.item_in(&"thrown") == ZeeWeaponIds.FRAG
+		saved.item_in(&"melee") == ArenaWeaponRoles.resolve(&"melee")
+		and saved.item_in(&"thrown") == ArenaWeaponRoles.resolve(&"thrown")
 		and saved.item_in(&"primary") == ZeeWeaponIds.RIFLE
 		and DotLoadoutValidator.validate(saved, schema, everything).ok,
 		"an old primary-and-sidearm loadout gains a knife and a frag and keeps its choices"
 	)
 	_check(
-		schema.default_loadout().item_in(&"thrown") == ZeeWeaponIds.FRAG,
+		schema.default_loadout().item_in(&"thrown") == ArenaWeaponRoles.resolve(&"thrown"),
 		"and the default loadout has a grenade in it, which an optional slot never put there"
 	)
 

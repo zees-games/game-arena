@@ -18,7 +18,13 @@ var _failed := 0
 func _ready() -> void:
 	Roles.clear()
 	Roles.scan()
-	_check(Roles.packs.is_empty(), "no pack is enabled by default")
+	var has_default := ResourceLoader.exists("res://addons/arena_weapons/spawn_provider.gd")
+	_check(Roles.packs.has("arena_weapons") == has_default, "arena_weapons is the default provider exactly when linked")
+
+	# A pack that is not there: zee fills every role.
+	Roles.force_packs = ["not_installed"]
+	Roles.scan()
+	_check(Roles.packs.is_empty(), "a missing pack is skipped")
 	_check(Roles.resolve(&"primary") == ZeeWeaponIds.RIFLE and Roles.resolve(&"melee") == ZeeWeaponIds.KNIFE, "zee fills the roles")
 	_check(ArenaContent.default_loadout() == ArenaContent.DEFAULT_LOADOUT, "default loadout is the zee one")
 	_check(Roles.wire_ids() == ZeeWeaponIds.all(), "wire ids are zee's alone")
@@ -45,7 +51,7 @@ func _ready() -> void:
 		_check(ZeeWeaponArtTable.table().has(first), "%s has art" % first)
 		_check(ArenaContent.loadout_schema().default_loadout().item_in(&"primary") == Roles.resolve(&"primary"), "the default loadout names the role's weapon")
 
-		Roles.force_packs = []
+		Roles.force_packs = ["not_installed"]
 		Roles.scan()
 		_check(Roles.pack_ids.is_empty() and ArenaContent.weapons().size() == ZeeWeaponIds.all().size(), "clearing puts zee back")
 
