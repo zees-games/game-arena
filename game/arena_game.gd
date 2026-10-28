@@ -698,7 +698,7 @@ func mirror_bullet(server_id: int, weapon_id: StringName, origin: Vector3, veloc
 ## The server ended bullet [param server_id] (BULLET_END). Client side.
 func end_bullet_mirror(server_id: int) -> void:
 	if bullet_mirrors != null and _mirror_ids.has(server_id):
-		var _gone := bullet_mirrors.despawn(int(_mirror_ids[server_id]))
+		bullet_mirrors.despawn(int(_mirror_ids[server_id]))
 	_mirror_ids.erase(server_id)
 
 
