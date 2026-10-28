@@ -608,10 +608,7 @@ func _reveal_winner() -> void:
 	if winner_reveal == null or ranked.is_empty():
 		_show_match_summary()
 		return
-	var entries: Array = []
-	for row: DotPlayerScore in ranked.slice(0, 3):
-		entries.append({"name": row.display_name, "score": "%d %s  %d %s" % [
-			row.kills, "kill" if row.kills == 1 else "kills", row.deaths, "death" if row.deaths == 1 else "deaths"]})
+	var entries := ArenaMatchText.reveal_entries(ranked)
 	var team := game.mode != null and game.mode.is_team_mode()
 	winner_reveal.reduced_motion = presentation != null and presentation.settings != null \
 		and presentation.settings.get_bool(&"reduce_motion", false)
@@ -653,9 +650,7 @@ func _show_match_summary() -> void:
 	var ranked := game.match_node.scoreboard.ranked() if game.match_node.scoreboard != null else []
 	if hud != null and not ranked.is_empty():
 		var best: DotPlayerScore = ranked[0]
-		hud.notice("MVP: %s  -  %d kills, %d deaths, %d assists" % [
-			best.display_name, best.kills, best.deaths, best.assists
-		])
+		hud.notice(ArenaMatchText.mvp_notice(best))
 	if game_menu != null and not game_menu.any_open():
 		game_menu.scoreboard.open()
 		_summary_board_open = true

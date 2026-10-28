@@ -299,7 +299,7 @@ const GLANCE_NAMES := ["You", "gamemann", "a_very_long_display_name", "bo", "qui
 func _glance_go_live(game: ArenaGame) -> bool:
 	var res := game.setup(_staged_map)
 	if not res.ok:
-		push_error("the glance game did not set up: %s" % res.error.message)
+		push_error("the glance game did not set up: ", res.error.message)
 		quit(1)
 		return false
 	for i in GLANCE_NAMES.size():

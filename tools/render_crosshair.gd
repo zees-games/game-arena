@@ -9,6 +9,9 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 ## Run through tools/render_crosshair.sh (needs a display; --headless saves empty frames).
 
 const OUT_DIR := "screenshots/crosshair"
+const NAMES := ["still", "moving", "air"]
+const FILES := ["still.png", "moving.png", "air.png"]
+const SETTLE := [90, 50, 8]
 const TICK_RATE := 64
 
 var _player: ArenaPlayer = null
@@ -58,13 +61,11 @@ func _process(delta: float) -> bool:
 	_player.present(delta)
 	_feel.drive(_cross, _player.arsenal, _player.camera.fov)
 	_frames += 1
-	var names := ["still", "moving", "air"]
-	var settle := [90, 50, 8]
-	if _frames < int(settle[_phase]):
+	if _frames < SETTLE[_phase]:
 		return false
 	var spread: float = _player.arsenal.spread_now()
-	root.get_texture().get_image().save_png(OUT_DIR.path_join(names[_phase] + ".png"))
-	print("%s: cone %.2f degrees, crosshair spread %.2f" % [names[_phase], spread, float(_cross.get("_spread_degrees"))])
+	root.get_texture().get_image().save_png(OUT_DIR.path_join(FILES[_phase]))
+	print(NAMES[_phase], ": cone ", snappedf(spread, 0.01), " degrees, crosshair spread ", snappedf(float(_cross.get("_spread_degrees")), 0.01))
 	_phase += 1
 	_frames = 0
 	if _phase == 1:
@@ -72,4 +73,4 @@ func _process(delta: float) -> bool:
 	elif _phase == 2:
 		_buttons = DotFpsCommand.BUTTON_JUMP
 		_move = Vector2(0.0, 1.0)
-	return _phase >= names.size()
+	return _phase >= NAMES.size()

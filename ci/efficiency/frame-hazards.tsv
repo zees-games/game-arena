@@ -4,10 +4,6 @@ examples/headless_lossy.gd::_physics_process::alloc_array	1
 examples/headless_lossy.gd::_physics_process::string_build	2
 examples/headless_lossy.gd::_sample_clock::string_build	1
 examples/headless_lossy.gd::_sample_render::string_build	2
-examples/headless_presentation.gd::_answer::duplicate	1
-examples/headless_presentation.gd::_answer::string_build	2
-examples/headless_presentation.gd::_process::duplicate	1
-examples/headless_presentation.gd::_process::string_build	3
 game/arena_client.gd::_fly_free_camera::string_build	1
 game/arena_client.gd::_local_commands::alloc_dict	1
 game/arena_hud.gd::_button::string_build	2
@@ -39,7 +35,7 @@ tools/screenshot.gd::_biggest_ramp::alloc_array	1
 tools/screenshot.gd::_biggest_ramp::alloc_dict	1
 tools/screenshot.gd::_biggest_ramp::string_build	2
 tools/screenshot.gd::_play_glance::alloc_array	3
-tools/screenshot.gd::_play_glance::string_build	3
+tools/screenshot.gd::_play_glance::string_build	2
 tools/screenshot.gd::_play_imported::alloc_dict	1
 tools/screenshot.gd::_play_imported::string_build	8
 tools/screenshot.gd::_process::string_build	2
