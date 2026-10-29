@@ -61,6 +61,10 @@ const MEDAL_STAGGER_SEC := 0.14
 ## Each medal's stand-in: a voice and a pitch, so eleven medals are eleven sounds until
 ## real recordings land. Up is good news, so most are the upward sweep at a pitch that
 ## climbs with how rare the medal is; Nemesis is the low one.
+## The synthesized "boing" of a stomp: a rising chirp pitched high. Made at runtime, so there is no asset or licence.
+const STOMP_SOUND := &"stomp"
+const STOMP_PITCH := 1.9
+
 const MEDAL_VOICES := {
 	&"medal_first_blood": [DotAudioSynth.Voice.SPAWN, 0.8],
 	&"medal_headshot": [DotAudioSynth.Voice.PICKUP, 1.25],
@@ -572,6 +576,16 @@ static func sound_catalogue() -> DotAudioCatalogue:
 		medal.pitch_max = float(MEDAL_VOICES[id][1])
 		c.add(medal)
 
+	var stomp := DotAudioDef.new()
+	stomp.id = STOMP_SOUND
+	stomp.path = "%s/%s.ogg" % [SOUND_DIR, String(STOMP_SOUND)]
+	stomp.bus = &"SFX"
+	stomp.max_concurrent = 3
+	stomp.priority = 88
+	stomp.pitch_min = STOMP_PITCH * 0.95
+	stomp.pitch_max = STOMP_PITCH * 1.05
+	c.add(stomp)
+
 	var hurt := DotAudioDef.new()
 	hurt.id = &"hurt"
 	hurt.path = "%s/hurt.ogg" % SOUND_DIR
@@ -713,6 +727,7 @@ static func sound_catalogue() -> DotAudioCatalogue:
 static func sound_recipes() -> Dictionary:
 	var out := _base_recipes()
 	out[KILL_CONFIRMED] = DotAudioSynth.Voice.BLIP
+	out[STOMP_SOUND] = DotAudioSynth.Voice.SPAWN
 	for id in MEDAL_VOICES:
 		out[id] = MEDAL_VOICES[id][0]
 	return out
@@ -1292,6 +1307,14 @@ func on_medals(medals: Array) -> void:
 			get_tree().create_timer(MEDAL_STAGGER_SEC * float(i)).timeout.connect(
 				func() -> void: if audio != null: audio.play(id)
 			)
+
+
+## A head stomp at [param at]: the configured sound and effect, heard and seen by everybody.
+func on_stomp(at: Vector3, sound: StringName, effect: StringName) -> void:
+	if audio != null and sound != &"":
+		var _v := audio.play_at(sound, at)
+	if fx != null and effect != &"":
+		fx.spawn(effect, Transform3D(Basis.IDENTITY, at))
 
 
 func on_hurt(_amount: float) -> void:

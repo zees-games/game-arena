@@ -170,6 +170,9 @@ signal killview_received(clip: Dictionary, info: Dictionary)
 ## Emitted on a client for every kill's medals and points: [method ArenaEvents.read_award].
 signal award_received(info: Dictionary)
 
+## Emitted on a client for every head stomp: [method ArenaEvents.read_stomp].
+signal stomp_received(info: Dictionary)
+
 ## This tick's confirmed hits, summed: attacker -> victim -> [amount, point, headshot,
 ## lethal]. Server side; sent and cleared after the tick ([method _flush_hits]).
 var _pending_hits: Dictionary = {}
@@ -246,6 +249,7 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 		game.jail_changed.connect(_on_jail_changed)
 		game.hit_confirmed.connect(_on_hit_confirmed)
 		game.medals_awarded.connect(_on_medals_awarded)
+		game.stomped.connect(_on_stomped)
 
 	return DotResult.success(self)
 
@@ -1523,6 +1527,10 @@ func peer_for_session(session_id: int) -> int:
 	return 0
 
 
+func _on_stomped(attacker: int, victim: int, fall_speed: float, point: Vector3, sound: StringName, effect: StringName) -> void:
+	send_event(0, ArenaEvents.Kind.STOMP, ArenaEvents.write_stomp(attacker, victim, fall_speed, point, String(sound), String(effect)))
+
+
 func _on_medals_awarded(killer: int, victim: int, medals: Array, points: int, streak: int) -> void:
 	send_event(0, ArenaEvents.Kind.AWARD, ArenaEvents.write_award(killer, victim, points, streak, medals))
 
@@ -1651,6 +1659,10 @@ func _on_event(message: DotNetMessage) -> void:
 			var award := ArenaEvents.read_award(reader)
 			if bool(award["ok"]):
 				award_received.emit(award)
+		ArenaEvents.Kind.STOMP:
+			var stomp := ArenaEvents.read_stomp(reader)
+			if bool(stomp["ok"]):
+				stomp_received.emit(stomp)
 		ArenaEvents.Kind.KILLVIEW:
 			var view := ArenaEvents.read_killview(event.body)
 			if bool(view["ok"]):

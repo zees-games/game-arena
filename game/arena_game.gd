@@ -43,6 +43,10 @@ var killview_rules: DotKillViewRules = _make_killview_rules()
 ## On here, off in dot-combat's default; the server applies it, a client never does.
 var fall_rules: DotFallDamageRules = make_fall_rules()
 
+## Landing on a head (`sv_stomp*`, the cfg `stomp_*` keys); the numbers are copied from [member config] each tick.
+var stomp := DotStomp.new()
+var _pre_vy: Dictionary = {}
+
 ## Movement-dependent spread, recoil patterns and the spread crosshair (dot-game's opt-in; sv_spread_*, sv_recoil_*, on here).
 var combat_feel: DotGameCombatFeel = _make_combat_feel()
 
@@ -444,6 +448,61 @@ func apply_drop_rules() -> void:
 	if map != null and is_authority and (_packs_placed_with.size() != wanted.size() or wanted != _packs_placed_with):
 		_packs_placed_with = wanted
 		drops.set_packs(map.packs, _tick)
+
+
+## Copies the cfg's stomp numbers onto [member stomp]'s rules. Rules the cfg does not own (sound ids) too.
+func _sync_stomp_config() -> void:
+	var r := stomp.rules
+	r.enabled = config.stomp_enabled
+	r.damage = config.stomp_damage
+	r.min_speed = config.stomp_min_speed
+	r.head_tolerance = config.stomp_head_tolerance
+	r.same_team = config.stomp_same_team
+	r.bounce = config.stomp_bounce
+	r.cooldown_sec = config.stomp_cooldown_sec
+	r.sound = StringName(config.stomp_sound)
+	r.effect = StringName(config.stomp_effect)
+
+
+## After everybody moved: a player who came down onto another's head kills them, and bounces.
+## Server-authoritative; a client's prediction of the bounce is corrected by the next snapshot.
+func _resolve_stomps() -> void:
+	_sync_stomp_config()
+	if not stomp.rules.enabled or combat == null:
+		return
+	var hulls: Array = []
+	for id in player_ids():
+		var other: ArenaPlayer = _players[id]
+		if not other.is_alive() or other.controller == null:
+			continue
+		hulls.append({
+			"id": id, "feet": other.controller.state.position, "team": team_of(id) if not teams().is_empty() else -1,
+			"height": other.controller.tunables.stand_height, "radius": other.controller.tunables.radius,
+		})
+	for id in player_ids():
+		var player: ArenaPlayer = _players[id]
+		if not _pre_vy.has(id) or not player.is_alive():
+			continue
+		var state: DotFpsState = player.controller.state
+		var victim := stomp.find(
+			id, state.position, player.controller.tunables.radius, -float(_pre_vy[id]),
+			team_of(id) if not teams().is_empty() else -1, hulls, _tick, tick_rate
+		)
+		if victim == 0:
+			continue
+		var hit := DotDamage.make(id, victim, stomp.amount(), combat.damage_type(ArenaContent.DAMAGE_STOMP))
+		hit.tick = _tick
+		hit.point = state.position
+		hit.weapon_id = ArenaContent.DAMAGE_STOMP
+		hit.context = {"why": &"stomp", "ignores_teams": stomp.rules.same_team}
+		var _applied := combat.apply_damage(hit)
+		if hit.refused:
+			continue
+		if stomp.rules.bounce > 0.0:
+			state.velocity.y = stomp.rules.bounce
+		stomped.emit(id, victim, -float(_pre_vy[id]), state.position, stomp.rules.sound, stomp.rules.effect)
+		if progress != null:
+			progress.record(id, ArenaStats.STOMPS)
 
 
 ## The medal thresholds from [member config], before each judgement so a workbench edit counts.
@@ -1718,6 +1777,7 @@ func tick(commands: Dictionary = {}) -> void:
 	var shots: Array[DotShot] = []
 	var delta := 1.0 / float(tick_rate)
 
+	_pre_vy.clear()
 	for id in player_ids():
 		var player: ArenaPlayer = _players[id]
 
@@ -1725,6 +1785,8 @@ func tick(commands: Dictionary = {}) -> void:
 			continue
 
 		var pair: Array = commands.get(id, [])
+		_pre_vy[id] = player.controller.state.velocity.y
+
 		var move: DotFpsCommand = pair[0] if pair.size() > 0 else DotFpsCommand.new()
 		var fire: DotWeaponCommand = pair[1] if pair.size() > 1 else DotWeaponCommand.new()
 
@@ -1766,6 +1828,9 @@ func tick(commands: Dictionary = {}) -> void:
 			bullet_bridge.tick(float(_tick))
 
 	# After the shots, before everything that can end the round: a hurt volume that kills
+	if is_authority:
+		_resolve_stomps()
+
 	# somebody is a death the win check below has to count this tick.
 	if is_authority:
 		_hurt_from_map()

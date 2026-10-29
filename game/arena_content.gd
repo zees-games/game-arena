@@ -25,6 +25,7 @@ const DAMAGE_BULLET := &"bullet"
 const DAMAGE_BLAST := ZeeWeaponIds.DAMAGE_BLAST
 const DAMAGE_FALL := &"fall"
 const DAMAGE_WORLD := &"world"
+const DAMAGE_STOMP := &"stomp"
 
 
 # --- Damage types ----------------------------------------------------------
@@ -51,6 +52,13 @@ static func fall() -> DotDamageType:
 	return type
 
 
+static func stomp() -> DotDamageType:
+	var type := DotDamageType.make(DAMAGE_STOMP, "Stomp")
+	type.armour_share = 0.0
+	type.uses_hit_groups = false
+	return type
+
+
 static func world() -> DotDamageType:
 	var type := DotDamageType.make(DAMAGE_WORLD, "The world")
 	type.armour_share = 0.0
@@ -73,6 +81,7 @@ static func damage_table() -> Dictionary:
 		_damage[DAMAGE_BULLET] = bullet()
 		_damage[DAMAGE_FALL] = fall()
 		_damage[DAMAGE_WORLD] = world()
+		_damage[DAMAGE_STOMP] = stomp()
 	return _damage
 
 

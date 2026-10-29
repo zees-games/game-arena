@@ -25,6 +25,15 @@ static func make(fx_dir: String, explosion_id: StringName) -> DotFxCatalogue:
 	spark.min_quality = 1
 	c.add(spark)
 
+	var puff := DotFxDef.new()
+	puff.id = &"stomp_puff"
+	puff.scene_path = "%s/impact_spark.tscn" % fx_dir
+	puff.lifetime_ms = 500
+	puff.cost = 2
+	puff.priority = 80
+	puff.max_distance = 80.0
+	c.add(puff)
+
 	var hole := DotFxDef.new()
 	hole.id = &"bullet_hole"
 	hole.kind = DotFxDef.Kind.DECAL

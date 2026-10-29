@@ -2,6 +2,7 @@ extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
+const ArenaPlayer := preload("../game/arena_player.gd")
 
 ## The player stack, run against a real arena rather than against a stub.
 ##
@@ -23,8 +24,8 @@ const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 const TICK_RATE := 64
 const BOTS := 4
 
-const SECTIONS := 7
-const CHECKS := 67
+const SECTIONS := 8
+const CHECKS := 74
 
 var _section_count := 0
 
@@ -50,6 +51,7 @@ func _run() -> void:
 	_test_life_and_death()
 	_test_classes_and_spawns()
 	_test_class_immunity()
+	_test_stomp()
 	_test_leaving()
 
 	_report_sections(_section_count, _section_count, SECTIONS, CHECKS)
@@ -403,6 +405,62 @@ func _test_class_immunity() -> void:
 
 	_f = stack.classes.force(key, &"default")
 	stack.apply_class_numbers(player)
+
+
+## Puts [param top] over [param under]'s head falling at [param speed], ticks once and says whether [param under] died.
+func _stomp_try(top: ArenaPlayer, under: ArenaPlayer, speed: float, height := 1.8) -> bool:
+	for p: ArenaPlayer in [top, under]:
+		_game.combat.health_of(p.player_id).revive()
+		_game.combat.health_of(p.player_id).invulnerable_until_tick = -1
+	_game.stomp.forget(top.player_id)
+	under.controller.state.position = Vector3(300, 0, 300)
+	under.controller.state.velocity = Vector3.ZERO
+	top.controller.state.position = Vector3(300, height + 0.1, 300)
+	top.controller.state.velocity = Vector3(0, -speed, 0)
+	var got := {"n": 0}
+	_game.stomped.connect(func(_a: int, _v: int, _s: float, _p: Vector3, _x: StringName, _e: StringName) -> void: got["n"] += 1, CONNECT_ONE_SHOT)
+	_game.tick()
+	if _game.stomped.get_connections().size() > 0:
+		for c in _game.stomped.get_connections():
+			if c["callable"].get_object() == null and got["n"] == 0:
+				_game.stomped.disconnect(c["callable"])
+	return not under.is_alive() and got["n"] == 1
+
+
+func _test_stomp() -> void:
+	_section("stomp")
+
+	var all := _game.players()
+	var a: ArenaPlayer = all[0]
+	var b: ArenaPlayer = null
+	var mate: ArenaPlayer = null
+	for p: ArenaPlayer in all:
+		if p == a:
+			continue
+		if _game.team_of(p.player_id) != _game.team_of(a.player_id) and b == null:
+			b = p
+		elif _game.team_of(p.player_id) == _game.team_of(a.player_id) and mate == null:
+			mate = p
+	_check(b != null and mate != null, "the stack has an opponent and a teammate to stomp")
+	if b == null or mate == null:
+		return
+
+	_game.config.stomp_enabled = true
+	_check(_stomp_try(a, b, 12.0), "a fast landing on an opponent's head kills them")
+	_check(not _stomp_try(a, b, 1.0), "below the minimum speed does not")
+	_check(not _stomp_try(a, mate, 12.0), "a teammate is safe by default")
+	_game.config.stomp_same_team = true
+	_check(_stomp_try(a, mate, 12.0), "and stompable when same-team is on, friendly fire or not")
+	_game.config.stomp_same_team = false
+	_game.config.stomp_enabled = false
+	_check(not _stomp_try(a, b, 12.0), "the enabled switch turns the whole thing off")
+	_game.config.stomp_enabled = true
+	_game.config.stomp_damage = 30.0
+	var hp := _game.combat.health_of(b.player_id)
+	var _t := _stomp_try(a, b, 12.0)
+	_check(b.is_alive() and hp.health < 100.0 and hp.health > 0.0, "a damage amount instead of a kill leaves them standing")
+	_game.config.stomp_damage = 0.0
+	_game.config.stomp_enabled = false
 
 
 func _test_leaving() -> void:

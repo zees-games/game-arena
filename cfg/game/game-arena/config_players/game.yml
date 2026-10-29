@@ -10,3 +10,23 @@
 # player_regen: 0.0
 # How far under an imported map's bounds a player is counted as out of it, metres. [1.0..200.0]
 # fall_out_depth: 10.0
+
+# --- Stomp
+# Landing on a player's head hurts them.
+# stomp_enabled: true
+# Health a stomp takes; 0 kills outright. [0.0..1000.0]
+# stomp_damage: 0.0
+# Downward speed in m/s needed for a stomp. [0.0..100.0]
+# stomp_min_speed: 4.0
+# Metres the feet may be above or below the top of the head. [0.0..2.0]
+# stomp_head_tolerance: 0.35
+# Whether teammates can be stomped (ignores friendly fire).
+# stomp_same_team: false
+# Upward speed in m/s the stomper bounces with. [0.0..50.0]
+# stomp_bounce: 8.0
+# Seconds before the same player can stomp again. [0.0..30.0]
+# stomp_cooldown_sec: 0.5
+# Sound id played on a stomp (a dot-audio id).
+# stomp_sound: "stomp"
+# Effect id spawned on a stomp (a dot-fx id).
+# stomp_effect: "stomp_puff"

@@ -5,7 +5,7 @@ extends DotConfig
 
 ## `@export_group` -> the cfg file it lives in: `cfg/game/game-arena/config_<file>/game.yml`.
 const CFG_FILES := {
-	"Horde": "horde", "Players": "players", "Match": "match", "Bots": "match", "Awards": "awards",
+	"Horde": "horde", "Players": "players", "Stomp": "players", "Match": "match", "Bots": "match", "Awards": "awards",
 }
 
 
@@ -69,6 +69,34 @@ func validate() -> DotResult:
 
 ## How far under an imported map's bounds a player is counted as out of it, metres.
 @export_range(1.0, 200.0, 1.0) var fall_out_depth: float = 10.0
+
+@export_group("Stomp")
+## Landing on a player's head hurts them.
+@export var stomp_enabled: bool = true
+
+## Health a stomp takes; 0 kills outright.
+@export_range(0.0, 1000.0, 1.0) var stomp_damage: float = 0.0
+
+## Downward speed in m/s needed for a stomp.
+@export_range(0.0, 100.0, 0.5) var stomp_min_speed: float = 4.0
+
+## Metres the feet may be above or below the top of the head.
+@export_range(0.0, 2.0, 0.05) var stomp_head_tolerance: float = 0.35
+
+## Whether teammates can be stomped (ignores friendly fire).
+@export var stomp_same_team: bool = false
+
+## Upward speed in m/s the stomper bounces with.
+@export_range(0.0, 50.0, 0.5) var stomp_bounce: float = 8.0
+
+## Seconds before the same player can stomp again.
+@export_range(0.0, 30.0, 0.1) var stomp_cooldown_sec: float = 0.5
+
+## Sound id played on a stomp (a dot-audio id).
+@export var stomp_sound: String = "stomp"
+
+## Effect id spawned on a stomp (a dot-fx id).
+@export var stomp_effect: String = "stomp_puff"
 
 @export_group("Match")
 ## Seconds before a dead player respawns; -1 keeps each mode's own.

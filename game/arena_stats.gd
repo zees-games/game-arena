@@ -57,6 +57,8 @@ const PLAYTIME_SEC := &"arena.playtime_sec"
 
 const PROPS_SPAWNED := &"arena.props_spawned"
 const NPC_KILLS := &"arena.npc_kills"
+## Head stomps landed on another player.
+const STOMPS := &"arena.stomps"
 
 
 ## Every id above, in declaration order. What a caller iterates.
@@ -71,7 +73,7 @@ static func ids() -> Array[StringName]:
 		SHOTS_FIRED, SHOTS_HIT,
 		BEST_STREAK, BEST_ROUND_KILLS,
 		ROUNDS_PLAYED, ROUNDS_WON, MATCHES_PLAYED, MATCHES_WON, PLAYTIME_SEC,
-		PROPS_SPAWNED, NPC_KILLS,
+		PROPS_SPAWNED, NPC_KILLS, STOMPS,
 	]
 
 
@@ -95,6 +97,7 @@ static func schema() -> DotStatsSchema:
 	_counter(schema, DAMAGE_DEALT, "Damage dealt", "hp", true)
 	_counter(schema, DAMAGE_TAKEN, "Damage taken", "hp", false)
 
+	_counter(schema, STOMPS, "Stomps", "kills", false)
 	_counter(schema, SHOTS_FIRED, "Shots fired", "shots", false)
 	_counter(schema, SHOTS_HIT, "Shots landed", "shots", false)
 

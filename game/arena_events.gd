@@ -86,6 +86,10 @@ enum Kind {
 	##
 	## After BULLET_END, for the reason VOTE gives.
 	KILLVIEW,
+	## A head stomp: who, on whom, the fall speed, where, and the sound and effect ids to present. To everybody.
+	##
+	## After KILLVIEW, for the reason VOTE gives.
+	STOMP,
 }
 
 enum Ask {
@@ -633,6 +637,32 @@ static func read_hit(reader: DotNetReader) -> Dictionary:
 		"point": reader.read_vector3_range(-NPC_EXTENT, NPC_EXTENT, 20),
 		"headshot": reader.read_bool(),
 		"lethal": reader.read_bool(),
+	}
+	out["ok"] = reader.ok()
+	return out
+
+
+static func write_stomp(
+	attacker: int, victim: int, fall_speed: float, point: Vector3, sound: String, effect: String
+) -> PackedByteArray:
+	var writer := _w()
+	writer.write_varint(maxi(0, attacker))
+	writer.write_varint(maxi(0, victim))
+	writer.write_uint(clampi(int(roundf(fall_speed)), 0, 255), 8)
+	writer.write_vector3_range(point, -NPC_EXTENT, NPC_EXTENT, 20)
+	writer.write_string(sound, NPC_ID_BYTES)
+	writer.write_string(effect, NPC_ID_BYTES)
+	return writer.to_bytes()
+
+
+static func read_stomp(reader: DotNetReader) -> Dictionary:
+	var out := {
+		"attacker_id": reader.read_varint(),
+		"victim_id": reader.read_varint(),
+		"fall_speed": float(reader.read_uint(8)),
+		"point": reader.read_vector3_range(-NPC_EXTENT, NPC_EXTENT, 20),
+		"sound": reader.read_string(NPC_ID_BYTES),
+		"effect": reader.read_string(NPC_ID_BYTES),
 	}
 	out["ok"] = reader.ok()
 	return out

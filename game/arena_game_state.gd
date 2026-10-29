@@ -17,6 +17,7 @@ const ArenaObjectives := preload("arena_objectives.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaProgress := preload("arena_progress.gd")
+const ArenaStats := preload("arena_stats.gd")
 const ArenaProjectiles := preload("arena_projectiles.gd")
 const ArenaDrops := preload("arena_drops.gd")
 const ArenaJailView := preload("arena_jail_view.gd")
@@ -235,6 +236,11 @@ signal hit_confirmed(attacker: int, victim: int, amount: float, point: Vector3, 
 
 ## What one kill earned: its medals ([enum ArenaAwards.Medal]), its points, and the
 ## killer's streak now. Authority side, after [signal player_killed] for the same kill.
+## A head stomp landed (authority side): who, on whom, the downward speed, where, and the sound and
+## effect ids to present. The stat event dot-stats counts; [constant ArenaStats.STOMPS] listens.
+signal stomped(attacker: int, victim: int, fall_speed: float, point: Vector3, sound: StringName, effect: StringName)
+
+## What one kill earned, see below.
 signal medals_awarded(killer: int, victim: int, medals: Array, points: int, streak: int)
 
 ## The medal rules' memory. Authority side; reset at each round's start.
