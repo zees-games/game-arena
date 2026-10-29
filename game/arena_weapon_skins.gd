@@ -5,6 +5,7 @@ extends RefCounted
 ## (role -> {model, muzzle, motion, view}) is applied; none installed, the weapons keep zee-dot-weapons' own art.
 ## Rows are plain data, so a pack needs no zee class in its signatures.
 
+const Roles := preload("arena_weapon_roles.gd")
 const CHANNEL := "arena.skins"
 const PROVIDER := "spawn_provider.gd"
 const OFF_ARG := "--arena-no-weapon-skins"
@@ -17,6 +18,8 @@ static var applied: PackedStringArray = PackedStringArray()
 ## Later packs (by folder name) win a role, with a DEBUG line saying so.
 static func apply(root: String = "res://addons", only: PackedStringArray = PackedStringArray()) -> PackedStringArray:
 	applied = PackedStringArray()
+	# Registering a pack source drops the art cache, which would erase this dressing if it came later.
+	Roles.ensure()
 	ZeeWeaponArtTable.drop_cache()
 
 	if OS.get_cmdline_user_args().has(OFF_ARG) or OS.get_cmdline_args().has(OFF_ARG):
@@ -43,6 +46,7 @@ static func apply(root: String = "res://addons", only: PackedStringArray = Packe
 				DotLog.debug(CHANNEL, "a later pack takes a role", {"role": role, "from": owner_of[role], "to": pack["name"]})
 
 			ZeeArtDress.apply(art as ZeeWeaponArt, rows[role] as Dictionary)
+			DotLog.debug(CHANNEL, "role dressed", {"role": role, "model": (art as ZeeWeaponArt).model_path})
 			owner_of[role] = pack["name"]
 			n += 1
 

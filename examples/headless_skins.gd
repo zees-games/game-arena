@@ -1,6 +1,7 @@
 extends Node
 
 const ArenaWeaponSkins := preload("../game/arena_weapon_skins.gd")
+const Roles := preload("../game/arena_weapon_roles.gd")
 
 ## Weapon skin packs: arena works with a pack linked, with none, and with one that carries no role art.
 ## Every role keeps a model either way, and the rifle still fires.
@@ -28,6 +29,10 @@ func _ready() -> void:
 	_check(linked.has("arena_weapons") == has_pack, "linked pack is applied exactly when present: %s" % str(linked))
 
 	if has_pack:
+		# The role scan registers pack sources, which drops the art cache: it must not undo the dressing.
+		Roles.clear()
+		ArenaWeaponSkins.apply()
+		Roles.ensure()
 		var skinned := _models()
 
 		for role in ROLES:
