@@ -276,7 +276,7 @@ func _test_wall_moves() -> void:
 	# reach) one run in two.
 	for _i in range(2):
 		server_a.controller.teleport(Vector3(-7.0, 0.1, -23.6), -90.0, 0.0)
-		await _until(func() -> bool: return false, 0.75)
+		await _wait_game(0.75)
 
 	var heard := {"runs": 0, "jumps": 0}
 	var on_run := func(running: bool) -> void:
@@ -291,7 +291,7 @@ func _test_wall_moves() -> void:
 	var corrections := int(net.predictor.get("_corrections_applied"))
 
 	_wall_from = net.clock.input_tick() + 4
-	await _until(func() -> bool: return false, 2.6)
+	await _wait_game(2.6)
 
 	runs = server_a.controller.motor.wall_runs - runs
 	jumps = server_a.controller.motor.wall_jumps - jumps
@@ -382,13 +382,14 @@ func _test_stamina_under_loss() -> void:
 
 	_stam_from = net.clock.input_tick() + 4
 	var from := _stam_from
-	var until := Time.get_ticks_msec() + 9000
-	while Time.get_ticks_msec() < until:
+	var until := Engine.get_physics_frames() + 9 * Engine.physics_ticks_per_second
+	var wall := Time.get_ticks_msec() + 72000
+	while Engine.get_physics_frames() < until and Time.get_ticks_msec() < wall:
 		await get_tree().physics_frame
 		tick_hook.call()
 	var last := net.clock.input_tick()
 	_stam_from = -1
-	await _until(func() -> bool: return false, 0.5)
+	await _wait_game(0.5)
 	replays = int(net.predictor.get("_replays")) - replays
 	corrections = int(net.predictor.get("_corrections_applied")) - corrections
 	var open: Array = _prediction_gap(session, from, last)
@@ -425,14 +426,14 @@ func _stamina_wall_run(server_a: ArenaPlayer, session: int, net: DotNetManager) 
 	_wall_from = -1
 	for _i in range(2):
 		server_a.controller.teleport(Vector3(-7.0, 0.1, -23.6), -90.0, 0.0)
-		await _until(func() -> bool: return false, 0.75)
+		await _wait_game(0.75)
 	var runs := server_a.controller.motor.wall_runs
 	replays = int(net.predictor.get("_replays"))
 	corrections = int(net.predictor.get("_corrections_applied"))
 	_wall_hold_sprint = true
 	_wall_from = net.clock.input_tick() + 4
 	from = _wall_from
-	await _until(func() -> bool: return false, 2.6)
+	await _wait_game(2.6)
 	runs = server_a.controller.motor.wall_runs - runs
 	replays = int(net.predictor.get("_replays")) - replays
 	corrections = int(net.predictor.get("_corrections_applied")) - corrections
@@ -466,7 +467,7 @@ func _test_teleport_under_loss() -> void:
 	var targets: Array[Vector3] = [Vector3(-7.0, 0.1, -23.6), Vector3(21.0, 0.1, -21.0)]
 	for i in range(targets.size()):
 		var near := i == 0
-		await _until(func() -> bool: return false, 1.0)
+		await _wait_game(1.0)
 		var at: Vector3 = server_a.controller.state.position
 		var to: Vector3 = targets[i]
 		if near:
@@ -476,7 +477,7 @@ func _test_teleport_under_loss() -> void:
 		var snaps := int(net.predictor.get("_snaps"))
 		server_a.controller.teleport(to, server_a.controller.state.yaw, 0.0)
 		var input0 := net.clock.input_tick()
-		await _until(func() -> bool: return false, 3.0)
+		await _wait_game(3.0)
 		snaps = int(net.predictor.get("_snaps")) - snaps
 		var settled := input0 + _ticks(64)
 		var gap: Array = _prediction_gap(session, settled, net.clock.input_tick() - _ticks(8))
@@ -636,7 +637,7 @@ func _test_wall_hops() -> void:
 	_hop_from = -1
 	for _i in range(2):
 		server_a.controller.teleport(Vector3(21.0, 0.1, -21.0), -90.0, 0.0)
-		await _until(func() -> bool: return false, 0.75)
+		await _wait_game(0.75)
 
 	var replays := int(net.predictor.get("_replays"))
 	var corrections := int(net.predictor.get("_corrections_applied"))
@@ -644,10 +645,10 @@ func _test_wall_hops() -> void:
 	_hop_from = net.clock.input_tick() + 4
 	var worst_before := float(net.predictor.get("_worst_error"))
 	net.predictor.set("_worst_error", 0.0)
-	await _until(func() -> bool: return false, 6.0)
+	await _wait_game(6.0)
 	var last := net.clock.input_tick()
 	_wall_idle = false
-	await _until(func() -> bool: return false, 0.5)
+	await _wait_game(0.5)
 
 	replays = int(net.predictor.get("_replays")) - replays
 	corrections = int(net.predictor.get("_corrections_applied")) - corrections

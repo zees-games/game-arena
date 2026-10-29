@@ -167,6 +167,16 @@ func _until(condition: Callable, seconds: float) -> bool:
 	return bool(condition.call())
 
 
+## Waits [param seconds] of GAME time: physics frames, not the wall clock. A starved runner (CI has two
+## cores) runs fewer ticks a second, and a window counted in wall seconds then holds too few ticks to check.
+## The wall cap keeps a hung scene from waiting for ever.
+func _wait_game(seconds: float) -> void:
+	var frames_to := Engine.get_physics_frames() + int(seconds * Engine.physics_ticks_per_second)
+	var deadline := Time.get_ticks_msec() + int(seconds * 8000.0)
+	while Engine.get_physics_frames() < frames_to and Time.get_ticks_msec() < deadline:
+		await get_tree().physics_frame
+
+
 ## The client's ENet packet throttle towards the server, out of 32; -1 off ENet.
 func _throttle_of(label: String) -> int:
 	var mp: Object = (_clients[label]["link"] as DotClientLink).multiplayer.multiplayer_peer
