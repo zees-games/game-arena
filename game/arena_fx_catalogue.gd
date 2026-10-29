@@ -76,7 +76,7 @@ static func make(fx_dir: String, explosion_id: StringName) -> DotFxCatalogue:
 	hurt.flash_decay_ms = 260
 	c.add(hurt)
 
-	AwGrenadeFx.add_defs(c, fx_dir)
+	AwGrenadeFx.add_defs(c)
 
 	var shake := DotFxDef.new()
 	shake.id = &"hurt_shake"
