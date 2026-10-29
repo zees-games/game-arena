@@ -3,20 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cix33yp40g2fh"
-path="res://.godot/imported/normal.jpg-436b114e0c2e4c9b484ead59ecb63cd9.ctex"
+path.bptc="res://.godot/imported/normal.jpg-436b114e0c2e4c9b484ead59ecb63cd9.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/surfaces/plaster/normal.jpg"
-dest_files=["res://.godot/imported/normal.jpg-436b114e0c2e4c9b484ead59ecb63cd9.ctex"]
+dest_files=["res://.godot/imported/normal.jpg-436b114e0c2e4c9b484ead59ecb63cd9.bptc.ctex"]
 
 [params]
 
-compress/mode=1
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

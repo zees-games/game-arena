@@ -3,20 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://byeg6c2ubth15"
-path="res://.godot/imported/albedo.jpg-d0fdcc5d6039e869b49146d8255c8c84.ctex"
+path.bptc="res://.godot/imported/albedo.jpg-d0fdcc5d6039e869b49146d8255c8c84.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/surfaces/metal/albedo.jpg"
-dest_files=["res://.godot/imported/albedo.jpg-d0fdcc5d6039e869b49146d8255c8c84.ctex"]
+dest_files=["res://.godot/imported/albedo.jpg-d0fdcc5d6039e869b49146d8255c8c84.bptc.ctex"]
 
 [params]
 
-compress/mode=1
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0

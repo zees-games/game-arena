@@ -3,20 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://215enlyevgju"
-path="res://.godot/imported/normal.jpg-be1a79ef1529133288076c0b5e6c3232.ctex"
+path.bptc="res://.godot/imported/normal.jpg-be1a79ef1529133288076c0b5e6c3232.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/surfaces/brick/normal.jpg"
-dest_files=["res://.godot/imported/normal.jpg-be1a79ef1529133288076c0b5e6c3232.ctex"]
+dest_files=["res://.godot/imported/normal.jpg-be1a79ef1529133288076c0b5e6c3232.bptc.ctex"]
 
 [params]
 
-compress/mode=1
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
