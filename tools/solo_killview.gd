@@ -8,12 +8,14 @@ const ArenaContent := preload("res://game/arena_content.gd")
 
 var _out := "res://screenshots/solo_killview"
 var _client: Node = null
+var _final := false
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_out = args[0]
+	_final = args.size() > 1 and args[1] == "final"
 	DirAccess.make_dir_recursive_absolute(_out)
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("force_offline", true)
@@ -41,7 +43,7 @@ func _run() -> void:
 	gm.match_node.rules.warmup_sec = 0.0
 	gm.match_node.rules.countdown_sec = 0.0
 	gm.match_node.rules.min_players = 1
-	gm.match_node.rules.score_limit = 2
+	gm.match_node.rules.score_limit = 1 if _final else 2
 	for i in 1200:
 		await _wait(0.1)
 		var p: Object = _client.get("player")
@@ -59,6 +61,9 @@ func _run() -> void:
 	for id in bots:
 		bots[id].set_meta(&"bot_scripted", true)
 	await _wait(4.0)
+	if _final:
+		await _run_final(gm, me, bots)
+		return
 	var killer = null
 	for id in bots:
 		killer = bots[id]
@@ -103,3 +108,31 @@ func _lethal(game: Object, killer: Object, me: Object) -> DotDamage:
 	damage.weapon_id = &"smg"
 	damage.tick = game.current_tick()
 	return damage
+
+
+## The last kill is the local player's, with fire held: the final killcam must play its full time
+## (the held button is no new press) and only then the winner reveal comes.
+func _run_final(game: Object, me: Object, bots: Dictionary) -> void:
+	var victim: Object = bots[bots.keys()[0]]
+	Input.action_press(&"arena_fire")
+	game.combat.apply_damage(_lethal(game, me, victim))
+	print("final kill: victim alive=", victim.is_alive(), " state=", game.match_node.state)
+	var kc = _client.get("killcam")
+	var t := 0.0
+	var started_at := -1.0
+	var ended_at := -1.0
+	var marks := {0.5: "final_0_5", 1.5: "final_1_5", 3.0: "final_3", 5.0: "final_5", 7.5: "final_7_5", 9.0: "final_9", 12.0: "final_12"}
+	while t < 14.0:
+		await _wait(0.1)
+		t += 0.1
+		if kc.is_playing() and started_at < 0.0:
+			started_at = t
+		if started_at >= 0.0 and ended_at < 0.0 and not kc.is_playing():
+			ended_at = t
+		for m: float in marks:
+			if absf(t - m) < 0.05:
+				_shot(marks[m])
+				print("t=%.1f playing=%s" % [t, kc.is_playing()])
+	Input.action_release(&"arena_fire")
+	print("killcam started at %.1f, ended at %.1f (seconds after the kill)" % [started_at, ended_at])
+	quit(0 if started_at >= 0.0 and ended_at - started_at > 5.0 else 1)
