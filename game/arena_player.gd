@@ -1940,6 +1940,8 @@ func _wear(avatar: DotAvatar) -> bool:
 		var t := controller.tunables
 		var mid := t.max_speed * (1.0 + t.walk_speed_scale) * 0.5
 		figure.set_run_speeds(mid, mid - 0.8)
+		# This game's full run is a sprint: the run clip raced past 4x and popped a foot at full speed.
+		figure.sprint_speed = 6.0
 
 	if not figure.from_art:
 		DotLog.debug(CHANNEL, "the people's art is missing; using the capsule", {"player": player_id})
