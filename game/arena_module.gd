@@ -1109,15 +1109,15 @@ func _wire_identity() -> void:
 		return
 
 	bridge.avatar_fn = _avatar_for
+	if game.progress != null:
+		game.progress.session_fn = server.session_by_userid
 	hook_post("player_admitted", _on_profile)
 	hook_post("player_avatar_changed", _on_profile)
 	hook_post("player_renamed", _on_profile)
 
 
 ## What a session looks like: what dot-platform resolved for them, or null for the stock
-## figure. Through the platform module's `player_for`, because the hub keys a player by
-## their scoped profile key, which only admission knows. Duck-typed: a server without
-## dot-platform is a configuration.
+## figure. Through `player_for`, because the hub keys a player by their scoped profile key.
 func _avatar_for(session_id: int) -> DotAvatar:
 	var session := server.session_by_userid(session_id) if server != null else null
 	var platform: Object = server.modules.get_module("platform") \

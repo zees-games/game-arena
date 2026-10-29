@@ -70,6 +70,17 @@ var link: DotAchievementStatsLink = null
 
 var _game: ArenaGame = null
 
+## func(userid) -> DotClientSession, set by the module. With it a player's numbers are filed under
+## dot-game's stable per-server key; without it (or no session), the seat's [method ArenaGame.storage_key].
+var session_fn: Callable = Callable()
+
+## dot-game's key resolver, shared by every game; arena drives its own tracker, so no sessions open.
+var stats_keys := DotGameStatsFeed.new()
+
+## player id -> key, asked of [member key_fn] once per stay; key -> player id, its inverse.
+var _keys: Dictionary = {}
+var _ids: Dictionary = {}
+
 ## player id -> seconds of playtime not yet filed as a whole second.
 var _playtime: Dictionary = {}
 
@@ -304,7 +315,7 @@ func begin(player_id: int, display_name: String = "") -> void:
 	if not _attached:
 		return
 
-	var key := ArenaGame.storage_key(player_id)
+	var key := _key_of(player_id)
 
 	stats.begin(StringName(key), display_name)
 
@@ -337,7 +348,7 @@ func leave(player_id: int) -> void:
 	if not _attached:
 		return
 
-	var key := ArenaGame.storage_key(player_id)
+	var key := _key_of(player_id)
 
 	_flush_playtime(player_id, true)
 
@@ -360,6 +371,9 @@ func leave(player_id: int) -> void:
 
 	_playtime.erase(player_id)
 	_round_kills.erase(player_id)
+	_keys.erase(player_id)
+	_ids.erase(key)
+	stats_keys.forget(player_id)
 
 	# Last, because it is the only part that may suspend. Everything above has to have
 	# happened by the time this function yields: a caller that drops the await — the
@@ -378,7 +392,7 @@ func record(player_id: int, stat_id: StringName, value: float = 1.0) -> void:
 	if not _attached:
 		return
 
-	stats.record(StringName(ArenaGame.storage_key(player_id)), stat_id, value)
+	stats.record(StringName(_key_of(player_id)), stat_id, value)
 	refresh_challenge(player_id)
 
 
@@ -421,7 +435,7 @@ func refresh_challenge(player_id: int) -> void:
 	if player == null or achievements == null:
 		return
 
-	var progress := achievements.progress_of(ArenaGame.storage_key(player_id))
+	var progress := achievements.progress_of(_key_of(player_id))
 
 	if progress == null:
 		return
@@ -436,7 +450,7 @@ func session_values(player_id: int) -> DotStatsValues:
 	if not _attached:
 		return DotStatsValues.new()
 
-	return stats.session_values(StringName(ArenaGame.storage_key(player_id)))
+	return stats.session_values(StringName(_key_of(player_id)))
 
 
 ## Lifetime achievement points, for a scoreboard column.
@@ -444,7 +458,7 @@ func points_of(player_id: int) -> int:
 	if not _attached:
 		return 0
 
-	return achievements.points_of(ArenaGame.storage_key(player_id))
+	return achievements.points_of(_key_of(player_id))
 
 
 # --- Time ------------------------------------------------------------------
@@ -623,7 +637,7 @@ func _publish_all() -> void:
 
 	for id in _playtime.keys():
 		var player_id := int(id)
-		var key := StringName(ArenaGame.storage_key(player_id))
+		var key := StringName(_key_of(player_id))
 
 		ArenaBoards.submit_session(
 			boards, mode_id, key, _name_of(player_id), stats.session_values(key)
@@ -638,15 +652,23 @@ func _name_of(player_id: int) -> String:
 	return player.display_name if player != null else str(player_id)
 
 
-## The inverse of [method ArenaGame.storage_key].
-##
-## Padded decimal, so `to_int()` on the tail is exact. Written as a method rather than
-## inline because a key format with a parser in one file and a printer in another is
-## the shape this family has shipped twice — dot-moderation's punishment kind and
-## dot-map's cloud interface are both two ends of one serialisation that never met.
-static func _id_from_key(key: String) -> int:
+## The key [param player_id]'s numbers are filed under, resolved once per stay.
+func _key_of(player_id: int) -> String:
+	if _keys.has(player_id):
+		return _keys[player_id]
+	var session: Variant = session_fn.call(player_id) if session_fn.is_valid() else null
+	var key := String(stats_keys.key_for(session)) if session is DotClientSession else ArenaGame.storage_key(player_id)
+	_keys[player_id] = key
+	_ids[key] = player_id
+	return key
+
+
+## The player a key belongs to, or 0 for one nobody seated holds.
+func _id_from_key(key: String) -> int:
+	if _ids.has(key):
+		return _ids[key]
 	var cut := key.rfind("-")
-	return key.substr(cut + 1).to_int() if cut >= 0 else key.to_int()
+	return key.substr(cut + 1).to_int() if key.begins_with("arena-player-") else 0
 
 
 func describe() -> Dictionary:

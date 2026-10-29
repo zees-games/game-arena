@@ -13,7 +13,7 @@ const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ROOT := "user://arena_cfgtest"
 const GAME := "game-arena"
-const CHECKS := 35
+const CHECKS := 39
 
 
 func _ready() -> void:
@@ -68,6 +68,7 @@ func _run() -> void:
 	var schema_path := OS.get_cache_dir().path_join("arena_schema_check.json")
 	_check(binder.write_schema(schema_path).ok, "write_schema writes the schema")
 	DirAccess.remove_absolute(schema_path)
+	_stats_keys(game)
 	_layers()
 	_templates(binder)
 	_workbench(binder, game)
@@ -106,6 +107,31 @@ func _falls(game: ArenaGame) -> void:
 
 
 ## Child process: loads the layers strictly over the test root and prints what the live config holds.
+class _Member extends RefCounted:
+	var uid := "backbone:arena-test"
+	var is_guest := false
+	var claims: Dictionary = {}
+
+
+## Stats go under dot-game's stable per-server key once a session is known, the seat's key without one.
+func _stats_keys(game: ArenaGame) -> void:
+	var p := game.progress
+	if not _check(p != null, "the authority keeps progress"):
+		return
+	var file := ROOT + "_stats.key"
+	p.stats_keys.scope_key_file = file
+	var who := DotClientSession.new()
+	who.userid = 2
+	who.identity = _Member.new()
+	p.session_fn = func(_id: int) -> DotClientSession: return who
+	var key := p._key_of(2)
+	_check(key.length() == 22 and not key.begins_with("backbone:"), "a member is filed under a scoped pseudonym", key)
+	_check(p._id_from_key(key) == 2, "and the key maps back to the player")
+	p.session_fn = Callable()
+	_check(p._key_of(3) == ArenaGame.storage_key(3), "with no session, the seat's key")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
+
+
 func _probe() -> void:
 	var config := ArenaConfig.new()
 	var binder := ArenaConfig.make_binder(config)
