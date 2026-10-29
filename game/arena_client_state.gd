@@ -94,6 +94,9 @@ var killcam: DotKillcamHost = null
 
 ## The kill view: the killer's replayed eye, in place of the death camera ([DotKillViewClient]).
 var killview: DotKillViewClient = null
+
+## Solo only: the server half of the kill view, run in this process (a connected game has the bridge's).
+var solo_killview: DotKillViewServer = null
 var winner_reveal: DotWinnerReveal = null
 var _reveal_hid: Dictionary = {}
 var _seen_match_state: int = -1

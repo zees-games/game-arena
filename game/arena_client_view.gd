@@ -487,6 +487,12 @@ func _on_solo_kill(entry: DotKillFeed.Entry) -> void:
 		return
 	if killcam != null and String(entry.killer_key).is_valid_int():
 		killcam.note_kill(int(entry.killer_key), int(entry.victim_key), String(entry.cause), entry.headshot)
+	if solo_killview != null and String(entry.killer_key).is_valid_int():
+		var named := game.player_for(int(entry.killer_key))
+		var noted := solo_killview.note_kill(int(entry.killer_key), int(entry.victim_key), float(game.current_tick()) / float(game.tick_rate), {
+			"killer": named.display_name if named != null else "", "weapon": String(entry.cause)})
+		if not noted.ok:
+			DotLog.trace(CHANNEL, "no kill view", {"why": noted.error.message})
 	var victim := game.player_for(int(entry.victim_key))
 	if victim == null or victim == player:
 		return
