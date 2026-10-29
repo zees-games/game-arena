@@ -3,6 +3,7 @@ extends Node
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaBindings := preload("../game/arena_bindings.gd")
 
 ## Hit registration end to end: a still target at 20, 40 and 80 m, the aim centred on its head, a scoped sniper
 ## fired. The shot must land on the head (a headshot, a confirmed hit), standing and crouched, on the first shot
@@ -14,7 +15,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 
 const TICK_RATE := 64
 const DISTANCES := [20.0, 40.0, 80.0]
-const EXPECTED_CHECKS := 29
+const EXPECTED_CHECKS := 40
 
 var _checks := 0
 var _failed := 0
@@ -156,6 +157,7 @@ func _run() -> void:
 		_check(f.size() == 1 and f[0].head, "%.0f m: a crouched shooter's centred shot is a headshot" % d, str(f))
 		_check(f.size() == 1, "%.0f m: crouched shot registers" % d)
 	await _probe_buffer()
+	await _probe_client()
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
 	get_tree().quit(0 if ok else 1)
@@ -190,3 +192,98 @@ func _probe_buffer() -> void:
 	_check(await _buffer_case(0.0, late, false) == 0, "a window of 0 drops even that tap")
 	_check(await _buffer_case(-1.0, early, false) == 1, "a negative window keeps the old unlimited buffer")
 	_game.player_for(1).arsenal.fire_buffer_seconds = _game.fire_buffer_seconds
+
+
+## The real offline client against a stationary bot: hip and scoped, the shot registers, the hit marker
+## flashes and the hit sound plays.
+func _probe_client() -> void:
+	_game.queue_free()
+	await get_tree().process_frame
+	var client: Node = (load("res://game/arena.tscn") as PackedScene).instantiate()
+	client.set("force_offline", true)
+	client.set("mouse_capture_override", true)
+	add_child(client)
+	var live := false
+	for _i in 2400:
+		await get_tree().process_frame
+		var p: ArenaPlayer = client.get("player")
+		var g: ArenaGame = client.get("game")
+		if p != null and g != null and p.is_alive() and g.match_node != null and g.match_node.state == DotMatch.State.LIVE:
+			var others := 0
+			for o in g.players():
+				if o != p and o.is_alive():
+					others += 1
+			if others >= 1:
+				live = true
+				break
+	_check(live, "client: the offline match goes live with a bot")
+	if not live:
+		client.queue_free()
+		return
+	var g: ArenaGame = client.get("game")
+	var me: ArenaPlayer = client.get("player")
+	var bot: ArenaPlayer = null
+	for o in g.players():
+		if o != me and o.is_alive():
+			bot = o
+	var bots: Dictionary = client.get("_bots")
+	for id in bots:
+		var b: ArenaPlayer = bots[id]
+		b.set_meta(&"bot_scripted", true)
+		b.set_meta(&"bot_move", DotFpsCommand.new())
+		b.set_meta(&"bot_fire", DotWeaponCommand.new())
+	for act in [ArenaBindings.FIRE, ArenaBindings.AIM]:
+		if not InputMap.has_action(act):
+			InputMap.add_action(act)
+	var sounds: Array = []
+	var audio: DotAudioManager = client.get("presentation").audio
+	audio.played.connect(func(id: StringName, _h: int, why: StringName) -> void:
+		if why == &"ok":
+			sounds.append(id))
+	var _fill := me.arsenal.give(ZeeWeaponIds.SNIPER)
+	var _sel := me.arsenal.select(ZeeWeaponIds.SLOT_HEAVY, g.current_tick())
+	for scoped in [false, true]:
+		var hits: Array = []
+		var on_hit := func(a: int, v: int, _amt: float, _pt: Vector3, _h: bool, _l: bool) -> void:
+			hits.append([a, v])
+		g.hit_confirmed.connect(on_hit)
+		sounds.clear()
+		var at := bot.global_position
+		var space := me.get_world_3d().direct_space_state
+		var spot := Vector3.INF
+		for k in 16:
+			var dir := Vector3.RIGHT.rotated(Vector3.UP, TAU * float(k) / 16.0)
+			var q := PhysicsRayQueryParameters3D.create(at + dir * 6.0 + Vector3(0.0, 1.6, 0.0), at + Vector3(0.0, 1.6, 0.0), 1)
+			if space.intersect_ray(q).is_empty():
+				spot = at + dir * 6.0
+				break
+		_check(spot != Vector3.INF, "client: a clear line to the bot")
+		me.spawn(Transform3D(Basis(), spot), g.current_tick())
+		g.combat.health_of(bot.player_id).health = 100000.0
+		var sampler = client.get("_sampler")
+		if scoped:
+			Input.action_press(ArenaBindings.AIM)
+		for _i in 200:
+			await get_tree().process_frame
+			var a := angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, 1.62, 0.0))
+			sampler.look_at_angles(a.x, a.y)
+		var hud = client.get("hud")
+		_check(not scoped or me.aim_zoom() < 0.9, "client: the sights are up before the shot" if scoped else "client: hip fire")
+		Input.action_press(ArenaBindings.FIRE)
+		var marker := 0.0
+		for _i in 90:
+			await get_tree().process_frame
+			if hud != null and hud.hit_marker != null:
+				marker = maxf(marker, hud.hit_marker.alpha())
+			if not hits.is_empty() and _i > 3:
+				Input.action_release(ArenaBindings.FIRE)
+		Input.action_release(ArenaBindings.FIRE)
+		Input.action_release(ArenaBindings.AIM)
+		var tag := "scoped" if scoped else "hip"
+		_check(not hits.is_empty(), "client: a %s shot at a still bot registers" % tag, str(hits.size()))
+		_check(marker > 0.0, "client: the hit marker flashes (%s)" % tag, str(marker))
+		_check(sounds.has(&"hit_marker") or sounds.has(&"kill_confirmed"), "client: the hit sound plays (%s)" % tag, str(sounds))
+		g.hit_confirmed.disconnect(on_hit)
+		for _i in 200:
+			await get_tree().process_frame
+	client.queue_free()
