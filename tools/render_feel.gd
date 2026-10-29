@@ -24,6 +24,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 ##   eye should go on down a little and come back, not stop dead or jump.
 ## - `strafe`: strafing right, then left, every third frame; the horizon should lean into it
 ##   and back, gently, about a degree.
+## - `flinch`: aiming at the bot, hit once at frame 8 (default tunables: the sights stay, the view shakes and the aim wobbles), every second frame; the bot should drift off the crosshair and come back.
 ## - `slide`: a run, then a slide, every third frame; the view should widen a little and lean.
 ##
 ## Writes `screenshots/feel/<scenario>_NNN.png`, `<scenario>.csv` (every frame) and, with
@@ -43,13 +44,15 @@ var _frames := 0
 var _save_every := 1
 var _log: PackedStringArray = []
 var _hands: ZeeViewModel = null
+var _flinch := DotFpsAimBreak.new()
+var _flinch_wobble := Vector2.ZERO
 ## Physics frames to let a scenario settle before it is recorded.
 var _settle := 0
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
-	for name in ["bot", "run", "stairs", "landing", "strafe", "slide"]:
+	for name in ["bot", "run", "stairs", "landing", "strafe", "slide", "flinch"]:
 		if args.is_empty() or args.has(name):
 			_scenarios.append(name)
 
@@ -126,6 +129,14 @@ func _next_scenario() -> void:
 			_settle = 20
 			_frames = 216
 			_save_every = 6
+		"flinch":
+			_player.controller.teleport(Vector3(16.0, 0.05, -8.0), 0.0, 0.0)
+			_bot.controller.teleport(Vector3(16.0, 0.05, -14.0), 0.0, 0.0)
+			_flinch.clear()
+			_flinch_wobble = Vector2.ZERO
+			_settle = 40
+			_frames = 96
+			_save_every = 2
 		"slide":
 			# West along the open lane at z -17, between the pillars and the south stair.
 			_player.controller.teleport(Vector3(13.0, 0.05, -17.0), 90.0, 0.0)
@@ -171,6 +182,9 @@ func _physics_process(_delta: float) -> bool:
 			if _settle <= 0 and _frame >= 24:
 				mine.buttons = DotFpsCommand.BUTTON_CROUCH
 
+	if _scenario == "flinch":
+		mine = _command(Vector2.ZERO, _flinch_wobble.x)
+		mine.pitch = _flinch_wobble.y
 	var _a := _player.simulate_tick(_tick, 1.0 / float(TICK_RATE), mine, DotWeaponCommand.new())
 	var _b := _bot.simulate_tick(_tick, 1.0 / float(TICK_RATE), theirs, DotWeaponCommand.new())
 	_tick += 1
@@ -192,6 +206,15 @@ func _process(delta: float) -> bool:
 		_player.view_now = Vector2(wrapf(turned * 3.0, -180.0, 180.0), 0.0)
 	else:
 		_player.view_now = null
+	if _scenario == "flinch":
+		# What ArenaClient does each frame with a hit: the shake onto the camera, the wobble onto the aim.
+		var now := float(_frame) / 144.0
+		if _settle <= 0 and _frame == 8:
+			_flinch.note_hit(now, _player.controller.tunables, 25.0)
+		var shake := _flinch.shake(now)
+		_player.camera_offset = Vector3(0.0, shake.y, shake.z)
+		_player.camera_roll = deg_to_rad(shake.x)
+		_flinch_wobble = _flinch.wobble(now) if _settle <= 0 else Vector2.ZERO
 	_player.present(delta)
 	_bot.present(delta)
 	if _settle > 0:

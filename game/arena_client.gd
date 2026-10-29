@@ -1891,7 +1891,9 @@ func _on_local_wall_jumped() -> void:
 
 func _on_local_damaged(damage: DotDamage) -> void:
 	if player != null and player.controller != null:
-		_aim_break.note_hit(Time.get_ticks_msec() * 0.001, player.controller.tunables)
+		var held := player.weapons.current_def() if player.weapons != null else null
+		var scale := game.ads_rules.hit_flinch_for(held.id) if held != null and game != null else 1.0
+		_aim_break.note_hit(Time.get_ticks_msec() * 0.001, player.controller.tunables, damage.amount, scale)
 	if presentation != null:
 		presentation.on_hurt(damage.amount)
 
@@ -1914,8 +1916,22 @@ func _apply_shake() -> void:
 	# Handed to the player rather than written onto the camera. `ArenaPlayer.present` is
 	# the one place the camera's transform is set -- it says so in its own comment -- and a
 	# second writer would fight it every frame for the same value.
-	player.camera_offset = presentation.camera_shake()
-	player.camera_roll = presentation.camera_roll()
+	var now := Time.get_ticks_msec() * 0.001
+	var hit := _aim_break.shake(now)
+	player.camera_offset = presentation.camera_shake() + player.camera.global_transform.basis * Vector3(0.0, hit.y, hit.z)
+	player.camera_roll = presentation.camera_roll() + deg_to_rad(hit.x)
+	_apply_hit_wobble(now)
+
+
+## Moves the aim by the change in the hit wobble since last frame, so the shots go where the sights wobble to; none at the hip.
+func _apply_hit_wobble(now: float) -> void:
+	if _sampler == null:
+		return
+	var target := _aim_break.wobble(now) if player.aim_held else Vector2.ZERO
+	var step := target - _hit_wobble_applied
+	_hit_wobble_applied = target
+	if step != Vector2.ZERO:
+		_sampler.look_at_angles(_sampler.yaw + step.x, _sampler.pitch + step.y)
 
 
 ## The field of view to use: the player's own, under any cap a server has applied.
