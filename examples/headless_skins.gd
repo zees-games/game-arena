@@ -38,6 +38,17 @@ func _ready() -> void:
 		for role in ROLES:
 			_check(skinned[role] != "" and skinned[role] != zee_models[role], "%s is dressed by the pack: %s" % [role, skinned[role]])
 
+		# Anything that rebuilds the table after apply() must not bring zee's art back.
+		ZeeWeaponArtTable.drop_cache()
+		_check(_models() == skinned, "drop_cache after apply keeps the dressing")
+		ZeeWeaponArtTable.add_source(&"skins_probe", Callable(self, &"_no_art"))
+		_check(_models() == skinned, "add_source after apply keeps the dressing")
+		ZeeWeaponArtTable.remove_source(&"skins_probe")
+		_check(_models() == skinned, "remove_source after apply keeps the dressing")
+		Roles.clear()
+		Roles.ensure()
+		_check(_models() == skinned, "a role rescan after apply keeps the dressing")
+
 	var other := ArenaWeaponSkins.apply("res://addons", PackedStringArray(["zz_modern_weapons"]))
 	_check(other.is_empty(), "a pack without role art is skipped")
 	_check(_models() == zee_models, "swapped pack: zee art stays")
@@ -69,3 +80,7 @@ func _check(ok: bool, what: String) -> void:
 	if not ok:
 		_failed += 1
 		print("FAIL: ", what)
+
+
+func _no_art() -> Array[ZeeWeaponArt]:
+	return []
