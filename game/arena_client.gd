@@ -589,6 +589,12 @@ func _build_killcam() -> void:
 		return ArenaWeaponIcons.shared.menu_texture(StringName(id))
 	killcam.over.connect(func(_skipped: bool) -> void: _reveal_winner())
 	add_child(killcam)
+
+
+## The podium is built at the first match end, not at start: about 22 nodes nobody sees before then.
+func _ensure_winner_reveal() -> void:
+	if winner_reveal != null:
+		return
 	winner_reveal = DotWinnerReveal.new()
 	winner_reveal.name = "WinnerReveal"
 	winner_reveal.skip_actions = ArenaKillcam.SKIP_ACTIONS
@@ -605,12 +611,6 @@ func _reveal_winner() -> void:
 	if not _in_match_end():
 		return
 	var ranked: Array = game.match_node.scoreboard.ranked() if game.match_node.scoreboard != null else []
-
-
-## The podium is built at the first match end, not at start: about 22 nodes nobody sees before then.
-func _ensure_winner_reveal() -> void:
-	if winner_reveal != null:
-		return
 	if ranked.is_empty():
 		_show_match_summary()
 		return
@@ -2063,6 +2063,7 @@ func _add_slide_key() -> void:
 func _start_solo_workbench() -> void:
 	var wb := DotGameWorkbench.new()
 	wb.name = "Workbench"
+	wb.lazy_panel = true
 	wb.listen_host_fn = func() -> bool: return true
 	for set: DotProfileSet in _solo_binder.profile_sets():
 		wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
@@ -2080,7 +2081,6 @@ func _start_solo_workbench() -> void:
 		_workbench_open = open
 		if open:
 			platform.hold_pointer(&"workbench")
-	wb.lazy_panel = true
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		else:
 			platform.release_pointer(&"workbench")

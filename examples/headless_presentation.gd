@@ -1698,6 +1698,10 @@ func _test_the_map_menu() -> void:
 	if client.winner_reveal != null:
 		client.winner_reveal.skip()
 	_check(revealed and menu.scoreboard.is_open(), "the end of the match reveals the winner, then raises the board by itself")
+	# A parse error in the client script (a misplaced line in one function) leaves no killcam, podium or board at all.
+	var script := load("res://game/arena_client.gd") as GDScript
+	_check(script != null and script.can_instantiate(), "the client script parses, so the end-of-match flow exists at all")
+	_check(client.winner_reveal != null and client.killcam != null, "the killcam is built at start and the podium by the first match end")
 	client._on_match({"state": DotMatch.State.WARMUP, "round": 2, "remaining_ticks": 0})
 	_check(not menu.scoreboard.is_open(), "and the next match takes it down again")
 	remove_child(client)
