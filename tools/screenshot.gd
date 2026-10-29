@@ -410,6 +410,11 @@ func _play_glance() -> void:
 			else "Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)"
 		late.append([10, func() -> void: _hud.notice(said)])
 
+	# `--glance --dropped`: the local weapon thrown and left lying; the camera is put over it late.
+	if OS.get_cmdline_user_args().has("--dropped"):
+		_stage_dropped()
+		return
+
 	_shots = [{
 		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else "") + ("_killcam" if OS.get_cmdline_user_args().has("--killcam") else "") + ("_" + _glance_theme if _glance_theme != "" else ""),
 		"local": true,
@@ -428,6 +433,22 @@ func _play_glance() -> void:
 		] + late,
 		"wait": 34,
 	}]
+
+
+## `--dropped`: the local player throws the weapon in hand, nobody picks it up, and a close frame is taken once it lies still.
+func _stage_dropped() -> void:
+	_glance_game.weapon_drop_rules.pickup_radius = 0.0
+	_glance_game.weapon_drops.draws = true
+	var thrown: int = _glance_game.weapon_drops.throw(_local.arsenal, _local.muzzle_position(), _local.aim_direction(), 112)
+	var shot := {"name": "%s_dropped" % String(_staged_id), "from": _local.global_position + Vector3.UP * 2.0, "at": _local.global_position, "wait": 100}
+	shot["late"] = [[2, func() -> void:
+		for entry in _glance_game.weapon_drops.snapshot():
+			var at: Vector3 = (entry["at"] as Transform3D).origin
+			print("dropped weapon ", thrown, " at ", at, " rest ", entry["rest"])
+			_camera.position = at + Vector3(0.5, 0.45, 0.7)
+			_camera.look_at(at, Vector3.UP)
+			return]]
+	_shots = [shot]
 
 
 ## `--killcam`: the kill view as a victim sees it, played from a clip of [param killer_id]'s eye swinging onto the local

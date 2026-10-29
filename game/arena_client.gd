@@ -1564,6 +1564,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 	# On the wire as well, for the server's No Scope medal; nothing simulated reads it.
 	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
 	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and _held(ArenaBindings.RELOAD))
+	_fire.set_button(DotWeaponCommand.BUTTON_DROP, mouse_drives_view() and _held(ArenaBindings.WEAPON_DROP))
 	_note_held_slot()
 	_fire.yaw = move.yaw
 	_fire.pitch = move.pitch

@@ -224,6 +224,12 @@ var utility_grenades := false
 ## change keeps what the server owner set.
 var drops: ArenaDrops = null
 
+## Weapons lying in the world (thrown with the drop key, or left by the dead): dot-weapon's layer
+## under [member weapon_drop_rules], whose cvars are the server owner's and outlive a map change.
+var weapon_drops: DotWeaponDrops = null
+var weapon_drop_rules: DotWeaponDropRules = DotWeaponDropRules.new()
+var _drop_held: Dictionary = {}
+
 ## Kills since each player last died. Authority side; a client counts its own from KILL.
 var streaks: Dictionary = {}
 

@@ -347,6 +347,9 @@ func _bind_rule_cvars() -> void:
 	# Dead bodies: dot-player-char's sv_ragdoll* (the server picks each reaction, ArenaGame.decide_death).
 	var _ragdoll_cvars := game.ragdoll_rules.bind_cvars(add_cvar, replicated)
 
+	# Dropped weapons: dot-weapon's sv_weapon_drop*; class overrides come from the dot-profile `drop_*` keys.
+	var _weapon_drop_cvars := game.weapon_drop_rules.bind_cvars(add_cvar, replicated)
+
 	# The map's toys: dot-props' sv_toys, sv_toys_awake, sv_toys_push.
 	var _toy_cvars := game.toy_rules.bind_cvars(add_cvar, replicated)
 
