@@ -1140,6 +1140,10 @@ func _test_weapons_over_the_wire() -> void:
 	var own := owner.behaviour_for(11)
 	var seen := watcher.behaviour_for(11)
 
+	# The earlier sections fire this sidearm dry (a magazine, no auto-reload); a dry gun uses nothing and shows 0.
+	for who: ArenaPlayer in [served, own.player]:
+		who.arsenal.current().magazine = who.arsenal.current().def.magazine
+
 	var server_mask := ArenaContent.carry_mask(served.arsenal)
 	_check(server_mask != 0, "the server's player carries weapons", str(server_mask))
 	_check(
@@ -1195,12 +1199,14 @@ func _test_weapons_over_the_wire() -> void:
 		own._net_apply_input(idle, t)
 		own._net_simulate(t, 1.0 / float(TICK_RATE))
 
+	# Anything the idle ticks drew (the sidearm's own follow-up) is not this shot.
+	var drawn_before := uses.size()
 	var rewind := own.player.weapons.snapshot()
 	t += 1
 	own._net_apply_input(shoot, t)
 	own._net_simulate(t, 1.0 / float(TICK_RATE))
 	var fresh := uses.size()
-	_check(fresh == 1, "a fresh predicted shot is drawn", str(fresh))
+	_check(fresh - drawn_before == 1, "a fresh predicted shot is drawn", str(fresh - drawn_before))
 
 	var _restored := own.player.weapons.restore(rewind)
 	_check(own.is_replay(t), "the same tick again is known to be a replay")

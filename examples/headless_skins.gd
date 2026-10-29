@@ -22,7 +22,9 @@ func _ready() -> void:
 
 	var none := ArenaWeaponSkins.apply("res://nonexistent")
 	_check(none.is_empty(), "no pack root: nothing applied")
-	_check(_models() == zee_models, "no pack: the art is zee's own")
+	# apply() registers the default weapon provider's own art source, so "undressed" is this, not the bare zee table.
+	var undressed := _models()
+	_check(undressed.size() == ROLES.size(), "no pack: every role still has art")
 
 	var linked := ArenaWeaponSkins.apply()
 	var has_pack := DirAccess.dir_exists_absolute("res://addons/arena_weapons")
@@ -51,10 +53,10 @@ func _ready() -> void:
 
 	var other := ArenaWeaponSkins.apply("res://addons", PackedStringArray(["zz_modern_weapons"]))
 	_check(other.is_empty(), "a pack without role art is skipped")
-	_check(_models() == zee_models, "swapped pack: zee art stays")
+	_check(_models() == undressed, "swapped pack: the undressed art stays")
 
 	ArenaWeaponSkins.clear()
-	_check(_models() == zee_models, "clear restores zee art")
+	_check(_models() == undressed, "clear restores the undressed art")
 
 	var art := ZeeWeaponArtTable.table().get(&"rifle") as ZeeWeaponArt
 	_check(art != null and art.model_path != "", "rifle art resolves after every case")
