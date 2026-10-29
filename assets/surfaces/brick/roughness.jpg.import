@@ -3,20 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://yc3ik3vu0nab"
-path="res://.godot/imported/roughness.jpg-6f791ab13e0cbb8b90f881971029a274.ctex"
+path.bptc="res://.godot/imported/roughness.jpg-6f791ab13e0cbb8b90f881971029a274.bptc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/surfaces/brick/roughness.jpg"
-dest_files=["res://.godot/imported/roughness.jpg-6f791ab13e0cbb8b90f881971029a274.ctex"]
+dest_files=["res://.godot/imported/roughness.jpg-6f791ab13e0cbb8b90f881971029a274.bptc.ctex"]
 
 [params]
 
-compress/mode=1
-compress/high_quality=false
+compress/mode=2
+compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
