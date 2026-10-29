@@ -1252,6 +1252,7 @@ func add_player(
 	combat_feel.attach(player.arsenal)
 	combat_feel.track_tunables(player.controller.tunables)
 	player.apply_movement_rules(movement_rules)
+	player.arsenal.fire_buffer_seconds = fire_buffer_seconds
 	player.solid_hulls_fn = solid_hulls_for
 	_players[id] = player
 
@@ -1361,6 +1362,9 @@ func set_movement_rules(rules: Dictionary) -> void:
 	if is_authority and rules.has("killcam"):
 		apply_match_limits()
 
+	if not is_authority and rules.has("fire_buffer"):
+		fire_buffer_seconds = float(rules["fire_buffer"])
+
 	if not is_authority and rules.has("max_unlag_ms"):
 		max_unlag_ms = float(rules["max_unlag_ms"])
 
@@ -1379,7 +1383,7 @@ func set_movement_rules(rules: Dictionary) -> void:
 ##
 ## `killcam` is the final killcam's seconds (`mp_killcam_time`, 0 off): clients play it, and the
 ## authority adds it to the match's end ([method _override_rules]).
-const SHOW_RULES: PackedStringArray = ["break_mode", "break_limbs", "break_criticals_only", "fp_body", "mode_index", "surf", "surf_air_accelerate", "killcam", "max_unlag_ms"]
+const SHOW_RULES: PackedStringArray = ["break_mode", "break_limbs", "break_criticals_only", "fp_body", "mode_index", "surf", "surf_air_accelerate", "killcam", "max_unlag_ms", "fire_buffer"]
 const SHOW_DEFAULTS := {"break_mode": 1.0, "break_limbs": 1.0, "break_criticals_only": 1.0, "fp_body": 0.0, "surf": 1.0, "surf_air_accelerate": 150.0, "killcam": 7.0}
 
 

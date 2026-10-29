@@ -14,7 +14,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 
 const TICK_RATE := 64
 const DISTANCES := [20.0, 40.0, 80.0]
-const EXPECTED_CHECKS := 24
+const EXPECTED_CHECKS := 29
 
 var _checks := 0
 var _failed := 0
@@ -155,6 +155,7 @@ func _run() -> void:
 		print("    crouched shooter %.0f m: eye %s hits %d" % [d, t.eye, f.size()])
 		_check(f.size() == 1 and f[0].head, "%.0f m: a crouched shooter's centred shot is a headshot" % d, str(f))
 		_check(f.size() == 1, "%.0f m: crouched shot registers" % d)
+	await _probe_buffer()
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
 	get_tree().quit(0 if ok else 1)
@@ -162,3 +163,30 @@ func _run() -> void:
 
 func _select_sniper(shooter: ArenaPlayer) -> void:
 	var _ok := shooter.arsenal.select(ZeeWeaponIds.SLOT_HEAVY, _now())
+
+
+## Fires once, then presses again [param press_at] ticks later (or holds from there) and counts the extra hits.
+func _buffer_case(window: float, press_at: int, hold: bool) -> int:
+	_game.player_for(1).arsenal.fire_buffer_seconds = window
+	var a: Vector2 = (await _trial(40.0, false, false)).angles
+	var aim := DotWeaponCommand.BUTTON_USER_0
+	var fire := DotWeaponCommand.BUTTON_ATTACK
+	for _i in 200:
+		await _step(aim, a.x, a.y)
+	_hits.clear()
+	await _step(aim | fire, a.x, a.y)
+	for i in 160:
+		var down := i >= press_at and (hold or i == press_at)
+		await _step(aim | (fire if down else 0), a.x, a.y)
+	return _hits.size() - 1
+
+
+func _probe_buffer() -> void:
+	var early := 20
+	var late := 78
+	_check(await _buffer_case(0.15, early, false) == 0, "a tap 20 ticks into the bolt cycle does not fire later (0.15 s window)")
+	_check(await _buffer_case(0.15, early, true) == 0, "holding the trigger from mid-cycle does not fire later (semi, 0.15 s window)")
+	_check(await _buffer_case(0.15, late, false) == 1, "a tap just before the cycle ends fires when it ends (0.15 s window)")
+	_check(await _buffer_case(0.0, late, false) == 0, "a window of 0 drops even that tap")
+	_check(await _buffer_case(-1.0, early, false) == 1, "a negative window keeps the old unlimited buffer")
+	_game.player_for(1).arsenal.fire_buffer_seconds = _game.fire_buffer_seconds

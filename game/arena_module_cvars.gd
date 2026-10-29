@@ -139,6 +139,16 @@ func _add_unlag_cvar() -> void:
 			log_info("lag compensation limit changed", {"ms": game.max_unlag_ms}))
 
 
+## `sv_fire_buffer`: seconds a semi-auto press during the cooldown stays queued. See [member ArenaGame.fire_buffer_seconds].
+func _add_fire_buffer_cvar() -> void:
+	add_cvar("sv_fire_buffer", str(game.fire_buffer_seconds),
+		"Seconds a semi-auto press during the cooldown stays queued; 0 drops it, -1 keeps it until the cooldown ends",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.fire_buffer_seconds = new_value.to_float()
+			log_info("fire buffer changed", {"seconds": game.fire_buffer_seconds}))
+
+
 ## `sv_maxrate`: bytes a second each client may be sent, 0 for no cap (the default).
 ##
 ## [b]0, because a cap here can only ever hurt[/b] (2026-10-15, `tools/net_probe.gd`): the

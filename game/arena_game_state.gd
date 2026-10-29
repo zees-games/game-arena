@@ -371,6 +371,16 @@ var max_unlag_ms: float = 1000.0:
 		if is_authority and float(movement_rules.get("max_unlag_ms", -1.0)) != max_unlag_ms:
 			call(&"set_movement_rules", {"max_unlag_ms": max_unlag_ms})  # defined in the derived ArenaGame
 
+## Seconds a semi-auto press made during a weapon's cooldown stays queued (`sv_fire_buffer`): 0 drops it, negative
+## keeps it until the cooldown ends. Sent in RULES because the client predicts the same arsenal.
+var fire_buffer_seconds: float = 0.15:
+	set(value):
+		fire_buffer_seconds = value
+		for player in call(&"players"):  # defined in the derived ArenaGame
+			player.arsenal.fire_buffer_seconds = value
+		if is_authority and float(movement_rules.get("fire_buffer", -9.0)) != value:
+			call(&"set_movement_rules", {"fire_buffer": value})
+
 ## Ticks of position history kept per player for a rewind: two seconds at 64 ticks.
 const UNLAG_HISTORY := 128
 
