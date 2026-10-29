@@ -495,13 +495,9 @@ static func sound_catalogue() -> DotAudioCatalogue:
 		fire.kind = DotAudioDef.Kind.POSITIONAL_3D
 		fire.bus = &"SFX"
 		fire.unit_size = 14.0
-		# Past this it is not a shot you can act on, and a sound accepted for distance
-		# costs a stream, a voice and a position update every frame for as long as it
-		# lasts. A sixty-four-player server would otherwise spend the whole pool on
-		# gunfire nobody can locate.
+		# Past this it is not a shot you can act on, and it would cost a voice every frame.
 		fire.max_distance = 90.0
-		# Twelve rifles in one tick is not twelve gunshots -- it is one, twelve times as
-		# loud, with comb filtering. Three sounds like a firefight.
+		# Twelve rifles in one tick is one gunshot, twelve times as loud. Three sounds like a firefight.
 		fire.max_concurrent = 3
 		fire.priority = 80
 		fire.pitch_min = 0.96
@@ -509,9 +505,7 @@ static func sound_catalogue() -> DotAudioCatalogue:
 		fire.tags = [&"weapon"]
 		c.add(fire)
 
-	# A rocket or a grenade going off. Positional and carrying far, because where an
-	# explosion was is the one thing about it a player has to act on; few at once, because
-	# three frags landing together are one big noise and not three.
+	# A blast: positional and carrying far, few at once.
 	var blast := DotAudioDef.new()
 	blast.id = EXPLOSION
 	blast.path = "%s/explosion.ogg" % SOUND_DIR
@@ -521,8 +515,7 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	blast.max_distance = 140.0
 	blast.max_concurrent = 3
 	blast.priority = 85
-	# The heavy shot's voice, an octave and a bit down: until there is a recording, the
-	# lowest thing the synthesiser makes is what reads as a blast rather than a gun.
+	# The lowest thing the synthesiser makes reads as a blast rather than a gun.
 	blast.pitch_min = 0.42
 	blast.pitch_max = 0.5
 	blast.tags = [&"weapon"]
@@ -540,9 +533,7 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	impact.pitch_max = 1.1
 	c.add(impact)
 
-	# Flat, not positional, and louder than anything else. A hit marker is information
-	# about *your own* shot; putting it in the world would make it quieter the further
-	# away you hit somebody, which is exactly backwards.
+	# Flat, not positional: a hit marker is about your own shot and must not fade with distance.
 	var hit := DotAudioDef.new()
 	hit.id = &"hit_marker"
 	hit.path = "%s/hit.ogg" % SOUND_DIR
@@ -709,21 +700,9 @@ static func sound_catalogue() -> DotAudioCatalogue:
 ## Which synthesised voice stands in for each id until real audio is dropped into
 ## [constant SOUND_DIR].
 ##
-## [b]This game made every audio decision months ago and has been silent anyway.[/b] The
-## catalogue above says what a shot is worth, how far away it stops mattering, how many may
-## overlap and what loses to what — and every one of its paths names an `.ogg` that nobody
-## has produced, so firing has had no sound at all. The crosshair and the ammunition
-## counter were the only feedback in a game whose whole argument for positional audio is
-## that a shot you cannot hear the direction of is a shot you cannot answer.
+## Which noise belongs to which id is this game's decision, not an addon's guess from an id like `fire_rail`.
 ##
-## [b]A table rather than a guess inside dot-audio.[/b] Which noise belongs to which id is
-## this game's decision, the same way the distances above are — an addon that inferred
-## "rail sounds tonal" from an id called `fire_rail` would be an addon guessing at
-## vocabulary it does not own.
-##
-## The three weapons deliberately get three DIFFERENT voices. A rail that is a quieter
-## rifle is the one thing weapon audio must not be: the point of hearing somebody else's
-## shot is knowing what they are holding before you come round the corner.
+## The three weapons get three DIFFERENT voices: hearing what somebody holds is the point of their shot.
 static func sound_recipes() -> Dictionary:
 	var out := _base_recipes()
 	out[KILL_CONFIRMED] = DotAudioSynth.Voice.BLIP
@@ -927,15 +906,8 @@ func _build_fx() -> DotResult:
 ## in-process server's console, and the panel on layer 128, registered with [param menu].
 ## This game adds its own four.
 ##
-## [b]Between the kit's commands and the server's.[/b] The kit adds the server's console
-## unprefixed and last, so it catches whatever the client did not claim; this game's
-## `quit` has to be claimed before a listen server's own `quit` would shut the server down.
-##
-## [b]Called by [ArenaClient] after its [DotMenu] exists, not from [method setup].[/b] The
-## kit makes the console one of the menu's overlays, so opening it frees the pointer and
-## raises `overlays_changed`, which is what suspends the sampler. Before dot-menu this game
-## wired the console's `visibility_changed` to the sampler by hand. A suite calls it with
-## no menu.
+## Between the kit's commands and the server's: this game's `quit` must be claimed before a listen server's own.
+## Called after the menu exists (the console is one of its overlays); a suite calls it with no menu.
 func build_console(menu: Object = null) -> DotResult:
 	console = DotConsoleKit.build(self, settings, menu)
 
@@ -955,14 +927,7 @@ func build_console(menu: Object = null) -> DotResult:
 
 ## The box a player types in, and the three settings that decide it.
 ##
-## [b]Why this game had none.[/b] arena could receive a chat line and could not send one:
-## [code]DotChatClient[/code] held the history, the HUD drew the notice, and there was no
-## key anywhere that opened anything to type in. The note this replaces called that "a
-## level of ambition rather than an oversight" on the grounds that a scrolling window with
-## an input field is a screen — but it is not a screen. A screen is modal and takes the
-## whole display; a chat box is eight lines in a corner that has to leave the game
-## visible behind it, which is why it is a HUD widget and why it lives here beside the
-## console rather than in [DotScreenStack].
+## A HUD widget, not a [DotScreenStack] screen: it is eight lines in a corner that leave the game visible.
 ##
 ## [b]Below the console, above everything else.[/b] Both can be open; the console is the
 ## one that must be on top, because it is what an operator opens when the rest of the
@@ -1079,11 +1044,7 @@ func set_chat_relayed(relayed: bool) -> void:
 
 ## Resolves the three-way setting against what the server said.
 ##
-## [b]`auto` is the only interesting value.[/b] `on` is a player who wants the box wherever
-## they are, which is also how both halves run at once — a relayed server AND a chat box in
-## front of the game. `off` is a player who chats somewhere else entirely. `auto` says: draw
-## it unless this server is already putting these lines somewhere this player can see, which
-## is the web client embedded in a page whose room is the other end of the relay.
+## `auto` draws the box unless this server already puts these lines where the player can see them (a web client whose page holds the relay's room).
 ##
 ## In every case the log keeps drawing what other people said. Turning the box off is
 ## "you type somewhere else", never "you are out of the conversation".
@@ -1168,11 +1129,7 @@ func camera_roll() -> float:
 
 ## Whether something on screen owns the keyboard right now.
 ##
-## [b]The chat box belongs here for the reason the console does.[/b] A client that keeps
-## reading movement while somebody types walks them across the map, and "typing `noclip`
-## walks the player forward" is the single most reported bug in every game that ships a
-## console and forgets this line. Chat is the same bug with a much wider audience: the
-## console is a thing a few people open, and chat is a thing everybody uses.
+## Movement must not read while somebody types (the chat box is the same bug as a console, for everybody).
 ##
 ## [b]Open, not focused.[/b] A click inside an open console can take focus off its line,
 ## and the console is still in front of the game; [ArenaClient] suspends its sampler on this.

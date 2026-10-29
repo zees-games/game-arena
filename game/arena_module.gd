@@ -338,55 +338,32 @@ func _module_load() -> DotResult:
 
 ## Binds the cvars of the game's rule sets (fall, ragdoll, toys, views, spectate, bodies, noblock, feel).
 func _bind_rule_cvars() -> void:
+	# Replicated where each client draws or predicts under the rule; the rules are the game's, so one bind lasts.
+	var replicated := DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	# sv_falldamage and its tunables: dot-combat's, on here (not on surf maps). Server-side only:
 	# the damage is the server's and arrives as health.
 	var _fall := game.fall_rules.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
 
-	# Dead bodies: dot-player-char's sv_ragdoll, sv_ragdoll_style, _time, _max, _force and
-	# _reactions. The server only picks each death's reaction from them (ArenaGame.decide_death);
-	# REPLICATED, because the clients are what draw the bodies and need the style, the
-	# lifetime and the cap. The rules belong to the game, not the map, so one bind lasts.
-	var _ragdoll_cvars := game.ragdoll_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	# Dead bodies: dot-player-char's sv_ragdoll* (the server picks each reaction, ArenaGame.decide_death).
+	var _ragdoll_cvars := game.ragdoll_rules.bind_cvars(add_cvar, replicated)
 
-	# The map's toys: dot-props' sv_toys, sv_toys_awake, sv_toys_push. REPLICATED, because a
-	# client hides the toys a server took away. The game's, so one bind lasts.
-	var _toy_cvars := game.toy_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	# The map's toys: dot-props' sv_toys, sv_toys_awake, sv_toys_push.
+	var _toy_cvars := game.toy_rules.bind_cvars(add_cvar, replicated)
 
-	# mp_forceview: whether players may switch to third person (0), or are held in first (1)
-	# or third (2). REPLICATED, because each client places its own camera under it.
-	var _view_cvars := game.view_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	# mp_forceview: free view (0), held in first (1) or third (2) person.
+	var _view_cvars := game.view_rules.bind_cvars(add_cvar, replicated)
 
-	# mp_killview*: dot-replay's kill view, on here. REPLICATED, because each client plays the clip
-	# under the server's seconds, skip key and slow motion.
-	var _killview_cvars := game.killview_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	# mp_killview*: dot-replay's kill view.
+	var _killview_cvars := game.killview_rules.bind_cvars(add_cvar, replicated)
 
-	# arena_ambient*: dot-audio's DotAmbienceRules. REPLICATED, because each client plays its own
-	# ambience under the server's intent; the directory cvar stays local.
-	var _ambient_cvars := game.ambient_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED,
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
-	)
+	# arena_ambient*: dot-audio's DotAmbienceRules; the directory cvar stays local.
+	var _ambient_cvars := game.ambient_rules.bind_cvars(add_cvar, replicated, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
 
-	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules. REPLICATED, because
-	# each client flies its own spectator camera under them (ArenaClient.toggle_roam).
-	var _spectate_cvars := game.spectate_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules (ArenaClient.toggle_roam).
+	var _spectate_cvars := game.spectate_rules.bind_cvars(add_cvar, replicated)
 
-	# mp_solidplayers: whether players and bots stop at each other (1, the default) or pass
-	# through (0). REPLICATED, because each client predicts its own player against the
-	# others' hulls (ArenaGame.solid_hulls_for).
-	var _solid_cvars := game.body_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	# mp_solidplayers: players and bots stop at each other (1) or pass through (0) (ArenaGame.solid_hulls_for).
+	var _solid_cvars := game.body_rules.bind_cvars(add_cvar, replicated)
 
 	# mp_teamblock, mp_enemyblock, mp_blockcmd*, mp_blockscope, mp_blockstate and !block / !noblock:
 	# dot-game's DotGameNoblock, REPLICATED for the same reason as mp_solidplayers. The server
@@ -399,16 +376,11 @@ func _bind_rule_cvars() -> void:
 		DotLog.result(CHANNEL, "noblock cvars", game.noblock.bind(add_cvar, self))
 		game.noblock_bound = true
 
-	# mp_vm_sway, _strafe_tilt, _bob, _landing and _aim_steadiness: zee-dot-weapons' view
-	# model feel. REPLICATED, because the hands are drawn on each client, not on the server.
-	var _feel_cvars := game.feel_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	# mp_vm_sway* and friends: zee-dot-weapons' view model feel, drawn on each client.
+	var _feel_cvars := game.feel_rules.bind_cvars(add_cvar, replicated)
 
 	# Aim down sights: spread and pace while aimed are predicted, so they cross as one JSON cvar.
-	var _ads_cvars := game.ads_rules.bind_cvars(
-		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	)
+	var _ads_cvars := game.ads_rules.bind_cvars(add_cvar, replicated)
 
 	game.combat_feel.bind_cvars(add_cvar)
 

@@ -419,7 +419,6 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 	var hit0 := trace.ray(eye, aim, 500.0)
 	var wall := hit0.point if hit0.ok() else aim_at
 
-	var cloud_at := eye + aim * 5.0
 	_shots = [
 		{
 			# Through the shooter's own eye: the flash low and right, the spark on the wall.
@@ -469,29 +468,29 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 				print("fx: %d splatters" % presentation.blood.decals.blood_count()),
 			"wait": 4,
 		},
-		{
-			# arena-weapons' smoke and fire clouds, then the blind flash, as the GRENADE_FX event draws them.
-			"name": "%s_fx_smoke" % String(id),
-			"from": eye,
-			"at": eye + aim,
-			"arm": func() -> void: presentation.on_grenade_fx({"fx": AwUtilityZones.Fx.SMOKE, "position": cloud_at, "radius": 4.0, "seconds": 30.0, "victim": 0, "strength": 1.0}, 0),
-			"wait": 90,
-		},
-		{
-			"name": "%s_fx_fire" % String(id),
-			"from": eye,
-			"at": eye + aim,
-			"arm": func() -> void: presentation.on_grenade_fx({"fx": AwUtilityZones.Fx.FIRE, "position": cloud_at + side * 3.0, "radius": 3.0, "seconds": 30.0, "victim": 0, "strength": 1.0}, 0),
-			"wait": 90,
-		},
-		{
-			"name": "%s_fx_blind" % String(id),
-			"from": eye,
-			"at": eye + aim,
-			"arm": func() -> void: presentation.on_grenade_fx({"fx": AwUtilityZones.Fx.BLIND, "position": eye, "radius": 4.0, "seconds": 30.0, "victim": 0, "strength": 0.6}, 0),
-			"wait": 2,
-		},
 	]
+	_shots.append_array(_fx_grenade_shots(presentation, id, eye, aim, side))
+
+
+## arena-weapons' smoke and fire clouds, then the blind flash, as the GRENADE_FX event draws them.
+func _fx_grenade_shots(presentation: ArenaPresentation, id: StringName, eye: Vector3, aim: Vector3, side: Vector3) -> Array:
+	var cloud_at := eye + aim * 5.0
+	var cases := [
+		["smoke", AwUtilityZones.Fx.SMOKE, cloud_at, 4.0, 1.0, 90],
+		["fire", AwUtilityZones.Fx.FIRE, cloud_at + side * 3.0, 3.0, 1.0, 90],
+		["blind", AwUtilityZones.Fx.BLIND, eye, 4.0, 0.6, 2],
+	]
+	var shots := []
+	for c in cases:
+		var info := {"fx": c[1], "position": c[2], "radius": c[3], "seconds": 30.0, "victim": 0, "strength": c[4]}
+		shots.append({
+			"name": "%s_fx_%s" % [String(id), c[0]],
+			"from": eye,
+			"at": eye + aim,
+			"arm": func() -> void: presentation.on_grenade_fx(info, 0),
+			"wait": c[5],
+		})
+	return shots
 
 
 ## `--action <kind> <id>` (`--action emote dance`, `--action pose sit`): a figure playing an avatar

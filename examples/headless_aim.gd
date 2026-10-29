@@ -196,6 +196,29 @@ func _probe_buffer() -> void:
 
 ## The real offline client against a stationary bot: hip and scoped, the shot registers, the hit marker
 ## flashes and the hit sound plays.
+## Waits for the offline client's match to go live with the player and one other alive.
+func _wait_live(client: Node) -> bool:
+	for _i in 2400:
+		await get_tree().process_frame
+		var p: ArenaPlayer = client.get("player")
+		var g: ArenaGame = client.get("game")
+		if p != null and g != null and p.is_alive() and g.match_node != null and g.match_node.state == DotMatch.State.LIVE:
+			for o in g.players():
+				if o != p and o.is_alive():
+					return true
+	return false
+
+
+## A point 6 m from [param at] with an unobstructed line back to it, or INF.
+func _clear_spot(space: PhysicsDirectSpaceState3D, at: Vector3) -> Vector3:
+	for k in 16:
+		var dir := Vector3.RIGHT.rotated(Vector3.UP, TAU * float(k) / 16.0)
+		var q := PhysicsRayQueryParameters3D.create(at + dir * 6.0 + Vector3(0.0, 1.6, 0.0), at + Vector3(0.0, 1.6, 0.0), 1)
+		if space.intersect_ray(q).is_empty():
+			return at + dir * 6.0
+	return Vector3.INF
+
+
 func _probe_client() -> void:
 	_game.queue_free()
 	await get_tree().process_frame
@@ -203,19 +226,7 @@ func _probe_client() -> void:
 	client.set("force_offline", true)
 	client.set("mouse_capture_override", true)
 	add_child(client)
-	var live := false
-	for _i in 2400:
-		await get_tree().process_frame
-		var p: ArenaPlayer = client.get("player")
-		var g: ArenaGame = client.get("game")
-		if p != null and g != null and p.is_alive() and g.match_node != null and g.match_node.state == DotMatch.State.LIVE:
-			var others := 0
-			for o in g.players():
-				if o != p and o.is_alive():
-					others += 1
-			if others >= 1:
-				live = true
-				break
+	var live: bool = await _wait_live(client)
 	_check(live, "client: the offline match goes live with a bot")
 	if not live:
 		client.queue_free()
@@ -250,13 +261,7 @@ func _probe_client() -> void:
 		sounds.clear()
 		var at := bot.global_position
 		var space := me.get_world_3d().direct_space_state
-		var spot := Vector3.INF
-		for k in 16:
-			var dir := Vector3.RIGHT.rotated(Vector3.UP, TAU * float(k) / 16.0)
-			var q := PhysicsRayQueryParameters3D.create(at + dir * 6.0 + Vector3(0.0, 1.6, 0.0), at + Vector3(0.0, 1.6, 0.0), 1)
-			if space.intersect_ray(q).is_empty():
-				spot = at + dir * 6.0
-				break
+		var spot := _clear_spot(space, at)
 		_check(spot != Vector3.INF, "client: a clear line to the bot")
 		me.spawn(Transform3D(Basis(), spot), g.current_tick())
 		g.combat.health_of(bot.player_id).health = 100000.0

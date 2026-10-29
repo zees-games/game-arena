@@ -240,13 +240,11 @@ func _build_netcode() -> DotResult:
 	config.tick_rate = game.tick_rate
 	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
 	config.enable_prediction = true
-	# Off on a client: rewinding is what a server does to resolve somebody else's shot.
-	config.enable_lag_compensation = false
+	config.enable_lag_compensation = false  # rewinding is a server's job
 	config.max_entities_per_snapshot = 64
 	# From the game: a quantised position decoded against the wrong range is a different position.
 	config.world_extent = ArenaGame.NET_WORLD_EXTENT
-	# One reconciliation a frame, against the newest snapshot (docs/netcode.md, "A frame's cost").
-	# By name, as a pack runs on whatever dot-net its shell carries; launch cl_reconcile_per_snapshot 1 is the old way.
+	# By name, as a pack runs on whatever dot-net its shell carries (docs/netcode.md, "A frame's cost").
 	if &"reconcile_once_per_frame" in config:
 		config.set(&"reconcile_once_per_frame", ArenaFrameProbe.launch_value("cl_reconcile_per_snapshot") != "1")
 	# And no replay when the snapshot matches the prediction; `cl_replay_always 1` replays every one.
@@ -300,8 +298,7 @@ func _build_netcode() -> DotResult:
 		gate.release(&"map")
 
 	extras.said.connect(_on_said)
-	# What the server says is carrying chat. It decides whether the box is drawn at all
-	# when the player's setting is `auto`.
+	# What the server says is carrying chat decides whether the box is drawn when the setting is `auto`.
 	extras.chat_relay_changed.connect(func(relayed: bool) -> void:
 		if presentation != null:
 			presentation.set_chat_relayed(relayed)
@@ -615,7 +612,8 @@ func _ensure_winner_reveal() -> void:
 	winner_reveal = DotWinnerReveal.new()
 	winner_reveal.name = "WinnerReveal"
 	winner_reveal.skip_actions = ArenaKillcamBodies.SKIP_ACTIONS
-	winner_reveal.finished.connect(_on_reveal_finished)
+	if not winner_reveal.finished.is_connected(_on_reveal_finished):
+		winner_reveal.finished.connect(_on_reveal_finished)
 	add_child(winner_reveal)
 
 

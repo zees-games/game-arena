@@ -48,7 +48,7 @@ func _process(delta: float) -> void:
 	var camera: Camera3D = body.camera if body != null else null
 	if camera == null or arms == null:
 		return
-	var model := camera.get_node_or_null(^"Hands") as ZeeViewModel
+	var model: ZeeViewModel = body.weapons.view_model() if body.weapons != null else null
 	global_position = camera.global_position
 	global_rotation = Vector3(0.0, camera.global_rotation.y, 0.0)
 	visible = model != null and model.visible and not model.is_scoped() and body.is_alive()

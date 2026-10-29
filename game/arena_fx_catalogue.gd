@@ -4,68 +4,19 @@ extends RefCounted
 static func make(fx_dir: String, explosion_id: StringName) -> DotFxCatalogue:
 	var c := DotFxCatalogue.new()
 
-	var muzzle := DotFxDef.new()
-	muzzle.id = &"muzzle_flash"
-	muzzle.scene_path = "%s/muzzle_flash.tscn" % fx_dir
-	muzzle.lifetime_ms = 90
-	muzzle.cost = 1
-	muzzle.priority = 85
-	muzzle.max_distance = 90.0
+	var muzzle := _scene(fx_dir, &"muzzle_flash", "muzzle_flash", 90, 1, 85, 90.0)
 	muzzle.max_concurrent = 8
 	c.add(muzzle)
-
-	var spark := DotFxDef.new()
-	spark.id = &"impact_spark"
-	spark.scene_path = "%s/impact_spark.tscn" % fx_dir
-	spark.lifetime_ms = 500
-	spark.cost = 2
-	spark.priority = 45
-	spark.max_distance = 60.0
 	# The expensive half of a firefight, and the first thing a low tier should not have.
-	spark.min_quality = 1
-	c.add(spark)
-
-	var puff := DotFxDef.new()
-	puff.id = &"stomp_puff"
-	puff.scene_path = "%s/impact_spark.tscn" % fx_dir
-	puff.lifetime_ms = 500
-	puff.cost = 2
-	puff.priority = 80
-	puff.max_distance = 80.0
-	c.add(puff)
-
-	var hole := DotFxDef.new()
-	hole.id = &"bullet_hole"
-	hole.kind = DotFxDef.Kind.DECAL
-	hole.scene_path = "%s/bullet_hole.tscn" % fx_dir
+	c.add(_scene(fx_dir, &"impact_spark", "impact_spark", 500, 2, 45, 60.0, 1))
+	c.add(_scene(fx_dir, &"stomp_puff", "impact_spark", 500, 2, 80, 80.0))
 	# Ten minutes; the ring is what bounds the count.
-	hole.lifetime_ms = 600000
-	hole.cost = 1
-	hole.priority = 20
-	hole.max_distance = 50.0
-	hole.min_quality = 1
+	var hole := _scene(fx_dir, &"bullet_hole", "bullet_hole", 600000, 1, 20, 50.0, 1)
+	hole.kind = DotFxDef.Kind.DECAL
 	c.add(hole)
-
-	var gib := DotFxDef.new()
-	gib.id = &"death_burst"
-	gib.scene_path = "%s/death_burst.tscn" % fx_dir
-	gib.lifetime_ms = 1500
-	gib.cost = 12
-	gib.priority = 70
-	gib.max_distance = 80.0
-	gib.min_quality = 2
-	c.add(gib)
-
-	# Drawn at every quality and above all but the hurt flash: where something went off is
-	# information. Not the death burst's scene, which reads as somebody dying there.
-	var boom := DotFxDef.new()
-	boom.id = explosion_id
-	boom.scene_path = "%s/explosion.tscn" % fx_dir
-	boom.lifetime_ms = 1400
-	boom.cost = 10
-	boom.priority = 85
-	boom.max_distance = 140.0
-	c.add(boom)
+	c.add(_scene(fx_dir, &"death_burst", "death_burst", 1500, 12, 70, 80.0, 2))
+	# Drawn at every quality and above all but the hurt flash: where something went off is information.
+	c.add(_scene(fx_dir, explosion_id, "explosion", 1400, 10, 85, 140.0))
 
 	var hurt := DotFxDef.new()
 	hurt.id = &"hurt_flash"
@@ -91,3 +42,15 @@ static func make(fx_dir: String, explosion_id: StringName) -> DotFxCatalogue:
 	c.add(big_shake)
 
 	return c
+
+
+static func _scene(fx_dir: String, id: StringName, scene: String, lifetime_ms: int, cost: int, priority: int, max_distance: float, min_quality: int = 0) -> DotFxDef:
+	var d := DotFxDef.new()
+	d.id = id
+	d.scene_path = "%s/%s.tscn" % [fx_dir, scene]
+	d.lifetime_ms = lifetime_ms
+	d.cost = cost
+	d.priority = priority
+	d.max_distance = max_distance
+	d.min_quality = min_quality
+	return d

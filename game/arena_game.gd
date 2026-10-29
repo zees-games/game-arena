@@ -278,8 +278,7 @@ func _build_combat() -> DotResult:
 	combat.trace = map.shot_trace()
 
 	var rules := DotDamageRules.new()
-	# Both from the mode. Self damage is on in every mode: rocket jumping is a
-	# movement option and the reason to hold the launcher.
+	# Self damage stays on in every mode: rocket jumping is a movement option.
 	rules.friendly_fire = mode.friendly_fire if config.friendly_fire < 0 else config.friendly_fire == 1
 	rules.self_damage = mode.self_damage
 	rules.hit_groups = true
@@ -298,14 +297,8 @@ func _build_combat() -> DotResult:
 
 	add_child(combat)
 
-	# AFTER add_child: `DotCombatManager.setup` runs from `_ready` and that is what
-	# builds the resolver, so assigning this beforehand writes to nothing.
-	#
-	# This is the entire friendly-fire seam. dot-combat has no idea what a team is; it
-	# asks this callable for two entity ids and compares the answers, and treats team 0
-	# as "no team" so two unassigned players in a free-for-all can always hurt each
-	# other. Without it `rules.friendly_fire = false` protects nobody, because every
-	# pair looks like strangers.
+	# AFTER add_child: the resolver is built in `_ready`. This is the whole friendly-fire seam:
+	# team 0 means "no team", so unassigned players in a free-for-all can always hurt each other.
 	combat.resolver.team_of = func(entity_id: int) -> int:
 		var player := player_for(entity_id)
 		return player.team if player != null else 0
@@ -318,28 +311,18 @@ func _build_combat() -> DotResult:
 
 	_build_bullets()
 
-	# A manager built for a new map starts on dot-combat's defaults; a client puts it back on
-	# the server's cvars here (see follow_server_cvars).
+	# A new manager starts on dot-combat's defaults; a client re-follows the server's cvars here.
 	var _following := _follow_cvar_source()
 
-
 	projectiles = ArenaProjectiles.new()
-	# The same gravity the players fall under, so a grenade arc and a jump arc agree.
-	# ArenaPlayer sets this on its tunables; the two must not drift apart.
+	# The same gravity the players fall under (ArenaPlayer's tunables); the two must not drift.
 	projectiles.setup(combat, 22.0)
-	# Where a grenade's `sticks` is read from. The player's catalogue, not a second one.
 	projectiles.catalogue = ArenaPlayer.weapon_catalogue()
 	projectiles.origin_of = func(entity_id: int) -> Variant:
 		var thrower := player_for(entity_id)
 		return thrower.muzzle_position() if thrower != null else null
 
-	# Flash, smoke and incendiary effects: server only, and only on an arena_weapons that has them.
-	grenades = null
-	if is_authority and ArenaGrenades.supported():
-		grenades = ArenaGrenades.new()
-		grenades.rules = grenades_rules
-		grenades.attach(self)
-		grenades.effect.connect(grenade_effect.emit)
+	_build_grenades()
 
 	drops = ArenaDrops.new()
 	drops.name = "Drops"
@@ -359,6 +342,16 @@ func _build_combat() -> DotResult:
 		jail_view.build(map.jail, sim_tick)
 
 	return DotResult.success(null)
+
+
+## Flash, smoke and incendiary effects: server only, and only on an arena_weapons that has them.
+func _build_grenades() -> void:
+	grenades = null
+	if is_authority and ArenaGrenades.supported():
+		grenades = ArenaGrenades.new()
+		grenades.rules = grenades_rules
+		grenades.attach(self)
+		grenades.effect.connect(grenade_effect.emit)
 
 
 ## Gives [param player_id] what [param reward] names. Authority side.
@@ -1831,11 +1824,10 @@ func tick(commands: Dictionary = {}) -> void:
 				surf_rides.call(&"after", id, player, move, _tick)
 			shots.append_array(outcome.shots)
 
-			# Heard by the monsters. Before the horde ticks, so they hear it this tick.
+			# Before the horde ticks, so the monsters hear it this tick.
 			if horde != null and (not outcome.shots.is_empty() or not outcome.spawns.is_empty()):
 				horde.note_fire(id, player.controller.state.position)
-			# A rocket is not a shot and is not resolved here; it is launched and
-			# flown. See ArenaProjectiles for why that is a new file.
+			# A rocket is launched and flown, not resolved as a shot (ArenaProjectiles).
 			if projectiles != null:
 				projectiles.accept(outcome)
 
@@ -1848,9 +1840,8 @@ func tick(commands: Dictionary = {}) -> void:
 	if is_authority:
 		_unlag_record()
 		for shot in shots:
-			# Traced against the other players where the shooter saw them: the command
-			# that fired carries how far behind its tick the client was drawing (-1 from
-			# a local player or a bot, who see the present, and nothing is rewound).
+			# Traced where the shooter saw the others: the command carries how far behind
+			# the client was drawing (-1 for a local player or bot: nothing is rewound).
 			_fired_tick[shot.attacker] = _tick
 			var pair: Array = commands.get(shot.attacker, [])
 			var lag: float = float(pair[2]) if pair.size() > 2 else -1.0
@@ -1867,10 +1858,8 @@ func tick(commands: Dictionary = {}) -> void:
 	if is_authority:
 		_hurt_from_map()
 
-	# After the shots, before the match: a monster must perceive where players ended
-	# the tick, and a monster killed by a shot must be reported dead before the win
-	# check, or its death lands a tick late (a round decided late at a score limit).
-	# Before the props, after the shots: a rocket arriving this tick must kill before the win check.
+	# After the shots, before the match: a kill from a rocket or a monster must be counted
+	# before the win check, or the round is decided a tick late.
 	if projectiles != null:
 		projectiles.tick(delta)
 
@@ -1883,8 +1872,6 @@ func tick(commands: Dictionary = {}) -> void:
 	if horde != null:
 		horde.tick(delta)
 
-	# After the shots, before the match: a burn kill or a completed objective must
-	# be counted before the win check, or the round is decided a tick late.
 	if effects != null:
 		effects.tick(delta)
 
@@ -1894,27 +1881,13 @@ func tick(commands: Dictionary = {}) -> void:
 	if spectate != null:
 		spectate.tick(delta)
 
-	# Before the match, like everything above it, and for a different reason: the stack
-	# expires spawn protection, and a player whose protection ran out on this tick has
-	# to be killable by a shot the match is about to count.
+	# Expires spawn protection, so a player whose protection ran out is killable this tick.
 	if player_stack != null:
 		player_stack.tick(_tick)
 
-	# After everybody has moved and before the match: a coin is taken where its taker
-	# ended the tick, and a heal from a pack lands before a shot next tick can be fatal.
+	# After everybody moved: a coin is taken where its taker ended the tick.
 	if drops != null and is_authority:
-		var sweepers := {}
-		for id in player_ids():
-			var p: ArenaPlayer = _players[id]
-			if p.is_alive():
-				sweepers[id] = {
-					"position": p.controller.state.position,
-					"hurt": p.health.health < p.health.max_health,
-					"heal": func(amount: float) -> void: var _h := p.health.heal(amount),
-					"needs_ammo": p.needs_ammo(),
-					"ammo": func(share: float) -> void: p.refill_ammo(share),
-				}
-		drops.tick(_tick, sweepers)
+		drops.tick(_tick, _drop_sweepers())
 
 	_sweep_jail_button()
 
@@ -1922,6 +1895,22 @@ func tick(commands: Dictionary = {}) -> void:
 
 	if surf_rides != null:
 		surf_rides.call(&"process", delta)
+
+
+## Who can pick up a drop this tick, keyed by player id.
+func _drop_sweepers() -> Dictionary:
+	var sweepers := {}
+	for id in player_ids():
+		var p: ArenaPlayer = _players[id]
+		if p.is_alive():
+			sweepers[id] = {
+				"position": p.controller.state.position,
+				"hurt": p.health.health < p.health.max_health,
+				"heal": func(amount: float) -> void: var _h := p.health.heal(amount),
+				"needs_ammo": p.needs_ammo(),
+				"ammo": func(share: float) -> void: p.refill_ammo(share),
+			}
+	return sweepers
 
 
 func current_tick() -> int:

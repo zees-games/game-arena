@@ -29,19 +29,14 @@ var _tp_cam: Camera3D = null
 var _tick := 0
 var _prev_time := 0.0
 var _before := Vector3.INF
-var _prev_sample_t := 0.0
 var _flinch := DotFpsAimBreak.new()
 var _wobble := Vector2.ZERO
 var _dead := false
 var _metrics := DotClipMetrics.new()
-var _bones: Skeleton3D = null
-var _feet: Array[int] = []
-var _sole := NAN
 var _spawn_yaw := 0.0
-var _log: Array[String] = []
-var _prev_feet: Array = []
 var _hands: Node3D = null
 var _armed := false
+var _query := PhysicsRayQueryParameters3D.new()
 
 
 func _initialize() -> void:
@@ -74,6 +69,8 @@ func _initialize() -> void:
 
 	# Two cameras sharing the one world, side by side; the player's own camera is not drawn.
 	_tp_cam = _view(1)
+	for body in _player.find_children("*", "CollisionObject3D", true, false):
+		_query.exclude.append((body as CollisionObject3D).get_rid())
 	_player.camera.current = false
 
 
@@ -151,7 +148,6 @@ func _hit(amount: float) -> void:
 func _process(delta: float) -> bool:
 	var time := _clip_time()
 	if time >= _clip.duration:
-		_report()
 		return true
 	var shake := _flinch.shake(maxf(time, 0.0))
 	_player.camera_offset = Vector3(0.0, shake.y, shake.z)
@@ -182,40 +178,11 @@ func _process(delta: float) -> bool:
 
 
 func _sample(time: float, feet: Vector3) -> void:
-	if _bones == null and _player.figure != null:
-		_bones = _player.figure.find_children("*", "Skeleton3D", true, false).front() as Skeleton3D
-		for i in _bones.get_bone_count():
-			var bone := _bones.get_bone_name(i).to_lower()
-			if bone.contains("foot") and not bone.contains("toe"):
-				_feet.append(i)
-	var sample := {"t": time, "root": feet, "ground_y": feet.y, "grounded": _player.controller.state.is_grounded()}
-	if _bones != null:
-		var ankles: Array = _feet.map(func(i: int) -> Vector3: return _bones.global_transform * _bones.get_bone_global_pose(i).origin)
-		if is_nan(_sole):
-			_sole = ankles.map(func(a: Vector3) -> float: return a.y - feet.y).min()
-		sample["feet"] = ankles.map(func(a: Vector3) -> Vector3: return a - Vector3(0.0, _sole, 0.0))
-		var row := "%.2f pos=(%.1f,%.1f) root_v=%.2f" % [time, feet.x, feet.z, _player.controller.state.velocity.length()]
-		for k in ankles.size():
-			var a: Vector3 = sample["feet"][k]
-			var v := 0.0
-			if _prev_feet.size() == ankles.size() and time > _prev_sample_t:
-				v = Vector2(a.x - _prev_feet[k].x, a.z - _prev_feet[k].z).length() / (time - _prev_sample_t)
-			row += "  %s h=%.3f v=%.2f" % [_bones.get_bone_name(_feet[k]), a.y - feet.y, v]
-			_log.append(row)
-		_prev_feet = sample["feet"].duplicate()
-		_prev_sample_t = time
-		var rotations: Array = []
-		for i in _bones.get_bone_count():
-			rotations.append(_bones.get_bone_pose_rotation(i))
-		sample["rotations"] = rotations
-	var points: Array[Vector2] = []
-	for spot in [feet, feet + Vector3(0.0, 1.7, 0.0)]:
-		points.append(_unit(_tp_cam, spot))
-	sample["points"] = points
-	var query := PhysicsRayQueryParameters3D.create(_tp_cam.global_position, feet + Vector3(0.0, 1.0, 0.0))
-	for body in _player.find_children("*", "CollisionObject3D", true, false):
-		query.exclude.append((body as CollisionObject3D).get_rid())
-	sample["blocked"] = not _tp_cam.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+	var sample := _metrics.pose_sample(time, _player.figure.skeleton() if _player.figure != null else null, feet, _player.controller.state.is_grounded())
+	sample["points"] = [_unit(_tp_cam, feet), _unit(_tp_cam, feet + Vector3(0.0, 1.7, 0.0))]
+	_query.to = feet + Vector3(0.0, 1.0, 0.0)
+	_query.from = _tp_cam.global_position
+	sample["blocked"] = not _tp_cam.get_world_3d().direct_space_state.intersect_ray(_query).is_empty()
 	_metrics.add(sample)
 
 
@@ -225,17 +192,11 @@ func _unit(cam: Camera3D, spot: Vector3) -> Vector2:
 	return cam.unproject_position(spot) / Vector2(VIEW)
 
 
-func _report() -> void:
-	var limits: Dictionary = {}
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://tools/filmstrip_thresholds.json"))
-	if parsed is Dictionary:
-		limits = parsed.get("defaults", {}).duplicate()
-		limits.merge(parsed.get("clips", {}).get(_clip.name, {}), true)
-	var text := DotClipMetrics.table(_clip.name, _metrics.evaluate(limits))
+## Runs once at shutdown, after `_process` has returned true, so none of it is per-frame.
+func _finalize() -> void:
+	var text := DotClipMetrics.table(_clip.name, _metrics.evaluate(DotClipMetrics.limits_for("res://tools/filmstrip_thresholds.json", _clip.name)))
 	print(text)
-	DirAccess.make_dir_recursive_absolute("res://screenshots/filmstrip")
-	var file := FileAccess.open("res://screenshots/filmstrip/%s_report.txt" % _clip.name, FileAccess.WRITE)
-	file.store_string(text + "\n" + "\n".join(_log) + "\n")
+	DotClipMetrics.write_report("res://screenshots/filmstrip/%s_report.txt" % _clip.name, text)
 
 
 func _tag_body(node: Node) -> void:
