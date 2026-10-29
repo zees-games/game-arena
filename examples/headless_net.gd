@@ -429,6 +429,8 @@ func _test_client_death_camera() -> void:
 	# respawn somebody is dot-match's business, not this check's. What is under test is
 	# the client reading "alive again" off the replicated health, having heard no spawn.
 	_server_game.player_for(victim).spawn(_server_game.map.spawns[0], _server_game.current_tick())
+	# A death leaves its weapon on the floor, so the real respawn hands the loadout back; so does this.
+	_server_game.player_for(victim).give_default_loadout()
 	_pump(TICK_RATE)
 	_check(
 		client_game.player_for(victim).is_alive() and not client_game.spectate.is_spectating(victim),
