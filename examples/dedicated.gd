@@ -45,7 +45,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 183
+const CHECKS := 187
 
 
 var _server: DotServer = null
@@ -1392,6 +1392,36 @@ func _test_loadout_command() -> void:
 	var _b := _server.console.set_cvar("mp_loadout_fixed", "")
 	var _c := _server.console.set_cvar("mp_loadout_allow", "")
 	_check(_game.loadouts.rules == null, "and emptied, the cvars are no restriction")
+
+	# Random: server-authoritative, new each time, and a cvar turns it off for a modified client too.
+	var offer: Dictionary = cmd.call(&"offer", ArenaGame.storage_key(77))
+	_check(_server.console.find_cvar("mp_loadout_random") != null and bool((offer.get("random", {}) as Dictionary).get("enabled", false)),
+		"the offer advertises Random while mp_loadout_random is on")
+	# One key per roll: a player's own publishes are rate-limited, and that is not what this asks.
+	var seen := {}
+	var rolled_ok := true
+	for i in 6:
+		var rk := ArenaGame.storage_key(9100 + i)
+		var r: Dictionary = await cmd.call(&"choose_random", null, rk)
+		rolled_ok = rolled_ok and bool(r.get("ok", false))
+		var got: DotResult = await _game.loadouts.active_for(rk)
+		seen[str((got.value as DotLoadout).item_in(&"primary")) + "/" + str((got.value as DotLoadout).item_in(&"secondary"))] = true
+	_check(rolled_ok and seen.size() > 1, "a random roll is taken and is not the same loadout every time", str(seen.keys()))
+	var _r_off := _server.console.set_cvar("mp_loadout_random", "0")
+	var offer_off: Dictionary = cmd.call(&"offer", ArenaGame.storage_key(77))
+	var refused: Dictionary = say.call("loadout random")
+	_check(not bool((offer_off.get("random", {}) as Dictionary).get("enabled", true)) and not bool(refused.get("ok", true)),
+		"with mp_loadout_random 0 the entry is hidden and the server refuses a modified client", str(refused))
+	var _r_on := _server.console.set_cvar("mp_loadout_random", "1")
+	var _r_slots := _server.console.set_cvar("mp_loadout_random_slots", "primary")
+	var sk := ArenaGame.storage_key(9200)
+	var before: DotResult = await _game.loadouts.active_for(sk)
+	var sec_before := (before.value as DotLoadout).item_in(&"secondary")
+	var only: Dictionary = await cmd.call(&"choose_random", null, sk)
+	var after: DotResult = await _game.loadouts.active_for(sk)
+	_check(bool(only.get("ok", false)) and (after.value as DotLoadout).item_in(&"secondary") == sec_before,
+		"mp_loadout_random_slots primary leaves the other slots as they were", str(only))
+	var _r_clear := _server.console.set_cvar("mp_loadout_random_slots", "")
 
 
 ## Waits [param seconds] of the server's own physics ticks.
