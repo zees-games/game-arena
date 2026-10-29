@@ -4578,10 +4578,10 @@ func _test_interface() -> void:
 	)
 	hud.follow(subject)
 	var no_icon := PackedStringArray()
-	for weapon in ZeeWeaponIds.all():
-		if weapon != ZeeWeaponIds.FISTS and ArenaHudGlance.Ink.weapon_icon(weapon) == null:
+	for weapon in AwWeaponPack.IDS:
+		if ArenaHudGlance.Ink.weapon_icon(weapon) == null:
 			no_icon.append(String(weapon))
-	_check(no_icon.is_empty(), "every weapon but the fists has a silhouette for the feed and the slots", ", ".join(no_icon))
+	_check(no_icon.is_empty(), "every weapon has a silhouette for the feed and the slots", ", ".join(no_icon))
 
 	var no_sprite := PackedStringArray()
 	for weapon in ArenaWeaponIcons.TAGS:

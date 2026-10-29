@@ -141,8 +141,9 @@ static func gun_game_mode() -> ArenaMode:
 	mode.display_name = "Gun Game"
 	mode.description = "Every kill gives you a different gun. First through the list wins."
 	mode.gun_game = PackedStringArray([
-		"minigun", "rifle", "battle_rifle", "burst_rifle", "smg", "carbine", "shotgun",
-		"drum_shotgun", "marksman", "sniper", "machine_pistol", "revolver", "pistol",
+		"minigun", "lmg", "grenade_launcher", "rifle", "bullpup", "battle_rifle", "burst_rifle",
+		"smg", "carbine", "shotgun", "drum_shotgun", "marksman", "sniper",
+		"machine_pistol", "revolver", "pistol",
 		"derringer", "knife",
 	])
 	mode.rules.score_limit = mode.gun_game.size()
