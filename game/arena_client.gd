@@ -572,7 +572,23 @@ func _build_killview() -> void:
 	killview.stage = killcam
 	killview.respawn_requested.connect(func() -> void:
 		if bridge != null:
-			bridge.send_request(ArenaEvents.Ask.RESPAWN))
+			bridge.send_request(ArenaEvents.Ask.RESPAWN)
+		elif solo_killview != null:
+			var _skipped := solo_killview.skip(player.player_id if player != null else 0, game.current_tick()))
+	if _offline and game.killview_rules.enabled:
+		solo_killview = game.make_killview_server()
+
+
+## Solo: the bridge's per-tick record and delivery, in this process. Only the local player's clip is played.
+func _tick_solo_killview() -> void:
+	if solo_killview == null or not game.killview_rules.enabled:
+		return
+	var tick := game.current_tick()
+	var now := float(tick) / float(game.tick_rate)
+	solo_killview.record(now)
+	for ready: Dictionary in solo_killview.collect(now, tick):
+		if player != null and int(ready["victim"]) == player.player_id:
+			_on_killview(ready["clip"], ready["info"])
 
 
 ## The server sent the replay of the view that killed this player. Not over the final killcam.
@@ -592,6 +608,7 @@ func _build_killcam() -> void:
 	killcam = DotKillcamHost.new()
 	ArenaKillcamBodies.configure(killcam)
 	killcam.name = "FinalKillcam"
+	killcam.rules = game.killview_rules if game != null else null
 	killcam.players_fn = func() -> Array: return game.players() if game != null else []
 	killcam.player_for_fn = func(id: int) -> Variant: return game.player_for(id) if game != null else null
 	killcam.seconds_fn = func() -> float: return game.rule("killcam") if game != null else 0.0
@@ -1076,6 +1093,7 @@ func _physics_step(delta: float) -> void:
 		if game != null:
 			_drive_bots()
 			game.tick(_local_commands(move))
+			_tick_solo_killview()
 		return
 
 	if net == null or not net.is_running() or bridge == null:

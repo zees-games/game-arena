@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# The standalone kill view, as a player sees it: frames in screenshots/solo_killview/.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec xvfb-run -a godot --path . --resolution 1280x720 --script tools/solo_killview.gd -- "${1:-res://screenshots/solo_killview}"
