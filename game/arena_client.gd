@@ -888,6 +888,7 @@ func _arm(body: ArenaPlayer) -> void:
 	body.ads_rules = game.ads_rules
 	view_model.ads_rules = game.ads_rules
 	body.camera.add_child(view_model)
+	view_arms = ArenaViewArms.mount(self, view_model, body, ArenaAvatars.look_of(body.avatar, StringName("arena-player-%08d" % body.player_id)))
 	body.arm_first_person(view_model, _offline)
 	_prewarm_weapons.call_deferred(body)
 

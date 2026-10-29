@@ -4,6 +4,7 @@ const ArenaAvatars := preload("../game/arena_avatars.gd")
 const ArenaWeaponIcons := preload("../game/arena_weapon_icons.gd")
 const ArenaSpriteWeapon := preload("../game/arena_sprite_weapon.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
+const ArenaViewArms := preload("../game/arena_view_arms.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaDrops := preload("../game/arena_drops.gd")
@@ -132,6 +133,10 @@ func _stage_feel(map: ArenaMap, id: StringName) -> void:
 		var hands := ZeeViewModel.new()
 		hands.name = "Hands"
 		_local.camera.add_child(hands)
+		var old_arms := root.get_node_or_null(^"ViewArms")
+		if old_arms != null:
+			old_arms.free()
+		ArenaViewArms.mount(root, hands, _local, ArenaAvatars.look_of(_local.avatar, &"arena-player-00000001"))
 		_local.arm_first_person(hands, true)
 		var _given := _local.weapons.give_everything()
 

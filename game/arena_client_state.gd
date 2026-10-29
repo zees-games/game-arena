@@ -1,6 +1,7 @@
 extends Node
 
 const ArenaAvatars := preload("arena_avatars.gd")
+const ArenaViewArms := preload("arena_view_arms.gd")
 const ArenaBindings := preload("arena_bindings.gd")
 const ArenaBots := preload("arena_bots.gd")
 const ArenaBrowser := preload("arena_browser.gd")
@@ -210,6 +211,7 @@ var last_prop_asked: int = -1
 
 ## The local player's hands, under their camera. Built on adoption.
 var view_model: ZeeViewModel = null
+var view_arms: Node3D = null
 var _sprite_view: ArenaSpriteWeapon = null
 
 ## Every rocket and grenade in the air, drawn.
