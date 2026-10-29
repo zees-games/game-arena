@@ -697,6 +697,7 @@ func _build_loadout_command() -> void:
 	loadout_command.set(&"instant_facts_fn", loadout_instant_facts)
 	loadout_command.set(&"instant_apply_fn", func(_ctx: Object, key: String) -> bool:
 		return await rearm_instant(player_id_of_key(key)))
+	loadout_command.set(&"item_alias_fn", Callable(ArenaContent.Roles, &"alias"))
 	loadout_command.set(&"applied_fn", func(_ctx: Object, key: String) -> bool:
 		return await rearm_if_allowed(player_id_of_key(key)))
 

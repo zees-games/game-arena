@@ -1,6 +1,6 @@
 extends RefCounted
 
-## Arena's weapon pictures: zee weapon id to sprite tag; the rest is dot-ui's [DotWeaponIconStyle].
+## Arena's weapon pictures: weapon id (arena-weapons') to sprite tag; the rest is dot-ui's [DotWeaponIconStyle].
 
 const TAGS := {
 	&"battle_rifle": &"battle_rifle", &"beamer": &"energy_rifle", &"bullpup": &"bullpup",
@@ -11,6 +11,7 @@ const TAGS := {
 	&"minigun": &"lmg", &"pickaxe": &"pickaxe", &"pistol": &"pistol", &"revolver": &"revolver",
 	&"rifle": &"rifle", &"shiv": &"dagger", &"shotgun": &"shotgun", &"smg": &"smg",
 	&"sniper": &"sniper", &"spade": &"axe", &"sticky": &"sticky",
+	&"lmg": &"lmg", &"quad_launcher": &"launcher", &"grenade_launcher": &"launcher",
 }
 
 ## The one instance the client, HUD and tests share.

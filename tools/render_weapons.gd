@@ -27,6 +27,12 @@ func _initialize() -> void:
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 	await _wait(16.0)
+	# The loading cover holds until every weapon's view is warmed; a frame under it shows the cover.
+	var gate: Variant = client.get("gate")
+	for i in 240:
+		if gate == null or (gate as Object).call(&"is_open"):
+			break
+		await _wait(0.5)
 	var me = client.get("player")
 	me.health.invulnerable = true
 	print("skin packs: %s" % [ArenaWeaponSkins.applied])
@@ -38,23 +44,38 @@ func _run() -> void:
 			for role in (load(path) as GDScript).call(&"role_art"):
 				roles.append(str(role))
 
+	# A game whose own pack holds the plain ids skins nothing by role: every weapon in the catalogue is its art.
 	if roles.is_empty():
-		roles = ["pistol", "smg", "carbine", "rifle", "shotgun", "sniper", "launcher", "frag"]
+		for id: StringName in ZeeWeaponPack.table():
+			roles.append(str(id))
+
+	var only := OS.get_environment("RENDER_ONLY")
+	if only != "":
+		roles = Array(only.split(","))
 
 	for role in roles:
 		var id := StringName(role)
 		var def: DotWeaponDef = ZeeWeaponPack.table().get(id)
 		if def == null:
 			continue
-		var _g = me.arsenal.give(id)
-		me.arsenal.select(def.slot, client.get("game").current_tick())
-		await _wait(1.4)
-		await _shot("%s_hip" % role)
-		Input.action_press(&"arena_aim")
-		await _wait(0.9)
-		await _shot("%s_aim" % role)
-		Input.action_release(&"arena_aim")
-		await _wait(0.3)
+		# A warmup ending respawns the player with the default loadout: hand the weapon over again until both frames hold it.
+		for attempt in 4:
+			me = client.get("player")
+			me.health.invulnerable = true
+			var _g = me.arsenal.give(id)
+			me.arsenal.equip(def.slot)
+			await _wait(1.4)
+			var vms := client.find_children("*", "ZeeViewModel", true, false)
+			if not vms.is_empty():
+				print("%s wall=%.3f" % [role, (vms[0] as ZeeViewModel).wall_amount()])
+			await _shot("%s_hip" % role)
+			Input.action_press(&"arena_aim")
+			await _wait(0.9)
+			await _shot("%s_aim" % role)
+			Input.action_release(&"arena_aim")
+			await _wait(0.3)
+			if me == client.get("player") and me.arsenal.current() != null and me.arsenal.current().id() == id:
+				break
 
 	quit(0)
 
