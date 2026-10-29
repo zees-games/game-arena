@@ -94,6 +94,14 @@ enum Kind {
 	##
 	## After STOMP, for the reason VOTE gives.
 	GRENADE_FX,
+	## A weapon left a hand or a corpse (`sv_weapondrop`): its id, weapon, ammo, pose, throw, seconds left and whether it already lies still. Also one per lying weapon at signon.
+	##
+	## After GRENADE_FX, for the reason VOTE gives.
+	WEAPON_DROP,
+	## A dropped weapon came to rest: its id and the pose to snap to.
+	WEAPON_SETTLED,
+	## A dropped weapon is gone: its id and who took it (0 for expiry or the cap).
+	WEAPON_GONE,
 }
 
 enum Ask {
@@ -693,6 +701,47 @@ static func read_grenade_fx(reader: DotNetReader) -> Dictionary:
 		"victim": reader.read_varint(),
 		"strength": reader.read_float_range(0.0, 1.0, 5),
 	}
+	out["ok"] = reader.ok()
+	return out
+
+
+static func write_weapon_drop(id: int, weapon_index: int, magazine: int, reserve: int, at: Transform3D, velocity: Vector3, seconds: float, rest: bool) -> PackedByteArray:
+	var w := _w()
+	w.write_varint(id)
+	w.write_varint(weapon_index)
+	w.write_varint(maxi(0, magazine))
+	w.write_varint(maxi(0, reserve))
+	w.write_vector3_range(at.origin, -NPC_EXTENT, NPC_EXTENT, 20)
+	w.write_quaternion(at.basis.get_rotation_quaternion(), 9)
+	w.write_vector3_range(velocity, -64.0, 64.0, 12)
+	w.write_varint(ceili(maxf(seconds, 0.0)))
+	w.write_bool(rest)
+	return w.to_bytes()
+
+
+static func read_weapon_drop(reader: DotNetReader) -> Dictionary:
+	var out := {"id": reader.read_varint(), "weapon": reader.read_varint(), "magazine": reader.read_varint(), "reserve": reader.read_varint()}
+	var origin := reader.read_vector3_range(-NPC_EXTENT, NPC_EXTENT, 20)
+	out["at"] = Transform3D(Basis(reader.read_quaternion(9)), origin)
+	out["velocity"] = reader.read_vector3_range(-64.0, 64.0, 12)
+	out["seconds"] = reader.read_varint()
+	out["rest"] = reader.read_bool()
+	out["ok"] = reader.ok()
+	return out
+
+
+static func write_weapon_settled(id: int, at: Transform3D) -> PackedByteArray:
+	var w := _w()
+	w.write_varint(id)
+	w.write_vector3_range(at.origin, -NPC_EXTENT, NPC_EXTENT, 20)
+	w.write_quaternion(at.basis.get_rotation_quaternion(), 9)
+	return w.to_bytes()
+
+
+static func read_weapon_settled(reader: DotNetReader) -> Dictionary:
+	var out := {"id": reader.read_varint()}
+	var origin := reader.read_vector3_range(-NPC_EXTENT, NPC_EXTENT, 20)
+	out["at"] = Transform3D(Basis(reader.read_quaternion(9)), origin)
 	out["ok"] = reader.ok()
 	return out
 

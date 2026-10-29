@@ -477,7 +477,7 @@ func _on_kill(info: Dictionary) -> void:
 		if death.direction == Vector3.ZERO and away != Vector3.ZERO:
 			# An older server sent no direction: away from the killer is the honest guess.
 			death.direction = away.normalized()
-		var _fell := victim.fall_body(ragdolls, death)
+		var _fell := victim.fall_body(ragdolls, death, not game.drops_weapon_on_death())
 
 
 ## A kill in a solo game: the same fall a connected client draws from the KILL message, from
@@ -491,4 +491,4 @@ func _on_solo_kill(entry: DotKillFeed.Entry) -> void:
 	if victim == null or victim == player:
 		return
 	var death: DotPlayerDeath = entry.get_meta(&"death", null)
-	var _fell := victim.fall_body(ragdolls, death if death != null else DotPlayerDeath.new())
+	var _fell := victim.fall_body(ragdolls, death if death != null else DotPlayerDeath.new(), not game.drops_weapon_on_death())

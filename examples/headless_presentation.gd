@@ -75,7 +75,7 @@ func _test_every_key_is_an_action() -> void:
 		&"arena_fire": "Mouse 1", &"arena_aim": "Mouse 2", &"arena_bash": "F",
 		&"arena_reload": "R", &"arena_slot_1": "1", &"arena_slot_2": "2", &"arena_slot_3": "3",
 		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Wheel up",
-		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Q", &"arena_launch": "E",
+		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Z", &"arena_launch": "E",
 		&"arena_launch_props": "X", &"arena_punt": "G", &"dot_voice_talk": "V",
 		&"dot_fps_walk": "Alt",
 	}

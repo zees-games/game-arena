@@ -560,6 +560,7 @@ func server_tick(tick: int) -> void:
 	_watch_horde()
 	_watch_projectiles()
 	_watch_drops()
+	_watch_weapon_drops()
 	_watch_bullets()
 
 	if net != null:
@@ -1124,6 +1125,12 @@ func send_signon(peer_id: int) -> void:
 				int(pack["id"]), int(pack["kind"]), int(pack["value"]), pack["at"], pack["at"]
 			))
 
+	# Weapons lying about now, at rest where they lie, so a joiner sees them and can be told to take one.
+	if game != null and game.weapon_drops != null:
+		for entry in game.weapon_drops.snapshot():
+			send_event(peer_id, ArenaEvents.Kind.WEAPON_DROP, _weapon_drop_body(
+				int(entry["id"]), entry["state"], entry["at"], Vector3.ZERO, float(entry["life"]), bool(entry["rest"])))
+
 	# The jail's gate, when the map has one: a joiner mid-open would otherwise predict it shut.
 	if game != null and game.map != null and game.map.jail != null:
 		send_event(peer_id, ArenaEvents.Kind.JAIL, _jail_body())
@@ -1152,6 +1159,9 @@ var _watched_bullets: DotWeaponBulletBridge = null
 ## The drops layer this bridge last connected to. See [method _watch_drops].
 var _watched_drops: Node = null
 
+## The dropped-weapon layer this bridge last connected to.
+var _watched_weapon_drops: DotWeaponDrops = null
+
 
 ## Follows whichever projectile layer the game has, and tells every client about each
 ## launch. Server side, every tick, because a map change builds a new one.
@@ -1171,6 +1181,37 @@ func _watch_drops() -> void:
 	if layer != null:
 		layer.dropped.connect(_on_dropped)
 		layer.taken.connect(_on_taken)
+
+
+## Same for the dropped weapons (thrown or left by the dead).
+func _watch_weapon_drops() -> void:
+	if net == null or not net.is_server or game == null:
+		return
+	var layer: DotWeaponDrops = game.weapon_drops
+	if layer == _watched_weapon_drops:
+		return
+	_watched_weapon_drops = layer
+	if layer != null:
+		layer.dropped.connect(_on_weapon_dropped)
+		layer.settled.connect(_on_weapon_settled)
+		layer.removed.connect(_on_weapon_gone)
+
+
+func _on_weapon_dropped(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, _owner: int) -> void:
+	send_event(0, ArenaEvents.Kind.WEAPON_DROP, _weapon_drop_body(id, state, at, velocity, game.weapon_drops.rules.lifetime, false))
+
+
+func _weapon_drop_body(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, seconds: float, rest: bool) -> PackedByteArray:
+	return ArenaEvents.write_weapon_drop(id, ArenaContent.weapon_index(StringName(state["id"])),
+		int(state.get("magazine", 0)), int(state.get("reserve", 0)), at, velocity, seconds, rest)
+
+
+func _on_weapon_settled(id: int, at: Transform3D) -> void:
+	send_event(0, ArenaEvents.Kind.WEAPON_SETTLED, ArenaEvents.write_weapon_settled(id, at))
+
+
+func _on_weapon_gone(id: int, taker: int) -> void:
+	send_event(0, ArenaEvents.Kind.WEAPON_GONE, ArenaEvents.write_taken(id, taker))
 
 
 func _on_dropped(id: int, kind: int, at: Vector3, from: Vector3, value: int) -> void:
@@ -1689,6 +1730,20 @@ func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
 			var took := ArenaEvents.read_taken(reader)
 			if bool(took["ok"]) and game.drops != null:
 				game.drops.mirror_taken(int(took["id"]), int(took["taker"]))
+		ArenaEvents.Kind.WEAPON_DROP:
+			var wd := ArenaEvents.read_weapon_drop(reader)
+			if bool(wd["ok"]) and game.weapon_drops != null:
+				game.weapon_drops.mirror_drop(int(wd["id"]), {
+					"id": ArenaContent.weapon_at(int(wd["weapon"])), "magazine": int(wd["magazine"]), "reserve": int(wd["reserve"]),
+				}, wd["at"], wd["velocity"], float(wd["seconds"]), bool(wd["rest"]))
+		ArenaEvents.Kind.WEAPON_SETTLED:
+			var ws := ArenaEvents.read_weapon_settled(reader)
+			if bool(ws["ok"]) and game.weapon_drops != null:
+				game.weapon_drops.mirror_settled(int(ws["id"]), ws["at"])
+		ArenaEvents.Kind.WEAPON_GONE:
+			var wg := ArenaEvents.read_taken(reader)
+			if bool(wg["ok"]) and game.weapon_drops != null:
+				game.weapon_drops.mirror_removed(int(wg["id"]))
 		ArenaEvents.Kind.JAIL:
 			var told_jail := ArenaEvents.read_jail(reader)
 			if bool(told_jail["ok"]) and game != null:
