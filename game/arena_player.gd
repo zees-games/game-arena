@@ -939,7 +939,7 @@ func give_loadout(entries: Array[Dictionary]) -> void:
 		var _knife := arsenal.give(ArenaContent.melee_id())
 
 	if hand > 0:
-		arsenal.select(hand, controller.state.tick)
+		hold(hand)
 
 
 ## Which of two slots to spawn holding: the heaviest GUN, never the grenade.
@@ -955,6 +955,13 @@ static func _better_hand(have: int, slot: int) -> int:
 	return have
 
 
+## Holds [param slot] at once. A spawn into a round's freeze has the arsenal disabled, where `select`
+## refuses and a bot (which presses no slot key) would stay on the knife it was given first.
+func hold(slot: int) -> void:
+	if not arsenal.equip(slot):
+		var _selected := arsenal.select(slot, controller.state.tick)
+
+
 ## The default loadout, for a player who has not chosen one.
 func give_default_loadout() -> void:
 	arsenal.clear()
@@ -962,7 +969,7 @@ func give_default_loadout() -> void:
 	for id in ArenaContent.default_loadout():
 		var _given := arsenal.give(id)
 
-	arsenal.select(ArenaContent.DEFAULT_SLOT, controller.state.tick)
+	hold(ArenaContent.DEFAULT_SLOT)
 
 
 # --- Lifecycle -------------------------------------------------------------

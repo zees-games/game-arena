@@ -1640,7 +1640,7 @@ func arm_for_mode(player: ArenaPlayer) -> void:
 	if mode.pool_keeps_melee and not player.arsenal.has_slot(ZeeWeaponIds.SLOT_MELEE):
 		var _knife := player.arsenal.give(ArenaContent.melee_id())
 	if hand > 0:
-		player.arsenal.select(hand, player.controller.state.tick)
+		player.hold(hand)
 
 
 ## A storage key that is usable as a filename.
@@ -2277,7 +2277,7 @@ func _apply_loadout_deferred(id: int) -> void:
 		)
 
 		if from_class:
-			player.arsenal.select(ArenaContent.DEFAULT_SLOT, player.controller.state.tick)
+			player.hold(ArenaContent.DEFAULT_SLOT)
 		else:
 			player.give_default_loadout()
 

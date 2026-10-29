@@ -41,7 +41,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 675
+const CHECKS := 676
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -1083,6 +1083,9 @@ func _test_freeze_countdown() -> void:
 	_check(game.match_node.state == DotMatch.State.LIVE, "the countdown ends in a live round")
 	for _i in range(6):
 		await get_tree().process_frame
+	# Neither presses a slot key, as a bot never does: spawned into the freeze, both hold the primary.
+	_check(a.arsenal.current_slot() == ArenaContent.DEFAULT_SLOT and game.player_for(961).arsenal.current_slot() == ArenaContent.DEFAULT_SLOT,
+		"a spawn into the freeze holds the starting weapon, not the knife", "%d %d" % [a.arsenal.current_slot(), game.player_for(961).arsenal.current_slot()])
 	spot = a.controller.state.position
 	var released := {960: intent.call()}
 	(released[960][1] as DotWeaponCommand).slot = 3
