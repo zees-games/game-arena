@@ -1708,13 +1708,14 @@ func _cmd_maps(ctx: DotCmdContext) -> void:
 			"" if _in_rotation(id) else "  (not in rotation)",
 		])
 
-	# The imported combat surf maps, marked by whether the rotation offers them.
-	# The imported combat surf maps, with their author (somebody else's work, and the
-	# credit travels with it) and whether the rotation offers them.
+	# The imported maps, with their author (somebody else's work, and the credit travels
+	# with it) and whether the rotation offers them.
 	for id in ArenaMap.imported_ids():
 		var author := str(ArenaMap.ArenaImportedMaps.manifest(id).get("author", "?"))
-		ctx.reply("%s %s  (combat surf by %s%s)" % [
-			"*" if String(id) == current else " ", String(id), author,
+		var walked := ArenaMap.ArenaImportedMaps.movement_of(id) == &""
+		ctx.reply("%s %s  (%s by %s%s)" % [
+			"*" if String(id) == current else " ", String(id),
+			"deathmatch" if walked else "combat surf", author,
 			"" if ArenaMaps.in_rotation(id) and _in_rotation(id) else ", not in rotation",
 		])
 

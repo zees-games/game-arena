@@ -36,7 +36,7 @@ PACK="arena"
 EXTRA_PACKS=""
 # headless_lossy plays real ENet through real loss. It was left out while it failed about
 # one run in four; since 2026-10-09 it passed 20 of 20 (see docs/testing.md "headless_lossy").
-SUITES="headless_config headless_workbench headless_mapcfg headless_match headless_bots headless_skins headless_roles headless_net headless_presentation headless_stack headless_admin headless_imported headless_delivered headless_workshop dedicated headless_lossy headless_feel headless_reload headless_combatfeel headless_ballistics"
+SUITES="headless_config headless_workbench headless_mapcfg headless_match headless_bots headless_skins headless_roles headless_net headless_presentation headless_stack headless_admin headless_imported headless_dm_maps headless_delivered headless_workshop dedicated headless_lossy headless_feel headless_reload headless_combatfeel headless_ballistics"
 # --------------------------------------------------------------------------------
 
 set -uo pipefail

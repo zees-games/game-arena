@@ -84,7 +84,7 @@ On Windows, run `bootstrap.ps1` instead and open the project in Godot.
 | `./game.sh shot` | Save a screenshot to `screenshots/` |
 | `./game.sh help` | All of the options |
 
-The combat surf maps come from arena-surf-dm-maps, which bootstrap links in at `maps/imported`. Without it the game plays its three own maps. `./game.sh -- --offline --map surf_10x_reloaded_fixed` plays one offline.
+The combat surf maps come from arena-surf-dm-maps, which bootstrap links in at `maps/imported`. The deathmatch and gun game maps come from arena-dm-maps (`maps/imported_dm`), credited to their authors on a map change; `./game.sh -- --offline --map gg_woods` plays one. Without it the game plays its three own maps. `./game.sh -- --offline --map surf_10x_reloaded_fixed` plays one offline.
 
 `online` and `server` use [dot-server-deploy](https://github.com/modcommunity/dot-server-deploy), which bootstrap clones next to this one. Run its `./setup.sh` once first.
 

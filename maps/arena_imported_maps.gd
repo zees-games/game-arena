@@ -52,6 +52,9 @@ static var _scanned := false
 ## the client's catalogue and every map change all ask for the same ten.
 static var _manifests: Dictionary = {}
 
+## id -> movement profile of a map found under a root; absent means the surf default.
+static var _profiles: Dictionary = {}
+
 ## id -> version string, from the manifest's own bytes.
 static var _versions: Dictionary = {}
 
@@ -59,9 +62,26 @@ static var _versions: Dictionary = {}
 static var _mounted: Dictionary = {}
 
 
+## The deathmatch and gun game maps (the arena-dm-maps repository, linked by dot-bootstrap).
+const DM_ROOT := "res://maps/imported_dm"
+
+
 ## Where manifests are looked for, in order.
 static func roots() -> PackedStringArray:
-	return PackedStringArray([ArenaPaths.rebase("res://maps/imported"), "user://maps"])
+	return PackedStringArray([ArenaPaths.rebase("res://maps/imported"), ArenaPaths.rebase(DM_ROOT), "user://maps"])
+
+
+## The movement profile for [param id]: the manifest's own `"movement"` key, else walking for a
+## map found under the deathmatch root, else surf (the surf maps' air control).
+static func movement_of(id: StringName) -> StringName:
+	var key := String(id)
+	var declared := str(manifest(id).get("movement", ""))
+
+	if declared != "":
+		return &"" if declared == "walk" else StringName(declared)
+
+	_scan()
+	return StringName(str(_profiles.get(key, "surf")))
 
 
 ## Every importable arena map, sorted, so two machines list them in one order.
@@ -200,6 +220,7 @@ static func rescan() -> void:
 	_paths.clear()
 	_manifests.clear()
 	_versions.clear()
+	_profiles.clear()
 
 
 static func _scan() -> void:
@@ -232,6 +253,9 @@ static func _scan() -> void:
 				continue
 
 			_paths[name] = path
+
+			if root.begins_with(ArenaPaths.rebase(DM_ROOT)):
+				_profiles[name] = ""
 
 			# A mounted copy of the same id is the one `manifest` answers with.
 			if not _mounted.has(name):

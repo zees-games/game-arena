@@ -1700,10 +1700,8 @@ static func imported(map_id: StringName) -> ArenaMap:
 	map.manifest_path = ArenaImportedMaps.manifest_path(map_id)
 	map.source_kind = str(manifest.get("kind", ""))
 	map.author = str(manifest.get("author", ""))
-	# Every map this game imports is a combat SURF map: built for the genre's air control,
-	# with ramps a player rides rather than walks. A kind added later that is not one would
-	# say so here.
-	map.movement_profile = &"surf" if map.source_kind == ArenaImportedMaps.KIND else &""
+	# Surf maps get the genre's air control; the deathmatch maps (arena-dm-maps) are walked.
+	map.movement_profile = ArenaImportedMaps.movement_of(map_id) if map.source_kind == ArenaImportedMaps.KIND else &""
 	map.bounds = ArenaBspMap.bounds_of(manifest)
 	map.floor_y = map.bounds.position.y
 	map.wall_height = map.bounds.size.y
