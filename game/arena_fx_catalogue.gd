@@ -76,32 +76,7 @@ static func make(fx_dir: String, explosion_id: StringName) -> DotFxCatalogue:
 	hurt.flash_decay_ms = 260
 	c.add(hurt)
 
-	# Utility grenades. The cloud and the fire are scaled to the blast radius by the caller; the
-	# blind is a white flash that the player's flash settings cap like any other.
-	var smoke := DotFxDef.new()
-	smoke.id = &"smoke_cloud"
-	smoke.scene_path = "%s/smoke_cloud.tscn" % fx_dir
-	smoke.lifetime_ms = 30000
-	smoke.cost = 10
-	smoke.priority = 80
-	smoke.max_distance = 120.0
-	c.add(smoke)
-
-	var blaze := DotFxDef.new()
-	blaze.id = &"fire_cloud"
-	blaze.scene_path = "%s/fire_cloud.tscn" % fx_dir
-	blaze.lifetime_ms = 30000
-	blaze.cost = 10
-	blaze.priority = 80
-	blaze.max_distance = 120.0
-	c.add(blaze)
-
-	var blind := DotFxDef.new()
-	blind.id = &"blind_flash"
-	blind.kind = DotFxDef.Kind.SCREEN
-	blind.flash_peak = 1.0
-	blind.flash_decay_ms = 2500
-	c.add(blind)
+	AwGrenadeFx.add_defs(c, fx_dir)
 
 	var shake := DotFxDef.new()
 	shake.id = &"hurt_shake"
