@@ -47,9 +47,12 @@ func _run() -> void:
 			"%s is catalogued and credited to %s" % [id, entry.author])
 		_check(map != null and map.spawns.size() > 0, "%s has spawns" % id)
 		_check(map != null and map.movement_profile == &"", "%s is walked, not surfed" % id)
+		# A delivered pack has no local root to fall back on, so the manifest has to say it.
+		_check(str(ArenaImportedMaps.manifest(id).get("movement", "")) == "walk" and ArenaImportedMaps.movement_of(id) == &"",
+			"%s's manifest declares movement walk" % id)
 
 	_check(found > 0, "at least one listed map is present (%d of %d)" % [found, listed.size()])
-	_report_sections(entered, entered, 1, 1 + 3 * found)
+	_report_sections(entered, entered, 1, 1 + 4 * found)
 
 
 func _resolve(link: String) -> String:
