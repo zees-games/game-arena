@@ -7,6 +7,8 @@ const ArenaContent := preload("../game/arena_content.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaGrenades := preload("../game/arena_grenades.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
+const ArenaHorde := preload("../game/arena_horde.gd")
+const ArenaNpcs := preload("../game/arena_npcs.gd")
 
 ## Utility grenades through the whole game: the loadout gate, the incendiary going off on contact, fire
 ## damage through arena's combat rules (enemy hurt, owner and team-mate not), the blind and cloud events, and
@@ -17,7 +19,7 @@ const ArenaBots := preload("../game/arena_bots.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 25
+const EXPECTED_CHECKS := 32
 
 var _checks := 0
 var _failed := 0
@@ -144,6 +146,7 @@ func _run() -> void:
 	_check(game.grenades.active_fires() == 0, "the fire burns out")
 
 	await _test_flash_and_smoke(game, thrower, enemy, here, seen)
+	await _test_monsters(game, thrower, here)
 
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
@@ -198,6 +201,68 @@ func _test_flash_and_smoke(game: ArenaGame, thrower: int, enemy: int, here: Vect
 	_check(bots.sight_blockers.size() == 1 and not bots.line_of_sight(Vector3(0.0, 4.0, -9.0), Vector3(0.0, 4.0, 5.0)) and bots.line_of_sight(Vector3(0.0, 40.0, -9.0), Vector3(0.0, 40.0, 5.0)), "the smoke cloud blocks the bots' line of sight")
 	var self_hp_ok: bool = game.combat.health_of(enemy).health > 0.0
 	_check(self_hp_ok, "neither deals damage on its own")
+
+
+## The horde: a flash blinds the monster beside it and not the far one, smoke blocks the horde's sight.
+func _test_monsters(game: ArenaGame, thrower: int, here: Vector3) -> void:
+	var horde := ArenaHorde.new()
+	horde.name = "Horde"
+	horde.game = game
+	horde.persist_heat = false
+	game.add_child(horde)
+	game.horde = horde
+	var built := horde.setup()
+	_check(built.ok, "a horde sets up beside the grenades", str(built.error))
+	if not built.ok:
+		return
+
+	var pts: Array = ArenaNpcs.nav_for(game.map).points
+	var at_near: Vector3 = pts[0]
+	pts.sort_custom(func(x: Vector3, y: Vector3) -> bool: return x.distance_to(at_near) > y.distance_to(at_near))
+	here = at_near
+	horde.spawner.limits.spawn_interval = 0.0
+	var near := horde.spawn_one(ArenaNpcs.GRUNT, at_near)
+	var far: DotNpcInstance = null
+	var at_far := at_near
+	for pt: Vector3 in pts:
+		if pt.distance_to(at_near) < 25.0:
+			break
+		far = horde.spawn_one(ArenaNpcs.GRUNT, pt)
+		at_far = pt
+		if far != null:
+			break
+	_check(near != null and far != null and at_near.distance_to(at_far) > 25.0, "two monsters stand, one by the blast and one far off", str(at_near.distance_to(at_far)))
+	if near == null or far == null:
+		return
+
+	var now := horde.spawner.now()
+	_check(near.blind_until <= now and not horde.senses.sight_blocked(here, here + Vector3(10.0, 0.0, 0.0)), "neither is blind and nothing blocks sight beforehand")
+
+	for kind in [&"flash", &"smoke"]:
+		var s := DotWeaponSpawn.new()
+		s.id = kind
+		s.origin = here + Vector3(0.0, 1.0, 0.0)
+		s.velocity = Vector3.ZERO
+		s.gravity_scale = 0.0
+		s.radius = 0.1
+		s.fuse_ticks = 2
+		s.life_ticks = TICK_RATE * 5
+		s.damage_type = game.combat.damage_type(&"blast")
+		s.owner_entity = thrower
+		s.tick = game.current_tick()
+		s.meta = {&"sticks": false}
+		game.projectiles.launch(s)
+	for _k in 8:
+		game.tick({})
+		await get_tree().physics_frame
+
+	now = horde.spawner.now()
+	_check(near.blind_until > now, "a flash blinds the monster beside it", "%s vs %s" % [near.blind_until, now])
+	_check(far.blind_until <= now, "and leaves the far one sighted")
+	_check(horde.senses.sight_blocked(here + Vector3(0.0, 1.6, -8.0), here + Vector3(0.0, 1.6, 8.0)), "the smoke cloud blocks the horde's sight through it")
+	_check(not horde.senses.sight_blocked(here + Vector3(0.0, 30.0, -8.0), here + Vector3(0.0, 30.0, 8.0)), "and not above it")
+	game.horde = null
+	horde.queue_free()
 
 
 func _test_wire() -> void:

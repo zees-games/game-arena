@@ -666,6 +666,9 @@ func _on_map_changed(_map: ArenaMap) -> void:
 	if spawner != null:
 		spawner.clear_all(DotNpcSpawner.REASON_CLEANUP)
 
+	if senses != null and DotAddonApi.build_level("dot_npc") >= 6:
+		senses.clear_sight_blockers()
+
 	var rebuilt := rebuild_navigation()
 
 	if not rebuilt.ok:
