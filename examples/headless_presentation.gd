@@ -1545,8 +1545,12 @@ func _test_bodies_fall() -> void:
 	dmg.weapon_id = ZeeWeaponIds.SNIPER
 	dmg.amount = 120.0
 	dmg.direction = Vector3(0, 0, -1)
+	var plain := g.decide_death(9, dmg)
+	_check(plain.reaction != &"power_launch", "by default a sniper kill does not launch (%s)" % plain.reaction)
+	g.ragdoll_rules.set_cvar("sv_ragdoll_exaggerate", "1")
 	var sniped := g.decide_death(9, dmg)
-	_check(sniped.reaction == &"power_launch", "a sniper kill is a power launch (%s)" % sniped.reaction)
+	_check(sniped.reaction == &"power_launch", "with sv_ragdoll_exaggerate a sniper kill is a power launch (%s)" % sniped.reaction)
+	g.ragdoll_rules.set_cvar("sv_ragdoll_exaggerate", "0")
 	dmg.weapon_id = ZeeWeaponIds.PISTOL
 	var counted := {}
 	for tick in range(200):
