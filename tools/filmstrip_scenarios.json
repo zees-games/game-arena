@@ -1,0 +1,33 @@
+{
+  "defaults": {"spawn": [15.0, 0.05, -13.0], "spawn_yaw": 0.0},
+  "clips": [
+    {"name": "walk", "duration": 4.0, "steps": [
+      {"t": 0.0, "move": [0, 0]},
+      {"t": 0.5, "move": [0, 1], "buttons": ["walk"]}
+    ]},
+    {"name": "sprint", "duration": 4.0, "steps": [
+      {"t": 0.0, "move": [0, 0]},
+      {"t": 0.5, "move": [0, 1], "buttons": ["sprint"]}
+    ]},
+    {"name": "fire", "duration": 3.0, "steps": [
+      {"t": 0.0, "move": [0, 0]},
+      {"t": 0.6, "buttons": ["attack"]},
+      {"t": 1.8, "buttons": []}
+    ]},
+    {"name": "reload", "duration": 4.0, "steps": [
+      {"t": 0.0, "move": [0, 0]},
+      {"t": 0.4, "buttons": ["attack"]},
+      {"t": 1.0, "buttons": []},
+      {"t": 1.2, "buttons": ["reload"]},
+      {"t": 1.3, "buttons": []}
+    ]},
+    {"name": "hit", "duration": 3.0, "steps": [
+      {"t": 0.0, "move": [0, 0]},
+      {"t": 1.0, "event": "hit"}
+    ]},
+    {"name": "die", "duration": 4.0, "steps": [
+      {"t": 0.0, "move": [0, 0]},
+      {"t": 1.0, "event": "die"}
+    ]}
+  ]
+}

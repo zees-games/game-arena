@@ -1,0 +1,4 @@
+{
+  "defaults": {"plant_height_m": 0.12, "slide_mps": 0.25, "sink_m": 0.05, "float_m": 0.20, "frame_margin": 0.02, "pop_deg": 135.0, "clip_frames_max": 0},
+  "clips": {}
+}
