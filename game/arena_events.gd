@@ -672,14 +672,15 @@ static func read_stomp(reader: DotNetReader) -> Dictionary:
 	return out
 
 
-## [param fx] is an `ArenaGrenades.Fx`; [param victim] is the blinded player, 0 for a cloud or fire.
-static func write_grenade_fx(fx: int, point: Vector3, radius: float, seconds: float, victim: int) -> PackedByteArray:
+## [param fx] is an `ArenaGrenades.Fx`; [param victim] is the blinded player, 0 for a cloud or fire; [param strength] (0..1, five bits) is how hard a flash hit.
+static func write_grenade_fx(fx: int, point: Vector3, radius: float, seconds: float, victim: int, strength: float = 1.0) -> PackedByteArray:
 	var w := _w()
 	w.write_uint(clampi(fx, 0, 3), 2)
 	w.write_vector3_range(point, -NPC_EXTENT, NPC_EXTENT, 20)
 	w.write_float_range(radius, 0.0, 63.75, 8)
 	w.write_float_range(seconds, 0.0, 127.5, 8)
 	w.write_varint(maxi(0, victim))
+	w.write_float_range(strength, 0.0, 1.0, 5)
 	return w.to_bytes()
 
 
@@ -690,6 +691,7 @@ static func read_grenade_fx(reader: DotNetReader) -> Dictionary:
 		"radius": reader.read_float_range(0.0, 63.75, 8),
 		"seconds": reader.read_float_range(0.0, 127.5, 8),
 		"victim": reader.read_varint(),
+		"strength": reader.read_float_range(0.0, 1.0, 5),
 	}
 	out["ok"] = reader.ok()
 	return out

@@ -17,7 +17,7 @@ const ArenaBots := preload("../game/arena_bots.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 24
+const EXPECTED_CHECKS := 25
 
 var _checks := 0
 var _failed := 0
@@ -193,4 +193,6 @@ func _test_wire() -> void:
 	_check(absf(float(back["seconds"]) - 3.5) < 0.1 and (back["position"] as Vector3).distance_to(Vector3(12.5, 1.0, -30.0)) < 0.5, "and its seconds and position")
 	var smoke := ArenaEvents.read_grenade_fx(DotNetReader.new(ArenaEvents.write_grenade_fx(ArenaGrenades.Fx.SMOKE, Vector3.ZERO, 6.0, 14.0, 0)))
 	_check(absf(float(smoke["radius"]) - 6.0) < 0.3 and absf(float(smoke["seconds"]) - 14.0) < 0.6, "a cloud keeps its radius and duration")
+	var soft := ArenaEvents.read_grenade_fx(DotNetReader.new(ArenaEvents.write_grenade_fx(ArenaGrenades.Fx.BLIND, Vector3.ZERO, 0.0, 3.0, 7, 0.4)))
+	_check(absf(float(soft["strength"]) - 0.4) < 0.04 and absf(float(back["strength"]) - 1.0) < 0.001, "GRENADE_FX carries the flash strength, full by default")
 	_check(ArenaEvents.Kind.GRENADE_FX == ArenaEvents.Kind.STOMP + 1, "the kind is appended right after STOMP")

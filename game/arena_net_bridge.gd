@@ -1245,7 +1245,7 @@ func _watch_projectiles() -> void:
 
 func _on_grenade_effect(info: Dictionary) -> void:
 	send_event(0, ArenaEvents.Kind.GRENADE_FX, ArenaEvents.write_grenade_fx(
-		int(info["fx"]), info["position"], float(info["radius"]), float(info["seconds"]), int(info["victim"])))
+		int(info["fx"]), info["position"], float(info["radius"]), float(info["seconds"]), int(info["victim"]), float(info.get("strength", 1.0))))
 
 
 func _on_launched(spawn: DotWeaponSpawn) -> void:

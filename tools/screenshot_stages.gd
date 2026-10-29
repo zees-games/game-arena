@@ -419,6 +419,7 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 	var hit0 := trace.ray(eye, aim, 500.0)
 	var wall := hit0.point if hit0.ok() else aim_at
 
+	var cloud_at := eye + aim * 5.0
 	_shots = [
 		{
 			# Through the shooter's own eye: the flash low and right, the spark on the wall.
@@ -467,6 +468,28 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 				presentation.present(0.016, eye, aim)
 				print("fx: %d splatters" % presentation.blood.decals.blood_count()),
 			"wait": 4,
+		},
+		{
+			# arena-weapons' smoke and fire clouds, then the blind flash, as the GRENADE_FX event draws them.
+			"name": "%s_fx_smoke" % String(id),
+			"from": eye,
+			"at": eye + aim,
+			"arm": func() -> void: presentation.on_grenade_fx({"fx": AwUtilityZones.Fx.SMOKE, "position": cloud_at, "radius": 4.0, "seconds": 30.0, "victim": 0, "strength": 1.0}, 0),
+			"wait": 90,
+		},
+		{
+			"name": "%s_fx_fire" % String(id),
+			"from": eye,
+			"at": eye + aim,
+			"arm": func() -> void: presentation.on_grenade_fx({"fx": AwUtilityZones.Fx.FIRE, "position": cloud_at + side * 3.0, "radius": 3.0, "seconds": 30.0, "victim": 0, "strength": 1.0}, 0),
+			"wait": 90,
+		},
+		{
+			"name": "%s_fx_blind" % String(id),
+			"from": eye,
+			"at": eye + aim,
+			"arm": func() -> void: presentation.on_grenade_fx({"fx": AwUtilityZones.Fx.BLIND, "position": eye, "radius": 4.0, "seconds": 30.0, "victim": 0, "strength": 0.6}, 0),
+			"wait": 2,
 		},
 	]
 
