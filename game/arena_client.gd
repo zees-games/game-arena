@@ -321,12 +321,12 @@ func _build_netcode() -> DotResult:
 	bridge.hit_received.connect(_on_hit)
 	bridge.killview_received.connect(_on_killview)
 	bridge.award_received.connect(_on_award)
+	bridge.stomp_received.connect(_on_stomp)
 	bridge.match_received.connect(_on_match)
 
 	# The one thing that writes an RTT sample: without it the input lead omits flight time
 	# and past ~30 ms every command arrives late.
 	if link != null:
-	bridge.stomp_received.connect(_on_stomp)
 		bridge.rtt_source = func() -> float: return ArenaNetBridge.link_rtt_ms(link)
 	# READY only once the scene exists, or what the server sent in between hits a missing node.
 	if link != null and link.has_method("is_playing") and bool(link.call("is_playing")):
@@ -529,6 +529,12 @@ func _on_hit(info: Dictionary) -> void:
 	_draw_body_hit(point)
 
 
+## A stomp landed somewhere: its sound and puff where it happened.
+func _on_stomp(info: Dictionary) -> void:
+	if presentation != null:
+		presentation.on_stomp(info["point"], StringName(info["sound"]), StringName(info["effect"]))
+
+
 ## A kill's medals and points, as the server judged them. Every client hears every
 ## award; the HUD draws only the followed player's own and the nemesis line on their death.
 func _on_award(info: Dictionary) -> void:
@@ -536,11 +542,6 @@ func _on_award(info: Dictionary) -> void:
 		return
 	var own := player.player_id if player != null else 0
 	var killer := game.player_for(int(info.get("killer_id", 0)))
-func _on_stomp(info: Dictionary) -> void:
-	if presentation != null:
-		presentation.on_stomp(info["point"], StringName(info["sound"]), StringName(info["effect"]))
-
-
 	var victim := game.player_for(int(info.get("victim_id", 0)))
 	hud.note_award(
 		info, own,
@@ -2154,6 +2155,10 @@ func _start_offline() -> void:
 					"headshot": headshot, "lethal": lethal,
 				})
 	)
+	game.stomped.connect(
+		func(_a: int, _v: int, _s: float, point: Vector3, sound: StringName, effect: StringName) -> void:
+			_on_stomp({"point": point, "sound": String(sound), "effect": String(effect)})
+	)
 	game.medals_awarded.connect(
 		func(killer: int, victim: int, medals: Array, points: int, streak: int) -> void:
 			_on_award({
@@ -2164,10 +2169,6 @@ func _start_offline() -> void:
 	game.player_killed.connect(func(entry: DotKillFeed.Entry) -> void:
 		if hud != null:
 			hud.note_kill(
-	game.stomped.connect(
-		func(_a: int, _v: int, _s: float, point: Vector3, sound: StringName, effect: StringName) -> void:
-			_on_stomp({"point": point, "sound": String(sound), "effect": String(effect)})
-	)
 				{
 					"killer_id": int(entry.killer_key) if entry.killer_key.is_valid_int() else 0,
 					"victim_id": int(entry.victim_key) if entry.victim_key.is_valid_int() else 0,
