@@ -33,7 +33,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 353
+const CHECKS := 361
 
 var _entered := 0
 var _completed := 0
@@ -71,6 +71,9 @@ func _check_gore_toggle(p: ArenaPresentation, eye: Vector3, aim: Vector3, dead: 
 	p.present(0.016, eye, aim)
 	p.on_died(dead)
 	p.present(0.016, eye, aim)
+	var _slab_back := _slab(Vector3(0.0, 0.0, -5.0), aim)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
 	p.on_used(_outcome(eye, aim, [Vector3(0.0, 0.0, -5.0)]))
 	_check(drawn.get(&"death_burst") == null, "gore off: a death draws no blood")
 	_check(drawn.get(&"bullet_hole") != null, "and gore off still leaves the bullet holes", str(drawn.keys()))
@@ -80,6 +83,20 @@ func _check_gore_toggle(p: ArenaPresentation, eye: Vector3, aim: Vector3, dead: 
 	p_gore.settings.set_value(&"gore", true)
 	var _gf := p_gore.settings.flush()
 	p_gore.queue_free()
+
+
+## A 4 m square slab whose face is at [param at], facing back along [param aim]: what a hole needs to sit on.
+func _slab(at: Vector3, aim: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(4.0, 4.0, 0.4)
+	shape.shape = box
+	body.add_child(shape)
+	add_child(body)
+	var up := Vector3.RIGHT if absf(aim.normalized().dot(Vector3.UP)) > 0.99 else Vector3.UP
+	body.global_transform = Transform3D(Basis.looking_at(aim, up), at + aim.normalized() * 0.2)
+	return body
 
 
 func _outcome(from: Vector3, aim: Vector3, impacts: Array[Vector3]) -> DotWeaponOutcome:
