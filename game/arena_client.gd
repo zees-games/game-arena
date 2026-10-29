@@ -570,6 +570,7 @@ func _build_killview() -> void:
 	killview.setup(game.killview_rules)
 	killview.hide_fn = func() -> Array: return [hud, view_model]
 	killview.stage = killcam
+	KillPovView.mount(self, game, killview, "KillViewScreen")
 	killview.respawn_requested.connect(func() -> void:
 		if bridge != null:
 			bridge.send_request(ArenaEvents.Ask.RESPAWN)
@@ -612,12 +613,13 @@ func _build_killcam() -> void:
 	killcam.players_fn = func() -> Array: return game.players() if game != null else []
 	killcam.player_for_fn = func(id: int) -> Variant: return game.player_for(id) if game != null else null
 	killcam.seconds_fn = func() -> float: return game.rule("killcam") if game != null else 0.0
-	killcam.camera_mode_fn = func() -> int: return game.killview_rules.camera if game != null else DotKillViewRules.Camera.BEHIND
+	killcam.camera_mode_fn = func() -> int: return game.killview_rules.camera if game != null else DotKillViewRules.Camera.EYE
 	killcam.weapon_name_fn = func(id: String) -> String:
 		var def: DotWeaponDef = ArenaPlayer.weapon_catalogue().get_def(StringName(id)) if id != "" else null
 		return def.display_name if def != null and def.display_name != "" else id.capitalize()
 	killcam.weapon_icon_fn = func(id: String) -> Texture2D:
 		return ArenaWeaponIcons.shared.menu_texture(StringName(id))
+	KillPovView.mount(self, game, killcam, "KillcamScreen")
 	killcam.over.connect(func(_skipped: bool) -> void: _reveal_winner())
 	add_child(killcam)
 

@@ -1343,7 +1343,7 @@ func _test_the_kill_view() -> void:
 	_section("The kill view replaces the death camera, and Space skips it")
 	var rules := DotKillViewRules.new()
 	rules.enabled = true
-	_check(rules.camera == DotKillViewRules.Camera.BEHIND, "mp_killview_camera defaults to behind the killer")
+	_check(rules.camera == DotKillViewRules.Camera.EYE, "mp_killview_camera defaults to the killer's eye")
 	rules.camera = DotKillViewRules.Camera.EYE
 	var ring := DotKillViewRing.new(rules)
 	for i in 120:
@@ -1939,6 +1939,7 @@ func _test_the_final_killcam() -> void:
 		"the end of the match waits the killcam's 7 s on top of the mode's")
 	var clock := [0.0]
 	var kc := _killcam_host(g, [killer, victim], clock)
+	kc.camera_mode_fn = func() -> int: return DotKillViewRules.Camera.BEHIND
 	var ended: Array = []
 	kc.over.connect(func(skipped: bool) -> void: ended.append(skipped))
 	var start := killer.controller.state.position

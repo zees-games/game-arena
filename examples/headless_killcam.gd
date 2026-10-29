@@ -2,7 +2,7 @@ extends DotGameCheckSuite
 
 const ArenaContent := preload("../game/arena_content.gd")
 
-const EXPECTED_CHECKS := 12
+const EXPECTED_CHECKS := 18
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -83,9 +83,12 @@ func _run() -> void:
 		"the killer's view plays after the death, offline")
 	var t0 := Time.get_ticks_msec()
 	await _wait(1.2)
+	await _check_killer_screen(kv, killer)
 	_check(kv.is_active(), "and is still playing a second on")
 	await _until(func() -> bool: return not kv.is_active(), 10.0)
 	_check(float(Time.get_ticks_msec() - t0) > 1500.0, "it ran its time, not skipped at once")
+	var screen: Node = _client.get_node_or_null("KillViewScreen")
+	_check(screen != null and screen.hands == null, "the killer's viewmodel is gone when the replay ends")
 	_check(await _until(func() -> bool: return me.is_alive(), 15.0), "then the player respawns")
 
 	var host: Node = _client.get("killcam")
@@ -109,3 +112,15 @@ func _run() -> void:
 	await _until(func() -> bool: return not host.is_playing(), 12.0)
 	_check(float(Time.get_ticks_msec() - shown) > 2000.0, "it played several seconds before the summary")
 	_report(EXPECTED_CHECKS)
+
+
+## The kill view is the killer's own screen: camera at their eye, their viewmodel, a crosshair.
+func _check_killer_screen(kv: Node, killer: Object) -> void:
+	var screen: Node = _client.get_node_or_null("KillViewScreen")
+	_check(screen != null and screen.hands != null and screen.hands.is_visible_in_tree(), "the replay shows the killer's viewmodel")
+	_check(screen != null and screen.hands != null and screen.hands.get_parent() == kv.camera, "the viewmodel rides the replay camera")
+	var held: StringName = killer.arsenal.current().def.id if killer.arsenal.current() != null else &""
+	_check(screen != null and screen.hands != null and screen.hands.equipped() == held, "it holds the weapon the killer held", str(held))
+	_check(screen != null and screen.crosshair != null and screen.crosshair.is_visible_in_tree() and not kv.crosshair.visible, "the killer's crosshair is drawn, the plain one is not")
+	var eye: Vector3 = killer.controller.motor.eye_position(killer.controller.state)
+	_check(kv.camera.global_position.distance_to(eye) < 0.6, "the camera is at the killer's eye", str(kv.camera.global_position.distance_to(eye)))
