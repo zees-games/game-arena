@@ -19,6 +19,7 @@ const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaProgress := preload("arena_progress.gd")
 const ArenaStats := preload("arena_stats.gd")
 const ArenaProjectiles := preload("arena_projectiles.gd")
+const ArenaGrenades := preload("arena_grenades.gd")
 const ArenaDrops := preload("arena_drops.gd")
 const ArenaJailView := preload("arena_jail_view.gd")
 const ArenaProps := preload("arena_props.gd")
@@ -207,6 +208,16 @@ var loadout_command: Object = null
 ## Rockets in flight. Built alongside the combat manager, because it traces against
 ## the same world and resolves through the same rules.
 var projectiles: ArenaProjectiles = null
+
+## Flash, smoke and incendiary effects; null off the authority or below arena_weapons level 3.
+## A utility grenade's smoke, fire or blind, across map changes (the grenades object is rebuilt per map).
+signal grenade_effect(info: Dictionary)
+
+var grenades: ArenaGrenades = null
+## `sv_grenade_*`, kept across maps so a cvar bound once survives a rebuild.
+var grenades_rules := AwGrenadeRules.new()
+## `sv_grenade_utility`: whether the utility grenades can be picked in a loadout.
+var utility_grenades := false
 
 ## What a critical kill drops: coins and a health pack. Rebuilt with the combat layer on a
 ## map change, like the projectiles; its rules live here in [member drop_rules] so a map

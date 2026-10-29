@@ -90,6 +90,10 @@ enum Kind {
 	##
 	## After KILLVIEW, for the reason VOTE gives.
 	STOMP,
+	## A utility grenade's effect: a smoke cloud, a fire zone, or a blind for one player. To everybody.
+	##
+	## After STOMP, for the reason VOTE gives.
+	GRENADE_FX,
 }
 
 enum Ask {
@@ -663,6 +667,29 @@ static func read_stomp(reader: DotNetReader) -> Dictionary:
 		"point": reader.read_vector3_range(-NPC_EXTENT, NPC_EXTENT, 20),
 		"sound": reader.read_string(NPC_ID_BYTES),
 		"effect": reader.read_string(NPC_ID_BYTES),
+	}
+	out["ok"] = reader.ok()
+	return out
+
+
+## [param fx] is an `ArenaGrenades.Fx`; [param victim] is the blinded player, 0 for a cloud or fire.
+static func write_grenade_fx(fx: int, point: Vector3, radius: float, seconds: float, victim: int) -> PackedByteArray:
+	var w := _w()
+	w.write_uint(clampi(fx, 0, 3), 2)
+	w.write_vector3_range(point, -NPC_EXTENT, NPC_EXTENT, 20)
+	w.write_float_range(radius, 0.0, 63.75, 8)
+	w.write_float_range(seconds, 0.0, 127.5, 8)
+	w.write_varint(maxi(0, victim))
+	return w.to_bytes()
+
+
+static func read_grenade_fx(reader: DotNetReader) -> Dictionary:
+	var out := {
+		"fx": reader.read_uint(2),
+		"position": reader.read_vector3_range(-NPC_EXTENT, NPC_EXTENT, 20),
+		"radius": reader.read_float_range(0.0, 63.75, 8),
+		"seconds": reader.read_float_range(0.0, 127.5, 8),
+		"victim": reader.read_varint(),
 	}
 	out["ok"] = reader.ok()
 	return out

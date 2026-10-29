@@ -322,6 +322,7 @@ func _build_netcode() -> DotResult:
 	bridge.killview_received.connect(_on_killview)
 	bridge.award_received.connect(_on_award)
 	bridge.stomp_received.connect(_on_stomp)
+	bridge.grenade_fx_received.connect(_on_grenade_fx)
 	bridge.match_received.connect(_on_match)
 
 	# The one thing that writes an RTT sample: without it the input lead omits flight time
@@ -533,6 +534,11 @@ func _on_hit(info: Dictionary) -> void:
 func _on_stomp(info: Dictionary) -> void:
 	if presentation != null:
 		presentation.on_stomp(info["point"], StringName(info["sound"]), StringName(info["effect"]))
+
+
+func _on_grenade_fx(info: Dictionary) -> void:
+	if presentation != null:
+		presentation.on_grenade_fx(info, player.player_id if player != null else 0)
 
 
 ## A kill's medals and points, as the server judged them. Every client hears every
@@ -2160,6 +2166,7 @@ func _start_offline() -> void:
 		func(_a: int, _v: int, _s: float, point: Vector3, sound: StringName, effect: StringName) -> void:
 			_on_stomp({"point": point, "sound": String(sound), "effect": String(effect)})
 	)
+	game.grenade_effect.connect(_on_grenade_fx)
 	game.medals_awarded.connect(
 		func(killer: int, victim: int, medals: Array, points: int, streak: int) -> void:
 			_on_award({

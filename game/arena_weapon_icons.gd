@@ -11,6 +11,7 @@ const TAGS := {
 	&"minigun": &"lmg", &"pickaxe": &"pickaxe", &"pistol": &"pistol", &"revolver": &"revolver",
 	&"rifle": &"rifle", &"shiv": &"dagger", &"shotgun": &"shotgun", &"smg": &"smg",
 	&"sniper": &"sniper", &"spade": &"axe", &"sticky": &"sticky",
+	&"flash": &"flashbang", &"smoke": &"grenade", &"incendiary": &"grenade",
 	&"lmg": &"lmg", &"quad_launcher": &"launcher", &"grenade_launcher": &"launcher",
 }
 

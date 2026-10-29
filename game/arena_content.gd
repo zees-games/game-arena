@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Roles := preload("arena_weapon_roles.gd")
+const Grenades := preload("arena_grenades.gd")
 
 ## Every weapon, item, damage type and ruleset the game ships, built in code.
 ##
@@ -289,8 +290,10 @@ static func in_give_order(entries: Array[Dictionary]) -> Array[Dictionary]:
 static func catalogue() -> DotItemCatalogue:
 	var items: Array[DotItem] = []
 
+	# Utility grenades are entitled by `sv_grenade_utility`, like the launcher is by the game's source.
+	var utility := Grenades.utility_ids(weapons())
 	for weapon in weapons():
-		var item := DotItem.make(weapon.id, DotItem.KIND_WEAPON, weapon.id != PAID_WEAPON)
+		var item := DotItem.make(weapon.id, DotItem.KIND_WEAPON, weapon.id != PAID_WEAPON and not utility.has(weapon.id))
 		item.display_name = weapon.display_name
 		# One loadout slot per weapon, from the pack's arsenal slot. A knife in the
 		# primary slot would be a player who spawns with nothing to shoot.

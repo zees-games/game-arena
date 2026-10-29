@@ -333,6 +333,14 @@ func _build_combat() -> DotResult:
 		var thrower := player_for(entity_id)
 		return thrower.muzzle_position() if thrower != null else null
 
+	# Flash, smoke and incendiary effects: server only, and only on an arena_weapons that has them.
+	grenades = null
+	if is_authority and ArenaGrenades.supported():
+		grenades = ArenaGrenades.new()
+		grenades.rules = grenades_rules
+		grenades.attach(self)
+		grenades.effect.connect(grenade_effect.emit)
+
 	drops = ArenaDrops.new()
 	drops.name = "Drops"
 	drops.is_authority = is_authority
@@ -669,7 +677,10 @@ func _build_loadouts() -> DotResult:
 	# service to ask. A game with unlocks binds a real source here; leaving it unset means
 	# only `free` items, which is dot-loadout's loud default.
 	loadouts.entitlement_source = func(_key: String) -> DotLoadoutEntitlements:
-		return DotLoadoutEntitlements.of([ArenaContent.PAID_WEAPON])
+		var owned: Array = [ArenaContent.PAID_WEAPON]
+		if utility_grenades:
+			owned.append_array(ArenaGrenades.utility_ids(ArenaContent.weapons()))
+		return DotLoadoutEntitlements.of(owned)
 
 	add_child(loadouts)
 	_build_loadout_command()
@@ -1226,6 +1237,7 @@ func _teardown_world() -> void:
 
 	combat = null
 	projectiles = null
+	grenades = null
 
 	if jail_view != null:
 		remove_child(jail_view)
@@ -1861,6 +1873,9 @@ func tick(commands: Dictionary = {}) -> void:
 	# Before the props, after the shots: a rocket arriving this tick must kill before the win check.
 	if projectiles != null:
 		projectiles.tick(delta)
+
+	if grenades != null:
+		grenades.tick(delta)
 
 	if props != null:
 		props.tick(delta)

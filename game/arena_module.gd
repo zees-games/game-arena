@@ -157,6 +157,7 @@ func _module_load() -> DotResult:
 	_add_unlag_cvar()
 	_add_stats_report_cvar()
 	_add_fire_buffer_cvar()
+	_add_grenade_cvars()
 	_add_rate_cvar()
 	if game.config_binder != null:
 		game.config_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)

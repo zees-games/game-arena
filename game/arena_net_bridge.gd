@@ -172,6 +172,9 @@ signal award_received(info: Dictionary)
 ## Emitted on a client for every head stomp: [method ArenaEvents.read_stomp].
 signal stomp_received(info: Dictionary)
 
+## A smoke cloud, fire zone or blind from a utility grenade, as [method ArenaEvents.read_grenade_fx] reads it.
+signal grenade_fx_received(info: Dictionary)
+
 ## This tick's confirmed hits, summed: attacker -> victim -> [amount, point, headshot,
 ## lethal]. Server side; sent and cleared after the tick ([method _flush_hits]).
 var _pending_hits: Dictionary = {}
@@ -1225,6 +1228,9 @@ func _watch_projectiles() -> void:
 	if net == null or not net.is_server or game == null:
 		return
 
+	if not game.grenade_effect.is_connected(_on_grenade_effect):
+		game.grenade_effect.connect(_on_grenade_effect)
+
 	var layer: RefCounted = game.projectiles
 
 	if layer == _watched_projectiles:
@@ -1234,6 +1240,12 @@ func _watch_projectiles() -> void:
 
 	if layer != null and not layer.launched.is_connected(_on_launched):
 		layer.launched.connect(_on_launched)
+
+
+
+func _on_grenade_effect(info: Dictionary) -> void:
+	send_event(0, ArenaEvents.Kind.GRENADE_FX, ArenaEvents.write_grenade_fx(
+		int(info["fx"]), info["position"], float(info["radius"]), float(info["seconds"]), int(info["victim"])))
 
 
 func _on_launched(spawn: DotWeaponSpawn) -> void:
@@ -1662,6 +1674,10 @@ func _on_event(message: DotNetMessage) -> void:
 			var stomp := ArenaEvents.read_stomp(reader)
 			if bool(stomp["ok"]):
 				stomp_received.emit(stomp)
+		ArenaEvents.Kind.GRENADE_FX:
+			var burst := ArenaEvents.read_grenade_fx(reader)
+			if bool(burst["ok"]):
+				grenade_fx_received.emit(burst)
 		ArenaEvents.Kind.KILLVIEW:
 			var view := DotKillViewClip.unpack(event.body)
 			if bool(view["ok"]):

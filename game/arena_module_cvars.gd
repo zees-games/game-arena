@@ -164,6 +164,20 @@ func _add_fire_buffer_cvar() -> void:
 			log_info("fire buffer changed", {"seconds": game.fire_buffer_seconds}))
 
 
+## `sv_grenade_*` (arena_weapons' [AwGrenadeRules]) and `sv_grenade_utility`: 0 keeps flash, smoke and incendiary out of
+## the loadout menu (the default), 1 entitles everyone to them.
+func _add_grenade_cvars() -> void:
+	if not game.ArenaGrenades.supported():
+		return
+	var _made := game.grenades_rules.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
+	add_cvar("sv_grenade_utility", "1" if game.utility_grenades else "0",
+		"1 lets players pick flash, smoke and incendiary grenades in the loadout menu",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.utility_grenades = new_value.to_float() != 0.0
+			log_info("utility grenades changed", {"on": game.utility_grenades}))
+
+
 ## `sv_maxrate`: bytes a second each client may be sent, 0 for no cap (the default).
 ##
 ## [b]0, because a cap here can only ever hurt[/b] (2026-10-15, `tools/net_probe.gd`): the

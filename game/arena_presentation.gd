@@ -7,6 +7,7 @@ const ArenaBlood := preload("arena_blood.gd")
 const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaBindings := preload("arena_bindings.gd")
+const ArenaGrenades := preload("arena_grenades.gd")
 const ArenaFxCatalogue := preload("arena_fx_catalogue.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
@@ -1315,6 +1316,30 @@ func on_stomp(at: Vector3, sound: StringName, effect: StringName) -> void:
 		var _v := audio.play_at(sound, at)
 	if fx != null and effect != &"":
 		fx.spawn(effect, Transform3D(Basis.IDENTITY, at))
+
+
+## A utility grenade's effect, from [ArenaGrenades]: a cloud or a fire at [param at], or a blind for the
+## followed player. The flash goes through dot-fx so the player's flash settings cap it.
+func on_grenade_fx(info: Dictionary, own_id: int) -> void:
+	var at: Vector3 = info["position"]
+	var seconds := float(info["seconds"])
+	match int(info["fx"]):
+		ArenaGrenades.Fx.BLIND:
+			if int(info["victim"]) != own_id or fx == null or fx.catalogue == null:
+				return
+			var def := fx.catalogue.find(&"blind_flash")
+			if def != null:
+				def.flash_decay_ms = clampi(int(seconds * 1000.0), 250, 10000)
+				var _shown := fx.flash(&"blind_flash")
+		ArenaGrenades.Fx.SMOKE, ArenaGrenades.Fx.FIRE:
+			if fx == null:
+				return
+			var id := &"smoke_cloud" if int(info["fx"]) == ArenaGrenades.Fx.SMOKE else &"fire_cloud"
+			var cloud := fx.spawn(id, Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * float(info["radius"]) * 0.5), at))
+			if cloud != null:
+				get_tree().create_timer(seconds).timeout.connect(func() -> void:
+					if is_instance_valid(cloud):
+						cloud.queue_free())
 
 
 func on_hurt(_amount: float) -> void:

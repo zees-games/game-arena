@@ -36,6 +36,8 @@ class Flying extends RefCounted:
 	var age_ticks: int = 0
 	## Bounces on a fuse, and stops on whatever it touches with `sticks`.
 	var sticks: bool = false
+	## A fused grenade that goes off on first contact (the incendiary's `explode_on_impact`).
+	var explodes: bool = false
 	## Stopped: on the floor, or stuck. A stopped projectile is not swept.
 	var resting: bool = false
 	## What a sticky stuck to, if it was a body that moves, and where on it.
@@ -108,6 +110,7 @@ func launch(spawn: DotWeaponSpawn) -> void:
 	f.position = spawn.origin
 	f.velocity = spawn.velocity
 	f.sticks = _sticks(spawn)
+	f.explodes = _explodes(spawn)
 	f.passes = _passes_at_launch(spawn)
 	f.pass_all = _passes_every_team_mate()
 	_live.append(f)
@@ -152,6 +155,11 @@ func _passes_at_launch(spawn: DotWeaponSpawn) -> Array:
 	var shot := DotShot.make(spawn.id, spawn.owner_entity, spawn.tick, 0)
 	shot.origin = spawn.origin
 	return Array(_combat.call(&"pass_through_sets", shot))
+
+
+func _explodes(spawn: DotWeaponSpawn) -> bool:
+	var def := catalogue.get_def(spawn.id) if catalogue != null else null
+	return def != null and bool(def.params.get(&"explode_on_impact", false))
 
 
 func _sticks(spawn: DotWeaponSpawn) -> bool:
@@ -221,7 +229,7 @@ func tick(delta: float) -> void:
 
 			if hit == null:
 				f.position += step
-			elif f.spawn.fuse_ticks <= 0:
+			elif f.spawn.fuse_ticks <= 0 or f.explodes:
 				_detonate(f, hit.point)
 				_live.remove_at(i)
 				continue
