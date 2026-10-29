@@ -41,7 +41,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 652
+const CHECKS := 655
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -4641,6 +4641,26 @@ func _test_interface() -> void:
 
 # --- Progression -----------------------------------------------------------
 
+## A kill on the feed becomes a kill reading on the registry's tracker, and reporting is off by default.
+func _stats_event_check(progress) -> void:
+	_check(DotRegistry.get_service(&"dot_stats_tracker") == progress.stats, "the tracker is the dot_stats_tracker service")
+	_check(not progress.stats.report_to_backbone, "stats reporting is off by default")
+	var players := _game.players()
+	if players.size() < 2:
+		return
+	var killer: Variant = players[0]
+	var victim: Variant = players[1]
+	var seen: Array = []
+	progress.stats.recorded.connect(func(_id: StringName, stat: StringName, _total: float) -> void: seen.append(stat))
+	var entry := DotKillFeed.Entry.new()
+	entry.killer_key = str(killer.player_id)
+	entry.victim_key = str(victim.player_id)
+	progress._on_killed(entry)
+	_check(
+		seen.has(ArenaStats.KILLS) and seen.has(ArenaStats.DEATHS),
+		"a kill produces kills and deaths stat events", str(seen)
+	)
+
 ## dot-stats, dot-achievements and dot-leaderboard, over the match that just ran. Every check is against a number the match
 ## PRODUCED, not one this test filed: reading back one's own readings tests dot-stats, and what is untested elsewhere is
 ## whether a kill here reaches those three addons at all.
@@ -4714,6 +4734,8 @@ func _test_progression() -> void:
 	)
 
 	_check(any_deaths, "deaths were counted too")
+
+	_stats_event_check(progress)
 
 	_check(
 		total_fired > 0.0,

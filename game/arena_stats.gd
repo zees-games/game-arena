@@ -89,13 +89,17 @@ static func schema() -> DotStatsSchema:
 	var schema := DotStatsSchema.new()
 
 	_counter(schema, KILLS, "Kills", "kills", true)
+	_limit(schema, KILLS, 100000.0, 120.0)
 	_counter(schema, DEATHS, "Deaths", "deaths", true)
+	_limit(schema, DEATHS, 100000.0, 120.0)
 	_counter(schema, SUICIDES, "Suicides", "deaths", false)
 	_counter(schema, TEAM_KILLS, "Team kills", "kills", false)
 	_counter(schema, HEADSHOTS, "Headshots", "kills", true)
 
 	_counter(schema, DAMAGE_DEALT, "Damage dealt", "hp", true)
+	_limit(schema, DAMAGE_DEALT, 100000000.0, 30000.0)
 	_counter(schema, DAMAGE_TAKEN, "Damage taken", "hp", false)
+	_limit(schema, DAMAGE_TAKEN, 100000000.0, 30000.0)
 
 	_counter(schema, STOMPS, "Stomps", "kills", false)
 	_counter(schema, SHOTS_FIRED, "Shots fired", "shots", false)
@@ -141,6 +145,16 @@ static func ratio_of(values: DotStatsValues) -> float:
 	var deaths := values.get_value(DEATHS, 0.0)
 	var kills := values.get_value(KILLS, 0.0)
 	return kills if deaths <= 0.0 else kills / deaths
+
+
+## Bounds the held value at [param ceiling] (never below 0) and its growth at [param per_minute]; the tracker refuses a reading outside them.
+static func _limit(schema: DotStatsSchema, id: StringName, ceiling: float, per_minute: float) -> void:
+	var def := schema.find(id)
+	def.has_min = true
+	def.min_value = 0.0
+	def.has_max = true
+	def.max_value = ceiling
+	def.max_rate = per_minute
 
 
 static func _counter(

@@ -57,7 +57,11 @@ const BOARDS_CONFIG_PATH := "user://arena_boards.json"
 ## differently the second time it is run.
 @export_dir var progress_dir: String = ""
 
+const STATS_SERVICE := &"dot_stats_tracker"
+
 var stats: DotStatsTracker = null
+## Flushes when reporting was switched on after the tracker started (it only makes its own timer at start).
+var _report_timer: Timer = null
 var achievements: DotAchievementTracker = null
 var boards: DotLeaderboardManager = null
 
@@ -156,14 +160,54 @@ func rebind_world() -> void:
 	bind_world()
 
 
+## Switches the stats report to the backbone on or off at run time (cvar arena_stats_report, off by default).
+##
+## Needs a backbone client holding STATS_WRITE; the token stays in that client and is never read or logged here.
+func set_reporting(on: bool) -> DotResult:
+	if stats == null:
+		return DotResult.fail(DotError.CODE_STATE, "There is no stats tracker.")
+
+	if not on:
+		stats.report_to_backbone = false
+		return DotResult.success(false)
+
+	if stats.reporter.client == null:
+		stats.reporter.client = DotRegistry.get_service(&"dot_backbone_client")
+
+	if not stats.reporter.is_available():
+		stats.report_to_backbone = false
+		DotLog.warn(CHANNEL, "stats reporting needs a backbone client with STATS_WRITE; staying off")
+		return DotResult.fail(DotError.CODE_STATE, "No backbone client to report stats through.")
+
+	stats.report_to_backbone = true
+
+	if _report_timer == null and report_interval > 0.0 and stats.get_node_or_null("ReportTimer") == null:
+		_report_timer = Timer.new()
+		_report_timer.name = "StatsReportTimer"
+		_report_timer.wait_time = report_interval
+		_report_timer.autostart = true
+		_report_timer.timeout.connect(func() -> void: stats.flush())
+		add_child(_report_timer)
+
+	DotLog.info(CHANNEL, "stats reporting on")
+	return DotResult.success(true)
+
+
+func _exit_tree() -> void:
+	if stats != null:
+		DotRegistry.unregister_instance(STATS_SERVICE, stats)
+
+
 func _build() -> DotResult:
 	stats = DotStatsTracker.new()
 	stats.name = "Stats"
 	stats.schema = ArenaStats.schema()
 	stats.report_to_backbone = report_to_backbone
 	stats.report_interval = report_interval
-	stats.define_on_start = report_to_backbone
+	stats.define_on_start = true
 	add_child(stats)
+	# dot-game's DotGameStatsFeed and anything else duck-typed finds the tracker by this name.
+	DotRegistry.register(STATS_SERVICE, stats)
 
 	var stats_started := stats.start()
 
