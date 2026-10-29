@@ -1101,6 +1101,7 @@ func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath) -> DotPlayerRagdo
 	var made := yard.spawn(body_mesh, death, controller.state.velocity)
 	_fell = made != null or not body_mesh.visible
 	if _fell and held != null:
+		var _dropped := yard.drop_prop(held, controller.state.velocity)
 		held.visible = false
 	return made
 
@@ -1108,7 +1109,6 @@ func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath) -> DotPlayerRagdo
 ## Puts a broken or fallen body back together once the player is alive again.
 func _mend_body() -> void:
 	if _severed and is_alive() and figure != null:
-		var _dropped := yard.drop_prop(held, controller.state.velocity)
 		_severed = false
 		figure.mend()
 
