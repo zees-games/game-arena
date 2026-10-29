@@ -402,6 +402,11 @@ func _bind_rule_cvars() -> void:
 		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
 	)
 
+	# Aim down sights: spread and pace while aimed are predicted, so they cross as one JSON cvar.
+	var _ads_cvars := game.ads_rules.bind_cvars(
+		add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+	)
+
 	game.combat_feel.bind_cvars(add_cvar)
 
 

@@ -79,6 +79,9 @@ var arsenal: DotWeaponArsenal = null
 ## and the replication counter. See [method _build_rig].
 var weapons: ZeeWeaponRig = null
 
+## The game's aim and hip-size numbers, handed to every rig built here; null keeps the addon's own.
+var ads_rules: ZeeAdsRules = null
+
 ## Somebody else's gun, in their hand. Client side, on every player but the local one.
 var held: ZeeWorldModel = null
 var _held_sprite: ArenaSpriteWeapon = null
@@ -710,6 +713,8 @@ func _build_rig(role: ZeeWeaponRig.Role, authority: bool, view_model: Node3D) ->
 	weapons.catalogue = _catalogue()
 	weapons.arsenal_ref = DotNodeRef.of_path(^"../Arsenal")
 	weapons.player_ref = DotNodeRef.of_path(^"..")
+	if ads_rules != null:
+		weapons.ads_rules = ads_rules
 
 	if view_model != null:
 		# In the tree by now: it hangs under this player's camera.

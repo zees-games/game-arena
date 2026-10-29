@@ -855,6 +855,8 @@ func _arm(body: ArenaPlayer) -> void:
 	view_model = ZeeViewModel.new()
 	view_model.name = "Hands"
 	view_model.feel_rules = game.feel_rules
+	body.ads_rules = game.ads_rules
+	view_model.ads_rules = game.ads_rules
 	body.camera.add_child(view_model)
 	body.arm_first_person(view_model, _offline)
 	_prewarm_weapons.call_deferred(body)

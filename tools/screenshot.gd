@@ -809,7 +809,7 @@ func _stage_mechanics(game: ArenaGame) -> Array[Dictionary]:
 		game.tick(idle)
 
 	if pool.size != Vector3.ZERO:
-		var at := swimmer.controller.state.position
+		var at: Vector3 = swimmer.controller.state.position
 		print("  swimmer at %s, mode %s, %.2f m under the surface" % [
 			at, swimmer.controller.motor.mode_name(swimmer.controller.state.mode), pool.end.y - at.y])
 		out.append({
@@ -819,7 +819,7 @@ func _stage_mechanics(game: ArenaGame) -> Array[Dictionary]:
 		})
 
 	if not booster.is_empty():
-		var at := rider.controller.state.position
+		var at: Vector3 = rider.controller.state.position
 		var push: Vector3 = booster["push"]
 		var along := Vector3(push.x, 0.0, push.z).normalized()
 		print("  booster rider carried %.1f m to %s, %.1f m/s" % [

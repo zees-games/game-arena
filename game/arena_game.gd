@@ -161,6 +161,7 @@ func follow_server_cvars(source: Object) -> bool:
 	if noblock != null:
 		noblock.follow(source)
 	var _feel := feel_rules.follow_cvars(source)
+	var _ads := ads_rules.follow_cvars(source)
 	combat_feel.follow_cvars(source)
 	return _follow_cvar_source()
 
@@ -1000,6 +1001,7 @@ func change_map(new_map: ArenaMap, new_mode: ArenaMode = null) -> DotResult:
 		# one standing inside a wall that no longer exists, and the first tick after
 		# the change would push them out of a room they are not in.
 		# The movement first, so the motor `rebind_map` rebuilds (and logs) is the map's.
+		player.ads_rules = ads_rules
 		player.apply_map_movement(map_movement())
 		player.rebind_map(map)
 		player.join_combat(combat)

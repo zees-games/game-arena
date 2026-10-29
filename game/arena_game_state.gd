@@ -479,6 +479,9 @@ var noblock_bound := false
 ## client's view model is handed this object, so one cvar change reaches the sway.
 var feel_rules: ZeeViewFeel = ZeeViewFeel.new()
 
+## Aim-down-sights and hip-size numbers (`zee_ads_rules`, REPLICATED): the server's cfg over the shipped defaults. One per game, shared by every rig and the view model.
+var ads_rules: ZeeAdsRules = ZeeAdsRules.load_config()
+
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.
 var _weapon_defs: Dictionary = {}
