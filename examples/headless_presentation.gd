@@ -1896,7 +1896,8 @@ func _test_the_final_killcam() -> void:
 		"the end of the match waits the killcam's 7 s on top of the mode's")
 
 	var clock := [0.0]
-	var kc := ArenaKillcam.new()
+	var kc := DotKillcamHost.new()
+	ArenaKillcamBodies.configure(kc)
 	kc.players_fn = func() -> Array: return [killer, victim]
 	kc.player_for_fn = g.player_for
 	kc.now_fn = func() -> float: return clock[0]

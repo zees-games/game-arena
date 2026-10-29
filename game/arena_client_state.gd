@@ -11,7 +11,7 @@ const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
-const ArenaKillcam := preload("arena_killcam.gd")
+const ArenaKillcamBodies := preload("arena_killcam_bodies.gd")
 const ArenaConfig := preload("arena_config.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaMode := preload("arena_mode.gd")
@@ -88,8 +88,8 @@ var game_menu: DotMenu = null
 var board: ArenaMenus.Board = null
 ## The match summary opened the Tab board (rather than a held Tab), so the client closes it.
 var _summary_board_open: bool = false
-## The final killcam ([ArenaKillcam]): records every frame, plays before the summary.
-var killcam: ArenaKillcam = null
+## The final killcam ([DotKillcamHost]): records every frame, plays before the summary.
+var killcam: DotKillcamHost = null
 
 ## The kill view: the killer's replayed eye, in place of the death camera ([DotKillViewClient]).
 var killview: DotKillViewClient = null

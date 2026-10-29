@@ -586,7 +586,8 @@ func _on_killview(clip: Dictionary, info: Dictionary) -> void:
 
 
 func _build_killcam() -> void:
-	killcam = ArenaKillcam.new()
+	killcam = DotKillcamHost.new()
+	ArenaKillcamBodies.configure(killcam)
 	killcam.name = "FinalKillcam"
 	killcam.players_fn = func() -> Array: return game.players() if game != null else []
 	killcam.player_for_fn = func(id: int) -> Variant: return game.player_for(id) if game != null else null
@@ -607,7 +608,7 @@ func _ensure_winner_reveal() -> void:
 		return
 	winner_reveal = DotWinnerReveal.new()
 	winner_reveal.name = "WinnerReveal"
-	winner_reveal.skip_actions = ArenaKillcam.SKIP_ACTIONS
+	winner_reveal.skip_actions = ArenaKillcamBodies.SKIP_ACTIONS
 	winner_reveal.finished.connect(_on_reveal_finished)
 	add_child(winner_reveal)
 
