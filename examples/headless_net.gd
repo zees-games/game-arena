@@ -1218,7 +1218,12 @@ func _test_weapons_over_the_wire() -> void:
 		"%d uses after the replay" % uses.size()
 	)
 
-	# A launch the server announces flies on a client, and hurts nobody there.
+	_test_launch_flies_on_client(own)
+	_done()
+
+
+## A launch the server announces flies on a client, and hurts nobody there.
+func _test_launch_flies_on_client(own: ArenaPlayerNet) -> void:
 	var client_game: ArenaGame = _clients[2]["game"]
 	var gone: Array = []
 	client_game.projectiles.detonated.connect(func(at: Vector3, _s: DotWeaponSpawn) -> void:
@@ -1251,7 +1256,6 @@ func _test_weapons_over_the_wire() -> void:
 		own.player.health.health == health_before,
 		"and decides nothing: the client's copy hurts nobody"
 	)
-	_done()
 
 
 ## Players are solid to each other (`mp_solidplayers`, 1 by default): a walk into another

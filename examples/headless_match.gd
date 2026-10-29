@@ -1037,17 +1037,7 @@ func _test_freeze_countdown() -> void:
 	var shots := [0]
 	a.used.connect(func(o: DotWeaponOutcome) -> void: shots[0] += o.shots.size())
 
-	var intent := func() -> Array:
-		var move := DotFpsCommand.new()
-		move.move = Vector2(0.0, 1.0)
-		move.yaw = a.controller.state.yaw
-		move.set_button(DotFpsCommand.BUTTON_JUMP, true)
-		var fire := DotWeaponCommand.new()
-		fire.slot = 0
-		fire.yaw = move.yaw
-		fire.pitch = move.pitch
-		fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
-		return [move, fire]
+	var intent := func() -> Array: return _jump_and_fire(a)
 	for _k in range(TICK_RATE / 2):
 		game.tick({960: intent.call()})
 	_check(shots[0] > 0, "baseline: a live player shoots", str(shots[0]))
@@ -1103,6 +1093,20 @@ func _test_freeze_countdown() -> void:
 	remove_child(game)
 	game.queue_free()
 	_done()
+
+
+## Forward, jumping and firing: what a player does during a freeze.
+func _jump_and_fire(a: ArenaPlayer) -> Array:
+	var move := DotFpsCommand.new()
+	move.move = Vector2(0.0, 1.0)
+	move.yaw = a.controller.state.yaw
+	move.set_button(DotFpsCommand.BUTTON_JUMP, true)
+	var fire := DotWeaponCommand.new()
+	fire.slot = 0
+	fire.yaw = move.yaw
+	fire.pitch = move.pitch
+	fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
+	return [move, fire]
 
 
 ## Lag compensation: a shot is traced against the other players where the shooter saw

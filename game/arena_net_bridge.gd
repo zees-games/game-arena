@@ -16,12 +16,8 @@ const ArenaRequest := preload("arena_request.gd")
 ## Joins [ArenaGame] to a [DotNetManager]. The netcode seam, and the only file in
 ## game-arena that names both.
 ##
-## [b]Every other join in this project is a few lines because the addons refuse to
-## know about each other; this one is a file because the ordering is the hard part.[/b]
-## dot-net drives simulation per entity, and this game's tick order is a whole-game
-## property — everybody moves, then every shot is resolved against the world as it is
-## afterwards, then the match clock runs. Those two facts have to be reconciled
-## somewhere, and this is where.
+## dot-net drives simulation per entity, but this game's tick order is a whole-game
+## property (everybody moves, then shots resolve, then the match clock runs); this file reconciles the two.
 ##
 ## [codeblock]
 ## # server
@@ -186,9 +182,7 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 		return DotResult.fail(DotError.CODE_INVALID, "A bridge needs both halves.")
 
 	if p_game.is_authority != p_net.is_server:
-		# A game that thinks it is authoritative behind a client manager would
-		# resolve its own hits; a server whose game is not authoritative would
-		# resolve nobody's. Both are silent, and both are unplayable.
+		# Silent and unplayable either way: a client that resolves its own hits, or a server that resolves none.
 		return DotResult.fail(
 			DotError.CODE_STATE,
 			"The game and the manager disagree about who is authoritative.",
@@ -200,14 +194,8 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 	net = p_net
 
 	net.send_fn = _send
-
-	# Registered on BOTH ends, in the same order, because `DotNetMessageRegistry.seal`
-	# assigns wire ids from a sort of the type names and hashes the resulting schema.
-	# A type registered on one end only is two different ids and two different schema
-	# hashes, and the peers disagree on the first connection. That is not theoretical:
-	# `Array.sort()` on a StringName sorts by interned pointer, which every suite in
-	# this family missed by running both ends in one process and sharing one intern
-	# table, and a browser client — a genuinely separate program — found immediately.
+	# Registered on BOTH ends in the same order: `seal` derives wire ids and the schema hash
+	# from the type names, and a type on one end only means the peers disagree on connect.
 	var event := net.messages.register(
 		ArenaEvent.NAME,
 		ArenaEvent,
@@ -232,9 +220,7 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 	net.messages.on(ArenaRequest.NAME, _on_request)
 
 	game.remote_feet_fn = remote_feet
-
-	# The map's toys: the server's leave the registry before their nodes go and the new ones are
-	# named; a client's mirrors stay registered and are handed this end's toys when they exist.
+	# Server toys leave the registry before their nodes go; a client's mirrors stay registered.
 	if net.is_server:
 		game.toys_clearing.connect(_release_toys)
 		game.toys_built.connect(_register_toys)
@@ -780,17 +766,8 @@ func client_tick(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> void
 ## [method DotNetPredictor.reconcile] rather than applying it — applying it directly would
 ## undo everything predicted since — and acknowledges the inputs that state covers.
 ##
-## This used to do a second pass on top of that, reconciling against
-## [method DotNetBehaviour.snapshot_values] which by then held values that had [i]already[/i]
-## been rewound and replayed. The inputs were therefore replayed twice, and one correction
-## became two. Nothing failed: the client still converged, because the second replay
-## started from the first one's answer.
-##
-## What it cost was visible only in the number that exists to measure it.
-## [method DotNetPredictor.correction_rate] read [b]0.500[/b] with the extra pass and
-## [b]0.032[/b] without — and a correction rate near a half is precisely the reading that
-## class documents as "the two simulations disagree, and no smoothing will fix that". It
-## was found in dot-2d-hungry, whose bridge was written from this one and inherited it.
+## A second pass here once replayed inputs twice: [method DotNetPredictor.correction_rate] read
+## [b]0.500[/b] with it and [b]0.032[/b] without, though the client still converged.
 func receive_snapshot(payload: PackedByteArray) -> DotResult:
 	if net == null or net.is_server:
 		return DotResult.fail(DotError.CODE_FORBIDDEN, "Only a client receives these.")

@@ -36,6 +36,42 @@ func _check(condition: bool, what: String, detail: String = "") -> void:
 	print("  [%s] %s%s" % ["ok" if condition else "FAIL", what, ("  (" + detail + ")") if detail != "" else ""])
 
 
+## An incendiary dropped from 1.5 m over [param here] with a fuse far longer than its fall.
+func _incendiary_spawn(game: ArenaGame, here: Vector3, thrower: int) -> DotWeaponSpawn:
+	var spawn := DotWeaponSpawn.new()
+	spawn.id = &"incendiary"
+	spawn.origin = here + Vector3(0.0, 1.5, 0.0)
+	spawn.velocity = Vector3(0.0, -6.0, 0.0)
+	spawn.gravity_scale = 1.0
+	spawn.radius = 0.1
+	spawn.fuse_ticks = TICK_RATE * 30
+	spawn.life_ticks = TICK_RATE * 40
+	spawn.damage_type = game.combat.damage_type(&"blast")
+	spawn.owner_entity = thrower
+	spawn.tick = game.current_tick()
+	spawn.meta = {&"sticks": false}
+	return spawn
+
+
+## The first of [param ids] after the thrower on its team (or, with [param same] false, not on it), or 0.
+func _first_on_team(game: ArenaGame, ids: Array, thrower: int, same: bool) -> int:
+	for id in ids.slice(1):
+		if (game.team_of(id) == game.team_of(thrower)) == same:
+			return id
+	return 0
+
+
+## Stands [param together] at [param here] and every other id 30 m off, settled over three ticks.
+func _gather(game: ArenaGame, ids: Array, together: Array, here: Vector3) -> void:
+	for id in ids:
+		var far := Vector3(30.0 + float(id), here.y, 30.0)
+		game.player_for(id).controller.state.position = here if id in together else far
+	for _k in 3:
+		for id in together:
+			game.player_for(id).controller.state.position = here
+		game.tick({})
+
+
 func _run() -> void:
 	_check(ArenaGrenades.supported(), "arena_weapons is at the level the glue needs", str(DotAddonApi.build_level("arena_weapons")))
 	_test_wire()
@@ -59,13 +95,8 @@ func _run() -> void:
 		ids.append(10 + i)
 	game.tick({})
 	var thrower := int(ids[0])
-	var mate := 0
-	var enemy := 0
-	for id in ids.slice(1):
-		if game.team_of(id) == game.team_of(thrower) and mate == 0:
-			mate = id
-		elif game.team_of(id) != game.team_of(thrower) and enemy == 0:
-			enemy = id
+	var mate := _first_on_team(game, ids, thrower, true)
+	var enemy := _first_on_team(game, ids, thrower, false)
 	_check(mate > 0 and enemy > 0, "a team-mate and an enemy", "%d %d" % [mate, enemy])
 	_check(game.grenades != null, "the server game builds the grenade glue")
 
@@ -73,30 +104,13 @@ func _run() -> void:
 	game.grenade_effect.connect(func(info: Dictionary) -> void: seen.append(info))
 	var floor_y := game.player_for(thrower).controller.state.position.y
 	var here := Vector3(0.0, floor_y, 0.0)
-	for id in ids:
-		var far := Vector3(30.0 + float(id), floor_y, 30.0)
-		game.player_for(id).controller.state.position = here if id in [thrower, mate, enemy] else far
-	for _k in 3:
-		for id in [thrower, mate, enemy]:
-			game.player_for(id).controller.state.position = here
-		game.tick({})
+	_gather(game, ids, [thrower, mate, enemy], here)
 
 	var before := {}
 	for id in [thrower, mate, enemy]:
 		before[id] = game.combat.health_of(id).health
 
-	var spawn := DotWeaponSpawn.new()
-	spawn.id = &"incendiary"
-	spawn.origin = here + Vector3(0.0, 1.5, 0.0)
-	spawn.velocity = Vector3(0.0, -6.0, 0.0)
-	spawn.gravity_scale = 1.0
-	spawn.radius = 0.1
-	spawn.fuse_ticks = TICK_RATE * 30
-	spawn.life_ticks = TICK_RATE * 40
-	spawn.damage_type = game.combat.damage_type(&"blast")
-	spawn.owner_entity = thrower
-	spawn.tick = game.current_tick()
-	spawn.meta = {&"sticks": false}
+	var spawn := _incendiary_spawn(game, here, thrower)
 	var went_off: Array = []
 	game.projectiles.detonated.connect(func(at: Vector3, _s: DotWeaponSpawn) -> void: went_off.append(at))
 	game.projectiles.launch(spawn)

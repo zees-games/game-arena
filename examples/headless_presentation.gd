@@ -1576,14 +1576,7 @@ func _test_bodies_fall() -> void:
 		"a KILL without one reads as a plain fall")
 
 	# The client's half, on a floor in a physics world.
-	var floor_body := StaticBody3D.new()
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(60, 1, 60)
-	shape.shape = box
-	shape.position = Vector3(0, -0.5, 0)
-	floor_body.add_child(shape)
-	add_child(floor_body)
+	var floor_body := _test_floor()
 	var yard := DotPlayerRagdolls.new()
 	add_child(yard)
 
@@ -1669,12 +1662,8 @@ func _test_the_map_menu() -> void:
 	_check(rows.filter(func(r: Dictionary) -> bool: return str(r["id"]).begins_with("map:")).size() > 1
 		and rows.any(func(r: Dictionary) -> bool: return str(r["id"]).begins_with("mode:")),
 		"it lists more than one map, and the modes this map can host", str(rows.map(func(r: Dictionary) -> String: return str(r["id"]))))
-	var m := InputEventKey.new()
-	m.physical_keycode = KEY_M
-	m.keycode = KEY_M
-	m.pressed = true
 	menu.close_all()
-	_check(menu.handle_event(m) and menu.picker.is_open(), "M opens the picker")
+	_check(menu.handle_event(_key_press(KEY_M)) and menu.picker.is_open(), "M opens the picker")
 	var wanted := &""
 	var key := KEY_NONE
 	for row in range(1, DotMenuPicker.PAGE_SIZE + 1):
@@ -1683,11 +1672,7 @@ func _test_the_map_menu() -> void:
 			wanted = StringName(str((it as Dictionary)["id"]).substr(4))
 			key = KEY_0 + row
 			break
-	var digit := InputEventKey.new()
-	digit.physical_keycode = key
-	digit.keycode = key
-	digit.pressed = true
-	var _k := menu.handle_event(digit)
+	var _k := menu.handle_event(_key_press(key))
 	for _i in 4:
 		await get_tree().physics_frame
 	_check(wanted != &"" and client.game.map.id == wanted and client._level != null and is_instance_valid(client._level),
@@ -1727,6 +1712,64 @@ func _test_the_map_menu() -> void:
 	client.free()
 	await get_tree().process_frame
 	_done()
+
+
+## Records 9.5 s of the killer running down +x with the victim standing down its aim, and a kill at 8 s.
+func _record_kill_run(kc: DotKillcamHost, killer: ArenaPlayer, victim: ArenaPlayer, clock: Array, at: Callable) -> void:
+	var step := 1.0 / 60.0
+	var start := killer.controller.state.position
+	killer.controller.state.pitch = 0.0
+	var aim := -Basis(Vector3.UP, deg_to_rad(killer.controller.state.yaw)).z
+	victim.controller.state.position = start + Vector3(8.0, 0.0, 0.0) + aim * 10.0
+	victim.global_position = victim.controller.state.position
+	while clock[0] < 9.5:
+		clock[0] += step
+		killer.controller.state.position = at.call(clock[0])
+		killer.global_position = at.call(clock[0])
+		kc.frame()
+		if absf(clock[0] - 8.0) < step * 0.5:
+			kc.note_kill(41, 42, "rifle")
+
+
+## A killcam host over [param players] and the game's rules, driven by hand from [param clock].
+func _killcam_host(g: ArenaGame, players: Array, clock: Array) -> DotKillcamHost:
+	var kc := DotKillcamHost.new()
+	ArenaKillcamBodies.configure(kc)
+	kc.players_fn = func() -> Array: return players
+	kc.player_for_fn = g.player_for
+	kc.now_fn = func() -> float: return clock[0]
+	kc.seconds_fn = func() -> float: return g.rule("killcam")
+	add_child(kc)
+	kc.killcam.auto_process = false
+	return kc
+
+
+func _check_banner_icon(kc: DotKillcamHost) -> void:
+	var icon_tex := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8))
+	kc.weapon_icon_fn = func(id: String) -> Texture2D: return icon_tex if id == "rifle" else null
+	kc.killcam.banner.present({"killer": "Killer", "weapon": "Rifle", "weapon_id": "rifle"})
+	_check(kc.killcam.banner.icon_rect.visible and kc.killcam.banner.icon_rect.texture == icon_tex,
+		"the banner shows the weapon's icon from weapon_icon_fn")
+
+
+func _test_floor() -> StaticBody3D:
+	var floor_body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(60, 1, 60)
+	shape.shape = box
+	shape.position = Vector3(0, -0.5, 0)
+	floor_body.add_child(shape)
+	add_child(floor_body)
+	return floor_body
+
+
+func _key_press(key: Key) -> InputEventKey:
+	var e := InputEventKey.new()
+	e.physical_keycode = key
+	e.keycode = key
+	e.pressed = true
+	return e
 
 
 ## Christian's first play test: B opens the loadout (primary, secondary, melee, grenades), a
@@ -1894,36 +1937,16 @@ func _test_the_final_killcam() -> void:
 	var victim: ArenaPlayer = g.add_player(42, "Victim").value
 	_check(is_equal_approx(g.match_node.rules.match_end_sec, g.mode.rules.match_end_sec + 7.0),
 		"the end of the match waits the killcam's 7 s on top of the mode's")
-
 	var clock := [0.0]
-	var kc := DotKillcamHost.new()
-	ArenaKillcamBodies.configure(kc)
-	kc.players_fn = func() -> Array: return [killer, victim]
-	kc.player_for_fn = g.player_for
-	kc.now_fn = func() -> float: return clock[0]
-	kc.seconds_fn = func() -> float: return g.rule("killcam")
-	add_child(kc)
-	kc.killcam.auto_process = false
+	var kc := _killcam_host(g, [killer, victim], clock)
 	var ended: Array = []
 	kc.over.connect(func(skipped: bool) -> void: ended.append(skipped))
 	var start := killer.controller.state.position
 	var step := 1.0 / 60.0
 	var at := func(t: float) -> Vector3: return start + Vector3(t, 0.0, 0.0)
-	# The victim stands down the killer's aim, as it does when it is shot.
-	killer.controller.state.pitch = 0.0
-	var aim := -Basis(Vector3.UP, deg_to_rad(killer.controller.state.yaw)).z
-	victim.controller.state.position = start + Vector3(8.0, 0.0, 0.0) + aim * 10.0
-	victim.global_position = victim.controller.state.position
-	while clock[0] < 9.5:
-		clock[0] += step
-		killer.controller.state.position = at.call(clock[0])
-		killer.global_position = at.call(clock[0])
-		kc.frame()
-		if absf(clock[0] - 8.0) < step * 0.5:
-			kc.note_kill(41, 42, "rifle")
+	_record_kill_run(kc, killer, victim, clock, at)
 	_check(kc.buffer.frame_count() > 400 and int(kc.buffer.last_event(&"kill")["data"]["killer"]) == 41,
 		"every frame drawn and the kill went into the buffer")
-
 	var drawn: Array = []
 	kc.killcam.frame_drawn.connect(func(s: Dictionary) -> void:
 		var kb: Node3D = killer.body_mesh
@@ -1946,11 +1969,7 @@ func _test_the_final_killcam() -> void:
 	_check(float(later[0]) > float(first[0]) + 0.2 and (later[2] as Vector3).x > (first[2] as Vector3).x + 0.2,
 		"time advances and the killer's body moves with the recording", "t %.2f -> %.2f, x %.2f -> %.2f" % [first[0], later[0], (first[2] as Vector3).x, (later[2] as Vector3).x])
 	_check(kc.killcam.banner != null and kc.killcam.banner.killer_label.text == "Killer", "under a banner naming the killer")
-	var icon_tex := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8))
-	kc.weapon_icon_fn = func(id: String) -> Texture2D: return icon_tex if id == "rifle" else null
-	kc.killcam.banner.present({"killer": "Killer", "weapon": "Rifle", "weapon_id": "rifle"})
-	_check(kc.killcam.banner.icon_rect.visible and kc.killcam.banner.icon_rect.texture == icon_tex,
-		"the banner shows the weapon's icon from weapon_icon_fn")
+	_check_banner_icon(kc)
 	var n := 0
 	while kc.is_playing() and n < 1000:
 		kc.killcam.advance(step)

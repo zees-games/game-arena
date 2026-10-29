@@ -292,12 +292,11 @@ func _wait(seconds: float) -> void:
 
 # --- Offline ----------------------------------------------------------------
 
-## The wall retract answers a wall the runner passes close to, which is the point of it and not bob or sway.
+## Zeroed so a nearby wall cannot be mistaken for bob or sway.
 func _zero_wall_retract(client: Node) -> void:
 	var p: ArenaPlayer = client.get("player")
-	var rules: Object = p.weapons.view_model().get("feel_rules") if p != null and p.weapons != null and p.weapons.view_model() != null else null
-	if rules != null:
-		rules.set("wall_retract", 0.0)
+	if p != null and p.weapons != null and p.weapons.view_model() != null:
+		p.weapons.view_model().get("feel_rules").set("wall_retract", 0.0)
 
 
 func _test_offline() -> void:

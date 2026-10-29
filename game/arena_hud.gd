@@ -79,23 +79,13 @@ var _portraits_in: float = 0.0
 
 ## What the round is about, when it is about something. Empty in a deathmatch.
 ##
-## One line rather than a widget per objective, because the two modes that have any
-## want completely different pictures — a hill wants a clock and a flag wants two
-## states — and a widget general enough for both would draw neither well. A game that
-## wants a proper objective HUD builds it; this is the line that says a mode is
-## running and how far along it is.
+## One line, not a widget per objective: a hill and a flag want different pictures.
 var objective_label: Label = null
 
 ## An administrator's `blind`, over the world and under the rest of the HUD.
 ##
-## [b]Under the widgets, on purpose.[/b] A blind takes the game away, not the player's
-## bearings: the clock, the kill feed, their own health and the chat box still say that
-## the match is going on and that they are in it, which is what makes it read as "an
-## admin did this" rather than as a client that stopped drawing. The menus and the chat
-## box are above the HUD altogether.
-##
-## Black rather than white. A white screen at full brightness is a thing a player can be
-## hurt by in a dark room, and taking the picture away is the whole of the point.
+## Under the widgets, so the clock, kill feed and health still read as "an admin did this"
+## rather than a client that stopped drawing. Black, not white: full white hurts in a dark room.
 var blind_overlay: ColorRect = null
 
 ## The scope, drawn at full aim with a scoped weapon. Under every widget, over the world.
@@ -105,19 +95,12 @@ var scope: ZeeScopeOverlay = null
 ## on every hit. Drawn by a shader per pixel ([constant HURT_SHADER]), so no art and no
 ## resolution of its own; strongest at no health, gone above [constant HURT_FROM].
 ##
-## [b]A shader, not a gradient texture.[/b] It was a `GradientTexture2D`, which is 64 by 64
-## unless told otherwise, stretched over the whole viewport: Christian's first play test
-## showed the oval in visible pixel steps at 1080p. Computed per pixel there is nothing to
-## stretch, and a little dither keeps the long soft ramp from banding into rings.
+## A shader, not a gradient texture: a 64 by 64 one stretched over 1080p showed visible steps.
 var hurt_overlay: ColorRect = null
 const HURT_FROM := 0.35
 
-## The hit pulse: dot-fx's `hurt_flash` (its strength in [member flash_source]'s
-## `flash_colour`), drawn at the edge rather than over the screen. dot-fx computes the
-## flash and draws nothing; nothing drew it before this, so a hit showed no red at all until
-## health fell under [constant HURT_FROM]. Read through dot-fx so the player's "no flashes"
-## and the three-a-second limit hold. [constant HURT_PULSE_GAIN] maps the flash's peak
-## (0.28) to about [constant HURT_PULSE_MAX] of the edge.
+## The hit pulse: dot-fx's `hurt_flash` (strength in [member flash_source]'s `flash_colour`), drawn at
+## the edge. Read through dot-fx so "no flashes" and the three-a-second limit hold; the gain maps its peak (0.28) to about the max.
 var flash_source: Object = null
 const HURT_PULSE_GAIN := 2.2
 const HURT_PULSE_MAX := 0.6
@@ -1349,11 +1332,8 @@ func present_body() -> void:
 			scope.follow(hands)
 		else:
 			scope.fraction = 0.0
-		if scope_up and is_inside_tree():
-			# The whole viewport, like the blind: the HUD's own size leaves the safe-area strip showing.
-			var inverse := get_global_transform().affine_inverse()
-			scope.position = inverse * Vector2.ZERO
-			scope.size = inverse.basis_xform(get_viewport_rect().size)
+		if scope_up:
+			_fill_viewport(scope)
 	if crosshair != null:
 		# The scope has its own reticle; a crosshair drawn over it is two.
 		# Dead or in a kill view: DotCrosshair hides itself (alive_source); older dot-ui is hidden here.
@@ -1364,20 +1344,7 @@ func present_body() -> void:
 		if _crosshair_fades:
 			crosshair.call(&"set_aim", hands.aim_fraction() if hands != null and not scope_up else 0.0)
 
-	if hurt_overlay != null:
-		var hurt := 0.0
-		if live and player.health != null and player.health.max_health > 0.0:
-			var fraction := player.health.health / player.health.max_health
-			hurt = clampf((HURT_FROM - fraction) / HURT_FROM, 0.0, 1.0)
-		if live and flash_source != null and is_instance_valid(flash_source):
-			var flash: Color = flash_source.get(&"flash_colour")
-			hurt = maxf(hurt, minf(flash.a * HURT_PULSE_GAIN, HURT_PULSE_MAX))
-		hurt_overlay.modulate.a = hurt
-		if hurt > 0.0 and is_inside_tree():
-			# The whole viewport, as the blind does (the HUD sits in the safe area).
-			var inverse := get_global_transform().affine_inverse()
-			hurt_overlay.position = inverse * Vector2.ZERO
-			hurt_overlay.size = inverse.basis_xform(get_viewport_rect().size)
+	_present_hurt(live)
 
 	var state: DotFpsState = player.controller.state if live else null
 	var tunables: DotFpsTunables = player.controller.tunables if live else null
@@ -1433,6 +1400,31 @@ func present_body() -> void:
 
 	_advance_popups(get_process_delta_time())
 	present_challenge(live)
+
+
+## Covers the whole viewport, like the blind: the HUD's own size leaves the safe-area strip showing.
+func _fill_viewport(control: Control) -> void:
+	if not is_inside_tree():
+		return
+	var inverse := get_global_transform().affine_inverse()
+	control.position = inverse * Vector2.ZERO
+	control.size = inverse.basis_xform(get_viewport_rect().size)
+
+
+## The red edge from low health and from a flash.
+func _present_hurt(live: bool) -> void:
+	if hurt_overlay == null:
+		return
+	var hurt := 0.0
+	if live and player.health != null and player.health.max_health > 0.0:
+		var fraction := player.health.health / player.health.max_health
+		hurt = clampf((HURT_FROM - fraction) / HURT_FROM, 0.0, 1.0)
+	if live and flash_source != null and is_instance_valid(flash_source):
+		var flash: Color = flash_source.get(&"flash_colour")
+		hurt = maxf(hurt, minf(flash.a * HURT_PULSE_GAIN, HURT_PULSE_MAX))
+	hurt_overlay.modulate.a = hurt
+	if hurt > 0.0:
+		_fill_viewport(hurt_overlay)
 
 
 ## The ability buttons from the followed player's movement state: slide, launch and dash

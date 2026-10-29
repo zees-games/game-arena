@@ -106,42 +106,27 @@ var camera: Camera3D = null
 ## The view to draw this frame, (yaw, pitch) in degrees, or null for the simulated
 ## state's. Set every frame by the client from `DotFpsSampler.look_now()`.
 ##
-## [b]Because a frame with no tick in it would otherwise not turn.[/b] The state's angles
-## change only when a tick runs, and this game ticks 64 times a second: a 144 Hz display
-## has more frames with no tick than with one, and on each of them the view stood where the
-## last frame left it while the mouse moved, then caught up double on the next. game-g2gfast
-## measured it first at 128 ticks (one frame in nine at 144 Hz); `headless_view` here.
+## A frame with no tick in it would not turn: at 144 Hz against 64 ticks most frames have none (`headless_view`).
 var view_now: Variant = null
 
 ## Added to where the local player is drawn this frame: what is left of the last
 ## prediction corrections, easing to zero (`DotNetPredictor.visual_offset`). Without it a
-## correction moves the eye in one frame -- 30 cm in one frame for a 30 cm correction in
-## game-g2gfast's `headless_feel` -- where the predictor has always computed the offset
-## that eases it over a tenth of a second, and nothing read it.
+## correction moves the eye in one frame.
 var drawn_offset: Vector3 = Vector3.ZERO
 
 ## How far through the current tick this frame is drawn (usually 0..1, -1 to 2 just after a
 ## slip), or NAN for the engine's physics fraction. Set every frame by a connected client from
 ## dot-net's `DotNetClock.render_alpha`.
 ##
-## [b]Because a connected client's ticks are the clock's, not the engine's.[/b] The clock
-## stretches or shrinks its ticks while it settles on the server (drift), so now and then a
-## physics frame runs no tick and a later one two. Drawn at the engine's fraction, the frame
-## with none goes back over the stretch it just drew and the eye stands still, and the frame
-## with two moves it double: `headless_feel` measured 8 frames in 5 s 10 to 15 cm off at a
-## 60 Hz display, every one on a physics frame that ran 0 or 2 ticks. Offline every physics
-## frame is one tick and the engine's fraction is exact.
+## A connected client's ticks are the clock's, which drifts: a physics frame may run 0 or 2 ticks,
+## and at the engine's fraction the eye stalls then jumps double (`headless_feel`). Offline it is exact.
 var drawn_alpha: float = NAN
 
 ## Whether [method present] draws this body between its ticks: a player this machine
 ## simulates and somebody else watches -- an offline bot. Set by the client.
 ##
-## [b]A bot offline was drawn where its last tick left it[/b], because the tick moves this
-## node and nothing else moved the body: at 144 Hz against 64 ticks a bot stood still on
-## more than half the frames and jumped on the rest, every frame 6 to 8 cm off its motion
-## (`headless_feel`). A mirrored player is never this: dot-net's interpolator moves its node
-## once a frame (`ArenaPlayerNet._net_interpolated`), and its controller is never ticked here,
-## so the controller's last-tick state it would blend from is not its own.
+## An offline bot was drawn where its last tick left it and stood still on most frames at 144 Hz
+## (`headless_feel`). A mirrored player never is: dot-net's interpolator moves its node each frame.
 var interpolate_body: bool = false
 
 ## The yaw this player started its last tick with, for [member interpolate_body]: the
