@@ -28,6 +28,8 @@ var _fp_cam: Camera3D = null
 var _tp_cam: Camera3D = null
 var _tick := 0
 var _prev_time := 0.0
+var _before := Vector3.INF
+var _prev_sample_t := 0.0
 var _flinch := DotFpsAimBreak.new()
 var _wobble := Vector2.ZERO
 var _dead := false
@@ -68,9 +70,7 @@ func _initialize() -> void:
 	_fp_cam = _view(0)
 	_fp_cam.add_child(hands)
 	_hands = hands
-	var spawn: Array = _clip.fields.get("spawn", [15.0, 0.05, -13.0])
 	_spawn_yaw = float(_clip.fields.get("spawn_yaw", 0.0))
-	_player.controller.teleport(Vector3(spawn[0], spawn[1], spawn[2]), float(_clip.fields.get("spawn_yaw", 0.0)), 0.0)
 
 	# Two cameras sharing the one world, side by side; the player's own camera is not drawn.
 	_tp_cam = _view(1)
@@ -104,6 +104,9 @@ func _physics_process(_delta: float) -> bool:
 		_armed = true
 		_player.arm_first_person(_hands, true)
 		_player.give_default_loadout()
+		# Placed once the tree is live: a teleport inside _initialize was lost and every clip began at the origin.
+		var spawn: Array = _clip.fields.get("spawn", [15.0, 0.05, -13.0])
+		_player.controller.teleport(Vector3(spawn[0], spawn[1], spawn[2]), _spawn_yaw, 0.0)
 	var time := _clip_time()
 	var state := _clip.state_at(maxf(time, 0.0))
 	var move: Array = state["move"]
@@ -118,6 +121,7 @@ func _physics_process(_delta: float) -> bool:
 			weapon_cmd.buttons |= int(WEAPON_BUTTONS.get(button, 0))
 	weapon_cmd.yaw = move_cmd.yaw
 	weapon_cmd.pitch = move_cmd.pitch
+	_before = _player.controller.state.position
 	var _out := _player.simulate_tick(_tick, 1.0 / float(TICK_RATE), move_cmd, weapon_cmd)
 	if time >= 0.0:
 		for step: Dictionary in _clip.events_between(maxf(_prev_time, -0.001), time):
@@ -154,12 +158,20 @@ func _process(delta: float) -> bool:
 	_player.camera_roll = deg_to_rad(shake.x)
 	_wobble = _flinch.wobble(maxf(time, 0.0))
 	_player.present(delta)
+	# The game places and turns your own body between ticks only in its view paths, which this camera skips.
+	var alpha := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
+	var feet := _player.controller.state.position
+	if _before.is_finite():
+		feet = _before.lerp(feet, alpha)
+	time -= (1.0 - alpha) / float(TICK_RATE)
+	if _player.body_mesh != null:
+		_player.body_mesh.global_position = feet
+		_player.body_mesh.global_rotation = Vector3(0.0, deg_to_rad(_player.controller.state.yaw), 0.0)
 	_fp_cam.global_transform = _player.camera.global_transform
 	_fp_cam.fov = _player.camera.fov
 	_fp_cam.cull_mask = 0xFFFFF & ~BODY_LAYER
 	_tp_cam.cull_mask = 0xFFFFF & ~VIEW_LAYER
 	_tag_body(_player)
-	var feet := _player.controller.state.position
 	var yaw := deg_to_rad(_spawn_yaw + float(_clip.state_at(maxf(time, 0.0))["yaw"]))
 	var behind := Basis(Vector3.UP, yaw) * Vector3(1.1, 1.7, 2.8)
 	_tp_cam.global_position = feet + behind
@@ -186,11 +198,12 @@ func _sample(time: float, feet: Vector3) -> void:
 		for k in ankles.size():
 			var a: Vector3 = sample["feet"][k]
 			var v := 0.0
-			if _prev_feet.size() == ankles.size():
-				v = Vector2(a.x - _prev_feet[k].x, a.z - _prev_feet[k].z).length() * 15.0
+			if _prev_feet.size() == ankles.size() and time > _prev_sample_t:
+				v = Vector2(a.x - _prev_feet[k].x, a.z - _prev_feet[k].z).length() / (time - _prev_sample_t)
 			row += "  %s h=%.3f v=%.2f" % [_bones.get_bone_name(_feet[k]), a.y - feet.y, v]
 			_log.append(row)
 		_prev_feet = sample["feet"].duplicate()
+		_prev_sample_t = time
 		var rotations: Array = []
 		for i in _bones.get_bone_count():
 			rotations.append(_bones.get_bone_pose_rotation(i))

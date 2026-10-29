@@ -5,7 +5,7 @@
 #   tools/filmstrip_run.sh <clip> [fps]
 set -euo pipefail
 cd "$(dirname "$0")/.."
-clip=${1:?clip}; fps=${2:-15}
+clip=${1:?clip}; fps=${2:-60}
 out=screenshots/filmstrip
 mkdir -p "$out"
 timeout 240 xvfb-run -a godot --path . --resolution 1280x480 --fixed-fps "$fps" \

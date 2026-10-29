@@ -1935,6 +1935,11 @@ func _wear(avatar: DotAvatar) -> bool:
 	body_mesh.add_child(figure)
 	var height := controller.tunables.stand_height if controller != null and controller.tunables != null else 1.8
 	figure.build(ArenaAvatars.look_of(avatar, StringName("arena-player-%08d" % player_id)), height)
+	if controller != null and controller.tunables != null:
+		# This game walks at about the stock run threshold: switch halfway between its walk and run.
+		var t := controller.tunables
+		var mid := t.max_speed * (1.0 + t.walk_speed_scale) * 0.5
+		figure.set_run_speeds(mid, mid - 0.8)
 
 	if not figure.from_art:
 		DotLog.debug(CHANNEL, "the people's art is missing; using the capsule", {"player": player_id})
