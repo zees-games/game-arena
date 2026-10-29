@@ -1225,6 +1225,7 @@ func _add(session: DotClientSession) -> void:
 	# player nothing is ever sent about: the manager only builds snapshots for peers it
 	# knows and only holds an input buffer for those, so the server would simulate them
 	# perfectly and alone.
+	game.loadout_identity.bind(session)
 	var added := bridge.add_player(
 		session.peer_id, session.userid, session.display_name
 	)
@@ -1266,6 +1267,7 @@ func _on_client_disconnected(session: DotClientSession, _reason: String) -> void
 	# its acknowledgement record as well as taking the player out of the match.
 	bridge.remove_peer(session.peer_id)
 	_joined.erase(session.userid)
+	game.loadout_identity.release(session.userid)
 
 	var loadouts := DotGameAvatarActionRelay.loadouts_of(net)
 	if loadouts != null:
