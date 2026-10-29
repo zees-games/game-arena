@@ -1904,6 +1904,11 @@ func _test_the_final_killcam() -> void:
 	var start := killer.controller.state.position
 	var step := 1.0 / 60.0
 	var at := func(t: float) -> Vector3: return start + Vector3(t, 0.0, 0.0)
+	# The victim stands down the killer's aim, as it does when it is shot.
+	killer.controller.state.pitch = 0.0
+	var aim := -Basis(Vector3.UP, deg_to_rad(killer.controller.state.yaw)).z
+	victim.controller.state.position = start + Vector3(8.0, 0.0, 0.0) + aim * 10.0
+	victim.global_position = victim.controller.state.position
 	while clock[0] < 9.5:
 		clock[0] += step
 		killer.controller.state.position = at.call(clock[0])
