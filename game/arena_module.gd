@@ -145,7 +145,7 @@ func _module_load() -> DotResult:
 	_add_match_cvars()
 
 	# B, the loadout menu: `/loadout` and its notice, and the owner's mp_loadout_menu,
-	# mp_loadout_allow and mp_loadout_fixed (dot-loadout's DotLoadoutCommand). Absent on a host
+	# mp_loadout_allow and mp_loadout_fixed and the mp_loadout_random* dice (dot-loadout's DotLoadoutCommand). Absent on a host
 	# whose dot-loadout predates it, and then B says the server did not answer.
 	if game.loadout_command != null:
 		game.loadout_command.call(&"bind", self)

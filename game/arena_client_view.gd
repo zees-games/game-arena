@@ -109,6 +109,7 @@ func _use_loadout_menu() -> void:
 		return
 	loadout_menu = game_menu.call(&"use_loadout", loadout_offer, choose_loadout, decorate_loadout_choice)
 	if loadout_menu != null:
+		loadout_menu.set(&"random_fn", random_loadout)
 		# Remembered under the signed-in site account (or "local" as a guest), and never
 		# from a suite or a render on scratch settings: those must not write, or read back, a
 		# player's real choice.
@@ -165,6 +166,13 @@ func choose_loadout(picks: Dictionary) -> Variant:
 	if game == null or game.loadout_command == null or player == null:
 		return DotResult.fail(DotError.CODE_STATE, "Join the match first.")
 	return await game.loadout_command.call(&"choose", null, ArenaGame.storage_key(player.player_id), picks)
+
+
+## Solo: rolls a random loadout under the same `mp_loadout_random*` rules the server applies.
+func random_loadout() -> Variant:
+	if game == null or game.loadout_command == null or player == null:
+		return DotResult.fail(DotError.CODE_STATE, "Join the match first.")
+	return await game.loadout_command.call(&"choose_random", null, ArenaGame.storage_key(player.player_id))
 
 
 ## A card's picture (the HUD's rendered weapon silhouettes) and numbers (zee's cards).
