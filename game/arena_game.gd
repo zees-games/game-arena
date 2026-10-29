@@ -1525,6 +1525,7 @@ static func _make_killview_rules() -> DotKillViewRules:
 func make_killview_server() -> DotKillViewServer:
 	var server := DotKillViewServer.new(killview_rules)
 	server.tick_rate = tick_rate
+	KillPov.watch_hits(self)
 	server.eyes_fn = func() -> Array:
 		var eyes: Array = []
 		for p: ArenaPlayer in players():
@@ -1533,7 +1534,7 @@ func make_killview_server() -> DotKillViewServer:
 			var st: DotFpsState = p.controller.state
 			var eye: Vector3 = p.controller.motor.eye_position(st) if p.controller.motor != null else st.position + Vector3(0.0, 1.6, 0.0)
 			var basis := Basis.from_euler(Vector3(deg_to_rad(st.pitch), deg_to_rad(st.yaw), 0.0))
-			eyes.append({"id": p.player_id, "transform": Transform3D(basis, eye)})
+			eyes.append({"id": p.player_id, "transform": Transform3D(basis, eye), "aux": KillPov.aux_of(p)})
 		return eyes
 	server.use_respawn_queue(func() -> Variant: return match_node.respawns if match_node != null else null,
 		func(id: Variant) -> DotResult: return respawn_player(int(id)))

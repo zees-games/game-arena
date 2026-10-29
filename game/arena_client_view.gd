@@ -1,5 +1,6 @@
 extends "arena_client_state.gd"
 
+const KillPovView := preload("arena_kill_pov_view.gd")
 ## Helpers of [ArenaClient] that touch only its state, split out so the client file stays under the size gate.
 
 

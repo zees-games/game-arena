@@ -3,6 +3,7 @@ extends Node
 
 ## State and signals of [ArenaGame], split out so the game file holds its behaviour.
 
+const KillPov := preload("arena_kill_pov.gd")
 const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaWeaponDropWiring := preload("arena_weapon_drop_wiring.gd")
 const ArenaConfig := preload("arena_config.gd")
