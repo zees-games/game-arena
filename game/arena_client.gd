@@ -866,7 +866,8 @@ func _arm(body: ArenaPlayer) -> void:
 ## each switch, in the middle of a fight. The materials are kept by [ZeeViewModel] and handed to
 ## the gate to draw once.
 func _prewarm_weapons(body: ArenaPlayer) -> void:
-	if gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
+	# Headless draws nothing, so the spare views only add nodes, memory and frames (perf smoke).
+	if DotPlatform.is_headless() or gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
 		return
 	var spare := ZeeViewModel.new()
 	spare.name = "WeaponPrewarm"
