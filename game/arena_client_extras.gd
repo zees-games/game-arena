@@ -4,7 +4,12 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaMapSession := preload("arena_map_session.gd")
 const ArenaMaps := preload("arena_maps.gd")
 const ArenaNetBridge := preload("arena_net_bridge.gd")
-const ArenaServices := preload("arena_services.gd")
+
+## ArenaServices' channel ids; naming ArenaServices here compiled all of dot-server into the client.
+const CH_ALL := &"all"
+const CH_TEAM := &"team"
+const CH_NEAR := &"near"
+const CH_WHISPER := &"whisper"
 
 ## The client halves of chat, voice and map changes.
 ##
@@ -108,10 +113,7 @@ func _build_chat() -> void:
 		})
 		return
 
-	for id in [
-		ArenaServices.CH_ALL, ArenaServices.CH_TEAM,
-		ArenaServices.CH_NEAR, ArenaServices.CH_WHISPER
-	]:
+	for id in [CH_ALL, CH_TEAM, CH_NEAR, CH_WHISPER]:
 		var channel := DotChatChannel.everyone()
 		channel.id = id
 		chat.add_channel(channel)
@@ -120,7 +122,7 @@ func _build_chat() -> void:
 		func(message: DotChatMessage, _channel: StringName) -> void:
 			# A dot-chat line's kind is "say" on every channel; the channel is what makes
 			# it a team line, and "team" is what the chat box colours.
-			var kind := "team" if message.channel == ArenaServices.CH_TEAM else message.kind_name()
+			var kind := "team" if message.channel == CH_TEAM else message.kind_name()
 			said.emit(speaker_of(message), text_of(message), kind)
 			line_received.emit(message.describe())
 	)
