@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Renders the end of a solo match: one bot kills another for the last point, then frames of the
 ## final killcam, the winner reveal and the scoreboard go to screenshots/killcam/. Run by
-## render_killcam.sh under xvfb.
+## render_killcam.sh under xvfb. `--death`: a bot kills you instead, and frames of your kill view.
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
@@ -13,6 +13,7 @@ const SHOTS := [1.6, 4.6, 8.3, 12.8, 13.6, 14.6, 16.0, 18.0, 22.0]
 var client: Node = null
 var _map := "dm_atrium"
 var _calm := false
+var _death := false
 
 
 func _initialize() -> void:
@@ -21,6 +22,7 @@ func _initialize() -> void:
 	if at >= 0 and at + 1 < args.size():
 		_map = args[at + 1]
 	_calm = "--reduce-motion" in args
+	_death = "--death" in args
 	var _scratch := ArenaPresentation.use_scratch_settings("render_killcam")
 	var scene: PackedScene = load("res://game/arena.tscn")
 	client = scene.instantiate()
@@ -69,6 +71,10 @@ func _run() -> void:
 	killer.controller.teleport(spawn.origin, yaw, 0.0)
 	victim.controller.teleport(spawn.origin + ahead * 5.0, yaw + PI, 0.0)
 	me.controller.teleport(spawn.origin - ahead * 3.0 + spawn.basis.x * 2.0, yaw, 0.0)
+	if _death:
+		await _render_death(game, killer, me, spawn.origin + ahead * 8.0, yaw + PI)
+		quit(0)
+		return
 	await _wait(3.6)
 
 	var mine: DotPlayerScore = game.match_node.scoreboard.find(str(killer.player_id))
@@ -102,3 +108,45 @@ func _run() -> void:
 		var path := ProjectSettings.globalize_path("%s/%s%s_%03d.png" % [OUT_DIR, _map, "_calm" if _calm else "", int(at_sec * 10.0)])
 		root.get_texture().get_image().save_png(path)
 	quit(0)
+
+
+# The solo game keeps no server ring, so this records the killer's eye as a server would.
+func _render_death(game: Object, killer: Object, me: Object, at: Vector3, facing: float) -> void:
+	me.controller.teleport(at, facing, 0.0)
+	game.killview_rules.enabled = true
+	var kc: Object = client.get("killcam")
+	var ring := DotKillViewRing.new(game.killview_rules)
+	var record := func() -> void:
+		var st: DotFpsState = killer.controller.state
+		var eye: Transform3D = Transform3D(Basis.from_euler(Vector3(deg_to_rad(st.pitch), deg_to_rad(st.yaw), 0.0)), killer.controller.motor.eye_position(st))
+		var _r := ring.record(killer.player_id, kc.now_fn.call(), eye, 75.0)
+	var until: float = kc.now_fn.call() + 3.6
+	while kc.now_fn.call() < until:
+		await process_frame
+		record.call()
+	me.health.invulnerable = false
+	me.health.invulnerable_until_tick = -1
+	var damage := DotDamage.make(killer.player_id, me.player_id, me.health.health + me.health.armour + 50.0, game.combat.damage_type(&""))
+	damage.weapon_id = &"rifle"
+	damage.tick = game.current_tick()
+	var applied = me.health.apply(damage)
+	game.combat.entity_killed.emit(me.player_id, applied)
+	var t_kill: float = kc.now_fn.call()
+	var _n := ring.note_kill(killer.player_id, me.player_id, t_kill, {})
+	while kc.now_fn.call() < t_kill + game.killview_rules.post_seconds + 0.1:
+		await process_frame
+		record.call()
+	var clips := ring.collect(kc.now_fn.call())
+	print("death: %s killed me, %d clip(s)" % [killer.display_name, clips.size()])
+	if clips.is_empty():
+		return
+	client.call(&"_on_killview", clips[0]["clip"], {"killer": killer.display_name, "weapon": "rifle"})
+	var last := 0.0
+	for at_sec: float in [0.3, 1.2, 2.2, 3.2, 4.0]:
+		await _wait(at_sec - last)
+		last = at_sec
+		await process_frame
+		var cam := root.get_viewport().get_camera_3d()
+		print("t=%.1f killview=%s cam %s fov %.0f" % [at_sec, str(client.get("killview").call(&"is_active")), cam.global_position, cam.fov])
+		var path := ProjectSettings.globalize_path("%s/%s_death_%03d.png" % [OUT_DIR, _map, int(at_sec * 10.0)])
+		root.get_texture().get_image().save_png(path)

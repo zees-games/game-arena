@@ -1343,6 +1343,8 @@ func _test_the_kill_view() -> void:
 	_section("The kill view replaces the death camera, and Space skips it")
 	var rules := DotKillViewRules.new()
 	rules.enabled = true
+	_check(rules.camera == DotKillViewRules.Camera.BEHIND, "mp_killview_camera defaults to behind the killer")
+	rules.camera = DotKillViewRules.Camera.EYE
 	var ring := DotKillViewRing.new(rules)
 	for i in 120:
 		var yaw := float(i) * 0.01
@@ -1387,6 +1389,19 @@ func _test_the_kill_view() -> void:
 	for _i in 200:
 		view.kv.advance(0.1)
 	_check(ended == [true, false] and asked[0] == 1 and previous.current, "a replay that runs out resumes the flow without a respawn request", "%s %s %s" % [ended, asked, previous.current])
+	rules.camera = DotKillViewRules.Camera.BEHIND
+	var eye := [Transform3D()]
+	view.kv.view.connect(func(x: Transform3D, _f: float, _c: Vector2, _h: bool) -> void: eye[0] = x)
+	var _again := view.play(clips[0]["clip"], {"killer": "Bolt"})
+	view.kv.advance(0.5)
+	view.kv.advance(0.5)
+	var cam := view.camera.global_position
+	var x0: Transform3D = eye[0]
+	var gap := cam.distance_to(x0.origin)
+	var ahead := (x0.origin - cam).dot(-x0.basis.z)
+	_check(gap > 1.5 and gap < 6.0 and ahead > 1.0 and not view._cursor.visible,
+		"mp_killview_camera 1: the camera rides behind the killer's eye, no crosshair", "gap %.2f ahead %.2f" % [gap, ahead])
+	view.kv.killcam.skip()
 	var off := DotKillViewRules.new()
 	var quiet := ArenaKillViewClient.new()
 	port.add_child(quiet)
@@ -1866,7 +1881,7 @@ func _test_the_weapon_art_is_vendored() -> void:
 
 
 func _test_the_final_killcam() -> void:
-	_section("The final killcam replays the last kill from the killer's eye, and 0 turns it off")
+	_section("The final killcam replays the last kill from behind the killer (or its eye), and 0 turns it off")
 	var g := ArenaGame.new()
 	g.is_authority = true
 	add_child(g)
@@ -1900,13 +1915,26 @@ func _test_the_final_killcam() -> void:
 		"every frame drawn and the kill went into the buffer")
 
 	var drawn: Array = []
-	kc.killcam.frame_drawn.connect(func(s: Dictionary) -> void: drawn.append([float(s["time"]), kc.camera.global_position]))
+	kc.killcam.frame_drawn.connect(func(s: Dictionary) -> void:
+		var kb: Node3D = killer.body_mesh
+		drawn.append([float(s["time"]), kc.camera.global_transform, kb.global_position if kb != null else Vector3.INF, kb != null and kb.visible]))
 	_check(kc.match_ended() and kc.is_playing(), "the match's end starts it")
 	kc.killcam.advance(step)
 	_check(not drawn.is_empty() and absf(float(drawn[0][0]) - 4.5) < 0.05, "from 3.5 s before the kill (%.2f)" % (float(drawn[0][0]) if not drawn.is_empty() else NAN))
-	var eye: Vector3 = drawn[0][1] if not drawn.is_empty() else Vector3.INF
+	var first: Array = drawn[0] if not drawn.is_empty() else [0.0, Transform3D(), Vector3.INF, false]
 	var want: Vector3 = at.call(4.5)
-	_check(absf(eye.x - want.x) < 0.1 and eye.y > want.y + 0.5, "with the camera at the killer's eye then (%s, feet %s)" % [eye, want])
+	var cam: Transform3D = first[1]
+	var gap := cam.origin.distance_to(want + Vector3(0.0, 1.6, 0.0))
+	_check(gap > 1.5 and gap < 8.0 and cam.origin.y > want.y + 1.0, "with the camera a few metres behind and above the killer (%.2f m)" % gap)
+	_check(first[3] and (first[2] as Vector3).distance_to(want) < 0.1, "and the killer's body drawn where it was recorded", "%s vs %s" % [first[2], want])
+	var chest := victim.global_position + Vector3(0.0, 1.2, 0.0)
+	var look := (-cam.basis.z).dot((chest - cam.origin).normalized())
+	_check(look > 0.95, "looking at the victim (%.3f)" % look)
+	for _i in 60:
+		kc.killcam.advance(step)
+	var later: Array = drawn[-1]
+	_check(float(later[0]) > float(first[0]) + 0.2 and (later[2] as Vector3).x > (first[2] as Vector3).x + 0.2,
+		"time advances and the killer's body moves with the recording", "t %.2f -> %.2f, x %.2f -> %.2f" % [first[0], later[0], (first[2] as Vector3).x, (later[2] as Vector3).x])
 	_check(kc.killcam.banner != null and kc.killcam.banner.killer_label.text == "Killer", "under a banner naming the killer")
 	var icon_tex := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8))
 	kc.weapon_icon_fn = func(id: String) -> Texture2D: return icon_tex if id == "rifle" else null
@@ -1918,6 +1946,18 @@ func _test_the_final_killcam() -> void:
 		kc.killcam.advance(step)
 		n += 1
 	_check(ended == [false] and n * step < 7.0, "it ends by itself inside the budget (%.2f s)" % (n * step))
+	_check(killer.body_mesh == null or not killer.body_mesh.visible, "a body attached only for the replay goes back hidden")
+
+	kc.camera_mode_fn = func() -> int: return DotKillViewRules.Camera.EYE
+	drawn.clear()
+	ended.clear()
+	var _again := kc.match_ended()
+	kc.killcam.advance(step)
+	var eye: Vector3 = (drawn[0][1] as Transform3D).origin if not drawn.is_empty() else Vector3.INF
+	_check(absf(eye.x - want.x) < 0.1 and eye.y > want.y + 0.5 and not (drawn[0][3] if not drawn.is_empty() else true),
+		"mp_killview_camera 0: the camera at the killer's eye, its body not drawn (%s, feet %s)" % [eye, want])
+	kc.skip()
+	_check(ended == [true], "and a skip ends it")
 
 	g.set_movement_rules({"killcam": 0.0})
 	ended.clear()

@@ -2,7 +2,7 @@ extends Node
 
 ## The final killcam. Client side: every frame drawn goes into dot-replay's [DotKillcamBuffer]
 ## (what the snapshots already brought, no new traffic), every kill is noted, and when the match
-## ends on one, [DotKillcam] replays it from the killer's eye before the scoreboard.
+## ends on one, [DotKillcam] replays it from behind the killer (or its eye, `mp_killview_camera`) before the scoreboard.
 ## The length is the server's `mp_killcam_time` (RULES `killcam`); 0 skips straight to [signal over].
 
 const CHANNEL := "arena.killcam"
@@ -34,11 +34,19 @@ var weapon_icon_fn: Callable = Callable()
 ## Nodes hidden while the replay runs (the HUD, the view model): anything with `visible`.
 var hide_while_playing: Array = []
 
+## Where the camera sits ([enum DotKillViewRules.Camera]): the game's `mp_killview_camera`.
+var camera_mode_fn: Callable = func() -> int: return DotKillViewRules.Camera.BEHIND
+
+## Layers the camera boom stops against (the map's).
+var world_mask: int = 1
+
 var buffer := DotKillcamBuffer.new()
 var killcam: DotKillcam = null
 var camera: Camera3D = null
 
 var _previous_camera: Camera3D = null
+var _framing: DotKillcamFraming = null
+var _base_fov: float = 75.0
 var _touched: Dictionary = {}
 var _hidden: Dictionary = {}
 
@@ -159,6 +167,9 @@ func _on_started(_kill: Dictionary) -> void:
 	if _previous_camera != null and _previous_camera != camera:
 		camera.fov = _previous_camera.fov
 		camera.cull_mask = _previous_camera.cull_mask
+	_base_fov = camera.fov
+	if _framing != null:
+		_framing.reset()
 	camera.make_current()
 	for n: Variant in hide_while_playing:
 		if n is Object and is_instance_valid(n) and (n as Object).get(&"visible") != null:
@@ -168,12 +179,30 @@ func _on_started(_kill: Dictionary) -> void:
 
 
 func _apply(s: Dictionary) -> void:
+	var data: Dictionary = killcam.kill()["data"]
+	var posed := pose(s, int(data.get("killer", 0)), int(data.get("victim", 0)))
+	if not camera.current:
+		camera.make_current()
+	if posed.has("eye"):
+		var v := place_camera(posed, _base_fov, get_process_delta_time())
+		camera.global_transform = v["transform"]
+		camera.fov = v["fov"]
+
+
+## Poses every recorded body at [param time] on this client's own clock; see [method pose].
+func pose_at(time: float, killer_id: int, victim_id: int) -> Dictionary:
+	var s := buffer.sample(time)
+	return {} if s.is_empty() else pose(s, killer_id, victim_id)
+
+
+## Poses every body in sample [param s]; the killer's is drawn only when the camera is behind it.
+## Returns {eye: the killer's eye Transform3D, target: the victim's chest} for what was recorded.
+func pose(s: Dictionary, killer_id: int, victim_id: int) -> Dictionary:
 	var a: Dictionary = s["a"]
 	var b: Dictionary = s["b"]
 	var alpha: float = s["alpha"]
-	var killer_id := int(killcam.kill()["data"].get("killer", 0))
-	if not camera.current:
-		camera.make_current()
+	var behind := int(camera_mode_fn.call()) == DotKillViewRules.Camera.BEHIND
+	var out := {}
 	for id: Variant in b:
 		var p := _player(int(id))
 		if p == null:
@@ -184,28 +213,51 @@ func _apply(s: Dictionary) -> void:
 		var yaw := rad_to_deg(lerp_angle(deg_to_rad(ra[1]), deg_to_rad(rb[1]), alpha))
 		var pitch := lerpf(ra[2], rb[2], alpha)
 		var alive: bool = rb[3] if alpha >= 0.5 else ra[3]
+		var speed := (ra[0] as Vector3).distance_to(rb[0]) * 60.0
 		if int(id) == killer_id:
-			camera.global_position = feet + Vector3(0.0, float(rb[4]), 0.0)
-			camera.global_rotation = Vector3(deg_to_rad(pitch), deg_to_rad(yaw), 0.0)
-			_place_body(p, feet, yaw, false, 0.0, 0.0)
+			var eye := feet + Vector3(0.0, float(rb[4]), 0.0)
+			out["eye"] = Transform3D(Basis.from_euler(Vector3(deg_to_rad(pitch), deg_to_rad(yaw), 0.0)), eye)
+			_place_body(p, feet, yaw, behind, pitch, speed)
 		else:
-			var from: Vector3 = ra[0]
-			var to: Vector3 = rb[0]
-			var speed := from.distance_to(to) * 60.0
+			if int(id) == victim_id:
+				out["target"] = feet + Vector3(0.0, 1.2, 0.0)
 			_place_body(p, feet, yaw, alive, pitch, speed)
+	return out
+
+
+## The camera for a [method pose] result: the killer's eye, or behind the killer looking at the victim.
+func place_camera(posed: Dictionary, base_fov: float, delta: float) -> Dictionary:
+	if _framing == null:
+		_framing = DotKillcamFraming.new(camera.get_world_3d() if is_inside_tree() else null, world_mask)
+	_framing.probe.collision_mask = world_mask
+	return _framing.place(int(camera_mode_fn.call()), posed["eye"], base_fov, posed.get("target"), delta)
+
+
+## Puts back every body a replay moved.
+func restore_bodies() -> void:
+	for p: Variant in _touched:
+		if is_instance_valid(p):
+			var body: Node3D = (p as Node).get(&"body_mesh")
+			if body != null:
+				body.transform = _touched[p][0]
+				body.visible = _touched[p][1]
+	_touched.clear()
 
 
 func _place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: float, speed: float) -> void:
 	var body: Node3D = p.get(&"body_mesh")
+	var attached := false
 	if body == null:
 		if not shown:
 			return
 		p.call(&"attach_body_mesh", Color.WHITE, p.get(&"avatar"))
 		body = p.get(&"body_mesh")
+		attached = true
 		if body == null:
 			return
 	if not _touched.has(p):
-		_touched[p] = [body.transform, body.visible]
+		# A body attached only for the replay (a first-person player's own) goes back hidden.
+		_touched[p] = [body.transform, false if attached else body.visible]
 	body.visible = shown
 	if not shown:
 		return
@@ -220,13 +272,7 @@ func _place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: float, 
 
 
 func _on_finished(skipped: bool) -> void:
-	for p: Variant in _touched:
-		if is_instance_valid(p):
-			var body: Node3D = (p as Node).get(&"body_mesh")
-			if body != null:
-				body.transform = _touched[p][0]
-				body.visible = _touched[p][1]
-	_touched.clear()
+	restore_bodies()
 	for n: Variant in _hidden:
 		if is_instance_valid(n):
 			(n as Object).set(&"visible", _hidden[n])
