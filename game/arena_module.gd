@@ -340,15 +340,12 @@ func _module_load() -> DotResult:
 func _bind_rule_cvars() -> void:
 	# Replicated where each client draws or predicts under the rule; the rules are the game's, so one bind lasts.
 	var replicated := DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
-	# sv_falldamage and its tunables: dot-combat's, on here (not on surf maps). Server-side only:
-	# the damage is the server's and arrives as health.
+	# sv_falldamage and its tunables: dot-combat's, on here (not on surf maps); server side, the damage arrives as health.
 	var _fall := game.fall_rules.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
 
 	# Dead bodies: dot-player-char's sv_ragdoll* (the server picks each reaction, ArenaGame.decide_death).
 	var _ragdoll_cvars := game.ragdoll_rules.bind_cvars(add_cvar, replicated)
-
-	# Dropped weapons: dot-weapon's sv_weapon_drop*; class overrides come from the dot-profile `drop_*` keys.
-	var _weapon_drop_cvars := game.weapon_drop_rules.bind_cvars(add_cvar, replicated)
+	var _weapon_drop_cvars := game.weapon_drop_rules.bind_cvars(add_cvar, replicated)  # sv_weapon_drop*
 
 	# The map's toys: dot-props' sv_toys, sv_toys_awake, sv_toys_push.
 	var _toy_cvars := game.toy_rules.bind_cvars(add_cvar, replicated)

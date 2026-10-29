@@ -25,6 +25,7 @@ extends "screenshot_stages.gd"
 ## gitignored — the frame is evidence for a review, not an asset.
 
 const OUT_DIR := "screenshots"
+const ScreenshotGlanceStates := preload("screenshot_glance_states.gd")
 
 
 func _initialize() -> void:
@@ -390,15 +391,9 @@ func _play_glance() -> void:
 	_local.controller.state.dash_cooldown_left = 1.3
 	_local.controller.state.slide_time = 0.3
 	_local.controller.state.wall_jumps_in_air = 1
-	# `--glance --dead`: the dead state, to look at: no crosshair, no hands.
-	if OS.get_cmdline_user_args().has("--dead"):
-		_local.make_dead()
-
 	var late: Array = []
-	# `--glance --killcam`: the kill view, to look at: the local player is dead and watches player 113's eye.
-	if OS.get_cmdline_user_args().has("--killcam"):
-		_local.make_dead()
-		late.append([20, func() -> void: _play_killview(game, 113)])
+	if ScreenshotGlanceStates.stage(self, game, late):
+		return
 	if _glance_chat:
 		_stage_full_chat()
 	if _glance_ballot:
@@ -409,11 +404,6 @@ func _play_glance() -> void:
 		var said := "Vote: Box, Atrium, Pit, Foundry, Canals, Spire (20s)" if _glance_map_ballot \
 			else "Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)"
 		late.append([10, func() -> void: _hud.notice(said)])
-
-	# `--glance --dropped`: the local weapon thrown and left lying; the camera is put over it late.
-	if OS.get_cmdline_user_args().has("--dropped"):
-		_stage_dropped()
-		return
 
 	_shots = [{
 		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else "") + ("_killcam" if OS.get_cmdline_user_args().has("--killcam") else "") + ("_" + _glance_theme if _glance_theme != "" else ""),
@@ -433,22 +423,6 @@ func _play_glance() -> void:
 		] + late,
 		"wait": 34,
 	}]
-
-
-## `--dropped`: the local player throws the weapon in hand, nobody picks it up, and a close frame is taken once it lies still.
-func _stage_dropped() -> void:
-	_glance_game.weapon_drop_rules.pickup_radius = 0.0
-	_glance_game.weapon_drops.draws = true
-	var thrown: int = _glance_game.weapon_drops.throw(_local.arsenal, _local.muzzle_position(), _local.aim_direction(), 112)
-	var shot := {"name": "%s_dropped" % String(_staged_id), "from": _local.global_position + Vector3.UP * 2.0, "at": _local.global_position, "wait": 100}
-	shot["late"] = [[2, func() -> void:
-		for entry in _glance_game.weapon_drops.snapshot():
-			var at: Vector3 = (entry["at"] as Transform3D).origin
-			print("dropped weapon ", thrown, " at ", at, " rest ", entry["rest"])
-			_camera.position = at + Vector3(0.5, 0.45, 0.7)
-			_camera.look_at(at, Vector3.UP)
-			return]]
-	_shots = [shot]
 
 
 ## `--killcam`: the kill view as a victim sees it, played from a clip of [param killer_id]'s eye swinging onto the local

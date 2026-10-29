@@ -335,7 +335,7 @@ func _build_combat() -> DotResult:
 		var who := player_for(entity_id)
 		return who.global_position if who != null else null
 	apply_drop_rules()
-	_build_weapon_drops()
+	ArenaWeaponDropWiring.build(self)
 	apply_jail_rules()
 
 	if not headless and map != null and map.jail != null:
@@ -377,71 +377,6 @@ func _reward_streak(player_id: int, streak: int, reward: String) -> void:
 			return
 
 	streak_reward.emit(player_id, streak, reward)
-
-
-## "3:heal,5:haste" -> {3: "heal", 5: "haste"}. Unparseable pairs are skipped.
-static func parse_streak_rewards(text: String) -> Dictionary:
-	var out := {}
-	for pair in text.split(",", false):
-		var bits := pair.strip_edges().split(":")
-		if bits.size() == 2 and bits[0].is_valid_int() and int(bits[0]) > 0:
-			out[int(bits[0])] = bits[1].strip_edges()
-	return out
-
-
-## The weapon layer, on both sides: the server simulates it, a client draws what it is told.
-func _build_weapon_drops() -> void:
-	weapon_drops = DotWeaponDrops.new()
-	weapon_drops.name = "WeaponDrops"
-	weapon_drops.rules = weapon_drop_rules
-	weapon_drops.is_authority = is_authority
-	weapon_drops.draws = not headless
-	weapon_drops.collision_mask = ragdoll_rules.collision_mask
-	weapon_drops.keep_slots = [ZeeWeaponIds.SLOT_MELEE]
-	weapon_drops.look_of = _weapon_drop_look
-	add_child(weapon_drops)
-
-
-## The drop key's rising edge throws the weapon in hand along the aim; every tick an empty slot
-## takes a dropped weapon in reach, which is also how the swap works.
-func _weapon_drop_input(id: int, player: ArenaPlayer, fire: DotWeaponCommand) -> void:
-	var held := fire.is_pressed(DotWeaponCommand.BUTTON_DROP)
-	var was: bool = _drop_held.get(id, false)
-	_drop_held[id] = held
-	var def := _class_def_of(id)
-	var velocity: Vector3 = player.controller.state.velocity
-	if held and not was:
-		var _id := weapon_drops.throw(player.arsenal, player.muzzle_position(), player.aim_direction(), id, def, velocity)
-	elif weapon_drops.count() > 0:
-		var _taken := weapon_drops.take_for(player.arsenal, player.controller.state.position + Vector3.UP * 0.5, id, def)
-
-
-func _class_def_of(id: int) -> DotPlayerClassDef:
-	if player_stack == null or player_stack.classes == null:
-		return null
-	return player_stack.classes.def_of(str(id))
-
-
-func _weapon_drop_look(weapon_id: StringName) -> Node3D:
-	var art: Variant = ZeeWeaponArtTable.table().get(weapon_id)
-	if not (art is ZeeWeaponArt):
-		return null
-	var model := ZeeWorldModel.new()
-	var _drawn := model.equip(art as ZeeWeaponArt)
-	return model
-
-
-## Called by the player as it dies, before its arsenal is disabled (a dead arsenal gives up nothing).
-func _drop_for_death(player: ArenaPlayer) -> void:
-	if weapon_drops == null or not is_authority:
-		return
-	var state := player.controller.state
-	var _gun := weapon_drops.drop_dead(player.arsenal, state.position + Vector3.UP, state.velocity * 0.5 + Vector3.UP * 2.0, player.player_id, _class_def_of(player.player_id))
-
-
-## Whether a death leaves a real weapon in the world, so the client skips its look-alike prop.
-func drops_weapon_on_death() -> bool:
-	return weapon_drops != null and weapon_drop_rules.enabled and weapon_drop_rules.on_death
 
 
 ## Puts [member jail_rules] on the map's jail, if it has one. Called when the drops layer is
@@ -1297,11 +1232,7 @@ func _teardown_world() -> void:
 		remove_child(drops)
 		drops.queue_free()
 		drops = null
-	if weapon_drops != null:
-		remove_child(weapon_drops)
-		weapon_drops.queue_free()
-		weapon_drops = null
-	_drop_held.clear()
+	ArenaWeaponDropWiring.teardown(self)
 
 	for point in _spawn_points:
 		if is_instance_valid(point):
@@ -1357,7 +1288,7 @@ func add_player(
 		return DotResult.fail(DotError.CODE_STATE, "Player %d is already here." % id)
 
 	var player := ArenaPlayer.new()
-	player.before_death = _drop_for_death.bind(player)
+	player.before_death = ArenaWeaponDropWiring.drop_for_death.bind(self, player)
 	player.setup(
 		ArenaPlayer.Mode.HEADLESS if headless else ArenaPlayer.Mode.PHYSICS,
 		map,
@@ -1874,9 +1805,7 @@ func tick(commands: Dictionary = {}) -> void:
 
 		var pair: Array = commands.get(id, [])
 		_pre_vy[id] = player.controller.state.velocity.y
-		if weapon_drops != null and is_authority and pair.size() > 1 and pair[1] != null:
-			_weapon_drop_input(id, player, pair[1])
-
+		ArenaWeaponDropWiring.input(self, id, player, pair)
 		var move: DotFpsCommand = pair[0] if pair.size() > 0 else DotFpsCommand.new()
 		var fire: DotWeaponCommand = pair[1] if pair.size() > 1 else DotWeaponCommand.new()
 

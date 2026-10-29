@@ -4,6 +4,7 @@ extends Node
 ## State and signals of [ArenaGame], split out so the game file holds its behaviour.
 
 const ArenaAmbience := preload("arena_ambience.gd")
+const ArenaWeaponDropWiring := preload("arena_weapon_drop_wiring.gd")
 const ArenaConfig := preload("arena_config.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaEffects := preload("arena_effects.gd")
@@ -228,7 +229,7 @@ var drops: ArenaDrops = null
 ## under [member weapon_drop_rules], whose cvars are the server owner's and outlive a map change.
 var weapon_drops: DotWeaponDrops = null
 var weapon_drop_rules: DotWeaponDropRules = DotWeaponDropRules.new()
-var _drop_held: Dictionary = {}
+var drop_held: Dictionary = {}
 
 ## Kills since each player last died. Authority side; a client counts its own from KILL.
 var streaks: Dictionary = {}
@@ -518,3 +519,18 @@ var ads_rules: ZeeAdsRules = ZeeAdsRules.load_config()
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.
 var _weapon_defs: Dictionary = {}
+
+
+## Whether a death leaves a real weapon in the world, so the client skips its look-alike prop.
+func drops_weapon_on_death() -> bool:
+	return weapon_drops != null and weapon_drop_rules.enabled and weapon_drop_rules.on_death
+
+
+## "3:heal,5:haste" -> {3: "heal", 5: "haste"}. Unparseable pairs are skipped.
+static func parse_streak_rewards(text: String) -> Dictionary:
+	var out := {}
+	for pair in text.split(",", false):
+		var bits := pair.strip_edges().split(":")
+		if bits.size() == 2 and bits[0].is_valid_int() and int(bits[0]) > 0:
+			out[int(bits[0])] = bits[1].strip_edges()
+	return out
