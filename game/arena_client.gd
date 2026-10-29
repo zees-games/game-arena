@@ -1571,9 +1571,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 	var right := mouse_drives_view() and _held(ArenaBindings.AIM) \
 		and not _aim_break.blocked(Time.get_ticks_msec() * 0.001)
 	var aims := right_mouse_aims() and not props_on_e()
-	var bash := (right and not aims) or (
-		not props_on_e() and mouse_drives_view() and _held(ArenaBindings.BASH)
-	)
+	var bash := (right and not aims) or (not props_on_e() and mouse_drives_view() and _held(ArenaBindings.BASH))
 	_fire.set_button(DotWeaponCommand.BUTTON_ALT, bash)
 	if player != null:
 		player.aim_held = right and aims

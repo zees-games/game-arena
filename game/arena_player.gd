@@ -74,7 +74,6 @@ var mode: Mode = Mode.HEADLESS
 
 var controller: DotFpsController = null
 var arsenal: DotWeaponArsenal = null
-
 ## Run as the player dies, while the arsenal still gives up its weapon; the game sets it.
 var before_death: Callable = Callable()
 
@@ -1073,14 +1072,9 @@ func break_body(
 	return made
 
 
-## This player's body falls: a ragdoll copied from what is drawn, built in [param yard] as
-## [param death] says (the server's pick, off the KILL). Client side, drawing only; the
-## figure is hidden until [method _mend_body] draws it again on respawn. Null when the
-## server's style hides bodies or there is no body to copy. [param gun_prop] false leaves the gun to a
-## real dropped weapon.
-##
-## [b]After any body break[/b]: the limbs a critical took off are hidden by then, so the
-## ragdoll is what is left of the body, and the pieces fly on their own.
+## This player's body falls: a ragdoll copied from what is drawn, built in [param yard] as [param death] says.
+## Client side, drawing only; the figure stays hidden until [method _mend_body] draws it on respawn. Null when the
+## style hides bodies or there is no body to copy. [param gun_prop] false leaves the gun to a real dropped weapon.
 func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath, gun_prop: bool = true) -> DotPlayerRagdoll:
 	if yard == null or body_mesh == null or not body_mesh.is_inside_tree():
 		return null
@@ -1091,7 +1085,6 @@ func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath, gun_prop: bool = 
 	var made := yard.spawn(body_mesh, death, controller.state.velocity)
 	_fell = made != null or not body_mesh.visible
 	if _fell and held != null:
-		# With dropped weapons on, the server's real drop replaces this look-alike.
 		if gun_prop:
 			var _dropped := yard.drop_prop(held, controller.state.velocity)
 		held.visible = false
@@ -1998,8 +1991,7 @@ func _on_damaged(_damage: DotDamage) -> void:
 
 
 func _on_died(damage: DotDamage) -> void:
-	if before_death.is_valid():
-		before_death.call()
+	if before_death.is_valid(): before_death.call()
 	make_dead()
 	died.emit(damage)
 
