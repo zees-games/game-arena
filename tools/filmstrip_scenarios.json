@@ -1,11 +1,11 @@
 {
-  "defaults": {"spawn": [15.0, 0.05, -13.0], "spawn_yaw": 0.0},
+  "defaults": {"spawn": [-14.0, 0.05, -9.0], "spawn_yaw": -90.0},
   "clips": [
     {"name": "walk", "duration": 4.0, "steps": [
       {"t": 0.0, "move": [0, 0]},
       {"t": 0.5, "move": [0, 1], "buttons": ["walk"]}
     ]},
-    {"name": "sprint", "duration": 4.0, "steps": [
+    {"name": "sprint", "duration": 4.0, "spawn": [-17.0, 0.05, -9.0], "steps": [
       {"t": 0.0, "move": [0, 0]},
       {"t": 0.5, "move": [0, 1], "buttons": ["sprint"]}
     ]},

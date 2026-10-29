@@ -20,6 +20,10 @@ const WEAPON_BUTTONS := {"attack": DotWeaponCommand.BUTTON_ATTACK, "alt": DotWea
 
 var _clip: DotScenario = null
 var _player: ArenaPlayer = null
+## The own body is on its own layer so the first-person view leaves it out while the
+## third-person view, sharing the world, still draws it.
+const BODY_LAYER := 1 << 18
+const VIEW_LAYER := 1 << 19
 var _fp_cam: Camera3D = null
 var _tp_cam: Camera3D = null
 var _tick := 0
@@ -31,6 +35,9 @@ var _metrics := DotClipMetrics.new()
 var _bones: Skeleton3D = null
 var _feet: Array[int] = []
 var _sole := NAN
+var _spawn_yaw := 0.0
+var _log: Array[String] = []
+var _prev_feet: Array = []
 var _hands: Node3D = null
 
 
@@ -61,6 +68,7 @@ func _initialize() -> void:
 	_hands = hands
 	_player.give_default_loadout()
 	var spawn: Array = _clip.fields.get("spawn", [15.0, 0.05, -13.0])
+	_spawn_yaw = float(_clip.fields.get("spawn_yaw", 0.0))
 	_player.controller.teleport(Vector3(spawn[0], spawn[1], spawn[2]), float(_clip.fields.get("spawn_yaw", 0.0)), 0.0)
 
 	# Two cameras sharing the one world, side by side; the player's own camera is not drawn.
@@ -96,7 +104,7 @@ func _physics_process(_delta: float) -> bool:
 	var move: Array = state["move"]
 	var move_cmd := DotFpsCommand.new()
 	move_cmd.move = Vector2(float(move[0]), float(move[1]))
-	move_cmd.yaw = float(state["yaw"]) + _wobble.x
+	move_cmd.yaw = _spawn_yaw + float(state["yaw"]) + _wobble.x
 	move_cmd.pitch = float(state["pitch"]) + _wobble.y
 	var weapon_cmd := DotWeaponCommand.new()
 	if time >= 0.0:
@@ -133,24 +141,26 @@ func _hit(amount: float) -> void:
 
 func _process(delta: float) -> bool:
 	var time := _clip_time()
-	if time < 0.0:
-		return false
 	if time >= _clip.duration:
 		_report()
 		return true
-	var shake := _flinch.shake(time)
+	var shake := _flinch.shake(maxf(time, 0.0))
 	_player.camera_offset = Vector3(0.0, shake.y, shake.z)
 	_player.camera_roll = deg_to_rad(shake.x)
-	_wobble = _flinch.wobble(time)
+	_wobble = _flinch.wobble(maxf(time, 0.0))
 	_player.present(delta)
 	_fp_cam.global_transform = _player.camera.global_transform
 	_fp_cam.fov = _player.camera.fov
+	_fp_cam.cull_mask = 0xFFFFF & ~BODY_LAYER
+	_tp_cam.cull_mask = 0xFFFFF & ~VIEW_LAYER
+	_tag_body(_player)
 	var feet := _player.controller.state.position
-	var yaw := deg_to_rad(float(_clip.state_at(time)["yaw"]))
+	var yaw := deg_to_rad(_spawn_yaw + float(_clip.state_at(maxf(time, 0.0))["yaw"]))
 	var behind := Basis(Vector3.UP, yaw) * Vector3(1.1, 1.7, 2.8)
 	_tp_cam.global_position = feet + behind
 	_tp_cam.look_at(feet + Vector3(0.0, 0.9, 0.0))
-	_sample(time, feet)
+	if time >= 0.0:
+		_sample(time, feet)
 	return false
 
 
@@ -167,6 +177,15 @@ func _sample(time: float, feet: Vector3) -> void:
 		if is_nan(_sole):
 			_sole = ankles.map(func(a: Vector3) -> float: return a.y - feet.y).min()
 		sample["feet"] = ankles.map(func(a: Vector3) -> Vector3: return a - Vector3(0.0, _sole, 0.0))
+		var row := "%.2f pos=(%.1f,%.1f) root_v=%.2f" % [time, feet.x, feet.z, _player.controller.state.velocity.length()]
+		for k in ankles.size():
+			var a: Vector3 = sample["feet"][k]
+			var v := 0.0
+			if _prev_feet.size() == ankles.size():
+				v = Vector2(a.x - _prev_feet[k].x, a.z - _prev_feet[k].z).length() * 15.0
+			row += "  %s h=%.3f v=%.2f" % [_bones.get_bone_name(_feet[k]), a.y - feet.y, v]
+		_log.append(row)
+		_prev_feet = sample["feet"].duplicate()
 		var rotations: Array = []
 		for i in _bones.get_bone_count():
 			rotations.append(_bones.get_bone_pose_rotation(i))
@@ -198,4 +217,13 @@ func _report() -> void:
 	print(text)
 	DirAccess.make_dir_recursive_absolute("res://screenshots/filmstrip")
 	var file := FileAccess.open("res://screenshots/filmstrip/%s_report.txt" % _clip.name, FileAccess.WRITE)
-	file.store_string(text)
+	file.store_string(text + "\n" + "\n".join(_log) + "\n")
+
+
+func _tag_body(node: Node) -> void:
+	if node == _player.camera:
+		return
+	if node is VisualInstance3D:
+		(node as VisualInstance3D).layers = BODY_LAYER
+	for child in node.get_children():
+		_tag_body(child)
