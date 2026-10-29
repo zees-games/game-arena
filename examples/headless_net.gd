@@ -965,7 +965,7 @@ func _test_movement_rules_reach_clients() -> void:
 		"if this passes quietly, the fingerprint check above proves nothing"
 	)
 
-	_server_game.set_movement_rules({"launch_velocity": 12.0, "slide_boost": 3.5})
+	_server_game.set_movement_rules({"launch_velocity": 15.5, "slide_boost": 3.5})
 	_server_game.movement_rules_changed.disconnect(relay)
 	# Back where the sections after this one expect the player: the noclip section's spot.
 	server_player.controller.teleport(Vector3(0.0, 0.1, 18.0))

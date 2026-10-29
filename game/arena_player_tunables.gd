@@ -35,7 +35,7 @@ static func make() -> DotFpsTunables:
 	# which the arena's movement command leaves free: its weapon buttons ride in their own.
 	tunables.launch_enabled = true
 	tunables.launch_button = DotFpsCommand.BUTTON_USER_0
-	tunables.launch_velocity = 12.0
+	tunables.launch_velocity = 15.5
 	tunables.launch_cooldown = 8.0
 	# Shift dashes: the sprint bit, which this game leaves free because it has no sprint
 	# (sprint_speed_scale is 1). A press throws you along the way you steer.

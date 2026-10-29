@@ -2,6 +2,7 @@ extends Node
 
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaModuleCvars := preload("../game/arena_module_cvars.gd")
 
 ## What dot-game's DotGameCombatFeel does to a real ArenaPlayer: spread widens while moving, airborne and
 ## sliding and narrows crouched; the recoil pattern is the same every run; the cl_crosshair_* cvars restyle
@@ -13,7 +14,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 
 const TICK_RATE := 64
 const EXPECTED_SECTIONS := 4
-const EXPECTED_CHECKS := 31
+const EXPECTED_CHECKS := 33
 
 var _checks := 0
 var _failed := 0
@@ -212,3 +213,6 @@ func _test_wiring() -> void:
 	_check(not arena_tun.sprint_can_shoot and not arena_tun.sprint_shot_follows_barrel, "and reach a tracked player's tunables")
 	var fresh := DotFpsTunables.new()
 	_check(fresh.sprint_can_shoot and fresh.sprint_shot_follows_barrel, "both default on: sprint-and-shoot allowed, along the barrel")
+	var launch_default := ArenaPlayer.arena_tunables().launch_velocity
+	_check(launch_default >= 12.0 * 1.25 and launch_default <= 12.0 * 1.35, "the launch defaults 25 to 35 percent above the old 12 m/s", str(launch_default))
+	_check(ArenaModuleCvars.MOVEMENT_CVARS.get("arena_launch_velocity", [""])[0] == "launch_velocity" and ArenaPlayer.MOVEMENT_RULES.has("launch_velocity"), "arena_launch_velocity sets the launch and is a replicated movement rule")
