@@ -46,6 +46,8 @@ var fall_rules: DotFallDamageRules = make_fall_rules()
 ## Landing on a head (`sv_stomp*`, the cfg `stomp_*` keys); the numbers are copied from [member config] each tick.
 var stomp := DotStomp.new()
 var _pre_vy: Dictionary = {}
+## Where each player's saved loadouts are filed (a stable key when they have one).
+var loadout_identity := ArenaLoadoutIdentity.new()
 
 ## Movement-dependent spread, recoil patterns and the spread crosshair (dot-game's opt-in; sv_spread_*, sv_recoil_*, on here).
 var combat_feel: DotGameCombatFeel = _make_combat_feel()
@@ -652,11 +654,11 @@ func _build_loadouts() -> DotResult:
 	loadouts.register_service = false
 
 	var config := DotLoadoutConfig.new()
-	config.backend = "memory"
+	config.backend = "local"
 	config.allow_default_loadout = true
 	config.conform_on_load = true
 	loadouts.config = config
-	loadouts.store = DotLoadoutStoreMemory.new()
+	loadouts.store = ArenaLoadoutIdentity.make_store()
 
 	# Everything in this game is free except the launcher, and there is no entitlement
 	# service to ask. A game with unlocks binds a real source here; leaving it unset means
@@ -684,7 +686,7 @@ func _build_loadout_command() -> void:
 	# The player a command came from: the session's userid, which is this game's player id.
 	loadout_command.set(&"key_fn", func(ctx: Object) -> String:
 		var session: Variant = ctx.get(&"session") if ctx != null else null
-		return storage_key(int((session as Object).get(&"userid"))) if session is Object else "")
+		return _loadout_key(int((session as Object).get(&"userid"))) if session is Object else "")
 	loadout_command.set(&"closed_fn", func(_key: String) -> String: return loadout_closed_reason())
 	# Default ON here (sv_loadout_instant_after_spawn); the addon's own default is off.
 	var instant: Variant = loadout_command.get(&"instant")
@@ -692,10 +694,10 @@ func _build_loadout_command() -> void:
 		(instant as Object).set(&"enabled", true)
 	loadout_command.set(&"instant_facts_fn", loadout_instant_facts)
 	loadout_command.set(&"instant_apply_fn", func(_ctx: Object, key: String) -> bool:
-		return await rearm_instant(player_id_of_key(key)))
+		return await rearm_instant(loadout_identity.id_of(key)))
 	loadout_command.set(&"item_alias_fn", Callable(ArenaContent.Roles, &"alias"))
 	loadout_command.set(&"applied_fn", func(_ctx: Object, key: String) -> bool:
-		return await rearm_if_allowed(player_id_of_key(key)))
+		return await rearm_if_allowed(loadout_identity.id_of(key)))
 
 
 ## Why the B menu has nothing to choose right now, or "": a mode that decides what everybody
@@ -705,11 +707,6 @@ func loadout_closed_reason() -> String:
 	if mode != null and mode.arms_players():
 		return "%s hands out the weapons. Your loadout is kept for the next mode." % mode.display_name
 	return ""
-
-
-## The player id a loadout key names (`arena-player-%08d`), or 0.
-static func player_id_of_key(key: String) -> int:
-	return key.trim_prefix("arena-player-").to_int() if key.begins_with("arena-player-") else 0
 
 
 ## Whether a new loadout goes into [param id]'s hands now rather than at the next spawn: in
@@ -727,7 +724,7 @@ func loadout_now_allowed(id: int) -> bool:
 ## The facts DotLoadoutInstantSwap judges for a loadout key: seconds since spawn and last shot
 ## (-1: none) and metres to the nearest living enemy (-1: none).
 func loadout_instant_facts(key: String) -> Dictionary:
-	var id := player_id_of_key(key)
+	var id := loadout_identity.id_of(key)
 	var rate := float(maxi(tick_rate, 1))
 	var out := {"now": float(_tick) / rate, "since_spawn": -1.0, "since_fire": -1.0, "enemy_dist": -1.0}
 	var me := player_for(id)
@@ -1675,11 +1672,11 @@ func arm_for_mode(player: ArenaPlayer) -> void:
 ## reporter rejects anything with a `backbone:` prefix before it leaves the server, and
 ## a key built from the session id can never carry one.
 static func storage_key(id: int) -> String:
-	return "arena-player-%08d" % id
+	return ArenaLoadoutIdentity.seat_key(id)
 
 
 func _loadout_key(id: int) -> String:
-	return storage_key(id)
+	return loadout_identity.key_of(id)
 
 
 # --- Simulation ------------------------------------------------------------
