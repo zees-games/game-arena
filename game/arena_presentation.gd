@@ -1221,13 +1221,8 @@ func on_explosion(at: Vector3, eye: Vector3) -> void:
 
 
 func on_impact(at: Transform3D, on_player: bool) -> void:
-	if on_player:
-		audio.play_at(&"impact", at.origin)
-		fx.spawn(&"impact_spark", at)
-		return
-	# The checked decal goes first: a miss's endpoint is open air, and a spark or a sound
-	# there is as floating as a hole. dot-fx refuses a character and follows a crate.
-	if fx.spawn_decal(&"bullet_hole", at) == null:
+	# Checked decal first: a miss's endpoint is open air, and a spark there floats too.
+	if not on_player and fx.spawn_decal(&"bullet_hole", at) == null:
 		return
 	audio.play_at(&"impact", at.origin)
 	fx.spawn(&"impact_spark", at)

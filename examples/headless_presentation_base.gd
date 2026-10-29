@@ -83,6 +83,7 @@ func _check_gore_toggle(p: ArenaPresentation, eye: Vector3, aim: Vector3, dead: 
 	p_gore.settings.set_value(&"gore", true)
 	var _gf := p_gore.settings.flush()
 	p_gore.queue_free()
+	await _test_decals_need_a_surface(p, eye, aim)
 
 
 ## A 4 m square slab whose face is at [param at], facing back along [param aim]: what a hole needs to sit on.
@@ -336,3 +337,62 @@ class FakeAuth extends Node:
 	var key := ""
 	func account_key() -> String:
 		return key
+
+
+## A hole needs a surface (dot-fx 0.3.3): a miss's endpoint is open air, a character walks
+## away, and a crate that moves carries its hole with it.
+func _test_decals_need_a_surface(p: ArenaPresentation, eye: Vector3, aim: Vector3) -> void:
+	var drawn := {}
+	p.fx.spawned.connect(func(id: StringName, node: Node, reason: StringName) -> void:
+		drawn[id] = node if node != null else reason
+	)
+	var air := eye + aim * 60.0
+	for draws in [false, true]:
+		drawn.clear()
+		p.present(0.016, eye, aim)
+		p.on_used(_outcome(eye, aim, [air]), draws)
+		_check(drawn.get(&"bullet_hole") == &"no_surface", "a shot into open air makes no hole (weapon_draws %s)" % draws, str(drawn.get(&"bullet_hole")))
+		_check(drawn.get(&"impact_spark") == null, "and no spark floats there either (weapon_draws %s)" % draws)
+
+	var crate := RigidBody3D.new()
+	var cshape := CollisionShape3D.new()
+	var cbox := BoxShape3D.new()
+	cbox.size = Vector3.ONE
+	cshape.shape = cbox
+	crate.add_child(cshape)
+	crate.gravity_scale = 0.0
+	add_child(crate)
+	crate.global_position = Vector3(0.0, 1.6, -30.0)
+	var guard := CharacterBody3D.new()
+	var gshape := CollisionShape3D.new()
+	gshape.shape = CapsuleShape3D.new()
+	guard.add_child(gshape)
+	add_child(guard)
+	guard.global_position = Vector3(30.0, 1.6, 0.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	drawn.clear()
+	var toward_crate := Vector3.FORWARD
+	var face := crate.global_position + Vector3(0.0, 0.0, 0.5)
+	p.on_used(_outcome(eye, toward_crate, [face]), true)
+	var hole: Variant = drawn.get(&"bullet_hole")
+	_check(hole is Node3D, "a shot at a surface makes a hole on the crate", str(hole))
+	_check(hole is Node and crate.is_ancestor_of(hole), "and a moving crate carries it: the hole is its child")
+	if hole is Node3D:
+		crate.global_position += Vector3(0.0, 2.0, 0.0)
+		_check((hole as Node3D).global_position.y > 3.0, "so the hole moves with the crate")
+
+	drawn.clear()
+	p.on_used(_outcome(eye, Vector3.RIGHT, [guard.global_position - Vector3(0.5, 0.0, 0.0)]), true)
+	_check(drawn.get(&"bullet_hole") == &"no_surface", "a character takes no hole", str(drawn.get(&"bullet_hole")))
+	crate.queue_free()
+	guard.queue_free()
+
+
+## The wall the shot hits and a ceiling, solid by the time the shot is taken.
+func _walls_for_a_shot(wall: Vector3, aim: Vector3) -> void:
+	_slab(wall, aim)
+	_slab(Vector3(0.0, 5.0, 0.0), Vector3.UP)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
