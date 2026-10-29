@@ -658,6 +658,7 @@ func _build_health() -> void:
 	add_child(health)
 
 	health.died.connect(_on_died)
+	health.damaged.connect(_on_damaged)
 
 
 func _build_arsenal() -> void:
@@ -1990,6 +1991,12 @@ func spread_degrees() -> float:
 	return b.spread_for(
 		state.horizontal_speed(), not state.is_grounded(), state.is_crouched()
 	)
+
+
+## The body flinches on a hit that leaves the player alive, so a third-person view shows it.
+func _on_damaged(_damage: DotDamage) -> void:
+	if figure != null and is_alive():
+		figure.flinch()
 
 
 func _on_died(damage: DotDamage) -> void:

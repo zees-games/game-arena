@@ -39,6 +39,7 @@ var _spawn_yaw := 0.0
 var _log: Array[String] = []
 var _prev_feet: Array = []
 var _hands: Node3D = null
+var _armed := false
 
 
 func _initialize() -> void:
@@ -63,16 +64,15 @@ func _initialize() -> void:
 	_player.attach_body_mesh(Color(0.3, 0.5, 0.85), ArenaAvatars.stock_avatar(&"arena-player-00000007"))
 	var hands := ZeeViewModel.new()
 	hands.name = "Hands"
-	_player.camera.add_child(hands)
-	_player.arm_first_person(hands, true)
+	# The rig finds the hands by path, so they hang under the drawn camera before it is armed.
+	_fp_cam = _view(0)
+	_fp_cam.add_child(hands)
 	_hands = hands
-	_player.give_default_loadout()
 	var spawn: Array = _clip.fields.get("spawn", [15.0, 0.05, -13.0])
 	_spawn_yaw = float(_clip.fields.get("spawn_yaw", 0.0))
 	_player.controller.teleport(Vector3(spawn[0], spawn[1], spawn[2]), float(_clip.fields.get("spawn_yaw", 0.0)), 0.0)
 
 	# Two cameras sharing the one world, side by side; the player's own camera is not drawn.
-	_fp_cam = _view(0)
 	_tp_cam = _view(1)
 	_player.camera.current = false
 
@@ -99,6 +99,11 @@ func _clip_time() -> float:
 
 
 func _physics_process(_delta: float) -> bool:
+	if not _armed:
+		# The tree is not live inside _initialize, and the rig finds the hands by their path.
+		_armed = true
+		_player.arm_first_person(_hands, true)
+		_player.give_default_loadout()
 	var time := _clip_time()
 	var state := _clip.state_at(maxf(time, 0.0))
 	var move: Array = state["move"]
@@ -171,7 +176,7 @@ func _sample(time: float, feet: Vector3) -> void:
 			var bone := _bones.get_bone_name(i).to_lower()
 			if bone.contains("foot") and not bone.contains("toe"):
 				_feet.append(i)
-	var sample := {"t": time, "ground_y": feet.y, "grounded": _player.controller.state.is_grounded()}
+	var sample := {"t": time, "root": feet, "ground_y": feet.y, "grounded": _player.controller.state.is_grounded()}
 	if _bones != null:
 		var ankles: Array = _feet.map(func(i: int) -> Vector3: return _bones.global_transform * _bones.get_bone_global_pose(i).origin)
 		if is_nan(_sole):
@@ -184,7 +189,7 @@ func _sample(time: float, feet: Vector3) -> void:
 			if _prev_feet.size() == ankles.size():
 				v = Vector2(a.x - _prev_feet[k].x, a.z - _prev_feet[k].z).length() * 15.0
 			row += "  %s h=%.3f v=%.2f" % [_bones.get_bone_name(_feet[k]), a.y - feet.y, v]
-		_log.append(row)
+			_log.append(row)
 		_prev_feet = sample["feet"].duplicate()
 		var rotations: Array = []
 		for i in _bones.get_bone_count():
