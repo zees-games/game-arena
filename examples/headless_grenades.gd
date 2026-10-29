@@ -6,6 +6,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaGrenades := preload("../game/arena_grenades.gd")
+const ArenaBots := preload("../game/arena_bots.gd")
 
 ## Utility grenades through the whole game: the loadout gate, the incendiary going off on contact, fire
 ## damage through arena's combat rules (enemy hurt, owner and team-mate not), the blind and cloud events, and
@@ -16,7 +17,7 @@ const ArenaGrenades := preload("../game/arena_grenades.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 22
+const EXPECTED_CHECKS := 24
 
 var _checks := 0
 var _failed := 0
@@ -154,6 +155,9 @@ func _test_flash_and_smoke(game: ArenaGame, thrower: int, enemy: int, here: Vect
 	victim.spawn(Transform3D(Basis(), here), game.team_of(enemy))
 	game.tick({})
 	var eye := victim.muzzle_position()
+	var bots := ArenaBots.world_for(game)
+	var brain := DotBotBrain.new(enemy, DotBotSettings.new())
+	bots.brains[enemy] = brain
 	for kind in [&"flash", &"smoke"]:
 		var s := DotWeaponSpawn.new()
 		s.id = kind
@@ -175,6 +179,9 @@ func _test_flash_and_smoke(game: ArenaGame, thrower: int, enemy: int, here: Vect
 	var clouds := seen.filter(func(i: Dictionary) -> bool: return int(i["fx"]) == ArenaGrenades.Fx.SMOKE)
 	_check(not blinds.is_empty() and float(blinds[0]["seconds"]) > 0.0, "a flash thrown at someone's face blinds them", str(blinds.size()))
 	_check(clouds.size() == 1 and float(clouds[0]["radius"]) > 0.0, "a smoke grenade announces one cloud", str(clouds.size()))
+	var now := float(game.current_tick()) / float(game.tick_rate)
+	_check(brain.is_blind(now), "a flashed bot's brain is blind for the ledger's seconds")
+	_check(bots.sight_blockers.size() == 1 and not bots.line_of_sight(Vector3(0.0, 4.0, -9.0), Vector3(0.0, 4.0, 5.0)) and bots.line_of_sight(Vector3(0.0, 40.0, -9.0), Vector3(0.0, 40.0, 5.0)), "the smoke cloud blocks the bots' line of sight")
 	var self_hp_ok: bool = game.combat.health_of(enemy).health > 0.0
 	_check(self_hp_ok, "neither deals damage on its own")
 

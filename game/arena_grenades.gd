@@ -4,11 +4,15 @@ extends RefCounted
 ## [ArenaProjectiles], which already does them with the thrower grace and hitbox sweeps.
 
 const ArenaPlayer := preload("arena_player.gd")
+const ArenaBots := preload("arena_bots.gd")
 
 const CHANNEL := "arena.grenades"
 
 ## arena_weapons API level that has AwUtilityZones (requires.floor.json).
 const MIN_LEVEL := 4
+
+## dot-bot API level that has DotBotBrain.blind_for and the world's sight blockers.
+const BOT_LEVEL := 8
 
 ## What an [signal effect] shows; the wire values live in the addon.
 const Fx = AwUtilityZones.Fx
@@ -66,8 +70,26 @@ func _on_detonated(at: Vector3, spawn: DotWeaponSpawn) -> void:
 	var g := AwGrenade.from_spawn(spawn, def, rules)
 	g.position = at
 	# Blast damage stays off: the incendiary's splash was resolved by the projectile layer already.
-	var _events := zones.detonate(g, def)
+	_tell_bots(zones.detonate(g, def), at)
 	DotLog.debug(CHANNEL, "utility grenade went off", {"kind": String(g.kind), "at": at})
+
+
+## A flashed bot goes blind for the ledger's seconds; a smoke cloud blocks every bot's line of sight.
+func _tell_bots(events: Array, at: Vector3) -> void:
+	if DotAddonApi.build_level("dot_bot") < BOT_LEVEL:
+		return
+
+	var world := ArenaBots.world_for(game)
+	var now := float(game.current_tick()) / float(game.tick_rate)
+
+	for e: Dictionary in events:
+		match String(e["event"]):
+			"blind":
+				var brain: DotBotBrain = world.brains.get(int(e["victim"]))
+				if brain != null:
+					brain.blind_for(now, zones.ledger.remaining(int(e["victim"])), at)
+			"smoke":
+				var _id := world.add_sight_blocker(at + Vector3(0.0, 1.6, 0.0), float(e["radius"]), now + float(e["seconds"]))
 
 
 func _victims() -> Array:
