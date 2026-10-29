@@ -1362,7 +1362,7 @@ func _test_the_kill_view() -> void:
 	var was_current := port.get_camera_3d()
 	var hud_stub := Control.new()
 	port.add_child(hud_stub)
-	var view := ArenaKillViewClient.new()
+	var view := DotKillViewClient.new()
 	port.add_child(view)
 	view.setup(rules)
 	view.kv.auto_process = false
@@ -1380,10 +1380,10 @@ func _test_the_kill_view() -> void:
 	view.kv.advance(0.5)
 	_check(view.camera.global_position.distance_to(from_kill) > 0.001 and absf(view.camera.fov - 80.0) < 0.5,
 		"it follows the killer's eye with the killer's field of view")
-	_check(view._cursor.visible and view._cursor.at.distance_to(Vector2(0.5, 0.45)) < 0.01, "and draws the killer's crosshair where it was")
+	_check(view.crosshair.visible and view.crosshair.at.distance_to(Vector2(0.5, 0.45)) < 0.01, "and draws the killer's crosshair where it was")
 	view.kv.killcam.skip()
 	_check(ended == [true] and asked[0] == 1, "a skip ends it and asks for the respawn")
-	_check(previous.current and hud_stub.visible and not view._cursor.visible, "the normal camera and HUD come back", "%s %s %s, was %s" % [previous.current, hud_stub.visible, view._cursor.visible, was_current])
+	_check(previous.current and hud_stub.visible and not view.crosshair.visible, "the normal camera and HUD come back", "%s %s %s, was %s" % [previous.current, hud_stub.visible, view.crosshair.visible, was_current])
 
 	_check(view.play(clips[0]["clip"], {"killer": "Bolt"}), "another death plays again")
 	for _i in 200:
@@ -1399,11 +1399,11 @@ func _test_the_kill_view() -> void:
 	var x0: Transform3D = eye[0]
 	var gap := cam.distance_to(x0.origin)
 	var ahead := (x0.origin - cam).dot(-x0.basis.z)
-	_check(gap > 1.5 and gap < 6.0 and ahead > 1.0 and not view._cursor.visible,
+	_check(gap > 1.5 and gap < 6.0 and ahead > 1.0 and not view.crosshair.visible,
 		"mp_killview_camera 1: the camera rides behind the killer's eye, no crosshair", "gap %.2f ahead %.2f" % [gap, ahead])
 	view.kv.killcam.skip()
 	var off := DotKillViewRules.new()
-	var quiet := ArenaKillViewClient.new()
+	var quiet := DotKillViewClient.new()
 	port.add_child(quiet)
 	quiet.setup(off)
 	_check(not quiet.play(clips[0]["clip"], {}), "with the cvar off nothing plays")

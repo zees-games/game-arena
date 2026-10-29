@@ -101,9 +101,9 @@ The slots are `primary` (rifles and the heavies), `secondary`, `melee`, `thrown`
 
 When a player dies, their screen plays the last seconds of the killer's view (dot-replay's kill view, API level 3) instead of the death camera. It is on in arena; `mp_killview*` (replicated, archived) tune it, defaults from the addon.
 
-- Server (`game/arena_killview.gd`, driven from `ArenaNetBridge._tick_killview`): every living player's and bot's eye is recorded each game tick into a `DotKillViewRing`; `_on_player_killed` notes the kill; the clip goes to the victim's peer alone as one `ArenaEvents.Kind.KILLVIEW` (var_to_bytes, rows halved until it fits the 16384 body cap). Bots get nothing. Leaving, and bot removal, forget the ring.
+- Server (dot-replay's `DotKillViewServer`, made by `ArenaGame.make_killview_server` and driven from `ArenaNetBridge._tick_killview`): every living player's and bot's eye is recorded each game tick into a `DotKillViewRing`; `_on_player_killed` notes the kill; the clip goes to the victim's peer alone as one `ArenaEvents.Kind.KILLVIEW` (`DotKillViewClip.pack`, rows halved until it fits the 16384 body cap). Bots get nothing. Leaving, and bot removal, forget the ring.
 - The victim's queued respawn is held for the length of the clip (at most `mp_killview` seconds, an estimate in game ticks) so the replay is not cut off by the respawn.
-- Client (`game/arena_killview_client.gd`): the replay camera and the killer's crosshair follow `kv.view`, the HUD and view model are hidden, the previous camera returns when it finishes. The final-killcam of a match end takes precedence.
+- Client (dot-replay's `DotKillViewClient`, the final killcam as its `stage`): the replay camera and the killer's crosshair follow `kv.view`, the HUD and view model are hidden, the previous camera returns when it finishes. The final-killcam of a match end takes precedence.
 - Space (the skip action) sends `Ask.RESPAWN`; the server respawns a held victim at once (`ArenaGame.respawn_player`) and ignores it otherwise.
 - Not recorded: the killer's real FOV (a constant 83.6 is used). Solo/offline play has no bridge, so no kill view.
 - Look at it: `tools/screenshot.sh dm_atrium --glance --killcam` renders a frame during a synthetic replay. `headless_net` (section `killview_reaches_the_victim`) and `headless_presentation` cover the rest.

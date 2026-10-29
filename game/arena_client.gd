@@ -561,7 +561,7 @@ func _begin_match_end() -> void:
 
 
 func _build_killview() -> void:
-	killview = ArenaKillViewClient.new()
+	killview = DotKillViewClient.new()
 	killview.name = "KillView"
 	add_child(killview)
 	killview.setup(game.killview_rules)

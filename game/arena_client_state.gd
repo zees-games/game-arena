@@ -12,7 +12,6 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
 const ArenaKillcam := preload("arena_killcam.gd")
-const ArenaKillViewClient := preload("arena_killview_client.gd")
 const ArenaConfig := preload("arena_config.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaMode := preload("arena_mode.gd")
@@ -92,8 +91,8 @@ var _summary_board_open: bool = false
 ## The final killcam ([ArenaKillcam]): records every frame, plays before the summary.
 var killcam: ArenaKillcam = null
 
-## The kill view: the killer's replayed eye, in place of the death camera ([ArenaKillViewClient]).
-var killview: ArenaKillViewClient = null
+## The kill view: the killer's replayed eye, in place of the death camera ([DotKillViewClient]).
+var killview: DotKillViewClient = null
 var winner_reveal: DotWinnerReveal = null
 var _reveal_hid: Dictionary = {}
 var _seen_match_state: int = -1

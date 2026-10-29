@@ -431,7 +431,7 @@ func _play_glance() -> void:
 
 
 ## `--killcam`: the kill view as a victim sees it, played from a clip of [param killer_id]'s eye swinging onto the local
-## player, advanced partway so the replay is still on screen. The real client plays the server's clip the same way (ArenaKillViewClient).
+## player, advanced partway so the replay is still on screen. The real client plays the server's clip the same way (DotKillViewClient).
 func _play_killview(game: ArenaGame, killer_id: int) -> void:
 	var rules := DotKillViewRules.new()
 	rules.enabled = true
@@ -446,7 +446,7 @@ func _play_killview(game: ArenaGame, killer_id: int) -> void:
 		var _r := ring.record(killer_id, t, Transform3D(swing * on_target, eye), 83.6, Vector2(0.5, 0.5))
 	var _n := ring.note_kill(killer_id, 112, 3.0, {"killer": killer.display_name, "weapon": "rifle"})
 	var clips := ring.collect(4.0)
-	var view := ArenaKillViewClient.new()
+	var view := DotKillViewClient.new()
 	view.name = "KillView"
 	root.add_child(view)
 	view.setup(rules)

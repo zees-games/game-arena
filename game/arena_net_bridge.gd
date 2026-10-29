@@ -10,7 +10,6 @@ const ArenaPlayerNet := preload("arena_player_net.gd")
 const ArenaNpcNet := preload("arena_npc_net.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaBots := preload("arena_bots.gd")
-const ArenaKillView := preload("arena_killview.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaRequest := preload("arena_request.gd")
 
@@ -143,7 +142,7 @@ var _ready_unseated: Dictionary = {}
 var _hello: Dictionary = {}
 
 ## Server: records every view and cuts the victims' clips (null until the first tick).
-var killview: ArenaKillView = null
+var killview: DotKillViewServer = null
 
 ## Emitted on a client when HELLO arrives, with what it said.
 signal hello_received(info: Dictionary)
@@ -164,7 +163,7 @@ signal match_received(info: Dictionary)
 ## Emitted on a client when its own damage landed: [method ArenaEvents.read_hit].
 signal hit_received(info: Dictionary)
 
-## Emitted on a client when the server sent the replay of its killer's view: [method ArenaEvents.read_killview].
+## Emitted on a client when the server sent the replay of its killer's view: [method DotKillViewClip.unpack].
 signal killview_received(clip: Dictionary, info: Dictionary)
 
 ## Emitted on a client for every kill's medals and points: [method ArenaEvents.read_award].
@@ -1453,14 +1452,14 @@ func _tick_killview() -> void:
 	if net == null or not net.is_server or not game.killview_rules.enabled:
 		return
 	if killview == null:
-		killview = ArenaKillView.new(game)
+		killview = game.make_killview_server()
 	var tick := game.current_tick()
 	var now := float(tick) / float(game.tick_rate)
 	killview.record(now)
 	for ready: Dictionary in killview.collect(now, tick):
 		var peer := peer_for_session(int(ready["victim"]))
 		if peer != 0:
-			send_event(peer, ArenaEvents.Kind.KILLVIEW, ArenaEvents.write_killview(ready["clip"], ready["info"]))
+			send_event(peer, ArenaEvents.Kind.KILLVIEW, DotKillViewClip.pack(ready["clip"], ready["info"], ArenaEvents.KILLVIEW_BYTES))
 
 
 func _on_player_killed(entry: DotKillFeed.Entry) -> void:
@@ -1664,7 +1663,7 @@ func _on_event(message: DotNetMessage) -> void:
 			if bool(stomp["ok"]):
 				stomp_received.emit(stomp)
 		ArenaEvents.Kind.KILLVIEW:
-			var view := ArenaEvents.read_killview(event.body)
+			var view := DotKillViewClip.unpack(event.body)
 			if bool(view["ok"]):
 				killview_received.emit(view["clip"], view["info"])
 		_:
