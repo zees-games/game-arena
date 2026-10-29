@@ -605,7 +605,19 @@ func _reveal_winner() -> void:
 	if not _in_match_end():
 		return
 	var ranked: Array = game.match_node.scoreboard.ranked() if game.match_node.scoreboard != null else []
-	if winner_reveal == null or ranked.is_empty():
+
+
+## The podium is built at the first match end, not at start: about 22 nodes nobody sees before then.
+func _ensure_winner_reveal() -> void:
+	if winner_reveal != null:
+		return
+	if ranked.is_empty():
+		_show_match_summary()
+		return
+	# Without a killcam there is no podium to build: a bare client keeps the summary notice.
+	if killcam != null:
+		_ensure_winner_reveal()
+	if winner_reveal == null:
 		_show_match_summary()
 		return
 	var entries := ArenaMatchText.reveal_entries(ranked)
@@ -1994,7 +2006,9 @@ func _build_platform() -> void:
 	link = platform.link as Node
 	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
 	gate.hold(&"map", "Loading the map")
-	gate.warm_up(_weapon_warm_items())
+	# Headless draws nothing: loading every weapon model to warm its materials is 38 MB for no frame.
+	if not DotPlatform.is_headless():
+		gate.warm_up(_weapon_warm_items())
 	if ArenaFrameProbe.on() and DotWeb.available():
 		# Lets a page script split its own frame log at the cover (window.arena_gate_open, ms).
 		gate.opened.connect(func() -> void: DotWeb.eval("window.arena_gate_open = performance.now()", true))
@@ -2066,6 +2080,7 @@ func _start_solo_workbench() -> void:
 		_workbench_open = open
 		if open:
 			platform.hold_pointer(&"workbench")
+	wb.lazy_panel = true
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		else:
 			platform.release_pointer(&"workbench")

@@ -9,7 +9,7 @@ extends DotGameCheckSuite
 
 const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaGame := preload("../game/arena_game.gd")
-const CHECKS := 10
+const CHECKS := 12
 
 
 
@@ -59,5 +59,15 @@ func _run() -> void:
 	wb.permit_fn = func(actor: Variant, _flag: String) -> bool: return actor == "mod"
 	_check(wb.api.handle("mod", {"op": "set", "kind": set.rel_path, "id": binder.profile_id, "key": "horde_cap", "value": 14}).ok, "a permitted actor edits")
 	wb.free()
+	var lazy := DotGameWorkbench.new()
+	lazy.panel_mode = 2
+	lazy.lazy_panel = true
+	lazy.config = {"enabled": false}
+	lazy.add_set(set, "Game settings")
+	add_child(lazy)
+	_check(lazy.start().value == true and lazy.overlay == null, "a lazy workbench starts with no panel nodes")
+	lazy.open()
+	_check(lazy.overlay != null and lazy.is_open(), "and builds the panel on the first open")
+	lazy.free()
 	game.free()
 	_report(CHECKS)
