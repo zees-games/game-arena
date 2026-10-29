@@ -1341,11 +1341,15 @@ func present_body() -> void:
 		player.weapons.view_model() as ZeeViewModel
 		if live and player.weapons != null else null
 	)
-	var scoped := hands != null and hands.is_scoped()
+	# The scope's view comes up over the aim-in (zee_ads_rules), so the crosshair gives way as it does.
+	var scope_up := hands != null and hands.scope_fraction() > 0.0
 
 	if scope != null:
-		scope.fraction = hands.aim_fraction() if scoped else 0.0
-		if scoped and is_inside_tree():
+		if hands != null:
+			scope.follow(hands)
+		else:
+			scope.fraction = 0.0
+		if scope_up and is_inside_tree():
 			# The whole viewport, like the blind: the HUD's own size leaves the safe-area strip showing.
 			var inverse := get_global_transform().affine_inverse()
 			scope.position = inverse * Vector2.ZERO
@@ -1353,12 +1357,12 @@ func present_body() -> void:
 	if crosshair != null:
 		# The scope has its own reticle; a crosshair drawn over it is two.
 		# Dead or in a kill view: DotCrosshair hides itself (alive_source); older dot-ui is hidden here.
-		crosshair.visible = not scoped and (_crosshair_hides or (live and player.is_alive()))
+		crosshair.visible = not scope_up and (_crosshair_hides or (live and player.is_alive()))
 		# Down an iron sight the sight is the aiming mark: the crosshair fades out as the gun
 		# comes up and back as it goes down (dot-ui's DotCrosshair, API 5; Christian's first
 		# play test had both on screen at once). Hip fire keeps it.
 		if _crosshair_fades:
-			crosshair.call(&"set_aim", hands.aim_fraction() if hands != null and not scoped else 0.0)
+			crosshair.call(&"set_aim", hands.aim_fraction() if hands != null and not scope_up else 0.0)
 
 	if hurt_overlay != null:
 		var hurt := 0.0
