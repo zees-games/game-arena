@@ -89,7 +89,12 @@ static func scan(from: String = "") -> void:
 	var dirs := ZeePackScan.provider_dirs(base, PROVIDER)
 	var own_script: GDScript = null
 
-	if own != "" and wanted.has(own) and dirs.has(own):
+	# arena_weapons owns its definitions from API level 2; an older build falls back to zee's set (requires.floor.json).
+	var own_ready := DotAddonApi.build_level("arena_weapons") >= 2
+	if not own_ready and own == "arena_weapons":
+		DotLog.warn(CHANNEL, "arena_weapons is older than API level 2; zee's weapons stand in", {"level": DotAddonApi.build_level("arena_weapons")})
+
+	if own != "" and own_ready and wanted.has(own) and dirs.has(own):
 		own_script = ZeePackScan.load_provider(CHANNEL, own, base.path_join(own).path_join(PROVIDER), true)
 
 	if own_script != null and own_script.has_method(&"set_id_prefix"):

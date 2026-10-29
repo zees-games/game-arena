@@ -118,7 +118,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - A built-in map's light is its `lighting` document; render a look change under `gl_compatibility` too. [maps](docs/maps.md#colour-and-light)
 - An imported map is lit from its manifest (`imported_profile`), a built-in map with `painted()` (dot-lighting 3). [imported](docs/imported-maps.md#lit-from-the-manifest)
 - A guard on a host addon's level needs that addon in `requires.floor.json` at the older path's level. [client](docs/client.md#keys)
-- `arena_weapons` is reached only through `cfg/addon/game_arena_weapons`, so `requires.uses.json` declares it (dot-core API 24) and `requires.floor.json` carries it (level 1; the addon has no API file yet).
+- `arena_weapons` is reached only through `cfg/addon/game_arena_weapons`, so `requires.uses.json` declares it (dot-core API 24) and `requires.floor.json` carries it at level 2 (own definitions), backed by the guard in `arena_weapon_roles.gd` that falls back to zee below it.
 - An imported map's solid is in the tree on every machine before any player is bodied; spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 - Bots route on an imported map over a `DotBotNav` baked in the background, never in the tick. [imported](docs/imported-maps.md#bots-route-over-a-mesh-baked-from-the-brushes)
 - Ride edges are planned by `tools/surf_rides.tscn`, never at load; `arena_surf.gd` loads by path only with dot-bot 4, dot-player-controller 3. [imported](docs/imported-maps.md#bots-ride-the-ramps)
