@@ -19,3 +19,6 @@
 *.ttf binary
 *.res binary
 *.pck binary
+
+# Vendored licence texts are byte copies of zee-dot-weapons' (CRLF); sync-art.sh --check compares bytes.
+assets/*/LICENSE-kenney-*.txt -text
