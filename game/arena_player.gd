@@ -98,6 +98,7 @@ var mirror_fire_seq: int = 0
 var mirror_fire_kind: int = 0
 var mirror_switching: bool = false
 var mirror_reloading: bool = false
+var _mode_click_audio: AudioStreamPlayer3D = null
 var health: DotHealth = null
 var hitboxes: DotHitboxSet = null
 
@@ -1687,6 +1688,19 @@ func _present_held_sprite(id: StringName) -> void:
 		hand.add_child(_held_sprite)
 	_held_sprite.show_weapon(id)
 	_held_sprite.visible = _held_sprite.visible and is_alive()
+
+
+## A remote player's selector switch, heard from their hand.
+func mirror_mode_click() -> void:
+	if not is_inside_tree() or mirror_weapon == &"":
+		return
+	if _mode_click_audio == null:
+		_mode_click_audio = AudioStreamPlayer3D.new()
+		_mode_click_audio.unit_size = 4.0
+		_mode_click_audio.max_distance = 30.0
+		add_child(_mode_click_audio)
+	_mode_click_audio.stream = ZeeWeaponSound.stream(ZeeWeaponSound.mode_click_for(mirror_weapon))
+	_mode_click_audio.play()
 
 
 func _present_held() -> void:

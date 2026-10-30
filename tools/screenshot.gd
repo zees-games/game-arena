@@ -392,6 +392,14 @@ func _play_glance() -> void:
 	if OS.get_cmdline_user_args().has("--flashlight"):
 		_stage_flashlight(game)
 
+	if OS.get_cmdline_user_args().has("--fire-mode"):
+		# An automatic rifle with the selector moved once, as N does.
+		var _gave := _local.arsenal.give(&"rifle")
+		for n: int in _local.arsenal.slots():
+			if _local.arsenal.slot_at(n).def.id == &"rifle":
+				var _chose := _local.arsenal.select(n, 0)
+		var _moved := _local.arsenal.cycle_fire_mode()
+
 	var slot := _local.arsenal.current()
 	if slot != null and slot.def.magazine > 0:
 		slot.magazine = maxi(1, slot.def.magazine / 3)

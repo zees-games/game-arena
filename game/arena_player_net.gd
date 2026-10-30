@@ -62,6 +62,8 @@ var net_health: int = 0
 var net_armour: int = 0
 var net_alive: bool = false
 var net_slot: int = 0
+## The held weapon's selector mode, for everyone so a remote click can be heard.
+var net_fire_mode: int = 0
 var net_magazine: int = 0
 var net_reserve: int = 0
 
@@ -150,7 +152,7 @@ func _register_net_vars() -> void:
 	# The pack's `all_specs()` is dot-weapon's three plus its own four, and is the one call
 	# its README asks a game to make: concatenating the halves by hand is how a game forgets
 	# the second one and has weapons that are silent for everybody but their owner.
-	for spec in DotCombatNetSync.specs() + ZeeWeaponNet.all_specs():
+	for spec in DotCombatNetSync.specs() + ZeeWeaponNet.all_specs() + DotWeaponNetSync.fire_mode_specs(false):
 		var declaration := replicate(spec["property"], DotNetVar.Type[spec["type"]])
 
 		if int(spec["bits"]) > 0:
@@ -452,7 +454,9 @@ func _push_weapons() -> void:
 	if owned:
 		var _changed := ArenaContent.apply_carry(player.arsenal, net_carry)
 
-	DotWeaponNetSync.push(self, player.arsenal)
+	# The owner's own selector is predicted; only a remote copy adopts and clicks.
+	var clicks := not owned and DotWeaponNetSync.fire_mode_will_change(self, player.arsenal)
+	DotWeaponNetSync.push(self, player.arsenal, not owned)
 
 	if owned:
 		DotWeaponNetSync.correct_ammo(self, player.arsenal)
@@ -465,6 +469,8 @@ func _push_weapons() -> void:
 	player.mirror_fire_kind = net_fire_kind
 	player.mirror_switching = net_switching
 	player.mirror_reloading = net_reloading
+	if clicks:
+		player.mirror_mode_click()
 
 
 ## Copies the interpolated state onto the player, every frame, on a remote one.

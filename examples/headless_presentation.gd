@@ -76,8 +76,8 @@ func _test_every_key_is_an_action() -> void:
 		&"arena_reload": "R", &"arena_slot_1": "1", &"arena_slot_2": "2", &"arena_slot_3": "3",
 		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Wheel up",
 		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Z", &"arena_launch": "E",
-		&"arena_launch_props": "N", &"arena_punt": "G", &"dot_voice_talk": "V",
-		&"dot_fps_walk": "Alt", &"arena_fire_mode": "L",
+		&"arena_launch_props": "P", &"arena_punt": "G", &"dot_voice_talk": "V",
+		&"dot_fps_walk": "Alt", &"arena_fire_mode": "N",
 	}
 	var wrong: Array[String] = []
 	for action: StringName in expected:
@@ -96,7 +96,7 @@ func _test_every_key_is_an_action() -> void:
 	var one_slot := DotWeaponSlot.new()
 	one_slot.def = one
 	_check(
-		ArenaHud.mode_label(two_slot, "L") == "Rifle  AUTO [L]" and ArenaHud.mode_label(one_slot, "L") == "Pistol",
+		ArenaHud.mode_label(two_slot, "N") == "Rifle  AUTO [N]" and ArenaHud.mode_label(one_slot, "N") == "Pistol",
 		"the ammo line names the fire mode and its key on a gun with a selector, and only then",
 		"%s / %s" % [ArenaHud.mode_label(two_slot, "N"), ArenaHud.mode_label(one_slot, "N")]
 	)
@@ -212,7 +212,7 @@ func _test_every_key_is_an_action() -> void:
 	client._unhandled_input(_key_event("G", true))
 	var g_punts := client.last_prop_asked == ArenaEvents.PropAct.PUNT
 	_check(e_grabs and f_freezes and g_punts and client.launch_action() == &"arena_launch_props",
-		"in Siege E grabs, X freezes, G punts and the launch is N's",
+		"in Siege E grabs, X freezes, G punts and the launch is P's",
 		"grab %s freeze %s punt %s launch %s" % [e_grabs, f_freezes, g_punts, client.launch_action()])
 	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_launch"), "T", p.settings)
 	client._holding = false

@@ -78,7 +78,7 @@ static func make() -> DotMenuBindings:
 	keys.add(WALK, &"bind_walk", "Walk", "Alt", "Movement")
 	keys.add(DASH, &"bind_dash", "Dash", "Shift", "Movement")
 	keys.add(LAUNCH, &"bind_launch", "Launch (grab a prop in a props mode)", "E", "Movement")
-	keys.add(LAUNCH_PROPS, &"bind_launch_props", "Launch, in a props mode", "N", "Movement")
+	keys.add(LAUNCH_PROPS, &"bind_launch_props", "Launch, in a props mode", "P", "Movement")
 
 	keys.add(FIRE, &"bind_fire", "Fire", "Mouse 1", "Weapons")
 	keys.add(AIM, &"bind_aim", "Aim (bashes with Right mouse aims off)", "Mouse 2", "Weapons")
@@ -94,7 +94,7 @@ static func make() -> DotMenuBindings:
 	keys.add(WEAPON_DROP, &"bind_weapon_drop", "Drop the weapon in hand (picks up the one at your feet)", "Q", "Weapons")
 	keys.add(USE, &"bind_use", "Pick up the dropped weapon you are looking at", "E", "Weapons")
 	keys.add(PUNT, &"bind_punt", "Punt a prop", "G", "Weapons")
-	keys.add(FIRE_MODE, &"bind_fire_mode", "Cycle fire mode (semi / burst / auto)", "L", "Weapons")
+	keys.add(FIRE_MODE, &"bind_fire_mode", "Cycle fire mode (semi / burst / auto)", "N", "Weapons")
 
 	keys.add(CHAT, &"chat_open_key", "Chat", "Y", "Chat", DotSettingsDef.Scope.ACCOUNT)
 	keys.add(CHAT_TEAM, &"chat_team_key", "Team chat", "U", "Chat", DotSettingsDef.Scope.ACCOUNT)
@@ -112,5 +112,5 @@ static func make() -> DotMenuBindings:
 	# B is the loadout menu (dot-menu's `dot_menu_loadout`), where the host has it (API 6).
 	if DotAddonApi.build_level("dot_menu") >= 6 and keys.has_method(&"add_loadout"):
 		var _l: Variant = keys.call(&"add_loadout", "Weapons")
-	var _r := keys.renamed(&"bind_bash", ["F"]).renamed(&"bind_launch_props", ["X"])
+	var _r := keys.renamed(&"bind_bash", ["F"]).renamed(&"bind_launch_props", ["X", "N"]).renamed(&"bind_fire_mode", ["L"])
 	return keys

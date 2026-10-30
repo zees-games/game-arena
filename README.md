@@ -50,7 +50,7 @@ A match starts in warmup, then counts down, then goes live. Nobody spawns until 
 | **F** | Flashlight. The server decides it, so everyone sees your beam (range, brightness and battery are in the dot profile) |
 | **X** | Bash with whatever is in your hand |
 | **R** | Reload |
-| **L** | Fire mode: cycles semi, burst and auto on a gun that has more than one, with a click; the ammo line shows the mode |
+| **N** | Fire mode: cycles semi, burst and auto on a gun that has more than one, with a click; the ammo line shows the mode |
 | **1**-**5** / wheel | Weapon slot: melee, sidearm, primary, heavy, grenade |
 | **Q** | Last weapon |
 | **V** | Push to talk |
@@ -59,7 +59,7 @@ A match starts in warmup, then counts down, then goes live. Nobody spawns until 
 | **H** | Help: the modes and every key as you have it bound |
 | **Esc** | Menu, and release the mouse. Leave is at the bottom |
 
-In Siege, **E** picks up and drops a prop, **X** freezes it, **G** punts it, and launch moves to **N**.
+In Siege, **E** picks up and drops a prop, **X** freezes it, **G** punts it, and launch moves to **P**.
 
 Every key except Esc can be moved under Menu → Controls; the change applies at once and is saved.
 
