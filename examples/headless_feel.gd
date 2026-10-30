@@ -198,10 +198,10 @@ func _run() -> void:
 	await _teardown()
 
 	# The total the section counter cannot be: a script error aborts the rest of a section
-	# after it announced itself. Offline 5, moves 7, boot 5, connect 4, and 4 a window
+	# after it announced itself. Offline 5, moves 8, boot 5, connect 4, and 4 a window
 	# (3 where the eye is not judged).
 	if _only == "" and _completed == _entered:
-		var expected := 5 + 7 + 5 + 4
+		var expected := 5 + 8 + 5 + 4
 		for window in WINDOWS:
 			expected += 4 if bool(window[8]) else 3
 		_check(_passed + _failed == expected, "every check ran (%d of %d)" % [_passed + _failed, expected])
@@ -448,6 +448,14 @@ func _test_moves() -> void:
 	var strafe_starved := _starvation(OFFLINE_FPS)
 
 	_mover_command = null
+	# Own body: it trails the eye further the further down you look, or the open hips (the cut
+	# where the belly bone is gone) fill the screen looking at your feet.
+	_mover.own_body_mode = 1
+	var back_level := _mover.own_body_back(0.0)
+	var back_down := _mover.own_body_back(-85.0)
+	_check(back_down > back_level + 0.3 and is_equal_approx(_mover.own_body_back(-20.0), back_level),
+		"looking down: the own body stands %.2f m further back, and not at all for a glance" % (back_down - back_level),
+		"level %.2f, down %.2f" % [back_level, back_down])
 	_mover.queue_free()
 	_mover = null
 
