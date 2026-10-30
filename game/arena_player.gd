@@ -407,6 +407,7 @@ func apply_class_movement(def: DotPlayerClassDef) -> void:
 		_class_base = controller.tunables.duplicate()
 
 	var _n := DotPlayerClassApply.to_movement(def, controller.tunables, _class_base)
+	ArenaPlayerTunables.apply_class_attributes(def, controller.tunables)
 
 
 ## Movement that feels like an arena shooter rather than a modern one.

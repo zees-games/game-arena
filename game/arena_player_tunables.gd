@@ -77,12 +77,30 @@ const MOVEMENT_RULES: PackedStringArray = [
 	"wall_run_max_approach_angle", "wall_jump_look_blend", "wall_jump_max_per_wall",
 	"wall_run_body_roll", "wall_run_body_yaw",
 	"wall_run_auto", "wall_run_on_jump", "wall_run_turn_view", "wall_run_jump_min_speed", "wall_run_jump_max_angle", "wall_run_cooldown",
+	"wall_run_min_height", "wall_run_min_length",
 	"wall_max_angle_from_vertical",
 ]
 
 ## The rules in [constant MOVEMENT_RULES] that pose a drawn body rather than move one: they
 ## are not tunables, they live on [member body_motion], and these are their defaults.
 const BODY_RULES := {"wall_run_body_roll": 25.0, "wall_run_body_yaw": 12.0}
+
+
+## Tunables a class (or a per-server profile entry) may override through its `attributes`
+## dictionary, keyed by the tunable's own name; the typed class fields live in dot-player-class.
+const CLASS_ATTRIBUTES: PackedStringArray = ["wall_run_min_height", "wall_run_min_length"]
+
+
+## Writes the [constant CLASS_ATTRIBUTES] a class sets onto [param tunables]; one it leaves out
+## keeps the server's value, so a cvar is never undone by a respawn.
+static func apply_class_attributes(def: Object, tunables: Object) -> int:
+	var attrs: Variant = def.get("attributes") if def != null else null
+	var written := 0
+	for key: String in CLASS_ATTRIBUTES:
+		if attrs is Dictionary and (attrs as Dictionary).has(key):
+			tunables.set(key, float((attrs as Dictionary)[key]))
+			written += 1
+	return written
 
 
 ## What a combat surf map plays with, as overrides on [method arena_tunables].

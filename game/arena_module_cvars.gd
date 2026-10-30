@@ -54,6 +54,8 @@ const MOVEMENT_CVARS := {
 	"arena_wall_run_jump_speed": ["wall_run_jump_min_speed", "Horizontal speed a jump-started wall run needs, m/s"],
 	"arena_wall_run_jump_angle": ["wall_run_jump_max_angle", "Widest angle off the wall's plane a jump-started run accepts, degrees"],
 	"arena_wall_run_cooldown": ["wall_run_cooldown", "Seconds after a wall run ends before another may start"],
+	"arena_wall_run_min_height": ["wall_run_min_height", "Height a wall face must have around the contact for a run to start, m (0 for any face)"],
+	"arena_wall_run_min_length": ["wall_run_min_length", "Length a wall must continue ahead for a run to start, m (0 for any face)"],
 	"arena_wall_angle": ["wall_max_angle_from_vertical", "Steepest lean from vertical a wall may have and still be run on, degrees"],
 	"arena_break": ["break_mode", "On a death the body: 0 stays whole, 1 loses limbs, 2 explodes"],
 	"arena_break_limbs": ["break_limbs", "How many limbs come off when arena_break is 1"],
