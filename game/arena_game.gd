@@ -1137,6 +1137,10 @@ func _respawn_for_new_map() -> void:
 		_on_respawn_due(key, match_node.choose_spawn(key, _tick), _tick)
 
 
+## A client behind a loading cover sets this and calls [method build_map_io_async], so the movers are not one long frame.
+var defer_map_io := false
+
+
 ## Puts an imported map's solid in the tree, replacing the last one; nothing on a
 ## built-in map.
 ##
@@ -1165,14 +1169,27 @@ func _build_world_collision() -> void:
 	# Before `_build_match` turns the spawns into spawn points: a mapper's spawn inside the
 	# floor would otherwise be a player rising through it. See `ArenaMap.settle_spawns`.
 	var lifted := map.settle_spawns(map.movement_body(), ArenaPlayer.arena_tunables())
-	map_io = ArenaMapIo.build(self, map_use)
-	if map_io != null:
-		add_child(map_io)
+	if not defer_map_io:
+		map_io = ArenaMapIo.build(self, map_use)
+		if map_io != null:
+			add_child(map_io)
 
 	if lifted > 0:
 		DotLog.debug(CHANNEL, "spawns lifted out of an imported map's solid", {
 			"map": String(map.id), "lifted": lifted, "of": map.spawns.size()
 		})
+
+
+## Builds the movers [member defer_map_io] left out, a slice at a time. Call it after setup or change_map.
+func build_map_io_async(slice: DotFrameSlice) -> void:
+	if map_io != null or map == null:
+		return
+	var built = await ArenaMapIo.build_async(self, map_use, slice)
+	if built != null and map_io == null and is_instance_valid(self):
+		map_io = built
+		add_child(map_io)
+	elif built != null:
+		built.free()
 
 
 func _free_map_io() -> void:

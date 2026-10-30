@@ -105,22 +105,37 @@ static func world_prefix(id: String, map_dir: String = "") -> String:
 ## Replaces [param drawn]'s legacy meshes with the map's dot-map world (free PBR art, same frame
 ## and scale); collision, spawns and mechanics stay the manifest's. False leaves the legacy meshes.
 static func draw_world(drawn: Node3D, id: String, map_dir: String = "") -> bool:
+	var plan := _draw_plan(drawn, id, map_dir)
+	if plan.is_empty():
+		return false
+	(plan.script as GDScript).call("attach", drawn, plan.mesh, plan.options)
+	return true
+
+
+## [method draw_world] in slices: awaits [param slice] between batches so the cover never freezes on one frame.
+static func draw_world_async(drawn: Node3D, id: String, map_dir: String, slice: DotFrameSlice) -> bool:
+	var plan := _draw_plan(drawn, id, map_dir)
+	if plan.is_empty():
+		return false
+	await (plan.script as GDScript).call("attach_async", drawn, plan.mesh, plan.options, slice)
+	return true
+
+
+static func _draw_plan(drawn: Node3D, id: String, map_dir: String) -> Dictionary:
 	var prefix := world_prefix(id, map_dir)
 	if prefix.is_empty() or not ResourceLoader.exists(DRAWN_WORLD):
-		return false
-	var drawn_world: GDScript = load(DRAWN_WORLD)
+		return {}
 	var got: DotResult = DotMapBspMesh.load_prefix(prefix)
 	if not got.ok:
 		DotLog.warn("arena.maps", "a map's world would not read; its legacy meshes are drawn", {"map": id, "why": got.error.message})
-		return false
+		return {}
 	for child in drawn.get_children():
 		drawn.remove_child(child)
 		child.free()
 	var surfaces := ArenaPaths.rebase("res://assets/surfaces")
-	drawn_world.call("attach", drawn, got.value, {
+	return {"script": load(DRAWN_WORLD), "mesh": got.value, "options": {
 		"surfaces_root": surfaces if DirAccess.dir_exists_absolute(surfaces) else DotMapSurfaces.DEFAULT_ROOT,
-	})
-	return true
+	}}
 
 
 ## A manifest, parsed, or empty when the file is missing or is not one.

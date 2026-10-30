@@ -2003,6 +2003,17 @@ static func can_bake() -> bool:
 			and ResourceLoader.exists(SHEET_SCRIPT)
 
 
+## [method to_scene] built in slices behind a loading cover; only an imported map with a world is sliced.
+func to_scene_async(slice: DotFrameSlice) -> Node3D:
+	if is_imported() and ArenaMap.use_worlds:
+		var bare := Node3D.new()
+		bare.name = "Level"
+		if await ArenaBspMap.draw_world_async(bare, String(id), manifest_path.get_base_dir(), slice):
+			return bare
+		bare.free()
+	return to_scene()
+
+
 ## What the bake must have been made from: the boxes, the floor and the sun, plus the versions of
 ## everything that lays them out. The same on the machine that baked and on every client.
 func light_fingerprint() -> String:

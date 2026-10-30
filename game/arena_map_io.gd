@@ -17,18 +17,34 @@ var is_authority := true
 ## The world for the game's current map, or null when the map is built in, has no converted world, or has no movers.
 ## [param use_rules] is the game's one DotMapUse (its cvars outlive the map).
 static func build(game, use_rules: DotMapUse):
+	var plan := _plan(game)
+	if plan.is_empty():
+		return null
+	return _finish(plan, game, use_rules, DotMapWorld.build(plan.mesh, plan.hooks, plan.options))
+
+
+## [method build] in slices behind the loading cover: awaits [param slice] so no frame carries the whole world.
+static func build_async(game, use_rules: DotMapUse, slice: DotFrameSlice):
+	var plan := _plan(game)
+	if plan.is_empty():
+		return null
+	var made: DotResult = await DotMapWorld.build_async(plan.mesh, plan.hooks, plan.options, slice)
+	return _finish(plan, game, use_rules, made)
+
+
+static func _plan(game) -> Dictionary:
 	var map = game.map
 	if map == null or not map.is_imported() or not ArenaMap.use_worlds:
-		return null
+		return {}
 	var prefix := ArenaBspMap.world_prefix(String(map.id), map.manifest_path.get_base_dir())
 	if prefix.is_empty():
-		return null
+		return {}
 	var got: DotResult = DotMapBspMesh.load_prefix(prefix)
 	if not got.ok:
-		return null
+		return {}
 	var mesh: DotMapBspMesh = got.value
 	if (mesh.manifest.get("movers", []) as Array).is_empty():
-		return null
+		return {}
 	var node = load(ArenaPaths.rebase("res://game/arena_map_io.gd")).new()
 	node.name = "MapIo"
 	node.is_authority = game.is_authority
@@ -36,14 +52,18 @@ static func build(game, use_rules: DotMapUse):
 	if game.is_authority:
 		hooks["send_fn"] = node.transport.send
 	var surfaces := ArenaPaths.rebase("res://assets/surfaces")
-	var made := DotMapWorld.build(mesh, hooks, {
+	return {"node": node, "mesh": mesh, "hooks": hooks, "options": {
 		"movers_only": true, "environment": false, "props": false, "sounds": false,
 		"draw": not DotPlatform.is_headless(), "authoritative": game.is_authority,
 		"rate": game.tick_rate, "map_id": String(map.id),
 		"surfaces_root": surfaces if DirAccess.dir_exists_absolute(surfaces) else DotMapSurfaces.DEFAULT_ROOT,
-	})
+	}}
+
+
+static func _finish(plan: Dictionary, game, use_rules: DotMapUse, made: DotResult):
+	var node = plan.node
 	if not made.ok:
-		DotLog.warn(CHANNEL, "a map's movers would not build", {"map": String(map.id), "why": made.error.message})
+		DotLog.warn(CHANNEL, "a map's movers would not build", {"map": String(game.map.id), "why": made.error.message})
 		node.free()
 		return null
 	node.world = made.value
@@ -51,7 +71,7 @@ static func build(game, use_rules: DotMapUse):
 	node.transport.flush_on(node.world.io)
 	use_rules.attach(node.world)
 	node.use = use_rules
-	DotLog.debug(CHANNEL, "movers built", {"map": String(map.id), "authority": game.is_authority})
+	DotLog.debug(CHANNEL, "movers built", {"map": String(game.map.id), "authority": game.is_authority})
 	return node
 
 

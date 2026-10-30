@@ -46,6 +46,7 @@ func _ready() -> void:
 
 	# Offline, `-- --map <id>` picks the map, as it does for a dedicated server; a
 	# connected client is told the server's map and rebuilds on it.
+	game.defer_map_io = true
 	var built := game.setup(_startup_map() if _offline else ArenaMap.dm_box())
 
 	if not built.ok:
@@ -54,14 +55,9 @@ func _ready() -> void:
 
 	# The world, which the server does not need and a player cannot do without. Held,
 	# because a map change has to take it away again — see `_on_map_changed`.
-	_level = game.map.to_scene()
-	_classify_level()
-	add_child(_level)
-	_light()
 	# Connected, this level is a placeholder: the first `_on_map_changed` releases the
 	# hold, since the server names its map only after READY (lifting it here showed dm_box).
-	if _offline:
-		gate.release(&"map")
+	_enter_level.call(_offline)
 
 	projectile_view = ArenaProjectileView.new()
 	projectile_view.name = "Projectiles"
@@ -220,7 +216,7 @@ func change_from_menu(id: StringName) -> DotResult:
 		_menu_catalogue = ArenaMaps.catalogue()
 	var def := _menu_catalogue.get_map(map.id)
 	if def != null:
-		_on_map_changed(def)
+		_on_map_changed.call(def)
 	return DotResult.success(id)
 
 
@@ -350,6 +346,8 @@ func _build_netcode() -> DotResult:
 func _on_map_changed(map: DotMapDef) -> void:
 	# Cover and stop the frozen body until the new level is in (released below).
 	gate.hold(&"map", "Loading the map")
+	while _level_busy:
+		await get_tree().process_frame
 	# **The client has to ADOPT the map it was handed, and this is where that was
 	# missing.** `ArenaGame.map` is assigned in exactly three places — `setup`, the
 	# module's mode change, and `change_map` — and every one of them runs on the
@@ -395,17 +393,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 			"map": String(map.id),
 		})
 
-	if _level != null and is_instance_valid(_level):
-		remove_child(_level)
-		# free(), not queue_free(): the new one goes in on this line and a deferred
-		# free would leave two levels drawn over each other for a frame.
-		_level.free()
-
-	_level = game.map.to_scene()
-	_classify_level()
-	add_child(_level)
-	_light()
-	gate.release(&"map")
+	await _enter_level(true)
 
 	# A mirroring client's combat manager is never rebuilt — `change_map` is the server's —
 	# and its trace is what the copies of every rocket and grenade bounce off. Left alone,
@@ -431,6 +419,25 @@ func _on_map_changed(map: DotMapDef) -> void:
 			if game.map != null and game.map.is_imported() and game.map.author != "" else ""
 		)
 		hud.notice("Now playing %s%s." % [map.name_or_id(), by])
+
+
+## Builds the movers and the drawn level in slices behind the cover, then optionally lifts the map hold.
+func _enter_level(release: bool) -> void:
+	_level_busy = true
+	var slice := DotFrameSlice.new()
+	await game.build_map_io_async(slice)
+	var made: Node3D = await game.map.to_scene_async(slice)
+	if _level != null and is_instance_valid(_level):
+		remove_child(_level)
+		# free(), not queue_free(): a deferred free leaves two levels drawn for a frame.
+		_level.free()
+	_level = made
+	_classify_level()
+	add_child(_level)
+	_light()
+	_level_busy = false
+	if release:
+		gate.release(&"map")
 
 
 ## The level's layers: what the third-person and spectator cameras stop against.
