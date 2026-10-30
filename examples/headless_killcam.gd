@@ -1,8 +1,9 @@
 extends DotGameCheckSuite
 
 const ArenaContent := preload("../game/arena_content.gd")
+const KillPov := preload("../game/arena_kill_pov.gd")
 
-const EXPECTED_CHECKS := 18
+const EXPECTED_CHECKS := 22
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -89,6 +90,7 @@ func _run() -> void:
 	_check(float(Time.get_ticks_msec() - t0) > 1500.0, "it ran its time, not skipped at once")
 	var screen: Node = _client.get_node_or_null("KillViewScreen")
 	_check(screen != null and screen.hands == null, "the killer's viewmodel is gone when the replay ends")
+	await _check_recoil(screen, killer)
 	_check(await _until(func() -> bool: return me.is_alive(), 15.0), "then the player respawns")
 
 	var host: Node = _client.get("killcam")
@@ -107,6 +109,7 @@ func _run() -> void:
 	_check(host.is_playing(), "a fire press in its first second does not skip it")
 	var shown := Time.get_ticks_msec()
 	await _wait(1.5)
+	await _check_poses(host, killer, me)
 	var reveal: Node = _client.get("winner_reveal")
 	_check(host.is_playing() and (reveal == null or not reveal.is_active()), "after 1.5 s it plays on and the podium waits")
 	await _until(func() -> bool: return not host.is_playing(), 12.0)
@@ -124,3 +127,59 @@ func _check_killer_screen(kv: Node, killer: Object) -> void:
 	_check(screen != null and screen.crosshair != null and screen.crosshair.is_visible_in_tree() and not kv.crosshair.visible, "the killer's crosshair is drawn, the plain one is not")
 	var eye: Vector3 = killer.controller.motor.eye_position(killer.controller.state)
 	_check(kv.camera.global_position.distance_to(eye) < 0.6, "the camera is at the killer's eye", str(kv.camera.global_position.distance_to(eye)))
+
+
+## A replayed shot kicks the replay camera through the view model's own recoil, and flashes the muzzle.
+func _check_recoil(screen: Node, killer: Object) -> void:
+	var cam := Camera3D.new()
+	add_child(cam)
+	var base := Transform3D(Basis.IDENTITY, Vector3(0.0, 50.0, 0.0))
+	var aux := KillPov.aux_of(killer)
+	aux[8] = 2.0
+	aux[10] = KillPov.GROUNDED
+	var climb := 0.0
+	var flashed := 0
+	for i in 40:
+		aux[2] = 1.0 if i < 10 else 2.0
+		cam.global_transform = base
+		screen.present({"camera": cam, "aux": aux, "fov": 75.0, "behind": false})
+		climb = maxf(climb, rad_to_deg(asin(clampf(-cam.global_basis.z.y, -1.0, 1.0))))
+		if screen.flashes != null:
+			flashed = maxi(flashed, screen.flashes.live_count())
+		await get_tree().process_frame
+	_check(climb > 0.3, "a replayed shot kicks the killer's camera up (%.2f degrees)" % climb)
+	_check(flashed > 0, "and flashes the muzzle", str(flashed))
+	screen.present({})
+	cam.queue_free()
+
+
+## Every other body in the final killcam wears the pose it was drawn in at the replayed moment, not its rest pose.
+func _check_poses(host: Node, killer: Object, me: Object) -> void:
+	var at := [NAN]
+	var mark := func(s: Dictionary) -> void: at[0] = s["time"]
+	host.killcam.frame_drawn.connect(mark)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	host.killcam.frame_drawn.disconnect(mark)
+	var drawn: Dictionary = host.poses.sample(at[0]) if not is_nan(at[0]) else {}
+	var compared := 0
+	var worst := 0.0
+	var off_rest := INF
+	for id: Variant in (drawn.get("b", {}) as Dictionary):
+		var p: Object = _client.get("game").call(&"player_for", id)
+		if p == null or p == killer or p == me or not (drawn["a"] as Dictionary).has(id):
+			continue
+		var a: PackedFloat32Array = drawn["a"][id]
+		var b: PackedFloat32Array = drawn["b"][id]
+		var sk: Skeleton3D = p.figure.skeleton()
+		for i in sk.get_bone_count():
+			var k := 13 + i * 4
+			var want := Quaternion(a[k], a[k + 1], a[k + 2], a[k + 3]).normalized().slerp(Quaternion(b[k], b[k + 1], b[k + 2], b[k + 3]).normalized(), drawn["alpha"])
+			worst = maxf(worst, sk.get_bone_pose_rotation(i).normalized().angle_to(want))
+		var rest := 0.0
+		for i in sk.get_bone_count():
+			rest = maxf(rest, sk.get_bone_pose_rotation(i).normalized().angle_to(sk.get_bone_rest(i).basis.get_rotation_quaternion()))
+		off_rest = minf(off_rest, rest)
+		compared += 1
+	_check(compared > 0 and worst < 0.02, "the final killcam draws each body in its recorded pose (%d bodies, worst %.3f rad)" % [compared, worst])
+	_check(compared > 0 and off_rest > 0.3, "and none stands in its rest pose (least %.2f rad from it)" % off_rest)

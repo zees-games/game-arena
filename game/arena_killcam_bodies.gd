@@ -14,6 +14,24 @@ static func configure(host: DotKillcamHost) -> void:
 	host.state_fn = state_of
 	host.place_body_fn = place_body
 	host.restore_body_fn = restore_body
+	if DotAddonApi.build_level("dot_replay") >= 7:  # older hosts replay bodies by speed only
+		host.set(&"pose_fn", pose_of)
+		host.set(&"apply_pose_fn", apply_pose)
+
+
+## The body's skeleton pose as drawn; none for a body nobody sees (a first-person player's own).
+static func pose_of(p: Node) -> PackedFloat32Array:
+	var body: Node3D = p.get(&"body_mesh")
+	var figure: Object = p.get(&"figure")
+	if body == null or not body.visible or figure == null or not figure.has_method(&"pose_record"):
+		return PackedFloat32Array()
+	return figure.call(&"pose_record")
+
+
+static func apply_pose(p: Node, a: PackedFloat32Array, b: PackedFloat32Array, alpha: float) -> void:
+	var figure: Object = p.get(&"figure")
+	if figure != null and figure.has_method(&"pose_apply"):
+		var _drawn: bool = figure.call(&"pose_apply", a, b, alpha)
 
 
 # [feet, yaw, pitch, alive, eye height]: where the body was drawn, not where the tick put it.
@@ -68,8 +86,12 @@ static func place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: f
 	body.global_position = feet
 	body.global_basis = Basis(Vector3.UP, deg_to_rad(yaw))
 	var figure: Node3D = p.get(&"figure")
-	if figure != null:
-		figure.set(&"hide_head", false)
-		figure.position = Vector3.ZERO
+	if figure == null:
+		return
+	figure.set(&"hide_head", false)
+	figure.position = Vector3.ZERO
+	# A body hidden before the replay had no pose recorded: animated here by the frame's real
+	# time, since a clip switched with none left to blend in draws the rest pose.
+	if not bool(touched[p][1]):
 		figure.call(&"set_motion", {"on_floor": true, "alive": true, "aim": deg_to_rad(pitch)})
-		figure.call(&"animate", speed, 0.0)
+		figure.call(&"animate", speed, figure.call(&"frame_delta"))
