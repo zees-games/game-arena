@@ -49,6 +49,12 @@
       {"t": 0.0, "move": [0, 0], "pitch": -60},
       {"t": 0.4, "move": [1, 0], "pitch": -60}
     ]},
+    {"name": "slide_body", "duration": 3.2, "fields": {"own_body": 2, "spawn": [-9.0, 0.05, -22.0], "spawn_yaw": 180.0}, "steps": [
+      {"t": 0.0, "move": [0, 0], "pitch": -35},
+      {"t": 0.4, "move": [0, 1], "buttons": ["sprint"], "pitch": -35},
+      {"t": 1.4, "move": [0, 1], "buttons": ["sprint", "crouch"], "pitch": -35},
+      {"t": 2.4, "move": [0, 0], "buttons": [], "pitch": -35}
+    ]},
     {"name": "down_full", "duration": 3.0, "fields": {"own_body": 2}, "steps": [
       {"t": 0.0, "move": [0, 0], "pitch": -60},
       {"t": 0.4, "move": [0, 1], "pitch": -60}

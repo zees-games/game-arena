@@ -1098,6 +1098,12 @@ func _local_commands() -> DotConsoleLocal:
 			ArenaViewArms.hand_scale_mult = clampf(str(v).to_float(), 0.1, 3.0)
 			return DotResult.success(ArenaViewArms.hand_scale_mult)
 	)
+	local.add_var(&"cl_fp_forearm_scale", "Multiplier on the first-person forearm size of every weapon (1: as the weapon's profile says).",
+		func() -> Variant: return ArenaViewArms.forearm_scale_mult,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.forearm_scale_mult = clampf(str(v).to_float(), 0.2, 3.0)
+			return DotResult.success(ArenaViewArms.forearm_scale_mult)
+	)
 	local.add_var(&"cl_fp_look_down_back", "Metres your own body trails back as the view tips fully down (-1: the player's own setting, 0.45 by default).",
 		func() -> Variant: return ArenaPlayer.look_down_back_override,
 		func(v: Variant) -> Variant:

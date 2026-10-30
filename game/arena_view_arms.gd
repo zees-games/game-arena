@@ -15,6 +15,8 @@ const DEFAULT_HAND_SCALE := 0.5
 static var debug_pose := false
 ## cl_fp_hand_scale: multiplies the held-hand size of every weapon (1 leaves the profile's).
 static var hand_scale_mult := 1.0
+## cl_fp_forearm_scale: multiplies the held-forearm size of every weapon.
+static var forearm_scale_mult := 1.0
 
 var arms: DotPlayerViewArms = null
 var body: Node3D = null
@@ -68,6 +70,9 @@ func _process(delta: float) -> void:
 	if model != null and model.has_method(&"art_hand_scale"):
 		var own: float = model.call(&"art_hand_scale")
 		arms.hand_scale = (own if own > 0.0 else DEFAULT_HAND_SCALE) * hand_scale_mult
+	if model != null and model.has_method(&"art_forearm_scale"):
+		var fore: float = model.call(&"art_forearm_scale")
+		arms.forearm_scale = (fore if fore > 0.0 else 1.0) * forearm_scale_mult
 	if &"debug_pose" in arms and arms.debug_pose != debug_pose:
 		arms.debug_pose = debug_pose
 	var v: Vector3 = body.controller.state.velocity

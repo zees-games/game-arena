@@ -42,6 +42,7 @@ func _run() -> void:
 			ids.append(str(id))
 	ArenaViewArms.debug_pose = args.has("--pose-debug")
 	ArenaViewArms.hand_scale_mult = float(_arg(args, "--hand-scale", "1.0"))
+	ArenaViewArms.forearm_scale_mult = float(_arg(args, "--forearm-scale", "1.0"))
 	var only := _arg(args, "--only", "")
 	if only != "":
 		ids = Array(only.split(","))
