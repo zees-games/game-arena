@@ -6,5 +6,5 @@
 # saves is empty, which is worse than no screenshot because it looks like one.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec timeout 300 xvfb-run -a godot --path . --resolution 1280x720 \
+exec timeout 300 xvfb-run -a godot --path . --resolution 1920x1080 \
   --script res://tools/render_bots.gd -- "${1:-medium}"

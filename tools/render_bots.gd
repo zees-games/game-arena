@@ -82,6 +82,8 @@ func _run() -> void:
 		root.get_texture().get_image().save_png(path)
 		var brain: DotBotBrain = minds[_subject.player_id].brain if minds.has(_subject.player_id) else null
 		var line := "%02d %s alive=%s" % [i, _subject.display_name, _subject.is_alive()]
+		var st = _subject.controller.state
+		line += " slide=%.2f wall=%.2f air=%s" % [st.slide_time, st.wall_run_time, st.mode != 0]
 		if brain != null and brain.last != null:
 			var t = game.player_for(brain.last.target_id) if brain.last.target_id >= 0 else null
 			var sees := false

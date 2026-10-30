@@ -143,6 +143,7 @@ class World:
 				c.velocity = p.controller.state.velocity
 				c.view_yaw = p.controller.state.yaw
 				c.view_pitch = p.controller.state.pitch
+				_motion_of(c, p.controller.state)
 			else:
 				c.position = p.global_position
 			if p.health != null and p.health.max_health > 0.0:
@@ -150,6 +151,25 @@ class World:
 			_contacts.append(c)
 			_by_id[c.id] = c
 			_players[c.id] = p
+
+	## What the bot's body is doing, and whether the game would honour an air-jump press now.
+	func _motion_of(c: DotBotContact, state: DotFpsState) -> void:
+		c.grounded = state.mode == DotFpsState.Mode.GROUND
+		c.sliding = state.slide_time >= 0.0
+		c.wall_running = state.wall_run_time >= 0.0
+		var tunables := _body_tunables()
+		c.air_jump_ready = tunables.launch_enabled and state.launch_cooldown_left <= 0.0
+
+	## The nearest map surface along a direction, for the walls a bot could run beside.
+	func wall_ahead(from: Vector3, dir: Vector3, reach: float) -> Dictionary:
+		var combat: Variant = game.get("combat")
+		var trace: Variant = (combat as Object).get("trace") if combat is Object else null
+		if not trace is DotTrace:
+			return {}
+		var hit := (trace as DotTrace).ray(from, dir, reach)
+		if not hit.ok():
+			return {}
+		return {"normal": hit.normal, "distance": hit.distance}
 
 	func now() -> float:
 		return float(maxi(_tick, 0)) / tick_rate
@@ -385,7 +405,7 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 		surf.call(&"steer", bot, mind, intent, tick, tick_rate)
 	elif mind.ride != null:
 		mind.ride = null
-	intent.write_move(move)
+	intent.write_move(move, "BUTTON_USER_0")
 	intent.write_fire(fire)
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)
 	move.sanitise()
