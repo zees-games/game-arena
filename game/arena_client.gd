@@ -1617,6 +1617,22 @@ func mouse_drives_view() -> bool:
 	return Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 
 
+## Alt-tabbing away leaves a captured pointer on a window nobody is looking at; give the cursor
+## back and ask for a click on return, which also re-arms browser pointer lock.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_APPLICATION_FOCUS_OUT and what != NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		return
+
+	if player == null or _menu_open() or not mouse_drives_view():
+		return
+
+	_awaiting_click = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	if hud != null:
+		hud.notice("Click to play")
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	# [b]The console first, and before the click that captures the mouse.[/b] Without it,
 	# a click inside an open console grabs pointer lock and the next keystroke goes to

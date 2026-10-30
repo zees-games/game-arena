@@ -1950,12 +1950,17 @@ func to_scene() -> Node3D:
 	if is_imported():
 		# The drawn map only. Its solid is the game's (see [method movement_body]), so a
 		# client that drew colliders here as well would have two of every brush.
-		var drawn := ArenaBspMap.build_visual(
-			ArenaImportedMaps.manifest(id), manifest_path.get_base_dir()
-		)
-		drawn.name = "Level"
+		var dir := manifest_path.get_base_dir()
+		# A world replaces every legacy mesh, so building them first only to free them
+		# was most of a multi-second frame on the biggest maps.
 		if ArenaMap.use_worlds:
-			var _w := ArenaBspMap.draw_world(drawn, String(id), manifest_path.get_base_dir())
+			var bare := Node3D.new()
+			bare.name = "Level"
+			if ArenaBspMap.draw_world(bare, String(id), dir):
+				return bare
+			bare.free()
+		var drawn := ArenaBspMap.build_visual(ArenaImportedMaps.manifest(id), dir)
+		drawn.name = "Level"
 		return drawn
 
 	var root := Node3D.new()

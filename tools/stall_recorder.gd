@@ -120,3 +120,15 @@ func lines(window_sec: float = 2.0) -> PackedStringArray:
 		out.append("  late: " + entry)
 	out.append("  late total: %d" % late.size())
 	return out
+
+
+## The n slowest frames as "frame +N: ms (script ms, draw calls)", N counted from the gate's open,
+## so a hitch can be placed in the cover, the first second of play or later; [param from] skips
+## the frames before it (pass open_at for play only).
+func worst(n: int = 5, from: int = 0) -> PackedStringArray:
+	var order: Array = range(from, frames.size())
+	order.sort_custom(func(a: int, b: int) -> bool: return frames[a] > frames[b])
+	var out := PackedStringArray()
+	for i: int in order.slice(0, n):
+		out.append("frame %+d: %.0f ms (script %.1f, %d draw calls)" % [i - open_at, frames[i], script_ms[i], calls[i]])
+	return out

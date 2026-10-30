@@ -587,6 +587,9 @@ func _print_perf(sorted: PackedFloat32Array, elapsed: float) -> void:
 		"gpu": RenderingServer.get_video_adapter_name(), "driver": RenderingServer.get_current_rendering_driver_name(),
 		"resolution": "%dx%d" % [vp.x, vp.y], "godot": Engine.get_version_info().get("string", ""),
 	}
+	if _rec != null:
+		d["worst_frames"] = Array(_rec.worst(5))
+		d["worst_play"] = Array(_rec.worst(5, maxi(_rec.open_at, 0)))
 	print("PERF " + JSON.stringify(d))
 
 
