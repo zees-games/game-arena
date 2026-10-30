@@ -12,7 +12,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 10
+const EXPECTED_CHECKS := 13
 const MAP := &"surf_forbidden_ways_2nd"
 
 var _checks := 0
@@ -128,6 +128,15 @@ func _run() -> void:
 	var sky_info: Dictionary = mio.aim_from(stand + Vector3(0.0, 1.6, 0.0), Vector3(0.0, 1.0, 0.0))
 	_check(sky_info.is_empty(), "looking away shows no prompt, so a pickup's prompt may show")
 	_check(not mio.press_for(_AimAway.new(stand + Vector3(0.0, 1.6, 0.0)), 21), "and the key is not spent on nothing, so a dropped weapon can take it")
+
+	var live: Array = mio.bodies()
+	_check(live.size() == 1 and int(live[0]["id"]) == 21 and (live[0]["position"] as Vector3).is_equal_approx(player.controller.state.position), "the host hands its living players to the movers as bodies")
+	var before: Vector3 = player.controller.state.position
+	world.io.carry_body(21, Vector3(0.0, 2.0, 0.0), null)
+	_check(absf(player.controller.state.position.y - before.y - 2.0 / TICK_RATE) < 0.0001, "a mover's carry displaces the player by velocity over the tick")
+	var hp: float = player.health.health
+	world.io.damage_fn.call(21, 10.0, "crush", null)
+	_check(player.health.health < hp, "and a crush is world damage through dot-combat", "%s -> %s" % [hp, player.health.health])
 
 	var plain := ArenaGame.new()
 	plain.name = "P"

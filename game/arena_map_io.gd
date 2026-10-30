@@ -6,12 +6,14 @@ const CHANNEL := "arena.map_io"
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPaths := preload("arena_paths.gd")
+const ArenaContent := preload("arena_content.gd")
 
 ## The host's clock source and the client's mirror of it.
 var world: DotMapWorld = null
 var use: DotMapUse = null
 var transport: DotMapStateTransport = DotMapStateTransport.new()
 var is_authority := true
+var game = null
 
 
 ## The world for the game's current map, or null when the map is built in, has no converted world, or has no movers.
@@ -66,7 +68,10 @@ static func _finish(plan: Dictionary, game, use_rules: DotMapUse, made: DotResul
 		DotLog.warn(CHANNEL, "a map's movers would not build", {"map": String(game.map.id), "why": made.error.message})
 		node.free()
 		return null
+	node.game = game
 	node.world = made.value
+	node.world.io.carry_fn = node._carry
+	node.world.io.damage_fn = node._damage
 	node.add_child(node.world)
 	node.transport.flush_on(node.world.io)
 	use_rules.attach(node.world)
@@ -75,10 +80,39 @@ static func _finish(plan: Dictionary, game, use_rules: DotMapUse, made: DotResul
 	return node
 
 
-## The host runs the logic one tick; nobody's push or crush is wired, so no bodies are passed.
+## The host runs the logic one tick with the living players as the bodies movers carry, push and crush.
 func tick() -> void:
 	if is_authority and world != null:
-		world.step([])
+		world.step(bodies())
+
+
+## Dot-map body dictionaries for the living players; `body` is the player id.
+func bodies() -> Array:
+	var out: Array = []
+	if game == null:
+		return out
+	for id in game.player_ids():
+		var p = game.player_for(id)
+		if p == null or not p.is_alive() or p.controller == null:
+			continue
+		out.append({"id": id, "body": id, "position": p.controller.state.position,
+				"height": p.controller.tunables.stand_height, "radius": p.controller.tunables.radius})
+	return out
+
+
+func _carry(body, velocity: Vector3, _mover) -> void:
+	var p = game.player_for(int(body)) if game != null else null
+	if p != null and p.controller != null:
+		p.controller.state.position += velocity / float(game.tick_rate)
+
+
+func _damage(body, amount: float, _kind: String, _attacker) -> void:
+	var p = game.player_for(int(body)) if game != null else null
+	if p == null or game.combat == null or not p.is_alive():
+		return
+	var damage := DotDamage.make(0, int(body), amount, game.combat.damage_type(ArenaContent.DAMAGE_WORLD))
+	damage.tick = game._tick
+	game.combat.apply_damage(damage)
 
 
 ## A client's mirror ticks with the physics clock between the host's messages.

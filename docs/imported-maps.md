@@ -91,7 +91,7 @@ A server names its combat surf maps the way every game does: `ArenaMapDirector.s
 
 A converted map whose manifest lists `movers` gets `ArenaMapIo` (`game/arena_map_io.gd`) as `game.map_io`: a dot-map `DotMapWorld` built with `movers_only` on every machine, so the brush entities, their I/O and their collision exist while the world model stays the game's own solid. A map with no movers, or a built-in one, gets null and pays nothing per frame. The host steps it in `ArenaGame.tick` and sends the state as `Kind.MAP_STATE` (a snapshot at signon, then change lists); a client applies it and advances the I/O clock between messages. `sv_use_reach` and `sv_use_cooldown` come from `DotMapUse`.
 
-The use key is one key for two things: `ArenaWeaponDropWiring.input` asks `map_io.press_for` first (a button or door looked at in reach wins, and the key is spent even while it cools down), and only otherwise lets a dropped weapon take it. The prompt is the same ordering through `ArenaClient._pickup_hint`, one line in `hud.use_hint`. Not wired yet: mover push and crush of bodies, riders on lifts, and the client following `sv_use_reach` for its prompt (it uses the default).
+The use key is one key for two things: `ArenaWeaponDropWiring.input` asks `map_io.press_for` first (a button or door looked at in reach wins, and the key is spent even while it cools down), and only otherwise lets a dropped weapon take it. The prompt is the same ordering through `ArenaClient._pickup_hint`, one line in `hud.use_hint`. Movers carry riders, push and crush players (`ArenaMapIo.bodies`, `sv_mover_ride`, `sv_mover_push`; a crush is world damage through dot-combat), and the prompt follows `sv_use_reach`.
 
 ## The maps' own mechanics
 

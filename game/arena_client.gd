@@ -1377,7 +1377,7 @@ func _on_detonated(at: Vector3, _spawn: DotWeaponSpawn) -> void:
 func _pickup_hint() -> String:
 	if game.map_io != null and player != null and player.is_alive():
 		var aimed: Dictionary = game.map_io.aim_from(player.camera.global_position, -player.camera.global_basis.z)
-		if not aimed.is_empty() and bool(aimed["in_range"]):
+		if not aimed.is_empty() and game.map_io.use.in_reach(aimed):
 			return String(aimed["label"])
 	if game.weapon_drops == null or player == null or not player.is_alive() or player.arsenal == null:
 		return ""
