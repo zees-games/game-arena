@@ -3,9 +3,10 @@ extends SceneTree
 ## The offline client's first-person reload of each weapon, frame by frame: screenshots/reload/<id>_NN.png and a sheet per
 ## weapon (tools/render_reload.sh). Each frame also counts the arm sets that draw pixels (each owner hidden in turn and
 ## the frame re-rendered); anything but exactly one fails.
-##   xvfb-run -a godot --path . --resolution 1920x1080 --script tools/render_reload.gd [-- --frames 12 --left 1 --only a,b]
+##   xvfb-run -a godot --path . --resolution 1920x1080 --script tools/render_reload.gd [-- --frames 12 --left 1 --only a,b --pose-debug]
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
+const ArenaViewArms := preload("../game/arena_view_arms.gd")
 
 const OUT_DIR := "screenshots/reload"
 
@@ -39,6 +40,7 @@ func _run() -> void:
 		var def: DotWeaponDef = ZeeWeaponPack.table()[id]
 		if def.uses_magazine():
 			ids.append(str(id))
+	ArenaViewArms.debug_pose = args.has("--pose-debug")
 	var only := _arg(args, "--only", "")
 	if only != "":
 		ids = Array(only.split(","))

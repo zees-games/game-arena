@@ -6,6 +6,11 @@ extends Node3D
 const NEEDS_LEVEL := 8
 ## Poses held with the firing hand alone.
 const ONE_HAND: Array[StringName] = [&"melee", &"thrown", &"fists"]
+## Nearest a held grip comes to the eye (metres), so a pistol's hand does not fill the view.
+const HANDS_MIN_DISTANCE := 0.3
+
+## cl_pose_debug: draws the grip sockets, hand targets and arm bones over the view.
+static var debug_pose := false
 
 var arms: DotPlayerViewArms = null
 var body: Node3D = null
@@ -29,6 +34,9 @@ static func mount(parent: Node, model: ZeeViewModel, body: Node3D, look: DotHuma
 	mounted.arms.name = "ViewArms"
 	mounted.add_child(mounted.arms)
 	mounted.arms.build(look, 1.8)
+	if &"hands_scale" in model:
+		model.hands_scale = mounted.arms.held_scale
+		model.hands_min_distance = HANDS_MIN_DISTANCE
 	model.hands_reached.connect(mounted._on_hands)
 	return mounted
 
@@ -43,15 +51,18 @@ func _on_hands(anchor: Node3D, grip: Vector3, fore: Vector3, pose: StringName) -
 		_grip.support = fore
 
 
-## Follows the camera by yaw only (under the pitch the arms would swing with the look); hidden with the view model or a scope.
+## Holding, follows the whole look like the drawn weapon, so pitch never takes the grip out of reach; empty-handed
+## (a downed crawl), by yaw only. Hidden with the view model or a scope.
 func _process(delta: float) -> void:
 	var camera: Camera3D = body.camera if body != null else null
 	if camera == null or arms == null:
 		return
 	var model: ZeeViewModel = body.weapons.view_model() if body.weapons != null else null
 	global_position = camera.global_position
-	global_rotation = Vector3(0.0, camera.global_rotation.y, 0.0)
+	global_rotation = Vector3(camera.global_rotation.x if holding() else 0.0, camera.global_rotation.y, 0.0)
 	visible = model != null and model.visible and not model.is_scoped() and body.is_alive()
+	if &"debug_pose" in arms and arms.debug_pose != debug_pose:
+		arms.debug_pose = debug_pose
 	var v: Vector3 = body.controller.state.velocity
 	arms.tick(Vector2(v.x, v.z).length(), delta)
 

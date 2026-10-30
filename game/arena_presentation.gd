@@ -10,6 +10,7 @@ const ArenaBindings := preload("arena_bindings.gd")
 const ArenaFxCatalogue := preload("arena_fx_catalogue.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
+const ArenaViewArms := preload("arena_view_arms.gd")
 
 ## Settings, audio, effects and a console, on the client.
 ##
@@ -1083,6 +1084,12 @@ func _local_commands() -> DotConsoleLocal:
 				return DotResult.fail(DotError.CODE_INVALID, "cl_perf takes a number of seconds")
 			ArenaFrameProbe.set_interval(text.to_float())
 			return DotResult.success(ArenaFrameProbe.interval)
+	)
+	local.add_var(&"cl_pose_debug", "1 draws the held weapon's grip sockets, the hand targets and the arm bones over the view.",
+		func() -> Variant: return 1 if ArenaViewArms.debug_pose else 0,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.debug_pose = str(v).strip_edges() == "1"
+			return DotResult.success(1 if ArenaViewArms.debug_pose else 0)
 	)
 	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
 	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",
