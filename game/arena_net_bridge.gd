@@ -618,7 +618,7 @@ func _commands() -> Dictionary:
 ## Where a bot's session id starts. Far above any userid dot-server hands out (they count up
 ## from 1 for the life of the process), and far below the entity table's ids (10^12), so a
 ## bot's id is a player id like anybody's and can never be a person's.
-const BOT_SESSION_BASE := 900_000_000
+const BOT_SESSION_BASE := ArenaGame.BOT_SESSION_BASE
 
 var _bot_minds: Dictionary = {}
 var _next_bot := 0

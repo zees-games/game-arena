@@ -315,6 +315,9 @@ func begin(player_id: int, display_name: String = "") -> void:
 	if not _attached:
 		return
 
+	if player_id >= ArenaGame.BOT_SESSION_BASE:
+		return
+
 	var key := _key_of(player_id)
 
 	stats.begin(StringName(key), display_name)
@@ -345,7 +348,7 @@ func begin(player_id: int, display_name: String = "") -> void:
 ## when somebody looks at it. A session is the natural unit — it is also when a
 ## player's totals stop moving.
 func leave(player_id: int) -> void:
-	if not _attached:
+	if not _attached or player_id >= ArenaGame.BOT_SESSION_BASE:
 		return
 
 	var key := _key_of(player_id)
@@ -389,7 +392,7 @@ func leave(player_id: int) -> void:
 
 ## Records one reading against a player. The single door into dot-stats.
 func record(player_id: int, stat_id: StringName, value: float = 1.0) -> void:
-	if not _attached:
+	if not _attached or player_id >= ArenaGame.BOT_SESSION_BASE:
 		return
 
 	stats.record(StringName(_key_of(player_id)), stat_id, value)

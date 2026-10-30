@@ -1310,6 +1310,10 @@ func _add_fall_damage(player: ArenaPlayer) -> void:
 	player.add_child(fall)
 
 
+## Server bot session ids start here; stats and progress never count them.
+const BOT_SESSION_BASE := 900_000_000
+
+
 ## Adds a player, builds their body, and puts them in the match.
 func add_player(
 	id: int, display_name: String, wanted_team: int = 0
