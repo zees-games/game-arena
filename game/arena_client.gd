@@ -1243,6 +1243,8 @@ func _present_frame(delta: float) -> void:
 			forward = -player.camera.global_transform.basis.z
 		presentation.present(delta, eye, forward)
 		_apply_shake()
+		if platform != null and platform.slide_sounds != null and presentation.steps != null:
+			presentation.steps.surf_rules = platform.slide_sounds.get(&"surf_rules")
 		presentation.keep_walkers(game.players())
 		var stack_now := game.player_stack
 		if stack_now != null and stack_now.physics != null and stack_now.physics.layout != null:
