@@ -11,6 +11,7 @@ const ArenaFxCatalogue := preload("arena_fx_catalogue.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
+const ArenaPlayer := preload("arena_player.gd")
 
 ## Settings, audio, effects and a console, on the client.
 ##
@@ -1090,6 +1091,18 @@ func _local_commands() -> DotConsoleLocal:
 		func(v: Variant) -> Variant:
 			ArenaViewArms.debug_pose = str(v).strip_edges() == "1"
 			return DotResult.success(1 if ArenaViewArms.debug_pose else 0)
+	)
+	local.add_var(&"cl_fp_hand_scale", "Multiplier on the first-person hand size of every weapon (1: as the weapon's profile says).",
+		func() -> Variant: return ArenaViewArms.hand_scale_mult,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.hand_scale_mult = clampf(str(v).to_float(), 0.1, 3.0)
+			return DotResult.success(ArenaViewArms.hand_scale_mult)
+	)
+	local.add_var(&"cl_fp_look_down_back", "Metres your own body trails back as the view tips fully down (-1: the player's own setting, 0.45 by default).",
+		func() -> Variant: return ArenaPlayer.look_down_back_override,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.look_down_back_override = clampf(str(v).to_float(), -1.0, 2.0)
+			return DotResult.success(ArenaPlayer.look_down_back_override)
 	)
 	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
 	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",

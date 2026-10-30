@@ -41,6 +41,7 @@ func _run() -> void:
 		if def.uses_magazine():
 			ids.append(str(id))
 	ArenaViewArms.debug_pose = args.has("--pose-debug")
+	ArenaViewArms.hand_scale_mult = float(_arg(args, "--hand-scale", "1.0"))
 	var only := _arg(args, "--only", "")
 	if only != "":
 		ids = Array(only.split(","))

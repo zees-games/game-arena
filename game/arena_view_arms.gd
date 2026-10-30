@@ -8,9 +8,13 @@ const NEEDS_LEVEL := 8
 const ONE_HAND: Array[StringName] = [&"melee", &"thrown", &"fists"]
 ## Nearest a held grip comes to the eye (metres), so a pistol's hand does not fill the view.
 const HANDS_MIN_DISTANCE := 0.3
+## DotPlayerViewArms' own hand size, for a weapon whose profile does not say.
+const DEFAULT_HAND_SCALE := 0.5
 
 ## cl_pose_debug: draws the grip sockets, hand targets and arm bones over the view.
 static var debug_pose := false
+## cl_fp_hand_scale: multiplies the held-hand size of every weapon (1 leaves the profile's).
+static var hand_scale_mult := 1.0
 
 var arms: DotPlayerViewArms = null
 var body: Node3D = null
@@ -61,6 +65,9 @@ func _process(delta: float) -> void:
 	global_position = camera.global_position
 	global_rotation = Vector3(camera.global_rotation.x if holding() else 0.0, camera.global_rotation.y, 0.0)
 	visible = model != null and model.visible and not model.is_scoped() and body.is_alive()
+	if model != null and model.has_method(&"art_hand_scale"):
+		var own: float = model.call(&"art_hand_scale")
+		arms.hand_scale = (own if own > 0.0 else DEFAULT_HAND_SCALE) * hand_scale_mult
 	if &"debug_pose" in arms and arms.debug_pose != debug_pose:
 		arms.debug_pose = debug_pose
 	var v: Vector3 = body.controller.state.velocity

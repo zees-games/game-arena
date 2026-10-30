@@ -4,7 +4,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 
-const EXPECTED_CHECKS := 11
+const EXPECTED_CHECKS := 12
 const STEP := 1.0 / 60.0
 
 ## A server cvar for the wall-run size rules changes whether a run starts beside a 1 m crate:
@@ -65,5 +65,10 @@ func _run() -> void:
 	var plain := ArenaPlayer.arena_tunables()
 	ArenaPlayerTunables.apply_class_attributes(DotPlayerClassDef.new(), plain)
 	_check(plain.wall_run_min_height == t.wall_run_min_height, "a class that sets none keeps the server's value")
+
+	var tall_def := DotPlayerClassDef.new()
+	tall_def.attributes = {"look_down_back": 0.8}
+	_check(is_equal_approx(ArenaPlayer.look_down_back_of(tall_def), 0.8) and is_equal_approx(ArenaPlayer.look_down_back_of(DotPlayerClassDef.new()), 0.45),
+		"a class profile sets how far the own body trails back looking down; none keeps the default")
 
 	_report(EXPECTED_CHECKS)

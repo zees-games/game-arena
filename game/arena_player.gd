@@ -424,6 +424,15 @@ func apply_class_movement(def: DotPlayerClassDef) -> void:
 
 	var _n := DotPlayerClassApply.to_movement(def, controller.tunables, _class_base)
 	ArenaPlayerTunables.apply_class_attributes(def, controller.tunables)
+	first_person_look_down_back = look_down_back_of(def)
+
+
+## The class profile's `look_down_back` attribute (metres your body trails back looking down), else the default.
+static func look_down_back_of(def: DotPlayerClassDef) -> float:
+	var attrs: Variant = def.get("attributes") if def != null else null
+	if attrs is Dictionary and (attrs as Dictionary).has("look_down_back"):
+		return clampf(float((attrs as Dictionary)["look_down_back"]), 0.0, 2.0)
+	return 0.45
 
 
 ## Movement that feels like an arena shooter rather than a modern one.
@@ -1192,13 +1201,16 @@ func present_own_body(mode: int, _yaw: float = 0.0) -> void:
 ## Extra metres the body trails behind as the view tips past 60 degrees down, full at 85:
 ## straight down, the open hips (the cut where the belly bone is gone) would fill the screen.
 @export var first_person_look_down_back: float = 0.45
+## cl_fp_look_down_back: a value of 0 or more replaces the export for every player on this client.
+static var look_down_back_override: float = -1.0
 
 
 ## Where your own body stands behind the eye for a view pitch in degrees (negative is down).
 func own_body_back(pitch: float) -> float:
 	var base := FIRST_PERSON_BACK if own_body_mode >= 2 else FIRST_PERSON_BACK_LEGS
 	var down := clampf(-pitch, 0.0, 90.0)
-	return base + first_person_look_down_back * clampf((down - 60.0) / 25.0, 0.0, 1.0)
+	var extra := first_person_look_down_back if look_down_back_override < 0.0 else look_down_back_override
+	return base + extra * clampf((down - 60.0) / 25.0, 0.0, 1.0)
 
 
 ## In first person: places your own body, when one is drawn, at the drawn feet behind the eye, with the wall-run roll.
