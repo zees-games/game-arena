@@ -1,6 +1,7 @@
 @tool
 extends Node3D
 
+const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaPlayerTunables := preload("arena_player_tunables.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaContent := preload("arena_content.gd")

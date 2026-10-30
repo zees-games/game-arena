@@ -1,5 +1,6 @@
 extends "arena_client_bots.gd"
 
+const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaMatchText := preload("arena_match_text.gd")
 
 

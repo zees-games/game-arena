@@ -1,6 +1,9 @@
 @tool
 extends "arena_game_state.gd"
 
+const ArenaFlashlight := preload("arena_flashlight.gd")
+
+
 ## The deathmatch itself: a match, a combat manager, a map, and some players.
 ##
 ## [b]This is the seam nothing else runs.[/b] dot-match knows nothing about damage,
