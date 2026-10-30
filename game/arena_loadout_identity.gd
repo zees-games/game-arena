@@ -17,7 +17,7 @@ func _init() -> void:
 
 ## The durable store: files for stable keys, memory for seat keys.
 static func make_store(dir: String = STORE_DIR) -> DotLoadoutStore:
-	return DotLoadoutStoreTiered.of(DotLoadoutStoreLocal.at(dir), Callable(load("res://game/arena_loadout_identity.gd"), &"is_durable"))
+	return DotLoadoutStoreTiered.of(DotLoadoutStoreLocal.at(dir), is_durable)
 
 
 ## The per-session key of player [param id]; ArenaGame.storage_key is this.
