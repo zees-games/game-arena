@@ -41,7 +41,7 @@ const SNAPSHOT_RATE := 16
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 282
+const CHECKS := 284
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
@@ -54,7 +54,7 @@ var _skipped_checks := 0
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 24
+const SECTIONS := 25
 
 var _entered := 0
 var _completed := 0

@@ -16,7 +16,9 @@ const NAME := &"arena.event"
 ## thirty-two.
 const KIND_BITS := 5
 
-const MAX_BODY := 16384
+## Events only travel server to client, so this is a sanity bound, not a flood guard. A map's first
+## state snapshot is tens of kilobytes; past the old 16 KB the body read back empty and unparsed.
+const MAX_BODY := 1 << 20
 
 var kind: int = 0
 var body: PackedByteArray = PackedByteArray()

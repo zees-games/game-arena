@@ -48,6 +48,7 @@ func _run() -> void:
 	_test_the_remote_workbench()
 	_test_bullets_reach_a_client()
 	_test_killview_reaches_the_victim()
+	_test_large_map_state_arrives_whole()
 
 	OS.remove_logger(errors)
 	# Engine errors go to stderr and change no exit code: a toy pulled out of the tree after a
@@ -1723,6 +1724,27 @@ func _test_map_sync_wire() -> void:
 	remove_child(session)
 	remove_child(server_link)
 	remove_child(client_link)
+	_done()
+
+
+## A map's first state snapshot is far past a packet; it must arrive as the JSON that was sent.
+func _test_large_map_state_arrives_whole() -> void:
+	print("")
+	_section("[a large map state arrives whole]")
+
+	var messages: Array = []
+	for i in 600:
+		messages.append({"type": "state", "tick": i, "changes": {"door_%d" % i: [0.5, 1.0, true]}})
+	var body := JSON.stringify({"type": "io_batch", "messages": messages}).to_utf8_buffer()
+	_check(body.size() > 16384, "the payload is past the old 16 KB event cap", "%d bytes" % body.size())
+
+	var back := ArenaEvent.new()
+	back.read(DotNetReader.new(ArenaEvent.new(ArenaEvents.Kind.MAP_STATE, body).to_bytes()))
+	_check(back.kind == ArenaEvents.Kind.MAP_STATE and back.body == body, "it reads back byte for byte",
+		"%d of %d bytes" % [back.body.size(), body.size()])
+
+	# The engine logger above fails the run on the parse error an emptied body used to cause.
+	_deliver_event(2, ArenaEvents.Kind.MAP_STATE, body)
 	_done()
 
 

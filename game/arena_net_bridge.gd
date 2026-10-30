@@ -1177,7 +1177,11 @@ func _live_map_io() -> Node:
 
 
 func _send_map_state(peer: Variant, payload: Dictionary) -> void:
-	send_event(int(peer), ArenaEvents.Kind.MAP_STATE, JSON.stringify(payload).to_utf8_buffer())
+	var body := JSON.stringify(payload).to_utf8_buffer()
+	if body.size() > ArenaEvent.MAX_BODY:
+		DotLog.error(CHANNEL, "map state too large for one event, dropped", {"bytes": body.size()})
+		return
+	send_event(int(peer), ArenaEvents.Kind.MAP_STATE, body)
 
 
 ## Follows whichever projectile layer the game has, and tells every client about each
@@ -1693,7 +1697,9 @@ func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
 		ArenaEvents.Kind.WEAPON_DROP, ArenaEvents.Kind.WEAPON_SETTLED, ArenaEvents.Kind.WEAPON_GONE:
 			_apply_weapon_drop_event(event.kind, reader)
 		ArenaEvents.Kind.MAP_STATE:
-			var told_state: Variant = JSON.parse_string(event.body.get_string_from_utf8())
+			var told_state: Variant = null
+			if not event.body.is_empty():
+				told_state = JSON.parse_string(event.body.get_string_from_utf8())
 			if told_state is Dictionary and game != null and game.map_io != null:
 				game.map_io.receive(told_state)
 		ArenaEvents.Kind.JAIL:
