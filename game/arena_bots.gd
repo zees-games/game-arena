@@ -111,6 +111,8 @@ class World:
 	## a surf cache; and whether that was looked for on this mesh.
 	var _surf: RefCounted = null
 	var _surf_looked: bool = false
+	## The map's ladders joined into [member _nav] as climb edges, and how many got one.
+	var _ladders: DotBotLinks = null
 
 	func _init(p_game: Object) -> void:
 		game = p_game
@@ -218,6 +220,8 @@ class World:
 		var surf := surf_for_map()
 		if surf != null:
 			return surf.call(&"route_detail", from, to)
+		if _ladders != null and _nav != null and _nav.is_ready():
+			return _nav.route(from, to)
 		var points := route(from, to)
 		var rides := PackedInt32Array()
 		rides.resize(points.size())
@@ -233,11 +237,38 @@ class World:
 		if _surf_looked:
 			return _surf
 		_surf_looked = true
+		_link_ladders(nav)
 		if DotAddonApi.build_level("dot_bot") < 4 or DotAddonApi.build_level("dot_player_controller") < 3:
 			return null
 		var surf_script := load(ArenaPaths.rebase("res://game/arena_surf.gd")) as GDScript
 		_surf = surf_script.call(&"load_for", game.get("map"), nav) if surf_script != null else null
 		return _surf
+
+	## How many ladders the bots can climb on this map: climb edges in the mesh.
+	func ladder_count() -> int:
+		if _ladders == null:
+			return 0
+		var n := 0
+		for l: Dictionary in _ladders.ladders:
+			n += 1 if l.has("from") else 0
+		return n
+
+	## Joins the imported map's ladders into [param nav] as one-way climbs and hands the brain their geometry (dot-bot 9).
+	func _link_ladders(nav: DotBotNav) -> void:
+		_ladders = null
+		ladder_fn = Callable()
+		var mechanics: Variant = (game.get("map") as Object).get("mechanics")
+		if DotAddonApi.build_level("dot_bot") < 9 or not (mechanics is Object) or (mechanics as Object).get("ladders").is_empty():
+			return
+		var links := DotBotLinks.new()
+		links.drops = false
+		for box: AABB in (mechanics as Object).get("ladders"):
+			links.ladders.append({"box": box})
+		var stats := links.join(nav)
+		DotLog.debug(CHANNEL, "ladders linked", {"ladders": links.ladders.size(), "edges": int(stats.get("ladders", 0))})
+		if int(stats.get("ladders", 0)) > 0:
+			_ladders = links
+			ladder_fn = links.ladder_of
 
 	## Starts the mesh bake and, once it has landed, loads the ride edges; true when both are done. Called every frame while loading, it keeps that work out of the first bot tick.
 	func warm() -> bool:
@@ -294,6 +325,7 @@ class World:
 		_nav_map = map
 		_surf = null
 		_surf_looked = false
+		_ladders = null
 		var body := _body_tunables()
 		var source: Node3D = (map as Object).call(&"nav_source") if (map as Object).has_method(&"nav_source") else null
 		var started := _nav.bake_in_background(source if source != null else root as Node3D, {"radius": body.radius, "height": body.stand_height, "climb": body.step_height})
