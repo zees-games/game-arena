@@ -348,6 +348,18 @@ func _module_load() -> DotResult:
 	return DotResult.success(null)
 
 
+## Binds dot-audio's sv_surf_* cvars with the `surf_*` profile values as their defaults, which every client follows.
+func _bind_surf_cvars(flags: int) -> void:
+	var values := game.config.surf_values()
+	for spec: Dictionary in preload("res://addons/dot_game/runtime/dot_game_slide_sounds.gd").surf_cvar_specs():
+		var key := String(spec["name"]).trim_prefix("sv_surf_")
+		var v: Variant = values.get(key, spec["value"])
+		var text := ("1" if v else "0") if v is bool else str(v)
+		var cv := add_cvar(String(spec["name"]), text, String(spec["description"]), flags)
+		if cv != null:
+			cv.with_range(float(spec["min"]), float(spec["max"]))
+
+
 ## Binds the cvars of the game's rule sets (fall, ragdoll, toys, views, spectate, bodies, noblock, feel).
 func _bind_rule_cvars() -> void:
 	# Replicated where each client draws or predicts under the rule; the rules are the game's, so one bind lasts.
@@ -374,6 +386,8 @@ func _bind_rule_cvars() -> void:
 
 	# mp_forcecamera, mp_freeroam, mp_freeroam_speed: dot-spectate's rules (ArenaClient.toggle_roam).
 	var _spectate_cvars := game.spectate_rules.bind_cvars(add_cvar, replicated)
+
+	_bind_surf_cvars(replicated)
 
 	# mp_solidplayers: players and bots stop at each other (1) or pass through (0) (ArenaGame.solid_hulls_for).
 	var _solid_cvars := game.body_rules.bind_cvars(add_cvar, replicated)

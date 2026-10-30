@@ -13,7 +13,7 @@ const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ROOT := "user://arena_cfgtest"
 const GAME := "game-arena"
-const CHECKS := 39
+const CHECKS := 41
 
 
 func _ready() -> void:
@@ -30,7 +30,7 @@ func _run() -> void:
 	var binder := ArenaConfig.make_binder(game.config)
 	binder.strict = true
 	_check(binder.load_layers().ok, "defaults load")
-	_check(binder.schema().size() == 31 and binder.diff().is_empty(), "31 fields, no diff at the code defaults")
+	_check(binder.schema().size() == 38 and binder.diff().is_empty(), "38 fields, no diff at the code defaults")
 	var console := DotConsole.new()
 	add_child(console)
 	binder.bind_cvars(console.cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
@@ -42,6 +42,10 @@ func _run() -> void:
 	var rules: DotNpcDirectorRules = horde._rules()
 	_check(rules.absolute_cap == 12 and rules.spawn_burst == 3, "the horde's rules read the config")
 	_check(binder.diff_yaml().contains("horde_cap: 12"), "the diff names the edit")
+	console.set_cvar("arena_surf_volume", "1.5")
+	var surf := DotAudioSurfRules.new()
+	_check(surf.apply_values(game.config.surf_values()) == 7 and is_equal_approx(surf.volume, 1.5), "the surf profile keys reach the rules")
+	_check(ArenaConfig.new().surf_values()["volume"] == 0.6 and surf.mute_steps, "surf defaults match dot-audio's")
 	game.config.horde_spawn_max_distance = 5.0
 	_check(not game.config.validate().ok, "validate refuses max <= min distance")
 	_check(not binder.check_map("dm_nowhere", ["dm_box"]).ok, "strict: an unknown map is refused")
@@ -184,7 +188,7 @@ func _layers() -> void:
 ## The shipped cfg files hold every key, in step with ArenaConfig, and change nothing as they are.
 func _templates(binder: DotGameConfigBinder) -> void:
 	var files := binder.template_files()
-	_check(files.size() == 4, "four shipped cfg files: " + str(files.size()))
+	_check(files.size() == 5, "five shipped cfg files: " + str(files.size()))
 	var stale := PackedStringArray()
 	for path: String in files:
 		if not FileAccess.file_exists("res://" + path) or FileAccess.get_file_as_string("res://" + path) != files[path]:
@@ -215,7 +219,7 @@ func _workbench(binder: DotGameConfigBinder, game: Node) -> void:
 	for k in keys:
 		if not listed.has(k):
 			missing.append(k)
-	_check(missing.is_empty() and binder.profile_sets().size() == 4, "the workbench lists all %d keys over %d files: %s" % [keys.size(), binder.profile_sets().size(), ",".join(missing)])
+	_check(missing.is_empty() and binder.profile_sets().size() == 5, "the workbench lists all %d keys over %d files: %s" % [keys.size(), binder.profile_sets().size(), ",".join(missing)])
 	var res: DotResult = wb.api.handle(DotGameWorkbench.LOCAL_ACTOR, {"op": "set", "kind": "config_awards", "id": binder.profile_id, "key": "award_kill_points", "value": 150})
 	_check(res.ok and game.config.award_kill_points == 150, "a workbench edit reaches the live config")
 	var files: Dictionary = wb.exporter.call("collect")

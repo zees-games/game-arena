@@ -1,0 +1,18 @@
+# game-arena: every key of this file at its code default, commented out. Uncomment a line to change it;
+# an operator overrides in cfg/server/game/game-arena/config_surf/game.yml. Layers: defaults < this < env < argv.
+
+# --- Surf
+# Whether surfing plays a quiet glide.
+# surf_sounds: true
+# Surf glide level: 0 off, 1 stock level. [0.0..2.0]
+# surf_volume: 0.6
+# Speed in m/s under which the surf glide is silent. [0.0..60.0]
+# surf_quiet_speed: 4.0
+# Speed in m/s at which the surf glide is loudest and highest. [1.0..200.0]
+# surf_full_speed: 22.0
+# Surf glide pitch at the quiet speed. [0.25..2.0]
+# surf_pitch_low: 0.75
+# Surf glide pitch at the full speed. [0.25..3.0]
+# surf_pitch_high: 1.35
+# Whether footsteps and landings stop while surfing.
+# surf_mute_steps: true

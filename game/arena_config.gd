@@ -5,7 +5,7 @@ extends DotConfig
 
 ## `@export_group` -> the cfg file it lives in: `cfg/game/game-arena/config_<file>/game.yml`.
 const CFG_FILES := {
-	"Horde": "horde", "Players": "players", "Stomp": "players", "Match": "match", "Bots": "match", "Awards": "awards",
+	"Horde": "horde", "Players": "players", "Stomp": "players", "Match": "match", "Bots": "match", "Awards": "awards", "Surf": "surf",
 }
 
 
@@ -130,3 +130,34 @@ func validate() -> DotResult:
 @export_group("Bots")
 ## Players a server fills to with bots when nothing else sets bot_quota.
 @export_range(0, 32, 1) var bot_quota: int = 4
+
+@export_group("Surf")
+## Whether surfing plays a quiet glide.
+@export var surf_sounds: bool = true
+
+## Surf glide level: 0 off, 1 stock level.
+@export_range(0.0, 2.0, 0.05) var surf_volume: float = 0.6
+
+## Speed in m/s under which the surf glide is silent.
+@export_range(0.0, 60.0, 0.5) var surf_quiet_speed: float = 4.0
+
+## Speed in m/s at which the surf glide is loudest and highest.
+@export_range(1.0, 200.0, 0.5) var surf_full_speed: float = 22.0
+
+## Surf glide pitch at the quiet speed.
+@export_range(0.25, 2.0, 0.01) var surf_pitch_low: float = 0.75
+
+## Surf glide pitch at the full speed.
+@export_range(0.25, 3.0, 0.01) var surf_pitch_high: float = 1.35
+
+## Whether footsteps and landings stop while surfing.
+@export var surf_mute_steps: bool = true
+
+
+## The surf fields as [method DotAudioSurfRules.apply_values] takes them.
+func surf_values() -> Dictionary:
+	return {
+		"sounds": surf_sounds, "volume": surf_volume, "quiet_speed": surf_quiet_speed,
+		"full_speed": surf_full_speed, "pitch_low": surf_pitch_low, "pitch_high": surf_pitch_high,
+		"mute_steps": surf_mute_steps,
+	}
