@@ -21,6 +21,11 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 const OUT_DIR := "res://screenshots"
 const SETTLE := 3
 
+class _StoreFake extends RefCounted:
+	func get_integration(_path: String, _query: Dictionary = {}) -> DotResult:
+		return DotResult.success({"items": [{"key": "a", "name": "Gold skin", "kind": "AVATAR"}, {"key": "b", "name": "Launcher pack", "kind": "ITEM"}]})
+
+
 var _menu: DotMenu = null
 var _board: ArenaMenus.Board = null
 var _browser: ArenaBrowser = null
@@ -52,6 +57,7 @@ func _initialize() -> void:
 		{"id": &"menu", "page": &"controls", "file": "menu_controls_3.png", "scroll": 1120},
 		{"id": &"menu", "page": &"controls", "file": "menu_controls_4.png", "scroll": 1680},
 		{"id": &"menu", "page": &"servers", "file": "menu_servers.png"},
+		{"id": &"menu", "page": &"store", "file": "menu_store.png"},
 		{"id": &"help", "file": "menu_help.png"},
 		{"id": &"board", "file": "menu_scoreboard.png"},
 		# Nothing open, so what is drawn is the HUD and the chat box over it. This one is
@@ -99,6 +105,8 @@ func _build() -> void:
 			entry.max_players = int(f[4])
 			entry.ping_ms = int(f[5])
 	_menu = ArenaMenus.build(root, _presentation, _browser)
+	# The site-store page the client adds through dot-game, over a canned entitlements read.
+	DotGameStorePanel.add_to_menu(_menu, func() -> String: return "p1", func() -> Object: return _StoreFake.new())
 
 	# A scoreboard with names of the length a real one has, and a row that is the local
 	# player, because a highlight that reads at "bo" and not at a real handle is the kind

@@ -149,6 +149,9 @@ func _build_interface() -> void:
 		if maps is Object:
 			(maps as Object).set(&"noun", "maps and modes")
 	_use_loadout_menu()
+	platform.add_store_panel(game_menu, func() -> String:
+		var key := loadout_account_key(DotRegistry.get_node_service(AUTH_SERVICE))
+		return "" if key == "local" else key)
 	game_menu.action_requested.connect(func(id: StringName) -> void:
 		if id != ArenaMenus.LEAVE:
 			return
