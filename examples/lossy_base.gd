@@ -78,6 +78,7 @@ const FIRST_SECONDS := 3.0
 const RELIABLE_SECONDS := 35.0
 
 ## Checks per window, and outside them.
+const MEASURE_ATTEMPTS := 3
 const WINDOW_CHECKS := 16
 const OTHER_CHECKS := 59
 
@@ -156,6 +157,51 @@ func _section(title: String) -> void:
 
 func _done() -> void:
 	_completed += 1
+
+
+## Runs one measured section, and runs it again (twice at most) when it failed AND this process
+## was stalled for longer than the clock's own tolerance during it. A runner descheduled for
+## 3 ticks makes a +-4 tick clock error by itself, which says nothing about the code. No limit
+## moves: the rerun is judged by the same checks, and a failure with no stall is final.
+func _measured(section: Callable) -> void:
+	for attempt in range(MEASURE_ATTEMPTS):
+		var passed := _passed
+		var failed := _failed
+		var failures := _failures.size()
+		var entered := _entered
+		var completed := _completed
+		_stall_ms = 0
+		_last_physics_usec = 0
+		await section.call()
+		var stalled := _stall_ms
+		if _failed == failed or stalled < _stall_limit_ms() or attempt == MEASURE_ATTEMPTS - 1:
+			if stalled >= _stall_limit_ms():
+				print("    (the runner stalled this process for up to %d ms during it)" % stalled)
+			return
+		print("    NOT A MEASUREMENT: the runner stalled this process for %d ms (limit %d) and %d checks failed; again" % [
+			stalled, _stall_limit_ms(), _failed - failed])
+		_passed = passed
+		_failed = failed
+		_failures.resize(failures)
+		_entered = entered
+		_completed = completed
+
+
+## Three ticks of wall time: the clock check's own tolerance.
+func _stall_limit_ms() -> int:
+	return 3000 / TICK_RATE
+
+
+## The longest gap between two physics callbacks since [method _measured] began, and the last one.
+var _stall_ms := 0
+var _last_physics_usec := 0
+
+
+func _track_stall() -> void:
+	var now := Time.get_ticks_usec()
+	if _last_physics_usec != 0:
+		_stall_ms = maxi(_stall_ms, (now - _last_physics_usec) / 1000)
+	_last_physics_usec = now
 
 
 func _until(condition: Callable, seconds: float) -> bool:

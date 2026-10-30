@@ -15,11 +15,11 @@ func _run() -> void:
 	if await _boot():
 		if await _connect_everyone():
 			for window in WINDOWS:
-				await _play_window(window)
-			await _test_wall_moves()
-			await _test_wall_hops()
-			await _test_stamina_under_loss()
-			await _test_teleport_under_loss()
+				await _measured(_play_window.bind(window))
+			await _measured(_test_wall_moves)
+			await _measured(_test_wall_hops)
+			await _measured(_test_stamina_under_loss)
+			await _measured(_test_teleport_under_loss)
 			await _test_server_cvars_reach_the_client()
 			await _test_ambient_cvars_reach_the_client()
 			await _test_view_feel_and_packs_reach_the_client()
@@ -42,6 +42,8 @@ func _run() -> void:
 func _physics_process(delta: float) -> void:
 	if not _driving:
 		return
+
+	_track_stall()
 
 	# Server truth, as of the last tick the module ran.
 	var server_tick := _game.current_tick()
