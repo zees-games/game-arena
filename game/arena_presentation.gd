@@ -1104,6 +1104,18 @@ func _local_commands() -> DotConsoleLocal:
 			ArenaViewArms.forearm_scale_mult = clampf(str(v).to_float(), 0.2, 3.0)
 			return DotResult.success(ArenaViewArms.forearm_scale_mult)
 	)
+	local.add_var(&"cl_fp_scope_arms_hide", "Aim fraction (0 to 1) at which a scoped weapon's first-person arms hide (-1: each weapon's own, 0.6 by default).",
+		func() -> Variant: return ArenaViewArms.scope_arms_hide_override,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.scope_arms_hide_override = clampf(str(v).to_float(), -1.0, 1.0)
+			return DotResult.success(ArenaViewArms.scope_arms_hide_override)
+	)
+	local.add_var(&"cl_fp_max_lean", "Most the first-person arms lean toward a hand out of reach (-1: each weapon's own, 0.4 by default; 0 is no lean).",
+		func() -> Variant: return ArenaViewArms.max_lean_override,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.max_lean_override = clampf(str(v).to_float(), -1.0, 3.0)
+			return DotResult.success(ArenaViewArms.max_lean_override)
+	)
 	local.add_var(&"cl_fp_look_down_back", "Metres your own body trails back as the view tips fully down (-1: the player's own setting, 0.45 by default).",
 		func() -> Variant: return ArenaPlayer.look_down_back_override,
 		func(v: Variant) -> Variant:

@@ -17,10 +17,15 @@ static var debug_pose := false
 static var hand_scale_mult := 1.0
 ## cl_fp_forearm_scale: multiplies the held-forearm size of every weapon.
 static var forearm_scale_mult := 1.0
+## cl_fp_scope_arms_hide: aim fraction the scoped arms hide at, for every weapon (-1: each weapon's own).
+static var scope_arms_hide_override := -1.0
+## cl_fp_max_lean: cap on how far the arms lean to a hand target, for every weapon (-1: each weapon's own).
+static var max_lean_override := -1.0
 
 var arms: DotPlayerViewArms = null
 var body: Node3D = null
 var _grip: DotViewGrip = null
+var _own_lean := 0.4
 
 
 static func available() -> bool:
@@ -40,6 +45,7 @@ static func mount(parent: Node, model: ZeeViewModel, body: Node3D, look: DotHuma
 	mounted.arms.name = "ViewArms"
 	mounted.add_child(mounted.arms)
 	mounted.arms.build(look, 1.8)
+	mounted._own_lean = mounted.arms.max_lean
 	if &"hands_scale" in model:
 		model.hands_scale = mounted.arms.held_scale
 		model.hands_min_distance = HANDS_MIN_DISTANCE
@@ -73,6 +79,10 @@ func _process(delta: float) -> void:
 	if model != null and model.has_method(&"art_forearm_scale"):
 		var fore: float = model.call(&"art_forearm_scale")
 		arms.forearm_scale = (fore if fore > 0.0 else 1.0) * forearm_scale_mult
+	if model != null:
+		model.scope_arms_hide_override = scope_arms_hide_override
+		var lean: float = model.call(&"art_max_lean") if model.has_method(&"art_max_lean") else -1.0
+		arms.max_lean = max_lean_override if max_lean_override >= 0.0 else (lean if lean >= 0.0 else _own_lean)
 	if &"debug_pose" in arms and arms.debug_pose != debug_pose:
 		arms.debug_pose = debug_pose
 	var v: Vector3 = body.controller.state.velocity

@@ -843,6 +843,15 @@ func _test_console() -> void:
 		+ "line is edited by hand more than any other"
 	)
 
+	p.console.submit("cl_fp_scope_arms_hide 0.3")
+	p.console.submit("cl_fp_max_lean 0.1")
+	var arm_ok := is_equal_approx(ArenaViewArms.scope_arms_hide_override, 0.3) and is_equal_approx(ArenaViewArms.max_lean_override, 0.1)
+	p.console.submit("cl_fp_scope_arms_hide 9")
+	p.console.submit("cl_fp_max_lean -1")
+	_check(arm_ok and is_equal_approx(ArenaViewArms.scope_arms_hide_override, 1.0) and is_equal_approx(ArenaViewArms.max_lean_override, -1.0),
+		"cl_fp_scope_arms_hide and cl_fp_max_lean reach the arms and clamp")
+	ArenaViewArms.scope_arms_hide_override = -1.0
+
 	p.console.submit("rcon_password hunter2")
 	_check(
 		not p.console.buffer.to_text().contains("hunter2"),

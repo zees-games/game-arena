@@ -1,5 +1,6 @@
 extends DotGameCheckSuite
 
+const ArenaViewArms := preload("../game/arena_view_arms.gd")
 const ArenaAmbience := preload("../game/arena_ambience.gd")
 const ArenaAvatars := preload("../game/arena_avatars.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
@@ -33,7 +34,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 370
+const CHECKS := 371
 
 var _entered := 0
 var _completed := 0
