@@ -102,6 +102,10 @@ enum Kind {
 	WEAPON_SETTLED,
 	## A dropped weapon is gone: its id and who took it (0 for expiry or the cap).
 	WEAPON_GONE,
+	## A converted map's mover state (dot-map's io_snapshot, io_state or a batch of them), as UTF-8 JSON. One per tick while something moves, and the whole state at signon.
+	##
+	## After WEAPON_GONE, for the reason VOTE gives.
+	MAP_STATE,
 }
 
 enum Ask {

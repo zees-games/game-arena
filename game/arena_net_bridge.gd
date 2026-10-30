@@ -495,6 +495,8 @@ func remove_peer(peer_id: int) -> void:
 	_players_by_peer.erase(peer_id)
 	_behaviours.erase(session_id)
 	_ready_peers.erase(peer_id)
+	if game != null and game.map_io != null:
+		game.map_io.remove_peer(peer_id)
 	if killview != null:
 		killview.forget(session_id)
 
@@ -560,6 +562,7 @@ func server_tick(tick: int) -> void:
 	_watch_projectiles()
 	_watch_drops()
 	_watch_weapon_drops()
+	_watch_map_io()
 	_watch_bullets()
 
 	if net != null:
@@ -1125,6 +1128,8 @@ func send_signon(peer_id: int) -> void:
 			))
 
 	_send_weapon_drops_signon(peer_id)
+	if game != null and game.map_io != null:
+		game.map_io.add_peer(peer_id)
 
 	# The jail's gate, when the map has one: a joiner mid-open would otherwise predict it shut.
 	if game != null and game.map != null and game.map.jail != null:
@@ -1150,6 +1155,29 @@ var _watched_projectiles: RefCounted = null
 
 ## The bullet bridge this bridge last connected to. See [method _watch_bullets].
 var _watched_bullets: DotWeaponBulletBridge = null
+
+## The mover world this bridge last sent to (a map change builds a new one).
+var _watched_map_io: Node = null
+
+
+## Hands a map's mover state to the peers that are ready, and again to all of them when a map change builds a new world.
+func _watch_map_io() -> void:
+	if net == null or not net.is_server or game == null or game.map_io == _live_map_io():
+		return
+	_watched_map_io = game.map_io
+	if _watched_map_io == null:
+		return
+	_watched_map_io.transport.raw_send = _send_map_state
+	for peer in _ready_peers:
+		_watched_map_io.add_peer(int(peer))
+
+
+func _live_map_io() -> Node:
+	return _watched_map_io if is_instance_valid(_watched_map_io) else null
+
+
+func _send_map_state(peer: Variant, payload: Dictionary) -> void:
+	send_event(int(peer), ArenaEvents.Kind.MAP_STATE, JSON.stringify(payload).to_utf8_buffer())
 
 
 ## Follows whichever projectile layer the game has, and tells every client about each
@@ -1664,6 +1692,10 @@ func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
 				game.drops.mirror_taken(int(took["id"]), int(took["taker"]))
 		ArenaEvents.Kind.WEAPON_DROP, ArenaEvents.Kind.WEAPON_SETTLED, ArenaEvents.Kind.WEAPON_GONE:
 			_apply_weapon_drop_event(event.kind, reader)
+		ArenaEvents.Kind.MAP_STATE:
+			var told_state: Variant = JSON.parse_string(event.body.get_string_from_utf8())
+			if told_state is Dictionary and game != null and game.map_io != null:
+				game.map_io.receive(told_state)
 		ArenaEvents.Kind.JAIL:
 			var told_jail := ArenaEvents.read_jail(reader)
 			if bool(told_jail["ok"]) and game != null:

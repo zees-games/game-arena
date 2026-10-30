@@ -382,6 +382,13 @@ func _play_glance() -> void:
 	if scale_at >= 0 and scale_at + 1 < args.size():
 		_hud.user_scale = float(args[scale_at + 1])
 
+	if OS.get_cmdline_user_args().has("--use"):
+		_shots = load("res://tools/screenshot_use.gd").stage(game, _local, _hud)
+		if _shots.is_empty():
+			push_error("--use needs a converted map with the jail button")
+			quit(1)
+		return
+
 	if OS.get_cmdline_user_args().has("--flashlight"):
 		_stage_flashlight(game)
 

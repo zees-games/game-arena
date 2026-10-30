@@ -1365,6 +1365,10 @@ func _on_detonated(at: Vector3, _spawn: DotWeaponSpawn) -> void:
 
 ## The prompt for the dropped weapon in front of the player, which the use key takes; empty when none.
 func _pickup_hint() -> String:
+	if game.map_io != null and player != null and player.is_alive():
+		var aimed: Dictionary = game.map_io.aim_from(player.camera.global_position, -player.camera.global_basis.z)
+		if not aimed.is_empty() and bool(aimed["in_range"]):
+			return String(aimed["label"])
 	if game.weapon_drops == null or player == null or not player.is_alive() or player.arsenal == null:
 		return ""
 	var found := game.weapon_drops.prompt_for(player.arsenal, player.camera.global_position, -player.camera.global_basis.z, game.weapon_drop_class_of(player.player_id))

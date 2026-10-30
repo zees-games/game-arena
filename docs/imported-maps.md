@@ -87,6 +87,12 @@ A server names its combat surf maps the way every game does: `ArenaMapDirector.s
 
 **Naming them is the server owner's, and publishing is a tag of arena-surf-dm-maps.** The ready-to-paste `cfg/game/game-arena/server.yml` block for every map is in that repository's README ("Naming them on a server"); dot-server-deploy's own `cfg/game/game-arena/server.yml` has no `game-arena` entry yet, and a map added after the last tag (v1.0.1) is not a pack until the next. Not covered by a suite: a real client fetching a real pack over the wire, and `_prefer_delivered`.
 
+## Doors, lifts and buttons
+
+A converted map whose manifest lists `movers` gets `ArenaMapIo` (`game/arena_map_io.gd`) as `game.map_io`: a dot-map `DotMapWorld` built with `movers_only` on every machine, so the brush entities, their I/O and their collision exist while the world model stays the game's own solid. A map with no movers, or a built-in one, gets null and pays nothing per frame. The host steps it in `ArenaGame.tick` and sends the state as `Kind.MAP_STATE` (a snapshot at signon, then change lists); a client applies it and advances the I/O clock between messages. `sv_use_reach` and `sv_use_cooldown` come from `DotMapUse`.
+
+The use key is one key for two things: `ArenaWeaponDropWiring.input` asks `map_io.press_for` first (a button or door looked at in reach wins, and the key is spent even while it cools down), and only otherwise lets a dropped weapon take it. The prompt is the same ordering through `ArenaClient._pickup_hint`, one line in `hud.use_hint`. Not wired yet: mover push and crush of bodies, riders on lifts, and the client following `sv_use_reach` for its prompt (it uses the default).
+
 ## The maps' own mechanics
 
 Pushes and boosters, water, ladders, conveyors, gravity and hurt volumes from each manifest's `mechanics` block run here. `ArenaMap.imported` reads it into `ArenaMap.mechanics`, null on a built-in map, and that null is how every caller knows there is nothing to run.

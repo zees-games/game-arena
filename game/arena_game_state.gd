@@ -7,6 +7,7 @@ const KillPov := preload("arena_kill_pov.gd")
 const ArenaAmbience := preload("arena_ambience.gd")
 const ArenaWeaponDropWiring := preload("arena_weapon_drop_wiring.gd")
 const ArenaConfig := preload("arena_config.gd")
+const ArenaMapIo := preload("arena_map_io.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaEffects := preload("arena_effects.gd")
 const ArenaHorde := preload("arena_horde.gd")
@@ -231,6 +232,10 @@ var drops: ArenaDrops = null
 ## under [member weapon_drop_rules], whose cvars are the server owner's and outlive a map change.
 var weapon_drops: DotWeaponDrops = null
 var weapon_drop_rules: DotWeaponDropRules = DotWeaponDropRules.new()
+## The converted map's doors, lifts and buttons, or null for a map without any (it then costs nothing per tick).
+var map_io: Node = null
+## The use key's reach and cooldown for map buttons: one for the game's life, so the owner's cvars outlive a map.
+var map_use: DotMapUse = DotMapUse.new()
 var drop_held: Dictionary = {}
 ## Per player: whether the use key was down last tick, for its rising edge.
 var use_held: Dictionary = {}

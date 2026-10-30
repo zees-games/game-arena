@@ -29,7 +29,7 @@ static func teardown(game) -> void:
 ## The drop key's rising edge throws the weapon in hand along the aim; the use key's takes the
 ## dropped weapon looked at; with `sv_weapon_drop_auto` an empty slot also takes one in reach.
 static func input(game, id: int, player, pair: Array) -> void:
-	if game.weapon_drops == null or not game.is_authority or pair.size() < 2 or pair[1] == null:
+	if not game.is_authority or pair.size() < 2 or pair[1] == null:
 		return
 	var held: bool = (pair[1] as DotWeaponCommand).is_pressed(DotWeaponCommand.BUTTON_DROP)
 	var was: bool = game.drop_held.get(id, false)
@@ -37,6 +37,11 @@ static func input(game, id: int, player, pair: Array) -> void:
 	var use_now: bool = (pair[1] as DotWeaponCommand).is_pressed(DotWeaponCommand.BUTTON_USE)
 	var used: bool = game.use_held.get(id, false)
 	game.use_held[id] = use_now
+	# One key, one target: a map button or door looked at in reach wins; else the weapon on the floor.
+	if use_now and not used and game.map_io != null and game.map_io.press_for(player, id):
+		return
+	if game.weapon_drops == null:
+		return
 	var def := class_def_of(game, id)
 	var velocity: Vector3 = player.controller.state.velocity
 	if held and not was:

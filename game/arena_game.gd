@@ -1149,6 +1149,7 @@ func _build_world_collision() -> void:
 		_world_collision.free()
 
 	_world_collision = null
+	_free_map_io()
 
 	if map == null or not map.is_imported():
 		return
@@ -1161,11 +1162,22 @@ func _build_world_collision() -> void:
 	# Before `_build_match` turns the spawns into spawn points: a mapper's spawn inside the
 	# floor would otherwise be a player rising through it. See `ArenaMap.settle_spawns`.
 	var lifted := map.settle_spawns(map.movement_body(), ArenaPlayer.arena_tunables())
+	map_io = ArenaMapIo.build(self, map_use)
+	if map_io != null:
+		add_child(map_io)
 
 	if lifted > 0:
 		DotLog.debug(CHANNEL, "spawns lifted out of an imported map's solid", {
 			"map": String(map.id), "lifted": lifted, "of": map.spawns.size()
 		})
+
+
+func _free_map_io() -> void:
+	if map_io != null and is_instance_valid(map_io):
+		remove_child(map_io)
+		map_io.free()
+	map_io = null
+	map_use.attach(null)
 
 
 ## The solid on the layout's `world` layer, once there is a layout to ask.
@@ -1230,6 +1242,7 @@ func _teardown_world() -> void:
 		drops.queue_free()
 		drops = null
 	ArenaWeaponDropWiring.teardown(self)
+	_free_map_io()
 
 	for point in _spawn_points:
 		if is_instance_valid(point):
@@ -1864,6 +1877,9 @@ func tick(commands: Dictionary = {}) -> void:
 			_resolve_shot(shot, float(_tick) - lag if lag >= 0.0 else -1.0)
 		if bullet_bridge != null:
 			bullet_bridge.tick(float(_tick))
+
+	if map_io != null:
+		map_io.tick()
 
 	# After the shots, before everything that can end the round: a hurt volume that kills
 	if is_authority:
