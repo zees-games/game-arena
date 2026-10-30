@@ -63,10 +63,12 @@ var remaining_override: float = NAN
 ## The key each prompt, hint and button names, as the player has it bound. The client
 ## writes these from its key table ([method ArenaClient._hud_keys]); the defaults are the
 ## table's.
+var _weapon_label := ""
+
 var keys: Dictionary = {
 	&"slide": "C", &"launch": "E", &"dash": "Shift", &"jump": "Space",
 	&"scoreboard": "Tab", &"menu": "Esc", &"chat": "Y", &"reload": "R", &"help": "H",
-	&"maps": "M", &"loadout": "", &"roam": "T", &"use": "E",
+	&"maps": "M", &"loadout": "", &"roam": "T", &"use": "E", &"fire_mode": "N",
 }
 
 ## The spectator's key hint ("Free camera", "Back to players"), set by the client while the
@@ -503,6 +505,16 @@ static func notice_width(frame_width: float) -> float:
 ## the middle, where the crosshair is: on a short frame the medals give way, not the aim.
 static func notice_top(frame_height: float) -> float:
 	return minf(maxf(182.0, frame_height * 0.27 + 70.0), frame_height * 0.5 - 70.0)
+
+
+## The ammo line's name for [param slot]: the weapon, then its fire mode and the key when it has a choice.
+static func mode_label(slot: DotWeaponSlot, key: String) -> String:
+	var name := slot.def.display_name
+	if slot.def.allowed_fire_modes().size() < 2:
+		return name
+	var mode := str(DotWeaponDef.Fire.keys()[slot.fire_mode()])
+	return "%s  %s%s" % [name, mode, " [%s]" % key if key != "" else ""]
+
 
 ## How far along a challenge is, in the words its stat is counted in.
 ##
@@ -1243,17 +1255,19 @@ func present_gear() -> void:
 			vitals.show_vitals(player.health.health, player.health.max_health, player.health.armour, player.health.max_armour)
 
 	var slot: DotWeaponSlot = player.arsenal.current() if live and player.arsenal != null else null
+	if ammo != null and slot != null:
+		_weapon_label = mode_label(slot, str(keys.get(&"fire_mode", "")))
 	if ammo != null:
 		if slot == null:
 			ammo.show_ammo("", -1, -1, false)
 		elif slot.def.magazine <= 0 and slot.def.ammo_type == &"":
-			ammo.show_ammo(slot.def.display_name, -1, -1, false)
+			ammo.show_ammo(_weapon_label, -1, -1, false)
 		elif slot.def.magazine <= 0:
 			var pool := player.arsenal.ammo().count(slot.def.ammo_type)
-			ammo.show_ammo(slot.def.display_name, pool, -1, pool <= 0)
+			ammo.show_ammo(_weapon_label, pool, -1, pool <= 0)
 		else:
 			var reserve := player.arsenal.ammo().count(slot.def.ammo_type) if slot.def.ammo_type != &"" else -1
-			ammo.show_ammo(slot.def.display_name, slot.magazine, reserve,
+			ammo.show_ammo(_weapon_label, slot.magazine, reserve,
 				float(slot.magazine) <= float(slot.def.magazine) * 0.25)
 
 	if slots != null:

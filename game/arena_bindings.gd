@@ -54,6 +54,7 @@ const WEAPON_PREVIOUS := &"arena_weapon_previous"
 const WEAPON_NEXT := &"arena_weapon_next"
 const WEAPON_LAST := &"arena_weapon_last"
 const PUNT := &"arena_punt"
+const FIRE_MODE := &"arena_fire_mode"
 const WEAPON_DROP := &"arena_weapon_drop"
 const USE := &"arena_use"
 ## First or third person, where the server allows it (`mp_forceview`).
@@ -93,6 +94,7 @@ static func make() -> DotMenuBindings:
 	keys.add(WEAPON_DROP, &"bind_weapon_drop", "Drop the weapon in hand (picks up the one at your feet)", "Q", "Weapons")
 	keys.add(USE, &"bind_use", "Pick up the dropped weapon you are looking at", "E", "Weapons")
 	keys.add(PUNT, &"bind_punt", "Punt a prop", "G", "Weapons")
+	keys.add(FIRE_MODE, &"bind_fire_mode", "Cycle fire mode (semi / burst / auto)", "L", "Weapons")
 
 	keys.add(CHAT, &"chat_open_key", "Chat", "Y", "Chat", DotSettingsDef.Scope.ACCOUNT)
 	keys.add(CHAT_TEAM, &"chat_team_key", "Team chat", "U", "Chat", DotSettingsDef.Scope.ACCOUNT)

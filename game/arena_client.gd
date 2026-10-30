@@ -1510,6 +1510,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 	# On the wire as well, for the server's No Scope medal; nothing simulated reads it.
 	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
 	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and _held(ArenaBindings.RELOAD))
+	_fire.set_button(DotWeaponCommand.BUTTON_FIRE_MODE, mouse_drives_view() and _held(ArenaBindings.FIRE_MODE))
 	_fire.set_button(DotWeaponCommand.BUTTON_DROP, mouse_drives_view() and _held(ArenaBindings.WEAPON_DROP))
 	_fire.set_button(DotWeaponCommand.BUTTON_USE, mouse_drives_view() and _held(ArenaBindings.USE))
 	_note_held_slot()
@@ -2065,6 +2066,7 @@ func _hud_keys() -> void:
 	hud.keys[&"chat"] = table.key_for(ArenaBindings.CHAT)
 	hud.keys[&"scoreboard"] = table.key_for(ArenaBindings.SCOREBOARD)
 	hud.keys[&"reload"] = table.key_for(ArenaBindings.RELOAD)
+	hud.keys[&"fire_mode"] = table.key_for(ArenaBindings.FIRE_MODE)
 	hud.keys[&"use"] = table.key_for(ArenaBindings.USE)
 	hud.keys[&"help"] = table.key_for(DotMenuBindings.HELP_ACTION)
 	hud.keys[&"maps"] = table.key_for(&"dot_menu_maps")

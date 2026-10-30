@@ -77,7 +77,7 @@ func _test_every_key_is_an_action() -> void:
 		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Wheel up",
 		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Z", &"arena_launch": "E",
 		&"arena_launch_props": "N", &"arena_punt": "G", &"dot_voice_talk": "V",
-		&"dot_fps_walk": "Alt",
+		&"dot_fps_walk": "Alt", &"arena_fire_mode": "L",
 	}
 	var wrong: Array[String] = []
 	for action: StringName in expected:
@@ -85,6 +85,21 @@ func _test_every_key_is_an_action() -> void:
 				or DotInputBinding.describe_action(action) != str(expected[action]):
 			wrong.append("%s=%s" % [action, DotInputBinding.describe_action(action)])
 	_check(wrong.is_empty(), "each is a row and on its default key in the InputMap", str(wrong))
+
+	var two := DotWeaponDef.new()
+	two.display_name = "Rifle"
+	two.fire_modes = DotWeaponDef.selector_modes(DotWeaponDef.Fire.AUTO, true)
+	var one := DotWeaponDef.new()
+	one.display_name = "Pistol"
+	var two_slot := DotWeaponSlot.new()
+	two_slot.def = two
+	var one_slot := DotWeaponSlot.new()
+	one_slot.def = one
+	_check(
+		ArenaHud.mode_label(two_slot, "L") == "Rifle  AUTO [L]" and ArenaHud.mode_label(one_slot, "L") == "Pistol",
+		"the ammo line names the fire mode and its key on a gun with a selector, and only then",
+		"%s / %s" % [ArenaHud.mode_label(two_slot, "N"), ArenaHud.mode_label(one_slot, "N")]
+	)
 
 	# The wheel rows by name: a pack asks for dot-ui 4, which names the wheel (level 2).
 	var named := ArenaBindings.make().row_for_action(&"arena_weapon_previous")
