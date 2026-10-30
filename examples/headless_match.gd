@@ -4489,6 +4489,8 @@ func _test_interface() -> void:
 	subject.arsenal.spread_rules = null
 	subject.controller.state.velocity = Vector3.ZERO
 	hud.refresh_all()
+	# A narrowing gap eases closed over `cl_crosshair_ease`; no frame has run, so step it out or `still` reads the match's last cone.
+	hud.crosshair.ease_spread(10.0)
 	var still := hud.crosshair.gap_pixels()
 
 	subject.controller.state.velocity = Vector3(8.0, 0.0, 0.0)
