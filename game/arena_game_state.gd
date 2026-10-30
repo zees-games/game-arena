@@ -241,6 +241,9 @@ var streaks: Dictionary = {}
 ## empty gives nothing. Applied on the kill that reaches the streak, server side.
 var streak_rewards: Dictionary = {3: "heal", 5: "haste", 7: "empowered"}
 
+## A random-every-spawn loadout was handed to [param player_id]; [param text] names it. Authority side.
+signal loadout_rolled(player_id: int, text: String)
+
 ## Somebody reached a streak with a reward. Server side; the module announces it.
 signal streak_reward(player_id: int, streak: int, reward: String)
 

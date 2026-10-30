@@ -71,6 +71,9 @@ func _ready() -> void:
 		# Solo, the world is this process's and there is no KILL message: the death the game
 		# decided is on the kill's entry.
 		game.player_killed.connect(_on_solo_kill)
+		game.loadout_rolled.connect(func(id: int, text: String) -> void:
+			if player != null and id == player.player_id and hud != null:
+				hud.notice(text))
 
 	_sampler = make_sampler()
 	# C slides as well as Duck: added once the key table has been applied, in

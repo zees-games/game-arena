@@ -2250,8 +2250,7 @@ func _test_content() -> void:
 			"%s can be put in a loadout" % weapon.id
 		)
 
-	# The budget has to permit something interesting and refuse the obvious abuse: a
-	# heavy with armour and a grenade on top is the combination nobody can answer.
+	# Free by default; a server that prices weapons gets the budget enforced.
 	var greedy := DotLoadout.empty(&"arena")
 	greedy.set_item(&"melee", ZeeWeaponIds.KNIFE)
 	greedy.set_item(&"primary", ZeeWeaponIds.LAUNCHER)
@@ -2259,9 +2258,18 @@ func _test_content() -> void:
 	greedy.set_item(&"thrown", ZeeWeaponIds.FRAG)
 	greedy.set_item(&"gear", &"armour")
 	_check(
-		not DotLoadoutValidator.validate(greedy, schema, everything).ok,
-		"the points budget refuses a heavy with armour and a grenade"
+		DotLoadoutValidator.validate(greedy, schema, everything).ok,
+		"a heavy with armour and a grenade is free by default"
 	)
+	var launcher := schema.catalogue.find(ZeeWeaponIds.LAUNCHER)
+	launcher.cost = 6
+	schema.point_budget = 5
+	_check(
+		not DotLoadoutValidator.validate(greedy, schema, everything).ok,
+		"a server that prices the launcher and sets a budget refuses it"
+	)
+	launcher.cost = 0
+	schema.point_budget = 0
 
 	var sensible := DotLoadout.empty(&"arena")
 	sensible.set_item(&"melee", ZeeWeaponIds.KNIFE)

@@ -173,6 +173,12 @@ func _module_load() -> DotResult:
 			game.streak_rewards = ArenaGame.parse_streak_rewards(new_value)
 			log_info("streak rewards changed", {"rewards": new_value})
 	)
+	game.loadout_rolled.connect(
+		func(player_id: int, text: String) -> void:
+			var peer := bridge.peer_for_session(player_id) if bridge != null else 0
+			if services != null and peer != 0:
+				services.notice(peer, text)
+	)
 	game.streak_reward.connect(
 		func(player_id: int, streak: int, reward: String) -> void:
 			var who := game.player_for(player_id)

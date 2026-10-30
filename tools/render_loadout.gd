@@ -5,7 +5,10 @@ extends SceneTree
 ## `DotMenuLoadoutScreen`, dot-loadout's offer) and the crosshair's fade (dot-ui's
 ## `DotCrosshair.aim_source`), which no headless suite can look at.
 ##
-##   xvfb-run -a godot --path . --resolution 1280x720 --script tools/render_loadout.gd
+##   xvfb-run -a godot --path . --resolution 1920x1080 --script tools/render_loadout.gd
+##   xvfb-run -a godot --path . --resolution 1920x1080 --script tools/render_loadout.gd -- --costed
+##
+## Free is the default; `--costed` prices a few weapons and sets a budget, as a server would.
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
@@ -13,6 +16,7 @@ const OUT_DIR := "screenshots/loadout"
 
 var client: Node = null
 var _failed := 0
+var _costed := OS.get_cmdline_user_args().has("--costed")
 
 
 func _initialize() -> void:
@@ -31,6 +35,14 @@ func _run() -> void:
 	var me = client.get("player")
 	var menu: DotMenu = client.get("game_menu")
 	me.health.invulnerable = true
+	var suffix := "_costed" if _costed else "_free"
+	if _costed:
+		var schema: DotLoadoutSchema = client.get("game").loadouts.schema
+		for id: StringName in [&"minigun", &"battle_rifle", &"sniper", &"rocket_launcher"]:
+			var priced := schema.catalogue.find(id)
+			if priced != null:
+				priced.cost = 4
+		schema.point_budget = 7
 
 	# The menu, on B as a player presses it.
 	var b := InputEventKey.new()
@@ -41,16 +53,23 @@ func _run() -> void:
 	await _wait(0.5)
 	var screen := menu.loadout_screen
 	_check(screen != null and screen.is_open(), "B opens the loadout screen")
-	await _shot("arena_loadout_primary")
-	# The heaviest gun with armour on: over the budget, said on the card.
-	screen.show_slot(4)
-	var _armour := screen.pick(0)
-	screen.show_slot(0)
-	for i in screen.choices().size():
-		if str((screen.choices()[i] as Dictionary)["id"]) == "minigun":
-			var _over := screen.pick(i)
-	await _shot("arena_loadout_over_budget")
-	screen.revert()
+	await _shot("arena_loadout_primary" + suffix)
+	_check(screen.costs_shown() == _costed, "costs are shown only when the server prices something (%s)" % suffix)
+	if _costed:
+		for i in screen.choices().size():
+			if str((screen.choices()[i] as Dictionary)["id"]) == "minigun":
+				var _over := screen.pick(i)
+		screen.show_slot(1)
+		var _second := screen.pick(0)
+		screen.show_slot(0)
+		await _shot("arena_loadout_over_budget" + suffix)
+		screen.revert()
+	else:
+		screen.toggle_random_spawn()
+		await _wait(0.3)
+		await _shot("arena_loadout_every_spawn_on")
+		_check(screen.random_spawn_on(), "the Every spawn toggle turns on")
+		screen.toggle_random_spawn()
 	screen.show_slot(3)
 	await _shot("arena_loadout_grenades")
 	screen.show_slot(0)

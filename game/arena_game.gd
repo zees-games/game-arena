@@ -1606,11 +1606,22 @@ func player_ids() -> Array[int]:
 ##
 ## A failure here must never stop a player spawning: an unreachable loadout store is a
 ## reason to give them a rifle, not a reason to leave them watching.
-func apply_loadout(id: int) -> void:
+func apply_loadout(id: int, at_spawn := false) -> void:
 	var player := player_for(id)
 
 	if player == null:
 		return
+
+	if at_spawn and loadout_command != null and not player.has_meta(&"bot") and id < 900_000_000:
+		var rolled: DotLoadout = await loadout_command.roll_for_spawn(_loadout_key(id))
+		player = player_for(id)
+		if rolled != null and player != null:
+			player.give_loadout(ArenaContent.in_give_order(loadouts.resolve(rolled)))
+			arm_for_mode(player)
+			loadout_rolled.emit(id, loadout_command.spawn_text(rolled))
+			return
+		if player == null:
+			return
 
 	var res: DotResult = await loadouts.active_for(_loadout_key(id))
 
@@ -2297,7 +2308,7 @@ func _apply_loadout_deferred(id: int) -> void:
 		else:
 			player.give_default_loadout()
 
-	apply_loadout(id)
+	apply_loadout(id, true)
 
 
 func _on_match_state_changed(from: DotMatch.State, to: DotMatch.State) -> void:

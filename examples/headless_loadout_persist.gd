@@ -10,7 +10,7 @@ const ArenaContent := preload("../game/arena_content.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaLoadoutIdentity := preload("../game/arena_loadout_identity.gd")
 const ROOT := "user://arena_loadout_persist"
-const CHECKS := 15
+const CHECKS := 21
 
 
 class FakeIdentity:
@@ -106,4 +106,28 @@ func _run() -> void:
 
 	DotPaths.remove_tree(ROOT)
 	DotPaths.remove_tree(ROOT + "_capped")
+	_free_by_default()
 	_report(CHECKS)
+
+
+func _free_by_default() -> void:
+	var schema := ArenaContent.loadout_schema()
+	var priced := 0
+	for id in schema.catalogue.ids():
+		if schema.catalogue.find(id).cost > 0:
+			priced += 1
+	_check(priced == 0, "every arena item is free by default", str(priced))
+	_check(schema.point_budget == 0, "and there is no point budget")
+	var pick := schema.default_loadout()
+	var everything := DotLoadoutEntitlements.everything()
+	var heavy := schema.catalogue.find(&"minigun")
+	_check(heavy != null and DotLoadoutValidator.validate(pick, schema, everything).ok, "the default loadout validates with no pricing")
+	# A profile that prices a weapon (params.loadout_cost) and a server budget.
+	heavy.cost = 8
+	pick.set_item(&"primary", &"minigun")
+	_check(DotLoadoutValidator.validate(pick, schema, everything).ok, "a priced weapon is still free until a budget is set")
+	schema.point_budget = 5
+	var over := DotLoadoutValidator.validate(pick, schema, everything)
+	_check(not over.ok and DotLoadoutRules.CVAR_BUDGET in str(over.error) and "loadout_cost" in str(over.error), "a costed weapon over the budget is refused, naming the cvar and the field", str(over.error))
+	heavy.cost = 0
+	_check(DotLoadoutValidator.validate(pick, schema, everything).ok, "free again once the profile drops the cost")

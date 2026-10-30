@@ -111,6 +111,7 @@ func _use_loadout_menu() -> void:
 	loadout_menu = game_menu.call(&"use_loadout", loadout_offer, choose_loadout, decorate_loadout_choice)
 	if loadout_menu != null:
 		loadout_menu.set(&"random_fn", random_loadout)
+		loadout_menu.set(&"random_spawn_fn", random_spawn_loadout)
 		# Remembered under the signed-in site account (or "local" as a guest), and never
 		# from a suite or a render on scratch settings: those must not write, or read back, a
 		# player's real choice.
@@ -174,6 +175,13 @@ func random_loadout() -> Variant:
 	if game == null or game.loadout_command == null or player == null:
 		return DotResult.fail(DotError.CODE_STATE, "Join the match first.")
 	return await game.loadout_command.call(&"choose_random", null, ArenaGame.storage_key(player.player_id))
+
+
+## Solo: the "random every spawn" toggle, under the same `mp_loadout_random_on_spawn` rule.
+func random_spawn_loadout(on: bool) -> Variant:
+	if game == null or game.loadout_command == null or player == null:
+		return DotResult.fail(DotError.CODE_STATE, "Join the match first.")
+	return await game.loadout_command.call(&"set_random_spawn", ArenaGame.storage_key(player.player_id), on)
 
 
 ## A card's picture (the HUD's rendered weapon silhouettes) and numbers (zee's cards).

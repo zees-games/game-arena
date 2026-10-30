@@ -243,15 +243,6 @@ const LOADOUT_SLOT_FOR := {
 	ZeeWeaponIds.SLOT_THROWN: &"thrown",
 }
 
-## Points per arsenal slot. Melee is free because everybody always has one.
-const COST_FOR_SLOT := {
-	ZeeWeaponIds.SLOT_MELEE: 0,
-	ZeeWeaponIds.SLOT_SIDEARM: 1,
-	ZeeWeaponIds.SLOT_PRIMARY: 2,
-	ZeeWeaponIds.SLOT_HEAVY: 4,
-	ZeeWeaponIds.SLOT_THROWN: 1,
-}
-
 ## The one item a player has to have unlocked. Everything else is free.
 ##
 ## Kept rather than made free with the rest, because it is the only thing exercising
@@ -299,20 +290,21 @@ static func catalogue() -> DotItemCatalogue:
 		# primary slot would be a player who spawns with nothing to shoot.
 		item.slots = [LOADOUT_SLOT_FOR.get(weapon.slot, &"primary")]
 		item.tags = weapon.tags.duplicate()
-		item.cost = int(COST_FOR_SLOT.get(weapon.slot, 2))
+		# Free unless the weapon profile sets `params.loadout_cost`.
+		item.cost = int(weapon.params.get(&"loadout_cost", 0))
 		items.append(item)
 
 	var armour := DotItem.make(&"armour", DotItem.KIND_EQUIPMENT, true)
 	armour.display_name = "Armour"
 	armour.slots = [&"gear"]
-	armour.cost = 2
+	armour.cost = 0
 	items.append(armour)
 
 	return DotItemCatalogue.of(items)
 
 
 ## The loadout schema: a melee, a sidearm, a primary, a throwable and a gear slot, on a
-## small points budget.
+## points budget that is off unless the server sets one.
 ##
 ## Points rather than an explicit list of legal combinations, because "a launcher, or a
 ## rifle and armour" is a handful of numbers rather than an enumeration that grows as
@@ -361,9 +353,6 @@ static func loadout_schema() -> DotLoadoutSchema:
 	var schema := DotLoadoutSchema.of(
 		&"arena", [melee, primary, secondary, thrown, gear], catalogue()
 	)
-	# Melee 0, sidearm 1, primary 2, heavy 4, a grenade 1, armour 2. Seven buys a rifle,
-	# a pistol, a frag and armour with one to spare, or a heavy with a sidearm and a
-	# grenade and no armour — and not a heavy WITH armour, which is the combination
-	# nobody can answer.
-	schema.point_budget = 7
+	# No point-buy by default; a server sets mp_loadout_budget and per-weapon loadout_cost.
+	schema.point_budget = 0
 	return schema
