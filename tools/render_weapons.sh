@@ -7,9 +7,12 @@ cd "$(dirname "$0")/.."
 rm -rf screenshots/weapons
 extra=()
 [ "${1:-}" = "--zee" ] && extra=(-- --arena-no-weapon-skins)
-xvfb-run -a -s "-screen 0 1280x720x24" timeout 400 godot --path . --resolution 1280x720 \
-  --script tools/render_weapons.gd "${extra[@]}" 2>&1 | grep -E 'wrote|skin packs|ERROR|SCRIPT' || true
-python3 -I - <<'PY'
+# Exits 1 when an aimed gun hides the screen's middle (render_weapons.gd's see-through check).
+status=0
+xvfb-run -a -s "-screen 0 1920x1080x24" timeout 600 godot --path . --resolution 1920x1080 \
+  --script tools/render_weapons.gd "${extra[@]}" > >(grep -E 'wrote|skin packs|ERROR|SCRIPT|see-through|FAIL' || true) 2>&1 || status=$?
+# The sheet needs Pillow, which a render box may lack; the frames and the check stand without it.
+python3 -I - <<'PY' || echo "no sheet: python3 with Pillow is needed"
 import glob, os
 from PIL import Image
 fs = sorted(glob.glob("screenshots/weapons/*_hip.png"))
@@ -28,3 +31,4 @@ if fs:
     sheet.save("screenshots/weapons/sheet.png")
     print("wrote screenshots/weapons/sheet.png")
 PY
+exit "$status"
