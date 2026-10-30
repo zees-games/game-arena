@@ -4,6 +4,7 @@ extends CanvasLayer
 
 const KillPov := preload("arena_kill_pov.gd")
 const ArenaContent := preload("arena_content.gd")
+const ArenaViewArms := preload("arena_view_arms.gd")
 const AMMO_FONT := 22
 
 var feel_rules: ZeeViewFeel = null
@@ -11,6 +12,10 @@ var ads_rules: ZeeAdsRules = null
 
 var hands: ZeeViewModel = null
 var flashes: ZeeShotFx = null
+## The killer's arms on dot-player-char's rig, as the live view draws them; null below its API 8.
+var arms: DotPlayerViewArms = null
+
+var _grip: DotViewGrip = null
 var crosshair: DotCrosshair = null
 var label: Label = null
 
@@ -41,6 +46,8 @@ func present(view: Dictionary) -> void:
 	visible = not behind
 	if hands != null:
 		hands.visible = not behind
+		if arms != null:
+			arms.visible = not behind
 	_move_hands(aux, cam)
 	if not behind:
 		_kick(cam)
@@ -67,7 +74,9 @@ func _start(cam: Camera3D) -> void:
 	if feel_rules != null:
 		hands.feel_rules = feel_rules
 	hands.ads_rules = ads_rules
+	hands.show_arms = not _shares_arms()
 	cam.add_child(hands)
+	_mount_arms(cam)
 	flashes = ZeeShotFx.new()
 	flashes.name = "KillerShotFx"
 	flashes.catalogue = ArenaContent.weapon_catalogue()
@@ -89,6 +98,33 @@ func _start(cam: Camera3D) -> void:
 	add_child(label)
 
 
+## Whether the shared arm rig draws the hands; the view model's own sleeves are then built off, not left drawn under the gun.
+func _shares_arms() -> bool:
+	return DotAddonApi.build_level("dot_player_char") >= ArenaViewArms.NEEDS_LEVEL and hands.has_signal(&"hands_reached")
+
+
+func _mount_arms(cam: Camera3D) -> void:
+	if not _shares_arms():
+		return
+	arms = DotPlayerViewArms.new()
+	arms.name = "KillerArms"
+	cam.add_child(arms)
+	arms.build(DotHumanoidLook.stock(1), 1.8)
+	hands.hands_reached.connect(_on_hands)
+
+
+func _on_hands(anchor: Node3D, grip: Vector3, fore: Vector3, pose: StringName) -> void:
+	if arms == null:
+		return
+	var one: bool = pose in ArenaViewArms.ONE_HAND
+	if _grip == null or _grip.anchor != anchor or _grip.is_two_hand() == one:
+		_grip = DotViewGrip.one_hand(anchor, grip) if one else DotViewGrip.two_hand(anchor, grip, fore)
+		arms.set_held(_grip)
+	_grip.grip = grip
+	if not one:
+		_grip.support = fore
+
+
 func _move_hands(aux: PackedFloat32Array, cam: Camera3D) -> void:
 	var id := KillPov.weapon_of(aux[0])
 	if id != &"" and hands.equipped() != id:
@@ -103,6 +139,8 @@ func _move_hands(aux: PackedFloat32Array, cam: Camera3D) -> void:
 		_fired(id, Vector2(aux[8], aux[9]), flags & KillPov.SIGNED != 0, cam)
 	_fire = aux[2]
 	hands.advance(get_process_delta_time())
+	if arms != null:
+		arms.tick(aux[11], get_process_delta_time())
 
 
 ## A shot in the replay: the recorded recoil through the view model's own kick, and the muzzle flash.
@@ -131,6 +169,10 @@ func _end() -> void:
 	if hands != null and is_instance_valid(hands):
 		hands.queue_free()
 	hands = null
+	if arms != null and is_instance_valid(arms):
+		arms.queue_free()
+	arms = null
+	_grip = null
 	for n: Node in [crosshair, label, flashes]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()

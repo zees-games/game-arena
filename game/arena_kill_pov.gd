@@ -32,8 +32,12 @@ static func aux_of(p: Object) -> PackedFloat32Array:
 		out[6] = float(p.call(&"spread_degrees"))
 	out[0] = float(int(String(id).hash() & 0xFFFFFF)) if id != &"" else 0.0
 	out[1] = 1.0 if bool(p.get(&"aim_held")) else 0.0
-	if weapons != null:
+	if bool(p.get(&"mirrored")):
+		out[2] = float(int(p.get(&"mirror_fire_seq")) % 4096)
+		out[3] = float(int(p.get(&"mirror_fire_kind")))
+	elif weapons != null:
 		out[2] = float(int(weapons.fire_seq) % 4096)
+		out[3] = float(int(weapons.fire_kind))
 		_watch_recoil(weapons as Object)
 		var kick: Vector3 = (weapons as Object).get_meta(RECOIL_META, Vector3.ZERO)
 		out[8] = kick.x

@@ -2,8 +2,9 @@ extends DotGameCheckSuite
 
 const ArenaContent := preload("../game/arena_content.gd")
 const KillPov := preload("../game/arena_kill_pov.gd")
+const Bodies := preload("../game/arena_killcam_bodies.gd")
 
-const EXPECTED_CHECKS := 23
+const EXPECTED_CHECKS := 30
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -110,6 +111,7 @@ func _run() -> void:
 	var shown := Time.get_ticks_msec()
 	await _wait(1.5)
 	await _check_poses(host, killer, me)
+	await _check_events(killer, me)
 	var reveal: Node = _client.get("winner_reveal")
 	_check(host.is_playing() and (reveal == null or not reveal.is_active()), "after 1.5 s it plays on and the podium waits")
 	await _until(func() -> bool: return not host.is_playing(), 12.0)
@@ -124,6 +126,7 @@ func _check_killer_screen(kv: Node, killer: Object) -> void:
 	_check(screen != null and screen.hands != null and screen.hands.get_parent() == kv.camera, "the viewmodel rides the replay camera")
 	var held: StringName = killer.arsenal.current().def.id if killer.arsenal.current() != null else &""
 	_check(screen != null and screen.hands != null and screen.hands.equipped() == held, "it holds the weapon the killer held", str(held))
+	_check(screen != null and screen.hands != null and screen.hands.find_child("Arms", true, false) == null and screen.arms != null and screen.arms.get_parent() == kv.camera, "the view model's own sleeve is off and the shared arms ride the camera instead")
 	_check(screen != null and screen.crosshair != null and screen.crosshair.is_visible_in_tree() and not kv.crosshair.visible, "the killer's crosshair is drawn, the plain one is not")
 	var eye: Vector3 = killer.controller.motor.eye_position(killer.controller.state)
 	_check(kv.camera.global_position.distance_to(eye) < 0.6, "the camera is at the killer's eye", str(kv.camera.global_position.distance_to(eye)))
@@ -184,3 +187,53 @@ func _check_poses(host: Node, killer: Object, me: Object) -> void:
 		compared += 1
 	_check(compared > 0 and worst < 0.02, "the final killcam draws each body in its recorded pose (%d bodies, worst %.3f rad)" % [compared, worst])
 	_check(compared > 0 and off_rest > 0.3, "and none stands in its rest pose (least %.2f rad from it)" % off_rest)
+
+
+## Another player's shot and death are replayed: a mirrored (remote) body records its fire count, a new count flashes
+## its muzzle once, and the victim's row turning dead drops a ragdoll that the restore takes away again.
+func _check_events(killer: Object, me: Object) -> void:
+	var bot: Object = null
+	for p: Object in _client.get("game").call(&"players"):
+		if p != killer and p != me and p.get(&"body_mesh") != null and p.get(&"held") != null:
+			bot = p
+			break
+	_check(bot != null, "a bot with a body and a held gun is there to replay")
+	if bot == null:
+		_check(false, "skipped: no bot", "a")
+		_check(false, "skipped: no bot", "b")
+		_check(false, "skipped: no bot", "c")
+		_check(false, "skipped: no bot", "d")
+		return
+	var was: Array = [bot.mirrored, bot.mirror_fire_seq, bot.mirror_fire_kind]
+	bot.mirrored = true
+	bot.mirror_fire_seq = 7
+	bot.mirror_fire_kind = ZeeWeaponNet.KIND_SHOT
+	var aux := KillPov.aux_of(bot)
+	bot.mirrored = was[0]
+	bot.mirror_fire_seq = was[1]
+	bot.mirror_fire_kind = was[2]
+	_check(aux[2] == 7.0 and aux[3] == float(ZeeWeaponNet.KIND_SHOT), "a remote body records its fire count and kind", str(aux))
+	var row := func(seq: float, alive: bool) -> Array:
+		return [Vector3.ZERO, 0.0, 0.0, alive, 1.6] + [0.0, 0.0, seq, float(ZeeWeaponNet.KIND_SHOT)]
+	var flashes := func() -> int:
+		var n := 0
+		for f: Node in get_tree().root.find_children("*", "ZeeShotFx", true, false):
+			n += (f as ZeeShotFx).live_count()
+		return n
+	var yard: DotPlayerRagdolls = _client.get("ragdolls")
+	var body: Node3D = bot.body_mesh
+	var shown := body.visible
+	body.visible = true
+	Bodies.replay_events(bot, row.call(3.0, true), row.call(3.0, true), 0.0, false, yard)
+	var before: int = flashes.call()
+	Bodies.replay_events(bot, row.call(3.0, true), row.call(4.0, true), 1.0, false, yard)
+	var after: int = flashes.call()
+	_check(after > before, "a new fire count in the replay flashes the muzzle", "%d -> %d" % [before, after])
+	Bodies.replay_events(bot, row.call(4.0, true), row.call(4.0, true), 0.0, false, yard)
+	_check(flashes.call() == after, "the same count does not flash twice")
+	var live := yard.live().size() if yard != null else 0
+	Bodies.replay_events(bot, row.call(4.0, true), row.call(4.0, false), 1.0, true, yard)
+	_check(yard != null and yard.live().size() == live + 1 and bot.has_meta(Bodies.FALL_META), "the victim's row turning dead drops a ragdoll")
+	Bodies.restore_body(bot, [body.transform, shown])
+	await get_tree().process_frame
+	_check(not bot.has_meta(Bodies.FALL_META), "and the restore takes it away")

@@ -3,11 +3,20 @@ extends RefCounted
 ## ArenaPlayer hooks for dot-replay's [DotKillcamHost]: how a drawn body is read and posed.
 
 const KillPov := preload("arena_kill_pov.gd")
+const ArenaPlayer := preload("arena_player.gd")
 const SKIP_ACTIONS: PackedStringArray = ["dot_fps_jump", "arena_fire", "ui_cancel"]
+const SEQ_RANGE := 4096
+const SEQ_META := &"killcam_seen_seq"
+const ALIVE_META := &"killcam_seen_alive"
+const FALL_META := &"killcam_ragdoll"
+const HIDDEN_META := &"killcam_hidden_ragdolls"
+## Aux columns in a state row (5 + aux index).
+const ROW_FIRE_SEQ := 7
+const ROW_FIRE_KIND := 8
 
 
-## Gives [param host] arena's skip keys and body hooks.
-static func configure(host: DotKillcamHost) -> void:
+## Gives [param host] arena's skip keys and body hooks. [param yard_fn] returns the client's DotPlayerRagdolls (or null).
+static func configure(host: DotKillcamHost, yard_fn: Callable = Callable()) -> void:
 	host.log_channel = "arena.killcam"
 	host.skip_actions = SKIP_ACTIONS
 	host.skip_hint = "Jump or Fire to skip"
@@ -17,6 +26,60 @@ static func configure(host: DotKillcamHost) -> void:
 	if DotAddonApi.build_level("dot_replay") >= 7:  # older hosts replay bodies by speed only
 		host.set(&"pose_fn", pose_of)
 		host.set(&"apply_pose_fn", apply_pose)
+	if DotAddonApi.build_level("dot_replay") >= 8:
+		host.set(&"event_fn", func(p: Node, ra: Array, rb: Array, alpha: float, is_victim: bool) -> void:
+			replay_events(p, ra, rb, alpha, is_victim, yard_fn.call() if yard_fn.is_valid() else null))
+
+
+## What a body did between two recorded rows: its muzzle flash and tracer for each new shot, and the death ragdoll
+## the frame the victim's row turns dead.
+static func replay_events(p: Node, ra: Array, rb: Array, alpha: float, is_victim: bool, yard: Variant) -> void:
+	var row := rb if alpha >= 0.5 else ra
+	var body: Node3D = p.get(&"body_mesh")
+	var held: Node3D = p.get(&"held")
+	if row.size() > ROW_FIRE_KIND:
+		var seq := int(row[ROW_FIRE_SEQ])
+		var seen: int = p.get_meta(SEQ_META, seq)
+		p.set_meta(SEQ_META, seq)
+		var fresh := posmod(seq - seen, SEQ_RANGE)
+		if fresh > 0 and fresh < SEQ_RANGE / 2 and body != null and body.visible and held != null:
+			var kind := int(row[ROW_FIRE_KIND])
+			held.call(&"on_fired", ArenaPlayer.WATCHED_RECOIL.get(kind, Vector2(0.6, 0.1)), kind)
+	var alive: bool = row[3]
+	var was: bool = p.get_meta(ALIVE_META, alive)
+	p.set_meta(ALIVE_META, alive)
+	if is_victim and was and not alive and yard is DotPlayerRagdolls and body != null and not p.has_meta(FALL_META):
+		_fall(p, body, ra, rb, alpha, yard as DotPlayerRagdolls)
+
+
+static func _fall(p: Node, body: Node3D, ra: Array, rb: Array, alpha: float, yard: DotPlayerRagdolls) -> void:
+	var hidden: Array = []
+	for old: DotPlayerRagdoll in yard.live():
+		if old.visible:
+			old.visible = false
+			hidden.append(old)
+	body.global_position = (ra[0] as Vector3).lerp(rb[0], alpha)
+	body.global_basis = Basis(Vector3.UP, lerp_angle(deg_to_rad(ra[1]), deg_to_rad(rb[1]), alpha))
+	var was_shown := body.visible
+	body.visible = true
+	var made: Variant = p.call(&"fall_body", yard, DotPlayerDeath.new(), false)
+	body.visible = was_shown
+	if made != null:
+		p.set_meta(FALL_META, made)
+	p.set_meta(HIDDEN_META, hidden)
+
+
+## Puts back what [method replay_events] changed on [param p]: the ragdoll it made, the ones it hid, its counters.
+static func _forget(p: Node) -> void:
+	var made: Variant = p.get_meta(FALL_META) if p.has_meta(FALL_META) else null
+	if made is Node and is_instance_valid(made):
+		(made as Node).queue_free()
+	for old: Variant in (p.get_meta(HIDDEN_META) if p.has_meta(HIDDEN_META) else []):
+		if old is Node3D and is_instance_valid(old):
+			(old as Node3D).visible = true
+	for key: StringName in [SEQ_META, ALIVE_META, FALL_META, HIDDEN_META]:
+		if p.has_meta(key):
+			p.remove_meta(key)
 
 
 ## The body's skeleton pose as drawn; none for a body nobody sees (a first-person player's own).
@@ -60,6 +123,7 @@ static func state_of(p: Node) -> Array:
 
 
 static func restore_body(p: Node, saved: Array) -> void:
+	_forget(p)
 	var body: Node3D = p.get(&"body_mesh")
 	if body != null:
 		body.transform = saved[0]
