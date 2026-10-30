@@ -4,14 +4,13 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 
-## The spread crosshair through DotGameCombatFeel.drive, standing and then running, as two frames to look at:
-## screenshots/crosshair/{still,moving,air}.png, each with the cone it was drawn at in its name's log line.
-## Run through tools/render_crosshair.sh (needs a display; --headless saves empty frames).
+## The spread crosshair through DotGameCombatFeel.drive in each posture, one frame each to look at:
+## screenshots/crosshair/<phase>.png, each with the cone it was drawn at in its name's log line.
+## An argument names the weapon to hold (tools/render_crosshair.sh lmg). Run through tools/render_crosshair.sh (needs a display; --headless saves empty frames).
 
 const OUT_DIR := "screenshots/crosshair"
-const NAMES := ["still", "moving", "air"]
-const FILES := ["still.png", "moving.png", "air.png"]
-const SETTLE := [90, 50, 8]
+const NAMES := ["still", "moving", "crouched", "crouched_firing", "rested", "firing", "air"]
+const SETTLE := [90, 50, 90, 40, 120, 40, 8]
 const TICK_RATE := 64
 
 var _player: ArenaPlayer = null
@@ -22,6 +21,7 @@ var _phase := 0
 var _frames := 0
 var _move := Vector2.ZERO
 var _buttons := 0
+var _attack := false
 
 
 func _initialize() -> void:
@@ -38,6 +38,11 @@ func _initialize() -> void:
 	_player.attach_camera(100.0)
 	_player.camera.current = true
 	_player.give_default_loadout()
+	var args := OS.get_cmdline_user_args()
+	if not args.is_empty():
+		var given := _player.arsenal.give(StringName(args[0]))
+		if given.ok:
+			var _held := _player.arsenal.equip(_player.arsenal.catalogue.get_def(StringName(args[0])).slot)
 	_feel.attach(_player.arsenal)
 	var layer := CanvasLayer.new()
 	root.add_child(layer)
@@ -52,7 +57,9 @@ func _physics_process(_delta: float) -> bool:
 	cmd.move = _move
 	cmd.yaw = -90.0
 	cmd.buttons = _buttons
-	var _out := _player.simulate_tick(_tick, 1.0 / float(TICK_RATE), cmd, DotWeaponCommand.new())
+	var fire := DotWeaponCommand.new()
+	fire.set_button(DotWeaponCommand.BUTTON_ATTACK, _attack)
+	var _out := _player.simulate_tick(_tick, 1.0 / float(TICK_RATE), cmd, fire)
 	_tick += 1
 	return false
 
@@ -64,13 +71,16 @@ func _process(delta: float) -> bool:
 	if _frames < SETTLE[_phase]:
 		return false
 	var spread: float = _player.arsenal.spread_now()
-	root.get_texture().get_image().save_png(OUT_DIR.path_join(FILES[_phase]))
-	print(NAMES[_phase], ": cone ", snappedf(spread, 0.01), " degrees, crosshair spread ", snappedf(float(_cross.get("_spread_degrees")), 0.01))
+	root.get_texture().get_image().save_png(OUT_DIR.path_join(NAMES[_phase] + ".png"))
+	print(NAMES[_phase], " (", _player.arsenal.current().def.id, "): cone ", snappedf(spread, 0.01), " degrees, crosshair spread ", snappedf(float(_cross.get("_spread_degrees")), 0.01))
 	_phase += 1
 	_frames = 0
-	if _phase == 1:
-		_move = Vector2(0.0, 1.0)
-	elif _phase == 2:
+	if _phase >= NAMES.size():
+		return true
+	var phase: String = NAMES[_phase]
+	_move = Vector2(0.0, 1.0) if phase in ["moving", "air"] else Vector2.ZERO
+	_buttons = DotFpsCommand.BUTTON_CROUCH if phase.begins_with("crouched") else 0
+	if phase == "air":
 		_buttons = DotFpsCommand.BUTTON_JUMP
-		_move = Vector2(0.0, 1.0)
-	return _phase >= NAMES.size()
+	_attack = phase.ends_with("firing")
+	return false

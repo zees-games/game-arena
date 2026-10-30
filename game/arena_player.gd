@@ -1253,6 +1253,8 @@ func simulate_tick(
 	ctx.crouched = state.is_crouched()
 	ctx.sliding = state.is_sliding()
 	ctx.sprinting = state.sprinting
+	ctx.wall_running = state.is_wall_running()
+	ctx.hurt_tick = health.last_damage_tick if health.last_damage_tick >= 0 else -1
 	ctx.sprint_blocks_fire = not controller.tunables.sprint_can_shoot
 	ctx.sprint_shot_follows_barrel = controller.tunables.sprint_shot_follows_barrel
 	ctx.authority = arsenal.authority
