@@ -1187,7 +1187,7 @@ func present_own_body(mode: int, _yaw: float = 0.0) -> void:
 	_first_person.apply(body_mesh)
 
 
-## Extra metres the body trails behind as the view tips past 35 degrees down, full at 80:
+## Extra metres the body trails behind as the view tips past 60 degrees down, full at 85:
 ## straight down, the open hips (the cut where the belly bone is gone) would fill the screen.
 @export var first_person_look_down_back: float = 0.45
 
@@ -1196,7 +1196,7 @@ func present_own_body(mode: int, _yaw: float = 0.0) -> void:
 func own_body_back(pitch: float) -> float:
 	var base := FIRST_PERSON_BACK if own_body_mode >= 2 else FIRST_PERSON_BACK_LEGS
 	var down := clampf(-pitch, 0.0, 90.0)
-	return base + first_person_look_down_back * clampf((down - 35.0) / 45.0, 0.0, 1.0)
+	return base + first_person_look_down_back * clampf((down - 60.0) / 25.0, 0.0, 1.0)
 
 
 ## In first person: places your own body, when one is drawn, at the drawn feet behind the eye, with the wall-run roll.
