@@ -2,6 +2,8 @@ extends "arena_client_bots.gd"
 
 const ArenaMatchText := preload("arena_match_text.gd")
 
+const ArenaMatchText := preload("arena_match_text.gd")
+
 
 func _ready() -> void:
 	# zee-dot-weapons' art is this game's copy of it, wherever this game is mounted. A
