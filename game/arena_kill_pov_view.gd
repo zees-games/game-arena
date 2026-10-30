@@ -59,8 +59,14 @@ func _start(cam: Camera3D) -> void:
 	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(crosshair)
 	label = Label.new()
-	label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	label.position = Vector2(-260.0, -80.0)
+	# Just above the killcam's bottom bar (16% of the height), which would cover it.
+	label.anchor_left = 1.0
+	label.anchor_right = 1.0
+	label.anchor_top = 0.83
+	label.anchor_bottom = 0.83
+	label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	label.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	label.offset_right = -40.0
 	label.add_theme_font_size_override("font_size", AMMO_FONT)
 	add_child(label)
 
