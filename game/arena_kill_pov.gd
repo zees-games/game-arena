@@ -6,7 +6,22 @@ const CHANNEL := "arena.killpov"
 const HITS_META := &"kill_pov_hits"
 const RECOIL_META := &"kill_pov_recoil"
 
-## Bits of aux[10].
+## Aux slots, in the order [DotKillViewRing] records them; SIZE is the contract with the ring's AUX.
+const WEAPON := 0
+const ADS := 1
+const FIRE_SEQ := 2
+const FIRE_KIND := 3
+const MAG := 4
+const RESERVE := 5
+const SPREAD := 6
+const HITS := 7
+const KICK_PITCH := 8
+const KICK_YAW := 9
+const FLAGS := 10
+const SPEED := 11
+const SIZE := 12
+
+## Bits of FLAGS.
 const GROUNDED := 1
 const CROUCHED := 2
 const SIGNED := 4
@@ -16,9 +31,16 @@ static var _ids: Dictionary = {}
 
 ## The twelve aux floats for [param p] (layout in [DotKillViewRing]): weapon, ads, fire count, reload, mag, reserve,
 ## spread, hits, the last shot's recoil pitch and yaw (0 when this end never saw the outcome), flags, ground speed.
-static func aux_of(p: Object) -> PackedFloat32Array:
+## [param size] is the ring's AUX; a shorter ring (an older dot-replay) gets the slots it has, never an out-of-range write.
+static func aux_of(p: Object, size: int = DotKillViewRing.AUX) -> PackedFloat32Array:
+	var full := _aux_full(p)
+	full.resize(size)
+	return full
+
+
+static func _aux_full(p: Object) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
-	out.resize(DotKillViewRing.AUX)
+	out.resize(SIZE)
 	if p == null:
 		return out
 	var arsenal: Variant = p.get(&"arsenal")
@@ -27,28 +49,28 @@ static func aux_of(p: Object) -> PackedFloat32Array:
 	if arsenal != null and arsenal.current() != null:
 		var slot: Variant = arsenal.current()
 		id = slot.def.id
-		out[4] = float(slot.magazine) if slot.def.magazine > 0 else 0.0
-		out[5] = float(arsenal.ammo().count(slot.def.ammo_type)) if slot.def.ammo_type != &"" else 0.0
-		out[6] = float(p.call(&"spread_degrees"))
-	out[0] = float(int(String(id).hash() & 0xFFFFFF)) if id != &"" else 0.0
-	out[1] = 1.0 if bool(p.get(&"aim_held")) else 0.0
+		out[MAG] = float(slot.magazine) if slot.def.magazine > 0 else 0.0
+		out[RESERVE] = float(arsenal.ammo().count(slot.def.ammo_type)) if slot.def.ammo_type != &"" else 0.0
+		out[SPREAD] = float(p.call(&"spread_degrees"))
+	out[WEAPON] = float(int(String(id).hash() & 0xFFFFFF)) if id != &"" else 0.0
+	out[ADS] = 1.0 if bool(p.get(&"aim_held")) else 0.0
 	if bool(p.get(&"mirrored")):
-		out[2] = float(int(p.get(&"mirror_fire_seq")) % 4096)
-		out[3] = float(int(p.get(&"mirror_fire_kind")))
+		out[FIRE_SEQ] = float(int(p.get(&"mirror_fire_seq")) % 4096)
+		out[FIRE_KIND] = float(int(p.get(&"mirror_fire_kind")))
 	elif weapons != null:
-		out[2] = float(int(weapons.fire_seq) % 4096)
-		out[3] = float(int(weapons.fire_kind))
+		out[FIRE_SEQ] = float(int(weapons.fire_seq) % 4096)
+		out[FIRE_KIND] = float(int(weapons.fire_kind))
 		_watch_recoil(weapons as Object)
 		var kick: Vector3 = (weapons as Object).get_meta(RECOIL_META, Vector3.ZERO)
-		out[8] = kick.x
-		out[9] = kick.y
-		out[10] = SIGNED if kick.z > 0.0 else 0
-	out[7] = float(int(p.get_meta(HITS_META, 0)) % 4096)
+		out[KICK_PITCH] = kick.x
+		out[KICK_YAW] = kick.y
+		out[FLAGS] = SIGNED if kick.z > 0.0 else 0
+	out[HITS] = float(int(p.get_meta(HITS_META, 0)) % 4096)
 	var controller: Variant = p.get(&"controller")
 	if controller is DotFpsController and (controller as DotFpsController).state != null:
 		var st := (controller as DotFpsController).state
-		out[10] += (GROUNDED if st.is_grounded() else 0) + (CROUCHED if st.is_crouched() else 0)
-		out[11] = st.horizontal_speed()
+		out[FLAGS] += (GROUNDED if st.is_grounded() else 0) + (CROUCHED if st.is_crouched() else 0)
+		out[SPEED] = st.horizontal_speed()
 	return out
 
 

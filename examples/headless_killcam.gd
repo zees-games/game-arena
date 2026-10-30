@@ -4,7 +4,7 @@ const ArenaContent := preload("../game/arena_content.gd")
 const KillPov := preload("../game/arena_kill_pov.gd")
 const Bodies := preload("../game/arena_killcam_bodies.gd")
 
-const EXPECTED_CHECKS := 30
+const EXPECTED_CHECKS := 32
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -138,9 +138,12 @@ func _check_recoil(screen: Node, killer: Object) -> void:
 	add_child(cam)
 	var base := Transform3D(Basis.IDENTITY, Vector3(0.0, 50.0, 0.0))
 	var aux := KillPov.aux_of(killer)
-	_check(aux.size() == DotKillViewRing.AUX and aux.size() >= 12, "the aux layout is the twelve floats the ring records")
-	aux[8] = 2.0
-	aux[10] = KillPov.GROUNDED
+	_check(aux.size() == DotKillViewRing.AUX and KillPov.SIZE == DotKillViewRing.AUX, "the aux layout is the twelve floats the ring records")
+	_check(KillPov.aux_of(killer, 8).size() == 8 and KillPov.aux_of(null, 20).size() == 20, "a ring of another size gets that many slots, never an out-of-range write")
+	var floor_json: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://requires.floor.json"))
+	_check(int(floor_json["addons"]["dot_replay"]) >= 8, "the pack requires the dot-replay that records twelve aux floats and the event hook")
+	aux[KillPov.KICK_PITCH] = 2.0
+	aux[KillPov.FLAGS] = KillPov.GROUNDED
 	var climb := 0.0
 	var flashed := 0
 	for i in 40:
