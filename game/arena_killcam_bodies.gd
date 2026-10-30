@@ -72,10 +72,10 @@ static func _fall(p: Node, body: Node3D, ra: Array, rb: Array, alpha: float, yar
 ## Puts back what [method replay_events] changed on [param p]: the ragdoll it made, the ones it hid, its counters.
 static func _forget(p: Node) -> void:
 	var made: Variant = p.get_meta(FALL_META) if p.has_meta(FALL_META) else null
-	if made is Node and is_instance_valid(made):
+	if is_instance_valid(made) and made is Node:
 		(made as Node).queue_free()
 	for old: Variant in (p.get_meta(HIDDEN_META) if p.has_meta(HIDDEN_META) else []):
-		if old is Node3D and is_instance_valid(old):
+		if is_instance_valid(old) and old is Node3D:
 			(old as Node3D).visible = true
 	for key: StringName in [SEQ_META, ALIVE_META, FALL_META, HIDDEN_META]:
 		if p.has_meta(key):
