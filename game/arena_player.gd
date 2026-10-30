@@ -1530,11 +1530,11 @@ func wall_roll() -> float:
 ## - **Landing dip**: 6 cm at the deepest for a 16 m/s landing (a 5.8 m fall), nothing under
 ##   8 m/s, so a plain hop on flat ground (7.4 m/s) and a run of bunny hops dip nothing and a
 ##   drop off a ledge or a launch does. A 0.25 s recovery; a nod of 1 degree at the deepest.
-## - **Strafe roll**: 1 degree at a 9 m/s strafe (the run), easing in and out at 8 a second;
+## - **Strafe roll**: 1 degree at a 7.65 m/s strafe (the run), easing in and out at 8 a second;
 ##   1.5 more while sliding.
 ## - **Wall-run lean**: 6 degrees away from the wall at 6 a second, as before.
 ## - **Bound**: the three together never past 7 degrees.
-## - **Widening**: none at or under the 9 m/s run, 4 degrees (vertical; about 5 at 4:3)
+## - **Widening**: none at or under the 7.65 m/s run, 4 degrees (vertical; about 5 at 4:3)
 ##   by 15 m/s, 2 more while sliding, 1 more on a wall; easing at 4 a second.
 static func camera_motion_picks() -> DotFpsViewMotion:
 	var m := DotFpsViewMotion.new()
@@ -1544,7 +1544,7 @@ static func camera_motion_picks() -> DotFpsViewMotion:
 	m.landing_recovery = 0.25
 	m.landing_pitch = 1.0
 	m.strafe_roll = 1.0
-	m.strafe_roll_reference = 9.0
+	m.strafe_roll_reference = 7.65
 	m.strafe_roll_response = 8.0
 	m.slide_roll = 1.5
 	m.wall_run_roll = 3.5
@@ -1552,7 +1552,7 @@ static func camera_motion_picks() -> DotFpsViewMotion:
 	m.wall_run_roll_response = 6.0
 	m.roll_limit = 5.0
 	m.fov_speed_gain = 4.0
-	m.fov_speed_floor = 9.0
+	m.fov_speed_floor = 7.65
 	m.fov_speed_reference = 15.0
 	m.fov_response = 4.0
 	m.slide_fov_gain = 2.0

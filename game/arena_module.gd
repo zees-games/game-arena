@@ -9,6 +9,8 @@ const ArenaAmbience := preload("arena_ambience.gd")
 const AMBIENT_KIND := "ambience"
 ## The workbench kind of the wall-move cvar set (arena_wall*).
 const WALL_KIND := "wallmoves"
+const SPEED_KIND := "speeds"
+const SPEED_CVARS: PackedStringArray = ["arena_speed_scale", "arena_run_speed", "arena_walk_scale", "arena_sprint_scale", "arena_crouch_scale"]
 const ArenaMapConfig := preload("arena_map_config.gd")
 const ArenaIdentity := preload("arena_identity.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -1023,6 +1025,12 @@ func _start_workbench() -> void:
 	var wall_set := DotGameWorkbench.cvar_set(console, wall_types, WALL_KIND)
 	if wall_set != null:
 		wb.add_set(wall_set, "Wall moves (arena_wall*)")
+	var speed_types := {}
+	for cvar in SPEED_CVARS:
+		speed_types[cvar] = "float"
+	var speed_set := DotGameWorkbench.cvar_set(console, speed_types, SPEED_KIND)
+	if speed_set != null:
+		wb.add_set(speed_set, "Speeds (arena_speed_scale, arena_run_speed, ...)")
 	var started := wb.start()
 	if not started.ok:
 		DotLog.result(CHANNEL, "the workbench", started)

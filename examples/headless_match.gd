@@ -4186,7 +4186,7 @@ func _commands_for_tick(tick: int) -> Dictionary:
 			# Strafe, so they are not four statues: it exercises the movement-based
 			# spread and the ground friction, and it means the shots are not all
 			# fired from a standstill.
-			move.move = Vector2(sin(float(tick) * 0.05 + float(player.player_id)), 0.2)
+			move.move = Vector2(sin(float(tick) * 0.05 + float(player.player_id)), 0.25)
 
 		move.sanitise()
 		fire.sanitise()

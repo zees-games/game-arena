@@ -308,7 +308,7 @@ class Climb:
 # them directly, and `headless_match` asserts they agree with the tunables.
 
 ## Ground speed, m/s. `DotFpsTunables.max_speed`.
-const MOVE_SPEED := 9.0
+const MOVE_SPEED := 7.65
 
 ## Metres. `DotFpsTunables.jump_height`, which is the PEAK of a standing jump and not
 ## the height of something a player can climb onto by walking at it.
@@ -786,7 +786,7 @@ static func dm_atrium() -> ArenaMap:
 
 	# A plinth under the shaft. Something to land on from the ring, and the only cover
 	# inside a room with four doorways pointed at it.
-	map.add_box(AABB(Vector3(-3.0, 0.0, -3.0), Vector3(6.0, 1.2, 6.0)))
+	map.add_box(AABB(Vector3(-3.0, 0.0, -3.0), Vector3(6.0, 1.0, 6.0)))
 
 	# --- North-west stair --------------------------------------------------
 	#

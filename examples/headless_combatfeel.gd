@@ -14,7 +14,7 @@ const ArenaModuleCvars := preload("../game/arena_module_cvars.gd")
 
 const TICK_RATE := 64
 const EXPECTED_SECTIONS := 4
-const EXPECTED_CHECKS := 33
+const EXPECTED_CHECKS := 36
 
 var _checks := 0
 var _failed := 0
@@ -216,3 +216,12 @@ func _test_wiring() -> void:
 	var launch_default := ArenaPlayer.arena_tunables().launch_velocity
 	_check(launch_default >= 12.0 * 1.25 and launch_default <= 12.0 * 1.35, "the launch defaults 25 to 35 percent above the old 12 m/s", str(launch_default))
 	_check(ArenaModuleCvars.MOVEMENT_CVARS.get("arena_launch_velocity", [""])[0] == "launch_velocity" and ArenaPlayer.MOVEMENT_RULES.has("launch_velocity"), "arena_launch_velocity sets the launch and is a replicated movement rule")
+	var speeds := ArenaPlayer.arena_tunables()
+	_check(speeds.max_speed < 8.0 and speeds.max_speed > 7.0, "the arena runs about 15 percent slower than the old 9 m/s", str(speeds.max_speed))
+	var run_before := speeds.speed_for(0)
+	speeds.speed_scale = 0.5
+	_check(is_equal_approx(speeds.speed_for(0), run_before * 0.5) and is_equal_approx(speeds.speed_for(DotFpsCommand.BUTTON_CROUCH), speeds.max_speed * speeds.crouch_speed_scale * 0.5), "speed_scale scales run and crouch alike")
+	var speed_ok := true
+	for cvar in ["arena_speed_scale", "arena_run_speed", "arena_walk_scale", "arena_sprint_scale", "arena_crouch_scale"]:
+		speed_ok = speed_ok and ArenaModuleCvars.MOVEMENT_CVARS.has(cvar) and ArenaPlayer.MOVEMENT_RULES.has(ArenaModuleCvars.MOVEMENT_CVARS[cvar][0])
+	_check(speed_ok, "every speed cvar is a replicated movement rule, so prediction agrees")

@@ -7,7 +7,7 @@ static func make() -> DotFpsTunables:
 	tunables.max_velocity = 400.0
 	tunables.max_wish_speed = 0.0
 	tunables.step_height = 0.4
-	tunables.max_speed = 9.0
+	tunables.max_speed = 7.65
 	tunables.accelerate = 12.0
 	tunables.friction = 5.5
 	tunables.stop_speed = 3.0
@@ -23,9 +23,9 @@ static func make() -> DotFpsTunables:
 	tunables.sprint_speed_scale = 1.0
 	tunables.crouch_speed_scale = 0.45
 	# Crouch at a run slides: a burst and a long, low-friction carry, then a crouch. The
-	# minimum is under the 9 m/s run so any real run slides and a crouch-walk never does.
+	# minimum is under the 7.65 m/s run so any real run slides and a crouch-walk never does.
 	tunables.slide_enabled = true
-	tunables.slide_min_speed = 6.5
+	tunables.slide_min_speed = 5.5
 	tunables.slide_boost = 3.5
 	tunables.slide_max_speed = 14.0
 	tunables.slide_friction = 0.9
@@ -47,12 +47,12 @@ static func make() -> DotFpsTunables:
 	tunables.dash_cooldown = 3.0
 	# Walls: run a few steps along one, jump off it, ride it down. dot-player-controller's
 	# defaults for everything but these four (docs/wall-movement.md there, docs/modes.md here).
-	# The run needs MORE than the 9 m/s plain run along the wall, so a run is something a
-	# player does on purpose (a slide, a dash or a strafe into it): at 9 or under, every jump
+	# The run needs MORE than the 7.65 m/s plain run along the wall, so a run is something a
+	# player does on purpose (a slide, a dash or a strafe into it): at the run speed or under, every jump
 	# taken beside a wall would become a run and peak about 40% lower than the player meant.
 	# The wall jump needs no speed at all, and the slide catches a fall against a wall.
 	tunables.wall_run_enabled = true
-	tunables.wall_run_min_speed = 9.5
+	tunables.wall_run_min_speed = 8.1
 	# Touching a wall in the air starts a run (the heading turns along it); a press jumps off.
 	tunables.wall_run_auto = true
 	tunables.wall_run_on_jump = false
@@ -66,6 +66,7 @@ static func make() -> DotFpsTunables:
 ## The movement keys a server owner may change on a running server (`arena_slide*`,
 ## `arena_launch*`), and that RULES carries to every client so prediction agrees.
 const MOVEMENT_RULES: PackedStringArray = [
+	"speed_scale", "max_speed", "walk_speed_scale", "sprint_speed_scale", "crouch_speed_scale",
 	"slide_enabled", "slide_min_speed", "slide_boost", "slide_max_speed",
 	"slide_friction", "slide_duration", "slide_cooldown",
 	"launch_enabled", "launch_velocity", "launch_forward", "launch_cooldown",

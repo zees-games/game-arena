@@ -42,10 +42,10 @@ A client's `game.mode` is whatever it was built with. The server puts the mode's
 | Cue | Pick | Why |
 | --- | --- | --- |
 | Landing dip | 6 cm at 16 m/s, from 8 m/s, recovering in 0.25 s, 1 degree nod | A spring kicked in velocity: the eye goes on down about 5 cm for 50 ms after a 5 m drop and comes back, never a frame's jump. Nothing under 8 m/s, so a plain hop (7.4 m/s) and a run of bunny hops dip nothing; a ledge, a launch or a long drop does. |
-| Strafe roll | 1 degree at 9 m/s (the run), 8 a second, two stages; 1.5 more sliding | The genre's lean, small enough to read as motion and not as a tilted horizon; two stages so it eases in and out, reversing a strafe included (0.06 degrees a frame at most at 144 Hz). |
+| Strafe roll | 1 degree at 7.65 m/s (the run), 8 a second, two stages; 1.5 more sliding | The genre's lean, small enough to read as motion and not as a tilted horizon; two stages so it eases in and out, reversing a strafe included (0.06 degrees a frame at most at 144 Hz). |
 | Wall-run lean | 6 degrees away from the wall, 6 a second | As before. A drift into the wall leans toward it a fraction of a degree (0.5 at most on dm_atrium's run) before the lean away takes over: the strafe roll seeing the approach, not a wobble. |
 | Bound | the rolls together at most 7 degrees | A strafe into a wall run cannot add up past it. |
-| Widening | none up to the 9 m/s run, 4 degrees (vertical; about 5 at 4:3) by 15 m/s, 2 more sliding, 1 more on a wall, 4 a second, two stages | A plain run never changes the lens, so aim at a run is the player's field of view; a slide, a wall run, a dash or a hop chain open it a little. The aim's zoom multiplies the widened lens, from the player's own setting each frame, so nothing compounds. |
+| Widening | none up to the 7.65 m/s run, 4 degrees (vertical; about 5 at 4:3) by 15 m/s, 2 more sliding, 1 more on a wall, 4 a second, two stages | A plain run never changes the lens, so aim at a run is the player's field of view; a slide, a wall run, a dash or a hop chain open it a little. The aim's zoom multiplies the widened lens, from the player's own setting each frame, so nothing compounds. |
 
 Each is a player's setting, 0 (off) to 2 times the pick: `camera_landing_dip`, `camera_strafe_roll`, `camera_wall_lean`, `camera_speed_fov`, ACCOUNT scope (motion sickness is about the person), in General > Camera motion and at the console. `ArenaPresentation.bind_camera_motion` pushes them when the client adopts its player and again on every change.
 

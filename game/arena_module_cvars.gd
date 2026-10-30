@@ -17,6 +17,11 @@ var _cv_maxrate: DotConVar = null
 ## exactly as before; a change reaches every player now and later and, through RULES,
 ## every client, so a client never predicts a slide the server does not make.
 const MOVEMENT_CVARS := {
+	"arena_speed_scale": ["speed_scale", "Multiplier on every ground speed, 1 as set (a server-wide slowdown or speed-up)"],
+	"arena_run_speed": ["max_speed", "Running speed, m/s"],
+	"arena_walk_scale": ["walk_speed_scale", "Walk speed as a fraction of run"],
+	"arena_sprint_scale": ["sprint_speed_scale", "Sprint speed as a fraction of run"],
+	"arena_crouch_scale": ["crouch_speed_scale", "Crouch speed as a fraction of run"],
 	"arena_slide": ["slide_enabled", "Crouch at a run slides (1) or only crouches (0)"],
 	"arena_slide_boost": ["slide_boost", "Speed a slide adds when it starts, m/s (0 for none)"],
 	"arena_slide_min_speed": ["slide_min_speed", "Speed needed to slide, m/s"],
