@@ -666,18 +666,13 @@ func _build_loadouts() -> DotResult:
 	# Everything in this game is free except the launcher, and there is no entitlement
 	# service to ask. A game with unlocks binds a real source here; leaving it unset means
 	# only `free` items, which is dot-loadout's loud default.
-	# What a player owns on the site store (a scoped key) is granted on top; no backbone, no extras.
-	var site_source := DotLoadoutSiteSource.new()
-	loadouts.entitlement_source = func(key: String) -> DotLoadoutEntitlements:
+	loadouts.entitlement_source = func(_key: String) -> DotLoadoutEntitlements:
 		var owned: Array = [ArenaContent.PAID_WEAPON]
 		if utility_grenades:
 			owned.append_array(ArenaGrenades.utility_ids(ArenaContent.weapons()))
-		if site_source.client == null:
-			site_source.client = DotRegistry.get_service(&"dot_backbone_client")
-		if site_source.client != null:
-			site_source.source(key)
-			owned.append_array(site_source.ids_of(key))
 		return DotLoadoutEntitlements.of(owned)
+	# Adds what the site store says the player owns (no-op without a backbone client).
+	DotGameStoreEntitlements.attach(loadouts)
 
 	add_child(loadouts)
 	_build_loadout_command()
