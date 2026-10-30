@@ -143,6 +143,11 @@ var _fire := DotWeaponCommand.new()
 ## A weapon slot the player asked for this tick, or 0 for "no change". Cleared once
 ## sent — see [method _read_fire].
 var _wanted_slot: int = 0
+## The light on the eye and the other players' beams (dot-flashlight); the server owns on/off.
+var flash: DotFlashlight = null
+var flash_crowd: DotFlashlightCrowd = null
+var _flash_ticks := 0
+var _flash_msec := -100000
 
 ## What the server last said was left on the clock, in seconds. Negative for "no
 ## limit", which is what `DotMatch.seconds_remaining` returns and what the HUD reads as

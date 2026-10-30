@@ -255,6 +255,17 @@ var beacon: bool = false
 ## [method present].
 var beacon_marker: DotFxBeacon = null
 
+## Whether this player's flashlight is on. The server decides it ([method switch_flashlight]) and
+## replicates it ([member ArenaPlayerNet.net_flashlight]); everyone draws the beam from it.
+var flashlight: bool = false
+## Whether the map's starting state has been applied to [member flashlight] yet.
+var flashlight_ready: bool = false
+var flashlight_charge: float = 1.0
+var _flashlight_held: bool = false
+## The flashlight config the switch obeys; set only where the game decides (offline, the server).
+var flashlight_cfg: DotFlashlightConfig = null
+var flashlight_map: String = ""
+
 ## The movement this player was built with, before any class scaled it.
 ##
 ## See [method apply_class_movement]. Captured on the first application rather than at
@@ -1252,6 +1263,7 @@ func simulate_tick(
 	_command.yaw = state.yaw
 	_command.pitch = state.pitch
 	aiming = _command.is_pressed(BUTTON_AIM)
+	_flashlight_hands(_command.is_pressed(ArenaFlashlight.BUTTON), delta)
 
 	health.tick(tick, delta)
 
@@ -1983,6 +1995,23 @@ func muzzle_position() -> Vector3:
 
 func aim_direction() -> Vector3:
 	return _command.aim_direction()
+
+
+## The light follows the rising edge of the switch bit, on the machine that decides (offline or the server).
+func _flashlight_hands(pressed: bool, delta: float) -> void:
+	var edge := pressed and not _flashlight_held
+	_flashlight_held = pressed
+	if flashlight_cfg == null:
+		return
+	if not flashlight_ready:
+		flashlight_ready = true
+		flashlight = ArenaFlashlight.starts_on(flashlight_cfg, flashlight_map)
+	if edge and flashlight_cfg.enabled and DotFlashlightRules.allowed_on(flashlight_cfg, flashlight_map):
+		flashlight = not flashlight and DotFlashlightRules.can_light(flashlight_cfg, flashlight_charge)
+	if flashlight_cfg.battery:
+		flashlight_charge = DotFlashlightRules.step_charge(flashlight_cfg, flashlight_charge, flashlight, delta)
+		if flashlight and flashlight_charge <= 0.0:
+			flashlight = false
 
 
 ## The current cone half-angle, for a crosshair.

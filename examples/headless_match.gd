@@ -524,6 +524,14 @@ func _test_zee_weapons() -> void:
 	_settle(game, 900, 4)
 	_check(bashes.size() == 1, "the alt-fire bashes, once per press", str(bashes.size()))
 
+	# The flashlight: one press of its button is one switch, and holding it is not another.
+	var lit_before: bool = p.flashlight
+	for i in range(ArenaFlashlight.HOLD_TICKS):
+		_hold(game, 900, ArenaFlashlight.BUTTON)
+	_settle(game, 900, 2)
+	var lit_after: bool = p.flashlight
+	_check(lit_before != lit_after, "the flashlight button switches the light once", "%s -> %s" % [lit_before, lit_after])
+
 	# A frag: thrown, bounced, and gone off on its fuse rather than on the first wall.
 	var gone: Array = []
 	game.projectiles.detonated.connect(func(at: Vector3, s: DotWeaponSpawn) -> void:

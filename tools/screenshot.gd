@@ -382,6 +382,9 @@ func _play_glance() -> void:
 	if scale_at >= 0 and scale_at + 1 < args.size():
 		_hud.user_scale = float(args[scale_at + 1])
 
+	if OS.get_cmdline_user_args().has("--flashlight"):
+		_stage_flashlight(game)
+
 	var slot := _local.arsenal.current()
 	if slot != null and slot.def.magazine > 0:
 		slot.magazine = maxi(1, slot.def.magazine / 3)
@@ -423,6 +426,26 @@ func _play_glance() -> void:
 		] + late,
 		"wait": 34,
 	}]
+
+
+## `--glance --flashlight`: the map gone dark and the local player's flashlight on, to look at the beam.
+func _stage_flashlight(game: ArenaGame) -> void:
+	for node in root.find_children("*", "WorldEnvironment", true, false):
+		var env := (node as WorldEnvironment).environment
+		env.background_mode = Environment.BG_COLOR
+		env.background_color = Color(0.01, 0.01, 0.02)
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.02, 0.02, 0.03)
+		env.ambient_light_energy = 1.0
+	for node in root.find_children("*", "DirectionalLight3D", true, false):
+		(node as DirectionalLight3D).visible = false
+	var beam := DotFlashlight.new()
+	beam.name = "Flashlight"
+	beam.config = game.flashlight_conf()
+	beam.handle_input = false
+	beam.authoritative = false
+	_local.camera.add_child(beam)
+	beam.apply_state({"on": true})
 
 
 ## `--killcam`: the kill view as a victim sees it, played from a clip of [param killer_id]'s eye swinging onto the local

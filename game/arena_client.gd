@@ -1277,6 +1277,7 @@ func _present_frame(delta: float) -> void:
 		body.present(delta)
 	ArenaFrameProbe.add(&"bodies", t)
 
+	_present_flashlights()
 	_watch_projectiles()
 
 	_drive_spectator_camera()
@@ -1482,7 +1483,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 	var firing := mouse_drives_view() and _held(ArenaBindings.FIRE)
 
 	_fire.set_button(DotWeaponCommand.BUTTON_ATTACK, firing)
-	# The Aim key (right mouse) aims down the sights, by default; the Bash key (F) is the
+	# The Aim key (right mouse) aims down the sights, by default; the Bash key (X) is the
 	# pack's alt-fire ("quick melee"). A player who would rather bash with the Aim key turns
 	# the `right_mouse_aims` setting off. Same guard as the trigger, so a right click on a
 	# menu neither zooms nor swings a rifle butt. In a mode where the Bash key is the prop
@@ -1492,6 +1493,8 @@ func _read_fire(move: DotFpsCommand) -> void:
 	var aims := right_mouse_aims() and not props_on_e()
 	var bash := (right and not aims) or (not props_on_e() and mouse_drives_view() and _held(ArenaBindings.BASH))
 	_fire.set_button(DotWeaponCommand.BUTTON_ALT, bash)
+	_fire.set_button(ArenaFlashlight.BUTTON, _flash_ticks > 0)
+	_flash_ticks = maxi(_flash_ticks - 1, 0)
 	if player != null:
 		player.aim_held = right and aims
 	if _sampler != null:
@@ -1698,6 +1701,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		)
 		_holding = not _holding
 		return
+	if InputMap.has_action(ArenaBindings.FLASHLIGHT) and event.is_action_pressed(ArenaBindings.FLASHLIGHT):
+		switch_flashlight()
+		return
 	if props_on_e() and _is(event, ArenaBindings.BASH):
 		_ask_prop(ArenaEvents.PropAct.FREEZE)
 		return
@@ -1728,6 +1734,58 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _is(event, ArenaBindings.WEAPON_LAST):
 		# The last weapon, which is the switch players make most.
 		_wanted_slot = _last_slot
+
+
+## Asks the server for a switch (the bit is held a few ticks) and shows it here at once.
+func switch_flashlight() -> void:
+	_flash_ticks = ArenaFlashlight.HOLD_TICKS
+	_flash_msec = Time.get_ticks_msec()
+	if flash != null and is_instance_valid(flash):
+		var _asked := flash.toggle()
+
+
+## The sound manager the flashlight clicks play through, or null before audio is up.
+func _flash_audio_ref() -> DotNodeRef:
+	if presentation == null or presentation.audio == null or not presentation.audio.is_inside_tree():
+		return null
+	return DotNodeRef.of_path(presentation.audio.get_path())
+
+
+## The eye's light follows the server (but not for 0.4 s after our own switch, which shows at once); everyone else's beams follow theirs.
+func _present_flashlights() -> void:
+	if player == null or player.camera == null or game == null:
+		return
+	var cfg := game.flashlight_conf()
+	if flash == null or not is_instance_valid(flash):
+		flash = DotFlashlight.new()
+		flash.name = "Flashlight"
+		flash.config = cfg
+		flash.handle_input = false
+		flash.authoritative = false
+		flash.allowed = DotFlashlightRules.allowed_on(cfg, str(game.map.id if game.map != null else ""))
+		flash.audio = _flash_audio_ref()
+		flash.switch_requested.connect(func(_want: bool) -> void:
+			_flash_ticks = ArenaFlashlight.HOLD_TICKS
+			_flash_msec = Time.get_ticks_msec())
+		player.camera.add_child(flash)
+	if flash.get_parent() != player.camera:
+		flash.reparent(player.camera, false)
+	if Time.get_ticks_msec() - _flash_msec > 400:
+		flash.apply_state({"on": player.flashlight and player.is_alive()})
+	if flash_crowd == null or not is_instance_valid(flash_crowd):
+		flash_crowd = DotFlashlightCrowd.new()
+		flash_crowd.name = "Flashlights"
+		flash_crowd.config = cfg
+		flash_crowd.audio = _flash_audio_ref()
+		add_child(flash_crowd)
+	flash_crowd.set_viewer(camera_position())
+	var seen: Array = []
+	for other: ArenaPlayer in game.players():
+		var key: Variant = other.player_id
+		seen.append(key)
+		flash_crowd.set_lit(key, other != player and other.flashlight and other.is_alive())
+		flash_crowd.place(key, other.muzzle_position(), other.aim_direction())
+	flash_crowd.retain(seen)
 
 
 ## Whether [param event] is on [param action], pressed or released. False for an action the
@@ -2040,6 +2098,9 @@ func _start_solo_workbench() -> void:
 		wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
 	if game.noblock != null:
 		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
+	var _fl := game.flashlight_conf()
+	for set: DotProfileSet in game.flashlight_binder.profile_sets():
+		wb.add_set(set, "Flashlight")
 	add_child(wb)
 	var started := wb.start()
 	DotLog.result(CHANNEL, "the workbench", started)
@@ -2048,6 +2109,7 @@ func _start_solo_workbench() -> void:
 	_solo_binder.attach(wb.api.runtime)
 	if game.noblock != null:
 		game.noblock.binder.attach(wb.api.runtime)
+	game.flashlight_binder.attach(wb.api.runtime)
 	wb.open_changed.connect(func(open: bool) -> void:
 		_workbench_open = open
 		if open:

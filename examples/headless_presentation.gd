@@ -72,11 +72,11 @@ func _test_every_key_is_an_action() -> void:
 
 	var p := _make(false)
 	var expected := {
-		&"arena_fire": "Mouse 1", &"arena_aim": "Mouse 2", &"arena_bash": "F",
+		&"arena_fire": "Mouse 1", &"arena_aim": "Mouse 2", &"arena_bash": "X", &"arena_flashlight": "F",
 		&"arena_reload": "R", &"arena_slot_1": "1", &"arena_slot_2": "2", &"arena_slot_3": "3",
 		&"arena_slot_4": "4", &"arena_slot_5": "5", &"arena_weapon_previous": "Wheel up",
 		&"arena_weapon_next": "Wheel down", &"arena_weapon_last": "Z", &"arena_launch": "E",
-		&"arena_launch_props": "X", &"arena_punt": "G", &"dot_voice_talk": "V",
+		&"arena_launch_props": "N", &"arena_punt": "G", &"dot_voice_talk": "V",
 		&"dot_fps_walk": "Alt",
 	}
 	var wrong: Array[String] = []
@@ -156,6 +156,18 @@ func _test_every_key_is_an_action() -> void:
 	_press(DotInputBinding.from_text("Z"), false)
 	_check(res.ok and z_reloads, "Reload rebound to Z reloads on Z")
 
+	# F is the flashlight and X the melee, through the same polling path.
+	client._unhandled_input(_key_event("F", true))
+	client._read_fire(DotFpsCommand.new())
+	var f_lights := client._fire.is_pressed(ArenaFlashlight.BUTTON)
+	client._flash_ticks = 0
+	_press(DotInputBinding.from_text("X"), true)
+	client._read_fire(DotFpsCommand.new())
+	var x_bashes := client._fire.is_pressed(DotWeaponCommand.BUTTON_ALT)
+	_press(DotInputBinding.from_text("X"), false)
+	_check(f_lights and x_bashes, "F sends the flashlight button and X the melee",
+		"F %s, X %s" % [f_lights, x_bashes])
+
 	# A slot, through `_unhandled_input`: J asks for slot 3, and 3 asks for nothing.
 	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_slot_3"), "J", p.settings)
 	client._wanted_slot = 0
@@ -180,12 +192,12 @@ func _test_every_key_is_an_action() -> void:
 	client._holding = false
 	client._unhandled_input(_key_event("E", true))
 	var e_grabs := client.last_prop_asked == ArenaEvents.PropAct.GRAB
-	client._unhandled_input(_key_event("F", true))
+	client._unhandled_input(_key_event("X", true))
 	var f_freezes := client.last_prop_asked == ArenaEvents.PropAct.FREEZE
 	client._unhandled_input(_key_event("G", true))
 	var g_punts := client.last_prop_asked == ArenaEvents.PropAct.PUNT
 	_check(e_grabs and f_freezes and g_punts and client.launch_action() == &"arena_launch_props",
-		"in Siege E grabs, F freezes, G punts and the launch is X's",
+		"in Siege E grabs, X freezes, G punts and the launch is N's",
 		"grab %s freeze %s punt %s launch %s" % [e_grabs, f_freezes, g_punts, client.launch_action()])
 	res = p.bindings.rebind(p.bindings.row_for_action(&"arena_launch"), "T", p.settings)
 	client._holding = false

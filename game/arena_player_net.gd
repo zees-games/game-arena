@@ -100,6 +100,8 @@ var net_challenge_value: int = 0
 
 ## `ArenaPlayer.beacon`. Everybody's.
 var net_beacon: bool = false
+## [member ArenaPlayer.flashlight], everybody's: each client draws the beam.
+var net_flashlight: bool = false
 
 ## The last command received, retained.
 ##
@@ -181,6 +183,7 @@ func _register_net_vars() -> void:
 	replicate(&"net_challenge", DotNetVar.Type.UINT).bits(7).to_owner_only()
 	replicate(&"net_challenge_value", DotNetVar.Type.UINT).bits(16).to_owner_only()
 	replicate(&"net_beacon", DotNetVar.Type.BOOL)
+	replicate(&"net_flashlight", DotNetVar.Type.BOOL)
 
 	replicate(&"net_weapon", DotNetVar.Type.UINT).bits(ArenaContent.WEAPON_INDEX_BITS)
 	replicate(&"net_carry", DotNetVar.Type.UINT).bits(ArenaContent.carry_bits()).to_owner_only()
@@ -312,6 +315,7 @@ func pull() -> void:
 	net_challenge = clampi(player.challenge + 1, 0, 127)
 	net_challenge_value = clampi(player.challenge_value, 0, 65535)
 	net_beacon = player.beacon
+	net_flashlight = player.flashlight
 
 	# A beaconed player is relevant to everybody, wherever they are. The beacon's whole
 	# job is that the room can find this player, and a client whose interest set had cut
@@ -402,6 +406,7 @@ func _net_state_applied(tick: int) -> void:
 	player.challenge = net_challenge - 1
 	player.challenge_value = net_challenge_value
 	player.beacon = net_beacon
+	player.flashlight = net_flashlight
 
 	# The controller writes its state out to the body node during simulation, and a
 	# receiving client does not simulate this player. Without this the state moves and
@@ -492,5 +497,6 @@ func describe() -> Dictionary:
 		"fire_seq": net_fire_seq,
 		"blind": net_blind,
 		"beacon": net_beacon,
+		"flashlight": net_flashlight,
 		"state_tick": last_state_tick,
 	}

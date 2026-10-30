@@ -17,8 +17,8 @@ extends RefCounted
 ##
 ## [b]The props-mode keys are the launch's and the bash's.[/b] In a mode where players use
 ## props (`ArenaClient.props_on_e`) the Launch key grabs and drops a prop, the Bash key
-## freezes it, and the launch moves to its own row ([constant LAUNCH_PROPS], X). Not two
-## more rows on E and F: two rows on one default are a conflict the table's swap cannot
+## freezes it, and the launch moves to its own row ([constant LAUNCH_PROPS], Z). Not two
+## more rows on E and X: two rows on one default are a conflict the table's swap cannot
 ## finish (binding a third action to E would move only one of them off it).
 ##
 ## [b]No noclip key.[/b] dot-player-controller registers `dot_fps_noclip` on V, which is
@@ -42,6 +42,7 @@ const LAUNCH_PROPS := &"arena_launch_props"
 const FIRE := &"arena_fire"
 const AIM := &"arena_aim"
 const BASH := &"arena_bash"
+const FLASHLIGHT := &"arena_flashlight"
 const RELOAD := &"arena_reload"
 ## Slots 1 to 5: melee, sidearm, primary, heavy, throwable (the pack's five).
 const SLOTS: Array[StringName] = [
@@ -76,11 +77,12 @@ static func make() -> DotMenuBindings:
 	keys.add(WALK, &"bind_walk", "Walk", "Alt", "Movement")
 	keys.add(DASH, &"bind_dash", "Dash", "Shift", "Movement")
 	keys.add(LAUNCH, &"bind_launch", "Launch (grab a prop in a props mode)", "E", "Movement")
-	keys.add(LAUNCH_PROPS, &"bind_launch_props", "Launch, in a props mode", "X", "Movement")
+	keys.add(LAUNCH_PROPS, &"bind_launch_props", "Launch, in a props mode", "N", "Movement")
 
 	keys.add(FIRE, &"bind_fire", "Fire", "Mouse 1", "Weapons")
 	keys.add(AIM, &"bind_aim", "Aim (bashes with Right mouse aims off)", "Mouse 2", "Weapons")
-	keys.add(BASH, &"bind_bash", "Bash (freeze a prop in a props mode)", "F", "Weapons")
+	keys.add(BASH, &"bind_bash", "Bash (freeze a prop in a props mode)", "X", "Weapons")
+	keys.add(FLASHLIGHT, &"bind_flashlight", "Flashlight", "F", "Weapons")
 	keys.add(RELOAD, &"bind_reload", "Reload", "R", "Weapons")
 	for i in range(SLOTS.size()):
 		keys.add(SLOTS[i], StringName("bind_slot_%d" % (i + 1)),
@@ -108,4 +110,5 @@ static func make() -> DotMenuBindings:
 	# B is the loadout menu (dot-menu's `dot_menu_loadout`), where the host has it (API 6).
 	if DotAddonApi.build_level("dot_menu") >= 6 and keys.has_method(&"add_loadout"):
 		var _l: Variant = keys.call(&"add_loadout", "Weapons")
+	var _r := keys.renamed(&"bind_bash", ["F"]).renamed(&"bind_launch_props", ["X"])
 	return keys

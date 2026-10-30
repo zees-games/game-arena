@@ -1303,6 +1303,9 @@ func add_player(
 	if player_stack != null:
 		player.use_collision_mask(player_stack.player_collision_mask())
 
+	if is_authority:
+		player.flashlight_cfg = flashlight_conf()
+		player.flashlight_map = String(map.id) if map != null else ""
 	player.join_combat(combat)
 	_add_fall_damage(player)
 	combat_feel.attach(player.arsenal)
@@ -1543,6 +1546,15 @@ func make_killview_server() -> DotKillViewServer:
 
 func player_for(id: int) -> ArenaPlayer:
 	return _players.get(id)
+
+
+## The flashlight config, made (with its cfg layers) on first use so a suite that builds a game by hand has one.
+func flashlight_conf() -> DotFlashlightConfig:
+	if flashlight_config == null:
+		flashlight_config = ArenaFlashlight.make_config()
+		flashlight_binder = ArenaFlashlight.make_binder(flashlight_config)
+		DotLog.result(CHANNEL, "flashlight config", flashlight_binder.load_layers())
+	return flashlight_config
 
 
 ## Builds [member noblock] over dot-team's rules (its cfg layers; strict fails the boot) for a server or a solo game.

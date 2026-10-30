@@ -311,6 +311,9 @@ var config := ArenaConfig.new()
 
 ## Binds [member config] to cvars and the workbench; set by the server scene.
 var config_binder: DotGameConfigBinder = null
+## The flashlight's config and binder ([ArenaFlashlight]), made by [method ArenaGame.flashlight_conf].
+var flashlight_config: DotFlashlightConfig = null
+var flashlight_binder: DotGameConfigBinder = null
 ## The workbench the server scene built; [ArenaModule] starts it once the cvars it offers exist.
 var workbench: DotGameWorkbench = null
 

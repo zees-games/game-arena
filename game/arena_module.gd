@@ -164,6 +164,10 @@ func _module_load() -> DotResult:
 	if game.config_binder != null:
 		game.config_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
 		game.config_binder.bind_commands(add_command)
+	var _fl := game.flashlight_conf()
+	if game.flashlight_binder != null:
+		var _fl_cvars := game.flashlight_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
+		game.flashlight_binder.bind_commands(add_command)
 	var _rides := game.start_ride_recording(add_cvar)
 
 	add_cvar(
@@ -1044,6 +1048,8 @@ func _start_workbench() -> void:
 		game.config_binder.attach(rt)
 	if game.noblock != null:
 		game.noblock.binder.attach(rt)
+	if game.flashlight_binder != null:
+		game.flashlight_binder.attach(rt)
 	if ambient_set != null:
 		var _applied := DotGameWorkbench.bind_cvar_set(ambient_set, rt, console)
 	if wall_set != null:

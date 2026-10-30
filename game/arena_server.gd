@@ -118,6 +118,9 @@ func _start_workbench(binder: DotGameConfigBinder) -> void:
 		wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
 	if game.noblock != null:
 		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
+	var _fl := game.flashlight_conf()
+	for set: DotProfileSet in game.flashlight_binder.profile_sets():
+		wb.add_set(set, "Flashlight")
 	add_child(wb)
 	# Started by ArenaModule once the arena_ambient* cvars exist, so they are a set beside the config.
 	game.workbench = wb
