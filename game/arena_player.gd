@@ -96,6 +96,7 @@ var mirror_weapon: StringName = &""
 var mirror_fire_seq: int = 0
 var mirror_fire_kind: int = 0
 var mirror_switching: bool = false
+var mirror_reloading: bool = false
 var health: DotHealth = null
 var hitboxes: DotHitboxSet = null
 
@@ -1668,6 +1669,7 @@ func _present_held() -> void:
 	var seq := mirror_fire_seq
 	var kind := mirror_fire_kind
 	var switching := mirror_switching
+	var reloading := mirror_reloading
 
 	if not mirrored and weapons != null and arsenal != null:
 		var def := arsenal.current_def()
@@ -1675,6 +1677,7 @@ func _present_held() -> void:
 		seq = weapons.fire_seq % ZeeWeaponNet.FIRE_SEQ_WRAP
 		kind = weapons.fire_kind
 		switching = arsenal.is_switching()
+		reloading = arsenal.is_reloading()
 
 	held.visible = is_alive() and not ArenaWeaponIcons.shared.sprites
 	_present_held_sprite(id)
@@ -1687,6 +1690,8 @@ func _present_held() -> void:
 			held.clear()
 
 	held.on_switching(switching)
+	if held.has_method(&"on_reloading"):
+		held.call(&"on_reloading", reloading and is_alive())
 
 	var fired := ZeeWeaponNet.uses_between(_seen_fire_seq, seq)
 	_seen_fire_seq = seq

@@ -459,6 +459,7 @@ func _push_weapons() -> void:
 	player.mirror_fire_seq = net_fire_seq
 	player.mirror_fire_kind = net_fire_kind
 	player.mirror_switching = net_switching
+	player.mirror_reloading = net_reloading
 
 
 ## Copies the interpolated state onto the player, every frame, on a remote one.
