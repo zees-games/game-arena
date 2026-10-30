@@ -253,20 +253,15 @@ class World:
 			n += 1 if l.has("from") else 0
 		return n
 
-	## Joins the imported map's ladders into [param nav] as one-way climbs and hands the brain their geometry (dot-bot 9).
+	## Joins the imported map's ladders into [param nav] as one-way climbs and hands the brain their geometry (dot-bot 10).
 	func _link_ladders(nav: DotBotNav) -> void:
 		_ladders = null
 		ladder_fn = Callable()
 		var mechanics: Variant = (game.get("map") as Object).get("mechanics")
-		if DotAddonApi.build_level("dot_bot") < 9 or not (mechanics is Object) or (mechanics as Object).get("ladders").is_empty():
+		if DotAddonApi.build_level("dot_bot") < 10 or not (mechanics is Object) or (mechanics as Object).get("ladders").is_empty():
 			return
-		var links := DotBotLinks.new()
-		links.drops = false
-		for box: AABB in (mechanics as Object).get("ladders"):
-			links.ladders.append({"box": box})
-		var stats := links.join(nav)
-		DotLog.debug(CHANNEL, "ladders linked", {"ladders": links.ladders.size(), "edges": int(stats.get("ladders", 0))})
-		if int(stats.get("ladders", 0)) > 0:
+		var links := DotBotLinks.link_ladders(nav, (mechanics as Object).get("ladders"))
+		if links != null:
 			_ladders = links
 			ladder_fn = links.ladder_of
 

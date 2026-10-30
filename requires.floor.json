@@ -2,7 +2,7 @@
   "format": 1,
   "addons": {
     "arena_weapons": 5,
-    "dot_bot": 9,
+    "dot_bot": 10,
     "dot_loadout": 1,
     "dot_menu": 5,
     "dot_player_controller": 2,
