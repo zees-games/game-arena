@@ -45,7 +45,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 187
+const CHECKS := 188
 
 
 var _server: DotServer = null
@@ -1397,6 +1397,8 @@ func _test_loadout_command() -> void:
 	var offer: Dictionary = cmd.call(&"offer", ArenaGame.storage_key(77))
 	_check(_server.console.find_cvar("mp_loadout_random") != null and bool((offer.get("random", {}) as Dictionary).get("enabled", false)),
 		"the offer advertises Random while mp_loadout_random is on")
+	_check(_server.console.find_cvar("mp_loadout_random_on_spawn") != null and int((offer.get("random", {}) as Dictionary).get("spawn", 0)) == 1,
+		"the offer carries the Every spawn rule (mp_loadout_random_on_spawn 1) so the menu shows the toggle")
 	# One key per roll: a player's own publishes are rate-limited, and that is not what this asks.
 	var seen := {}
 	var rolled_ok := true
