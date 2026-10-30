@@ -7,10 +7,17 @@ cd "$(dirname "$0")/.."
 rm -rf screenshots/weapons
 extra=()
 [ "${1:-}" = "--zee" ] && extra=(-- --arena-no-weapon-skins)
-# Exits 1 when an aimed gun hides the screen's middle (render_weapons.gd's see-through check).
+# Exits 1 when an aimed gun hides the screen's middle (render_weapons.gd's see-through check),
+# or when the run prints any "must be normalized" error (a rotation built from an unnormalised axis).
 status=0
+log=$(mktemp)
 xvfb-run -a -s "-screen 0 1920x1080x24" timeout 600 godot --path . --resolution 1920x1080 \
-  --script tools/render_weapons.gd "${extra[@]}" > >(grep -E 'wrote|skin packs|ERROR|SCRIPT|see-through|FAIL' || true) 2>&1 || status=$?
+  --script tools/render_weapons.gd "${extra[@]}" > "$log" 2>&1 || status=$?
+grep -E 'wrote|skin packs|ERROR|SCRIPT|see-through|FAIL' "$log" | sort | uniq -c | sort -rn | head -20 || true
+bad=$(grep -c 'must be normalized' "$log" || true)
+echo "normalized-axis errors: $bad"
+rm -f "$log"
+[ "$bad" -gt 0 ] && [ "$status" -eq 0 ] && status=1
 # The sheet needs Pillow, which a render box may lack; the frames and the check stand without it.
 python3 -I - <<'PY' || echo "no sheet: python3 with Pillow is needed"
 import glob, os
