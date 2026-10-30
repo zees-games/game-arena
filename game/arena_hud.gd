@@ -66,12 +66,14 @@ var remaining_override: float = NAN
 var keys: Dictionary = {
 	&"slide": "C", &"launch": "E", &"dash": "Shift", &"jump": "Space",
 	&"scoreboard": "Tab", &"menu": "Esc", &"chat": "Y", &"reload": "R", &"help": "H",
-	&"maps": "M", &"loadout": "", &"roam": "T",
+	&"maps": "M", &"loadout": "", &"roam": "T", &"use": "E",
 }
 
 ## The spectator's key hint ("Free camera", "Back to players"), set by the client while the
 ## viewer is dead and may roam; empty otherwise. Drawn in the prompt line.
 var roam_hint: String = ""
+## "Pick up Assault Rifle" while a dropped weapon you can take is looked at; empty otherwise.
+var use_hint: String = ""
 
 ## Seconds until the portraits are read again: a ranked row a few times a second is a
 ## row that keeps up, and once a frame is ten lookups for nothing.
@@ -1356,6 +1358,8 @@ func present_body() -> void:
 			slide_label.show_prompt("Cancel slide", str(keys[&"slide"]))
 		elif live and player.is_alive() and _needs_reload():
 			slide_label.show_prompt("Reload", str(keys[&"reload"]))
+		elif live and player.is_alive() and use_hint != "":
+			slide_label.show_prompt(use_hint, str(keys[&"use"]))
 		elif roam_hint != "" and player != null and not player.is_alive():
 			slide_label.show_prompt(roam_hint, str(keys[&"roam"]))
 		else:

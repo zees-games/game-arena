@@ -14,7 +14,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 11
+const EXPECTED_CHECKS := 17
 
 var _checks := 0
 var _failed := 0
@@ -33,16 +33,23 @@ func _check(condition: bool, what: String, detail: String = "") -> void:
 	print("  [%s] %s%s" % ["ok" if condition else "FAIL", what, ("  (" + detail + ")") if detail != "" else ""])
 
 
-func _press(down: bool) -> DotWeaponCommand:
+func _press(down: bool, button: int = DotWeaponCommand.BUTTON_DROP) -> DotWeaponCommand:
 	var c := DotWeaponCommand.new()
-	c.set_button(DotWeaponCommand.BUTTON_DROP, down)
+	c.set_button(button, down)
 	return c
 
 
-func _step(game: ArenaGame, id: int, down: bool, ticks: int) -> void:
+func _step(game: ArenaGame, id: int, down: bool, ticks: int, button: int = DotWeaponCommand.BUTTON_DROP) -> void:
 	for _k in ticks:
-		game.tick({id: [DotFpsCommand.new(), _press(down)]})
+		game.tick({id: [DotFpsCommand.new(), _press(down, button)]})
 		await get_tree().physics_frame
+
+
+func _meshes(node: Node) -> int:
+	var n := 1 if node is MeshInstance3D and (node as MeshInstance3D).is_visible_in_tree() else 0
+	for c in node.get_children():
+		n += _meshes(c)
+	return n
 
 
 func _run() -> void:
@@ -76,6 +83,7 @@ func _run() -> void:
 	rules.key_enabled = true
 
 	var held_id: StringName = player.arsenal.current().id()
+	rules.auto_pickup = true
 	await _step(game, 21, true, 1)
 	await _step(game, 21, true, 3)
 	_check(drops.count() == 1, "the key throws the weapon in hand, once per press", str(drops.count()))
@@ -90,6 +98,29 @@ func _run() -> void:
 	var back = player.arsenal.current()
 	_check(drops.count() == 0, "an empty slot in reach picks it back up", str(drops.count()))
 	_check(back != null, "and the player holds a weapon again")
+
+	rules.auto_pickup = false
+	drops.draws = true
+	player.hold(ArenaContent.DEFAULT_SLOT)
+	var gun = player.arsenal.current()
+	gun.magazine = 7
+	var gun_slot: int = gun.def.slot
+	await _step(game, 21, true, 1)
+	await _step(game, 21, false, 1)
+	_check(drops.count() == 1, "the key throws the gun for the use test", str(drops.count()))
+	var lying: Node3D = drops.get("_entries").values()[0]["body"]
+	for _k in TICK_RATE * 2:
+		await _step(game, 21, false, 1)
+	_check(_meshes(lying) > 0, "a dropped weapon has a visible mesh after it lands", str(_meshes(lying)))
+	_check(absf(-lying.global_basis.z.y) < 0.8, "and it lies down rather than standing on end")
+	player.controller.state.position = lying.global_position + Vector3(0.0, 0.0, 0.5)
+	await _step(game, 21, false, TICK_RATE)
+	_check(drops.count() == 1, "with auto pickup off, standing on it takes nothing", str(drops.count()))
+	await _step(game, 21, true, 2, DotWeaponCommand.BUTTON_USE)
+	await _step(game, 21, false, 2, DotWeaponCommand.BUTTON_USE)
+	_check(drops.count() == 0, "the use key picks it up", str(drops.count()))
+	var back_gun = player.arsenal.weapons_in(gun_slot)
+	_check(not back_gun.is_empty() and back_gun[0].magazine == 7, "with the magazine it lay with", str(back_gun[0].magazine if not back_gun.is_empty() else -1))
 
 	player.hold(ArenaContent.DEFAULT_SLOT)
 	rules.pickup_radius = 0.0

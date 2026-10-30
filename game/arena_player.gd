@@ -1085,13 +1085,16 @@ func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath, gun_prop: bool = 
 	# Your own body in first person has no head; the one that falls has.
 	if figure != null:
 		figure.hide_head = false
-	# The gun goes down with the hand that held it rather than hanging in the air.
+	# The gun leaves the body first: copied into the ragdoll it stays on end in the raised hand.
+	var gun_shown := held != null and held.visible
+	if gun_shown and gun_prop:
+		var _dropped := yard.drop_prop(held, controller.state.velocity)
+	if gun_shown:
+		held.visible = false
 	var made := yard.spawn(body_mesh, death, controller.state.velocity)
 	_fell = made != null or not body_mesh.visible
-	if _fell and held != null:
-		if gun_prop:
-			var _dropped := yard.drop_prop(held, controller.state.velocity)
-		held.visible = false
+	if held != null and not _fell:
+		held.visible = gun_shown
 	return made
 
 

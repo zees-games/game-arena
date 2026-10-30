@@ -1360,6 +1360,17 @@ func _on_detonated(at: Vector3, _spawn: DotWeaponSpawn) -> void:
 	if presentation != null:
 		presentation.on_explosion(at, camera_position())
 
+## The prompt for the dropped weapon in front of the player, which the use key takes; empty when none.
+func _pickup_hint() -> String:
+	if game.weapon_drops == null or player == null or not player.is_alive() or player.arsenal == null:
+		return ""
+	var found := game.weapon_drops.prompt_for(player.arsenal, player.camera.global_position, -player.camera.global_basis.z, game.weapon_drop_class_of(player.player_id))
+	if found.is_empty() or not bool(found["can_take"]):
+		return ""
+	var def: Variant = player.arsenal.catalogue.get_def(StringName(found["weapon"]))
+	return "Pick up %s" % (def.name_or_id() if def != null else str(found["weapon"]))
+
+
 
 ## Where a dead player looks.
 ##
@@ -1382,6 +1393,7 @@ func _drive_spectator_camera() -> void:
 	if not game.spectate.is_spectating(id):
 		if hud != null:
 			hud.roam_hint = ""
+			hud.use_hint = _pickup_hint()
 		if not player.camera.current:
 			player.camera.current = true
 		return
@@ -1488,6 +1500,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
 	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and _held(ArenaBindings.RELOAD))
 	_fire.set_button(DotWeaponCommand.BUTTON_DROP, mouse_drives_view() and _held(ArenaBindings.WEAPON_DROP))
+	_fire.set_button(DotWeaponCommand.BUTTON_USE, mouse_drives_view() and _held(ArenaBindings.USE))
 	_note_held_slot()
 	_fire.yaw = move.yaw
 	_fire.pitch = move.pitch
@@ -1986,6 +1999,7 @@ func _hud_keys() -> void:
 	hud.keys[&"chat"] = table.key_for(ArenaBindings.CHAT)
 	hud.keys[&"scoreboard"] = table.key_for(ArenaBindings.SCOREBOARD)
 	hud.keys[&"reload"] = table.key_for(ArenaBindings.RELOAD)
+	hud.keys[&"use"] = table.key_for(ArenaBindings.USE)
 	hud.keys[&"help"] = table.key_for(DotMenuBindings.HELP_ACTION)
 	hud.keys[&"maps"] = table.key_for(&"dot_menu_maps")
 	hud.keys[&"loadout"] = table.key_for(&"dot_menu_loadout") if loadout_menu != null else ""

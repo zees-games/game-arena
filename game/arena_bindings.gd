@@ -54,6 +54,7 @@ const WEAPON_NEXT := &"arena_weapon_next"
 const WEAPON_LAST := &"arena_weapon_last"
 const PUNT := &"arena_punt"
 const WEAPON_DROP := &"arena_weapon_drop"
+const USE := &"arena_use"
 ## First or third person, where the server allows it (`mp_forceview`).
 const VIEW := &"arena_view"
 ## The spectator's free camera, on and off (`mp_freeroam`). Its flying keys are the movement keys.
@@ -88,6 +89,7 @@ static func make() -> DotMenuBindings:
 	keys.add(WEAPON_NEXT, &"bind_weapon_next", "Next weapon", "Wheel down", "Weapons")
 	keys.add(WEAPON_LAST, &"bind_weapon_last", "Last weapon", "Z", "Weapons")
 	keys.add(WEAPON_DROP, &"bind_weapon_drop", "Drop the weapon in hand (picks up the one at your feet)", "Q", "Weapons")
+	keys.add(USE, &"bind_use", "Pick up the dropped weapon you are looking at", "E", "Weapons")
 	keys.add(PUNT, &"bind_punt", "Punt a prop", "G", "Weapons")
 
 	keys.add(CHAT, &"chat_open_key", "Chat", "Y", "Chat", DotSettingsDef.Scope.ACCOUNT)

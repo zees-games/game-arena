@@ -1592,7 +1592,22 @@ func _test_bodies_fall() -> void:
 	fall.reaction = &"limp"
 	fall.direction = Vector3(1, 0, 0)
 	fall.damage = 80.0
-	var body := player.fall_body(yard, fall)
+	var gun_mesh := BoxMesh.new()
+	var gun_node := MeshInstance3D.new()
+	gun_node.mesh = gun_mesh
+	player.held = ZeeWorldModel.new()
+	player.held.add_child(gun_node)
+	player.body_mesh.add_child(player.held)
+	var body := player.fall_body(yard, fall, false)
+	var gun_in_ragdoll := false
+	if body != null:
+		for m in body.find_children("*", "MeshInstance3D", true, false):
+			gun_in_ragdoll = gun_in_ragdoll or (m as MeshInstance3D).mesh == gun_mesh
+	_check(not gun_in_ragdoll and not player.held.visible,
+		"the held gun is not copied into the falling body (it would stay on end in the hand)")
+	player.body_mesh.remove_child(player.held)
+	player.held.free()
+	player.held = null
 	_check(body != null and body.style == DotPlayerRagdollRules.Style.RAGDOLL and body.part_count() == 6,
 		"the stock avatar falls as a six-part ragdoll (%s)" % (str(body.describe()) if body != null else "none"))
 	_check(not player.body_mesh.visible, "and the standing figure is hidden")

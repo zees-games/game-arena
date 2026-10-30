@@ -8,7 +8,8 @@ static func build(game) -> void:
 	layer.name = "WeaponDrops"
 	layer.rules = game.weapon_drop_rules
 	layer.is_authority = game.is_authority
-	layer.draws = not game.headless
+	# `game.headless` is the collision backend and is true on every client; a screen decides drawing.
+	layer.draws = not DotPlatform.is_headless()
 	layer.collision_mask = game.ragdoll_rules.collision_mask
 	layer.keep_slots = [ZeeWeaponIds.SLOT_MELEE]
 	layer.look_of = look
@@ -22,21 +23,27 @@ static func teardown(game) -> void:
 		game.weapon_drops.queue_free()
 		game.weapon_drops = null
 	game.drop_held.clear()
+	game.use_held.clear()
 
 
-## The drop key's rising edge throws the weapon in hand along the aim; every tick an empty slot
-## takes a dropped weapon in reach, which is also how the swap works.
+## The drop key's rising edge throws the weapon in hand along the aim; the use key's takes the
+## dropped weapon looked at; with `sv_weapon_drop_auto` an empty slot also takes one in reach.
 static func input(game, id: int, player, pair: Array) -> void:
 	if game.weapon_drops == null or not game.is_authority or pair.size() < 2 or pair[1] == null:
 		return
 	var held: bool = (pair[1] as DotWeaponCommand).is_pressed(DotWeaponCommand.BUTTON_DROP)
 	var was: bool = game.drop_held.get(id, false)
 	game.drop_held[id] = held
+	var use_now: bool = (pair[1] as DotWeaponCommand).is_pressed(DotWeaponCommand.BUTTON_USE)
+	var used: bool = game.use_held.get(id, false)
+	game.use_held[id] = use_now
 	var def := class_def_of(game, id)
 	var velocity: Vector3 = player.controller.state.velocity
 	if held and not was:
 		var _id: int = game.weapon_drops.throw(player.arsenal, player.muzzle_position(), player.aim_direction(), id, def, velocity)
-	elif game.weapon_drops.count() > 0:
+	elif use_now and not used and game.weapon_drops.count() > 0:
+		var _used: int = game.weapon_drops.use(player.arsenal, player.muzzle_position(), player.aim_direction(), id, def)
+	elif game.weapon_drops.rules.resolve(def).auto_pickup and game.weapon_drops.count() > 0:
 		var _taken: int = game.weapon_drops.take_for(player.arsenal, player.controller.state.position + Vector3.UP * 0.5, id, def)
 
 

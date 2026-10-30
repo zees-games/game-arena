@@ -232,6 +232,13 @@ var drops: ArenaDrops = null
 var weapon_drops: DotWeaponDrops = null
 var weapon_drop_rules: DotWeaponDropRules = DotWeaponDropRules.new()
 var drop_held: Dictionary = {}
+## Per player: whether the use key was down last tick, for its rising edge.
+var use_held: Dictionary = {}
+
+
+## The player-class def that overrides drop rules for [param id], or null.
+func weapon_drop_class_of(id: int) -> DotPlayerClassDef:
+	return ArenaWeaponDropWiring.class_def_of(self, id)
 
 ## Kills since each player last died. Authority side; a client counts its own from KILL.
 var streaks: Dictionary = {}
