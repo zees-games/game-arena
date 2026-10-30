@@ -63,7 +63,9 @@ static func restore_body(p: Node, saved: Array) -> void:
 	var body: Node3D = p.get(&"body_mesh")
 	if body != null:
 		body.transform = saved[0]
-		body.visible = saved[1]
+		# A remote body saved hidden while down is alive again by now: the respawn drew it, and the
+		# snapshot would leave a live bot invisible. A body attached for the replay stays hidden after it.
+		body.visible = saved[1] or (saved.size() < 3 and bool(p.call(&"is_alive")))
 
 
 static func place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: float, speed: float, touched: Dictionary) -> void:
@@ -79,7 +81,7 @@ static func place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: f
 			return
 	if not touched.has(p):
 		# A body attached only for the replay (a first-person player's own) goes back hidden.
-		touched[p] = [body.transform, false if attached else body.visible]
+		touched[p] = [body.transform, false if attached else body.visible] + ([true] if attached else [])
 	body.visible = shown
 	if not shown:
 		return
