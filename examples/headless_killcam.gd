@@ -3,7 +3,7 @@ extends DotGameCheckSuite
 const ArenaContent := preload("../game/arena_content.gd")
 const KillPov := preload("../game/arena_kill_pov.gd")
 
-const EXPECTED_CHECKS := 22
+const EXPECTED_CHECKS := 23
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -135,6 +135,7 @@ func _check_recoil(screen: Node, killer: Object) -> void:
 	add_child(cam)
 	var base := Transform3D(Basis.IDENTITY, Vector3(0.0, 50.0, 0.0))
 	var aux := KillPov.aux_of(killer)
+	_check(aux.size() == DotKillViewRing.AUX and aux.size() >= 12, "the aux layout is the twelve floats the ring records")
 	aux[8] = 2.0
 	aux[10] = KillPov.GROUNDED
 	var climb := 0.0
