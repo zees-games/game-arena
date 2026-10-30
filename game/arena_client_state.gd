@@ -94,6 +94,9 @@ var killcam: DotKillcamHost = null
 
 ## The kill view: the killer's replayed eye, in place of the death camera ([DotKillViewClient]).
 var killview: DotKillViewClient = null
+
+## Solo only: the server half of the kill view, run in this process (a connected game has the bridge's).
+var solo_killview: DotKillViewServer = null
 var winner_reveal: DotWinnerReveal = null
 var _reveal_hid: Dictionary = {}
 var _seen_match_state: int = -1
@@ -129,9 +132,8 @@ var _profile_link: DotNetProfileLink = null
 var _profile_runtime: DotProfileRuntime = null
 var _workbench_open := false
 var _sampler: DotFpsSampler = null
-## Refuses the sights for a moment after the local player is hit (sv_unscope_hit).
-var _aim_break := DotFpsAimBreak.new()
-var _hit_wobble_applied := Vector2.ZERO
+## The platform's hit flinch: shake, aim wobble, and the sights refused after a hit (sv_unscope_hit).
+var _flinch: DotGameHitFlinch = null
 ## Degrees of a wall-run attach turn not yet applied to the view.
 var _view_turn_left := 0.0
 const VIEW_TURN_RATE := 22.0

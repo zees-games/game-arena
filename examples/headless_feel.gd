@@ -1,5 +1,6 @@
 extends DotGameCheckSuite
 
+const ArenaContent := preload("../game/arena_content.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
@@ -198,10 +199,10 @@ func _run() -> void:
 	await _teardown()
 
 	# The total the section counter cannot be: a script error aborts the rest of a section
-	# after it announced itself. Offline 5, moves 7, boot 5, connect 4, and 4 a window
+	# after it announced itself. Offline 9, moves 7, boot 5, connect 4, and 4 a window
 	# (3 where the eye is not judged).
 	if _only == "" and _completed == _entered:
-		var expected := 5 + 7 + 5 + 4
+		var expected := 9 + 7 + 5 + 4
 		for window in WINDOWS:
 			expected += 4 if bool(window[8]) else 3
 		_check(_passed + _failed == expected, "every check ran (%d of %d)" % [_passed + _failed, expected])
@@ -292,6 +293,29 @@ func _wait(seconds: float) -> void:
 
 # --- Offline ----------------------------------------------------------------
 
+## Solo has no bridge, so the client runs the kill view: a bot's kill plays the killer's view and holds the respawn.
+func _test_offline_kill_view(client: Node, bots: Dictionary) -> void:
+	var g: ArenaGame = client.get("game")
+	var me: ArenaPlayer = client.get("player")
+	var view = client.get("killview")
+	_check(view != null and client.get("solo_killview") != null and g.killview_rules.enabled, "solo: the kill view is built and on")
+	if view == null or bots.is_empty():
+		return
+	var killer: ArenaPlayer = bots[bots.keys()[0]]
+	var played := await _until(func() -> bool:
+		if me.is_alive():
+			var hit := DotDamage.make(killer.player_id, me.player_id, 1000.0, g.combat.damage_type(ArenaContent.DAMAGE_BULLET))
+			hit.weapon_id = &"smg"
+			hit.tick = g.current_tick()
+			g.combat.apply_damage(hit)
+		return view.is_active(), 30.0)
+	_check(played, "solo: a bot's kill starts the kill view on the local player", "alive=%s held=%s gate=%s" % [me.is_alive(), client.get("solo_killview")._held, g.can_be_harmed(me.player_id)])
+	var ended := await _until(func() -> bool: return not view.is_active(), 20.0)
+	_check(ended, "solo: the replay ends by itself")
+	var back := await _until(func() -> bool: return me.is_alive(), 20.0)
+	_check(back, "solo: the victim respawns once it has played")
+
+
 ## The wall retract answers a wall the runner passes close to, which is the point of it and not bob or sway.
 func _zero_wall_retract(client: Node) -> void:
 	var p: ArenaPlayer = client.get("player")
@@ -347,6 +371,8 @@ func _test_offline() -> void:
 	_check_others(w, "the bots are drawn between ticks: no frame more than %.1f cm off their motion", 0.02)
 	_check_view_model(w)
 	_starved_reason = ""
+
+	await _test_offline_kill_view(client, bots)
 
 	_offline_bots = {}
 	client.queue_free()

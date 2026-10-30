@@ -1808,17 +1808,17 @@ func tick(commands: Dictionary = {}) -> void:
 
 	var shots: Array[DotShot] = []
 	var delta := 1.0 / float(tick_rate)
-
 	_pre_vy.clear()
+
 	for id in player_ids():
 		var player: ArenaPlayer = _players[id]
 
 		if not player.is_alive():
 			continue
 
-		var pair: Array = commands.get(id, [])
 		_pre_vy[id] = player.controller.state.velocity.y
 
+		var pair: Array = commands.get(id, [])
 		var move: DotFpsCommand = pair[0] if pair.size() > 0 else DotFpsCommand.new()
 		var fire: DotWeaponCommand = pair[1] if pair.size() > 1 else DotWeaponCommand.new()
 
@@ -1859,10 +1859,10 @@ func tick(commands: Dictionary = {}) -> void:
 		if bullet_bridge != null:
 			bullet_bridge.tick(float(_tick))
 
-	# After the shots, before everything that can end the round: a hurt volume that kills
 	if is_authority:
 		_resolve_stomps()
 
+	# After the shots, before everything that can end the round: a hurt volume that kills
 	# somebody is a death the win check below has to count this tick.
 	if is_authority:
 		_hurt_from_map()

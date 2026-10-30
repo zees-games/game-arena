@@ -107,6 +107,11 @@ func _ready() -> void:
 	_grab_mouse()
 	platform.slide_settings = presentation.settings
 	DotLog.result(CHANNEL, "the platform", platform.setup())
+	_flinch = platform.add_hit_flinch(
+		func() -> Variant: return _sampler,
+		func() -> Variant: return player.camera if player != null else null,
+		func() -> bool: return player != null and player.aim_held,
+		func() -> Variant: return player.controller.tunables if player != null and player.controller != null else null)
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
 	_suspend_input(platform.is_input_blocked())
@@ -532,7 +537,8 @@ func _on_hit(info: Dictionary) -> void:
 	_draw_body_hit(point)
 
 
-## A stomp landed somewhere: its sound and puff where it happened.
+## A kill's medals and points, as the server judged them. Every client hears every
+## award; the HUD draws only the followed player's own and the nemesis line on their death.
 func _on_stomp(info: Dictionary) -> void:
 	if presentation != null:
 		presentation.on_stomp(info["point"], StringName(info["sound"]), StringName(info["effect"]))
@@ -543,8 +549,6 @@ func _on_grenade_fx(info: Dictionary) -> void:
 		presentation.on_grenade_fx(info, player.player_id if player != null else 0)
 
 
-## A kill's medals and points, as the server judged them. Every client hears every
-## award; the HUD draws only the followed player's own and the nemesis line on their death.
 func _on_award(info: Dictionary) -> void:
 	if hud == null or game == null:
 		return
@@ -577,7 +581,23 @@ func _build_killview() -> void:
 	killview.stage = killcam
 	killview.respawn_requested.connect(func() -> void:
 		if bridge != null:
-			bridge.send_request(ArenaEvents.Ask.RESPAWN))
+			bridge.send_request(ArenaEvents.Ask.RESPAWN)
+		elif solo_killview != null:
+			var _skipped := solo_killview.skip(player.player_id if player != null else 0, game.current_tick()))
+	if _offline and game.killview_rules.enabled:
+		solo_killview = game.make_killview_server()
+
+
+## Solo: the bridge's per-tick record and delivery, in this process. Only the local player's clip is played.
+func _tick_solo_killview() -> void:
+	if solo_killview == null or not game.killview_rules.enabled:
+		return
+	var tick := game.current_tick()
+	var now := float(tick) / float(game.tick_rate)
+	solo_killview.record(now)
+	for ready: Dictionary in solo_killview.collect(now, tick):
+		if player != null and int(ready["victim"]) == player.player_id:
+			_on_killview(ready["clip"], ready["info"])
 
 
 ## The server sent the replay of the view that killed this player. Not over the final killcam.
@@ -1080,6 +1100,7 @@ func _physics_step(delta: float) -> void:
 		if game != null:
 			_drive_bots()
 			game.tick(_local_commands(move))
+			_tick_solo_killview()
 		return
 
 	if net == null or not net.is_running() or bridge == null:
@@ -1555,7 +1576,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 	# menu neither zooms nor swings a rifle butt. In a mode where the Bash key is the prop
 	# tool's freeze, the bash is the Aim key's whatever the setting says.
 	var right := mouse_drives_view() and _held(ArenaBindings.AIM) \
-		and not _aim_break.blocked(Time.get_ticks_msec() * 0.001)
+		and not _flinch.blocked()
 	var aims := right_mouse_aims() and not props_on_e()
 	var bash := (right and not aims) or (
 		not props_on_e() and mouse_drives_view() and _held(ArenaBindings.BASH)
@@ -1914,7 +1935,7 @@ func _on_local_damaged(damage: DotDamage) -> void:
 	if player != null and player.controller != null:
 		var held := player.weapons.current_def() if player.weapons != null else null
 		var scale := game.ads_rules.hit_flinch_for(held.id) if held != null and game != null else 1.0
-		_aim_break.note_hit(Time.get_ticks_msec() * 0.001, player.controller.tunables, damage.amount, scale)
+		_flinch.note_hit(damage.amount, scale)
 	if presentation != null:
 		presentation.on_hurt(damage.amount)
 
@@ -1934,25 +1955,9 @@ func _on_local_died(_damage: DotDamage) -> void:
 func _apply_shake() -> void:
 	if player == null or player.camera == null or presentation == null:
 		return
-	# Handed to the player rather than written onto the camera. `ArenaPlayer.present` is
-	# the one place the camera's transform is set -- it says so in its own comment -- and a
-	# second writer would fight it every frame for the same value.
-	var now := Time.get_ticks_msec() * 0.001
-	var hit := _aim_break.shake(now)
-	player.camera_offset = presentation.camera_shake() + player.camera.global_transform.basis * Vector3(0.0, hit.y, hit.z)
-	player.camera_roll = presentation.camera_roll() + deg_to_rad(hit.x)
-	_apply_hit_wobble(now)
-
-
-## Moves the aim by the change in the hit wobble since last frame, so the shots go where the sights wobble to; none at the hip.
-func _apply_hit_wobble(now: float) -> void:
-	if _sampler == null:
-		return
-	var target := _aim_break.wobble(now) if player.aim_held else Vector2.ZERO
-	var step := target - _hit_wobble_applied
-	_hit_wobble_applied = target
-	if step != Vector2.ZERO:
-		_sampler.look_at_angles(_sampler.yaw + step.x, _sampler.pitch + step.y)
+	# Handed to the player rather than written onto the camera: `ArenaPlayer.present` is the one place its transform is set. The hit flinch is the platform's, applied after it.
+	player.camera_offset = presentation.camera_shake()
+	player.camera_roll = presentation.camera_roll()
 
 
 ## The field of view to use: the player's own, under any cap a server has applied.
