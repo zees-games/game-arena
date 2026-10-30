@@ -10,6 +10,7 @@ const GAME_ID := "game-arena"
 const KEYS := {
 	"arena_surf": {"type": "int", "min": 0, "max": 1},
 	"arena_surf_airaccelerate": {"type": "float", "min": 0.0},
+	"arena_spawn_mode": {"type": "string"},
 }
 
 

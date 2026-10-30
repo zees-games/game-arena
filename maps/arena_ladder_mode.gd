@@ -93,6 +93,11 @@ func _simulate(state: DotFpsState, command: DotFpsCommand, delta: float, motor: 
 	var t := motor.tunables
 	var box := touching(state.position, t.radius, t.height_at(state.crouch_fraction))
 	if box.size == Vector3.ZERO:
+		# Off the top while pushing forward: carry on over the lip, or the climb's zero
+		# velocity drops a climber straight back onto the ladder.
+		if state.velocity.y > 0.0 and command.move.y > 0.0:
+			var fwd := DotFpsMotor._view_basis(state.yaw, 0.0).forward
+			state.velocity = Vector3(fwd.x, 0.0, fwd.z).normalized() * climb_speed + Vector3.UP * state.velocity.y
 		motor.set_mode(state, DotFpsState.Mode.AIR)
 		motor.move_and_slide(state, delta)
 		return

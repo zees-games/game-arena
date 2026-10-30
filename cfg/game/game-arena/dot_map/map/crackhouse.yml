@@ -1,0 +1,3 @@
+# 48 spawns over every floor: the default "avoid" keeps picking the same few, so respawn at random.
+# An operator overrides it in cfg/server/game/game-arena/dot_map/map/crackhouse.yml.
+arena_spawn_mode: random
