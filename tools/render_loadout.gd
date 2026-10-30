@@ -38,7 +38,7 @@ func _run() -> void:
 	var suffix := "_costed" if _costed else "_free"
 	if _costed:
 		var schema: DotLoadoutSchema = client.get("game").loadouts.schema
-		for id: StringName in [&"minigun", &"battle_rifle", &"sniper", &"rocket_launcher"]:
+		for id: StringName in [&"minigun", &"battle_rifle", &"sniper", &"rocket_launcher", &"revolver"]:
 			var priced := schema.catalogue.find(id)
 			if priced != null:
 				priced.cost = 4
@@ -60,8 +60,12 @@ func _run() -> void:
 			if str((screen.choices()[i] as Dictionary)["id"]) == "minigun":
 				var _over := screen.pick(i)
 		screen.show_slot(1)
-		var _second := screen.pick(0)
-		screen.show_slot(0)
+		var refused := true
+		for i in screen.choices().size():
+			if str((screen.choices()[i] as Dictionary)["id"]) == "revolver":
+				refused = not screen.pick(i)
+		_check(refused, "a priced secondary over the budget is refused")
+		_check(screen.points_with() <= 7, "the draft stays within the budget (%d / 7)" % screen.points_with())
 		await _shot("arena_loadout_over_budget" + suffix)
 		screen.revert()
 	else:
@@ -69,6 +73,9 @@ func _run() -> void:
 		await _wait(0.3)
 		await _shot("arena_loadout_every_spawn_on")
 		_check(screen.random_spawn_on(), "the Every spawn toggle turns on")
+		var plate := menu.toast_plate
+		_check(plate != null and plate.visible and plate.get_global_rect().position.y > root.size.y * 0.5,
+			"the toast sits below the loadout panel, not over its intro text")
 		screen.toggle_random_spawn()
 	screen.show_slot(3)
 	await _shot("arena_loadout_grenades")
