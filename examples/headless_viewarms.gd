@@ -60,14 +60,17 @@ func _weapon(me: Node, id: StringName) -> void:
 	await _seconds(1.0)
 	var sampler: DotFpsSampler = _client.get("_sampler")
 	var yaw: float = sampler.yaw
+	var hip_x := 0.0
 	for phase: String in PHASES:
 		var worst := {"reach": 0.0, "pixel": 0.0, "near": INF, "sets": 1, "n": 0, "wall": 0.0, "sprint": 0.0, "hand": "-", "behind": 0, "need": 0.0, "arm": 0.0}
 		match phase:
 			"hip":
 				await _sample(worst, 0.4)
+				hip_x = _holder_x()
 			"aim":
 				Input.action_press(&"arena_aim")
 				await _sample(worst, 0.8)
+				_check_centred(id, hip_x)
 				Input.action_release(&"arena_aim")
 				await _seconds(0.5)
 			"look down", "look up":
@@ -99,6 +102,22 @@ func _weapon(me: Node, id: StringName) -> void:
 		var detail := "worst %s (%.2f m from its shoulder, arm %.2f m), %d hand targets behind the eye, nearest hand %.3f m, arm sets %d, wall %.2f, sprint %.2f" % [worst.hand, worst.need, worst.arm, worst.behind, worst.near, worst.sets, worst.wall, worst.sprint]
 		_check(worst.reach <= REACH_M and worst.pixel <= PIXEL_PX and worst.sets == 1 and worst.near > _near(), what, detail)
 	_finished += 1
+
+
+## How far the gun sits right of the eye's centre line, metres.
+func _holder_x() -> float:
+	var vm: ZeeViewModel = _client.get("view_model")
+	var camera: Camera3D = _client.get("player").camera
+	return absf((camera.global_transform.affine_inverse() * (vm.get(&"_holder") as Node3D).global_position).x)
+
+
+## Held aim must bring a weapon that can aim fully up, and its gun nearer the centre than at the hip.
+func _check_centred(id: StringName, hip_x: float) -> void:
+	var vm: ZeeViewModel = _client.get("view_model")
+	if not vm.can_aim():
+		return
+	var x := _holder_x()
+	_check(vm.aim_fraction() >= 0.99 and (x < hip_x - 0.02 or x < 0.03), "%s aim: sights up and gun centred" % id, "fraction %.2f, gun %.3f m off centre, %.3f at the hip" % [vm.aim_fraction(), x, hip_x])
 
 
 ## Every frame for [param seconds] (at least one), each measured while the arms hold the weapon.

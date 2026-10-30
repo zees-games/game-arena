@@ -125,6 +125,8 @@ func _physics_process(_delta: float) -> bool:
 		for button: String in state["buttons"]:
 			move_cmd.buttons |= int(MOVE_BUTTONS.get(button, 0))
 			weapon_cmd.buttons |= int(WEAPON_BUTTONS.get(button, 0))
+	# The view model follows aim_held (the client's right mouse), not a command bit.
+	_player.aim_held = time >= 0.0 and (state["buttons"] as Array).has("aim")
 	weapon_cmd.yaw = move_cmd.yaw
 	weapon_cmd.pitch = move_cmd.pitch
 	_before = _player.controller.state.position
