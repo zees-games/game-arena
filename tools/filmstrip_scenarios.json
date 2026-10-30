@@ -58,6 +58,15 @@
     {"name": "down_full", "duration": 3.0, "fields": {"own_body": 2}, "steps": [
       {"t": 0.0, "move": [0, 0], "pitch": -60},
       {"t": 0.4, "move": [0, 1], "pitch": -60}
-    ]}
+    ]},
+    {"name": "wall_pistol", "duration": 7.0, "fields": {"weapon": "pistol"}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.5, "move": [0, 1], "buttons": ["walk"]}, {"t": 4.2, "yaw": 90}]},
+    {"name": "wall_rifle", "duration": 7.0, "fields": {"weapon": "rifle"}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.5, "move": [0, 1], "buttons": ["walk"]}, {"t": 4.2, "yaw": 90}]},
+    {"name": "wall_launcher", "duration": 7.0, "fields": {"weapon": "launcher"}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.5, "move": [0, 1], "buttons": ["walk"]}, {"t": 4.2, "yaw": 90}]},
+    {"name": "wall_knife", "duration": 7.0, "fields": {"weapon": "knife"}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.5, "move": [0, 1], "buttons": ["walk"]}, {"t": 4.2, "yaw": 90}]},
+    {"name": "wall_rifle_sprint", "duration": 5.0, "fields": {"weapon": "rifle", "spawn": [-9.0, 0.05, -22.0], "spawn_yaw": 180.0}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.5, "move": [0, 1], "buttons": ["sprint"]}]},
+    {"name": "crouch_rifle", "duration": 3.0, "fields": {"weapon": "rifle"}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.4, "buttons": ["crouch"]}, {"t": 1.4, "move": [0, 1], "buttons": ["crouch", "walk"]}]},
+    {"name": "slide_rifle", "duration": 3.5, "fields": {"weapon": "rifle"}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.3, "move": [0, 1], "buttons": ["sprint"]}, {"t": 1.2, "move": [0, 1], "buttons": ["sprint", "crouch"]}, {"t": 2.4, "move": [0, 0], "buttons": []}]},
+    {"name": "ads_crouch_rifle", "duration": 3.0, "fields": {"weapon": "rifle"}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.4, "buttons": ["crouch"]}, {"t": 1.0, "buttons": ["crouch", "aim"]}]},
+    {"name": "slide_aim_rifle", "duration": 3.5, "fields": {"weapon": "rifle"}, "steps": [{"t": 0.0, "move": [0, 0]}, {"t": 0.3, "move": [0, 1], "buttons": ["sprint"]}, {"t": 1.2, "move": [0, 1], "buttons": ["sprint", "crouch", "aim"]}, {"t": 2.4, "move": [0, 0], "buttons": ["aim"]}]}
   ]
 }

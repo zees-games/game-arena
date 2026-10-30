@@ -104,6 +104,12 @@ func _physics_process(_delta: float) -> bool:
 		_armed = true
 		_player.arm_first_person(_hands, true)
 		_player.give_default_loadout()
+		# A clip's "weapon" field holds that weapon (any id of the pack) instead of the default primary.
+		var weapon_id := StringName(String(_clip.fields.get("weapon", "")))
+		if weapon_id != &"":
+			var given := _player.arsenal.give(weapon_id)
+			if given.ok:
+				var _held := _player.arsenal.equip(int((given.value as DotWeaponSlot).def.slot))
 		# Placed once the tree is live: a teleport inside _initialize was lost and every clip began at the origin.
 		var spawn: Array = _clip.fields.get("spawn", [15.0, 0.05, -13.0])
 		_player.controller.teleport(Vector3(spawn[0], spawn[1], spawn[2]), _spawn_yaw, 0.0)
