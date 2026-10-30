@@ -8,7 +8,7 @@ extends SceneTree
 ##   xvfb-run -a godot --path . --resolution 1920x1080 --script tools/render_loadout.gd
 ##   xvfb-run -a godot --path . --resolution 1920x1080 --script tools/render_loadout.gd -- --costed
 ##
-## Free is the default; `--costed` prices a few weapons and sets a budget, as a server would.
+## `-- --locked` owns nothing, so the launcher shows as a locked store item. Free is the default; `--costed` prices a few weapons and sets a budget, as a server would.
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
@@ -17,6 +17,7 @@ const OUT_DIR := "screenshots/loadout"
 var client: Node = null
 var _failed := 0
 var _costed := OS.get_cmdline_user_args().has("--costed")
+var _locked := OS.get_cmdline_user_args().has("--locked")
 
 
 func _initialize() -> void:
@@ -44,6 +45,10 @@ func _run() -> void:
 				priced.cost = 4
 		schema.point_budget = 7
 
+	if _locked:
+		# The launcher is owned by default here; owning nothing locks it, so the store button shows.
+		client.get("game").loadouts.entitlement_source = func(_key: String) -> DotLoadoutEntitlements:
+			return DotLoadoutEntitlements.of([])
 	# The menu, on B as a player presses it.
 	var b := InputEventKey.new()
 	b.physical_keycode = KEY_B
@@ -54,6 +59,17 @@ func _run() -> void:
 	var screen := menu.loadout_screen
 	_check(screen != null and screen.is_open(), "B opens the loadout screen")
 	await _shot("arena_loadout_primary" + suffix)
+	if _locked:
+		var locked := 0
+		for c: Variant in screen.choices():
+			locked += 1 if bool((c as Dictionary).get("locked", false)) else 0
+		_check(locked > 0, "the offer carries locked items solo (%d)" % locked)
+		for i in screen.choices().size():
+			if bool((screen.choices()[i] as Dictionary).get("locked", false)):
+				var _s := screen.pick(i)
+				break
+		await _wait(0.3)
+		await _shot("arena_loadout_locked")
 	_check(screen.costs_shown() == _costed, "costs are shown only when the server prices something (%s)" % suffix)
 	if _costed:
 		for i in screen.choices().size():

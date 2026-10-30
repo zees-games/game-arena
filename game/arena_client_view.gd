@@ -110,6 +110,10 @@ func _use_loadout_menu() -> void:
 		return
 	loadout_menu = game_menu.call(&"use_loadout", loadout_offer, choose_loadout, decorate_loadout_choice)
 	if loadout_menu != null:
+		# Items the player does not own, greyed with a store button, solo and connected.
+		if DotAddonApi.build_level("dot_game") >= 40:
+			platform.add_loadout_store(loadout_menu, func() -> Object: return game.loadout_command if game != null else null,
+					func() -> String: return ArenaGame.storage_key(player.player_id) if player != null else "")
 		loadout_menu.set(&"random_fn", random_loadout)
 		loadout_menu.set(&"random_spawn_fn", random_spawn_loadout)
 		# Remembered under the signed-in site account (or "local" as a guest), and never
