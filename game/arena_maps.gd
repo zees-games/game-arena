@@ -373,6 +373,46 @@ static func server_map_keys(server: Object) -> PackedStringArray:
 	return out
 
 
+## The deathmatch and gun game packs a game with no server (solo, offline) lists, as keys.
+const STANDALONE_KEYS: PackedStringArray = [
+	"gamemann/aim-forts@1.0.3",
+	"gamemann/blackhawkdown@1.0.1",
+	"gamemann/welcometomexicov6@1.0.1",
+	"gamemann/dm-hot-cn-v1@1.0.3",
+	"gamemann/dm-industrial-gamma@1.0.3",
+	"gamemann/dm-morpheus@1.0.3",
+	"gamemann/dm-overwatch@1.0.3",
+	"gamemann/dm-scarletdevilmansion@1.0.3",
+	"gamemann/gg-canyon@1.0.3",
+	"gamemann/gg-fy-snow@1.0.3",
+	"gamemann/gg-garage@1.0.3",
+	"gamemann/gg-krusty-krab@1.0.3",
+	"gamemann/gg-lego-arena@1.0.3",
+	"gamemann/gg-punishment@1.0.3",
+	"gamemann/gg-simpsons-x@1.0.3",
+	"gamemann/gg-woods@1.0.3",
+]
+
+
+## [constant STANDALONE_KEYS] minus the maps [param catalogue] already has (a linked local
+## import wins), so solo play lists the published maps and fetches one when it is picked.
+static func standalone_keys(catalogue: DotMapCatalogue) -> PackedStringArray:
+	var out := PackedStringArray()
+
+	for key in STANDALONE_KEYS:
+		var def := delivered_def(key)
+
+		if def == null:
+			continue
+
+		var have: DotMapDef = catalogue.get_map(def.id) if catalogue != null else null
+
+		if have == null or bool(have.meta.get("delivered", false)):
+			out.append(key)
+
+	return out
+
+
 ## A map the server names, as dot-map content: delivered, not downloaded.
 ##
 ## [b]Built from the key alone[/b], because nothing else is on the disk yet: these packs are

@@ -128,7 +128,7 @@ func setup() -> DotResult:
 	# The maps the server owner named, catalogued as delivered and fetched only when one is
 	# changed to (`ArenaMapSession`). Before the session and the cooldown, so the rotation
 	# and its pool size see them.
-	var _adopted := ArenaMaps.adopt_delivered(catalogue, ArenaMaps.server_map_keys(server))
+	var _adopted := ArenaMaps.adopt_delivered(catalogue, _named_keys(catalogue))
 
 	session = ArenaMapSession.new()
 	session.name = "MapSession"
@@ -259,6 +259,14 @@ func apply_rotation() -> void:
 		def.in_rotation = true
 
 
+## The server's map keys, or the published defaults when there is no server (solo, offline).
+func _named_keys(catalogue: DotMapCatalogue) -> PackedStringArray:
+	if server == null:
+		return ArenaMaps.standalone_keys(catalogue)
+
+	return ArenaMaps.server_map_keys(server)
+
+
 ## Reads the server's list again and makes the catalogue's delivered maps match it: a map
 ## newly named is offered, one no longer named is gone. In place, because the rotation and
 ## the vote hold the catalogue by reference. Returns `{added, removed}`.
@@ -268,7 +276,7 @@ func adopt_server_maps() -> Dictionary:
 
 	var playing := current.id if current != null else &""
 	var out := ArenaMaps.adopt_delivered(
-		session.catalogue, ArenaMaps.server_map_keys(server), playing
+		session.catalogue, _named_keys(session.catalogue), playing
 	)
 	apply_rotation()
 	restrict_rotation()
