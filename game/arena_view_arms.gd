@@ -66,7 +66,7 @@ func _process(delta: float) -> void:
 	var model: ZeeViewModel = body.weapons.view_model() if body.weapons != null else null
 	global_position = camera.global_position
 	global_rotation = Vector3(camera.global_rotation.x if holding() else 0.0, camera.global_rotation.y, 0.0)
-	visible = model != null and model.visible and not model.is_scoped() and body.is_alive()
+	visible = model != null and model.visible and not model.arms_hidden_by_scope() and body.is_alive()
 	if model != null and model.has_method(&"art_hand_scale"):
 		var own: float = model.call(&"art_hand_scale")
 		arms.hand_scale = (own if own > 0.0 else DEFAULT_HAND_SCALE) * hand_scale_mult

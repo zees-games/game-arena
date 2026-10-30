@@ -2,7 +2,6 @@ extends DotGameCheckSuite
 ## The first-person arms hold the gun as it is drawn: for every weapon, at the hip, down the sights, looking up and
 ## down, running into a wall and through every reload frame, each hand reaches its grip point (within REACH_M of the
 ## arms' own palm offset), that point lands on the drawn grip's pixel, and exactly one set of arms is shown.
-## Not in game.sh's SUITES yet: long guns' support hands sit past arm reach until the weapons declare their sockets.
 ##   godot --headless --path . res://examples/headless_viewarms.tscn
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
@@ -108,7 +107,9 @@ func _sample(worst: Dictionary, seconds: float) -> void:
 	var first := true
 	while first or Time.get_ticks_msec() < until:
 		first = false
+		# A zero timer fires after the frame's _process, as drawn: at process_frame the player has stepped and the arms have not yet followed.
 		await get_tree().process_frame
+		await get_tree().create_timer(0.0).timeout
 		var vm: ZeeViewModel = _client.get("view_model")
 		var arms: Node3D = _client.get("view_arms")
 		if vm == null or vm.is_scoped() or not _holding() or not arms.visible:
