@@ -6,6 +6,7 @@ const ArenaModule := preload("../game/arena_module.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const StallRecorder := preload("stall_recorder.gd")
+const FrameProfile := preload("frame_profile.gd")
 
 ## dot-net's lossy UDP relay, by path (it has no class_name): the latency simulator.
 const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
@@ -19,6 +20,7 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 ## godot --headless --path . res://tools/client_bench.tscn -- --delay 30 --burn 20   # a slow device
 ## xvfb-run -a godot --path . res://tools/client_bench.tscn -- --delay 30            # with drawing
 ## ... -- --stall   the frames around the loading cover instead (load_stall's connected twin)
+## ... -- --profile the slowest frames split per system and per processing node (frame_profile.gd)
 ## [/codeblock]
 ##
 ## `--delay` is milliseconds EACH WAY (so 30 is a 60 ms round trip). `--burn MS` spends MS of
@@ -416,6 +418,10 @@ func _measure() -> void:
 	var lead_sum := 0.0
 	var fclock := DotMenuFrameClock.new()
 	fclock.start(get_tree())
+	var prof: RefCounted = null
+	if "--profile" in OS.get_cmdline_user_args():
+		prof = FrameProfile.new()
+		prof.start(get_tree(), fclock)
 	var perf0: Dictionary = net.perf_counters() if net != null and net.has_method(&"perf_counters") else {}
 	var next_line := start + 2000000
 	var line_perf: Dictionary = perf0
@@ -468,6 +474,10 @@ func _measure() -> void:
 	print("  fps %.1f | frame p50 %.1f p95 %.1f max %.1f ms" % [n / elapsed, sorted[n / 2], sorted[int(n * 0.95)], sorted[n - 1]])
 	if _json:
 		_print_perf(sorted, elapsed)
+	if prof != null:
+		prof.stop()
+		for line in prof.lines():
+			print("PROFILE" + line)
 	var fs := fclock.summary(elapsed + 1.0)
 	fclock.stop()
 	print("  physics %.2f ms/frame (%.2f ms/step) | script %.2f | render %.2f | wait %.2f | steps %.2f/frame (max %d) | draw calls %.0f objects %.0f" % [
