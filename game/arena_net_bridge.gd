@@ -782,7 +782,7 @@ func receive_snapshot(payload: PackedByteArray) -> DotResult:
 	# Without this the clock's input lead omits the flight time and, past about 30 ms
 	# of latency, every command arrives after its tick and is discarded as late.
 	if rtt_source.is_valid():
-		net.stats.note_rtt(float(rtt_source.call()))
+		net.stats.note_rtt(float(rtt_source.call()) + net.latency.effective() * 2000.0)
 
 	if not ArenaFrameProbe.on():
 		return net.receive_snapshot(payload)
@@ -1079,7 +1079,29 @@ func send_request(kind: int, body: PackedByteArray = PackedByteArray()) -> void:
 	if not wrote.ok:
 		return
 
-	link.send_request(writer.to_bytes())
+	_send_held(link.send_request, writer.to_bytes())
+
+
+## Releases what `cl_latency_baseline` is holding. A client drives its own clock (`auto_tick` off), so dot-net's own step never runs and held snapshots would wait for ever; call it once a frame.
+func advance_latency(delta: float) -> void:
+	if net != null and net.latency.busy():
+		net.latency.advance(delta)
+
+
+## Sends one input command to the server, through `cl_latency_baseline` when it is on (the link's RPC is not dot-net's send path).
+func send_input(tick: int, move: DotFpsCommand, fire: DotWeaponCommand) -> void:
+	if link != null:
+		_send_held(link.send_input, encode_input(tick, move, fire))
+
+
+func _send_held(sender: Callable, payload: PackedByteArray) -> void:
+	if net == null or not net.latency.delaying():
+		sender.call(payload)
+		return
+	var weak: WeakRef = weakref(link)
+	net.latency.hold(func() -> void:
+		if weak.get_ref() != null:
+			sender.call(payload))
 
 
 ## Everything a joining peer has to be told, in the order it has to be told it.

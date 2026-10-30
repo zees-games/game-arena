@@ -1119,6 +1119,7 @@ func _physics_step(delta: float) -> void:
 
 	# The clock says how many ticks this frame is worth, which on a client whose engine
 	# runs at the server's rate is almost always exactly one.
+	bridge.advance_latency(delta)
 	var ticks := net.clock.advance(delta)
 
 	# [b]Each pass is its own tick.[/b] `advance` has already moved the clock by all of
@@ -1135,8 +1136,7 @@ func _physics_step(delta: float) -> void:
 		var tick := net.clock.input_tick() - (ticks - 1 - i)
 		bridge.client_tick(tick, move, _fire)
 
-		if bridge.link != null:
-			bridge.link.send_input(bridge.encode_input(tick, move, _fire))
+		bridge.send_input(tick, move, _fire)
 
 
 func _local_commands(move: DotFpsCommand) -> Dictionary:

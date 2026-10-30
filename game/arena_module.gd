@@ -462,6 +462,9 @@ func _build_netcode() -> DotResult:
 	# client parents its copy under `DotClientLink`, which is named to match.
 	bridge.open_link(server)
 
+	# The switch a server owner uses to forbid clients' artificial lag; dot-game's module does the same.
+	var _latency := net.latency.bind_server_cvar(Callable(self, "add_cvar"), DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED)
+
 	# Who somebody is reaches the match: a figure as they are seated, and the real name
 	# and figure once dot-platform has them. See `_wire_identity`.
 	_wire_identity()
