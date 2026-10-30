@@ -10,8 +10,8 @@ mkdir -p "$out"
 clips=("$@")
 [[ ${#clips[@]} -gt 0 ]] || mapfile -t clips < <(python3 -c 'import json;print("\n".join(c["name"] for c in json.load(open("tools/filmstrip_scenarios.json"))["clips"]))')
 for clip in "${clips[@]}"; do
-  GPU_SHOT_BOXES=${GPU_SHOT_BOXES:-staging02} ../gpu.sh shot game-arena tools/filmstrip_run.sh "$clip" "${FPS:-60}"
+  GPU_SHOT_BOXES=${GPU_SHOT_BOXES:-staging02} ../gpu.sh shot "$(basename "$PWD")" tools/filmstrip_run.sh "$clip" "${FPS:-60}"
   rsync -az -e "ssh -i ${GPU_KEY:-$HOME/.ssh/gpu-laptop} -o BatchMode=yes" \
-    "gamedev@staging02.deacon.internal:gpu/shot/game-arena/$out/$clip.mp4" "gamedev@staging02.deacon.internal:gpu/shot/game-arena/$out/${clip}_report.txt" "$out/"
+    "gamedev@staging02.deacon.internal:gpu/shot/$(basename "$PWD")/$out/$clip.mp4" "gamedev@staging02.deacon.internal:gpu/shot/$(basename "$PWD")/$out/${clip}_report.txt" "$out/"
 done
 echo "sheets in $out/"

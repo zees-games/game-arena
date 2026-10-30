@@ -5,7 +5,7 @@
       {"t": 0.0, "move": [0, 0]},
       {"t": 0.5, "move": [0, 1], "buttons": ["walk"]}
     ]},
-    {"name": "sprint", "duration": 2.8, "spawn": [-9.0, 0.05, -22.0], "spawn_yaw": 180.0, "steps": [
+    {"name": "sprint", "duration": 2.8, "fields": {"spawn": [-9.0, 0.05, -22.0], "spawn_yaw": 180.0}, "steps": [
       {"t": 0.0, "move": [0, 0]},
       {"t": 0.5, "move": [0, 1], "buttons": ["sprint"]}
     ]},
@@ -29,6 +29,29 @@
     {"name": "die", "duration": 4.0, "steps": [
       {"t": 0.0, "move": [0, 0]},
       {"t": 1.0, "event": "die"}
+    ]},
+    {"name": "down_stand", "duration": 2.0, "fields": {"own_body": 1}, "steps": [
+      {"t": 0.0, "move": [0, 0], "pitch": -70}
+    ]},
+    {"name": "down_walk", "duration": 3.0, "fields": {"own_body": 1}, "steps": [
+      {"t": 0.0, "move": [0, 0], "pitch": -60},
+      {"t": 0.4, "move": [0, 1], "buttons": ["walk"], "pitch": -60}
+    ]},
+    {"name": "down_run", "duration": 2.4, "fields": {"own_body": 1, "spawn": [-9.0, 0.05, -22.0], "spawn_yaw": 180.0}, "steps": [
+      {"t": 0.0, "move": [0, 0], "pitch": -55},
+      {"t": 0.4, "move": [0, 1], "pitch": -55}
+    ]},
+    {"name": "down_back", "duration": 3.0, "fields": {"own_body": 1, "spawn": [-9.0, 0.05, -22.0], "spawn_yaw": 0.0}, "steps": [
+      {"t": 0.0, "move": [0, 0], "pitch": -60},
+      {"t": 0.4, "move": [0, -1], "pitch": -60}
+    ]},
+    {"name": "down_strafe", "duration": 3.0, "fields": {"own_body": 1}, "steps": [
+      {"t": 0.0, "move": [0, 0], "pitch": -60},
+      {"t": 0.4, "move": [1, 0], "pitch": -60}
+    ]},
+    {"name": "down_full", "duration": 3.0, "fields": {"own_body": 2}, "steps": [
+      {"t": 0.0, "move": [0, 0], "pitch": -60},
+      {"t": 0.4, "move": [0, 1], "pitch": -60}
     ]}
   ]
 }

@@ -171,8 +171,10 @@ var _severed: bool = false
 ## respawn has to draw it again. Client side.
 var _fell: bool = false
 
-## Draws this player's own body in first person when the server's `fp_body` rule says so.
+## Draws a box avatar's own body in first person ([method present_own_body]).
 var _first_person: DotPlayerFirstPersonBody = null
+## How much of your own body shows in first person (DotPlayerViewRules.BODY_*), from the client.
+var own_body_mode: int = 0
 
 ## Third person: the camera behind and over the shoulder of the eye, kept out of the level by
 ## dot-core's probe, and the whole body drawn. The client sets it from the view key under the
@@ -1118,19 +1120,18 @@ func _mend_body() -> void:
 		held.visible = true
 
 
-## How far behind the eye your own body is drawn in first person, in metres. Behind, with
-## only the legs drawn (see [method present_own_body]): measured 2026-10-06 against the stock
-## blocky avatar, legs drawn under or in front of the eye show their cut tops as a flat skin-
-## coloured square in the middle of the screen, which reads worse than no body at all. A body
-## worth looking down at needs a legs model, not a box character's.
+## How far behind the eye your own body is drawn in first person, in metres: far enough that the
+## chest under a hidden neck stays out of the near plane.
 const FIRST_PERSON_BACK := 0.18
+## The same with only the legs drawn: nothing above the belly reaches the near plane, and further back the feet leave the view.
+const FIRST_PERSON_BACK_LEGS := 0.0
 
 
-## Your own body in first person, or not: the server's `fp_body` rule. Client side, for
-## the player at this keyboard. The head is shadow-only and the body sits behind the eye
-## (see [DotPlayerFirstPersonBody]); the held weapon's world model stays hidden, because
-## the view model is already the gun in your hands.
-func present_own_body(show: bool, yaw: float) -> void:
+## Your own body in first person: [param mode] is DotPlayerViewRules' BODY_OFF, BODY_LEGS or
+## BODY_FULL. Client side, for the player at this keyboard; placed each frame by [method present]
+## at the drawn feet, so it moves with the interpolated eye. The held gun's world model stays hidden.
+func present_own_body(mode: int, _yaw: float = 0.0) -> void:
+	own_body_mode = mode
 	if third_person and is_alive() and camera != null and camera.current:
 		# Seen from behind: the whole body and the gun in its hands. Placed by `present`.
 		if body_mesh == null:
@@ -1138,17 +1139,17 @@ func present_own_body(show: bool, yaw: float) -> void:
 		if _first_person != null:
 			_first_person.restore()
 		if figure != null:
-			figure.hide_head = false
+			figure.first_person = DotHumanoidOwnView.THIRD
 			figure.position = Vector3.ZERO
 		body_mesh.visible = true
 		_present_held()
 		return
 
-	if not show or not is_alive() or camera == null or not camera.current:
+	if mode <= 0 or not is_alive() or camera == null or not camera.current:
 		if _first_person != null:
 			_first_person.restore()
 		if figure != null:
-			figure.hide_head = false
+			figure.first_person = DotHumanoidOwnView.THIRD
 		if body_mesh != null:
 			body_mesh.visible = false
 		if held != null:
@@ -1157,31 +1158,29 @@ func present_own_body(show: bool, yaw: float) -> void:
 
 	if body_mesh == null:
 		attach_body_mesh(Color.WHITE, avatar)
-		if held != null:
-			held.visible = false
-
-	if _first_person == null:
-		_first_person = DotPlayerFirstPersonBody.new()
-		# The head-hiding is the helper's; the offset is done here, every frame, because
-		# it has to follow the yaw and the helper's is applied once.
-		_first_person.back_offset = 0.0
-		# Only the legs, by name, and everything else shadow-only. A list of what to HIDE
-		# (head, chest, arms...) was the first version, and the render still showed a grey
-		# slab across half the screen: the avatar's parts are not named what the list
-		# guessed. What to KEEP is two words every avatar here uses.
-		_first_person.shown_names = PackedStringArray(["leg", "foot", "shoe", "boot"])
-
 	if held != null:
 		held.visible = false
 	body_mesh.visible = true
-	body_mesh.rotation = Vector3(0.0, deg_to_rad(yaw), 0.0)
-	body_mesh.position = body_mesh.basis * Vector3(0.0, 0.0, FIRST_PERSON_BACK)
 	if figure != null:
-		# A skinned person is one mesh, so the helper's hide-by-name has nothing to choose
-		# from: the head bone is shrunk instead, and the body stands behind the eye.
-		figure.hide_head = true
+		figure.first_person = DotHumanoidOwnView.BODY if mode >= 2 else DotHumanoidOwnView.LEGS
 		return
+	if _first_person == null:
+		_first_person = DotPlayerFirstPersonBody.new()
+		_first_person.back_offset = 0.0
+		# What to keep, by name: the box avatars' parts are not named what a hide list would guess.
+		_first_person.shown_names = PackedStringArray(["leg", "foot", "shoe", "boot"])
 	_first_person.apply(body_mesh)
+
+
+## In first person: places your own body, when one is drawn, at the drawn feet behind the eye, with the wall-run roll.
+func _place_own_body(drawn: DotFpsState, delta: float) -> void:
+	if _tp_probe != null:
+		_tp_probe.reset()
+	if own_body_mode <= 0 or body_mesh == null or not body_mesh.visible:
+		return
+	_pose_body(drawn, drawn.yaw, delta)
+	var back := FIRST_PERSON_BACK if own_body_mode >= 2 else FIRST_PERSON_BACK_LEGS
+	body_mesh.global_position = drawn.position + Basis(Vector3.UP, deg_to_rad(drawn.yaw)) * Vector3(0.0, 0.0, back)
 
 
 func make_dead() -> void:
@@ -1334,8 +1333,8 @@ func present(delta: float) -> void:
 		)
 		if third_person and camera.current:
 			_place_third_person(drawn, delta)
-		elif _tp_probe != null:
-			_tp_probe.reset()
+		else:
+			_place_own_body(drawn, delta)
 		# Widened from the player's own field of view, then zoomed by the aim: a scope at a run
 		# is the scope's zoom of a slightly wider lens, and nothing compounds frame to frame.
 		camera.fov = (_base_fov + widen) * _aim_fov_scale
@@ -1376,6 +1375,8 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 		"climbing": drawn.mode == ladder.mode_id,
 		"alive": is_alive(),
 		"wall_running": drawn.is_wall_running(),
+		"velocity": v,
+		"wall": Plane(drawn.wall_normal, drawn.position - drawn.wall_normal * (controller.tunables.radius if controller != null else 0.35)) if drawn.wall_normal != Vector3.ZERO else Plane(),
 		# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
 		# reads where this player is aiming.
 		"aim": deg_to_rad(drawn.pitch),

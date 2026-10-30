@@ -47,11 +47,14 @@ var _settle := 0
 ## `third` on the command line: the same routes drawn from the third-person camera, files
 ## named `<scenario>_tp_NNN.png`, so the body's roll and turn on the wall can be looked at.
 var _third := false
+## `body` on the command line: your own body drawn in first person (mp_fp_body 2), looking down 50 degrees.
+var _body := false
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	_third = args.has("third")
+	_body = args.has("body")
 	for name in ["run", "runjump", "jumprun", "chimney"]:
 		if args.is_empty() or args.has(name):
 			_scenarios.append(name)
@@ -72,7 +75,7 @@ func _initialize() -> void:
 	_player.camera.current = true
 	_player.third_person = _third
 	if _third:
-		_player.present_own_body(false, 0.0)
+		_player.present_own_body(0, 0.0)
 	# The first scenario starts on the first physics frame, not here: the player's nodes are
 	# not ready until the tree runs, and a teleport made before that is undone by it (the
 	# first version of this tool recorded a run from the spawn point).
@@ -122,6 +125,8 @@ func _physics_process(_delta: float) -> bool:
 		if _driven < 0:
 			_driven = _tick
 		command = _driver.next(_player.controller.state)
+		if _body:
+			command.pitch = -50.0
 		# `runjump`: a jump off the wall half a second into the run.
 		var state := _player.controller.state
 		if _scenario == "runjump" and not _kicked and state.is_wall_running() and state.wall_run_time >= 0.5:
@@ -142,6 +147,8 @@ func _process(delta: float) -> bool:
 	if _scenario == "starting":
 		return false
 
+	if _body:
+		_player.present_own_body(DotPlayerViewRules.BODY_FULL)
 	_player.present(delta)
 
 	if _driven < 0:
@@ -166,7 +173,7 @@ func _process(delta: float) -> bool:
 	# what matters, and that is exact.
 	if _frame % SAVE_EVERY == 0:
 		var image := root.get_texture().get_image()
-		image.save_png(OUT_DIR.path_join("%s%s_%03d.png" % [_scenario, "_tp" if _third else "", _frame / SAVE_EVERY]))
+		image.save_png(OUT_DIR.path_join("%s%s_%03d.png" % [_scenario, "_tp" if _third else ("_body" if _body else ""), _frame / SAVE_EVERY]))
 
 	_frame += 1
 	return false

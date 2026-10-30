@@ -162,7 +162,7 @@ A critical takes a limb off the skin (dot-player-char bakes it out and shrinks i
 
 **A stock avatar chooses each slot from its own mix of the key's hash** (`ArenaAvatars._pick`, a 32-bit integer finaliser with a per-slot salt, so it agrees on every machine). Server ids are consecutive and a string hash moves by a few per id, so the first version's `(seed / 7) % HEADS.size()` dressed players 112..118 in one head: a row of the same face in the world and in the portrait row. `headless_presentation` checks 16 consecutive ids for at least 8 heads; the old pick gave 4.
 
-**Your own body in first person** (`arena_fp_body`, off by default) builds the local player a body with its head bone shrunk to nothing (`hide_head`: the person is one mesh, so dot-player-char's hide-by-name has nothing to choose from) and draws it `FIRST_PERSON_BACK` behind the eye.
+**Your own body in first person** follows dot-player-controller's `mp_fp_body` (0 none, 1 legs and feet, the default, 2 the whole body below the neck), or the player's own `first_person_body` setting (Video, "My body": auto, off, legs, body), saved with the rest of their settings; arena's older `arena_fp_body` 1 keeps at least the legs. dot-player-char's `DotHumanoidFigure.first_person` hides the rest by shrinking bones (the person is one mesh), a shadow-only copy keeps the whole person's shadow, and `DotHumanoidLegs` plants the feet, turns the hips to the way you move and sets the feet on a wall you run along.
 
 **Third person is deliberately not here.** The movement is analytic and lag-compensated, and server and clients agree because there is exactly one motor to agree about. game-playground is where third person runs.
 

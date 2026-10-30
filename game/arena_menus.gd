@@ -127,7 +127,8 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 	var video := menu.page(&"video")
 	if video != null:
 		video.section("Image").add(DotMenuRow.toggle(&"view_model", "Weapon in view", "Your hands and gun. A server may turn them off.")) \
-			.add(DotMenuRow.toggle(&"first_person_legs", "Show my legs", "See your own legs when you look down. Only on servers that allow it."))
+			.add(DotMenuRow.select(&"first_person_body", "My body", "What you see of yourself when you look down. Server default follows the server.",
+				[[&"auto", "Server default"], [&"off", "None"], [&"legs", "Legs and feet"], [&"body", "Whole body"]]))
 		DotMenuStock.add_gore_row(video)
 
 	var audio := menu.page(&"audio")

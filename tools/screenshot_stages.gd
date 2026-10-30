@@ -300,7 +300,7 @@ func _feel_shots_world(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, a
 				_local.avatar = load("res://game/arena_avatars.gd").stock_avatar(&"you")
 				# Current first: present_own_body draws nothing for a camera nobody looks through.
 				_local.camera.current = true
-				_local.present_own_body(true, _local.controller.state.yaw)
+				_local.present_own_body(1, _local.controller.state.yaw)
 				_hud.visible = true,
 			"wait": 12,
 		},

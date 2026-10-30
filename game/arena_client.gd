@@ -1224,10 +1224,9 @@ func _present_frame(delta: float) -> void:
 	_fold_correction()
 	_fold_alpha()
 
-	# Your own body when you look down, if the server's `fp_body` rule is on.
+	# Your own body when you look down: the player's setting, else the server's mp_fp_body.
 	if player != null and game != null and player.controller != null:
-		var legs_ok := presentation == null or presentation.settings == null or presentation.settings.get_bool(&"first_person_legs", true)
-		player.present_own_body(legs_ok and game.view_rules.shows_own_legs(game.rule("fp_body") != 0.0),
+		player.present_own_body(own_body_mode(),
 			(player.view_now as Vector2).x if player.view_now != null else player.controller.state.yaw)
 
 	_face_a_respawn()
@@ -1322,6 +1321,17 @@ func _fold_alpha() -> void:
 	if _offline or net == null or net.clock == null or not net.clock.has_method(&"render_alpha"):
 		return
 	player.drawn_alpha = float(net.clock.call(&"render_alpha"))
+
+
+## How much of their own body the local player sees in first person (DotPlayerViewRules.BODY_*):
+## the `first_person_body` setting, or the server's when it is "auto"; arena's `fp_body` rule keeps at least the legs.
+func own_body_mode() -> int:
+	var picked := presentation.settings.get_string(&"first_person_body", "auto") if presentation != null and presentation.settings != null else "auto"
+	var mode := game.view_rules.own_body(OWN_BODY_CHOICES.find(StringName(picked)) - 1)
+	return DotPlayerViewRules.BODY_LEGS if mode == DotPlayerViewRules.BODY_OFF and picked == "auto" and game.rule("fp_body") != 0.0 else mode
+
+
+const OWN_BODY_CHOICES: Array[StringName] = [&"auto", &"off", &"legs", &"body"]
 
 
 ## Points the drawing and the explosions at whichever projectile layer the game has now.

@@ -2,9 +2,8 @@ extends "headless_presentation_base.gd"
 
 
 func _ready() -> void:
-	# Before anything builds a presentation layer: every settings document this suite
-	# writes (`field_of_view 110` at the console, a volume dragged in the menu, a key
-	# rebound) goes to a scratch directory emptied first, never this machine's real one.
+	# Before anything builds a presentation layer: every settings document this suite writes
+	# goes to a scratch directory emptied first, never this machine's real one.
 	_player_file_was = _player_file_stamp()
 	var _scratch := ArenaPresentation.use_scratch_settings("headless_presentation")
 	DotLog.set_level(
@@ -40,6 +39,7 @@ func _run() -> void:
 	_test_the_final_killcam()
 	await _test_the_kill_view()
 	_test_the_view_turns_every_frame()
+	_test_own_body()
 	_test_criticals_and_the_body()
 	await _test_bodies_fall()
 	_test_feedback_from_the_wire()

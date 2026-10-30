@@ -33,7 +33,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ##
 ## Exits non-zero on any failure.
 
-const CHECKS := 361
+const CHECKS := 367
 
 var _entered := 0
 var _completed := 0
@@ -396,3 +396,60 @@ func _walls_for_a_shot(wall: Vector3, aim: Vector3) -> void:
 	_slab(Vector3(0.0, 5.0, 0.0), Vector3.UP)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
+
+
+## Looking down in first person: the setting picks what is drawn and is kept, the legs are in view,
+## and the feet stand on the floor under the eye.
+func _test_own_body() -> void:
+	_section("Looking down shows your own legs, feet on the floor, as the setting says")
+	var p := _make(false)
+	var _kept := p.settings.set_value(&"first_person_body", &"legs")
+	var _flushed := p.settings.flush()
+	var again := _make(false)
+	_check(again.settings.get_string(&"first_person_body", "") == "legs", "the choice is saved for the next start")
+	var g := ArenaGame.new()
+	g.is_authority = true
+	add_child(g)
+	var _set := g.setup(ArenaMap.dm_box())
+	var added: DotResult = g.add_player(9, "Nine")
+	var me: ArenaPlayer = added.value if added.ok else null
+	if not _check(me != null, "a player to look down from"):
+		_done()
+		return
+	var _camera := me.attach_camera()
+	me.attach_body_mesh(Color.WHITE, ArenaAvatars.stock_avatar(&"nine"))
+	var client := ArenaClient.new()
+	client.game = g
+	client.player = me
+	client.presentation = again
+	var picks := []
+	for choice: StringName in [&"off", &"body", &"auto", &"legs"]:
+		var _r := again.settings.set_value(&"first_person_body", choice)
+		picks.append(client.own_body_mode())
+	_check(picks == [DotPlayerViewRules.BODY_OFF, DotPlayerViewRules.BODY_FULL, DotPlayerViewRules.BODY_LEGS, DotPlayerViewRules.BODY_LEGS],
+		"none, whole body, the server's choice (legs) and legs each reach the player", str(picks))
+	for _i in 30:
+		g.tick()
+	me.view_now = Vector2(me.controller.state.yaw, -60.0)
+	for _i in 20:
+		me.present_own_body(client.own_body_mode())
+		me.present(1.0 / 60.0)
+	var ankles := DotHumanoidLegs.ankles(me.figure.skeleton()) if me.figure != null else []
+	var floor_y := me.controller.state.position.y
+	var low := INF
+	var mid := Vector3.ZERO
+	for at: Vector3 in ankles:
+		low = minf(low, absf(at.y - floor_y))
+		mid += at / maxf(ankles.size(), 1)
+	var look := -me.camera.global_basis.z
+	var off_centre := rad_to_deg(look.angle_to(mid - me.camera.global_position))
+	_check(me.body_mesh.visible and me.figure != null and me.figure.first_person == DotHumanoidOwnView.LEGS,
+		"looking 60 degrees down, the legs are drawn and the rest is not")
+	_check(ankles.size() == 2 and off_centre < me.camera.fov * 0.5,
+		"and the feet are in view (%.0f degrees off centre of a %.0f degree view)" % [off_centre, me.camera.fov])
+	_check(low < 0.06, "the lower foot is on the floor under the eye (%.3f m off it)" % low)
+	client.player = null
+	client.game = null
+	client.free()
+	g.queue_free()
+	_done()

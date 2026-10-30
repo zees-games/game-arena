@@ -37,6 +37,8 @@ var _spawn_yaw := 0.0
 var _hands: Node3D = null
 var _armed := false
 var _query := PhysicsRayQueryParameters3D.new()
+## A clip's `own_body` (DotPlayerViewRules.BODY_*): the first-person view draws your own body, placed by the game.
+var _own_body := 0
 
 
 func _initialize() -> void:
@@ -66,6 +68,7 @@ func _initialize() -> void:
 	_fp_cam.add_child(hands)
 	_hands = hands
 	_spawn_yaw = float(_clip.fields.get("spawn_yaw", 0.0))
+	_own_body = int(_clip.fields.get("own_body", 0))
 
 	# Two cameras sharing the one world, side by side; the player's own camera is not drawn.
 	_tp_cam = _view(1)
@@ -160,12 +163,16 @@ func _process(delta: float) -> bool:
 	if _before.is_finite():
 		feet = _before.lerp(feet, alpha)
 	time -= (1.0 - alpha) / float(TICK_RATE)
-	if _player.body_mesh != null:
+	if _own_body > 0 and _player.figure != null:
+		_player.own_body_mode = _own_body
+		_player.figure.first_person = DotHumanoidOwnView.BODY if _own_body >= 2 else DotHumanoidOwnView.LEGS
+		_player.body_mesh.visible = true
+	elif _player.body_mesh != null:
 		_player.body_mesh.global_position = feet
 		_player.body_mesh.global_rotation = Vector3(0.0, deg_to_rad(_player.controller.state.yaw), 0.0)
 	_fp_cam.global_transform = _player.camera.global_transform
 	_fp_cam.fov = _player.camera.fov
-	_fp_cam.cull_mask = 0xFFFFF & ~BODY_LAYER
+	_fp_cam.cull_mask = 0xFFFFF if _own_body > 0 else 0xFFFFF & ~BODY_LAYER
 	_tp_cam.cull_mask = 0xFFFFF & ~VIEW_LAYER
 	_tag_body(_player)
 	var yaw := deg_to_rad(_spawn_yaw + float(_clip.state_at(maxf(time, 0.0))["yaw"]))
