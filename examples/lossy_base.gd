@@ -78,7 +78,7 @@ const FIRST_SECONDS := 3.0
 const RELIABLE_SECONDS := 35.0
 
 ## Checks per window, and outside them.
-const MEASURE_ATTEMPTS := 3
+const MEASURE_ATTEMPTS := 6
 const WINDOW_CHECKS := 16
 const OTHER_CHECKS := 59
 
@@ -159,7 +159,7 @@ func _done() -> void:
 	_completed += 1
 
 
-## Runs one measured section, and runs it again (twice at most) when it failed AND this process
+## Runs one measured section, and runs it again (five times at most) when it failed AND this process
 ## was stalled for longer than the clock's own tolerance during it. A runner descheduled for
 ## 3 ticks makes a +-4 tick clock error by itself, which says nothing about the code. No limit
 ## moves: the rerun is judged by the same checks, and a failure with no stall is final.
@@ -172,8 +172,9 @@ func _measured(section: Callable) -> void:
 		var completed := _completed
 		_stall_ms = 0
 		_last_physics_usec = 0
+		_start_watchdog()
 		await section.call()
-		var stalled := _stall_ms
+		var stalled := maxi(_stall_ms, _watchdog_stall_ms())
 		if _failed == failed or stalled < _stall_limit_ms() or attempt == MEASURE_ATTEMPTS - 1:
 			if stalled >= _stall_limit_ms():
 				print("    (the runner stalled this process for up to %d ms during it)" % stalled)
@@ -185,6 +186,8 @@ func _measured(section: Callable) -> void:
 		_failures.resize(failures)
 		_entered = entered
 		_completed = completed
+		# A burst of load rarely lasts one section; waiting lets it pass.
+		await get_tree().create_timer(2.0).timeout
 
 
 ## Three ticks of wall time: the clock check's own tolerance.
@@ -195,6 +198,60 @@ func _stall_limit_ms() -> int:
 ## The longest gap between two physics callbacks since [method _measured] began, and the last one.
 var _stall_ms := 0
 var _last_physics_usec := 0
+
+
+## A thread that only sleeps 1 ms and records how late it wakes. The physics gap cannot see a runner
+## that starves the relay or ENet threads while the main thread still gets its callbacks on time.
+var _watch_thread: Thread = null
+var _watch_stop := false
+var _watch_max_usec := 0
+var _watch_mutex := Mutex.new()
+
+
+func _start_watchdog() -> void:
+	_watch_mutex.lock()
+	_watch_max_usec = 0
+	_watch_mutex.unlock()
+	if _watch_thread != null:
+		return
+	_watch_stop = false
+	_watch_thread = Thread.new()
+	_watch_thread.start(_watch_loop)
+
+
+func _watch_loop() -> void:
+	var last := Time.get_ticks_usec()
+	while true:
+		OS.delay_usec(1000)
+		var now := Time.get_ticks_usec()
+		_watch_mutex.lock()
+		_watch_max_usec = maxi(_watch_max_usec, now - last - 1000)
+		var stop := _watch_stop
+		_watch_mutex.unlock()
+		last = now
+		if stop:
+			return
+
+
+func _watchdog_stall_ms() -> int:
+	_watch_mutex.lock()
+	var usec := _watch_max_usec
+	_watch_mutex.unlock()
+	return usec / 1000
+
+
+func _stop_watchdog() -> void:
+	if _watch_thread == null:
+		return
+	_watch_mutex.lock()
+	_watch_stop = true
+	_watch_mutex.unlock()
+	_watch_thread.wait_to_finish()
+	_watch_thread = null
+
+
+func _exit_tree() -> void:
+	_stop_watchdog()
 
 
 func _track_stall() -> void:

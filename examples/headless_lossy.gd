@@ -475,6 +475,12 @@ func _test_teleport_under_loss() -> void:
 		if near:
 			# The first is a hop under the snap distance, from wherever A is: along +X by 1 m.
 			to = at + Vector3(1.0, 0.0, 0.0)
+		else:
+			# The farther target: A's own position differs from the server's by the lead, so one
+			# within a metre or two of the snap distance snaps or not by where the circle was.
+			var other: Vector3 = targets[0] if to == targets[1] else targets[1]
+			if at.distance_to(other) > at.distance_to(to):
+				to = other
 		var moved := at.distance_to(to)
 		var snaps := int(net.predictor.get("_snaps"))
 		server_a.controller.teleport(to, server_a.controller.state.yaw, 0.0)
