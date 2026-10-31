@@ -23,6 +23,8 @@ func _watch_weapon_drops() -> void:
 		layer.dropped.connect(_on_weapon_dropped)
 		layer.settled.connect(_on_weapon_settled)
 		layer.removed.connect(_on_weapon_gone)
+		layer.pushed.connect(func(id: int, _at: Transform3D, _v: Vector3, _spin: Vector3) -> void: _on_weapon_changed(id))
+		layer.ammo_changed.connect(func(id: int, _state: Dictionary) -> void: _on_weapon_changed(id))
 
 
 ## Tells a joiner of the weapons lying about now, at rest where they lie.
@@ -45,6 +47,13 @@ func _on_weapon_dropped(id: int, state: Dictionary, at: Transform3D, velocity: V
 func _weapon_drop_body(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, seconds: float, rest: bool, team: int = 0) -> PackedByteArray:
 	return ArenaWeaponDropEvents.write_weapon_drop(id, ArenaContent.weapon_index(StringName(state["id"])),
 		int(state.get("magazine", 0)), int(state.get("reserve", 0)), at, velocity, seconds, rest, team)
+
+
+## A shot or blast moved a drop, or ammunition was taken off it: say so again; the client treats a known id as an update.
+func _on_weapon_changed(id: int) -> void:
+	var pose := game.weapon_drops.pose_of(id)
+	if not pose.is_empty():
+		_send_event(0, ArenaEvents.Kind.WEAPON_DROP, _weapon_drop_body(id, pose["state"], pose["at"], pose["velocity"], game.weapon_drops.rules.lifetime, bool(pose["rest"]), game.weapon_drops.drop_team(id)))
 
 
 func _on_weapon_settled(id: int, at: Transform3D) -> void:

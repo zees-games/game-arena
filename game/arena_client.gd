@@ -3,6 +3,7 @@ extends "arena_client_bots.gd"
 const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaMatchText := preload("arena_match_text.gd")
 const ArenaTeamMenu := preload("arena_team_menu.gd")
+const ArenaWeaponDropWiring := preload("arena_weapon_drop_wiring.gd")
 
 ## Offline only: the team menu's rules run in this process (online the server's do).
 var _local_team_menu: ArenaTeamMenu = null
@@ -1410,13 +1411,7 @@ func _pickup_hint() -> String:
 		var aimed: Dictionary = game.map_io.aim_from(player.camera.global_position, -player.camera.global_basis.z)
 		if not aimed.is_empty() and game.map_io.use.in_reach(aimed):
 			return String(aimed["label"])
-	if game.weapon_drops == null or player == null or not player.is_alive() or player.arsenal == null:
-		return ""
-	var found := game.weapon_drops.prompt_for(player.arsenal, player.camera.global_position, -player.camera.global_basis.z, game.weapon_drop_class_of(player.player_id), game.team_of(player.player_id) if not game.teams().is_empty() else 0)
-	if found.is_empty() or not bool(found["can_take"]):
-		return ""
-	var def: Variant = player.arsenal.catalogue.get_def(StringName(found["weapon"]))
-	return "Pick up %s" % (def.name_or_id() if def != null else str(found["weapon"]))
+	return ""
 
 
 
@@ -1442,6 +1437,7 @@ func _drive_spectator_camera() -> void:
 		if hud != null:
 			hud.roam_hint = ""
 			hud.use_hint = _pickup_hint()
+		ArenaWeaponDropWiring.update_panel(self, _held(ArenaBindings.USE), get_process_delta_time())
 		if not player.camera.current:
 			player.camera.current = true
 		return
