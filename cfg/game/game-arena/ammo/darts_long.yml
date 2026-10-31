@@ -1,0 +1,12 @@
+# Arena ammo type: Long darts. Penetration power is metres of resistance-1 material; materials/body_zones are "id:cost" lists.
+name: "Long darts"
+penetration: 1.5
+max_depth: 1.5
+default_resistance: 1.0
+materials: "glass:0.1,wood:0.4,dirt:1,concrete:2.5,metal:4,steel:6"
+body_cost: 0.2
+body_zones: "head:1.5,chest:1,legs:0.6,arms:0.6"
+min_damage: 0.2
+max_passes: 4
+guns: "marksman,sniper"
+default: false

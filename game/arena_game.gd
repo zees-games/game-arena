@@ -55,6 +55,15 @@ var loadout_identity := ArenaLoadoutIdentity.new()
 ## Movement-dependent spread, recoil patterns and the spread crosshair (dot-game's opt-in; sv_spread_*, sv_recoil_*, on here).
 var combat_feel: DotGameCombatFeel = _make_combat_feel()
 
+## Ammo profiles (`cfg/game/game-arena/ammo`): what each gun's round can penetrate, read by the hitscan behaviour.
+var ammo_types: DotWeaponAmmoTypes = _load_ammo_types()
+
+
+static func _load_ammo_types() -> DotWeaponAmmoTypes:
+	var types := DotWeaponAmmoTypes.new()
+	var _n := types.load_set(DotWeaponAmmoTypes.make_set("", "game-arena"))
+	return types
+
 func _exit_tree() -> void:
 	if surf_rides != null:
 		surf_rides.call(&"release")
@@ -1348,6 +1357,7 @@ func add_player(
 	player.join_combat(combat)
 	_add_fall_damage(player)
 	combat_feel.attach(player.arsenal)
+	player.arsenal.ammo_types = ammo_types
 	combat_feel.track_tunables(player.controller.tunables)
 	player.apply_movement_rules(movement_rules)
 	player.arsenal.fire_buffer_seconds = fire_buffer_seconds

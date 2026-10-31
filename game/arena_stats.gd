@@ -106,6 +106,7 @@ static func schema() -> DotStatsSchema:
 
 	_counter(schema, STOMPS, "Stomps", "kills", false)
 	DotStatsPoints.declare(schema, POINTS, "Points")
+	DotStatsPenetration.declare(schema)
 	_counter(schema, SHOTS_FIRED, "Shots fired", "shots", false)
 	_counter(schema, SHOTS_HIT, "Shots landed", "shots", false)
 

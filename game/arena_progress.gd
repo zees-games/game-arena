@@ -593,7 +593,16 @@ func _on_damage_applied(damage: DotDamage) -> void:
 		return
 
 	record(damage.attacker, ArenaStats.DAMAGE_DEALT, damage.health_lost)
+	_report_penetration(damage)
 	points.note_damage(damage.attacker, damage.victim, damage.health_lost, Time.get_ticks_msec() / 1000.0)
+
+
+## A hit by a round that crossed a wall or a body first, through dot-stats' penetration hook.
+func _report_penetration(damage: DotDamage) -> void:
+	if _kill_feed == null or int(damage.context.get("penetrated", 0)) <= 0:
+		return
+	var kind := DotStatsPenetration.KIND_WALL if bool(damage.context.get("wallbang", false)) else DotStatsPenetration.KIND_BODY
+	var _ok := _kill_feed.report_penetration(damage.attacker, damage.victim, String(damage.weapon_id), kind, damage.health_lost, damage.lethal)
 
 
 func _on_round_started(_round_number: int) -> void:

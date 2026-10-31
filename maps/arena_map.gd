@@ -1913,6 +1913,7 @@ func shot_trace() -> DotTrace:
 		return to_trace()
 
 	var trace := DotTracePhysics.new()
+	trace.material_fn = DotPhysicsSurfaceSet.material_of
 
 	if collision_root != null and collision_root.is_inside_tree():
 		trace.bind_from_node(collision_root)

@@ -1,0 +1,12 @@
+# Arena ammo type: Cells. Penetration power is metres of resistance-1 material; materials/body_zones are "id:cost" lists.
+name: "Cells"
+penetration: 0.0
+max_depth: 0.1
+default_resistance: 1.0
+materials: "glass:0.1,wood:0.4,dirt:1,concrete:2.5,metal:4,steel:6"
+body_cost: 0.1
+body_zones: "head:1.5,chest:1,legs:0.6,arms:0.6"
+min_damage: 0.2
+max_passes: 4
+guns: "charge_rifle,beamer"
+default: false

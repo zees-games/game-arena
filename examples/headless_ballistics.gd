@@ -12,7 +12,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 10
+const EXPECTED_CHECKS := 13
 
 var _checks := 0
 var _failed := 0
@@ -92,6 +92,11 @@ func _run() -> void:
 	var info := {"hits": [], "point": Vector3.ZERO, "ticks": 0}
 	_check(_game.bullet_bridge != null, "the game builds a bullet bridge")
 	_check(not _game.combat_feel.ballistics.enabled, "sv_ballistics is off by default")
+	var round_of := shooter.arsenal.round_for(&"rifle")
+	_check(round_of != null and round_of.penetration > 0.0, "the rifle's round, from cfg ammo data, can penetrate")
+	var sniper := shooter.arsenal.round_for(&"sniper")
+	_check(sniper != null and sniper.penetration > round_of.penetration, "the sniper's round penetrates further")
+	_check(shooter.arsenal.round_for(&"charge_rifle").penetration == 0.0, "a cell round penetrates nothing")
 
 	await _fire(3)
 	var off_health := _game.combat.health_of(2).health
