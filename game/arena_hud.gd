@@ -140,8 +140,8 @@ var launch_key_text: String:
 ## an empty magazine.
 var slide_label: DotKeyPrompt = null
 
-## The coins this player has collected this match, from the drops layer.
-var coins_label: Label = null
+## The points this player has collected this match, from the drops layer.
+var points_label: Label = null
 
 ## Kills since each player last died, counted from the KILL events every client gets, so
 ## the meter needs nothing new on the wire. See [method note_kill].
@@ -152,8 +152,7 @@ var streaks: Dictionary = {}
 ## Only ever written from AWARD: the HUD counts nothing about who killed whom itself.
 var nemeses: Dictionary = {}
 
-## The streak meter on the left: a bar that fills toward [constant STREAK_FULL] and a count.
-var streak_meter: StreakMeter = null
+## Kills the vitals' killstreak row counts toward.
 const STREAK_FULL := 10
 
 ## The hit marker: four ticks round the crosshair on every hit the server confirmed, red
@@ -238,73 +237,6 @@ class Look:
 		canvas.draw_string(font, at, text, align, width, font_size, colour)
 
 
-## The killstreak meter: a thin rounded bar up the left edge, a flame over it, and
-## "Killstreak xN" under it, all gold. Drawn, with the flame from `assets/medals/`.
-class StreakMeter extends Control:
-	var fraction: float = 0.0
-	var count: int = 0
-	## Seconds since the count last went up, for the flame's pulse.
-	var _since: float = 99.0
-	var _shown: float = 0.0
-
-	func set_count(value: int, full: int) -> void:
-		if value > count:
-			_since = 0.0
-		count = value
-		fraction = float(value) / float(maxi(1, full))
-
-	func advance(delta: float) -> void:
-		_since += delta
-		# The fill eases toward the count rather than jumping, so a kill reads as a rise.
-		_shown = move_toward(_shown, clampf(fraction, 0.0, 1.0), delta * 2.5)
-		queue_redraw()
-
-	## The bar and the flame over it: a thin column. The words under it are
-	## [method label_footprint], apart, because one box round both would take in the key
-	## hints beside the bar.
-	func footprint() -> Rect2:
-		return Rect2(-10.0, -36.0, 30.0, size.y + 37.0)
-
-	## "Killstreak xN" under the bar.
-	func label_footprint() -> Rect2:
-		var w := Look.feedback_font(true).get_string_size("Killstreak x%d" % count, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17).x
-		return Rect2(-17.0, size.y + 8.0, w + 6.0, 24.0)
-
-	func _draw() -> void:
-		var width := 10.0
-		var track := Rect2(0.0, 0.0, width, size.y)
-		var back := StyleBoxFlat.new()
-		back.bg_color = Color(ArenaHudGlance.Ink.c(self, &"plate"), 0.6)
-		back.set_corner_radius_all(4)
-		back.border_color = Color(ArenaHudGlance.Ink.c(self, &"text"), 0.25)
-		back.set_border_width_all(1)
-		draw_style_box(back, track.grow(1.0))
-		var gold := ArenaHudGlance.Ink.c(self, &"highlight")
-		var fill := track.size.y * _shown
-		if fill > 0.5:
-			var bar := StyleBoxFlat.new()
-			bar.bg_color = gold
-			bar.set_corner_radius_all(4)
-			draw_style_box(bar, Rect2(0.0, track.size.y - fill, width, fill))
-			draw_rect(Rect2(1.5, track.size.y - fill + 2.0, 2.0, maxf(0.0, fill - 4.0)), Color(1.0, 0.95, 0.7, 0.7))
-
-		var pulse := 1.0 + 0.35 * maxf(0.0, 1.0 - _since / 0.3)
-		var icon := Look.medal_icon("fire")
-		var side := 26.0 * pulse
-		var at := Rect2(Vector2(width * 0.5 - side * 0.5, -side - 8.0), Vector2(side, side))
-		if icon != null:
-			draw_texture_rect(icon, at.grow(2.0), false, Color(0.1, 0.05, 0.0, 0.6))
-			draw_texture_rect(icon, at, false, gold if count > 0 else Color(1.0, 1.0, 1.0, 0.45))
-		Look.draw_outlined(
-			self, Look.feedback_font(true), Vector2(-14.0, size.y + 26.0), "Killstreak x%d" % count,
-			17, gold if count > 0 else Color(1.0, 1.0, 1.0, 0.6), 6
-		)
-
-
-## The medals of the followed player's kills: a row above the crosshair, each a coloured
-## badge with a white icon and its name under it. Each scales in with an overshoot, holds,
-## and fades; several from one kill come in one after another, and the row re-centres as
-## they come and go.
 class MedalRow extends Control:
 	const IN_SEC := 0.22
 	const HOLD_SEC := 2.4
@@ -516,90 +448,9 @@ static func mode_label(slot: DotWeaponSlot, key: String) -> String:
 	return "%s  %s%s" % [name, mode, " [%s]" % key if key != "" else ""]
 
 
-## How far along a challenge is, in the words its stat is counted in.
-##
-## [b]Never the raw counter over the raw target.[/b] Christian's first play test showed
-## "(2/100000)" over the score box: damage dealt against a hundred-thousand target, which
-## read as a debug print. Playing time is seconds and reads as a clock ("0:03 of 10 h");
-## a target of a thousand or more is shortened ("2 of 100k"); a small one stays a count
-## ("3/25"), which is what a player wants to see go up.
-static func progress_text(stat: StringName, value: int, target: int) -> String:
-	if stat == ArenaStats.PLAYTIME_SEC:
-		return "%s of %s" % [_duration(value), _duration(target)]
-	if target >= 1000:
-		return "%s of %s" % [_short_count(value), _short_count(target)]
-	return "%d/%d" % [value, target]
-
-
-static func _short_count(n: int) -> String:
-	if absi(n) >= 1000000:
-		return ("%.1fM" % (n / 1000000.0)).replace(".0M", "M")
-	if absi(n) >= 1000:
-		return ("%.1fk" % (n / 1000.0)).replace(".0k", "k")
-	return str(n)
-
-
-static func _duration(sec: int) -> String:
-	if sec >= 3600 and sec % 3600 == 0:
-		return "%d h" % (sec / 3600)
-	if sec >= 3600:
-		return "%d:%02d h" % [sec / 3600, (sec % 3600) / 60]
-	return "%d:%02d" % [sec / 60, sec % 60]
-
-
-## "1 coin", "5 coins": the count and the noun, agreed (the play test read "+1 COINS").
-static func coins_text(count: int) -> String:
-	return "%d coin" % count if absi(count) == 1 else "%d coins" % count
-
-
-## The challenge bar at the top: the achievement the player is nearest to, and how near.
-var challenge_label: Label = null
-var challenge_bar: ProgressBar = null
-var _challenges: DotAchievementCatalogue = null
-
-
-func present_challenge(live: bool) -> void:
-	if challenge_label == null:
-		# Top left: the top centre is the scores and the portraits now.
-		challenge_label = _make_label("Challenge", Control.PRESET_TOP_LEFT, Vector2(0.0, 2.0))
-		challenge_label.grow_horizontal = Control.GROW_DIRECTION_END
-		challenge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		challenge_label.offset_left = 8.0
-		challenge_label.add_theme_font_size_override(&"font_size", 14)
-		challenge_bar = ProgressBar.new()
-		challenge_bar.name = "ChallengeBar"
-		challenge_bar.show_percentage = false
-		challenge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		challenge_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-		challenge_bar.offset_left = 8.0
-		challenge_bar.offset_right = 300.0
-		challenge_bar.offset_top = 28.0
-		challenge_bar.offset_bottom = 34.0
-		var fill := StyleBoxFlat.new()
-		fill.bg_color = Color(1.0, 0.78, 0.25)
-		challenge_bar.add_theme_stylebox_override(&"fill", fill)
-		var back := StyleBoxFlat.new()
-		back.bg_color = Color(0.0, 0.0, 0.0, 0.45)
-		challenge_bar.add_theme_stylebox_override(&"background", back)
-		add_child(challenge_bar)
-		_challenges = ArenaAwards.catalogue()
-
-	var index := player.challenge if player != null else -1
-	var shown := live and index >= 0 and index < _challenges.achievements.size()
-	challenge_label.visible = shown
-	challenge_bar.visible = shown
-
-	if not shown:
-		return
-
-	var a: DotAchievement = _challenges.achievements[index]
-	var target := int(a.requirements[0].value)
-	challenge_label.text = "%s — %s  %s" % [
-		a.display_name, a.description.trim_suffix("."),
-		progress_text(a.requirements[0].stat, player.challenge_value, target),
-	]
-	challenge_bar.max_value = float(target)
-	challenge_bar.value = float(player.challenge_value)
+## "1 point", "5 points": the count and the noun, agreed (the play test read "+1 POINTS").
+static func points_text(count: int) -> String:
+	return "%d point" % count if absi(count) == 1 else "%d points" % count
 
 
 ## Seconds a "+N" popup rises and fades over.
@@ -609,11 +460,11 @@ const POPUP_SEC := 1.3
 ## medals play.
 const KILL_POPUP_SEC := 2.6
 
-## Rising "+1" / "+3 COINS" lines beside the crosshair: [Label, age].
+## Rising "+1" / "+3 POINTS" lines beside the crosshair: [Label, age].
 var _popups: Array = []
 
-## The coin count last frame, so a rise can be told as a popup.
-var _coins_seen: int = -1
+## The point count last frame, so a rise can be told as a popup.
+var _points_seen: int = -1
 
 
 ## A "+N" beside the crosshair that rises and fades: the genre's way of saying a kill or a
@@ -717,23 +568,11 @@ func note_award(info: Dictionary, own_id: int, victim_name: String, killer_name:
 			_death_text += "\n" + line
 
 
-## The streak meter, the hit marker, the damage numbers and the medal row. Built once, on
+## The hit marker, the damage numbers and the medal row. Built once, on
 ## first need, over everything else on the HUD.
 func _build_feedback() -> void:
-	if streak_meter != null:
+	if hit_marker != null:
 		return
-	streak_meter = StreakMeter.new()
-	streak_meter.name = "Streak"
-	streak_meter.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	streak_meter.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	streak_meter.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	# [b]Short enough that its words clear a full chat log.[/b] The chat box's eight rows
-	# reach y 424 at 1280x720 (`ArenaPresentation._build_chat`: 110 off the bottom, the
-	# entry, 8 x 20); a 250-tall bar put "Killstreak xN" at 468..492, and the sixth chat
-	# line wrote over it in the client shell (a ballot's "Vote: …" line wraps to two).
-	streak_meter.position = Vector2(34.0, -160.0)
-	streak_meter.size = Vector2(10.0, 180.0)
-	add_child(streak_meter)
 	damage_numbers = DotDamageNumbers.new()
 	damage_numbers.name = "DamageNumbers"
 	damage_numbers.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -884,7 +723,8 @@ func build(p_game: ArenaGame) -> void:
 	# under it when there is any. The bars ease and the numbers do not (`DotVitals`).
 	vitals = DotVitals.new()
 	vitals.name = "Vitals"
-	_place(vitals, Control.PRESET_BOTTOM_LEFT, Rect2(0.0, -84.0, 380.0, 76.0))
+	_place(vitals, Control.PRESET_BOTTOM_LEFT, Rect2(0.0, -112.0, 380.0, 104.0))
+	vitals.streak_icon = Look.medal_icon("fire")
 	vitals.bar_start = 38.0
 	vitals.bar_end = 300.0
 
@@ -993,7 +833,7 @@ func footprints() -> Dictionary:
 	var pieces := {
 		"scores": strip, "portraits": portraits, "feed": feed, "vitals": vitals,
 		"ammo": ammo, "slots": slots, "abilities": abilities, "hints": hints,
-		"prompt": slide_label, "streak": streak_meter, "medals": medal_row,
+		"prompt": slide_label, "medals": medal_row,
 	}
 	for key: String in pieces:
 		var piece: Control = pieces[key]
@@ -1002,13 +842,9 @@ func footprints() -> Dictionary:
 		var local: Rect2 = piece.call(&"footprint")
 		if local.has_area():
 			out[key] = piece.get_global_transform() * local
-	if streak_meter != null and streak_meter.is_visible_in_tree():
-		out["streak_label"] = streak_meter.get_global_transform() * streak_meter.label_footprint()
-	for label: Label in [challenge_label, notice_label, objective_label, death_label, coins_label]:
+	for label: Label in [notice_label, objective_label, death_label, points_label]:
 		if label != null and label.is_visible_in_tree() and label.text != "":
 			out[String(label.name)] = label.get_global_rect()
-	if challenge_bar != null and challenge_bar.is_visible_in_tree():
-		out["challenge_bar"] = challenge_bar.get_global_rect()
 	return out
 
 
@@ -1386,9 +1222,7 @@ func present_body() -> void:
 
 	var delta := get_process_delta_time()
 	var streak := int(streaks.get(player.player_id, 0)) if player != null else 0
-	streak_meter.visible = live
-	streak_meter.set_count(streak, STREAK_FULL)
-	streak_meter.advance(delta)
+	vitals.show_streak(streak, STREAK_FULL)
 	# The hit marker and the damage numbers advance themselves (`DotHudPiece._process`).
 	medal_row.advance(delta)
 
@@ -1399,25 +1233,24 @@ func present_body() -> void:
 	death_label.visible = player != null and not player.is_alive() and _death_text != ""
 	death_label.text = _death_text
 
-	if coins_label == null:
-		# Top left, under the challenge: a count, not something to watch.
-		coins_label = _make_label("Coins", Control.PRESET_TOP_LEFT, Vector2(0.0, 40.0))
-		coins_label.grow_horizontal = Control.GROW_DIRECTION_END
-		coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		coins_label.offset_left = 8.0
-		coins_label.add_theme_color_override(&"font_color", Color(1.0, 0.82, 0.25))
+	if points_label == null:
+		# Top left: a count, not something to watch.
+		points_label = _make_label("Points", Control.PRESET_TOP_LEFT, Vector2(0.0, 8.0))
+		points_label.grow_horizontal = Control.GROW_DIRECTION_END
+		points_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		points_label.offset_left = 8.0
+		points_label.add_theme_color_override(&"font_color", Color(1.0, 0.82, 0.25))
 	var count := 0
 	if live and game != null and game.drops != null:
-		count = int(game.drops.coins.get(player.player_id, 0))
-	coins_label.visible = count > 0
-	coins_label.text = coins_text(count)
+		count = int(game.drops.points.get(player.player_id, 0))
+	points_label.visible = count > 0
+	points_label.text = points_text(count)
 
-	if _coins_seen >= 0 and count > _coins_seen:
-		popup("+" + coins_text(count - _coins_seen), Color(1.0, 0.82, 0.25))
-	_coins_seen = count
+	if _points_seen >= 0 and count > _points_seen:
+		popup("+" + points_text(count - _points_seen), Color(1.0, 0.82, 0.25))
+	_points_seen = count
 
 	_advance_popups(get_process_delta_time())
-	present_challenge(live)
 
 
 ## Covers the whole viewport, like the blind: the HUD's own size leaves the safe-area strip showing.

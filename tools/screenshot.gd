@@ -412,11 +412,18 @@ func _play_glance() -> void:
 		slot.magazine = maxi(1, slot.def.magazine / 3)
 	_local.health.health = _local.health.max_health * 0.64
 	_local.health.armour = 35.0
+	if OS.get_cmdline_user_args().has("--low"):
+		_local.health.health = _local.health.max_health * 0.14
+		_local.health.armour = 0.0
 	_local.controller.state.launch_cooldown_left = 4.2
 	_local.controller.state.dash_cooldown_left = 1.3
 	_local.controller.state.slide_time = 0.3
 	_local.controller.state.wall_jumps_in_air = 1
 	var late: Array = []
+	var streak_at := args.find("--streak")
+	if streak_at >= 0 and streak_at + 1 < args.size():
+		var run := int(args[streak_at + 1])
+		late.append([14, func() -> void: _hud.streaks[112] = run])
 	if ScreenshotGlanceStates.stage(self, game, late):
 		return
 	if _glance_chat:
@@ -431,7 +438,7 @@ func _play_glance() -> void:
 		late.append([10, func() -> void: _hud.notice(said)])
 
 	_shots = [{
-		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else "") + ("_killcam" if OS.get_cmdline_user_args().has("--killcam") else "") + ("_" + _glance_theme if _glance_theme != "" else ""),
+		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else "") + ("_low" if args.has("--low") else "") + ("_streak" if streak_at >= 0 else "") + ("_killcam" if OS.get_cmdline_user_args().has("--killcam") else "") + ("_" + _glance_theme if _glance_theme != "" else ""),
 		"local": true,
 		"late": [
 			[12, func() -> void:

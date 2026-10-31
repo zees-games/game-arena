@@ -1169,7 +1169,8 @@ func _test_chat_box() -> void:
 	hud.build(null)
 	hud._build_feedback()
 	hud.fit_to_frame(Vector2(1280, 720))
-	var streak: Rect2 = hud.streak_meter.get_global_transform() * hud.streak_meter.label_footprint()
+	hud.vitals.show_streak(3, ArenaHud.STREAK_FULL)
+	var streak: Rect2 = hud.vitals.get_global_transform() * hud.vitals.footprint()
 	var rows := float(window.max_lines) * (window.line_height + window.line_gap)
 	var log_box := Rect2(window.margin_left, 720.0 - window.margin_bottom - window.entry_height - rows, window.width, rows)
 	_check(not log_box.intersects(streak), "a full chat log stays under the killstreak meter at 1280x720",
@@ -2107,14 +2108,10 @@ func _test_hud_fits_the_frame() -> void:
 	hud.abilities.show_buttons(buttons)
 	hud.hints.show_hints([["Scoreboard", "Tab"], ["Menu", "Esc"], ["Chat", "Y"], ["Slide", "C"]])
 	hud.slide_label.show_prompt("Cancel slide", "C")
-	hud.streak_meter.set_count(3, ArenaHud.STREAK_FULL)
+	hud.vitals.show_streak(3, ArenaHud.STREAK_FULL)
 	hud.medal_row.add(ArenaAwards.Medal.HEADSHOT, "Headshot")
 	hud.medal_row.add(ArenaAwards.Medal.DOUBLE_KILL, "Double Kill")
 	hud.medal_row.advance(1.0)
-	hud.present_challenge(false)
-	hud.challenge_label.text = "Veteran — Ten hours in the arena  (2/36000)"
-	hud.challenge_label.visible = true
-	hud.challenge_bar.visible = true
 
 	# The chat box, scaled with the HUD as ArenaPresentation scales it: unscaled, a full log
 	# at 854x480 reached the killstreak meter and the key hints.
@@ -2143,7 +2140,7 @@ func _test_hud_fits_the_frame() -> void:
 				if a.intersects(rects[keys[j]]):
 					met.append("%s/%s" % [keys[i], keys[j]])
 		var size_name := "%dx%d" % [int(frame.x), int(frame.y)]
-		_check(met.is_empty() and keys.size() == 15,
+		_check(met.is_empty() and keys.size() == 11,
 			"at %s, none of the %d pieces meets another" % [size_name, keys.size()], ", ".join(met))
 		_check(outside.is_empty(), "and every one is inside the frame", ", ".join(outside))
 
@@ -2380,14 +2377,9 @@ func _test_criticals_and_the_body() -> void:
 	_check(hud.hurt_overlay.material is ShaderMaterial,
 		"the red edge is drawn by a shader, not a stretched texture")
 
-	# The play test's "+1 COINS" and "(2/100000)".
-	_check(ArenaHud.coins_text(1) == "1 coin" and ArenaHud.coins_text(5) == "5 coins",
-		"one coin is a coin (%s, %s)" % [ArenaHud.coins_text(1), ArenaHud.coins_text(5)])
-	var damage := ArenaHud.progress_text(&"arena.damage_dealt", 2, 100000)
-	var hours := ArenaHud.progress_text(&"arena.playtime_sec", 3, 36000)
-	var kills := ArenaHud.progress_text(&"arena.kills", 11, 100)
-	_check(damage == "2 of 100k" and hours == "0:03 of 10 h" and kills == "11/100",
-		"a challenge's progress reads in its own units (%s; %s; %s)" % [damage, hours, kills])
+	# The play test's "+1 POINTS".
+	_check(ArenaHud.points_text(1) == "1 point" and ArenaHud.points_text(5) == "5 points",
+		"one point is a point (%s, %s)" % [ArenaHud.points_text(1), ArenaHud.points_text(5)])
 
 	player.controller.tunables.launch_enabled = true  # off by default; the button only shows when on
 	hud.present_body()
@@ -2407,11 +2399,11 @@ func _test_criticals_and_the_body() -> void:
 	for v in [7, 8, 9]:
 		hud.note_kill({"killer_id": 6, "victim_id": v, "headshot": v == 9, "weapon": "rifle"}, 6, "Broken")
 	hud.present_body()
-	_check(hud.streak_meter.count == 3, "three kills fill the streak meter to three")
+	_check(hud.vitals.streak == 3, "three kills fill the streak row to three")
 	_check(hud._popups.is_empty() and hud.hit_marker.alpha() == 0.0 and hud.medal_row.shown.is_empty(),
 		"and a KILL alone draws no points, no hit marker and no medal: the client decides none of them")
 
-	# The challenge bar: the achievement this player is nearest to.
+	# The achievement the player is nearest to (still sent to the client).
 	var awards: DotAchievementCatalogue = load("res://game/arena_awards.gd").catalogue()
 	var progress := DotAchievementProgress.new()
 	progress.set_value(&"arena.kills", 11.0)
@@ -2419,15 +2411,6 @@ func _test_criticals_and_the_body() -> void:
 	var picked_def: DotAchievement = awards.achievements[int(picked[0])] if int(picked[0]) >= 0 else null
 	_check(picked_def != null and int(picked[1]) == 11 and picked_def.requirements[0].stat == &"arena.kills",
 		"a challenge is the goal a player is furthest along (%s)" % (picked_def.display_name if picked_def != null else "none"))
-	player.challenge = int(picked[0])
-	player.challenge_value = int(picked[1])
-	hud.present_challenge(true)
-	_check(hud.challenge_label.visible and hud.challenge_label.text.contains("11/100") and hud.challenge_bar.value == 11.0,
-		"and the HUD draws it with a bar (%s)" % hud.challenge_label.text)
-	player.challenge = -1
-	hud.present_challenge(true)
-	_check(not hud.challenge_label.visible, "and nothing when there is none")
-
 	for i in range(3):
 		hud.note_kill({"killer_id": 7, "victim_id": 6, "weapon": "sniper"}, 6, "Sniper")
 	_check(hud.streaks.get(6, -1) == 0 and not hud._death_text.contains("NEMESIS"),
@@ -2596,7 +2579,7 @@ func _test_feedback_from_the_wire() -> void:
 	_check(hud.medal_row.labels() == PackedStringArray(["First Blood", "Headshot"]) and float(hud.medal_row.shown[1]["age"]) > 0.0,
 		"then both, by name, in the order the server sent them")
 	hud.present_body()
-	_check(hud.streak_meter.count == 4, "the streak meter takes the server's streak (%d)" % hud.streak_meter.count)
+	_check(hud.vitals.streak == 4, "the streak row takes the server's streak (%d)" % hud.vitals.streak)
 	hud.medal_row.advance(3.5)
 	_check(hud.medal_row.shown.is_empty(), "and the medals fade out after a couple of seconds")
 
