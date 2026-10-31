@@ -71,6 +71,9 @@ enum Mode {
 
 @export var team: int = 0
 
+## Ground speed above which a mirrored crouching player is drawn sliding, not crouch walking.
+const SLIDE_DRAW_SPEED := 5.0
+
 var mode: Mode = Mode.HEADLESS
 
 var controller: DotFpsController = null
@@ -1404,6 +1407,14 @@ func present(delta: float) -> void:
 ## [b]From the drawn state[/b], the same one the body is placed from, so the stride matches the
 ## ground the body covers this frame. The weapon kind picks the arms: a gun, a melee weapon
 ## (a swing plays the slash over the legs), or empty hands.
+## Whether the body is drawn sliding. A mirrored player's slide timer is not replicated, so a
+## crouch held at running speed on the ground reads as one.
+func _drawn_sliding(drawn: DotFpsState) -> bool:
+	if drawn.is_sliding():
+		return true
+	return mirrored and drawn.mode == DotFpsState.Mode.GROUND and drawn.crouch_fraction > 0.5 and Vector2(drawn.velocity.x, drawn.velocity.z).length() > SLIDE_DRAW_SPEED
+
+
 func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 	if figure == null or body_mesh == null or not body_mesh.visible:
 		return
@@ -1418,6 +1429,7 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 		"alive": is_alive(),
 		"wall_running": drawn.is_wall_running(),
 		"velocity": v,
+		"sliding": _drawn_sliding(drawn),
 		"wall": Plane(drawn.wall_normal, drawn.position - drawn.wall_normal * (controller.tunables.radius if controller != null else 0.35)) if drawn.wall_normal != Vector3.ZERO else Plane(),
 		# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
 		# reads where this player is aiming.
