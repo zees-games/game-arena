@@ -1,14 +1,764 @@
 [
-  {"paths": [""], "licence": "MIT", "author": "game-arena contributors", "url": "https://github.com/zees-games/game-arena"},
-  {"paths": ["assets/prototype"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/prototype-textures", "title": "Prototype Textures"},
-  {"paths": ["assets/medals"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/board-game-icons", "title": "Board Game Icons and Game Icons"},
-  {"paths": ["assets/hud_icons"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/game-icons", "title": "Game Icons and Mobile Controls"},
-  {"paths": ["assets/blaster-kit"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/blaster-kit", "title": "Blaster Kit"},
-  {"paths": ["assets/ammo"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/weapon-pack", "title": "Weapon Pack"},
-  {"paths": ["assets/melee"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/survival-kit", "title": "Weapon Pack and Survival Kit"},
-  {"paths": ["assets/arms"], "licence": "CC0-1.0", "author": "Kenney; para", "url": "https://opengameart.org/content/fps-arms-rigged-only", "title": "Blocky Characters; fps arms (rigged only), reshaped"},
-  {"paths": ["assets/low-poly-guns"], "licence": "CC0-1.0", "author": "Quaternius; Kenney", "url": "https://opengameart.org/content/low-poly-guns-pack", "title": "Ultimate Low Poly Guns Pack and Blaster Kit, kitbashed"},
-  {"paths": ["assets/weapon_icons"], "licence": "CC0-1.0", "author": "Kenney; Quaternius", "url": "https://kenney.nl", "title": "Silhouettes rendered from the CC0 weapon models"},
-  {"paths": ["assets/surfaces"], "licence": "CC0-1.0", "author": "Lennart Demes and contributors (ambientCG)", "url": "https://ambientcg.com", "title": "PBR materials"},
-  {"paths": ["avatars/kenney"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/blocky-characters", "title": "Blocky Characters"}
+ {
+  "paths": [
+   ""
+  ],
+  "licence": "MIT",
+  "author": "game-arena contributors",
+  "url": "https://github.com/zees-games/game-arena"
+ },
+ {
+  "paths": [
+   "assets/prototype"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney",
+  "url": "https://kenney.nl/assets/prototype-textures",
+  "title": "Prototype Textures"
+ },
+ {
+  "paths": [
+   "assets/medals"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney",
+  "url": "https://kenney.nl/assets/board-game-icons",
+  "title": "Board Game Icons and Game Icons"
+ },
+ {
+  "paths": [
+   "assets/hud_icons"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney",
+  "url": "https://kenney.nl/assets/game-icons",
+  "title": "Game Icons and Mobile Controls"
+ },
+ {
+  "paths": [
+   "assets/blaster-kit"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney",
+  "url": "https://kenney.nl/assets/blaster-kit",
+  "title": "Blaster Kit"
+ },
+ {
+  "paths": [
+   "assets/ammo"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney",
+  "url": "https://kenney.nl/assets/weapon-pack",
+  "title": "Weapon Pack"
+ },
+ {
+  "paths": [
+   "assets/melee"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney",
+  "url": "https://kenney.nl/assets/survival-kit",
+  "title": "Weapon Pack and Survival Kit"
+ },
+ {
+  "paths": [
+   "assets/arms"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney; para",
+  "url": "https://opengameart.org/content/fps-arms-rigged-only",
+  "title": "Blocky Characters; fps arms (rigged only), reshaped"
+ },
+ {
+  "paths": [
+   "assets/low-poly-guns"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Quaternius; Kenney",
+  "url": "https://opengameart.org/content/low-poly-guns-pack",
+  "title": "Ultimate Low Poly Guns Pack and Blaster Kit, kitbashed"
+ },
+ {
+  "paths": [
+   "assets/weapon_icons"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney; Quaternius",
+  "url": "https://kenney.nl",
+  "title": "Silhouettes rendered from the CC0 weapon models"
+ },
+ {
+  "paths": [
+   "assets/surfaces"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Lennart Demes and contributors (ambientCG)",
+  "url": "https://ambientcg.com",
+  "title": "PBR materials"
+ },
+ {
+  "paths": [
+   "avatars/kenney"
+  ],
+  "licence": "CC0-1.0",
+  "author": "Kenney",
+  "url": "https://kenney.nl/assets/blocky-characters",
+  "title": "Blocky Characters"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_10x_final",
+   "worlds/surf_10x_final"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf 10x Final",
+  "author": "Wof-",
+  "source_url": "https://gamebanana.com/mods/121522",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_10x_reloaded_fixed",
+   "worlds/surf_10x_reloaded_fixed"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf 10x Reloaded Fixed",
+  "author": "Buck Nasty",
+  "source_url": "https://gamebanana.com/mods/121524",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_110b_austinpowers",
+   "worlds/surf_110b_austinpowers"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf 110b Austinpowers",
+  "author": "TheInvoker",
+  "source_url": "https://gamebanana.com/mods/121530",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_29_12_06",
+   "worlds/surf_29_12_06"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf 29 12 06",
+  "author": "matrix-hetman",
+  "source_url": "https://gamebanana.com/mods/121540",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_adverse",
+   "worlds/surf_adverse"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Adverse",
+  "author": "target practice, Archangel",
+  "source_url": "https://gamebanana.com/mods/137677",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_akai_final",
+   "worlds/surf_akai_final"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Akai Final",
+  "author": "akai",
+  "source_url": "https://gamebanana.com/mods/121606",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_bathroom_final",
+   "worlds/surf_bathroom_final"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Bathroom Final",
+  "author": "smooth",
+  "source_url": "https://gamebanana.com/mods/121698",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_buck_wild",
+   "worlds/surf_buck_wild"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Buck Wild",
+  "author": "buck nasty",
+  "source_url": "https://gamebanana.com/mods/121787",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_dust2_2008_final",
+   "worlds/surf_dust2_2008_final"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Dust2 2008 Final",
+  "author": "Matrix Hetman, Karatek\u00e4fer",
+  "source_url": "https://gamebanana.com/mods/121962",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_forbidden_ways_2nd",
+   "worlds/surf_forbidden_ways_2nd"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Forbidden Ways 2nd",
+  "author": "krusty",
+  "source_url": "https://gamebanana.com/mods/122075",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_forbidden_ways_reloaded",
+   "worlds/surf_forbidden_ways_reloaded"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Forbidden Ways Reloaded",
+  "author": "Krusty, sky by Karatek\u00e4fer",
+  "source_url": "https://gamebanana.com/mods/122076",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_fruits",
+   "worlds/surf_fruits"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Fruits",
+  "author": "Sangre, Hellraisedsurfer, Robsonfire, Machine, Jaden, Komaokc, Icecreamlock, Shahzam, SKAR, JackTheStripper (copy-mark), Linus",
+  "source_url": "https://gamebanana.com/mods/122092",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_grave_reloaded",
+   "worlds/surf_grave_reloaded"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Grave Reloaded",
+  "author": "xblah",
+  "source_url": "https://gamebanana.com/mods/122151",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_greatriver",
+   "worlds/surf_greatriver"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Greatriver",
+  "author": "Ace Of Spades13",
+  "source_url": "https://gamebanana.com/mods/122158",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_greatriver_v4",
+   "worlds/surf_greatriver_v4"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Greatriver V4",
+  "author": "BeNnY",
+  "source_url": "https://gamebanana.com/mods/122202",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_greatriver_xdre4m",
+   "worlds/surf_greatriver_xdre4m"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Greatriver Xdre4m",
+  "author": "!Black, with Ace Of Spades13 and Junior",
+  "source_url": "https://gamebanana.com/mods/122206",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_i_hate_campers",
+   "worlds/surf_i_hate_campers"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Surf I Hate Campers",
+  "author": "Snah",
+  "source_url": "https://gamebanana.com/mods/122339",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_japan_ptad",
+   "worlds/surf_japan_ptad"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Japan Ptad",
+  "author": "ptad, monkeydie",
+  "source_url": "https://gamebanana.com/mods/137687",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_legends",
+   "worlds/surf_legends"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Legends",
+  "author": "SintaxError",
+  "source_url": "https://gamebanana.com/mods/122424",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_machine2",
+   "worlds/surf_machine2"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Machine2",
+  "author": "Z-machine",
+  "source_url": "https://gamebanana.com/mods/122478",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_machine_remix_final",
+   "worlds/surf_machine_remix_final"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Machine Remix Final",
+  "author": "paper-cut, z-machine(original)",
+  "source_url": "https://gamebanana.com/mods/122497",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_mai_remix",
+   "worlds/surf_mai_remix"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Mai Remix",
+  "author": "Krusty",
+  "source_url": "https://gamebanana.com/mods/122505",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_matrix_v8",
+   "worlds/surf_matrix_v8"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Matrix V8",
+  "author": "Flippi273",
+  "source_url": "https://gamebanana.com/mods/122520",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_ny_advance",
+   "worlds/surf_ny_advance"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Ny Advance",
+  "author": "faj",
+  "source_url": "https://gamebanana.com/mods/122641",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_ny_bigloop_2008a",
+   "worlds/surf_ny_bigloop_2008a"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Ny Bigloop 2008a",
+  "author": "Paper-Cut, FAJ",
+  "source_url": "https://gamebanana.com/mods/122644",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_parrot_selector",
+   "worlds/surf_parrot_selector"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Parrot Selector",
+  "author": "ptad",
+  "source_url": "https://gamebanana.com/mods/122709",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_pavilion",
+   "worlds/surf_pavilion"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Pavilion",
+  "author": "Black Sheep",
+  "source_url": "https://gamebanana.com/mods/122711",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_pox",
+   "worlds/surf_pox"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Pox",
+  "author": "Krusty, Pariah, Karatek\u00e4fer, Korr",
+  "source_url": "https://gamebanana.com/mods/122741",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_rebel_resistance_final3",
+   "worlds/surf_rebel_resistance_final3"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Rebel Resistance Final3",
+  "author": "-)RR(-ArchAngel -)RR(-Lethalis",
+  "source_url": "https://gamebanana.com/mods/122824",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_ski_2",
+   "worlds/surf_ski_2"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Ski 2",
+  "author": "Massive Boredom and Mario",
+  "source_url": "https://gamebanana.com/mods/122953",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_ski_2_source",
+   "worlds/surf_ski_2_source"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Ski 2 Source",
+  "author": "Korliki ''Angel",
+  "source_url": "https://gamebanana.com/mods/122956",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_skyworld",
+   "worlds/surf_skyworld"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Skyworld",
+  "author": "Goerge",
+  "source_url": "https://gamebanana.com/mods/122985",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_snipers_island",
+   "worlds/surf_snipers_island"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Surf Snipers Island",
+  "author": "Loller Dan",
+  "source_url": "https://gamebanana.com/mods/137698",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_the_flow",
+   "worlds/surf_the_flow"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Surf The Flow",
+  "author": "G-Flow, Karatek\u00e4fer (skybox), Stavros Xanthis",
+  "source_url": "https://gamebanana.com/mods/137701",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_the_gloaming",
+   "worlds/surf_the_gloaming"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf The Gloaming",
+  "author": "Roosta, Teeth",
+  "source_url": "https://gamebanana.com/mods/123134",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_thriller",
+   "worlds/surf_thriller"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Thriller",
+  "author": "buck nasty",
+  "source_url": "https://gamebanana.com/mods/123141",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_torque2",
+   "worlds/surf_torque2"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Torque2",
+  "author": "Sangre Nueva",
+  "source_url": "https://gamebanana.com/mods/123157",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_velocity",
+   "worlds/surf_velocity"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Velocity",
+  "author": "copy-mark, jack the stripper, sangre, hellraisedsurfer, target practice, jesuswashomeless, skar",
+  "source_url": "https://gamebanana.com/mods/123224",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported/surf_xiv_v2a",
+   "worlds/surf_xiv_v2a"
+  ],
+  "licence": "none stated",
+  "exception": "credited-community-map",
+  "title": "Surf Xiv V2a",
+  "author": "smooth.nl",
+  "source_url": "https://gamebanana.com/mods/123284",
+  "removal_contact": "https://github.com/zees-games/arena-surf-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/aim-forts"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Aim Forts",
+  "author": "NoBuxs",
+  "source_url": "https://gamebanana.com/mods/116937",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/blackhawkdown"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Blackhawkdown",
+  "author": "Cc_NIPPER",
+  "source_url": "https://gamebanana.com/mods/116994",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/crackhouse"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Crackhouse",
+  "author": "unknown",
+  "source_url": "",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/dm-hot-cn-v1"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Dm Hot Cn V1",
+  "author": "seigneurdesombres",
+  "source_url": "https://gamebanana.com/mods/117417",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/dm-industrial-gamma"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Dm Industrial Gamma",
+  "author": "warhawk3407",
+  "source_url": "https://gamebanana.com/mods/117427",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/dm-morpheus"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Dm Morpheus",
+  "author": "mr-thermaltake",
+  "source_url": "https://gamebanana.com/mods/117486",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/dm-overwatch"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Dm Overwatch",
+  "author": "LikeMike213",
+  "source_url": "https://gamebanana.com/mods/117534",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/dm-scarletdevilmansion"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Dm Scarletdevilmansion",
+  "author": "Deity Link",
+  "source_url": "https://gamebanana.com/mods/117571",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/gg-canyon"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Gg Canyon",
+  "author": "Devi8",
+  "source_url": "https://gamebanana.com/mods/134054",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/gg-fy-snow"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Gg Fy Snow",
+  "author": "s1nk0",
+  "source_url": "https://gamebanana.com/mods/135022",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/gg-garage"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Gg Garage",
+  "author": "SGT_kick_ur_ass",
+  "source_url": "https://gamebanana.com/mods/135049",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/gg-krusty-krab"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Gg Krusty Krab",
+  "author": "FireWavezZ",
+  "source_url": "https://gamebanana.com/mods/135508",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/gg-lego-arena"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Gg Lego Arena",
+  "author": "Jevan",
+  "source_url": "https://gamebanana.com/mods/135558",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/gg-punishment"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Gg Punishment",
+  "author": "Karatekaefer",
+  "source_url": "https://gamebanana.com/mods/136211",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/gg-simpsons-x"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Gg Simpsons X",
+  "author": "BasicAir",
+  "source_url": "https://gamebanana.com/mods/136613",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/gg-woods"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Gg Woods",
+  "author": "X-tr3m3r",
+  "source_url": "https://gamebanana.com/mods/137426",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ },
+ {
+  "paths": [
+   "maps/imported_dm/welcometomexicov6"
+  ],
+  "licence": "CC-BY-NC-ND-4.0",
+  "exception": "credited-community-map",
+  "title": "Welcometomexicov6",
+  "author": "zaki90",
+  "source_url": "https://gamebanana.com/mods/117984",
+  "removal_contact": "https://github.com/zees-games/arena-dm-maps/issues"
+ }
 ]
