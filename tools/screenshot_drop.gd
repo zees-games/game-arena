@@ -7,8 +7,11 @@ static func stage(game, local, _hud) -> Array[Dictionary]:
 	if drops == null:
 		return []
 	var eye: Vector3 = local.camera.global_position
-	var dir := Vector3(0.0, -0.15, -1.0).normalized()
-	local.camera.look_at(eye + dir, Vector3.UP)
+	var dir := Vector3(0.0, -0.45, -1.0).normalized()
+	var aim_cam := func() -> void:
+		local.camera.global_position = eye
+		local.camera.look_at(eye + dir * 2.0, Vector3.UP)
+		local.camera.current = true
 	var held := &""
 	for n: int in local.arsenal.slots():
 		if local.arsenal.slot_at(n).def.slot == ZeeWeaponIds.SLOT_PRIMARY:
@@ -22,19 +25,25 @@ static func stage(game, local, _hud) -> Array[Dictionary]:
 	game.add_child(view)
 	var info := {}
 	var spawn := func() -> void:
+		aim_cam.call()
 		drops.clear()
 		drops.rules.pickup_delay = 0.0
 		var _id: int = drops.spawn(state, eye + dir * 2.0, Vector3.ZERO, 0)
 		for _t in 64 * 2:
 			game.tick({})
+		aim_cam.call()
 		info = drops.prompt_for(local.arsenal, eye, dir, game.weapon_drop_class_of(local.player_id))
 		view.show_prompt(info, 0.0)
 	var circle := func() -> void:
+		aim_cam.call()
 		view.show_prompt(info, 0.62)
 	var shoot := func() -> void:
+		aim_cam.call()
 		view.show_prompt({}, 0.0)
 		var tr: DotTrace = game.combat.trace
 		var _r := tr.ray(eye, dir, 6.0)
+		if _hud != null:
+			_hud.use_hint = ""
 	return [
 		{"name": "drop_panel", "local": true, "arm": spawn, "wait": 10},
 		{"name": "drop_hold", "local": true, "arm": circle, "wait": 6},

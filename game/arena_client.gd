@@ -1436,8 +1436,11 @@ func _drive_spectator_camera() -> void:
 	if not game.spectate.is_spectating(id):
 		if hud != null:
 			hud.roam_hint = ""
-			hud.use_hint = _pickup_hint()
 		ArenaWeaponDropWiring.update_panel(self, _held(ArenaBindings.USE), get_process_delta_time())
+		if hud != null:
+			# The world panel over a dropped weapon already says "Take ammo"; the HUD line would repeat it.
+			var panel: Node3D = get_meta(&"pickup_view", null)
+			hud.use_hint = "" if panel != null and panel.visible else _pickup_hint()
 		if not player.camera.current:
 			player.camera.current = true
 		return
