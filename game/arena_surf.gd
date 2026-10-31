@@ -322,6 +322,7 @@ func steer(bot: Object, mind: Object, intent: DotBotIntent, tick: int, tick_rate
 		var began := Time.get_ticks_usec()
 		status = ride.steer(state, intent, tick)
 		steer_usec += Time.get_ticks_usec() - began
+		DotFrameCost.add_usec(&"surf_pilot", Time.get_ticks_usec() - began, "bot steer, ride %d" % intent.ride)
 		steer_ticks += 1
 	if status == DotBotSurfRide.RIDING:
 		return

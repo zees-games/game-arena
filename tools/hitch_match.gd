@@ -48,6 +48,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	DotFrameCost.enabled = true
 	_hitch.threshold_ms = _threshold
 	_hitch.start(get_tree())
 	_t0 = Time.get_ticks_usec()
