@@ -8,7 +8,7 @@ static func _w() -> DotNetWriter:
 	return DotNetWriter.new()
 
 
-static func write_weapon_drop(id: int, weapon_index: int, magazine: int, reserve: int, at: Transform3D, velocity: Vector3, seconds: float, rest: bool) -> PackedByteArray:
+static func write_weapon_drop(id: int, weapon_index: int, magazine: int, reserve: int, at: Transform3D, velocity: Vector3, seconds: float, rest: bool, team: int = 0) -> PackedByteArray:
 	var w := _w()
 	w.write_varint(id)
 	w.write_varint(weapon_index)
@@ -19,6 +19,7 @@ static func write_weapon_drop(id: int, weapon_index: int, magazine: int, reserve
 	w.write_vector3_range(velocity, -64.0, 64.0, 12)
 	w.write_varint(ceili(maxf(seconds, 0.0)))
 	w.write_bool(rest)
+	w.write_varint(maxi(0, team))
 	return w.to_bytes()
 
 
@@ -29,6 +30,7 @@ static func read_weapon_drop(reader: DotNetReader) -> Dictionary:
 	out["velocity"] = reader.read_vector3_range(-64.0, 64.0, 12)
 	out["seconds"] = reader.read_varint()
 	out["rest"] = reader.read_bool()
+	out["team"] = reader.read_varint()
 	out["ok"] = reader.ok()
 	return out
 

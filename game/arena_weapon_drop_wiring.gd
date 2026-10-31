@@ -12,6 +12,7 @@ static func build(game) -> void:
 	layer.draws = not DotPlatform.is_headless()
 	layer.collision_mask = game.ragdoll_rules.collision_mask
 	layer.keep_slots = [ZeeWeaponIds.SLOT_MELEE]
+	layer.team_of = func(pid: int) -> int: return game.team_of(pid) if not game.teams().is_empty() else 0
 	layer.look_of = look
 	game.weapon_drops = layer
 	game.add_child(layer)

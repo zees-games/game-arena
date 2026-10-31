@@ -1384,7 +1384,7 @@ func _pickup_hint() -> String:
 			return String(aimed["label"])
 	if game.weapon_drops == null or player == null or not player.is_alive() or player.arsenal == null:
 		return ""
-	var found := game.weapon_drops.prompt_for(player.arsenal, player.camera.global_position, -player.camera.global_basis.z, game.weapon_drop_class_of(player.player_id))
+	var found := game.weapon_drops.prompt_for(player.arsenal, player.camera.global_position, -player.camera.global_basis.z, game.weapon_drop_class_of(player.player_id), game.team_of(player.player_id) if not game.teams().is_empty() else 0)
 	if found.is_empty() or not bool(found["can_take"]):
 		return ""
 	var def: Variant = player.arsenal.catalogue.get_def(StringName(found["weapon"]))

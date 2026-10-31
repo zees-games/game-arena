@@ -31,7 +31,7 @@ func _send_weapon_drops_signon(peer_id: int) -> void:
 		return
 	for entry in game.weapon_drops.snapshot():
 		_send_event(peer_id, ArenaEvents.Kind.WEAPON_DROP, _weapon_drop_body(
-			int(entry["id"]), entry["state"], entry["at"], Vector3.ZERO, float(entry["life"]), bool(entry["rest"])))
+			int(entry["id"]), entry["state"], entry["at"], Vector3.ZERO, float(entry["life"]), bool(entry["rest"]), int(entry["team"])))
 
 
 func _send_event(peer_id: int, kind: int, body: PackedByteArray) -> void:
@@ -39,12 +39,12 @@ func _send_event(peer_id: int, kind: int, body: PackedByteArray) -> void:
 
 
 func _on_weapon_dropped(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, _owner: int) -> void:
-	_send_event(0, ArenaEvents.Kind.WEAPON_DROP, _weapon_drop_body(id, state, at, velocity, game.weapon_drops.rules.lifetime, false))
+	_send_event(0, ArenaEvents.Kind.WEAPON_DROP, _weapon_drop_body(id, state, at, velocity, game.weapon_drops.rules.lifetime, false, game.weapon_drops.drop_team(id)))
 
 
-func _weapon_drop_body(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, seconds: float, rest: bool) -> PackedByteArray:
+func _weapon_drop_body(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, seconds: float, rest: bool, team: int = 0) -> PackedByteArray:
 	return ArenaWeaponDropEvents.write_weapon_drop(id, ArenaContent.weapon_index(StringName(state["id"])),
-		int(state.get("magazine", 0)), int(state.get("reserve", 0)), at, velocity, seconds, rest)
+		int(state.get("magazine", 0)), int(state.get("reserve", 0)), at, velocity, seconds, rest, team)
 
 
 func _on_weapon_settled(id: int, at: Transform3D) -> void:
@@ -64,7 +64,7 @@ func _apply_weapon_drop_event(kind: int, reader: DotNetReader) -> void:
 			if bool(wd["ok"]) and layer != null:
 				layer.mirror_drop(int(wd["id"]), {
 					"id": ArenaContent.weapon_at(int(wd["weapon"])), "magazine": int(wd["magazine"]), "reserve": int(wd["reserve"]),
-				}, wd["at"], wd["velocity"], float(wd["seconds"]), bool(wd["rest"]))
+				}, wd["at"], wd["velocity"], float(wd["seconds"]), bool(wd["rest"]), int(wd["team"]))
 		ArenaEvents.Kind.WEAPON_SETTLED:
 			var ws := ArenaWeaponDropEvents.read_weapon_settled(reader)
 			if bool(ws["ok"]) and layer != null:
