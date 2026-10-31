@@ -1,0 +1,14 @@
+[
+  {"paths": [""], "licence": "MIT", "author": "game-arena contributors", "url": "https://github.com/zees-games/game-arena"},
+  {"paths": ["assets/prototype"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/prototype-textures", "title": "Prototype Textures"},
+  {"paths": ["assets/medals"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/board-game-icons", "title": "Board Game Icons and Game Icons"},
+  {"paths": ["assets/hud_icons"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/game-icons", "title": "Game Icons and Mobile Controls"},
+  {"paths": ["assets/blaster-kit"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/blaster-kit", "title": "Blaster Kit"},
+  {"paths": ["assets/ammo"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/weapon-pack", "title": "Weapon Pack"},
+  {"paths": ["assets/melee"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/survival-kit", "title": "Weapon Pack and Survival Kit"},
+  {"paths": ["assets/arms"], "licence": "CC0-1.0", "author": "Kenney; para", "url": "https://opengameart.org/content/fps-arms-rigged-only", "title": "Blocky Characters; fps arms (rigged only), reshaped"},
+  {"paths": ["assets/low-poly-guns"], "licence": "CC0-1.0", "author": "Quaternius; Kenney", "url": "https://opengameart.org/content/low-poly-guns-pack", "title": "Ultimate Low Poly Guns Pack and Blaster Kit, kitbashed"},
+  {"paths": ["assets/weapon_icons"], "licence": "CC0-1.0", "author": "Kenney; Quaternius", "url": "https://kenney.nl", "title": "Silhouettes rendered from the CC0 weapon models"},
+  {"paths": ["assets/surfaces"], "licence": "CC0-1.0", "author": "Lennart Demes and contributors (ambientCG)", "url": "https://ambientcg.com", "title": "PBR materials"},
+  {"paths": ["avatars/kenney"], "licence": "CC0-1.0", "author": "Kenney", "url": "https://kenney.nl/assets/blocky-characters", "title": "Blocky Characters"}
+]
