@@ -12,7 +12,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 13
+const EXPECTED_CHECKS := 18
 
 var _checks := 0
 var _failed := 0
@@ -133,6 +133,53 @@ func _run() -> void:
 	tuning.spread_moving = was[5]
 	tuning.recoil_pitch = was[6]
 	print("  off-damage-before-switch: %s" % off_damaged)
+	_game.combat_feel.ballistics.set(&"enabled", false)
+	await _wallbang_check(shooter, victim)
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
 	get_tree().quit(0 if ok else 1)
+
+
+## A hitscan shot through a thin wall must carry the penetration on its damage and reach the stats as penetration_*.
+func _wallbang_check(shooter: ArenaPlayer, victim: ArenaPlayer) -> void:
+	for _i in 150:
+		_game.tick({})
+		await get_tree().physics_frame
+	var dir := shooter.aim_direction()
+	var origin := shooter.muzzle_position()
+	var feet := origin + dir * 15.0 - Vector3(0.0, 1.3, 0.0)
+	feet.y = maxf(feet.y, 0.05)
+	victim.spawn(Transform3D(Basis(), feet), 1)
+	_game.tick({})
+	var flat := _game.combat.trace as DotTraceFlat
+	_check(flat != null, "wall: the headless trace is flat")
+	if flat == null:
+		return
+	var wall_at := origin + dir * 7.0
+	var boxes_was := flat.boxes.duplicate()
+	var mats_was := flat.box_materials.duplicate()
+	var _w := flat.add_box(AABB(wall_at - Vector3(3.0, 3.0, 0.1), Vector3(6.0, 6.0, 0.2)))
+	await get_tree().physics_frame
+	var seen: Array = []
+	var on_damage := func(d: DotDamage) -> void: seen.append(d)
+	_game.combat.damage_applied.connect(on_damage)
+	var before: DotStatsValues = null
+	var key := StringName(_game.progress._key_of(1))
+	if _game.progress.stats != null:
+		before = _game.progress.stats.session_values(key).duplicate_values()
+	for _i in 150:
+		_game.tick({})
+		await get_tree().physics_frame
+	await _fire(3)
+	_game.combat.damage_applied.disconnect(on_damage)
+	flat.boxes.assign(boxes_was)
+	flat.box_materials.assign(mats_was)
+	var passed := false
+	for d: DotDamage in seen:
+		passed = passed or (int(d.context.get("penetrated", 0)) > 0 and bool(d.context.get("wallbang", false)))
+	_check(not seen.is_empty(), "wall: the shot through a wall landed", str(seen.size()))
+	_check(passed, "wall: its damage is marked penetrated and wallbang")
+	var now: DotStatsValues = _game.progress.stats.session_values(key)
+	var hits_before := before.get_value(DotStatsPenetration.HITS) if before != null else 0.0
+	_check(now.get_value(DotStatsPenetration.HITS) > hits_before, "wall: penetration_hits is filed", str(now.get_value(DotStatsPenetration.HITS)))
+	_check(now.get_value(DotStatsPenetration.DAMAGE) > 0.0, "wall: penetration_damage is filed")
