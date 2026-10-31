@@ -172,6 +172,9 @@ signal mode_shown(shown: ArenaMode)
 ## numbers belong to whoever decides who died.
 @export var track_progress: bool = true
 
+## Where lifetime stat totals persist (a user:// JSON file). Empty keeps none, so a suite is the same on every run; the server and the offline client set it.
+@export var stats_file: String = ""
+
 @export_group("Service")
 
 @export var register_service: bool = true

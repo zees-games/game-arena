@@ -34,6 +34,7 @@ func _ready() -> void:
 	game = ArenaGame.new()
 	game.name = "Game"
 	game.is_authority = true
+	game.stats_file = "user://arena_stats.json"
 	# HEADLESS: analytic geometry from the box list rather than a physics space. Not a
 	# degraded mode — it is exact, it needs no physics server, and it gives the same
 	# answer as a client replaying the same tick, which is what makes reconciliation

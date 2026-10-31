@@ -25,6 +25,7 @@ func _ready() -> void:
 	game = ArenaGame.new()
 	game.name = "Game"
 	game.is_authority = _offline
+	game.stats_file = "user://arena_stats.json"
 
 	# HEADLESS collision on a client with a screen: a predicting client must use the
 	# server's analytic backend, or replays land differently and reconciliation corrects

@@ -43,7 +43,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 678
+const CHECKS := 684
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -5241,6 +5241,38 @@ func _test_map_change() -> void:
 		_check(rk.rating_of(victim.player_id) == 1500.0, "Elo mode seeds the rating from the stored rank_score")
 		rk.mode = DotStatsRank.MODE_WEIGHTED
 		rk.reset()
+
+		# Leave and rejoin through the progress node and a file store: the lifetime total survives, and a flush after the rejoin adds only the new session.
+		var file_path := "user://headless_match_stats.json"
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(file_path))
+		var fstore := DotStatsStoreFile.new(file_path)
+		fstore.schema = tracker.schema
+		tracker.store = fstore
+		var visitor := 9001
+		var vkey := StringName(_game.progress._key_of(visitor))
+		await _game.progress.begin(visitor, "Visitor")
+		_game.progress.record(visitor, ArenaStats.KILLS, 3.0)
+		await _game.progress.leave(visitor)
+		var _w: DotResult = await tracker.flush_store()
+		var kills_id := StringName(ArenaStats.KILLS)
+		var stored_after_leave: float = (await fstore.values_for(vkey)).value.get_value(kills_id)
+		_check(stored_after_leave == 3.0, "a leave files the session into the lifetime store", str(stored_after_leave))
+		await _game.progress.begin(visitor, "Visitor")
+		var base: DotStatsValues = _game.progress.rank.baselines.get(visitor, null)
+		_check(base != null and base.get_value(kills_id) == 3.0, "a rejoin reads the stored lifetime total as the rank baseline")
+		_check(_game.progress.stats.session_values(vkey).get_value(kills_id) == 0.0, "the rejoined session starts at zero")
+		_game.progress.record(visitor, ArenaStats.KILLS, 2.0)
+		var _w2: DotResult = await tracker.flush()
+		var stored_after_flush: float = (await fstore.values_for(vkey)).value.get_value(kills_id)
+		_check(stored_after_flush == 5.0, "a flush after the rejoin adds only the new session", str(stored_after_flush))
+		var _w3: DotResult = await tracker.flush()
+		_check((await fstore.values_for(vkey)).value.get_value(kills_id) == 5.0, "a second flush adds nothing")
+		var reread := DotStatsStoreFile.new(file_path)
+		reread.schema = tracker.schema
+		_check((await reread.values_for(vkey)).value.get_value(kills_id) == 5.0, "the file holds the same total for a fresh process")
+		await _game.progress.leave(visitor)
+		tracker.store = null
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(file_path))
 
 	var kills_after := 0.0
 

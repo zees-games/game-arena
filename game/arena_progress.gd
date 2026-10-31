@@ -223,6 +223,9 @@ func _build() -> DotResult:
 	stats.report_to_backbone = report_to_backbone
 	stats.report_interval = report_interval
 	stats.define_on_start = true
+	# Before add_child, so the tracker's flush timer also writes the store.
+	if _game != null and _game.stats_file != "":
+		stats.store = DotStatsStoreFile.new(_game.stats_file)
 	add_child(stats)
 	_kill_feed = DotStatsEventFeed.new(stats)
 	_kill_feed.key_of = func(id: Variant) -> StringName: return StringName(_key_of(int(id)))
@@ -243,6 +246,7 @@ func _build() -> DotResult:
 		{"stat": String(ArenaStats.POINTS), "weight": 0.01},
 	]
 	rank.record_fn = func(who: Variant, stat: StringName, value: float) -> void: record(int(who), stat, value)
+	rank.key_fn = func(who: Variant) -> StringName: return StringName(_key_of(int(who)))
 	# dot-game's DotGameStatsFeed and anything else duck-typed finds the tracker by this name.
 	DotRegistry.register(STATS_SERVICE, stats)
 
@@ -348,11 +352,8 @@ func begin(player_id: int, display_name: String = "") -> void:
 
 	# Before the session's first flush, or the flushed figures would count twice (stored and session).
 	if stats.store != null:
-		# The store is keyed by the tracker's player key, the rank by the session id: read by one, seed the other.
-		var loaded: DotResult = await stats.store.values_for(StringName(key))
-		if loaded.ok:
-			rank.seed_baseline(player_id, loaded.value as DotStatsValues)
-		else:
+		var loaded: DotResult = await rank.load_baseline(stats.store, player_id)
+		if not loaded.ok:
 			DotLog.debug(CHANNEL, "lifetime baseline could not be loaded; ranking on the session", {
 				"player": key, "why": loaded.error.message
 			})
