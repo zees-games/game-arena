@@ -7,6 +7,8 @@
 # A shipped build copies them in instead.
 /addons/dot_core
 /addons/dot_profile
+# bootstrap-optional: only tools/profile_surf.sh uses it.
+/addons/dot_profiler
 /addons/dot_entity
 /addons/dot_net
 /addons/dot_server
