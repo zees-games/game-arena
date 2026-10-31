@@ -1439,7 +1439,7 @@ func _drive_spectator_camera() -> void:
 		ArenaWeaponDropWiring.update_panel(self, _held(ArenaBindings.USE), get_process_delta_time())
 		if hud != null:
 			# The world panel over a dropped weapon already says "Take ammo"; the HUD line would repeat it.
-			var panel: Node3D = get_meta(&"pickup_view", null)
+			var panel: Node3D = get_meta(&"pickup_view") if has_meta(&"pickup_view") else null
 			hud.use_hint = "" if panel != null and panel.visible else _pickup_hint()
 		if not player.camera.current:
 			player.camera.current = true
@@ -1655,6 +1655,13 @@ func mouse_drives_view() -> bool:
 
 ## Alt-tabbing away leaves a captured pointer on a window nobody is looking at; give the cursor
 ## back and ask for a click on return, which also re-arms browser pointer lock.
+func _exit_tree() -> void:
+	super()
+	if _local_team_menu != null:
+		_local_team_menu.release()
+		_local_team_menu = null
+
+
 func _notification(what: int) -> void:
 	if what != NOTIFICATION_APPLICATION_FOCUS_OUT and what != NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		return

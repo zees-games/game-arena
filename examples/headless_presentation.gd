@@ -122,9 +122,9 @@ func _test_every_key_is_an_action() -> void:
 	_check(unsound.is_empty(), "requires.floor.json is sound: every floor has a guard behind it", str(unsound))
 	var asked := DotAddonApi.apply_floors(derived, floors.value if floors.ok else {})
 	_check(
-		asked.get("dot_ui") == 13 and asked.get("dot_lighting") == derived.get("dot_lighting") \
+		asked.get("dot_ui") == 17 and asked.get("dot_lighting") == derived.get("dot_lighting") \
 			and int(asked.get("dot_lighting", 0)) >= 3,
-		"so a pack asks a shell for dot-ui 13 (the weapon icons) and the dot-lighting it was built on (3+, painted())", str(asked)
+		"so a pack asks a shell for dot-ui 17 (the vitals streak row) and the dot-lighting it was built on (3+, painted())", str(asked)
 	)
 
 	# One key, one meaning: V is push to talk and nothing else; the sampler reads no noclip.

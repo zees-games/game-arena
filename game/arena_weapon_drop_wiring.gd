@@ -58,8 +58,8 @@ static func input(game, id: int, player, pair: Array) -> void:
 static func update_panel(client, pressed: bool, delta: float) -> void:
 	var game = client.game
 	var player = client.player
-	var view: DotWeaponPickupView = client.get_meta(&"pickup_view", null)
-	var hold: DotWeaponUseHold = client.get_meta(&"pickup_hold", null)
+	var view: DotWeaponPickupView = client.get_meta(&"pickup_view") if client.has_meta(&"pickup_view") else null
+	var hold: DotWeaponUseHold = client.get_meta(&"pickup_hold") if client.has_meta(&"pickup_hold") else null
 	if view == null:
 		view = DotWeaponPickupView.new()
 		view.name = "PickupView"
