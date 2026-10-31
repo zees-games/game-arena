@@ -1321,11 +1321,18 @@ func on_hurt(_amount: float) -> void:
 	fx.spawn(&"hurt_shake", Transform3D.IDENTITY)
 
 
+const DEATH_BURST_AHEAD := 1.5
+
+
 func on_died(where: Transform3D) -> void:
 	audio.play(&"died")
 	# Read at the moment of the death, so the setting needs no apply step. Only the blood is
 	# gated: bullet holes are not gore.
 	if settings.get_bool(&"gore", true):
+		# The origin is the dying player's own feet under their own camera: the drops would hang in the lens as red balls.
+		var ahead := Vector3(fx.viewer_forward.x, 0.0, fx.viewer_forward.z)
+		if ahead.length_squared() > 0.0001:
+			where.origin += ahead.normalized() * DEATH_BURST_AHEAD
 		fx.spawn(&"death_burst", where)
 	fx.spawn(&"death_shake", Transform3D.IDENTITY)
 

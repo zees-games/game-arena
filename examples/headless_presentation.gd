@@ -722,6 +722,9 @@ func _test_a_shot_is_drawn() -> void:
 	p.present(0.016, eye, aim)
 	p.on_died(dead)
 	_check(drawn.get(&"death_burst") is Node3D, "and a death bursts (%s)" % str(drawn.get(&"death_burst")))
+	var burst: Variant = drawn.get(&"death_burst")
+	var chest: Vector3 = (burst as Node3D).global_position + Vector3(0.0, 1.2, 0.0) if burst is Node3D else eye
+	_check(chest.distance_to(eye) > 1.0, "the burst is not in the dying player's own lens (%.2f m from the eye)" % chest.distance_to(eye))
 
 	await _check_gore_toggle(p, eye, aim, dead, drawn)
 

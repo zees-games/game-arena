@@ -1029,6 +1029,8 @@ func _present_health_tag(delta: float) -> void:
 	_hurt_age += delta
 
 	var show := is_alive() and _hurt_age < HEALTH_TAG_SEC and health.max_health > 0.0
+	# A killcam replays a past moment: the live world's bars would hang over it.
+	show = show and _viewed_by_a_player()
 	if not show:
 		if _health_tag != null:
 			_health_tag.visible = false
@@ -1057,6 +1059,11 @@ func _present_health_tag(delta: float) -> void:
 	var fraction := clampf(now / health.max_health, 0.0, 1.0)
 	_health_fill.scale = Vector3(maxf(fraction, 0.001), 1.0, 1.0)
 	_health_fill.position.x = -HEALTH_TAG_WIDTH * (1.0 - fraction) * 0.5
+
+
+func _viewed_by_a_player() -> bool:
+	var eye := get_viewport().get_camera_3d()
+	return eye == null or not String(eye.name).begins_with("Kill")
 
 
 static func _tag_quad(colour: Color, forward: float) -> MeshInstance3D:
