@@ -77,6 +77,7 @@ var session_fn: Callable = Callable()
 ## dot-game's key resolver, shared by every game; arena drives its own tracker, so no sessions open.
 var stats_keys := DotGameStatsFeed.new()
 
+var _kill_feed: DotStatsEventFeed = null
 ## player id -> key, asked of [member key_fn] once per stay; key -> player id, its inverse.
 var _keys: Dictionary = {}
 var _ids: Dictionary = {}
@@ -217,6 +218,13 @@ func _build() -> DotResult:
 	stats.report_interval = report_interval
 	stats.define_on_start = true
 	add_child(stats)
+	_kill_feed = DotStatsEventFeed.new(stats)
+	_kill_feed.key_of = func(id: Variant) -> StringName: return StringName(_key_of(int(id)))
+	_kill_feed.is_bot = func(id: Variant) -> bool: return int(id) >= ArenaGame.BOT_SESSION_BASE
+	_kill_feed.extra = func() -> Dictionary: return {
+		"map": String(_game.map.id) if _game != null and _game.map != null else "",
+		"mode": String(_game.mode.id) if _game != null and _game.mode != null else "",
+	}
 	# dot-game's DotGameStatsFeed and anything else duck-typed finds the tracker by this name.
 	DotRegistry.register(STATS_SERVICE, stats)
 
@@ -536,16 +544,12 @@ func _on_killed(entry: DotKillFeed.Entry) -> void:
 	_round_kills[killer] = int(_round_kills.get(killer, 0)) + 1
 
 
-## Files the killer/victim pair for the site's "vs" table. Bots are flagged, not skipped.
+## Files the killer/victim pair for the site's "vs" table; the shape and name rules are dot-stats'.
 func _report_kill(killer: int, victim: int, entry: DotKillFeed.Entry) -> void:
-	if not _attached or stats == null or victim <= 0 or killer == victim:
+	if not _attached or _kill_feed == null or victim <= 0:
 		return
-	stats.record_kill(StringName(_key_of(killer)), StringName(_key_of(victim)), String(entry.cause), {
-		"killer_name": entry.killer_name, "victim_name": entry.victim_name,
-		"killer_bot": killer >= ArenaGame.BOT_SESSION_BASE, "victim_bot": victim >= ArenaGame.BOT_SESSION_BASE,
-		"headshot": entry.headshot,
-		"map": String(_game.map.id) if _game.map != null else "",
-		"mode": String(_game.mode.id) if _game.mode != null else "",
+	_kill_feed.report_kill(killer, victim, String(entry.cause), {
+		"killer_name": entry.killer_name, "victim_name": entry.victim_name, "headshot": entry.headshot,
 	})
 
 
