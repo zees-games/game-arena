@@ -132,6 +132,15 @@ static func restore_body(p: Node, saved: Array) -> void:
 		body.visible = saved[1] or (saved.size() < 3 and bool(p.call(&"is_alive")))
 
 
+## The player's crouch fraction (x) and slide (y, 1 or 0) now: the replay hands a hidden body no
+## recorded pose, so its live stance is the nearest thing to what it was doing.
+static func _stance_of(p: Node) -> Vector2:
+	var controller: DotFpsController = p.get(&"controller")
+	if controller == null:
+		return Vector2.ZERO
+	return Vector2(controller.state.crouch_fraction, 1.0 if controller.state.is_sliding() else 0.0)
+
+
 static func place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: float, speed: float, touched: Dictionary) -> void:
 	var body: Node3D = p.get(&"body_mesh")
 	var attached := false
@@ -159,5 +168,7 @@ static func place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: f
 	# A body hidden before the replay had no pose recorded: animated here by the frame's real
 	# time, since a clip switched with none left to blend in draws the rest pose.
 	if not bool(touched[p][1]):
-		figure.call(&"set_motion", {"on_floor": true, "alive": true, "aim": deg_to_rad(pitch)})
+		var stance := _stance_of(p)
+		figure.call(&"set_motion", {"on_floor": true, "alive": true, "aim": deg_to_rad(pitch),
+			"crouched": stance.x > 0.5, "crouch": stance.x, "sliding": stance.y > 0.5})
 		figure.call(&"animate", speed, figure.call(&"frame_delta"))
