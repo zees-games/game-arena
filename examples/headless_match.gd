@@ -41,7 +41,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 670
+const CHECKS := 671
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -5167,6 +5167,19 @@ func _test_map_change() -> void:
 			after > before,
 			"progress is still counting after the world was replaced",
 			"%.0f -> %.0f, damage %.1f" % [before, after, damage.health_lost]
+		)
+
+		var zoned := DotDamage.make(
+			shooter.player_id, victim.player_id, 5.0,
+			_game.combat.damage_type(ArenaContent.DAMAGE_BULLET)
+		)
+		zoned.tick = _game.current_tick()
+		zoned.hit_group = DotHitGroup.NECK
+		zoned.weapon_id = &"probe"
+		var _z := _game.combat.apply_damage(zoned)
+		_check(
+			_game.progress.session_values(shooter.player_id).get_cell(DotStatsHitzones.HITS, "zone:neck") >= 1.0,
+			"a landed hit is filed by body zone through the dot-stats hitzone hook"
 		)
 		var pts_before := _game.progress.session_values(shooter.player_id).get_value(ArenaStats.POINTS, 0.0)
 		var _landed := _game.progress.points.award(shooter.player_id, DotStatsPoints.SOURCE_PICKUP, 3.0)

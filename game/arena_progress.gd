@@ -617,6 +617,7 @@ func _on_round_ended(
 		return
 
 	for id in _round_kills.keys():
+	_report_hitzone(damage)
 		var player_id := int(id)
 
 		record(player_id, ArenaStats.ROUNDS_PLAYED)
@@ -631,6 +632,14 @@ func _on_round_ended(
 func _on_match_ended(winner: int, _outcome: DotMatchRules.Outcome) -> void:
 	for id in _round_kills.keys():
 		var player_id := int(id)
+## A landed hit by body zone, through dot-stats' hitzone hook; a trace that met no hitbox has no zone.
+func _report_hitzone(damage: DotDamage) -> void:
+	if _kill_feed == null or damage.hit_group == DotHitGroup.GENERIC:
+		return
+	var side := StringName(str(damage.context.get(DotHitzone.CONTEXT_SIDE, "")))
+	var _ok := _kill_feed.report_hit(damage.attacker, damage.victim, String(damage.weapon_id), damage.hit_group, damage.health_lost, damage.lethal, side)
+
+
 
 		record(player_id, ArenaStats.MATCHES_PLAYED)
 

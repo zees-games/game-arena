@@ -110,6 +110,7 @@ static func schema() -> DotStatsSchema:
 	_counter(schema, SHOTS_FIRED, "Shots fired", "shots", false)
 	_counter(schema, SHOTS_HIT, "Shots landed", "shots", false)
 
+	DotStatsHitzones.declare(schema)
 	_best(schema, BEST_STREAK, "Best kill streak", "kills", true)
 	_best(schema, BEST_ROUND_KILLS, "Best round", "kills", true)
 

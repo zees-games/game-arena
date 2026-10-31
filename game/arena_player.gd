@@ -818,6 +818,26 @@ func _build_hitboxes() -> void:
 	head.precedence = 10
 	hitboxes.add_child(head)
 
+	# Neck and foot are finer zones; with mp_hitzones off the resolver folds them back to chest and
+	# leg, so damage is unchanged and only the stats see them.
+	var neck := DotHitbox.new()
+	neck.name = "Neck"
+	neck.group = DotHitGroup.NECK
+	neck.shape = DotHitbox.Shape.SPHERE
+	neck.radius = 0.09
+	neck.position = Vector3(0.0, 1.46, 0.0)
+	neck.precedence = 5
+	hitboxes.add_child(neck)
+
+	var feet := DotHitbox.new()
+	feet.name = "Feet"
+	feet.group = DotHitGroup.FOOT
+	feet.shape = DotHitbox.Shape.SPHERE
+	feet.radius = 0.14
+	feet.position = Vector3(0.0, 0.12, 0.0)
+	feet.precedence = 5
+	hitboxes.add_child(feet)
+
 	var chest := DotHitbox.new()
 	chest.name = "Chest"
 	chest.group = DotHitGroup.CHEST
