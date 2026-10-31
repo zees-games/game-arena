@@ -802,60 +802,36 @@ static func _catalogue() -> DotWeaponCatalogue:
 
 
 func _build_hitboxes() -> void:
-	hitboxes = DotHitboxSet.new()
-	hitboxes.name = "Hitboxes"
-	hitboxes.bounds_offset = Vector3(0.0, 0.9, 0.0)
-	hitboxes.bounds_radius = 1.6
-
-	var head := DotHitbox.new()
-	head.name = "Head"
-	head.group = DotHitGroup.HEAD
-	head.shape = DotHitbox.Shape.SPHERE
-	head.radius = 0.15
-	head.position = Vector3(0.0, 1.62, 0.0)
-	# Higher than the torso's, so the shared surface between a head sphere and a chest
-	# capsule resolves to the head every time rather than about half the time.
-	head.precedence = 10
-	hitboxes.add_child(head)
-
-	# Neck and foot are finer zones; with mp_hitzones off the resolver folds them back to chest and
-	# leg, so damage is unchanged and only the stats see them.
-	var neck := DotHitbox.new()
-	neck.name = "Neck"
-	neck.group = DotHitGroup.NECK
-	neck.shape = DotHitbox.Shape.SPHERE
-	neck.radius = 0.09
-	neck.position = Vector3(0.0, 1.46, 0.0)
-	neck.precedence = 5
-	hitboxes.add_child(neck)
-
-	var feet := DotHitbox.new()
-	feet.name = "Feet"
-	feet.group = DotHitGroup.FOOT
-	feet.shape = DotHitbox.Shape.SPHERE
-	feet.radius = 0.14
-	feet.position = Vector3(0.0, 0.12, 0.0)
-	feet.precedence = 5
-	hitboxes.add_child(feet)
-
-	var chest := DotHitbox.new()
-	chest.name = "Chest"
-	chest.group = DotHitGroup.CHEST
-	chest.shape = DotHitbox.Shape.CAPSULE
-	chest.radius = 0.30
-	chest.height = 1.05
-	chest.position = Vector3(0.0, 0.98, 0.0)
-	hitboxes.add_child(chest)
-
-	var legs := DotHitbox.new()
-	legs.name = "Legs"
-	legs.group = DotHitGroup.LEG
-	legs.shape = DotHitbox.Shape.CAPSULE
-	legs.radius = 0.24
-	legs.height = 0.9
-	legs.position = Vector3(0.0, 0.45, 0.0)
-	hitboxes.add_child(legs)
-
+	var plan := DotPlayerHitboxes.new()
+	plan.name = "HitboxPlan"
+	plan.set_factory = func() -> Node3D:
+		var set_ := DotHitboxSet.new()
+		set_.bounds_offset = Vector3(0.0, 0.9, 0.0)
+		set_.bounds_radius = 1.6
+		return set_
+	# Arena's five zones in absolute metres (not scaled from the height), so hit geometry and
+	# hitzone stats stay as they were; the other stock zones are dropped. Head outranks the
+	# torso so their shared surface resolves to the head every time.
+	plan.config = {
+		"disabled": ["arm_l", "arm_r", "hand_l", "hand_r", "leg_l", "leg_r", "foot_l", "foot_r"],
+		"zones": {
+			"head": {"position": [0.0, 1.62, 0.0], "radius": 0.15, "precedence": 10},
+			"neck": {"position": [0.0, 1.46, 0.0], "radius": 0.09, "precedence": 5},
+			"torso": {"position": [0.0, 0.98, 0.0], "radius": 0.30, "height": 1.05, "precedence": 0},
+			"legs": {"group": "leg", "shape": "capsule", "position": [0.0, 0.45, 0.0], "radius": 0.24, "height": 0.9, "precedence": 0},
+			"feet": {"group": "foot", "shape": "sphere", "position": [0.0, 0.12, 0.0], "radius": 0.14, "precedence": 5},
+		},
+	}
+	add_child(plan)
+	# Built now rather than on the plan's _ready: the set must exist when this returns.
+	var built := plan.build()
+	if not built.ok:
+		push_error("arena hitboxes: " + built.error.message)
+	# The set's entity owner is its parent, so it hangs off the player, not off the plan.
+	hitboxes = plan.hitbox_set() as DotHitboxSet
+	plan.remove_child(hitboxes)
+	remove_child(plan)
+	plan.free()
 	add_child(hitboxes)
 	hitboxes.refresh()
 
