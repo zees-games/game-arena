@@ -62,6 +62,8 @@ const STOMPS := &"arena.stomps"
 
 ## Lifetime points, fed by DotStatsPoints (kills, headshots, streaks, assists, pickups).
 const POINTS := &"arena.points"
+## The published skill figure the site orders by (dot-stats' DotStatsRank).
+const RANK_SCORE := &"rank_score"
 
 
 ## Every id above, in declaration order. What a caller iterates.
@@ -76,7 +78,7 @@ static func ids() -> Array[StringName]:
 		SHOTS_FIRED, SHOTS_HIT,
 		BEST_STREAK, BEST_ROUND_KILLS,
 		ROUNDS_PLAYED, ROUNDS_WON, MATCHES_PLAYED, MATCHES_WON, PLAYTIME_SEC,
-		PROPS_SPAWNED, NPC_KILLS, STOMPS, POINTS,
+		PROPS_SPAWNED, NPC_KILLS, STOMPS, POINTS, RANK_SCORE,
 	]
 
 
@@ -106,6 +108,7 @@ static func schema() -> DotStatsSchema:
 
 	_counter(schema, STOMPS, "Stomps", "kills", false)
 	DotStatsPoints.declare(schema, POINTS, "Points")
+	DotStatsRank.declare(schema, RANK_SCORE, "Rank score")
 	DotStatsPenetration.declare(schema)
 	_counter(schema, SHOTS_FIRED, "Shots fired", "shots", false)
 	_counter(schema, SHOTS_HIT, "Shots landed", "shots", false)

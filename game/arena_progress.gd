@@ -80,6 +80,8 @@ var stats_keys := DotGameStatsFeed.new()
 var _kill_feed: DotStatsEventFeed = null
 ## The one points score; amounts live in dot-stats' source table, the game only reports events.
 var points: DotStatsPoints = null
+## The skill rank (dot-stats' DotStatsRank): weighted stats or Elo, chosen by the arena_rank cvar.
+var rank: DotStatsRank = null
 ## player id -> key, asked of [member key_fn] once per stay; key -> player id, its inverse.
 var _keys: Dictionary = {}
 var _ids: Dictionary = {}
@@ -232,6 +234,15 @@ func _build() -> DotResult:
 	points = DotStatsPoints.new()
 	points.stat_id = ArenaStats.POINTS
 	points.record_fn = func(who: Variant, stat: StringName, value: float) -> void: record(int(who), stat, value)
+	rank = DotStatsRank.new()
+	rank.stat_id = ArenaStats.RANK_SCORE
+	rank.terms = [
+		{"stat": String(ArenaStats.KILLS), "weight": 1.0},
+		{"stat": String(ArenaStats.DEATHS), "weight": -0.5},
+		{"stat": String(ArenaStats.HEADSHOTS), "weight": 0.5},
+		{"stat": String(ArenaStats.POINTS), "weight": 0.01},
+	]
+	rank.record_fn = func(who: Variant, stat: StringName, value: float) -> void: record(int(who), stat, value)
 	# dot-game's DotGameStatsFeed and anything else duck-typed finds the tracker by this name.
 	DotRegistry.register(STATS_SERVICE, stats)
 
@@ -537,6 +548,7 @@ func _on_killed(entry: DotKillFeed.Entry) -> void:
 	_report_kill(killer, victim, entry)
 	points.award_kill(killer, victim, Time.get_ticks_msec() / 1000.0, entry.headshot, false, entry.streak)
 	record(killer, ArenaStats.KILLS)
+	_update_rank(killer, victim)
 
 	if entry.headshot:
 		record(killer, ArenaStats.HEADSHOTS)
@@ -550,6 +562,17 @@ func _on_killed(entry: DotKillFeed.Entry) -> void:
 	record(killer, ArenaStats.BEST_STREAK, float(entry.streak))
 
 	_round_kills[killer] = int(_round_kills.get(killer, 0)) + 1
+
+
+## Moves the Elo ratings, or republishes the weighted score of both players from this session's figures.
+func _update_rank(killer: int, victim: int) -> void:
+	if rank.mode == DotStatsRank.MODE_ELO:
+		var _moved := rank.duel(killer, victim)
+		return
+	for who in [killer, victim]:
+		if not _attached or int(who) >= ArenaGame.BOT_SESSION_BASE:
+			continue
+		var _s := rank.publish(who, stats.session_values(StringName(_key_of(int(who)))).to_dictionary())
 
 
 ## Files the killer/victim pair for the site's "vs" table; the shape and name rules are dot-stats'.

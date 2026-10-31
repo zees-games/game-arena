@@ -158,6 +158,16 @@ func _add_stats_report_cvar() -> void:
 		PackedStringArray(["arena_stats_report"]))
 
 
+## `arena_rank`: "weighted", "elo", or "weighted:arena.kills=1,arena.deaths=-0.5" (dot-stats' DotStatsRank.apply_cvar).
+func _add_rank_cvar() -> void:
+	add_cvar("arena_rank", "weighted",
+		"Skill rank formula: weighted, elo, or weighted:<stat>=<weight>,...",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			if game.progress == null or not game.progress.rank.apply_cvar(new_value):
+				log_info("arena_rank refused", {"value": new_value}))
+
+
 ## `sv_fire_buffer`: seconds a semi-auto press during the cooldown stays queued. See [member ArenaGame.fire_buffer_seconds].
 func _add_fire_buffer_cvar() -> void:
 	add_cvar("sv_fire_buffer", str(game.fire_buffer_seconds),

@@ -159,6 +159,7 @@ func _module_load() -> DotResult:
 	_add_spawn_cvars()
 	_add_unlag_cvar()
 	_add_stats_report_cvar()
+	_add_rank_cvar()
 	_add_fire_buffer_cvar()
 	_add_grenade_cvars()
 	_add_rate_cvar()

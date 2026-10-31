@@ -41,7 +41,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 671
+const CHECKS := 672
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -5187,6 +5187,14 @@ func _test_map_change() -> void:
 			_game.progress.session_values(shooter.player_id).get_value(ArenaStats.POINTS, 0.0) == pts_before + 3.0,
 			"a points award lands on the player's arena.points stat through the DotStatsPoints hook"
 		)
+		_game.progress.rank.mode = DotStatsRank.MODE_ELO
+		var _moved := _game.progress.rank.duel(shooter.player_id, -999)
+		_check(
+			_game.progress.session_values(shooter.player_id).get_value(ArenaStats.RANK_SCORE, 0.0) == 1012.0,
+			"an Elo win files rank_score through the DotStatsRank hook"
+		)
+		_game.progress.rank.mode = DotStatsRank.MODE_WEIGHTED
+		_game.progress.rank.reset()
 
 	var kills_after := 0.0
 
