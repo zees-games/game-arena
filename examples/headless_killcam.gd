@@ -3,8 +3,9 @@ extends DotGameCheckSuite
 const ArenaContent := preload("../game/arena_content.gd")
 const KillPov := preload("../game/arena_kill_pov.gd")
 const Bodies := preload("../game/arena_killcam_bodies.gd")
+const KillPovView := preload("../game/arena_kill_pov_view.gd")
 
-const EXPECTED_CHECKS := 32
+const EXPECTED_CHECKS := 43
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -74,6 +75,13 @@ func _run() -> void:
 		bots[id].set_meta(&"bot_scripted", true)
 	await _wait(4.0)
 	var killer: Object = bots.values()[0]
+	var hurt := DotDamage.make(me.player_id, killer.player_id, 5.0, gm.combat.damage_type(ArenaContent.DAMAGE_BULLET))
+	hurt.weapon_id = &"smg"
+	hurt.tick = gm.current_tick()
+	gm.combat.apply_damage(hurt)
+	await _wait(0.4)
+	_check(_tags_visible(bots, me) > 0, "control: a hurt bot's health bar shows on the live camera")
+	await _check_lens(gm, me, killer)
 	for i in 60:
 		gm.combat.apply_damage(_lethal(gm, killer, me))
 		if not me.is_alive():
@@ -85,12 +93,15 @@ func _run() -> void:
 		"the killer's view plays after the death, offline")
 	var t0 := Time.get_ticks_msec()
 	await _wait(1.2)
+	_check(KillPov.is_replay_camera(kv.camera), "the kill view's camera is flagged as a replay")
+	_check(_tags_visible(bots, me) == 0, "no health bar shows over anybody during the kill view")
 	await _check_killer_screen(kv, killer)
 	_check(kv.is_active(), "and is still playing a second on")
 	await _until(func() -> bool: return not kv.is_active(), 10.0)
 	_check(float(Time.get_ticks_msec() - t0) > 1500.0, "it ran its time, not skipped at once")
 	var screen: Node = _client.get_node_or_null("KillViewScreen")
 	_check(screen != null and screen.hands == null, "the killer's viewmodel is gone when the replay ends")
+	_check(not KillPov.is_replay_camera(kv.camera), "and the camera is no longer flagged")
 	await _check_recoil(screen, killer)
 	_check(await _until(func() -> bool: return me.is_alive(), 15.0), "then the player respawns")
 
@@ -110,6 +121,7 @@ func _run() -> void:
 	_check(host.is_playing(), "a fire press in its first second does not skip it")
 	var shown := Time.get_ticks_msec()
 	await _wait(1.5)
+	_check(_tags_visible(bots, me) == 0, "no health bar shows over anybody during the final killcam")
 	await _check_poses(host, killer, me)
 	await _check_events(killer, me)
 	var reveal: Node = _client.get("winner_reveal")
@@ -240,3 +252,74 @@ func _check_events(killer: Object, me: Object) -> void:
 	Bodies.restore_body(bot, [body.transform, shown])
 	await get_tree().process_frame
 	_check(not bot.has_meta(Bodies.FALL_META), "and the restore takes it away")
+
+
+## Health bars that draw on this frame over the bots and the local player.
+func _tags_visible(bots: Dictionary, me: Object) -> int:
+	var n := 0
+	var all: Array = bots.values()
+	all.append(me)
+	for p: Node in all:
+		var tag := p.get_node_or_null("HealthTag") as Node3D
+		if tag != null and tag.is_visible_in_tree():
+			n += 1
+	return n
+
+
+## The replay lens stays out of solids for eyes recorded at, beside and inside walls, and the killer's gun
+## meets the same wall response from a replayed eye as from a live one.
+func _check_lens(gm: Object, me: Object, killer: Object) -> void:
+	var layers: Array[StringName] = [&"world", &"prop"]
+	var mask: int = gm.player_stack.physics.layout.mask_of(layers)
+	var space: PhysicsDirectSpaceState3D = me.get_world_3d().direct_space_state
+	var origin: Vector3 = me.global_position + Vector3.UP * 1.2
+	var swept := 0
+	var inside := 0
+	var wall_eye := Vector3.ZERO
+	var wall_dir := Vector3.ZERO
+	for i in 24:
+		var dir := Vector3.FORWARD.rotated(Vector3.UP, TAU * i / 24.0)
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, origin + dir * 12.0, mask))
+		if hit.is_empty():
+			continue
+		for d in [0.0, 0.03, 0.08, 0.2]:
+			var eye: Vector3 = (hit["position"] as Vector3) - dir * d
+			var placed := KillPov.clear_eye(space, eye, dir, mask)
+			swept += 1
+			if DotCameraProbe.is_inside(space, placed, 0.05, mask):
+				inside += 1
+		if wall_dir == Vector3.ZERO:
+			wall_eye = (hit["position"] as Vector3) - dir * 0.3
+			wall_dir = dir
+	_check(swept >= 20, "the sweep found walls to test the lens against", str(swept))
+	_check(inside == 0, "no replay lens ends inside a solid, over eyes at, beside and in walls", "%d of %d" % [inside, swept])
+	var cam := Camera3D.new()
+	add_child(cam)
+	cam.look_at_from_position(wall_eye, wall_eye + wall_dir)
+	var view := KillPovView.new()
+	view.world_mask = mask
+	view.feel_rules = gm.get(&"feel_rules") as ZeeViewFeel
+	view.ads_rules = gm.get(&"ads_rules") as ZeeAdsRules
+	add_child(view)
+	var aux := KillPov.aux_of(killer)
+	var peak := 0.0
+	for i in 40:
+		cam.look_at_from_position(wall_eye, wall_eye + wall_dir)
+		view.present({"camera": cam, "aux": aux, "fov": 75.0, "behind": false})
+		await get_tree().physics_frame
+		if view.hands != null:
+			peak = maxf(peak, view.hands.wall_amount())
+	_check(view.hands != null and KillPov.is_replay_camera(cam), "the stand-in replay shows the killer's gun and is flagged")
+	_check(peak > 0.0, "the replayed gun pulls back from a wall just ahead of the replayed eye", str(peak))
+	var free := cam.global_position - wall_dir * 2.0
+	var after := 0.0
+	for i in 60:
+		cam.look_at_from_position(free, free + wall_dir)
+		view.present({"camera": cam, "aux": aux, "fov": 75.0, "behind": false})
+		await get_tree().physics_frame
+		after = view.hands.wall_amount()
+	_check(after < peak * 0.5, "and lowers it again in the open", "%s of %s" % [after, peak])
+	view.present({})
+	_check(not KillPov.is_replay_camera(cam), "ending the replay unflags the camera")
+	cam.queue_free()
+	view.queue_free()

@@ -6,7 +6,11 @@ const KillPov := preload("arena_kill_pov.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
 const AMMO_FONT := 22
+## Metres per second the lens may slide out of a wall.
+const EASE_SPEED := 6.0
 
+## Layers the replay lens must stay out of (world and props); 0 skips the clearance.
+var world_mask := 0
 var feel_rules: ZeeViewFeel = null
 var ads_rules: ZeeAdsRules = null
 
@@ -20,6 +24,7 @@ var crosshair: DotCrosshair = null
 var label: Label = null
 
 var _camera: Camera3D = null
+var _push := Vector3.ZERO
 var _fire := -1.0
 var _hits := -1.0
 
@@ -43,6 +48,9 @@ func present(view: Dictionary) -> void:
 		(own as CanvasItem).visible = false
 	if cam != _camera:
 		_start(cam)
+	KillPov.mark_replay_camera(cam, true)
+	if not behind:
+		_clear_lens(cam)
 	visible = not behind
 	if hands != null:
 		hands.visible = not behind
@@ -52,6 +60,17 @@ func present(view: Dictionary) -> void:
 	if not behind:
 		_kick(cam)
 	_hud(aux, cam.fov)
+
+
+## Pulls the lens out of any solid the recorded eye stood in or against; the move eases so a cut never snaps.
+func _clear_lens(cam: Camera3D) -> void:
+	if world_mask == 0 or not cam.is_inside_tree():
+		return
+	var want := KillPov.clear_eye(cam.get_world_3d().direct_space_state, cam.global_position, -cam.global_basis.z, world_mask)
+	var step := want - cam.global_position
+	# Out of a solid at once, back toward the recorded eye gradually.
+	_push = step if step.length() >= _push.length() else _push.move_toward(step, EASE_SPEED * get_process_delta_time())
+	cam.global_position += _push
 
 
 ## The killer's recoil and aim on the replay camera, as [code]ArenaPlayer.present[/code] puts them on a live one;
@@ -173,12 +192,14 @@ func _end() -> void:
 		arms.queue_free()
 	arms = null
 	_grip = null
+	_push = Vector3.ZERO
 	for n: Node in [crosshair, label, flashes]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
 	crosshair = null
 	label = null
 	flashes = null
+	KillPov.mark_replay_camera(_camera, false)
 	_camera = null
 
 
@@ -188,5 +209,9 @@ static func mount(parent: Node, game: Object, target: Object, label: String) -> 
 	view.name = label
 	view.feel_rules = game.get(&"feel_rules") as ZeeViewFeel
 	view.ads_rules = game.get(&"ads_rules") as ZeeAdsRules
+	var stack: Variant = game.get(&"player_stack")
+	if stack != null and stack.physics != null and stack.physics.layout != null:
+		var layers: Array[StringName] = [&"world", &"prop"]
+		view.world_mask = stack.physics.layout.mask_of(layers)
 	parent.add_child(view)
 	target.set(&"present_fn", view.present)

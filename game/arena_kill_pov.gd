@@ -5,6 +5,10 @@ extends RefCounted
 const CHANNEL := "arena.killpov"
 const HITS_META := &"kill_pov_hits"
 const RECOIL_META := &"kill_pov_recoil"
+const REPLAY_META := &"arena_replay_camera"
+## How far behind the eye the clearance sweep starts, and the lens sphere it sweeps.
+const CLEAR_BACK := 0.6
+const CLEAR_RADIUS := 0.12
 
 ## Aux slots, in the order [DotKillViewRing] records them; SIZE is the contract with the ring's AUX.
 const WEAPON := 0
@@ -27,6 +31,25 @@ const CROUCHED := 2
 const SIGNED := 4
 
 static var _ids: Dictionary = {}
+
+
+## Marks [param cam] as showing a replay (the kill view or final killcam) while the view draws it.
+static func mark_replay_camera(cam: Camera3D, on: bool) -> void:
+	if cam != null and is_instance_valid(cam):
+		cam.set_meta(REPLAY_META, on)
+
+
+## Whether [param cam] is a replay camera right now: the world drawn through it is a past moment.
+static func is_replay_camera(cam: Camera3D) -> bool:
+	return cam != null and bool(cam.get_meta(REPLAY_META, false))
+
+
+## Where a replay eye may sit: [param eye] itself when a small sphere there is clear, else pulled back along
+## [param forward] until it is, so the lens never ends inside a crate or against a wall the recording stood beside.
+static func clear_eye(space: PhysicsDirectSpaceState3D, eye: Vector3, forward: Vector3, mask: int) -> Vector3:
+	var back := eye - forward.normalized() * CLEAR_BACK
+	var along := DotCameraProbe.clear_length(space, back, eye, CLEAR_RADIUS, mask)
+	return back + forward.normalized() * along
 
 
 ## The twelve aux floats for [param p] (layout in [DotKillViewRing]): weapon, ads, fire count, reload, mag, reserve,
