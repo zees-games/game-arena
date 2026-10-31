@@ -632,6 +632,7 @@ func _on_damage_applied(damage: DotDamage) -> void:
 
 	record(damage.attacker, ArenaStats.DAMAGE_DEALT, damage.health_lost)
 	_report_penetration(damage)
+	_report_hitzone(damage)
 	points.note_damage(damage.attacker, damage.victim, damage.health_lost, Time.get_ticks_msec() / 1000.0)
 
 
@@ -641,7 +642,17 @@ func _report_penetration(damage: DotDamage) -> void:
 	if _kill_feed == null or (int(damage.context.get("penetrated", 0)) <= 0 and not bounced):
 		return
 	var kind := DotStatsPenetration.KIND_WALL if bool(damage.context.get("wallbang", false)) else DotStatsPenetration.KIND_BODY
+	if bounced:
+		kind = DotStatsPenetration.KIND_RICOCHET
 	var _ok := _kill_feed.report_penetration(damage.attacker, damage.victim, String(damage.weapon_id), kind, damage.health_lost, damage.lethal)
+
+
+## A landed hit by body zone, through dot-stats' hitzone hook; a trace that met no hitbox has no zone.
+func _report_hitzone(damage: DotDamage) -> void:
+	if _kill_feed == null or damage.hit_group == DotHitGroup.GENERIC:
+		return
+	var side := StringName(str(damage.context.get(DotHitzone.CONTEXT_SIDE, "")))
+	var _ok := _kill_feed.report_hit(damage.attacker, damage.victim, String(damage.weapon_id), damage.hit_group, damage.health_lost, damage.lethal, side)
 
 
 func _on_round_started(_round_number: int) -> void:
@@ -656,7 +667,6 @@ func _on_round_ended(
 		return
 
 	for id in _round_kills.keys():
-	_report_hitzone(damage)
 		var player_id := int(id)
 
 		record(player_id, ArenaStats.ROUNDS_PLAYED)
@@ -665,22 +675,12 @@ func _on_round_ended(
 		if _won(player_id, winner):
 			record(player_id, ArenaStats.ROUNDS_WON)
 
-	if bounced:
-		kind = DotStatsPenetration.KIND_RICOCHET
 		_round_kills[id] = 0
 
 
 func _on_match_ended(winner: int, _outcome: DotMatchRules.Outcome) -> void:
 	for id in _round_kills.keys():
 		var player_id := int(id)
-## A landed hit by body zone, through dot-stats' hitzone hook; a trace that met no hitbox has no zone.
-func _report_hitzone(damage: DotDamage) -> void:
-	if _kill_feed == null or damage.hit_group == DotHitGroup.GENERIC:
-		return
-	var side := StringName(str(damage.context.get(DotHitzone.CONTEXT_SIDE, "")))
-	var _ok := _kill_feed.report_hit(damage.attacker, damage.victim, String(damage.weapon_id), damage.hit_group, damage.health_lost, damage.lethal, side)
-
-
 
 		record(player_id, ArenaStats.MATCHES_PLAYED)
 
