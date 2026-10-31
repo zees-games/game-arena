@@ -346,6 +346,19 @@ func begin(player_id: int, display_name: String = "") -> void:
 
 	var key := _key_of(player_id)
 
+	# Before the session's first flush, or the flushed figures would count twice (stored and session).
+	if stats.store != null:
+		# The store is keyed by the tracker's player key, the rank by the session id: read by one, seed the other.
+		var loaded: DotResult = await stats.store.values_for(StringName(key))
+		if loaded.ok:
+			rank.seed_baseline(player_id, loaded.value as DotStatsValues)
+		else:
+			DotLog.debug(CHANNEL, "lifetime baseline could not be loaded; ranking on the session", {
+				"player": key, "why": loaded.error.message
+			})
+		if not _attached:
+			return
+
 	stats.begin(StringName(key), display_name)
 
 	_playtime[player_id] = 0.0
@@ -397,6 +410,7 @@ func leave(player_id: int) -> void:
 	# Without this the link holds one baseline row per stat per player who has ever
 	# connected, for as long as the server is up. Its own documentation says so.
 	link.forget(key)
+	rank.forget(player_id)
 
 	_playtime.erase(player_id)
 	_round_kills.erase(player_id)
@@ -564,7 +578,7 @@ func _on_killed(entry: DotKillFeed.Entry) -> void:
 	_round_kills[killer] = int(_round_kills.get(killer, 0)) + 1
 
 
-## Moves the Elo ratings, or republishes the weighted score of both players from this session's figures.
+## Moves the Elo ratings, or republishes the weighted score of both players from their stored baseline plus this session.
 func _update_rank(killer: int, victim: int) -> void:
 	if rank.mode == DotStatsRank.MODE_ELO:
 		var _moved := rank.duel(killer, victim)
@@ -572,7 +586,7 @@ func _update_rank(killer: int, victim: int) -> void:
 	for who in [killer, victim]:
 		if not _attached or int(who) >= ArenaGame.BOT_SESSION_BASE:
 			continue
-		var _s := rank.publish(who, stats.session_values(StringName(_key_of(int(who)))).to_dictionary())
+		var _s := rank.publish_lifetime(who, stats.session_values(StringName(_key_of(int(who)))), stats.schema)
 
 
 ## Files the killer/victim pair for the site's "vs" table; the shape and name rules are dot-stats'.

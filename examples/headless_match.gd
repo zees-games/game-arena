@@ -43,7 +43,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 674
+const CHECKS := 678
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -5207,6 +5207,40 @@ func _test_map_change() -> void:
 		)
 		_game.progress.rank.mode = DotStatsRank.MODE_WEIGHTED
 		_game.progress.rank.reset()
+
+		# Lifetime path: a stored baseline lifts the rank, no baseline ranks on the session, a flush never counts twice.
+		var rk := _game.progress.rank
+		var tracker := _game.progress.stats
+		var sess := tracker.session_values(StringName(_game.progress._key_of(shooter.player_id)))
+		var session_only := rk.publish(shooter.player_id, sess.to_dictionary())
+		var career := DotStatsValues.new()
+		career.values[str(ArenaStats.KILLS)] = 100.0
+		var store := DotStatsStoreMemory.new()
+		var _stored := await store.merge(StringName(_game.progress._key_of(shooter.player_id)), career, tracker.schema)
+		rk.forget(shooter.player_id)
+		var loaded: DotResult = await store.values_for(StringName(_game.progress._key_of(shooter.player_id)))
+		rk.seed_baseline(shooter.player_id, loaded.value as DotStatsValues)
+		var lifetime := rk.publish_lifetime(shooter.player_id, sess, tracker.schema)
+		_check(lifetime > session_only, "a player with a stored baseline ranks above the session-only figure", "%s vs %s" % [lifetime, session_only])
+		_check(
+			is_equal_approx(rk.publish_lifetime(victim.player_id, sess, tracker.schema), rk.weighted(sess.to_dictionary())),
+			"a player with no baseline ranks on the session alone"
+		)
+		tracker.store = store
+		store.schema = tracker.schema
+		var _flushed: DotResult = await tracker.flush()
+		_check(
+			is_equal_approx(rk.publish_lifetime(shooter.player_id, sess, tracker.schema), lifetime),
+			"a flush after the baseline load does not count the session twice"
+		)
+		tracker.store = null
+		rk.mode = DotStatsRank.MODE_ELO
+		var stored_rank := DotStatsValues.new()
+		stored_rank.values[str(ArenaStats.RANK_SCORE)] = 1500.0
+		rk.seed_baseline(victim.player_id, stored_rank)
+		_check(rk.rating_of(victim.player_id) == 1500.0, "Elo mode seeds the rating from the stored rank_score")
+		rk.mode = DotStatsRank.MODE_WEIGHTED
+		rk.reset()
 
 	var kills_after := 0.0
 
