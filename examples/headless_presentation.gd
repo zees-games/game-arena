@@ -2376,6 +2376,7 @@ func _test_criticals_and_the_body() -> void:
 	_check(damage == "2 of 100k" and hours == "0:03 of 10 h" and kills == "11/100",
 		"a challenge's progress reads in its own units (%s; %s; %s)" % [damage, hours, kills])
 
+	player.controller.tunables.launch_enabled = true  # off by default; the button only shows when on
 	hud.present_body()
 	_check(hud.abilities.visible and hud.abilities.line(&"launch").contains("LAUNCH"),
 		"the launch's button reads ready (%s)" % hud.abilities.line(&"launch"))

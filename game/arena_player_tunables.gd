@@ -31,9 +31,9 @@ static func make() -> DotFpsTunables:
 	tunables.slide_friction = 0.9
 	tunables.slide_duration = 0.9
 	tunables.slide_cooldown = 0.6
-	# E throws you upward to dodge or escape, on a cooldown. The command's first user bit,
-	# which the arena's movement command leaves free: its weapon buttons ride in their own.
-	tunables.launch_enabled = true
+	# E throws you upward on a cooldown, on the command's first user bit (the weapon buttons
+	# ride in their own). Off by default: a stray E must not fire the player; arena_launch 1 enables it.
+	tunables.launch_enabled = false
 	tunables.launch_button = DotFpsCommand.BUTTON_USER_0
 	tunables.launch_velocity = 15.5
 	tunables.launch_cooldown = 8.0

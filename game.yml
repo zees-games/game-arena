@@ -28,6 +28,8 @@ module: game/arena_module.gd
 cvars:
   arena_scorelimit: "25"
   arena_minplayers: "1"
+  # E throws the player into the air only when a server turns this on; off by default.
+  arena_launch: "0"
   # Loadouts on B: players choose by default. An owner restricts them in their cfg/content.yml
   # (docs/modes.md "Loadouts and the owner's rules"), for example snipers only:
   #   mp_loadout_allow: "primary=tag:scoped"

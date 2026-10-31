@@ -391,7 +391,51 @@ const STANDALONE_KEYS: PackedStringArray = [
 	"gamemann/gg-punishment@1.0.3",
 	"gamemann/gg-simpsons-x@1.0.3",
 	"gamemann/gg-woods@1.0.3",
+	# The combat surf packs are published as <repo>-<map> (see PACK_PREFIX), at the repo's 1.2.0.
+	"gamemann/arena-surf-dm-maps-surf_10x_final@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_10x_reloaded_fixed@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_110b_austinpowers@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_29_12_06@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_adverse@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_akai_final@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_bathroom_final@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_buck_wild@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_dust2_2008_final@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_forbidden_ways_2nd@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_forbidden_ways_reloaded@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_fruits@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_grave_reloaded@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_greatriver@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_greatriver_v4@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_greatriver_xdre4m@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_i_hate_campers@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_japan_ptad@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_legends@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_machine2@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_machine_remix_final@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_mai_remix@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_matrix_v8@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_ny_advance@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_ny_bigloop_2008a@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_parrot_selector@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_pavilion@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_pox@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_rebel_resistance_final3@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_ski_2@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_ski_2_source@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_skyworld@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_snipers_island@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_the_flow@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_the_gloaming@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_thriller@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_torque2@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_velocity@1.2.0",
+	"gamemann/arena-surf-dm-maps-surf_xiv_v2a@1.2.0",
 ]
+
+
+## The surf packs are published as `gamemann/arena-surf-dm-maps-<map>`; the map's own id (its manifest's) has no prefix.
+const PACK_PREFIX := "arena-surf-dm-maps-"
 
 
 ## [constant STANDALONE_KEYS] minus the maps [param catalogue] already has (a linked local
@@ -437,6 +481,9 @@ static func delivered_def(key: String) -> DotMapDef:
 
 	if def == null or def.content_version == "":
 		return null
+
+	if String(def.id).begins_with(PACK_PREFIX):
+		def.id = StringName(String(def.id).trim_prefix(PACK_PREFIX))
 
 	def.scene_path = manifest_in_mount(def)
 	def.version = def.content_version

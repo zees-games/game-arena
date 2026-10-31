@@ -892,8 +892,9 @@ func _test_movement_rules_reach_clients() -> void:
 	var client_player: ArenaPlayer = (entry["bridge"] as ArenaNetBridge).behaviour_for(session).player
 
 	_check(
-		client_player.controller.tunables.slide_enabled and client_player.controller.tunables.launch_enabled,
-		"the arena slides and launches by default, on the client as on the server"
+		client_player.controller.tunables.slide_enabled and not client_player.controller.tunables.launch_enabled
+		and not server_player.controller.tunables.launch_enabled,
+		"the arena slides by default and does not launch (E is off until arena_launch 1), on the client as on the server"
 	)
 
 	# This harness has no event link, so RULES is handed to each client as the link would
@@ -947,6 +948,17 @@ func _test_movement_rules_reach_clients() -> void:
 	server_player.controller.simulated.connect(
 		func(_t: int, s: DotFpsState) -> void: peak[0] = maxf(peak[0], s.position.y)
 	)
+	# Default E must do nothing: hold it for a window and the player stays near the ground.
+	var idle_peak := [start_y]
+	var idle_sub := func(_t: int, s: DotFpsState) -> void: idle_peak[0] = maxf(idle_peak[0], s.position.y)
+	server_player.controller.simulated.connect(idle_sub)
+	var _idle := _flight_window(2, 32, DotFpsCommand.BUTTON_USER_0)
+	server_player.controller.simulated.disconnect(idle_sub)
+	_check(float(idle_peak[0]) - start_y < 1.0, "E with the default rules does not throw the player into the air",
+		"rose %.2f m" % (float(idle_peak[0]) - start_y))
+	_server_game.set_movement_rules({"launch_enabled": true})
+	var _arm := _flight_window(0, 8, 0)
+	peak[0] = start_y
 	var launch := _flight_window(2, 64, DotFpsCommand.BUTTON_USER_0)
 	print("  measured: launch peak %.2f m, worst gap %.2f m (%s)" % [float(peak[0]) - start_y, float(launch["worst_gap"]), launch["worst_at"]])
 	_check(float(peak[0]) - start_y > 3.0, "E throws the server's player into the air (from %s)" % open_sky,

@@ -34,9 +34,9 @@ const ROOT := "user://arena_delivered_check"
 ## Inside the project, so the publisher finds the imported outputs the markers name; under
 ## `.godot`, which git ignores.
 const STAGE := "res://.godot/arena_delivered_stage"
-const SECTIONS := 4
+const SECTIONS := 5
 ## Without a frame; two more with `--shot`.
-const CHECKS := 17
+const CHECKS := 21
 
 var _entered := 0
 var _completed := 0
@@ -79,6 +79,7 @@ func _run() -> void:
 		await _test_leaves()
 		_cleanup(game)
 
+	_test_surf_keys()
 	_finish()
 
 
@@ -282,6 +283,21 @@ func _test_leaves() -> void:
 	var back := _director.session.catalogue.get_map(MAP)
 	_check(int(adopted.get("removed", 0)) == 1 and back != null and back.is_local(),
 		"it is dropped, and this machine's own import of the id put back (%d removed)" % int(adopted.get("removed", 0)))
+	_done()
+
+
+func _test_surf_keys() -> void:
+	_section("the published surf packs are in the solo list, under their manifest ids")
+	var def := ArenaMaps.delivered_def("gamemann/arena-surf-dm-maps-surf_10x_final@1.2.0")
+	_check(def != null and String(def.id) == "surf_10x_final", "the pack prefix is stripped from the map id (%s)" % (String(def.id) if def != null else "null"))
+	var surf := 0
+	for key in ArenaMaps.STANDALONE_KEYS:
+		if key.begins_with("gamemann/" + ArenaMaps.PACK_PREFIX) and key.ends_with("@1.2.0"):
+			surf += 1
+	_check(surf == 39, "STANDALONE_KEYS holds 39 surf packs (%d)" % surf)
+	var listed := ArenaMaps.standalone_keys(null)
+	_check("gamemann/arena-surf-dm-maps-surf_10x_final@1.2.0" in listed, "standalone_keys() lists a surf pack")
+	_check(listed.size() >= surf, "standalone_keys() lists at least all of them (%d)" % listed.size())
 	_done()
 
 

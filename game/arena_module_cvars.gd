@@ -28,7 +28,7 @@ const MOVEMENT_CVARS := {
 	"arena_slide_duration": ["slide_duration", "Longest a slide lasts, seconds"],
 	"arena_slide_friction": ["slide_friction", "Friction while sliding (lower carries further)"],
 	"arena_slide_cooldown": ["slide_cooldown", "Seconds between slides"],
-	"arena_launch": ["launch_enabled", "E throws the player into the air (1) or does nothing (0)"],
+	"arena_launch": ["launch_enabled", "E throws the player into the air (1) or does nothing (0, the default)"],
 	"arena_launch_velocity": ["launch_velocity", "Upward speed of a launch, m/s"],
 	"arena_launch_forward": ["launch_forward", "Forward speed a launch adds, m/s"],
 	"arena_launch_cooldown": ["launch_cooldown", "Seconds between launches"],
