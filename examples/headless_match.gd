@@ -35,13 +35,15 @@ const ArenaWeaponIcons := preload("res://game/arena_weapon_icons.gd")
 
 const TICK_RATE := 64
 const BOTS := 4
+var _stats_errors: PackedStringArray = []
+
 const SCORE_LIMIT := 6
 
 ## Enough ticks for six kills at arena pace. Bounded rather than "until it ends", so a
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 672
+const CHECKS := 674
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -66,7 +68,14 @@ var _states: Array[String] = []
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
+	DotLog.signals().record.connect(_on_log_record)
 	_run.call_deferred()
+
+
+## An ERROR from the stats layer used to scroll past and leave progression off with every suite green.
+func _on_log_record(rec: Dictionary) -> void:
+	if int(rec.get("level", 0)) >= DotLog.Level.ERROR and String(rec.get("channel", "")).begins_with("stats"):
+		_stats_errors.append(str(rec.get("message", rec)))
 
 
 func _run() -> void:
@@ -124,6 +133,9 @@ func _run() -> void:
 	# of them (the kill feed, the shot-blocking trace) must already have run. Earlier it failed one assertion four sections
 	# later, about a HUD that was working.
 	await _test_map_change()
+
+	_check(_stats_errors.is_empty(), "the stats layer logged no error", str(_stats_errors))
+	_check(ArenaStats.schema().validate().ok, "arena's stats schema, hitzones included, validates", str(ArenaStats.schema().validate().error))
 
 	if _game != null:
 		_game.queue_free()
