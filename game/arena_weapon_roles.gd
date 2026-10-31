@@ -60,6 +60,7 @@ static var pack_ids: Array[StringName] = []
 ## The pack registered under plain ids in the last [method scan], or "" (zee's built-ins stand).
 static var own_pack: String = ""
 static var _own_script: GDScript = null
+static var _classed: Array[StringName] = []
 static var _by_role: Dictionary = {}
 static var _sources: Array[StringName] = []
 ## Overrides `weapons.packs` when not empty (tests and a console).
@@ -136,6 +137,7 @@ static func scan(from: String = "") -> void:
 		ZeePackSource.register(source, script, Callable(ZeePackScan, &"defs_of").bind(script))
 		_sources.append(source)
 		packs.append(dir)
+		_class_sounds(script, kept)
 		DotLog.info(CHANNEL, "weapon pack registered", {"pack": dir, "weapons": kept.size()})
 
 	_settle()
@@ -146,7 +148,25 @@ static func ensure() -> void:
 		scan()
 
 
+## Gives each of a pack's guns the sound class it names (a provider's `sound_classes()`), so its lmg is not the rifle.
+static func _class_sounds(script: GDScript, kept: PackedStringArray) -> void:
+	if not script.has_method(&"sound_classes"):
+		return
+
+	var classes: Dictionary = script.call(&"sound_classes")
+
+	for id: StringName in classes:
+		if kept.has(String(id)):
+			ZeeWeaponSound.set_class(id, classes[id])
+			_classed.append(id)
+
+
 static func clear() -> void:
+	for id in _classed:
+		ZeeWeaponSound.set_class(id, &"")
+
+	_classed.clear()
+
 	for source in _sources:
 		ZeePackSource.unregister(source)
 
