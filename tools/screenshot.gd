@@ -389,6 +389,13 @@ func _play_glance() -> void:
 			quit(1)
 		return
 
+	if OS.get_cmdline_user_args().has("--drop"):
+		_shots = load("res://tools/screenshot_drop.gd").stage(game, _local, _hud)
+		if _shots.is_empty():
+			push_error("--drop needs a game with the weapon drop layer")
+			quit(1)
+		return
+
 	if OS.get_cmdline_user_args().has("--flashlight"):
 		_stage_flashlight(game)
 
