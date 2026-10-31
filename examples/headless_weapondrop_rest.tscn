@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/headless_weapondrop_rest.gd" id="1_wr"]
+
+[node name="HeadlessWeaponDropRest" type="Node"]
+script = ExtResource("1_wr")
