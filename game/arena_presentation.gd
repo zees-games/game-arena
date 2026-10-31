@@ -879,6 +879,7 @@ func _build_fx() -> DotResult:
 	fx.config.shake_scale = settings.get_float(&"shake_scale", 1.0)
 	fx.config.allow_flashes = settings.get_bool(&"allow_flashes", true)
 	fx.config.max_decals = 192
+	fx.config.penetration_decals = settings.get_bool(&"penetration_decals", true)
 	add_child(fx)
 
 	var res := fx.setup()
@@ -1232,6 +1233,8 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 				fx.spawn_decal(&"bullet_hole", facing(at, shot.direction))
 			else:
 				on_impact(facing(at, shot.direction), false)
+
+		fx.spawn_penetration_decals(shot.penetrations)
 
 		# No hit marker here. `shot.damages` is this client's PREDICTION of what its shot
 		# did, and the server may refuse it (a lag-compensated miss, a protected spawn);

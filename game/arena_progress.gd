@@ -599,7 +599,8 @@ func _on_damage_applied(damage: DotDamage) -> void:
 
 ## A hit by a round that crossed a wall or a body first, through dot-stats' penetration hook.
 func _report_penetration(damage: DotDamage) -> void:
-	if _kill_feed == null or int(damage.context.get("penetrated", 0)) <= 0:
+	var bounced := int(damage.context.get("ricochet", 0)) > 0
+	if _kill_feed == null or (int(damage.context.get("penetrated", 0)) <= 0 and not bounced):
 		return
 	var kind := DotStatsPenetration.KIND_WALL if bool(damage.context.get("wallbang", false)) else DotStatsPenetration.KIND_BODY
 	var _ok := _kill_feed.report_penetration(damage.attacker, damage.victim, String(damage.weapon_id), kind, damage.health_lost, damage.lethal)
@@ -626,6 +627,8 @@ func _on_round_ended(
 		if _won(player_id, winner):
 			record(player_id, ArenaStats.ROUNDS_WON)
 
+	if bounced:
+		kind = DotStatsPenetration.KIND_RICOCHET
 		_round_kills[id] = 0
 
 

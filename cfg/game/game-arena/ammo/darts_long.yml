@@ -10,3 +10,6 @@ min_damage: 0.2
 max_passes: 4
 guns: "marksman,sniper"
 default: false
+ricochet_materials: "metal,steel,concrete"
+ricochet_angle: 12
+ricochet_keep: 0.6
