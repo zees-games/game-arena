@@ -113,11 +113,18 @@ func _run() -> void:
 	Input.action_press(&"arena_aim")
 	await _wait(0.12)
 	await _shot("arena_ads_raising")
-	await _wait(0.8)
+	# Poll, not a fixed wait: game time runs slower than wall time on a loaded renderer.
+	for _i in 40:
+		if hud.crosshair.aim_opacity < 0.01:
+			break
+		await _wait(0.2)
 	var aimed: float = hud.crosshair.aim_opacity
 	await _shot("arena_ads_aimed")
 	Input.action_release(&"arena_aim")
-	await _wait(0.8)
+	for _i in 40:
+		if hud.crosshair.aim_opacity > 0.99:
+			break
+		await _wait(0.2)
 	_check(hip > 0.99 and aimed < 0.01 and hud.crosshair.aim_opacity > 0.99,
 		"the crosshair is there at the hip (%.2f), gone aimed (%.2f), back after (%.2f)" % [hip, aimed, hud.crosshair.aim_opacity])
 
