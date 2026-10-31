@@ -271,6 +271,8 @@ static func _add_chat_and_comfort(s: DotSettingsSchema) -> void:
 		.with_description("Zero turns camera shake off entirely."))
 	s.add(DotSettingsDef.boolean(&"allow_flashes", true, &"accessibility")
 		.with_description("Off draws no full-screen flashes at all."))
+	s.add(DotSettingsDef.boolean(&"penetration_decals", true, &"video")
+		.with_description("Bullet marks on both faces of a wall a shot passed through, and where it ricocheted."))
 	s.add(DotSettingsDef.boolean(&"reduce_motion", false, &"accessibility").with_scope(DotSettingsDef.Scope.ACCOUNT)
 		.with_description("The end-of-match announcement appears at once, with nothing sliding, rising or bursting."))
 
@@ -380,6 +382,8 @@ func _on_setting_changed(key: StringName, value: Variant, _why: StringName) -> v
 			fx.config.shake_scale = float(value)
 		&"allow_flashes":
 			fx.config.allow_flashes = bool(value)
+		&"penetration_decals":
+			fx.config.penetration_decals = bool(value)
 		&"fx_quality":
 			fx.config.quality = int(value)
 		&"chat_window":
@@ -1078,6 +1082,13 @@ func _local_commands() -> DotConsoleLocal:
 	local.add_command(&"fx", "Show the effects system", func(_a: PackedStringArray) -> Variant:
 		return fx.describe_lines()
 	)
+	local.add_var(&"cl_penetration_decals", "1 marks both faces of a wall a shot passed through and each ricochet, 0 draws none.",
+		func() -> Variant: return 1 if fx.config.penetration_decals else 0,
+		func(v: Variant) -> Variant:
+			var _set := settings.set_value(&"penetration_decals", str(v).strip_edges() != "0")
+			fx.config.penetration_decals = settings.get_bool(&"penetration_decals", true)
+			return DotResult.success(1 if fx.config.penetration_decals else 0)
+	)
 	local.add_var(&"cl_perf", "Seconds between frame reports in the log (arena.perf); 0 is off.",
 		func() -> Variant: return ArenaFrameProbe.interval,
 		func(v: Variant) -> Variant:
@@ -1235,6 +1246,7 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 				on_impact(facing(at, shot.direction), false)
 
 		fx.spawn_penetration_decals(shot.penetrations)
+		fx.spawn_ricochet_decals(shot.ricochets)
 
 		# No hit marker here. `shot.damages` is this client's PREDICTION of what its shot
 		# did, and the server may refuse it (a lag-compensated miss, a protected spawn);

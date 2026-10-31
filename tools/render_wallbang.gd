@@ -116,15 +116,36 @@ func _run() -> void:
 		print("FAIL no wallbang")
 		quit(1)
 		return
+	# A second round glancing off the exit face, so the "exit" frame holds both marks.
+	var side0 := dir.cross(Vector3.UP).normalized()
+	var exit0: Vector3 = shot.penetrations[0]["exit"]
+	var skim_from := exit0 + dir * 0.8 - side0 * 1.5
+	var skim := DotShot.make(&"rifle", me.player_id, game.current_tick(), 1)
+	skim.origin = skim_from
+	skim.direction = (exit0 + side0 * 0.6 - skim_from).normalized()
+	skim.damage = 20.0
+	skim.scatter()
+	skim.penetration = round_of.make_penetration()
+	skim.penetration.ricochet_materials = PackedStringArray(["concrete"])
+	skim.penetration.ricochet_angle = 40.0
+	game.combat.ricochet_enabled = true
+	game.combat.set_authoritative_origin(me.player_id, skim_from)
+	var _skim_res: DotShot = game.combat.resolve_shot(skim)
+	var bounced: int = pres.fx.spawn_ricochet_decals(skim.ricochets)
+	print("ricochet decals=%d" % bounced)
+	if bounced < 1:
+		print("FAIL no ricochet")
+		quit(1)
+		return
 	await _wait(0.3)
 	var entry: Vector3 = shot.penetrations[0]["entry"]
 	var exit_p: Vector3 = shot.penetrations[0]["exit"]
 	var side := dir.cross(Vector3.UP).normalized()
 	var foot: Vector3 = spot["me"]
 	await _shot(me, foot, entry, "entry")
-	var past: Vector3 = exit_p + dir * 1.5 + side * 0.3
+	var past: Vector3 = exit_p + dir * 1.8 - side * 0.3
 	past.y = foot.y
-	await _shot(me, past, exit_p, "exit")
+	await _shot(me, past, exit_p + side * 0.3, "exit")
 	var beside: Vector3 = (entry + exit_p) * 0.5 + side * 1.5 - dir * 0.8
 	beside.y = foot.y
 	await _shot(me, beside, (entry + exit_p) * 0.5, "side")
