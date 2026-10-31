@@ -1564,6 +1564,16 @@ func _test_free_roam() -> void:
 	var mgr := game.spectate.manager
 	_check(game.spectate.can_roam(victim), "a dead player may roam")
 
+	var dead: ArenaPlayer = game.player_for(victim)
+	if dead != null and dead.flashlight_cfg != null:
+		var lit_dead: bool = dead.flashlight
+		for i in range(ArenaFlashlight.HOLD_TICKS):
+			_hold(game, victim, ArenaFlashlight.BUTTON)
+		_settle(game, victim, 2)
+		_check(dead.flashlight == lit_dead, "a dead spectator's flashlight key switches nothing")
+	else:
+		_check(false, "the dead player is reachable for the flashlight check")
+
 	var before := game.spectate.camera_for(victim)
 	var entered := game.spectate.toggle_roam(victim)
 	_check(entered.ok, "the roam key enters a roam", str(entered.error))

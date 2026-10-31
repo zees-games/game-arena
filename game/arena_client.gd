@@ -1774,10 +1774,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Asks the server for a switch (the bit is held a few ticks) and shows it here at once.
 func switch_flashlight() -> void:
+	if _watching_other():
+		return
 	_flash_ticks = ArenaFlashlight.HOLD_TICKS
 	_flash_msec = Time.get_ticks_msec()
 	if flash != null and is_instance_valid(flash):
 		var _asked := flash.toggle()
+
+
+## Whether the camera shows somebody else's view (a spectator, a death or kill cam). The eye light is
+## then not ours to switch: the watched player's own beam is drawn by the crowd from their head.
+func _watching_other() -> bool:
+	if player == null or game == null:
+		return false
+	return not player.is_alive() or (game.spectate != null and game.spectate.is_spectating(player.player_id))
 
 
 ## The sound manager the flashlight clicks play through, or null before audio is up.
@@ -1806,7 +1816,10 @@ func _present_flashlights() -> void:
 		player.camera.add_child(flash)
 	if flash.get_parent() != player.camera:
 		flash.reparent(player.camera, false)
-	if Time.get_ticks_msec() - _flash_msec > 400:
+	if _watching_other():
+		_flash_ticks = 0
+		flash.apply_state({"on": false})
+	elif Time.get_ticks_msec() - _flash_msec > 400:
 		flash.apply_state({"on": player.flashlight and player.is_alive()})
 	if flash_crowd == null or not is_instance_valid(flash_crowd):
 		flash_crowd = DotFlashlightCrowd.new()

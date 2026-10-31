@@ -2052,7 +2052,7 @@ func _flashlight_hands(pressed: bool, delta: float) -> void:
 	if not flashlight_ready:
 		flashlight_ready = true
 		flashlight = ArenaFlashlight.starts_on(flashlight_cfg, flashlight_map)
-	if edge and flashlight_cfg.enabled and DotFlashlightRules.allowed_on(flashlight_cfg, flashlight_map):
+	if edge and is_alive() and flashlight_cfg.enabled and DotFlashlightRules.allowed_on(flashlight_cfg, flashlight_map):
 		flashlight = not flashlight and DotFlashlightRules.can_light(flashlight_cfg, flashlight_charge)
 	if flashlight_cfg.battery:
 		flashlight_charge = DotFlashlightRules.step_charge(flashlight_cfg, flashlight_charge, flashlight, delta)
