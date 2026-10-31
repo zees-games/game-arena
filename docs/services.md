@@ -6,7 +6,7 @@
 
 `ArenaStats` declares the numbers, `ArenaAwards` is a document of rules over them, `ArenaBoards` orders them, and `ArenaProgress` joins all three to the game. The ids are the contract and there is one copy of them.
 
-The tracker is registered as `dot_stats_tracker` (what dot-game's `DotGameStatsFeed` looks up); kills, deaths and damage carry min/max/max_rate. Reporting to the backbone is the cvar `arena_stats_report`, off by default, and needs a registered backbone client holding STATS_WRITE (the token stays in the client; nothing here reads or logs it).
+The tracker is registered as `dot_stats_tracker` (what dot-game's `DotGameStatsFeed` looks up); kills, deaths and damage carry min/max/max_rate. Reporting to the backbone is dot-game's family cvar `stats_report` (`arena_stats_report` is its alias), off by default, and needs a registered backbone client holding STATS_WRITE (the token stays in the client; nothing here reads or logs it).
 
 - **dot-stats to dot-achievements is `DotAchievementStatsLink`, never `stats.recorded.connect(...)`.** `recorded` carries the session total; an achievement is about a lifetime. Wired straight through, the running total is added to the lifetime total on every kill (5,050 after a hundred). `headless_match` asserts lifetime kills equal session kills, the smallest check that tells the two wirings apart.
 - **A board is written when a player leaves, not when they score.** A submission reads, compares, writes and re-sorts; a session is when a player's totals stop moving.

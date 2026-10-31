@@ -146,19 +146,14 @@ func _add_unlag_cvar() -> void:
 			log_info("lag compensation limit changed", {"ms": game.max_unlag_ms}))
 
 
-## `arena_stats_report`: 1 files the players' stats with the backbone. Off by default; needs a client with STATS_WRITE.
+## `stats_report` (dot-game's family cvar): 1 files the players' stats with the backbone. Off by default; `arena_stats_report` is its alias.
 func _add_stats_report_cvar() -> void:
-	var apply := func(on: bool) -> void:
-		if game.progress == null:
-			return
-		var res := game.progress.set_reporting(on)
-		log_info("stats reporting", {"on": on, "ok": res.ok})
-	var cv := add_cvar("arena_stats_report", "0",
-		"File player stats with the backbone (1) or keep them on this server (0); needs a STATS_WRITE client",
-		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0).with_max(1.0)
-	cv.changed.connect(func(_old: String, new_value: String) -> void: apply.call(new_value.to_int() != 0))
-	if cv.get_string() == "1":
-		apply.call(true)
+	var _cv := DotGameStatsReport.bind(self,
+		func(on: bool) -> DotResult:
+			if game.progress == null:
+				return DotResult.fail(DotError.CODE_STATE, "No progress yet.")
+			return game.progress.set_reporting(on),
+		PackedStringArray(["arena_stats_report"]))
 
 
 ## `sv_fire_buffer`: seconds a semi-auto press during the cooldown stays queued. See [member ArenaGame.fire_buffer_seconds].

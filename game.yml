@@ -30,6 +30,9 @@ cvars:
   arena_minplayers: "1"
   # E throws the player into the air only when a server turns this on; off by default.
   arena_launch: "0"
+  # 1 files the players' stats with the backbone using the server's own ticket; 0 keeps them here.
+  # The family cvar; arena_stats_report is its old name and still works.
+  stats_report: "0"
   # Loadouts on B: players choose by default. An owner restricts them in their cfg/content.yml
   # (docs/modes.md "Loadouts and the owner's rules"), for example snipers only:
   #   mp_loadout_allow: "primary=tag:scoped"
