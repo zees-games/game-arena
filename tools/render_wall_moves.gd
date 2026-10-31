@@ -49,12 +49,17 @@ var _settle := 0
 var _third := false
 ## `body` on the command line: your own body drawn in first person (mp_fp_body 2), looking down 50 degrees.
 var _body := false
+## `legs` (with `body`): legs-only mode (mp_fp_body 1); `steep`: looking down 85 degrees instead of 50.
+var _mode := 2
+var _pitch := -50.0
 
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	_third = args.has("third")
 	_body = args.has("body")
+	_mode = 1 if args.has("legs") else 2
+	_pitch = -85.0 if args.has("steep") else -50.0
 	for name in ["run", "runjump", "jumprun", "chimney"]:
 		if args.is_empty() or args.has(name):
 			_scenarios.append(name)
@@ -126,7 +131,7 @@ func _physics_process(_delta: float) -> bool:
 			_driven = _tick
 		command = _driver.next(_player.controller.state)
 		if _body:
-			command.pitch = -50.0
+			command.pitch = _pitch
 		# `runjump`: a jump off the wall half a second into the run.
 		var state := _player.controller.state
 		if _scenario == "runjump" and not _kicked and state.is_wall_running() and state.wall_run_time >= 0.5:
@@ -148,7 +153,7 @@ func _process(delta: float) -> bool:
 		return false
 
 	if _body:
-		_player.present_own_body(DotPlayerViewRules.BODY_FULL)
+		_player.present_own_body(_mode)
 	_player.present(delta)
 
 	if _driven < 0:
