@@ -73,6 +73,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - Effects are built against `ArenaPresentation.facing` (-Z along the shot); a missing scene is a warning. [client](docs/client.md#effect-scenes)
 - Players and bots are dot-player-char's people (`ArenaAvatars.look_of`); the document stays `arena_stock`; the gun hand is the left. [client](docs/client.md#avatars)
 - The Escape menu is dot-menu's (`ArenaMenus`): Escape releases, then opens it; only a click captures. [client](docs/client.md#escape-the-pointer-and-the-menu)
+- The team menu (Period) is dot-menu's screen over dot-team's server rules (`ArenaTeamMenu`, `mp_teamswitch_*`, `mp_team_names`); no row may default to Period. [netcode](docs/netcode.md#the-team-menu)
 - Every key the client reads is an `ArenaBindings` row read through its action, never a keycode; props modes reuse Launch and Bash; V is push to talk (no noclip). [client](docs/client.md#keys)
 - M is the map menu: solo `map_menu_rows()` / `change_from_menu()`, on a server dot-vote's menu over this ballot. No row may default to M. [client](docs/client.md#escape-the-pointer-and-the-menu)
 - B is the loadout menu: the authority's `loadout_command` decides; a choice is in the hands at once only in warmup or spawn protection. No row may default to B. [modes](docs/modes.md#loadouts-and-the-owners-rules)

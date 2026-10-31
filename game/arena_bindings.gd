@@ -112,5 +112,8 @@ static func make() -> DotMenuBindings:
 	# B is the loadout menu (dot-menu's `dot_menu_loadout`), where the host has it (API 6).
 	if DotAddonApi.build_level("dot_menu") >= 6 and keys.has_method(&"add_loadout"):
 		var _l: Variant = keys.call(&"add_loadout", "Weapons")
+	# Period is the team menu (dot-menu API 17): the teams, or Play and Spectate in a free-for-all.
+	if DotAddonApi.build_level("dot_menu") >= 17 and keys.has_method(&"add_teams"):
+		var _t: Variant = keys.call(&"add_teams", "Interface")
 	var _r := keys.renamed(&"bind_bash", ["F"]).renamed(&"bind_launch_props", ["X", "N"]).renamed(&"bind_fire_mode", ["L"])
 	return keys

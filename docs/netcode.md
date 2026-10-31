@@ -117,6 +117,10 @@ How many is dot-server's `DotBotQuota` (`bot_quota` 4, `bot_quota_mode fill`, `b
 
 `headless_lossy` is the suite for all of this ([testing](testing.md#headless_lossy-real-enet-through-real-loss)).
 
+## The team menu
+
+The Period key (a rebindable `ArenaBindings` row) opens dot-menu's team screen. It asks over chat (`/teams`, `/teams <id|auto|play|spectate>`) and the reply is a `team_menu` notice, so no wire kind is added. `ArenaTeamMenu` (game/arena_team_menu.gd) adapts dot-team's `DotTeamMenuServer`: the server checks every switch against `mp_teamswitch_enabled`, `_cooldown`, `_imbalance`, `_maxplayers`, `_anytime`, `_kill` and `_spectate`. Layout cvars: `mp_team_names` (comma list, more names than sides adds teams up to 8), `mp_team_colours` (`#rrggbb` list), `mp_team_max`. Free-for-all lists only Play and Spectate; Spectate is always offered. Suite: `headless_teammenu`; frames: `tools/screenshot.sh --team-menu`.
+
 ## The map's toys
 
 Each toy is an entity (`arena_toy_net.gd`: `state_transform`, `on`, `count`), registered by the server when the map's toys are built and named in TOYS (the map's id, then the net ids in toy order), sent to every ready peer and to a joiner at signon. **A client registers a mirror for every id the moment TOYS arrives**, under `ToyMirrors`, and hands each its toy by index once its own toys for that map exist: dot-net stops reading a snapshot at the first entity a client does not know, because a body cannot be skipped without its declarations, so a mirror missing while the client loads the map (or for good, on a client left on another map, as `headless_net`'s client 3 is) froze every player after it. A server's entities on the old map leave the registry and the tree at once on a map change.

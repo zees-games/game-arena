@@ -2,6 +2,7 @@
 # Renders a map to screenshots/<map>_{overview,eye,roof}.png so a person can look at it.
 #
 #   tools/screenshot.sh dm_atrium
+#   tools/screenshot.sh --team-menu   # the team menu: two teams, four renamed, free-for-all
 #   tools/screenshot.sh dm_box --admin   # a beacon, a beacon behind a wall, a blind
 #   tools/screenshot.sh dm_box --feel --muzzle --weapons=smg:3,knife:1   # first-person frames of chosen weapons (id:slot)
 #   tools/screenshot.sh dm_box --action emote dance   # a figure playing an avatar action (pose sit, gesture wave)
@@ -19,6 +20,9 @@
 # one.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if [ "${1:-}" = "--team-menu" ]; then
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/team_menu_shot.gd
+fi
 map="${1:-dm_box}"
 shift || true
 # RENDERER picks the rendering method. The client shell runs gl_compatibility everywhere,

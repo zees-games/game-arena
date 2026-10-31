@@ -149,6 +149,8 @@ func _build_interface() -> void:
 		if maps is Object:
 			(maps as Object).set(&"noun", "maps and modes")
 	_use_loadout_menu()
+	if game_menu.has_method(&"use_teams"):
+		var _teams: Variant = game_menu.call(&"use_teams")
 	platform.add_store_panel(game_menu, func() -> String:
 		var key := loadout_account_key(DotRegistry.get_node_service(AUTH_SERVICE))
 		return "" if key == "local" else key)

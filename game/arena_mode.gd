@@ -369,9 +369,14 @@ func teams() -> Array[DotTeam]:
 	var pair := DotTeam.standard_pair()
 	pair[0].spawn_tag = &"red"
 	pair[1].spawn_tag = &"blue"
+	out.append_array(pair)
 
-	for index in range(min(team_count, pair.size())):
-		out.append(pair[index])
+	# Sides past the pair have no end of the map of their own (spawn_tag empty: the shared pool);
+	# arena_team_menu.gd names and colours them.
+	for index in range(2, mini(team_count, 8)):
+		out.append(DotTeam.make(index + 1, "Team %d" % (index + 1)))
+
+	out.resize(mini(team_count, 8))
 
 	return out
 

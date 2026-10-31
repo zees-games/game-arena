@@ -22,6 +22,7 @@ const ArenaModule := preload("arena_module.gd")
 const ArenaNetBridge := preload("arena_net_bridge.gd")
 const ArenaServices := preload("arena_services.gd")
 const ArenaStats := preload("arena_stats.gd")
+const ArenaTeamMenu := preload("arena_team_menu.gd")
 const ArenaVote := preload("arena_vote.gd")
 
 ## Binds an [ArenaGame] to a [DotServer].
@@ -221,6 +222,10 @@ func _module_load() -> DotResult:
 		game.map_changed.connect(_reapply_combat_cvars.unbind(1))
 
 	_bind_rule_cvars()
+
+	# The team menu (period): mp_teamswitch_*, mp_team_names, mp_team_colours, mp_team_max and the `teams` command.
+	team_menu = ArenaTeamMenu.new()
+	team_menu.bind(game, add_cvar, self)
 
 	_start_workbench()
 
@@ -1075,6 +1080,9 @@ func _start_workbench() -> void:
 
 
 func _module_unload() -> void:
+	if team_menu != null:
+		team_menu.release()
+		team_menu = null
 	# The link and the runtime hold each other through broadcast.
 	if profile_link != null:
 		profile_link.release()

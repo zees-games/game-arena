@@ -10,6 +10,8 @@ var game: ArenaGame = null
 ## dedicated server are different deployments of the same game and only one replicates.
 var net: DotNetManager = null
 var _cv_maxrate: DotConVar = null
+## The team menu server and its team layout cvars (arena_team_menu.gd).
+var team_menu: RefCounted = null
 
 
 ## cvar -> the movement tunable it sets, with what it means. Each defaults to what
