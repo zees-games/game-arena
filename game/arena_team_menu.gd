@@ -39,6 +39,15 @@ func bind(p_game: ArenaGame, add: Callable, host: Object) -> void:
 	apply_layout()
 
 
+## Offline: the same rules with their default values and no console; returns the offer and choose callables for [method DotMenu.use_teams], keyed to [param local_id_fn].
+func bind_local(p_game: ArenaGame, local_id_fn: Callable) -> Array[Callable]:
+	var none := func(_n: String, _v: Variant, _d: String, _f: int) -> Variant: return null
+	bind(p_game, none, null)
+	var offer := func() -> Dictionary: return server.menu_for(local_id_fn.call())
+	var choose := func(id: String) -> DotResult: return server.request(local_id_fn.call(), id)
+	return [offer, choose]
+
+
 ## Drops the callables that point back at this object, so the menu and its server can be freed.
 func release() -> void:
 	for cv: DotConVar in [names_cvar, colours_cvar, max_cvar]:

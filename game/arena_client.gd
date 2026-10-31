@@ -2,6 +2,10 @@ extends "arena_client_bots.gd"
 
 const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaMatchText := preload("arena_match_text.gd")
+const ArenaTeamMenu := preload("arena_team_menu.gd")
+
+## Offline only: the team menu's rules run in this process (online the server's do).
+var _local_team_menu: ArenaTeamMenu = null
 
 
 func _ready() -> void:
@@ -150,7 +154,14 @@ func _build_interface() -> void:
 			(maps as Object).set(&"noun", "maps and modes")
 	_use_loadout_menu()
 	if game_menu.has_method(&"use_teams"):
-		var _teams: Variant = game_menu.call(&"use_teams")
+		var offer := Callable()
+		var choose := Callable()
+		if _offline:
+			_local_team_menu = ArenaTeamMenu.new()
+			var pair := _local_team_menu.bind_local(game, func() -> int: return player.player_id if player != null else 0)
+			offer = pair[0]
+			choose = pair[1]
+		var _teams: Variant = game_menu.call(&"use_teams", offer, choose)
 	platform.add_store_panel(game_menu, func() -> String:
 		var key := loadout_account_key(DotRegistry.get_node_service(AUTH_SERVICE))
 		return "" if key == "local" else key)

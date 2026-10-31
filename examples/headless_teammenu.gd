@@ -11,8 +11,8 @@ const ArenaTeamMenu := preload("../game/arena_team_menu.gd")
 ## godot --headless --path . res://examples/headless_teammenu.tscn
 ## [/codeblock]
 
-const EXPECTED_CHECKS := 43
-const EXPECTED_SECTIONS := 6
+const EXPECTED_CHECKS := 58
+const EXPECTED_SECTIONS := 7
 
 var _checks := 0
 var _failed := 0
@@ -203,6 +203,39 @@ func _run() -> void:
 	var four := ArenaMode.team_deathmatch()
 	four.team_count = 4
 	_check(four.teams().size() == 4 and four.teams()[2].spawn_tag == &"", "a four-team mode builds four, the extra two on the shared spawn pool")
+
+	# 7. Offline: the menu's own callables (no server, no console) run the same rules.
+	_sections += 1
+	for mode: ArenaMode in [ArenaMode.free_for_all(), ArenaMode.team_deathmatch()]:
+		var solo := _game(mode)
+		var _me := solo.add_player(71, "Me")
+		var _bot := solo.add_player(72, "Bot")
+		var local := ArenaTeamMenu.new()
+		var pair := local.bind_local(solo, func() -> int: return 71)
+		_menus.append(local)
+		local.server.clock_fn = func() -> float: return _now
+		var offer: Dictionary = pair[0].call()
+		var tag := "offline %s: " % ("ffa" if mode.teams().is_empty() else "teams")
+		_check(offer["ffa"] == mode.teams().is_empty() and offer["spectate_ok"] and offer["enabled"], tag + "the offer works with no server", str(offer.keys()))
+		var rec := solo.match_node.scoreboard.record_for("71")
+		var deaths := rec.deaths
+		var kills_other := solo.match_node.scoreboard.record_for("72").kills
+		var r: DotResult = pair[1].call("spectate")
+		_check(r.ok and rec.spectating and not solo.player_for(71).is_alive(), tag + "Spectate leaves play with no body left", str(r.error.message if r.error else ""))
+		_check(rec.deaths == deaths and solo.match_node.scoreboard.record_for("72").kills == kills_other, tag + "leaving scores no death and gives no kill credit")
+		_check(solo.spectate.is_spectating(71) and pair[0].call()["spectating"], tag + "dot-spectate has them, and the menu offers Play")
+		if not mode.teams().is_empty():
+			var on_teams := 0
+			for t in solo.match_node.teams.teams:
+				on_teams += solo.match_node.teams.count_on(t.id) if not t.is_spectator else 0
+			_check(on_teams == 1, tag + "team counts no longer include them", str(on_teams))
+		_now += 10.0
+		r = pair[1].call("play" if mode.teams().is_empty() else "auto")
+		_check(r.ok and not rec.spectating and solo.player_for(71).is_alive(), tag + "Play puts them back in, spawned")
+		_check(not solo.spectate.is_spectating(71) and rec.present, tag + "no longer watching, still on the scoreboard")
+		_now += 10.0
+		r = pair[1].call("play" if mode.teams().is_empty() else "spectate")
+		_check(r.ok or mode.teams().is_empty(), tag + "a second choice is answered")
 
 	# The menu and its server point at each other; release() breaks the cycle so the exit check stays clean.
 	for m in _menus:
