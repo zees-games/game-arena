@@ -1762,6 +1762,16 @@ func _test_the_map_menu() -> void:
 	_check(client.winner_reveal != null and client.killcam != null, "the killcam is built at start and the podium by the first match end")
 	client._on_match({"state": DotMatch.State.WARMUP, "round": 2, "remaining_ticks": 0})
 	_check(not menu.scoreboard.is_open(), "and the next match takes it down again")
+	# Overlapping screens that each restore "what they found" left the HUD hidden for good.
+	client.hud.visible = false
+	client._restore_hud_if_orphaned()
+	_check(client.hud.visible, "a HUD left hidden with no killview, killcam or reveal up comes back")
+	client.hud.visible = false
+	client._reveal_hid[client.hud] = true
+	client._restore_hud_if_orphaned()
+	_check(not client.hud.visible, "and a HUD hidden by a screen that is up stays hidden")
+	client._reveal_hid.clear()
+	client.hud.visible = true
 	remove_child(client)
 	client.free()
 	await get_tree().process_frame

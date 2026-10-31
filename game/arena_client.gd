@@ -682,7 +682,7 @@ func _reveal_winner() -> void:
 		_show_match_summary()
 		return
 	for n: Variant in [hud, view_model]:
-		if n is Object and is_instance_valid(n):
+		if n is Object and is_instance_valid(n) and not _reveal_hid.has(n):
 			_reveal_hid[n] = bool((n as Object).get(&"visible"))
 			(n as Object).set(&"visible", false)
 
@@ -696,6 +696,20 @@ func _on_reveal_finished(_skipped: bool) -> void:
 		_show_match_summary()
 
 
+## The kill view, the final killcam and the winner reveal each hide the HUD and put back what they found. When two overlap, the later one found it already hidden and restores it hidden, for the rest of the session; this is the one owner that says no screen is up, so the HUD returns.
+func _restore_hud_if_orphaned() -> void:
+	if hud == null or hud.visible or not _reveal_hid.is_empty():
+		return
+	if killcam != null and killcam.is_playing():
+		return
+	if killview != null and killview.is_active():
+		return
+	if winner_reveal != null and winner_reveal.is_active():
+		return
+	DotLog.warn(CHANNEL, "HUD was left hidden with no screen up; restored")
+	hud.visible = true
+
+
 ## Records the frame for the killcam, or draws the replay over it. Solo has no MATCH message,
 ## so the end of a solo match is seen here.
 func _killcam_frame() -> void:
@@ -704,6 +718,7 @@ func _killcam_frame() -> void:
 	killcam.hide_while_playing = [hud, view_model]
 	killcam.world_mask = _level_mask()
 	killcam.frame()
+	_restore_hud_if_orphaned()
 	var now := int(game.match_node.state) if game.match_node != null else -1
 	if _offline and now != _seen_match_state and now == DotMatch.State.MATCH_END:
 		_begin_match_end()
