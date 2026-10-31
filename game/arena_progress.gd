@@ -519,6 +519,7 @@ func _on_killed(entry: DotKillFeed.Entry) -> void:
 
 	var killer := entry.killer_key.to_int()
 
+	_report_kill(killer, victim, entry)
 	record(killer, ArenaStats.KILLS)
 
 	if entry.headshot:
@@ -533,6 +534,19 @@ func _on_killed(entry: DotKillFeed.Entry) -> void:
 	record(killer, ArenaStats.BEST_STREAK, float(entry.streak))
 
 	_round_kills[killer] = int(_round_kills.get(killer, 0)) + 1
+
+
+## Files the killer/victim pair for the site's "vs" table. Bots are flagged, not skipped.
+func _report_kill(killer: int, victim: int, entry: DotKillFeed.Entry) -> void:
+	if not _attached or stats == null or victim <= 0 or killer == victim:
+		return
+	stats.record_kill(StringName(_key_of(killer)), StringName(_key_of(victim)), String(entry.cause), {
+		"killer_name": entry.killer_name, "victim_name": entry.victim_name,
+		"killer_bot": killer >= ArenaGame.BOT_SESSION_BASE, "victim_bot": victim >= ArenaGame.BOT_SESSION_BASE,
+		"headshot": entry.headshot,
+		"map": String(_game.map.id) if _game.map != null else "",
+		"mode": String(_game.mode.id) if _game.mode != null else "",
+	})
 
 
 func _on_shot_resolved(shot: DotShot) -> void:

@@ -475,6 +475,10 @@ func _test_zee_weapons() -> void:
 		"and a spawn holds the rifle, not the grenade in the highest slot",
 		str(p.arsenal.current_def().id if p.arsenal.current_def() != null else &"")
 	)
+	_check(
+		ArenaWeaponRoles.own_pack == "" or ZeeWeaponSound.class_for(&"lmg", &"") == &"lmg",
+		"the arena pack's lmg has the lmg sound class, not the rifle's", str(ZeeWeaponSound.class_for(&"lmg", &""))
+	)
 
 	# A loadout saved before the melee slot existed still gives something under 1.
 	var old := DotLoadout.empty(&"arena")
