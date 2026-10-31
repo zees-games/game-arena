@@ -54,6 +54,11 @@ func _run() -> void:
 			continue
 		var me = client.get("player")
 		me.health.invulnerable = true
+		# The previous weapon's reload must be over, or this one's press is swallowed or reads the old view model.
+		for _w in 120:
+			if not me.arsenal.is_reloading():
+				break
+			await process_frame
 		var _g = me.arsenal.give(id)
 		me.arsenal.equip(def.slot)
 		await _wait(1.4)
@@ -76,6 +81,11 @@ func _run() -> void:
 		var view := _view_model(me)
 		if view != null and not view.has_method(&"reload_sequence"):
 			view = null
+		# The view model builds its sequence a frame or two after the arsenal starts the reload.
+		for _w in 30:
+			if view == null or view.call(&"reload_sequence") != null or not me.arsenal.is_reloading():
+				break
+			await process_frame
 		if view != null:
 			print("%s: %s" % [id, view.call(&"reload_sequence").describe() if view.call(&"reload_sequence") != null else "no sequence"])
 		for f in frames:
