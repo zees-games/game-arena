@@ -72,9 +72,6 @@ enum Mode {
 
 @export var team: int = 0
 
-## Ground speed above which a mirrored crouching player is drawn sliding, not crouch walking.
-const SLIDE_DRAW_SPEED := 5.0
-
 var mode: Mode = Mode.HEADLESS
 
 var controller: DotFpsController = null
@@ -1413,12 +1410,9 @@ func present(delta: float) -> void:
 	_mend_body()
 
 
-## Whether the body is drawn sliding. A mirrored player's slide timer is not replicated, so a
-## crouch held at running speed on the ground reads as one.
+## Whether the body is drawn sliding: the replicated slide timer (net_flags), for bots, humans and remote copies alike.
 func _drawn_sliding(drawn: DotFpsState) -> bool:
-	if drawn.is_sliding():
-		return true
-	return mirrored and drawn.mode == DotFpsState.Mode.GROUND and drawn.crouch_fraction > 0.5 and Vector2(drawn.velocity.x, drawn.velocity.z).length() > SLIDE_DRAW_SPEED
+	return (drawn.move_flags() & DotFpsState.Move.SLIDE) != 0 and drawn.mode == DotFpsState.Mode.GROUND
 
 
 ## Tells the person how this player moves, and advances its clip. Client side.

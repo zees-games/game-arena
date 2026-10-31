@@ -18,7 +18,7 @@ const BOT := 1
 const OTHER := 2
 const MAPS: Array[StringName] = [&"dm_atrium", &"dm_pit"]
 
-const CHECKS := 20
+const CHECKS := 21
 const SECTIONS := 6
 
 var _entered := 0
@@ -77,6 +77,8 @@ func _play(map_id: StringName, preset: String, launch: bool) -> Dictionary:
 	var seen_crouch := 0
 	var seen_slide := 0
 	var wire_ok := true
+	var remote_slides := 0
+	var drawn_ok := true
 	for i in range(int(SECONDS * TICK_RATE)):
 		var tick := game.current_tick()
 		var commands := {}
@@ -97,12 +99,15 @@ func _play(map_id: StringName, preset: String, launch: bool) -> Dictionary:
 			remote.crouch_fraction = bot_player.controller.state.crouch_fraction
 			var mask: int = DotFpsState.Move.SLIDE | DotFpsState.Move.WALL_RUN
 			wire_ok = wire_ok and (remote.move_flags() & mask) == (flags & mask)
+			if (flags & DotFpsState.Move.SLIDE) != 0 and bot_player.controller.state.mode == DotFpsState.Mode.GROUND:
+				remote_slides += 1
+				drawn_ok = drawn_ok and bot_player._drawn_sliding(remote)
 		if i % 4 == 0:
 			await get_tree().process_frame
 
 	var motor: Variant = game.player_for(BOT).controller.motor
 	var counts: Dictionary = minds[BOT].brain.tricks.counts
-	var result := {"slides": motor.slides, "wall_runs": motor.wall_runs, "launches": motor.launches, "ducks": ducks, "air_jump": counts[&"air_jump"], "started_slide": counts[&"slide"], "started_wall": counts[&"wall"], "seen_crouch": seen_crouch, "seen_slide": seen_slide, "wire_ok": wire_ok}
+	var result := {"slides": motor.slides, "wall_runs": motor.wall_runs, "launches": motor.launches, "ducks": ducks, "air_jump": counts[&"air_jump"], "started_slide": counts[&"slide"], "started_wall": counts[&"wall"], "seen_crouch": seen_crouch, "seen_slide": seen_slide, "wire_ok": wire_ok, "remote_slides": remote_slides, "drawn_ok": drawn_ok}
 	if launch:
 		_results["%s/%s" % [preset, map_id]] = result
 		print("       %s" % [result])
@@ -135,6 +140,12 @@ func _compare() -> void:
 		into2["seen_slide"] += int(_results[key]["seen_slide"])
 	_check(int(hard["seen_crouch"]) > 0, "a crouching bot reads CROUCH in move_flags", str(hard["seen_crouch"]))
 	_check(int(hard["seen_slide"]) > 0, "a sliding bot reads SLIDE in move_flags", str(hard["seen_slide"]))
+	var drawn_ok := true
+	var remote_slides := 0
+	for key2: String in _results:
+		drawn_ok = drawn_ok and bool(_results[key2]["drawn_ok"])
+		remote_slides += int(_results[key2]["remote_slides"])
+	_check(drawn_ok and remote_slides > 0, "a remote copy rebuilt from net_flags is drawn sliding while the bot slides", str(remote_slides))
 	_check(wire, "slide and wall-run flags survive the net_flags pack and unpack")
 	_check(int(hard["slides"]) >= 20, "nightmare bots slide on the real motor", str(hard["slides"]))
 	_check(int(hard["wall_runs"]) >= 4, "nightmare bots wall run on the real motor", str(hard["wall_runs"]))
