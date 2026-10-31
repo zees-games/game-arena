@@ -1,9 +1,9 @@
 extends SceneTree
 
-## A rifle round through a thin wall: frames of the entry face, the exit face and a side view
-## of both holes. The look no assertion gives: do the decals sit on the surfaces, not in them?
+## A rifle round through a thin wall: close-ups of the entry hole, the exit hole and a ricochet mark.
+## Each close-up is diffed against the same view without the decal, so a hidden mark fails the run.
 ##
-##     tools/render_wallbang.sh [map]       # frames in screenshots/wallbang/
+##     tools/render_wallbang.sh [map]       # frames in screenshots/wallbang/, exit 1 if a mark is invisible
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const OUT_DIR := "res://screenshots/wallbang"
@@ -44,12 +44,50 @@ func _spot(game) -> Dictionary:
 	return {}
 
 
-func _shot(me, foot: Vector3, face: Vector3, name: String) -> void:
-	# The client owns the current camera, so move the player rather than a spare camera.
-	var d := face - (foot + Vector3.UP * 1.5)
-	me.controller.teleport(foot, atan2(-d.x, -d.z), asin(clampf(d.normalized().y, -1.0, 1.0)))
-	await _wait(0.5)
-	root.get_texture().get_image().save_png(ProjectSettings.globalize_path("%s/%s_%s.png" % [OUT_DIR, _map, name]))
+## Hides what would stand between a close-up camera and the wall: hands, body, HUD.
+func _clear_view(me) -> void:
+	for n: Variant in [client.get("view_model"), client.get("view_arms"), me.body_mesh, me.avatar]:
+		if n is Node3D:
+			(n as Node3D).visible = false
+		elif n is CanvasItem:
+			(n as CanvasItem).visible = false
+
+
+func _frame() -> Image:
+	return root.get_texture().get_image()
+
+
+## The player's eye 0.6 m off the wall along the decal's normal, looking at it (the client owns the
+## current camera and rewrites a spare one's transform, so the player is moved instead). Returns the diff
+## (pixels near the projected centre that change when the decal is hidden), failing the run at zero.
+func _closeup(me, decal: Node3D, at: Vector3, normal: Vector3, name: String) -> int:
+	_clear_view(me)
+	var cam: Camera3D = me.camera
+	var eye := at + normal * 0.6
+	var look := -normal
+	var yaw := atan2(-look.x, -look.z)
+	me.controller.teleport(eye - Vector3.UP * 1.5, yaw, 0.0)
+	# The look is the client's sampler's, not the controller's (see arena_client's spawn facing).
+	client.get("_sampler").look_at_angles(rad_to_deg(yaw), 0.0)
+	await _wait(0.4)
+	var with_decal := _frame()
+	with_decal.save_png(ProjectSettings.globalize_path("%s/%s_%s.png" % [OUT_DIR, _map, name]))
+	decal.visible = false
+	await _wait(0.3)
+	var bare := _frame()
+	decal.visible = true
+	var c := cam.unproject_position(at)
+	var changed := 0
+	for y in range(int(c.y) - 40, int(c.y) + 41):
+		for x in range(int(c.x) - 40, int(c.x) + 41):
+			if x < 0 or y < 0 or x >= with_decal.get_width() or y >= with_decal.get_height():
+				continue
+			var d := with_decal.get_pixel(x, y)
+			var e := bare.get_pixel(x, y)
+			if absf(d.r - e.r) + absf(d.g - e.g) + absf(d.b - e.b) > 0.06:
+				changed += 1
+	print("closeup %s: %d px differ from the bare wall" % [name, changed])
+	return changed
 
 
 func _run() -> void:
@@ -110,6 +148,10 @@ func _run() -> void:
 	game.combat.set_authoritative_origin(me.player_id, eye)
 	var res: DotShot = game.combat.resolve_shot(shot)
 	var pres = client.get("presentation")
+	var decals: Array[Node3D] = []
+	pres.fx.spawned.connect(func(_id, node, _why) -> void:
+		if node is Node3D:
+			decals.append(node))
 	var made: int = pres.fx.spawn_penetration_decals(shot.penetrations)
 	print("decals=%d" % made)
 	if shot.penetrations.is_empty() or made < 2:
@@ -131,6 +173,7 @@ func _run() -> void:
 	game.combat.ricochet_enabled = true
 	game.combat.set_authoritative_origin(me.player_id, skim_from)
 	var _skim_res: DotShot = game.combat.resolve_shot(skim)
+	var made_before := decals.size()
 	var bounced: int = pres.fx.spawn_ricochet_decals(skim.ricochets)
 	print("ricochet decals=%d" % bounced)
 	if bounced < 1:
@@ -138,15 +181,19 @@ func _run() -> void:
 		quit(1)
 		return
 	await _wait(0.3)
-	var entry: Vector3 = shot.penetrations[0]["entry"]
-	var exit_p: Vector3 = shot.penetrations[0]["exit"]
-	var side := dir.cross(Vector3.UP).normalized()
-	var foot: Vector3 = spot["me"]
-	await _shot(me, foot, entry, "entry")
-	var past: Vector3 = exit_p + dir * 1.8 - side * 0.3
-	past.y = foot.y
-	await _shot(me, past, exit_p + side * 0.3, "exit")
-	var beside: Vector3 = (entry + exit_p) * 0.5 + side * 1.5 - dir * 0.8
-	beside.y = foot.y
-	await _shot(me, beside, (entry + exit_p) * 0.5, "side")
-	quit(0)
+	var pen: Dictionary = shot.penetrations[0]
+	var marks := [
+		["entry", pen["entry"], pen["entry_normal"], decals[0]],
+		["exit", pen["exit"], pen["exit_normal"], decals[1]],
+		["ricochet", skim.ricochets[0]["point"], skim.ricochets[0]["normal"], decals[made_before]],
+	]
+	_clear_view(me)
+	me.camera.near = 0.02
+	me.camera.cull_mask = 1
+	var failed := false
+	for m: Array in marks:
+		var n: int = await _closeup(me, m[3], m[1], (m[2] as Vector3).normalized(), m[0])
+		if n < 20:
+			print("FAIL %s decal is not visible against the bare wall" % m[0])
+			failed = true
+	quit(1 if failed else 0)
