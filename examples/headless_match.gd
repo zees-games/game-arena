@@ -41,7 +41,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 666
+const CHECKS := 670
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -4696,6 +4696,17 @@ func _stats_event_check(progress) -> void:
 		seen.has(ArenaStats.KILLS) and seen.has(ArenaStats.DEATHS),
 		"a kill produces kills and deaths stat events", str(seen)
 	)
+	_check(progress.stats.reporter.pending_kills() == 0, "a kill is not filed for the site while reporting is off")
+	progress.stats.report_to_backbone = true
+	var bot_entry := DotKillFeed.Entry.new()
+	bot_entry.killer_key = str(ArenaGame.BOT_SESSION_BASE + 1)
+	bot_entry.victim_key = str(victim.player_id)
+	bot_entry.cause = &"rifle"
+	progress._on_killed(bot_entry)
+	_check(progress.stats.reporter.pending_kills() == 1, "a bot kill is filed for the vs table", str(progress.stats.reporter.pending_kills()))
+	var filed: Dictionary = progress.stats.reporter._kills[0] if progress.stats.reporter.pending_kills() > 0 else {}
+	_check(bool(filed.get("killer_bot", false)) and not bool(filed.get("victim_bot", true)) and filed.get("weapon", "") == "rifle", "flagged as a bot killer with its weapon", str(filed))
+	progress.stats.report_to_backbone = false
 
 ## dot-stats, dot-achievements and dot-leaderboard, over the match that just ran. Every check is against a number the match
 ## PRODUCED, not one this test filed: reading back one's own readings tests dot-stats, and what is untested elsewhere is
