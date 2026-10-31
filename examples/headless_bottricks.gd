@@ -18,7 +18,7 @@ const BOT := 1
 const OTHER := 2
 const MAPS: Array[StringName] = [&"dm_atrium", &"dm_pit"]
 
-const CHECKS := 17
+const CHECKS := 20
 const SECTIONS := 6
 
 var _entered := 0
@@ -74,6 +74,9 @@ func _play(map_id: StringName, preset: String, launch: bool) -> Dictionary:
 	minds[BOT].seed = 7
 	minds[OTHER].seed = 19
 	var ducks := 0
+	var seen_crouch := 0
+	var seen_slide := 0
+	var wire_ok := true
 	for i in range(int(SECONDS * TICK_RATE)):
 		var tick := game.current_tick()
 		var commands := {}
@@ -83,12 +86,23 @@ func _play(map_id: StringName, preset: String, launch: bool) -> Dictionary:
 		if game.player_for(BOT).is_alive() and move.is_pressed(DotFpsCommand.BUTTON_CROUCH):
 			ducks += 1
 		game.tick(commands)
+		var bot_player: Object = game.player_for(BOT)
+		var flags: int = bot_player.move_flags()
+		if flags & DotFpsState.Move.CROUCH: seen_crouch += 1
+		if flags & DotFpsState.Move.SLIDE: seen_slide += 1
+		if i % 8 == 0:
+			# What a remote client rebuilds from net_flags must read the same crouch and slide.
+			var remote := DotFpsState.new()
+			DotFpsNetSync.unpack_flags(remote, DotFpsNetSync.pack_flags(bot_player.controller.state))
+			remote.crouch_fraction = bot_player.controller.state.crouch_fraction
+			var mask: int = DotFpsState.Move.SLIDE | DotFpsState.Move.WALL_RUN
+			wire_ok = wire_ok and (remote.move_flags() & mask) == (flags & mask)
 		if i % 4 == 0:
 			await get_tree().process_frame
 
 	var motor: Variant = game.player_for(BOT).controller.motor
 	var counts: Dictionary = minds[BOT].brain.tricks.counts
-	var result := {"slides": motor.slides, "wall_runs": motor.wall_runs, "launches": motor.launches, "ducks": ducks, "air_jump": counts[&"air_jump"], "started_slide": counts[&"slide"], "started_wall": counts[&"wall"]}
+	var result := {"slides": motor.slides, "wall_runs": motor.wall_runs, "launches": motor.launches, "ducks": ducks, "air_jump": counts[&"air_jump"], "started_slide": counts[&"slide"], "started_wall": counts[&"wall"], "seen_crouch": seen_crouch, "seen_slide": seen_slide, "wire_ok": wire_ok}
 	if launch:
 		_results["%s/%s" % [preset, map_id]] = result
 		print("       %s" % [result])
@@ -104,11 +118,24 @@ func _compare() -> void:
 	_section("nightmare tricks often, easy rarely")
 	var easy := {"slides": 0, "wall_runs": 0, "ducks": 0, "launches": 0}
 	var hard := easy.duplicate()
+	var wire := true
+	for key: String in _results:
+		wire = wire and bool(_results[key]["wire_ok"])
 	for key: String in _results:
 		var into := easy if key.begins_with("easy") else hard
 		for field: String in into:
 			into[field] += int(_results[key][field])
 	print("       easy %s | nightmare %s" % [easy, hard])
+	for field: String in ["seen_crouch", "seen_slide"]:
+		easy[field] = 0
+		hard[field] = 0
+	for key: String in _results:
+		var into2 := easy if key.begins_with("easy") else hard
+		into2["seen_crouch"] += int(_results[key]["seen_crouch"])
+		into2["seen_slide"] += int(_results[key]["seen_slide"])
+	_check(int(hard["seen_crouch"]) > 0, "a crouching bot reads CROUCH in move_flags", str(hard["seen_crouch"]))
+	_check(int(hard["seen_slide"]) > 0, "a sliding bot reads SLIDE in move_flags", str(hard["seen_slide"]))
+	_check(wire, "slide and wall-run flags survive the net_flags pack and unpack")
 	_check(int(hard["slides"]) >= 20, "nightmare bots slide on the real motor", str(hard["slides"]))
 	_check(int(hard["wall_runs"]) >= 4, "nightmare bots wall run on the real motor", str(hard["wall_runs"]))
 	_check(int(hard["ducks"]) >= 64, "nightmare bots duck", str(hard["ducks"]))

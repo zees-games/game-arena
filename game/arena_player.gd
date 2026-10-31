@@ -5,6 +5,7 @@ const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaPlayerTunables := preload("arena_player_tunables.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaContent := preload("arena_content.gd")
+const ArenaKillPov := preload("arena_kill_pov.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaLadderMode := preload("../maps/arena_ladder_mode.gd")
 const ArenaMapMechanics := preload("../maps/arena_map_mechanics.gd")
@@ -100,6 +101,7 @@ var mirror_weapon: StringName = &""
 var mirror_fire_seq: int = 0
 var mirror_fire_kind: int = 0
 var mirror_switching: bool = false
+var mirror_charge: float = 0.0
 var mirror_reloading: bool = false
 var _mode_click_audio: AudioStreamPlayer3D = null
 var health: DotHealth = null
@@ -1029,8 +1031,10 @@ func _present_health_tag(delta: float) -> void:
 	_hurt_age += delta
 
 	var show := is_alive() and _hurt_age < HEALTH_TAG_SEC and health.max_health > 0.0
-	# A killcam replays a past moment: the live world's bars would hang over it.
-	show = show and _viewed_by_a_player()
+	# A replay camera shows a past moment: the live world's bars would hang over it, and a body
+	# the replay hides (the killer's own, at the lens) has no head to float over.
+	show = show and not ArenaKillPov.is_replay_camera(get_viewport().get_camera_3d())
+	show = show and (body_mesh == null or body_mesh.is_visible_in_tree())
 	if not show:
 		if _health_tag != null:
 			_health_tag.visible = false
@@ -1059,11 +1063,6 @@ func _present_health_tag(delta: float) -> void:
 	var fraction := clampf(now / health.max_health, 0.0, 1.0)
 	_health_fill.scale = Vector3(maxf(fraction, 0.001), 1.0, 1.0)
 	_health_fill.position.x = -HEALTH_TAG_WIDTH * (1.0 - fraction) * 0.5
-
-
-func _viewed_by_a_player() -> bool:
-	var eye := get_viewport().get_camera_3d()
-	return eye == null or not String(eye.name).begins_with("Kill")
 
 
 static func _tag_quad(colour: Color, forward: float) -> MeshInstance3D:
@@ -1240,6 +1239,11 @@ func make_dead() -> void:
 	hitboxes.enabled = false
 
 
+## What the body is doing now as [enum DotFpsState.Move] bits; remote players too (from the replicated state).
+func move_flags() -> int:
+	return controller.state.move_flags() if controller != null and controller.state != null else 0
+
+
 func is_alive() -> bool:
 	return health.alive
 
@@ -1409,11 +1413,6 @@ func present(delta: float) -> void:
 	_mend_body()
 
 
-## Tells the person how this player moves, and advances its clip. Client side.
-##
-## [b]From the drawn state[/b], the same one the body is placed from, so the stride matches the
-## ground the body covers this frame. The weapon kind picks the arms: a gun, a melee weapon
-## (a swing plays the slash over the legs), or empty hands.
 ## Whether the body is drawn sliding. A mirrored player's slide timer is not replicated, so a
 ## crouch held at running speed on the ground reads as one.
 func _drawn_sliding(drawn: DotFpsState) -> bool:
@@ -1422,6 +1421,11 @@ func _drawn_sliding(drawn: DotFpsState) -> bool:
 	return mirrored and drawn.mode == DotFpsState.Mode.GROUND and drawn.crouch_fraction > 0.5 and Vector2(drawn.velocity.x, drawn.velocity.z).length() > SLIDE_DRAW_SPEED
 
 
+## Tells the person how this player moves, and advances its clip. Client side.
+##
+## [b]From the drawn state[/b], the same one the body is placed from, so the stride matches the
+## ground the body covers this frame. The weapon kind picks the arms: a gun, a melee weapon
+## (a swing plays the slash over the legs), or empty hands.
 func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 	if figure == null or body_mesh == null or not body_mesh.visible:
 		return
@@ -1431,12 +1435,12 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 		"on_floor": drawn.mode == DotFpsState.Mode.GROUND,
 		"vertical": v.y,
 		"crouched": drawn.crouch_fraction > 0.5,
+		"sliding": _drawn_sliding(drawn),
 		"swimming": drawn.mode == swim.mode_id,
 		"climbing": drawn.mode == ladder.mode_id,
 		"alive": is_alive(),
 		"wall_running": drawn.is_wall_running(),
 		"velocity": v,
-		"sliding": _drawn_sliding(drawn),
 		"wall": Plane(drawn.wall_normal, drawn.position - drawn.wall_normal * (controller.tunables.radius if controller != null else 0.35)) if drawn.wall_normal != Vector3.ZERO else Plane(),
 		# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
 		# reads where this player is aiming.
@@ -1765,6 +1769,9 @@ func _present_held() -> void:
 	held.on_switching(switching)
 	if held.has_method(&"on_reloading"):
 		held.call(&"on_reloading", reloading and is_alive())
+
+	if held.has_method(&"on_charge"):
+		held.call(&"on_charge", mirror_charge if mirrored else 0.0)
 
 	var fired := ZeeWeaponNet.uses_between(_seen_fire_seq, seq)
 	_seen_fire_seq = seq
