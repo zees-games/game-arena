@@ -18,7 +18,7 @@ const BOT := 1
 const OTHER := 2
 const MAPS: Array[StringName] = [&"dm_atrium", &"dm_pit"]
 
-const CHECKS := 21
+const CHECKS := 24
 const SECTIONS := 6
 
 var _entered := 0
@@ -151,7 +151,10 @@ func _compare() -> void:
 	_check(int(hard["wall_runs"]) >= 4, "nightmare bots wall run on the real motor", str(hard["wall_runs"]))
 	_check(int(hard["ducks"]) >= 64, "nightmare bots duck", str(hard["ducks"]))
 	_check(int(hard["launches"]) >= 2, "nightmare bots air-jump where it is on", str(hard["launches"]))
-	_check(int(easy["slides"]) * 3 <= int(hard["slides"]), "easy bots slide far less", "%d vs %d" % [easy["slides"], hard["slides"]])
+	_check(int(easy["slides"]) >= 3, "easy bots still slide now and then (seeded, 4 x 240 s)", str(easy["slides"]))
+	_check(int(easy["ducks"]) >= 64, "easy bots crouch visibly", str(easy["ducks"]))
+	_check(int(easy["seen_crouch"]) > 0 and int(easy["seen_slide"]) > 0, "easy bots read CROUCH and SLIDE in move_flags", "%d / %d" % [easy["seen_crouch"], easy["seen_slide"]])
+	_check(int(easy["slides"]) * 3 <= int(hard["slides"]) * 2, "easy bots slide less than nightmare", "%d vs %d" % [easy["slides"], hard["slides"]])
 	_check(int(easy["wall_runs"]) * 3 <= int(hard["wall_runs"]), "easy bots rarely wall run", "%d vs %d" % [easy["wall_runs"], hard["wall_runs"]])
 	_check(int(easy["launches"]) * 3 <= int(hard["launches"]), "easy bots rarely air-jump", "%d vs %d" % [easy["launches"], hard["launches"]])
 	_done()
