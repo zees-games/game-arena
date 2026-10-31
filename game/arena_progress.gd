@@ -268,8 +268,6 @@ func _build() -> DotResult:
 		var file_store := DotAchievementStoreFile.new()
 		file_store.directory = progress_dir
 		achievements.store = file_store
-	else:
-		achievements.store = DotAchievementStoreMemory.new()
 
 	add_child(achievements)
 
