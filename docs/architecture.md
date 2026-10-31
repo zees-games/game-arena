@@ -76,7 +76,7 @@ Three small decisions in those joins:
 4. **All shots are resolved after everyone has moved**, so a shot is traced against the world as it ends the tick.
 5. **Map hurt volumes, then the match.** `_hurt_from_map` runs after the shots; the match ticks last, so a kill scored this tick can end the round this tick.
 
-Inside a player's tick, the map's own mechanics run after the controller's move and before the pits ([imported maps](imported-maps.md#the-maps-own-mechanics)), and drops are swept after the player stack and before the match ([modes](modes.md#coins-out-of-a-body)).
+Inside a player's tick, the map's own mechanics run after the controller's move and before the pits ([imported maps](imported-maps.md#the-maps-own-mechanics)), and drops are swept after the player stack and before the match ([modes](modes.md#points-out-of-a-body)).
 
 ## Nobody is harmed behind a loading cover
 

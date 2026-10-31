@@ -1,6 +1,6 @@
 extends Node3D
 
-## What comes out of a body on a critical kill: coins, and maybe a health pack.
+## What comes out of a body on a critical kill: points, and maybe a health pack.
 ##
 ## [b]Server-authoritative and drawn everywhere.[/b] On the authority this holds real
 ## [DotPickup]s in a [DotPickupField], ticked with the game and swept against every live
@@ -8,30 +8,33 @@ extends Node3D
 ## removed by TAKEN, because a client that took its own pickups would be one that decides
 ## what it has. The same class on both ends so the two cannot disagree about what a drop is.
 ##
-## [b]The coins are the genre's reward for a critical[/b]: they burst out of the body and
-## whoever walks through them collects them. They count per player ([member coins]); a
+## [b]The points are the genre's reward for a critical[/b]: they burst out of the body and
+## whoever walks through them collects them. They count per player ([member points]); a
 ## server owner sets how many, what one is worth, whether a health pack comes too, whether
 ## any kill drops them, and how long they lie there (all `arena_drop_*` cvars). See
 ## game-arena's docs/modes.md.
 
-enum Kind { COIN, HEALTH, AMMO }
+enum Kind { POINT, HEALTH, AMMO }
 
 ## A world pack's wire id is this plus its spot's index, so it can never meet a kill drop's
 ## (those count up from 1) and a joiner is told the same id the others already hold.
 const PACK_ID_BASE := 1000000
 
 ## A drop is out: [param id] is its number on the wire, [param from] where the body was
-## (the coins burst from there), [param at] where it lands. Server side.
+## (the points burst from there), [param at] where it lands. Server side.
 signal dropped(id: int, kind: int, at: Vector3, from: Vector3, value: int)
+
+## A player walked through points worth [param value]. Authority only; ArenaProgress files them as the pickup source.
+signal points_collected(taker: int, value: int)
 
 ## A drop is gone: [param taker] took it, or 0 when it expired. Server side.
 signal taken(id: int, taker: int)
 
-## How many coins a lethal critical drops. 0 drops none.
-var coins_per_kill: int = 5
+## How many points a lethal critical drops. 0 drops none.
+var points_per_kill: int = 5
 
-## What one coin adds to its taker's count.
-var coin_value: int = 1
+## What one point adds to its taker's count.
+var point_value: int = 1
 
 ## Health a health pack gives; 0 drops no pack.
 var health_amount: float = 25.0
@@ -57,8 +60,8 @@ var is_authority: bool = true
 ## Whether this end draws drops. False on a headless server.
 var draws: bool = false
 
-## player id -> coins collected this match.
-var coins: Dictionary = {}
+## player id -> points collected this match.
+var points: Dictionary = {}
 
 var field: DotPickupField = null
 var _tick_rate: int = 64
@@ -77,10 +80,10 @@ var _packs: Array[Dictionary] = []
 var _drawn: Dictionary = {}
 
 ## id -> {"kind", "value"} for every drop this end has been told about, drawn or not: the
-## coin count a HUD shows is kept from it, and a headless client draws nothing.
+## point count a HUD shows is kept from it, and a headless client draws nothing.
 var _known: Dictionary = {}
 
-## Where a player is, for a coin flying to its taker. Set by the game: id -> Vector3 or null.
+## Where a player is, for a point flying to its taker. Set by the game: id -> Vector3 or null.
 var position_of: Callable = Callable()
 
 
@@ -175,10 +178,10 @@ func on_kill(where: Vector3, critical: bool, tick: int, p_seed: int) -> int:
 	# Seeded from the death so a replay of the same kill scatters the same way.
 	rng.seed = p_seed
 
-	for i in range(maxi(coins_per_kill, 0)):
-		var angle := TAU * (float(i) + rng.randf() * 0.5) / float(maxi(coins_per_kill, 1))
+	for i in range(maxi(points_per_kill, 0)):
+		var angle := TAU * (float(i) + rng.randf() * 0.5) / float(maxi(points_per_kill, 1))
 		var reach := rng.randf_range(1.0, 2.2)
-		_spawn(Kind.COIN, coin_value, where, where + Vector3(cos(angle) * reach, 0.0, sin(angle) * reach), tick)
+		_spawn(Kind.POINT, point_value, where, where + Vector3(cos(angle) * reach, 0.0, sin(angle) * reach), tick)
 		made += 1
 
 	if health_amount > 0.0:
@@ -194,7 +197,7 @@ func _spawn(kind: int, value: int, from: Vector3, at: Vector3, tick: int) -> voi
 
 	var pickup := DotPickup.new()
 	pickup.name = "Drop%d" % id
-	pickup.item_id = &"coin" if kind == Kind.COIN else &"health"
+	pickup.item_id = &"point" if kind == Kind.POINT else &"health"
 	pickup.count = value
 	pickup.respawn_sec = 0.0
 	pickup.radius = 1.0
@@ -246,8 +249,9 @@ func tick(tick: int, players: Dictionary) -> void:
 				mirror_taken(int(pack["id"]), int(id))
 				continue
 			var drop_id := int(pickup.get_meta(&"drop_id", 0))
-			if pickup.item_id == &"coin":
-				coins[int(id)] = int(coins.get(int(id), 0)) + pickup.count
+			if pickup.item_id == &"point":
+				points[int(id)] = int(points.get(int(id), 0)) + pickup.count
+				points_collected.emit(int(id), pickup.count)
 			elif entry.has("heal"):
 				(entry["heal"] as Callable).call(float(pickup.count))
 			_forget(drop_id, int(id))
@@ -300,8 +304,8 @@ func mirror_taken(id: int, taker: int) -> void:
 	_known.erase(id)
 
 	# The authority counted it when it was taken; a client counts what TAKEN tells it.
-	if not is_authority and taker != 0 and int(known.get("kind", -1)) == Kind.COIN:
-		coins[taker] = int(coins.get(taker, 0)) + int(known.get("value", 0))
+	if not is_authority and taker != 0 and int(known.get("kind", -1)) == Kind.POINT:
+		points[taker] = int(points.get(taker, 0)) + int(known.get("value", 0))
 
 	var entry: Dictionary = _drawn.get(id, {})
 
@@ -317,7 +321,7 @@ func mirror_taken(id: int, taker: int) -> void:
 	entry["age"] = 0.0
 
 
-## Burst, settle, spin; and a taken coin flies to its taker. Frame rate, drawing only.
+## Burst, settle, spin; and a taken point flies to its taker. Frame rate, drawing only.
 func _process(delta: float) -> void:
 	for id in _drawn.keys():
 		var entry: Dictionary = _drawn[id]
@@ -344,14 +348,14 @@ func _process(delta: float) -> void:
 		node.rotation.y = age * 4.0
 
 
-## A coin is a gold disc on its edge; a health pack a green cross. Drawn, no art.
+## A point is a gold disc on its edge; a health pack a green cross. Drawn, no art.
 static func _model(kind: int) -> Node3D:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
 	var material := StandardMaterial3D.new()
 
 	if kind == Kind.AMMO:
-		# A squat orange crate with a lighter band: the rounds. Bigger than a coin, so a pack
+		# A squat orange crate with a lighter band: the rounds. Bigger than a point, so a pack
 		# reads across a room.
 		var crate := BoxMesh.new()
 		crate.size = Vector3(0.5, 0.3, 0.32)
@@ -367,7 +371,7 @@ static func _model(kind: int) -> Node3D:
 		band_material.albedo_color = Color(0.95, 0.92, 0.8)
 		band.material_override = band_material
 		root.add_child(band)
-	elif kind == Kind.COIN:
+	elif kind == Kind.POINT:
 		var disc := CylinderMesh.new()
 		disc.top_radius = 0.18
 		disc.bottom_radius = 0.18
@@ -413,6 +417,6 @@ func drawn_count() -> int:
 
 func describe() -> Dictionary:
 	return {
-		"live": _live.size(), "drawn": _drawn.size(), "coins": coins,
-		"coins_per_kill": coins_per_kill, "health": health_amount, "any_kill": any_kill,
+		"live": _live.size(), "drawn": _drawn.size(), "points": points,
+		"points_per_kill": points_per_kill, "health": health_amount, "any_kill": any_kill,
 	}

@@ -60,6 +60,9 @@ const NPC_KILLS := &"arena.npc_kills"
 ## Head stomps landed on another player.
 const STOMPS := &"arena.stomps"
 
+## Lifetime points, fed by DotStatsPoints (kills, headshots, streaks, assists, pickups).
+const POINTS := &"arena.points"
+
 
 ## Every id above, in declaration order. What a caller iterates.
 ##
@@ -73,7 +76,7 @@ static func ids() -> Array[StringName]:
 		SHOTS_FIRED, SHOTS_HIT,
 		BEST_STREAK, BEST_ROUND_KILLS,
 		ROUNDS_PLAYED, ROUNDS_WON, MATCHES_PLAYED, MATCHES_WON, PLAYTIME_SEC,
-		PROPS_SPAWNED, NPC_KILLS, STOMPS,
+		PROPS_SPAWNED, NPC_KILLS, STOMPS, POINTS,
 	]
 
 
@@ -102,6 +105,7 @@ static func schema() -> DotStatsSchema:
 	_limit(schema, DAMAGE_TAKEN, 100000000.0, 30000.0)
 
 	_counter(schema, STOMPS, "Stomps", "kills", false)
+	DotStatsPoints.declare(schema, POINTS, "Points")
 	_counter(schema, SHOTS_FIRED, "Shots fired", "shots", false)
 	_counter(schema, SHOTS_HIT, "Shots landed", "shots", false)
 

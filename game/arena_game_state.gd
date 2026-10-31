@@ -223,7 +223,7 @@ var grenades_rules := AwGrenadeRules.new()
 ## `sv_grenade_utility`: whether the utility grenades can be picked in a loadout.
 var utility_grenades := false
 
-## What a critical kill drops: coins and a health pack. Rebuilt with the combat layer on a
+## What a critical kill drops: points and a health pack. Rebuilt with the combat layer on a
 ## map change, like the projectiles; its rules live here in [member drop_rules] so a map
 ## change keeps what the server owner set.
 var drops: ArenaDrops = null
@@ -283,7 +283,7 @@ var medals := ArenaAwards.MedalBook.new()
 
 ## The server owner's drop rules (`arena_drop_*`), applied to every drops layer built.
 var drop_rules := {
-	"coins": 5, "coin_value": 1, "health": 25.0, "any_kill": false, "life": 10.0,
+	"points": 5, "point_value": 1, "health": 25.0, "any_kill": false, "life": 10.0,
 	"packs": true, "pack_health": 50.0, "pack_ammo": 50.0, "pack_respawn": 20.0,
 }
 

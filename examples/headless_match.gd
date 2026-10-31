@@ -41,7 +41,7 @@ const SCORE_LIMIT := 6
 ## match that never ends fails the test instead of hanging the run.
 const MAX_TICKS := 64 * 90
 
-const CHECKS := 665
+const CHECKS := 666
 
 ## Sections entered against sections that ran to their last line. A runtime error aborts a section silently, and a section that
 ## bailed out after a failed guard counts as unfinished on purpose. The CHECKS total is the other half (docs/testing.md).
@@ -694,9 +694,9 @@ func _switch_to(game: ArenaGame, id: int, slot: int) -> void:
 
 # --- Drops -------------------------------------------------------------------
 
-## Coins and a health pack out of a critical kill, taken by walking through them.
+## Points and a health pack out of a critical kill, taken by walking through them.
 func _test_drops() -> void:
-	_section("a critical kill drops coins and a health pack")
+	_section("a critical kill drops points and a health pack")
 
 	var game := ArenaGame.new()
 	game.name = "DropsGame"
@@ -734,23 +734,23 @@ func _test_drops() -> void:
 	_stand(game, 901, Vector3(0.0, 0.05, 18.0))
 	kill.call(900, 901, true)
 	var dropped := game.drops.live_count()
-	_check(dropped == int(game.drop_rules["coins"]) + 1,
-		"a lethal critical drops %d coins and a pack (%d)" % [game.drop_rules["coins"], dropped])
+	_check(dropped == int(game.drop_rules["points"]) + 1,
+		"a lethal critical drops %d points and a pack (%d)" % [game.drop_rules["points"], dropped])
 
-	# Walk the killer over every coin, and the pack, at full health.
+	# Walk the killer over every point, and the pack, at full health.
 	var killer := game.player_for(900)
-	var coins_at: Array[Vector3] = []
+	var points_at: Array[Vector3] = []
 	var pack_at := Vector3.ZERO
 	for pickup in game.drops.field.pickups():
-		if pickup.item_id == &"coin":
-			coins_at.append(pickup.global_position)
+		if pickup.item_id == &"point":
+			points_at.append(pickup.global_position)
 		else:
 			pack_at = pickup.global_position
-	for at in coins_at:
+	for at in points_at:
 		_stand(game, 900, at)
 		game.tick({})
-	_check(int(game.drops.coins.get(900, 0)) == coins_at.size(),
-		"walking through the coins collects every one (%d)" % int(game.drops.coins.get(900, 0)))
+	_check(int(game.drops.points.get(900, 0)) == points_at.size(),
+		"walking through the points collects every one (%d)" % int(game.drops.points.get(900, 0)))
 
 	_stand(game, 900, pack_at)
 	game.tick({})
@@ -5156,6 +5156,12 @@ func _test_map_change() -> void:
 			after > before,
 			"progress is still counting after the world was replaced",
 			"%.0f -> %.0f, damage %.1f" % [before, after, damage.health_lost]
+		)
+		var pts_before := _game.progress.session_values(shooter.player_id).get_value(ArenaStats.POINTS, 0.0)
+		var _landed := _game.progress.points.award(shooter.player_id, DotStatsPoints.SOURCE_PICKUP, 3.0)
+		_check(
+			_game.progress.session_values(shooter.player_id).get_value(ArenaStats.POINTS, 0.0) == pts_before + 3.0,
+			"a points award lands on the player's arena.points stat through the DotStatsPoints hook"
 		)
 
 	var kills_after := 0.0

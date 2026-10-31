@@ -78,6 +78,8 @@ var session_fn: Callable = Callable()
 var stats_keys := DotGameStatsFeed.new()
 
 var _kill_feed: DotStatsEventFeed = null
+## The one points score; amounts live in dot-stats' source table, the game only reports events.
+var points: DotStatsPoints = null
 ## player id -> key, asked of [member key_fn] once per stay; key -> player id, its inverse.
 var _keys: Dictionary = {}
 var _ids: Dictionary = {}
@@ -117,6 +119,8 @@ func attach(game: ArenaGame) -> DotResult:
 		return built
 
 	game.player_killed.connect(_on_killed)
+	game.drops.points_collected.connect(func(taker: int, value: int) -> void:
+		var _got := points.award(taker, DotStatsPoints.SOURCE_PICKUP, float(value)))
 	bind_world()
 
 	_attached = true
@@ -225,6 +229,9 @@ func _build() -> DotResult:
 		"map": String(_game.map.id) if _game != null and _game.map != null else "",
 		"mode": String(_game.mode.id) if _game != null and _game.mode != null else "",
 	}
+	points = DotStatsPoints.new()
+	points.stat_id = ArenaStats.POINTS
+	points.record_fn = func(who: Variant, stat: StringName, value: float) -> void: record(int(who), stat, value)
 	# dot-game's DotGameStatsFeed and anything else duck-typed finds the tracker by this name.
 	DotRegistry.register(STATS_SERVICE, stats)
 
@@ -528,6 +535,7 @@ func _on_killed(entry: DotKillFeed.Entry) -> void:
 	var killer := entry.killer_key.to_int()
 
 	_report_kill(killer, victim, entry)
+	points.award_kill(killer, victim, Time.get_ticks_msec() / 1000.0, entry.headshot, false, entry.streak)
 	record(killer, ArenaStats.KILLS)
 
 	if entry.headshot:
@@ -585,6 +593,7 @@ func _on_damage_applied(damage: DotDamage) -> void:
 		return
 
 	record(damage.attacker, ArenaStats.DAMAGE_DEALT, damage.health_lost)
+	points.note_damage(damage.attacker, damage.victim, damage.health_lost, Time.get_ticks_msec() / 1000.0)
 
 
 func _on_round_started(_round_number: int) -> void:

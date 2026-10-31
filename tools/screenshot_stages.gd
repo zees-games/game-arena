@@ -279,7 +279,7 @@ func _feel_shots_world(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, a
 				var from := Vector3(0.0, 0.05, 14.5)
 				for i in range(5):
 					var a := TAU * float(i) / 5.0
-					drops.mirror_drop(i + 1, ArenaDrops.Kind.COIN, from + Vector3(cos(a) * 1.6, 0.0, sin(a) * 1.6), from, 1)
+					drops.mirror_drop(i + 1, ArenaDrops.Kind.POINT, from + Vector3(cos(a) * 1.6, 0.0, sin(a) * 1.6), from, 1)
 				drops.mirror_drop(9, ArenaDrops.Kind.HEALTH, from + Vector3(0.0, 0.0, 0.3), from, 25),
 			"wait": 40,
 		},

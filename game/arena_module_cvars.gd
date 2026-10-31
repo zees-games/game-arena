@@ -116,8 +116,8 @@ const JAIL_CVARS := {
 
 ## cvar -> the key in `ArenaGame.drop_rules` it sets, and what it means.
 const DROP_CVARS := {
-	"arena_drop_coins": ["coins", "Coins a critical kill drops (0 for none)"],
-	"arena_drop_coin_value": ["coin_value", "What one coin adds to its taker's count"],
+	"arena_drop_points": ["points", "Points a critical kill drops (0 for none)"],
+	"arena_drop_point_value": ["point_value", "What one point adds to its taker's count"],
 	"arena_drop_health": ["health", "Health in the pack a critical kill drops (0 for none)"],
 	"arena_drop_any_kill": ["any_kill", "Every kill drops (1), or only a critical one (0)"],
 	"arena_drop_life": ["life", "Seconds a drop lies there before it goes"],

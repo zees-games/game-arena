@@ -10,7 +10,7 @@ game/arena_hud.gd::_button::string_build	2
 game/arena_hud.gd::_duration::string_build	3
 game/arena_hud.gd::_objective_line::string_build	5
 game/arena_hud.gd::_short_count::string_build	3
-game/arena_hud.gd::coins_text::string_build	1
+game/arena_hud.gd::points_text::string_build	1
 game/arena_hud.gd::present_abilities::alloc_array	1
 game/arena_hud.gd::present_body::string_build	4
 game/arena_hud.gd::present_challenge::string_build	1

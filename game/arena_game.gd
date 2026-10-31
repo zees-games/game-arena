@@ -431,8 +431,8 @@ func _sweep_jail_button() -> void:
 func apply_drop_rules() -> void:
 	if drops == null:
 		return
-	drops.coins_per_kill = int(drop_rules["coins"])
-	drops.coin_value = int(drop_rules["coin_value"])
+	drops.points_per_kill = int(drop_rules["points"])
+	drops.point_value = int(drop_rules["point_value"])
 	drops.health_amount = float(drop_rules["health"])
 	drops.any_kill = bool(drop_rules["any_kill"])
 	drops.life_sec = float(drop_rules["life"])
@@ -1942,7 +1942,7 @@ func tick(commands: Dictionary = {}) -> void:
 	if player_stack != null:
 		player_stack.tick(_tick)
 
-	# After everybody moved: a coin is taken where its taker ended the tick.
+	# After everybody moved: a point is taken where its taker ended the tick.
 	if drops != null and is_authority:
 		drops.tick(_tick, _drop_sweepers())
 
@@ -2124,7 +2124,7 @@ func _on_entity_killed(entity_id: int, damage: DotDamage) -> void:
 			arm_for_mode(killer_player)
 			_demote_for_melee(damage, killer_player)
 
-	# Coins out of the body, if the rules say this kill drops any.
+	# Points out of the body, if the rules say this kill drops any.
 	if drops != null and is_authority:
 		var _n := drops.on_kill(
 			victim.controller.state.position, damage.critical, _tick, entity_id * 7919 + _tick
