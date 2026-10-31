@@ -14,7 +14,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 17
+const EXPECTED_CHECKS := 27
 
 var _checks := 0
 var _failed := 0
@@ -146,6 +146,55 @@ func _run() -> void:
 	await _step(game, 21, true, 1)
 	await _step(game, 21, false, 2)
 	_check(drops.count() == 1, "sv_weapon_drop_max 1 keeps one, the oldest cleaned first", str(drops.count()))
+
+	# Shots, splash, tap and hold on the lone drop left by the cap test.
+	rules.max_count = 0
+	rules.hold_time = 0.1
+	var snap := drops.snapshot()[0] as Dictionary
+	var lie_id: int = snap["id"]
+	var lie_body: Node3D = drops.get("_entries")[lie_id]["body"]
+	for _k in TICK_RATE * 3:
+		await _step(game, 21, false, 1)
+	var rest_at := lie_body.global_position
+	var tr: DotTrace = game.combat.trace
+	var awake_before: int = drops.active_count()
+	var _miss := tr.ray(rest_at + Vector3(3.0, 1.0, 0.0), Vector3.DOWN, 5.0)
+	_check(drops.active_count() == awake_before, "a trace that misses wakes nothing", str(drops.active_count()))
+	var _hit := tr.ray(rest_at + Vector3(0.0, 1.0, 0.0), Vector3.DOWN, 5.0)
+	_check(drops.active_count() > 0, "a traced shot (bullets, projectiles, melee) wakes a dropped weapon")
+	_check(lie_body.linear_velocity.length() > 0.0 or lie_body.global_position != rest_at, "and moves it", str(lie_body.linear_velocity))
+	for _k in TICK_RATE * 4:
+		await _step(game, 21, false, 1)
+	_check(drops.active_count() == 0, "the shot drop comes to rest again", str(drops.active_count()))
+	var _spl := tr.sphere_overlap(lie_body.global_position, 3.0, game.combat.hitbox_sets(), true)
+	_check(drops.active_count() > 0, "an explosion's sphere wakes it too")
+
+	var held_def: StringName = StringName(str((snap["state"] as Dictionary).get("id", "")))
+	var other := &""
+	for cid in player.arsenal.catalogue.ids_in_slot(ZeeWeaponIds.SLOT_SIDEARM):
+		if cid != held_def:
+			other = cid
+			break
+	for _k in TICK_RATE * 3:
+		await _step(game, 21, false, 1)
+	player.arsenal.give(other)
+	player.hold(ZeeWeaponIds.SLOT_SIDEARM)
+	var mine = player.arsenal.current()
+	var from_id: StringName = mine.id() if mine != null else &""
+	drops.clear()
+	var aim_at: Vector3 = player.muzzle_position() + player.aim_direction() * 1.0
+	drops.rules.pickup_delay = 0.0
+	var d2 := drops.spawn(snap["state"], aim_at, Vector3.ZERO, 22)
+	var pr := drops.prompt_for(player.arsenal, player.muzzle_position(), player.aim_direction(), game.weapon_drop_class_of(21), game.team_of(21) if not game.teams().is_empty() else 0)
+	_check(pr.get("mode", "") == "swap", "a different weapon in the slot is offered as a swap", str(pr))
+	await _step(game, 21, true, 2, DotWeaponCommand.BUTTON_USE)
+	await _step(game, 21, false, 2, DotWeaponCommand.BUTTON_USE)
+	_check(drops.has_drop(d2) and player.arsenal.current() != null and player.arsenal.current().id() == from_id, "a tap on a different weapon in the slot swaps nothing")
+	await _step(game, 21, true, 10, DotWeaponCommand.BUTTON_USE)
+	_check(not drops.has_drop(d2), "holding the use key for the hold time takes the weapon")
+	var swapped = player.arsenal.current()
+	_check(player.arsenal.carries(held_def) and not player.arsenal.carries(other), "and it replaced the one carried", str(swapped.id() if swapped != null else ""))
+	_check(drops.count() == 1, "while the old one lies on the floor", str(drops.count()))
 
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
