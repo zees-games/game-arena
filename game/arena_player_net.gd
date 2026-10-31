@@ -72,6 +72,7 @@ var net_fire_seq: int = 0
 var net_fire_kind: int = 0
 var net_reloading: bool = false
 var net_switching: bool = false
+var net_charge: int = 0
 
 # --- Which weapon, and what is carried ---
 
@@ -152,7 +153,7 @@ func _register_net_vars() -> void:
 	# The pack's `all_specs()` is dot-weapon's three plus its own four, and is the one call
 	# its README asks a game to make: concatenating the halves by hand is how a game forgets
 	# the second one and has weapons that are silent for everybody but their owner.
-	for spec in DotCombatNetSync.specs() + ZeeWeaponNet.all_specs() + DotWeaponNetSync.fire_mode_specs(false):
+	for spec in DotCombatNetSync.specs() + ZeeWeaponNet.all_specs() + ZeeWeaponNet.charge_specs() + DotWeaponNetSync.fire_mode_specs(false):
 		var declaration := replicate(spec["property"], DotNetVar.Type[spec["type"]])
 
 		if int(spec["bits"]) > 0:
@@ -468,6 +469,7 @@ func _push_weapons() -> void:
 	player.mirror_fire_seq = net_fire_seq
 	player.mirror_fire_kind = net_fire_kind
 	player.mirror_switching = net_switching
+	player.mirror_charge = float(net_charge) / ZeeWeaponNet.CHARGE_MAX
 	player.mirror_reloading = net_reloading
 	if clicks:
 		player.mirror_mode_click()
