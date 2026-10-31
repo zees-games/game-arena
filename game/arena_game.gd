@@ -814,6 +814,7 @@ func _build_progress() -> DotResult:
 
 	progress = ArenaProgress.new()
 	progress.name = "Progress"
+	progress.progress_dir = progress_dir
 	add_child(progress)
 
 	var attached := progress.attach(self)

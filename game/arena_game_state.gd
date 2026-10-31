@@ -175,6 +175,9 @@ signal mode_shown(shown: ArenaMode)
 ## Where lifetime stat totals persist (a user:// JSON file). Empty keeps none, so a suite is the same on every run; the server and the offline client set it.
 @export var stats_file: String = ""
 
+## Where achievement progress persists; empty uses the tracker's default user:// store. A suite points it at a throwaway directory.
+@export var progress_dir: String = ""
+
 @export_group("Service")
 
 @export var register_service: bool = true
