@@ -6389,7 +6389,7 @@ func _test_atrium() -> void:
 	# separate maps. dm_box reached 1.4.0 by its own four steps — the crates on
 	# 2026-09-22, the gantries and nests on 2026-09-24, the nest stairs on 2026-09-29,
 	# the corner stairs on 2026-10-02.
-	var expected := {&"dm_atrium": "1.7.0", &"dm_pit": "1.5.0", &"dm_box": "1.4.0"}
+	var expected := {&"dm_atrium": "1.7.1", &"dm_pit": "1.5.0", &"dm_box": "1.4.0"}
 	var wrong := PackedStringArray()
 
 	for id: StringName in expected:

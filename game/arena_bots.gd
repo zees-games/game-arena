@@ -425,6 +425,11 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 
 	if mind.brain == null:
 		mind.brain = DotBotBrain.new(mind.seed if mind.seed != 0 else bot.player_id, DotBotSettings.of(game))
+		# The bot's trick gates follow the motor: 1.18 times the minimum, as the old 6.5 was of 5.5.
+		var body_tunables: Variant = bot.controller.get("tunables") if bot.controller != null else null
+		if body_tunables is DotFpsTunables:
+			mind.brain.tricks.slide_speed = body_tunables.slide_min_speed * 1.18
+			mind.brain.tricks.wall_run_speed = body_tunables.wall_run_min_speed * 1.17
 	world.brains[bot.player_id] = mind.brain
 
 	var me := world.contact(bot.player_id)

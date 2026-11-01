@@ -27,7 +27,7 @@ static func make() -> DotFpsTunables:
 	# (was 3.5 at the 7.65 run) keeps the slide-jump reach the wall-run gaps were sized for.
 	tunables.slide_enabled = true
 	tunables.slide_min_speed = 4.1
-	tunables.slide_boost = 7.0
+	tunables.slide_boost = 3.5
 	tunables.slide_max_speed = 14.0
 	tunables.slide_friction = 0.9
 	tunables.slide_duration = 0.9

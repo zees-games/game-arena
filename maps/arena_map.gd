@@ -308,7 +308,7 @@ class Climb:
 # them directly, and `headless_match` asserts they agree with the tunables.
 
 ## Ground speed, m/s. `DotFpsTunables.max_speed`.
-const MOVE_SPEED := 7.65
+const MOVE_SPEED := 5.74
 
 ## Metres. `DotFpsTunables.jump_height`, which is the PEAK of a standing jump and not
 ## the height of something a player can climb onto by walking at it.
@@ -1188,7 +1188,7 @@ static func dm_atrium() -> ArenaMap:
 	# --- The north gallery (1.7.0) -------------------------------------------
 	#
 	# Added 2026-10-10, for the wall run and the wall jump. Two ledges against the north
-	# wall with a 12 m gap between them, and a chimney up onto the first. Both are
+	# wall with a 9 m gap between them, and a chimney up onto the first. Both are
 	# shortcuts: each ledge has a walked stair, so the survey (which asks only the
 	# ordinary movement) reaches everything, and the walls only make it faster.
 	#
@@ -1217,7 +1217,7 @@ static func dm_atrium() -> ArenaMap:
 	const GAL_TREAD := 0.75
 
 	var gallery_high := AABB(Vector3(-30.0, 0.0, GAL_Z), Vector3(12.0, GAL_HIGH, GAL_D))
-	var gallery_low := AABB(Vector3(-6.0, 0.0, GAL_Z), Vector3(12.0, GAL_LOW, GAL_D))
+	var gallery_low := AABB(Vector3(-9.0, 0.0, GAL_Z), Vector3(15.0, GAL_LOW, GAL_D))
 	map.add_box(gallery_high)
 	map.add_box(gallery_low)
 
