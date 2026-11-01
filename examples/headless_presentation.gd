@@ -1737,7 +1737,7 @@ func _test_the_map_menu() -> void:
 		if str(r["id"]).begins_with("mode:") and not bool(r["current"]):
 			mode_id = StringName(str(r["id"]).substr(5))
 			break
-	var changed := client.change_from_menu(StringName("mode:%s" % mode_id))
+	var changed := await client.change_from_menu(StringName("mode:%s" % mode_id))
 	_check(changed.ok and client.game.mode.id == mode_id and client.game.map.id == wanted,
 		"and a mode changes on the same map", "%s: %s" % [mode_id, changed.error.message if not changed.ok else "ok"])
 	# The Tab board draws dot-match's records, not whatever the roster says: the client builds

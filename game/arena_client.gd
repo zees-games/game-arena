@@ -213,6 +213,9 @@ func change_from_menu(id: StringName) -> DotResult:
 	var map := game.map
 	var mode: ArenaMode = null
 	if text.begins_with("map:"):
+		var fetched := await _fetch_picked(StringName(text.substr(4)))
+		if not fetched.ok:
+			return fetched
 		var built := _build_map(StringName(text.substr(4)))
 		if not built.ok:
 			return built
@@ -230,9 +233,7 @@ func change_from_menu(id: StringName) -> DotResult:
 	var changed := game.change_map(map, mode)
 	if not changed.ok:
 		return changed
-	if _menu_catalogue == null:
-		_menu_catalogue = ArenaMaps.catalogue()
-	var def := _menu_catalogue.get_map(map.id)
+	var def := _catalogue().get_map(map.id)
 	if def != null:
 		_on_map_changed.call(def)
 	return DotResult.success(id)

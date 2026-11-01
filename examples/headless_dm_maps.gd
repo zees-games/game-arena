@@ -4,6 +4,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
+const ArenaModes := preload("../game/arena_modes.gd")
 
 ## The deathmatch and gun game maps (arena-dm-maps, linked at maps/imported_dm): each in maps.json
 ## is discovered, answers to ArenaMap.by_id with its author's credit and spawns, and is walked,
@@ -33,13 +34,42 @@ func _run() -> void:
 	_check(solo.get_map(&"gg-woods").scene_path == "res://dot_cloud/gamemann/gg-woods/1.0.3/gg-woods.json",
 		"gg-woods mounts at its hyphenated manifest")
 
+	print("-- an unlinked picker lists the suggested packs by label, and a pick with no cloud fails naming it")
+	var solo_rows := ArenaMaps.menu_rows(solo, &"", null, [])
+	var solo_detail: Dictionary = {}
+	for each: Dictionary in solo_rows:
+		solo_detail[str(each["id"])] = str(each["detail"])
+	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/crackhouse@1.0.3") and solo.get_map(&"crackhouse") != null,
+		"crackhouse is a suggested pack")
+	_check(solo_detail.get("map:crackhouse", "") == "Deathmatch map", "crackhouse reads 'Deathmatch map'")
+	_check(solo_detail.get("map:gg-woods", "") == "Gun game map", "gg-woods reads 'Gun game map'")
+	var pick := await ArenaMaps.mount_delivered(solo.get_map(&"crackhouse"), DotMapLoader.new(), solo)
+	_check(not pick.ok, "picking an unfetched pack with no cloud client fails")
+	_check(solo.get_map(&"gg-woods") != null, "the failed pick leaves the catalogue usable")
+
+	var ffa: ArenaMode = ArenaModes.by_id(&"ffa")
+	var gungame: ArenaMode = ArenaModes.by_id(&"gungame")
+	var ffa_ids: Dictionary = {}
+	var gg_ids: Dictionary = {}
+	for each: Dictionary in ArenaMaps.menu_rows(solo, &"", ffa, []):
+		ffa_ids[str(each["id"])] = true
+	for each: Dictionary in ArenaMaps.menu_rows(solo, &"", gungame, []):
+		gg_ids[str(each["id"])] = true
+	var both := true
+	for each in solo.maps:
+		var def: DotMapDef = each
+		var id := "map:%s" % def.id
+		both = both and ArenaMaps.supports_mode(def, ffa) and ArenaMaps.supports_mode(def, gungame) \
+			and ffa_ids.has(id) and gg_ids.has(id)
+	_check(both, "every suggested map is playable and listed in both deathmatch and gun game, whatever its label")
+
 	var root := ProjectSettings.globalize_path("res://maps/imported_dm")
 	var resolved := _resolve(root)
 	var json_path := resolved.get_base_dir().path_join("maps.json")
 
 	if resolved.is_empty() or not FileAccess.file_exists(json_path):
 		print("no maps/imported_dm link — nothing more to check (link arena-dm-maps)")
-		_report_sections(1, 1, 1, 3)
+		_report_sections(2, 2, 2, 9)
 		return
 
 	var listed: Array = JSON.parse_string(FileAccess.get_file_as_string(json_path)).get("maps", [])
@@ -86,7 +116,7 @@ func _run() -> void:
 		if ArenaImportedMaps.has(StringName(str(want.id))):
 			_check(names.has(wid) and names[wid] != "Combat surf map", "%s is in the picker, not labelled a surf map" % wid)
 	_check(last_dm < first_surf, "deathmatch and gun game maps come before the surf maps")
-	_report_sections(entered + 1, entered + 1, 3, 5 + 5 * found)
+	_report_sections(entered + 2, entered + 2, 4, 11 + 5 * found)
 
 
 func _resolve(link: String) -> String:

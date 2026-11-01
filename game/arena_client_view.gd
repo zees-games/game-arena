@@ -68,9 +68,7 @@ func _build_map(id: StringName) -> DotResult:
 	var own := ArenaMap.by_id(id)
 	if own != null:
 		return DotResult.success(own)
-	if _menu_catalogue == null:
-		_menu_catalogue = ArenaMaps.catalogue()
-	var def := _menu_catalogue.get_map(id)
+	var def := _catalogue().get_map(id)
 	if ArenaMaps.is_workshop(def):
 		return ArenaMaps.build_workshop(def)
 	return DotResult.fail(DotError.CODE_INVALID, "There is no map called '%s'." % id)
@@ -232,16 +230,50 @@ func _restore_loadout() -> void:
 var _menu_catalogue: DotMapCatalogue = null
 
 
+## The menu's catalogue. Solo, the suggested packs this machine has no link for are listed too
+## (fetched when picked, [method _fetch_picked]), as a server lists the ones it names.
+func _catalogue() -> DotMapCatalogue:
+	if _menu_catalogue == null:
+		_menu_catalogue = ArenaMaps.catalogue()
+		if _offline:
+			var _adopted := ArenaMaps.adopt_delivered(_menu_catalogue, ArenaMaps.standalone_keys(_menu_catalogue))
+	return _menu_catalogue
+
+
+## A picked map whose pack is not on this machine: fetched through dot-cloud under the load cover
+## with its progress, then mounted so [code]ArenaMap.by_id[/code] builds it. Success when nothing was needed.
+func _fetch_picked(id: StringName) -> DotResult:
+	var def := _catalogue().get_map(id)
+	if not ArenaMaps.is_delivered(def) or ArenaMap.by_id(id) != null:
+		return DotResult.success(null)
+	var cloud := DotRegistry.get_service(DotMapLoader.CLOUD_SERVICE)
+	var text := "Downloading %s" % def.label()
+	gate.hold(&"map", text)
+	gate.set_progress(0.0, text)
+	var on_progress := func(p: Dictionary) -> void:
+		gate.set_progress(float(p.get("fraction", 0.0)), "%s  %d%%" % [text, int(float(p.get("fraction", 0.0)) * 100.0)])
+	if cloud != null and cloud.has_signal(&"progress_changed"):
+		cloud.connect(&"progress_changed", on_progress)
+	var mounted := await ArenaMaps.mount_delivered(def, DotMapLoader.new(), _menu_catalogue)
+	if cloud != null and cloud.has_signal(&"progress_changed"):
+		cloud.disconnect(&"progress_changed", on_progress)
+	gate.set_progress(-1.0)
+	gate.release(&"map")
+	if mounted.ok and ArenaMap.by_id(id) == null:
+		return DotResult.fail(DotError.CODE_STATE, "%s was fetched but this game cannot build it." % def.label())
+	if not mounted.ok and cloud == null:
+		return DotResult.fail(DotError.CODE_STATE, "%s is not on this machine and there is no dot-cloud client to fetch it." % def.label())
+	return mounted
+
+
 ## What M lists solo, in the ballot's ids so a server's list reads the same: every map that
 ## can host the mode being played (`map:<id>`), then every mode the map being played can host
 ## (`mode:<id>`).
 func map_menu_rows() -> Array:
 	if game == null:
 		return []
-	if _menu_catalogue == null:
-		_menu_catalogue = ArenaMaps.catalogue()
 	var here := game.map.id if game.map != null else &""
-	return ArenaMaps.menu_rows(_menu_catalogue, here, game.mode, ArenaModes.all())
+	return ArenaMaps.menu_rows(_catalogue(), here, game.mode, ArenaModes.all())
 
 
 ## The map an offline client starts on: `-- --map <id>`, else `dm_box`.

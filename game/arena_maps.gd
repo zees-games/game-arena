@@ -343,8 +343,8 @@ static func _imported_def_for(id: StringName, map: ArenaMap) -> DotMapDef:
 	def.author = map.author if map.author != "" else "unknown"
 	def.enabled = in_rotation(id)
 	def.tier = clampi(int(map.extent / 32.0), 1, 10)
-	def.description = "Combat surf, %d spawns, %.0f m across." % [
-		map.spawns.size(), maxf(map.bounds.size.x, map.bounds.size.z)
+	def.description = "%s, %d spawns, %.0f m across." % [
+		imported_label(id), map.spawns.size(), maxf(map.bounds.size.x, map.bounds.size.z)
 	]
 	def.meta = {
 		"builder": "ArenaMap.by_id",
@@ -394,6 +394,7 @@ static func server_map_keys(server: Object) -> PackedStringArray:
 const STANDALONE_KEYS: PackedStringArray = [
 	"gamemann/aim-forts@1.0.3",
 	"gamemann/blackhawkdown@1.0.1",
+	"gamemann/crackhouse@1.0.3",
 	"gamemann/welcometomexicov6@1.0.1",
 	"gamemann/dm-hot-cn-v1@1.0.3",
 	"gamemann/dm-industrial-gamma@1.0.3",
@@ -509,7 +510,7 @@ static func delivered_def(key: String) -> DotMapDef:
 	def.author = "unknown"
 	def.enabled = in_rotation(def.id)
 	def.tier = 1
-	def.description = "Combat surf, delivered as %s." % key
+	def.description = "%s, delivered as %s." % [imported_label(def.id), key]
 	def.meta = {
 		"builder": "ArenaMap.by_id",
 		"imported": true,
@@ -519,6 +520,39 @@ static func delivered_def(key: String) -> DotMapDef:
 		"movement": "surf",
 	}
 	return def
+
+
+## Fetches a delivered map's pack when it is not mounted and gives `ArenaImportedMaps` its directory, so
+## `ArenaMap.by_id` builds the map from the mounted manifest. Shared by the map session (a server's change)
+## and the solo picker. A pack whose manifest is not `"kind": "arena"` is refused and leaves [param catalogue].
+static func mount_delivered(
+	map: DotMapDef, loader: DotMapLoader, catalogue: DotMapCatalogue = null
+) -> DotResult:
+	var key := str(map.meta.get("key", "%s@%s" % [String(map.content_id), map.effective_content_version()]))
+
+	if ArenaImportedMaps.is_mounted(map.id) \
+			and ArenaImportedMaps.manifest_path(map.id) == manifest_in_mount(map):
+		return DotResult.success(null)
+
+	var fetched: DotResult = await loader.ensure_content(map)
+
+	if not fetched.ok:
+		return fetched.wrap("could not fetch the map %s" % String(map.id))
+
+	var dir := mount_of(map)
+	var added := ArenaImportedMaps.add_mounted(map.id, dir)
+
+	if not added.ok:
+		if added.error.code == DotError.CODE_INVALID:
+			refuse(key, ArenaImportedMaps.kind_at(manifest_in_mount(map)))
+
+			if catalogue != null:
+				catalogue.remove(map.id)
+
+		return added.wrap("%s is not a map this game can build" % key)
+
+	DotLog.info(CHANNEL, "a delivered map is mounted", {"map": String(map.id), "pack": key, "dir": dir})
+	return DotResult.success(null)
 
 
 ## `res://dot_cloud/<content id>/<version>`, where [param def]'s pack mounts.

@@ -178,32 +178,7 @@ func change_to_map(map: DotMapDef) -> DotResult:
 ## is refused naming the pack if it is not. A pack whose manifest is not
 ## `"kind": "arena"` is refused, warned about once, and leaves the catalogue.
 func _mount_delivered(map: DotMapDef) -> DotResult:
-	var key := str(map.meta.get("key", "%s@%s" % [String(map.content_id), map.effective_content_version()]))
-
-	if not ArenaImportedMaps.is_mounted(map.id) \
-			or ArenaImportedMaps.manifest_path(map.id) != ArenaMaps.manifest_in_mount(map):
-		var fetched: DotResult = await loader.ensure_content(map)
-
-		if not fetched.ok:
-			return fetched.wrap("could not fetch the map %s" % String(map.id))
-
-		var dir := ArenaMaps.mount_of(map)
-		var added := ArenaImportedMaps.add_mounted(map.id, dir)
-
-		if not added.ok:
-			if added.error.code == DotError.CODE_INVALID:
-				ArenaMaps.refuse(key, ArenaImportedMaps.kind_at(ArenaMaps.manifest_in_mount(map)))
-
-				if catalogue != null:
-					catalogue.remove(map.id)
-
-			return added.wrap("%s is not a map this game can build" % key)
-
-		DotLog.info(LOG_CHANNEL, "a delivered map is mounted", {
-			"map": String(map.id), "pack": key, "dir": dir,
-		})
-
-	return DotResult.success(null)
+	return await ArenaMaps.mount_delivered(map, loader, catalogue)
 
 
 ## Replaces the meshes, where this deployment draws any.

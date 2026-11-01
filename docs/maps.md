@@ -119,3 +119,7 @@ A subscribed pack's map (map kind `arena`, solo only; `provides.json` says so) i
 ## Suggested map packs
 
 `game.yml` lists `arena-dm-maps` (group `dm`) and `arena-surf-dm-maps` (group `surf`) as `suggested:`. The game runs without them; the Workshop mounts them by default and `--no-suggested`, `--suggested=none` or `--no-suggested-surf` turns them off. Players can still pick single maps in the Workshop list. **A server offers them too**: dot-server-deploy adds the `suggested:` packs to the map list at the newest version every start, so a fresh server's vote has the DM and surf maps with no `overrides.yml`; `suggested_maps: none` (or `surf`, to keep one group), `sv_suggested_maps` or `--no-suggested` on the server turns that off (dot-server-deploy `docs/configuration.md`). Online clients only ever get the server's list.
+
+### Solo with no link
+
+The solo map picker (M) lists `ArenaMaps.STANDALONE_KEYS` (the published deathmatch, gun game and surf packs) beside whatever is installed under `maps/imported`, `maps/imported_dm` and `user://maps`, deathmatch and gun game first, labelled "Deathmatch map" or "Gun game map". The labels are only labels: every such map is pickable, votable and nominatable in both modes. Picking one that is not installed fetches the pack through the dot-cloud client (`ArenaMaps.mount_delivered`, the call the server's map session makes), holds the load gate with a progress bar, then plays it. With no cloud client the pick fails with a message instead of building nothing.

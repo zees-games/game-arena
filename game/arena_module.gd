@@ -1741,10 +1741,9 @@ func _cmd_maps(ctx: DotCmdContext) -> void:
 	# with it) and whether the rotation offers them.
 	for id in ArenaMap.imported_ids():
 		var author := str(ArenaMap.ArenaImportedMaps.manifest(id).get("author", "?"))
-		var walked := ArenaMap.ArenaImportedMaps.movement_of(id) == &""
 		ctx.reply("%s %s  (%s by %s%s)" % [
 			"*" if String(id) == current else " ", String(id),
-			"deathmatch" if walked else "combat surf", author,
+			ArenaMaps.imported_label(id).to_lower(), author,
 			"" if ArenaMaps.in_rotation(id) and _in_rotation(id) else ", not in rotation",
 		])
 
