@@ -49,6 +49,7 @@ func _run() -> void:
 	_test_bullets_reach_a_client()
 	_test_killview_reaches_the_victim()
 	_test_large_map_state_arrives_whole()
+	_test_glass_breaks_on_a_client()
 
 	OS.remove_logger(errors)
 	# Engine errors go to stderr and change no exit code: a toy pulled out of the tree after a
@@ -2107,4 +2108,48 @@ func _test_event_wire() -> void:
 	_check(ArenaEvents.prop_acts_fit(), "every prop act fits the prop request's act field",
 		"%d acts in %d bits" % [ArenaEvents.PropAct.size(), ArenaEvents.PROP_ACT_BITS])
 
+	_done()
+
+
+## A pane the server breaks is told to a client over the real event frames, and a joiner is told which are already gone.
+## One process, one group: the client's copy shares the pane's model number, which is how the real pairing works.
+func _test_glass_breaks_on_a_client() -> void:
+	print("")
+	_section("[a broken pane reaches a client]")
+	var sent: Array = []
+	var previous := _server_bridge.link
+	var link := _capture_link(sent)
+	var server_pane := DotMapGlass.new()
+	server_pane.model = 9001
+	var client_pane := DotMapGlass.new()
+	client_pane.model = 9001
+	client_pane.authoritative = false
+	add_child(server_pane)
+	add_child(client_pane)
+	_pump(2)
+	sent.clear()
+	_check(not client_pane.is_broken(), "the client's copy of the pane stands before the break")
+	_check(not client_pane.hurt(5.0) and not client_pane.is_broken(), "and a client's own hit never breaks it")
+	_check(server_pane.hurt(5.0, Vector3(1, 2, 3), &"test"), "the server's pane breaks")
+	var told := 0
+	for item in sent:
+		var decoded: DotResult = _clients[2]["net"].messages.decode(DotNetReader.new(item[1]), 1, false)
+		if decoded.ok and (decoded.value as ArenaEvent).kind == ArenaEvents.Kind.PANE_BROKEN:
+			told += 1
+			var _r: DotResult = _clients[2]["bridge"].receive_event(item[1])
+	_check(told >= 1, "the server sends PANE_BROKEN", str(told))
+	_check(client_pane.is_broken(), "and the client's copy is broken by it")
+	sent.clear()
+	var late := DotMapGlass.new()
+	late.model = 9001
+	late.authoritative = false
+	add_child(late)
+	_server_bridge._send_panes_signon(2)
+	for item in sent:
+		var _r: DotResult = _clients[2]["bridge"].receive_event(item[1])
+	_check(late.is_broken(), "a joiner is told the pane is already gone")
+	_server_bridge.link = previous
+	link.free()
+	for pane in [server_pane, client_pane, late]:
+		pane.free()
 	_done()
