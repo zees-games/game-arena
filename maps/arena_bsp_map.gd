@@ -185,6 +185,43 @@ static func _swap_glass(body: StaticBody3D, id: String, dir: String) -> void:
 	DotLog.debug("arena.maps", "glass swapped for breakable panes", {"map": id, "panes": swapped})
 
 
+## Moves the legacy hulls of fences, grates and vents (the converted world names them, the legacy blob does not) onto the
+## player_clip layer: they still stop a body, and a shot passes. `dot_material` lets a penetration table price them.
+static func _split_fences(body: StaticBody3D, id: String, dir: String) -> void:
+	var prefix := world_prefix(id, dir)
+	if prefix.is_empty():
+		return
+	var got: DotMapBspMesh = DotMapBspMesh.load_prefix(prefix).value
+	if got == null:
+		return
+	var fence := StaticBody3D.new()
+	fence.name = "ImportedFence"
+	fence.collision_layer = DotPhysicsLayout.shooter_3d().mask_of([&"player_clip"])
+	fence.collision_mask = 0
+	fence.set_meta(&"dot_material", &"fence")
+	var solids: Array[CollisionShape3D] = []
+	for child in body.get_children():
+		if child is CollisionShape3D and (child as CollisionShape3D).shape is ConvexPolygonShape3D:
+			solids.append(child)
+	for model in got.models():
+		var origin := got.model_origin(model)
+		for h: Dictionary in got.hull_shapes(model, PackedStringArray(["fence"])):
+			var want := _box_of((h["shape"] as ConvexPolygonShape3D).points, origin)
+			for s in solids:
+				var have := _box_of((s.shape as ConvexPolygonShape3D).points, Vector3.ZERO)
+				if have.position.distance_to(want.position) < 0.06 and have.size.distance_to(want.size) < 0.06:
+					solids.erase(s)
+					body.remove_child(s)
+					fence.add_child(s)
+					break
+	var moved := fence.get_child_count()
+	if moved > 0:
+		body.add_child(fence)
+	else:
+		fence.free()
+	DotLog.debug("arena.maps", "fences moved off the shot layer", {"map": id, "hulls": moved})
+
+
 static func _box_of(points: PackedVector3Array, origin: Vector3) -> AABB:
 	var box := AABB(points[0] + origin, Vector3.ZERO) if points.size() > 0 else AABB()
 	for p in points:
@@ -419,6 +456,7 @@ static func build_collision(manifest: Dictionary, dir: String) -> StaticBody3D:
 		body.add_child(shape)
 
 	_swap_glass(body, id, dir)
+	_split_fences(body, id, dir)
 
 	var vertex_count := int(info.get("displacement_vertex_count", 0))
 	var index_count := int(info.get("displacement_index_count", 0))

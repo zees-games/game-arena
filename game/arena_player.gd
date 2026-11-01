@@ -410,6 +410,8 @@ func use_collision_mask(mask: int) -> void:
 		return
 
 	controller.tunables.collision_mask = mask
+	if weapons != null:
+		weapons.wall_extra_mask = mask
 
 
 ## Scales this player's movement by their class.
@@ -727,6 +729,8 @@ func _build_rig(role: ZeeWeaponRig.Role, authority: bool, view_model: Node3D) ->
 	weapons.role = role
 	weapons.authority = authority
 	weapons.tick_rate = _tick_rate
+	# The held weapon lowers at every brush that stops the player, clip and fences included, though shots pass them.
+	weapons.wall_extra_mask = controller.tunables.collision_mask if controller != null else 0
 	weapons.catalogue = _catalogue()
 	weapons.arsenal_ref = DotNodeRef.of_path(^"../Arsenal")
 	weapons.player_ref = DotNodeRef.of_path(^"..")
