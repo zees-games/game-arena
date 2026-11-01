@@ -173,11 +173,16 @@ func _differ(a: Image, b: Image, mid: Vector2, radius: float, inner: float, tole
 	return out
 
 
+## Frame sequence after each still (DOT_SHOT_FRAMES, set by render_weapons.sh); see DotShotSeq.
+var _seq := DotShotSeq.new()
+
+
 func _shot(file: String) -> void:
 	await process_frame
 	await RenderingServer.frame_post_draw
 	var _saved := root.get_viewport().get_texture().get_image().save_png("%s/%s.png" % [OUT_DIR, file])
 	print("wrote %s/%s.png" % [OUT_DIR, file])
+	await _seq.record(self, "%s/%s.png" % [OUT_DIR, file])
 
 
 func _wait(sec: float) -> void:

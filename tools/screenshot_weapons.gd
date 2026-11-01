@@ -195,11 +195,16 @@ func _command(facing: float, trigger: bool) -> void:
 	_subject.set_meta(&"bot_fire", fire)
 
 
+## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+
+
 func _shot(name: String) -> void:
 	await process_frame
 	await process_frame
 	var path := ProjectSettings.globalize_path("%s/weapons_%s.png" % [OUT_DIR, name])
 	root.get_texture().get_image().save_png(path)
+	await _seq.record(self, path)
 	var flying := []
 	for f in client.get("game").projectiles.flying():
 		flying.append("%s bounces %d%s" % [f.position, f.bounces, " resting" if f.resting else ""])

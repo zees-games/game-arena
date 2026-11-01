@@ -19,6 +19,9 @@ var _menu: DotMenu = null
 var _presentation: ArenaPresentation = null
 var _wait := SETTLE
 var _opened := false
+## Frame sequence after the still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+var _seq_active := false
 
 
 func _process(_delta: float) -> bool:
@@ -58,7 +61,13 @@ func _process(_delta: float) -> bool:
 	if _wait > 0:
 		_wait -= 1
 		return false
+	if _seq_active:
+		return not _seq.step(root)
 	var image := root.get_texture().get_image()
 	image.save_png(OUT)
 	print("wrote %s (%d x %d)" % [OUT, image.get_width(), image.get_height()])
+	if _seq.enabled():
+		_seq.begin(OUT)
+		_seq_active = true
+		return false
 	return true
