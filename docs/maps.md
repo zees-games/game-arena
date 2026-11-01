@@ -115,3 +115,7 @@ Each built-in map places a few of dot-props' **loose** toys ([member ArenaMap.to
 ## Workshop maps
 
 A subscribed pack's map (map kind `arena`, solo only; `provides.json` says so) is a **JSON box-list document** named by the entry's `scene`: `id` (must equal the entry's id), `name`, optional `extent` (8 to 200), `wall_height`, `boxes` (`[x, y, z, size_x, size_y, size_z]`, at most 512) and `spawns` (`{at: [x, y, z], yaw}`, 1 to 64, inside the extent). `ArenaMapDoc.build` makes an `ArenaMap` of it and adds the four perimeter walls, so collision, shots and the picture come from the one box list as for a built-in. The pack ships no code. A bad document is refused with its reason (logged once) and left off the menu and the ballot; the game's own ids always win. `ArenaMaps.build_workshop(def)` is the one builder, and `ArenaClient._build_map` uses it for a menu choice. Limits: [not-yet](not-yet.md).
+
+## Suggested map packs
+
+`game.yml` lists `arena-dm-maps` (group `dm`) and `arena-surf-dm-maps` (group `surf`) as `suggested:`. The game runs without them; the Workshop mounts them by default and `--no-suggested`, `--suggested=none` or `--no-suggested-surf` turns them off. Players can still pick single maps in the Workshop list.

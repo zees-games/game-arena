@@ -55,3 +55,63 @@ metadata:
       arena_vote:
         label: "Start a map vote now"
         command: "arena_vote"
+
+# Map packs the game suggests, not requires: the Workshop mounts them unless the player opts out
+# (--no-suggested, --suggested=none, --no-suggested-dm; docs/maps.md).
+suggested:
+  - dm=gamemann/aim-forts
+  - dm=gamemann/blackhawkdown
+  - dm=gamemann/crackhouse
+  - dm=gamemann/dm-hot-cn-v1
+  - dm=gamemann/dm-industrial-gamma
+  - dm=gamemann/dm-morpheus
+  - dm=gamemann/dm-overwatch
+  - dm=gamemann/dm-scarletdevilmansion
+  - dm=gamemann/gg-canyon
+  - dm=gamemann/gg-fy-snow
+  - dm=gamemann/gg-garage
+  - dm=gamemann/gg-krusty-krab
+  - dm=gamemann/gg-lego-arena
+  - dm=gamemann/gg-punishment
+  - dm=gamemann/gg-simpsons-x
+  - dm=gamemann/gg-woods
+  - dm=gamemann/welcometomexicov6
+  - surf=gamemann/arena-surf-dm-maps-surf_10x_final
+  - surf=gamemann/arena-surf-dm-maps-surf_10x_reloaded_fixed
+  - surf=gamemann/arena-surf-dm-maps-surf_110b_austinpowers
+  - surf=gamemann/arena-surf-dm-maps-surf_29_12_06
+  - surf=gamemann/arena-surf-dm-maps-surf_adverse
+  - surf=gamemann/arena-surf-dm-maps-surf_akai_final
+  - surf=gamemann/arena-surf-dm-maps-surf_bathroom_final
+  - surf=gamemann/arena-surf-dm-maps-surf_buck_wild
+  - surf=gamemann/arena-surf-dm-maps-surf_dust2_2008_final
+  - surf=gamemann/arena-surf-dm-maps-surf_forbidden_ways_2nd
+  - surf=gamemann/arena-surf-dm-maps-surf_forbidden_ways_reloaded
+  - surf=gamemann/arena-surf-dm-maps-surf_fruits
+  - surf=gamemann/arena-surf-dm-maps-surf_grave_reloaded
+  - surf=gamemann/arena-surf-dm-maps-surf_greatriver
+  - surf=gamemann/arena-surf-dm-maps-surf_greatriver_v4
+  - surf=gamemann/arena-surf-dm-maps-surf_greatriver_xdre4m
+  - surf=gamemann/arena-surf-dm-maps-surf_i_hate_campers
+  - surf=gamemann/arena-surf-dm-maps-surf_japan_ptad
+  - surf=gamemann/arena-surf-dm-maps-surf_legends
+  - surf=gamemann/arena-surf-dm-maps-surf_machine2
+  - surf=gamemann/arena-surf-dm-maps-surf_machine_remix_final
+  - surf=gamemann/arena-surf-dm-maps-surf_mai_remix
+  - surf=gamemann/arena-surf-dm-maps-surf_matrix_v8
+  - surf=gamemann/arena-surf-dm-maps-surf_ny_advance
+  - surf=gamemann/arena-surf-dm-maps-surf_ny_bigloop_2008a
+  - surf=gamemann/arena-surf-dm-maps-surf_parrot_selector
+  - surf=gamemann/arena-surf-dm-maps-surf_pavilion
+  - surf=gamemann/arena-surf-dm-maps-surf_pox
+  - surf=gamemann/arena-surf-dm-maps-surf_rebel_resistance_final3
+  - surf=gamemann/arena-surf-dm-maps-surf_ski_2
+  - surf=gamemann/arena-surf-dm-maps-surf_ski_2_source
+  - surf=gamemann/arena-surf-dm-maps-surf_skyworld
+  - surf=gamemann/arena-surf-dm-maps-surf_snipers_island
+  - surf=gamemann/arena-surf-dm-maps-surf_the_flow
+  - surf=gamemann/arena-surf-dm-maps-surf_the_gloaming
+  - surf=gamemann/arena-surf-dm-maps-surf_thriller
+  - surf=gamemann/arena-surf-dm-maps-surf_torque2
+  - surf=gamemann/arena-surf-dm-maps-surf_velocity
+  - surf=gamemann/arena-surf-dm-maps-surf_xiv_v2a
