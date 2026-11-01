@@ -827,7 +827,7 @@ func _build_audio() -> DotResult:
 	return DotResult.success(null)
 
 
-## Longest a frame spends baking sounds, in milliseconds.
+## Longest a frame spends baking sounds with the cover down, in milliseconds; the gate widens it under the cover.
 const BAKE_BUDGET_MSEC := 6
 
 var _bake_recipes: Dictionary = {}
@@ -852,7 +852,9 @@ func _bake_slice() -> void:
 		_bake_ids.clear()
 		_bake_hold(false)
 		return
-	bake_into(sink.bank, audio.catalogue, _bake_recipes, _bake_ids, BAKE_BUDGET_MSEC)
+	var gate: Object = client.get(&"gate") if client != null else null
+	var budget := int(gate.call(&"slice_msec", BAKE_BUDGET_MSEC)) if gate != null and gate.has_method(&"slice_msec") else BAKE_BUDGET_MSEC
+	bake_into(sink.bank, audio.catalogue, _bake_recipes, _bake_ids, budget)
 	if _bake_ids.is_empty():
 		_bake_hold(false)
 

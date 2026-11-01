@@ -996,7 +996,7 @@ func _prewarm_tick() -> void:
 	match int(_warm.phase):
 		0:
 			var arts: Array = _warm.arts
-			var until := Time.get_ticks_msec() + 8
+			var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
 			while _warm.next < arts.size() and Time.get_ticks_msec() < until:
 				if not is_instance_valid(_warm.spare):
 					break
