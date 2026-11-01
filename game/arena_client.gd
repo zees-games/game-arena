@@ -1139,8 +1139,12 @@ func _physics_step(delta: float) -> void:
 
 	if _offline:
 		if game != null:
+			var t_bots := Time.get_ticks_usec()
 			_drive_bots()
+			ArenaFrameProbe.add(&"bots", t_bots)
+			var t_tick := Time.get_ticks_usec()
 			game.tick(_local_commands(move))
+			ArenaFrameProbe.add(&"game_tick", t_tick)
 			_tick_solo_killview()
 		return
 
@@ -2258,6 +2262,9 @@ func _start_remote_workbench() -> void:
 
 
 func _start_offline() -> void:
+	# Nothing to catch up with offline: a slow frame owed several steps makes the next
+	# frame slower still. Two steps, then the owed time is dropped.
+	Engine.max_physics_steps_per_frame = 2
 	game.start(0)
 	_start_solo_workbench()
 

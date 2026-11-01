@@ -42,6 +42,7 @@ const CHANNEL := "arena.bots"
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaPaths := preload("arena_paths.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
 ## The behaviour of a weapon whose shot flies (a rocket, a bolt); every other one is led as
 ## hitscan. A path, because the pack names behaviours by path (see [DotWeaponDef]).
@@ -413,7 +414,9 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 		return [move, fire]
 
 	var world := world_for(game)
+	var t_refresh := Time.get_ticks_usec()
 	world.refresh(tick, tick_rate)
+	ArenaFrameProbe.add(&"bot_refresh", t_refresh)
 
 	if mind.brain == null:
 		mind.brain = DotBotBrain.new(mind.seed if mind.seed != 0 else bot.player_id, DotBotSettings.of(game))
@@ -426,7 +429,9 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	if mind.ride == null and mind.last_position != Vector3.INF and me.position.distance_to(mind.last_position) > TELEPORT_JUMP:
 		mind.brain.ride_ended(true)
 	mind.last_position = me.position
+	var t_brain := Time.get_ticks_usec()
 	var intent := mind.brain.think(me, world, world.now())
+	ArenaFrameProbe.add(&"bot_brain", t_brain)
 	var surf := world.surf_for_map()
 	if surf != null:
 		surf.call(&"steer", bot, mind, intent, tick, tick_rate)

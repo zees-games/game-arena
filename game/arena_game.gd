@@ -2,6 +2,7 @@
 extends "arena_game_state.gd"
 
 const ArenaFlashlight := preload("arena_flashlight.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
 
 ## The deathmatch itself: a match, a combat manager, a map, and some players.
@@ -1868,6 +1869,7 @@ func tick(commands: Dictionary = {}) -> void:
 	var delta := 1.0 / float(tick_rate)
 
 	_pre_vy.clear()
+	var t_sim := Time.get_ticks_usec()
 	for id in player_ids():
 		var player: ArenaPlayer = _players[id]
 
@@ -1895,6 +1897,8 @@ func tick(commands: Dictionary = {}) -> void:
 			# A rocket is launched and flown, not resolved as a shot (ArenaProjectiles).
 			if projectiles != null:
 				projectiles.accept(outcome)
+
+	ArenaFrameProbe.add(&"tick_players", t_sim)
 
 	# The toys after everybody moved: a walk into a ball sends it on. Then every shot that
 	# passes one pushes it, before the combat resolves the shot, which a toy never stops.
