@@ -43,6 +43,7 @@ func _run() -> void:
 	ArenaViewArms.debug_pose = args.has("--pose-debug")
 	ArenaViewArms.hand_scale_mult = float(_arg(args, "--hand-scale", "1.0"))
 	ArenaViewArms.forearm_scale_mult = float(_arg(args, "--forearm-scale", "1.0"))
+	ArenaViewArms.max_lean_override = float(_arg(args, "--max-lean", "-1"))
 	var only := _arg(args, "--only", "")
 	if only != "":
 		ids = Array(only.split(","))
@@ -59,7 +60,12 @@ func _run() -> void:
 			if not me.arsenal.is_reloading():
 				break
 			await process_frame
-		var _g = me.arsenal.give(id)
+		# Carry weight refuses a heavy gun on top of the earlier ones, which read as "not in hand".
+		if me.arsenal.carry != null:
+			me.arsenal.carry.enabled = false
+		var given: DotResult = me.arsenal.give(id)
+		if not given.ok:
+			print("%s: give failed: %s" % [id, given.message])
 		me.arsenal.equip(def.slot)
 		await _wait(1.4)
 		var slot: DotWeaponSlot = me.arsenal.current()
