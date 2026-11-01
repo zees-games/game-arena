@@ -199,6 +199,11 @@ var _armed := false
 ## `screenshots/`.
 
 
+## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+var _seq_active := false
+
+
 func _process(delta: float) -> bool:
 	if _toy_box != null and not _toy_placements.is_empty():
 		var _built := _toy_box.build(_toy_placements)
@@ -254,6 +259,14 @@ func _process(delta: float) -> bool:
 		_wait = int(shot.get("wait", 3))
 		return false
 
+	if _seq_active:
+		if _seq.step(root):
+			return false
+		_seq_active = false
+		_index += 1
+		_armed = false
+		return false
+
 	var image := root.get_texture().get_image()
 	# SHOT_SUFFIX names a run's frames apart (`_compat`, `_1280x960`) so two runs at two
 	# sizes or in two renderers can be looked at side by side.
@@ -261,6 +274,11 @@ func _process(delta: float) -> bool:
 	var path := OUT_DIR.path_join("%s%s.png" % [_shots[_index]["name"], suffix])
 	image.save_png(path)
 	print("wrote %s (%d x %d)" % [path, image.get_width(), image.get_height()])
+
+	if _seq.enabled():
+		_seq.begin(path)
+		_seq_active = true
+		return false
 
 	_index += 1
 	_armed = false
