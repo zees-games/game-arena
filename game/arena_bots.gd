@@ -114,6 +114,8 @@ class World:
 	var _surf_looked: bool = false
 	## The map's ladders joined into [member _nav] as climb edges, and how many got one.
 	var _ladders: DotBotLinks = null
+	## The body tunables of this tick, looked up once for all contacts (the lookup walks every player).
+	var _tunables: DotFpsTunables = null
 
 	func _init(p_game: Object) -> void:
 		game = p_game
@@ -133,6 +135,7 @@ class World:
 		_contacts.clear()
 		_by_id.clear()
 		_players.clear()
+		_tunables = null
 		var teams := _team_mode()
 		for p: ArenaPlayer in game.call("players"):
 			var c := DotBotContact.new()
@@ -160,7 +163,9 @@ class World:
 		c.grounded = state.mode == DotFpsState.Mode.GROUND
 		c.sliding = state.slide_time >= 0.0
 		c.wall_running = state.wall_run_time >= 0.0
-		var tunables := _body_tunables()
+		if _tunables == null:
+			_tunables = _body_tunables()
+		var tunables := _tunables
 		c.air_jump_ready = tunables.launch_enabled and state.launch_cooldown_left <= 0.0
 
 	## The nearest map surface along a direction, for the walls a bot could run beside.

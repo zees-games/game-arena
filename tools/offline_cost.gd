@@ -30,6 +30,8 @@ func _ready() -> void:
 
 
 func _run() -> void:
+	# A windowed client fills the model cache under its loading cover; headless skips that, so do it here.
+	var _warmed := ZeeModelCache.warm(ZeeWeaponArtTable.model_paths())
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("force_offline", true)
 	_client.set("mouse_capture_override", true)
