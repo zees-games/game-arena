@@ -106,6 +106,10 @@ enum Kind {
 	##
 	## After WEAPON_GONE, for the reason VOTE gives.
 	MAP_STATE,
+	## A map's glass pane broke on the server: its model number (as the id) and 0. Also one per broken pane at signon.
+	##
+	## After MAP_STATE, for the reason VOTE gives.
+	PANE_BROKEN,
 }
 
 enum Ask {

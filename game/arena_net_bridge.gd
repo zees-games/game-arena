@@ -562,6 +562,7 @@ func server_tick(tick: int) -> void:
 	_watch_projectiles()
 	_watch_drops()
 	_watch_weapon_drops()
+	_watch_panes()
 	_watch_map_io()
 	_watch_bullets()
 
@@ -1150,6 +1151,7 @@ func send_signon(peer_id: int) -> void:
 			))
 
 	_send_weapon_drops_signon(peer_id)
+	_send_panes_signon(peer_id)
 	if game != null and game.map_io != null:
 		game.map_io.add_peer(peer_id)
 
@@ -1718,6 +1720,8 @@ func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
 				game.drops.mirror_taken(int(took["id"]), int(took["taker"]))
 		ArenaEvents.Kind.WEAPON_DROP, ArenaEvents.Kind.WEAPON_SETTLED, ArenaEvents.Kind.WEAPON_GONE:
 			_apply_weapon_drop_event(event.kind, reader)
+		ArenaEvents.Kind.PANE_BROKEN:
+			_apply_pane_broken(reader)
 		ArenaEvents.Kind.MAP_STATE:
 			var told_state: Variant = null
 			if not event.body.is_empty():

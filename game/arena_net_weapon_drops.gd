@@ -1,4 +1,4 @@
-extends "arena_net_toys.gd"
+extends "arena_net_panes.gd"
 ## The pickup and dropped-weapon events between server and clients: follows each layer, sends, and mirrors.
 
 const ArenaContent := preload("arena_content.gd")
@@ -34,10 +34,6 @@ func _send_weapon_drops_signon(peer_id: int) -> void:
 	for entry in game.weapon_drops.snapshot():
 		_send_event(peer_id, ArenaEvents.Kind.WEAPON_DROP, _weapon_drop_body(
 			int(entry["id"]), entry["state"], entry["at"], Vector3.ZERO, float(entry["life"]), bool(entry["rest"]), int(entry["team"])))
-
-
-func _send_event(peer_id: int, kind: int, body: PackedByteArray) -> void:
-	call(&"send_event", peer_id, kind, body)
 
 
 func _on_weapon_dropped(id: int, state: Dictionary, at: Transform3D, velocity: Vector3, _owner: int) -> void:
