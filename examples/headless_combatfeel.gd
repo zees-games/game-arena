@@ -217,7 +217,7 @@ func _test_wiring() -> void:
 	_check(launch_default >= 12.0 * 1.25 and launch_default <= 12.0 * 1.35, "the launch defaults 25 to 35 percent above the old 12 m/s", str(launch_default))
 	_check(ArenaModuleCvars.MOVEMENT_CVARS.get("arena_launch_velocity", [""])[0] == "launch_velocity" and ArenaPlayer.MOVEMENT_RULES.has("launch_velocity"), "arena_launch_velocity sets the launch and is a replicated movement rule")
 	var speeds := ArenaPlayer.arena_tunables()
-	_check(speeds.max_speed < 8.0 and speeds.max_speed > 7.0, "the arena runs about 15 percent slower than the old 9 m/s", str(speeds.max_speed))
+	_check(speeds.max_speed < 6.0 and speeds.max_speed > 5.5, "the arena runs at 75 percent of the old 7.65 m/s", str(speeds.max_speed))
 	var run_before := speeds.speed_for(0)
 	speeds.speed_scale = 0.5
 	_check(is_equal_approx(speeds.speed_for(0), run_before * 0.5) and is_equal_approx(speeds.speed_for(DotFpsCommand.BUTTON_CROUCH), speeds.max_speed * speeds.crouch_speed_scale * 0.5), "speed_scale scales run and crouch alike")

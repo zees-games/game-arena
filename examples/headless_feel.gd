@@ -473,7 +473,9 @@ func _test_moves() -> void:
 
 	_check(climb["n"] > 40 and climb["top"] > 3.0, "the run goes up the stair", "%d frames, top %.2f m" % [climb["n"], climb["top"]])
 	_starved_reason = stair_starved
-	_check(climb["ratio"] < 2.5, "the eye climbs the stair smoothly: no frame rises more than 2.5x the climb's average",
+	# One step's smoothed rise takes the same frames at any speed while the mean falls with it, so the bound is 2.5 at the old 7.65 m/s run.
+	var ratio_limit := 2.5 * 7.65 / ArenaPlayer.arena_tunables().max_speed
+	_check(climb["ratio"] < ratio_limit, "the eye climbs the stair smoothly: no frame rises more than %.1fx the climb's average" % ratio_limit,
 		"max %.1f mm against a mean of %.1f mm" % [climb["max"] * 1000.0, climb["mean"] * 1000.0])
 	_starved_reason = ""
 

@@ -139,6 +139,7 @@ func _play(preset: String) -> void:
 	var first_errors: Array[float] = []
 	var last_first_shot := NAN
 	var blind_shots := 0
+	var last_seen_tick := {}
 	var shots := 0
 	# Grenades the bot let go of: a throw is not a shot (a frag lobbed at where a target went
 	# behind cover is meant to be blind), so it is counted here and not judged by sight.
@@ -171,9 +172,15 @@ func _play(preset: String) -> void:
 			if fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK) and bot_mind.throw_stage == 0:
 				shots += 1
 				var target := game.player_for(brain.last.target_id) if brain.last.target_id >= 0 else null
-				if target == null or not trace.line_of_sight(bot.muzzle_position(), target.global_position + Vector3.UP * ArenaBots.CHEST):
-					if target == null or not trace.line_of_sight(bot.muzzle_position(), target.muzzle_position()):
-						blind_shots += 1
+				# Sight as the brain judges it (its eye to the target's chest or head) or from the muzzle: a corner can block one and not the other.
+				var chest := target.global_position + Vector3.UP * ArenaBots.CHEST if target != null else Vector3.ZERO
+				var seen := target != null and (trace.line_of_sight(bot.muzzle_position(), chest) or trace.line_of_sight(bot.muzzle_position(), target.muzzle_position()) or trace.line_of_sight(bot.global_position + Vector3.UP * ArenaBots.EYE, chest) or trace.line_of_sight(bot.global_position + Vector3.UP * ArenaBots.EYE, target.global_position + Vector3.UP * ArenaBots.EYE))
+				if seen:
+					last_seen_tick[brain.last.target_id] = tick
+				# The brain reuses a sight answer for DotBotBrain.SIGHT_REUSE, so a shot within it of the target leaving sight is still sighted.
+				var stale_ticks := int(ceil(DotBotBrain.SIGHT_REUSE * TICK_RATE)) + 1
+				if not seen and (target == null or tick - int(last_seen_tick.get(brain.last.target_id, -1000)) > stale_ticks):
+					blind_shots += 1
 
 		var e := brain.engagement()
 		var first := float(e["first_shot_at"])
