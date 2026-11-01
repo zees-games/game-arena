@@ -14,6 +14,8 @@
 #   ./game.sh soak [MAP] [MIN]     bot soak on tools/soak.tscn (report in .godot/test-logs/soak-MAP.json)
 #   ./game.sh suites               list the test suites
 #   ./game.sh visual [--update] [MAP...]  compare map frames to tests/golden (tools/visual_check.sh)
+#   ./game.sh perf [--update] [--post]  frame-time budget on the GPU box vs tests/perf_budget.json
+#   ./game.sh netchaos [ARGS]      real server and clients under tc netem loss, jitter, blackout
 #   ./game.sh shot [ARGS]        save a screenshot to screenshots/ (tools/shot.sh or tools/screenshot.sh)
 #
 # Options (before the command):
@@ -52,7 +54,7 @@ CR=$'\r\033[K'
 [ -t 1 ] || { RED=""; GRN=""; YLW=""; OFF=""; CR=""; }
 
 die() { printf '%s%s%s\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
-usage() { sed -n '3,24p' "$ROOT/$(basename "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,26p' "$ROOT/$(basename "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -279,6 +281,14 @@ case "$cmd" in
             exec "$tool" "$@"
         done
         die "$GAME_NAME has no screenshot tool." 2
+        ;;
+    perf)
+        [ -x tools/perf_budget.sh ] || die "$GAME_NAME has no perf budget." 2
+        exec tools/perf_budget.sh "$@"
+        ;;
+    netchaos)
+        [ -x tools/netchaos.sh ] || die "$GAME_NAME has no netchaos rig." 2
+        exec tools/netchaos.sh "$@"
         ;;
     visual)
         [ -x tools/visual_check.sh ] || die "$GAME_NAME has no visual check." 2
