@@ -355,10 +355,12 @@ func _test_loads() -> bool:
 		1 if int(info.get("displacement_index_count", 0)) > 0 else 0
 	)
 	var solid := _game.map.collision_root
-	_check(solid != null and solid.is_inside_tree() and solid.get_child_count() == expected,
-		"one shape per brush is in the tree (%d of %d)" % [
-			solid.get_child_count() if solid != null else -1, expected
-		])
+	# Clip and fence hulls sit in their own bodies (shots pass them), so count the shapes below the root.
+	var shapes := -1
+	if solid != null:
+		shapes = solid.find_children("*", "CollisionShape3D", true, false).size()
+	_check(solid != null and solid.is_inside_tree() and shapes == expected,
+		"one shape per brush is in the tree (%d of %d)" % [shapes, expected])
 	_check(_game.combat.trace is DotTracePhysics,
 		"the shots trace the physics space, not a box list")
 	_check(_game.match_node.spawn_points().size() == _game.map.spawns.size()
