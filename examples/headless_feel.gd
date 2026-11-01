@@ -327,6 +327,8 @@ func _test_offline() -> void:
 		(bots[id] as ArenaPlayer).set_meta(&"bot_scripted", true)
 	_offline_bots = bots
 	_zero_wall_retract(client)
+	# Out-of-sight bodies are presented every fourth frame; this measures every frame.
+	ArenaPlayer.present_lod_enabled = false
 	_hold_movement(false)
 	_turning = true
 	_driving = true
@@ -348,6 +350,7 @@ func _test_offline() -> void:
 	_starved_reason = ""
 
 	_offline_bots = {}
+	ArenaPlayer.present_lod_enabled = true
 	client.queue_free()
 	_client = null
 	await get_tree().process_frame

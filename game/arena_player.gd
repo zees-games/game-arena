@@ -1616,7 +1616,7 @@ func wall_roll() -> float:
 ##   1.5 more while sliding.
 ## - **Wall-run lean**: 6 degrees away from the wall at 6 a second, as before.
 ## - **Bound**: the three together never past 7 degrees.
-## - **Widening**: from 3 m/s, about 1 degree at the 5.74 m/s run and 4 degrees (vertical; about 5 at 4:3)
+## - **Widening**: none at or under the 5.74 m/s run, 4 degrees (vertical; about 5 at 4:3)
 ##   by 15 m/s, 2 more while sliding, 1 more on a wall; easing at 4 a second.
 static func camera_motion_picks() -> DotFpsViewMotion:
 	var m := DotFpsViewMotion.new()
@@ -1634,7 +1634,7 @@ static func camera_motion_picks() -> DotFpsViewMotion:
 	m.wall_run_roll_response = 6.0
 	m.roll_limit = 5.0
 	m.fov_speed_gain = 4.0
-	m.fov_speed_floor = 3.0
+	m.fov_speed_floor = 5.74
 	m.fov_speed_reference = 15.0
 	m.fov_response = 4.0
 	m.slide_fov_gain = 2.0
