@@ -6,7 +6,8 @@ static func stage(game, local, _hud) -> Array[Dictionary]:
 	var drops = game.weapon_drops
 	if drops == null:
 		return []
-	var eye: Vector3 = local.camera.global_position
+	# The camera has not been presented yet (it sits at the origin), so the eye comes from the body.
+	var eye: Vector3 = local.controller.state.position + Vector3.UP * 1.6
 	var dir := Vector3(0.0, -0.45, -1.0).normalized()
 	var aim_cam := func() -> void:
 		local.view_now = Vector2(0.0, rad_to_deg(asin(dir.y)))
@@ -29,15 +30,13 @@ static func stage(game, local, _hud) -> Array[Dictionary]:
 		aim_cam.call()
 		drops.clear()
 		drops.rules.pickup_delay = 0.0
-		var _id: int = drops.spawn(state, eye + dir * 2.0, Vector3.ZERO, 0)
-		for _t in 64 * 2:
-			game.tick({})
+		var _id: int = drops.spawn(state, eye + dir * 1.3, Vector3.ZERO, 0)
+	var refresh := func(fill: float) -> void:
 		aim_cam.call()
 		info = drops.prompt_for(local.arsenal, eye, dir, game.weapon_drop_class_of(local.player_id))
-		view.show_prompt(info, 0.0)
+		view.show_prompt(info, fill)
 	var circle := func() -> void:
-		aim_cam.call()
-		view.show_prompt(info, 0.62)
+		refresh.call(0.62)
 	var shoot := func() -> void:
 		aim_cam.call()
 		view.show_prompt({}, 0.0)
@@ -46,8 +45,8 @@ static func stage(game, local, _hud) -> Array[Dictionary]:
 		if _hud != null:
 			_hud.use_hint = ""
 	return [
-		{"name": "drop_panel", "local": true, "arm": spawn, "wait": 10},
-		{"name": "drop_hold", "local": true, "arm": circle, "wait": 6},
+		{"name": "drop_hold", "local": true, "arm": spawn, "wait": 90, "late": [[3, refresh.bind(0.62)]]},
+		{"name": "drop_panel", "local": true, "arm": circle, "wait": 6, "late": [[3, refresh.bind(0.0)]]},
 		{"name": "drop_shot_1", "local": true, "arm": shoot, "wait": 5},
 		{"name": "drop_shot_2", "local": true, "wait": 14},
 		{"name": "drop_shot_3", "local": true, "wait": 24},

@@ -14,7 +14,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 27
+const EXPECTED_CHECKS := 30
 
 var _checks := 0
 var _failed := 0
@@ -195,6 +195,22 @@ func _run() -> void:
 	var swapped = player.arsenal.current()
 	_check(player.arsenal.carries(held_def) and not player.arsenal.carries(other), "and it replaced the one carried", str(swapped.id() if swapped != null else ""))
 	_check(drops.count() == 1, "while the old one lies on the floor", str(drops.count()))
+
+	# The world panel: shown for a drop the player looks at, hidden out of reach.
+	drops.clear()
+	drops.rules.pickup_delay = 0.0
+	var eye: Vector3 = player.muzzle_position()
+	var _d3 := drops.spawn(snap["state"], eye + player.aim_direction() * 1.2, Vector3.ZERO, 22)
+	var view := DotWeaponPickupView.new()
+	add_child(view)
+	var seen := drops.prompt_for(player.arsenal, eye, player.aim_direction(), game.weapon_drop_class_of(21))
+	view.show_prompt(seen, 0.0)
+	_check(not seen.is_empty() and view.visible, "a looked-at drop shows the panel", str(seen))
+	_check(view.text_for(seen).contains("[E]"), "with the key named in the text", view.text_for(seen))
+	var away := drops.prompt_for(player.arsenal, eye + Vector3(60.0, 0.0, 0.0), player.aim_direction(), game.weapon_drop_class_of(21))
+	view.show_prompt(away, 0.0)
+	_check(away.is_empty() and not view.visible, "and out of reach it hides")
+	view.queue_free()
 
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
