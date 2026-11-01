@@ -3,8 +3,9 @@ extends DotGameCheckSuite
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 const ArenaModule := preload("../game/arena_module.gd")
+const ArenaMap := preload("../maps/arena_map.gd")
 
-const EXPECTED_CHECKS := 12
+const EXPECTED_CHECKS := 15
 const STEP := 1.0 / 60.0
 
 ## A server cvar for the wall-run size rules changes whether a run starts beside a 1 m crate:
@@ -71,4 +72,41 @@ func _run() -> void:
 	_check(is_equal_approx(ArenaPlayer.look_down_back_of(tall_def), 0.8) and is_equal_approx(ArenaPlayer.look_down_back_of(DotPlayerClassDef.new()), 0.45),
 		"a class profile sets how far the own body trails back looking down; none keeps the default")
 
+	await _test_clip_hulls()
 	_report(EXPECTED_CHECKS)
+
+
+## A player-clip hull of the legacy collision blob stops a body but not a shot.
+func _test_clip_hulls() -> void:
+	var id := &"aim-forts"
+	if not ArenaMap.imported_ids().has(id):
+		for _i in 3:
+			_check(true, "skipped without the imported map")
+		return
+	var root := ArenaMap.by_id(id).to_collision()
+	add_child(root)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var clip := root.get_node_or_null("ImportedClip") as StaticBody3D
+	_check(clip != null and clip.get_child_count() > 0, "the legacy clip hulls sit in their own body")
+	if clip == null or clip.get_child_count() == 0:
+		_check(false, "a body is blocked by a clip hull")
+		_check(false, "a shot passes a clip hull")
+		root.free()
+		return
+	var layout := DotPhysicsLayout.shooter_3d()
+	var pts := ((clip.get_child(0) as CollisionShape3D).shape as ConvexPolygonShape3D).points
+	var mid := Vector3.ZERO
+	for q in pts:
+		mid += q
+	mid /= float(pts.size())
+	var space := get_viewport().world_3d.direct_space_state
+	var from := mid + Vector3(0.0, 40.0, 0.0)
+	var to := mid - Vector3(0.0, 40.0, 0.0)
+	var stop := PhysicsRayQueryParameters3D.create(from, to, layout.mask_of([&"player_clip"]))
+	var body_hit := space.intersect_ray(stop)
+	_check(not body_hit.is_empty() and body_hit["collider"] == clip, "a body (player_clip mask) is blocked by a clip hull")
+	var shot := PhysicsRayQueryParameters3D.create(from, to, layout.mask_of([&"world", &"prop"] as Array[StringName]))
+	var shot_hit := space.intersect_ray(shot)
+	_check(shot_hit.is_empty() or shot_hit["collider"] != clip, "a shot (world mask) passes the same clip hull")
+	root.free()
