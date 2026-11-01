@@ -519,6 +519,8 @@ func _test_audio_is_a_firefight() -> void:
 	sink.forget()
 	var muzzle := Transform3D.IDENTITY
 	muzzle.origin = Vector3(2, 0, 0)
+	# The layered player has its own suite; this section checks the plain fire_* fallback and its throttle.
+	p.shots.rules.layers = false
 	for _i in range(12):
 		p.on_fired(&"rifle", muzzle, false)
 	_check(
@@ -544,7 +546,7 @@ func _test_audio_is_a_firefight() -> void:
 	for id in cat.ids():
 		# dot-audio's stock footsteps and beds are files the addon ships: no stand-in needed.
 		# Nor are the ambience moods' files, which DotAmbience registers when a mood starts.
-		if not recipes.has(id) and not DotAudioStock.ids().has(id) and not String(id).begins_with(DotAmbience.ID_PREFIX):
+		if not recipes.has(id) and not DotAudioStock.ids().has(id) and not String(id).begins_with("shot_") and not String(id).begins_with(DotAmbience.ID_PREFIX):
 			uncovered.append(String(id))
 	_check(
 		uncovered.is_empty(),

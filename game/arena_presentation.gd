@@ -794,6 +794,16 @@ func _build_audio() -> DotResult:
 	ambience.manager = audio
 	ambience.fallback_bed = &"amb_industrial"
 	add_child(ambience)
+	shot_enclosure = DotAudioEnclosure.new()
+	shot_enclosure.name = "ShotEnclosure"
+	add_child(shot_enclosure)
+	shots = DotShotPlayer.new()
+	shots.name = "Shots"
+	shots.manager = audio
+	shots.enclosure = shot_enclosure
+	add_child(shots)
+	for weapon_class in SHOT_CLASS.values():
+		var _registered := shots.register(DotAudioShotStock.shot(weapon_class))
 	ambient = DotAmbienceDirector.new()
 	ambient.name = "Ambient"
 	ambient.manager = audio
@@ -1256,7 +1266,9 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 
 
 func on_fired(weapon_id: StringName, muzzle: Transform3D, mine: bool) -> void:
-	audio.play_at(StringName("fire_%s" % weapon_id), muzzle.origin)
+	var layered := shots != null and SHOT_CLASS.has(weapon_id) and shots.fire(StringName("shot_%s" % SHOT_CLASS[weapon_id]), muzzle.origin).ok
+	if not layered:
+		audio.play_at(StringName("fire_%s" % weapon_id), muzzle.origin)
 	fx.spawn(&"muzzle_flash", muzzle)
 	if mine:
 		# Only your own weapon kicks the camera. Somebody else's rifle going off beside
@@ -1428,12 +1440,30 @@ func keep_walkers(bodies: Array) -> void:
 		steps.keep(bodies)
 
 
+## Which stock shot (dot-audio `DotAudioShotStock`) each weapon plays; a weapon not listed keeps its single `fire_*` sound.
+const SHOT_CLASS := {&"rifle": &"rifle", &"shotgun": &"shotgun", &"rail": &"sniper"}
+
+## The layered shot player and the enclosure probe it reads (dot-audio); `use_shot_rules` hands both the server's cvars.
+var shots: DotShotPlayer = null
+var shot_enclosure: DotAudioEnclosure = null
+
+
+func use_shot_rules(rules: DotShotRules) -> void:
+	if shots != null:
+		shots.rules = rules
+	if shot_enclosure != null:
+		shot_enclosure.rules = rules
+
+
 ## The roof probe the weapon's shot sounds read (`ZeeShotFx.roof`): roofed means a room tail follows a shot.
 var shot_roof := DotAmbienceRoof.new()
 
 
 ## The listener's roof, once a frame: under one the ambience crosses to its indoor mood.
 func follow_roof(delta: float, eye: Vector3, space: PhysicsDirectSpaceState3D, world_mask: int) -> void:
+	if shot_enclosure != null:
+		shot_enclosure.mask = world_mask
+		shot_enclosure.step(delta, eye, space)
 	shot_roof.mask = world_mask
 	var _changed := shot_roof.step(delta, eye, space)
 	if ambient != null:

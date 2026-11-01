@@ -502,6 +502,9 @@ var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 ## The ambience cvars (`arena_ambient*`): bound by the module (REPLICATED), followed by a client through its link.
 var ambient_rules: DotAmbienceRules = ArenaAmbience.make_rules()
 
+## `snd_shot_*`: dot-audio's layered shots and room-aware tails (all on). Bound by the module, followed by the client.
+var shot_rules := DotShotRules.new()
+
 ## Who a spectator may watch and whether they may fly a free camera: dot-spectate's
 ## `mp_forcecamera`, `mp_freeroam` and `mp_freeroam_speed`. Bound by the module (REPLICATED) and
 ## followed by the client, which is the end that flies the camera. One object for the life of

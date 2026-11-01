@@ -109,6 +109,8 @@ func _ready() -> void:
 	# The server's arena_ambient* (a link tells them) drive the quiet layer; the player's sliders multiply on top.
 	if presentation != null and presentation.ambient != null:
 		presentation.ambient.follow_settings(presentation.settings, game.ambient_rules)
+	if presentation != null:
+		presentation.use_shot_rules(game.shot_rules)
 
 	_grab_mouse()
 	platform.slide_settings = presentation.settings
