@@ -4,6 +4,7 @@
 #   tools/screenshot.sh dm_atrium
 #   tools/screenshot.sh --profiler-menu [out.png]   # the real client, menu on Advanced, Performance card
 #   tools/screenshot.sh --map-menu [dir]   # the solo map picker (M), every page
+#   tools/screenshot.sh --team-menu-key [--unwired] [out.png]   # the period key in the real client (or a bare menu: Play, Spectate)
 #   tools/screenshot.sh --team-menu   # the team menu: two teams, four renamed, free-for-all
 #   tools/screenshot.sh dm_box --admin   # a beacon, a beacon behind a wall, a blind
 #   tools/screenshot.sh dm_box --feel --muzzle --weapons=smg:3,knife:1   # first-person frames of chosen weapons (id:slot)
@@ -31,6 +32,10 @@ fi
 if [ "${1:-}" = "--map-menu" ]; then
   shift
   exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/map_menu_shot.gd -- "$@"
+fi
+if [ "${1:-}" = "--team-menu-key" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/team_menu_period_shot.gd -- "$@"
 fi
 if [ "${1:-}" = "--team-menu" ]; then
   exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/team_menu_shot.gd
