@@ -118,4 +118,4 @@ A subscribed pack's map (map kind `arena`, solo only; `provides.json` says so) i
 
 ## Suggested map packs
 
-`game.yml` lists `arena-dm-maps` (group `dm`) and `arena-surf-dm-maps` (group `surf`) as `suggested:`. The game runs without them; the Workshop mounts them by default and `--no-suggested`, `--suggested=none` or `--no-suggested-surf` turns them off. Players can still pick single maps in the Workshop list.
+`game.yml` lists `arena-dm-maps` (group `dm`) and `arena-surf-dm-maps` (group `surf`) as `suggested:`. The game runs without them; the Workshop mounts them by default and `--no-suggested`, `--suggested=none` or `--no-suggested-surf` turns them off. Players can still pick single maps in the Workshop list. **A server offers them too**: dot-server-deploy adds the `suggested:` packs to the map list at the newest version every start, so a fresh server's vote has the DM and surf maps with no `overrides.yml`; `suggested_maps: none` (or `surf`, to keep one group), `sv_suggested_maps` or `--no-suggested` on the server turns that off (dot-server-deploy `docs/configuration.md`). Online clients only ever get the server's list.
