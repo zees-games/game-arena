@@ -9,6 +9,7 @@ const ClientBench := preload("client_bench.gd")
 ## Prints fps, frame p50/p95/max, the engine's physics and process monitors and physics steps per frame.
 
 var _bots := 10
+var _reuse := true
 var _seconds := 25.0
 var _client: Node = null
 var _frames := PackedFloat64Array()
@@ -25,6 +26,7 @@ func _ready() -> void:
 		match args[i]:
 			"--bots": _bots = int(args[i + 1])
 			"--seconds": _seconds = float(args[i + 1])
+			"--reuse": _reuse = int(args[i + 1]) != 0
 	var _scratch := ArenaPresentation.use_scratch_settings("offline_cost")
 	_run.call_deferred()
 
@@ -40,6 +42,7 @@ func _run() -> void:
 	var pilot := ClientBench.Pilot.new()
 	pilot.process_priority = -999
 	add_child(pilot)
+	_set_reuse(self)
 	var warm := 8.0
 	ArenaFrameProbe.set_interval(1.0e9)
 	var t0 := Time.get_ticks_usec()
@@ -83,6 +86,9 @@ func _run() -> void:
 		var row: PackedInt64Array = ArenaFrameProbe._sections[key]
 		print("  section %-14s %.3f ms/frame | %.3f ms/call x%d | max %.2f ms" % [key, float(row[0]) / _n / 1000.0, float(row[0]) / maxi(row[1], 1) / 1000.0, row[1], row[2] / 1000.0])
 	print("  controller queries per physics step: %.1f" % (float(_queries(self) - _q0) / maxf(float(Engine.get_physics_frames() - _steps0), 1.0)))
+	_ticks = 0; _reused = 0; _settled = 0
+	var _qq := _queries(self)
+	print("  motor ticks %d settled-skips %d reused start probes %d (queries per tick %.2f)" % [_ticks, _settled, _reused, float(_qq) / maxf(_ticks, 1.0)])
 	print("  physics3d active %d islands %d pairs %d" % [Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS), Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT), Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)])
 	get_tree().quit(0)
 
@@ -90,11 +96,25 @@ func _run() -> void:
 var _q0 := 0
 
 
+func _set_reuse(node: Node) -> void:
+	if node is DotFpsController and node.get("motor") != null:
+		node.motor.reuse_settled_ground = _reuse
+	for c in node.get_children():
+		_set_reuse(c)
+var _ticks := 0
+var _reused := 0
+var _settled := 0
+
+
 func _queries(node: Node) -> int:
 	var total := 0
 	if node is DotFpsController and node.body != null:
 		var d: Dictionary = node.body.describe()
 		total += int(d.get("queries", d.get("inner", {}).get("queries", 0)))
+		var m: Dictionary = node.motor.describe() if node.get("motor") != null else {}
+		_ticks += int(m.get("ticks", 0))
+		_reused += int(m.get("reused_ground_ticks", 0))
+		_settled += int(m.get("settled_ground_ticks", 0))
 	for c in node.get_children():
 		total += _queries(c)
 	return total
