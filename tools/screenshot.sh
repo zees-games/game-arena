@@ -2,6 +2,8 @@
 # Renders a map to screenshots/<map>_{overview,eye,roof}.png so a person can look at it.
 #
 #   tools/screenshot.sh dm_atrium
+#   tools/screenshot.sh --profiler-menu [out.png]   # the real client, menu on Advanced, Performance card
+#   tools/screenshot.sh --map-menu [dir]   # the solo map picker (M), every page
 #   tools/screenshot.sh --team-menu   # the team menu: two teams, four renamed, free-for-all
 #   tools/screenshot.sh dm_box --admin   # a beacon, a beacon behind a wall, a blind
 #   tools/screenshot.sh dm_box --feel --muzzle --weapons=smg:3,knife:1   # first-person frames of chosen weapons (id:slot)
@@ -19,7 +21,17 @@
 # every frame it saves is empty, which is worse than no screenshot because it looks like
 # one.
 set -euo pipefail
+# A short frame sequence beside each still (DotShotSeq), so Nightly -> Review can play and scrub it.
+export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-16} DOT_SHOT_SECS=${DOT_SHOT_SECS:-2}
 cd "$(dirname "$0")/.."
+if [ "${1:-}" = "--profiler-menu" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/profiler_menu_shot.gd -- "$@"
+fi
+if [ "${1:-}" = "--map-menu" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/map_menu_shot.gd -- "$@"
+fi
 if [ "${1:-}" = "--team-menu" ]; then
   exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/team_menu_shot.gd
 fi
