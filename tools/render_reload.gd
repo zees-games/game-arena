@@ -48,6 +48,10 @@ func _run() -> void:
 	if only != "":
 		ids = Array(only.split(","))
 
+	if args.has("--holds"):
+		await _holds(args)
+		return
+
 	for id_s in ids:
 		var id := StringName(id_s)
 		var def: DotWeaponDef = ZeeWeaponPack.table().get(id)
@@ -118,6 +122,40 @@ func _run() -> void:
 			_failed += 1
 	print("render_reload: %d weapons failed the one-arm-set check" % _failed)
 	quit(1 if _failed > 0 else 0)
+
+
+## `--holds`: every weapon in the catalogue (or `--only`) at the hip and down the sights, the hands' reach to each grip printed.
+func _holds(args: PackedStringArray) -> void:
+	var ids: Array = ZeeWeaponPack.table().keys()
+	ids.sort()
+	var only := _arg(args, "--only", "")
+	if only != "":
+		ids = Array(only.split(",")).map(func(s: String) -> StringName: return StringName(s))
+	for id: StringName in ids:
+		var def: DotWeaponDef = ZeeWeaponPack.table()[id]
+		var me = client.get("player")
+		me.health.invulnerable = true
+		if me.arsenal.carry != null:
+			me.arsenal.carry.enabled = false
+		var given: DotResult = me.arsenal.give(id)
+		if not given.ok:
+			print("%s: give failed: %s" % [id, given.message])
+		me.arsenal.equip(def.slot)
+		await _wait(1.4)
+		var slot: DotWeaponSlot = me.arsenal.current()
+		if slot == null or slot.def.id != id:
+			print("%s: not in hand, skipped" % id)
+			continue
+		await _shot("%s_hip" % id)
+		print("%s hip: hand gaps %s" % [id, _hand_gaps()])
+		Input.action_press(&"arena_aim")
+		await _wait(0.9)
+		await _shot("%s_ads" % id)
+		print("%s ads: hand gaps %s" % [id, _hand_gaps()])
+		Input.action_release(&"arena_aim")
+		await _wait(0.5)
+	print("render_reload: holds done")
+	quit(0)
 
 
 ## The whole reload as the arsenal times it: the opening and every round for a per-round reload.
