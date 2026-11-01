@@ -23,8 +23,7 @@ static func make() -> DotFpsTunables:
 	tunables.sprint_speed_scale = 1.0
 	tunables.crouch_speed_scale = 0.45
 	# Crouch at a run slides: a burst and a long, low-friction carry, then a crouch. The
-	# minimum is under the 5.74 m/s run so any real run slides and a crouch-walk never does. The boost
-	# (was 3.5 at the 7.65 run) keeps the slide-jump reach the wall-run gaps were sized for.
+	# minimum is under the 5.74 m/s run so any real run slides and a crouch-walk never does.
 	tunables.slide_enabled = true
 	tunables.slide_min_speed = 4.1
 	tunables.slide_boost = 3.5
