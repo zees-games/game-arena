@@ -7,7 +7,7 @@ static func make() -> DotFpsTunables:
 	tunables.max_velocity = 400.0
 	tunables.max_wish_speed = 0.0
 	tunables.step_height = 0.4
-	tunables.max_speed = 7.65
+	tunables.max_speed = 5.74
 	tunables.accelerate = 12.0
 	tunables.friction = 5.5
 	tunables.stop_speed = 3.0
@@ -23,10 +23,11 @@ static func make() -> DotFpsTunables:
 	tunables.sprint_speed_scale = 1.0
 	tunables.crouch_speed_scale = 0.45
 	# Crouch at a run slides: a burst and a long, low-friction carry, then a crouch. The
-	# minimum is under the 7.65 m/s run so any real run slides and a crouch-walk never does.
+	# minimum is under the 5.74 m/s run so any real run slides and a crouch-walk never does. The boost
+	# (was 3.5 at the 7.65 run) keeps the slide-jump reach the wall-run gaps were sized for.
 	tunables.slide_enabled = true
-	tunables.slide_min_speed = 5.5
-	tunables.slide_boost = 3.5
+	tunables.slide_min_speed = 4.1
+	tunables.slide_boost = 7.0
 	tunables.slide_max_speed = 14.0
 	tunables.slide_friction = 0.9
 	tunables.slide_duration = 0.9
@@ -47,12 +48,12 @@ static func make() -> DotFpsTunables:
 	tunables.dash_cooldown = 3.0
 	# Walls: run a few steps along one, jump off it, ride it down. dot-player-controller's
 	# defaults for everything but these four (docs/wall-movement.md there, docs/modes.md here).
-	# The run needs MORE than the 7.65 m/s plain run along the wall, so a run is something a
+	# The run needs MORE than the 5.74 m/s plain run along the wall, so a run is something a
 	# player does on purpose (a slide, a dash or a strafe into it): at the run speed or under, every jump
 	# taken beside a wall would become a run and peak about 40% lower than the player meant.
 	# The wall jump needs no speed at all, and the slide catches a fall against a wall.
 	tunables.wall_run_enabled = true
-	tunables.wall_run_min_speed = 8.1
+	tunables.wall_run_min_speed = 5.9
 	# Touching a wall in the air starts a run (the heading turns along it); a press jumps off.
 	tunables.wall_run_auto = true
 	tunables.wall_run_on_jump = false

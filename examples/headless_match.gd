@@ -107,7 +107,7 @@ func _run() -> void:
 	_test_score_vote()
 	await _test_progression()
 	_test_geometry_held()
-	_test_interface()
+	await _test_interface()
 
 	await _test_horde()
 	await _test_siege()
@@ -3731,9 +3731,9 @@ func _test_box_upper() -> void:
 			"%.2f m/s against max_speed %.2f" % [corner_pace, tunables.max_speed]
 		)
 
-		# Held on for a second — more than the 6.5 m of landing takes — the run ends
+		# Held on for a second and a half — more than the 6.5 m of landing takes — the run ends
 		# against the side wall, still at ledge height, not in the corner below.
-		for step in range(64):
+		for step in range(96):
 			var command := DotFpsCommand.new()
 			command.yaw = corner["up_yaw"]
 			command.move = Vector2(0.0, 1.0)
@@ -4223,8 +4223,8 @@ func _commands_for_tick(tick: int) -> Dictionary:
 
 			# Strafe, so they are not four statues: it exercises the movement-based
 			# spread and the ground friction, and it means the shots are not all
-			# fired from a standstill.
-			move.move = Vector2(sin(float(tick) * 0.05 + float(player.player_id)), 0.25)
+			# fired from a standstill. Forward 0.33 is the old 0.25 at the 75% run speed.
+			move.move = Vector2(sin(float(tick) * 0.05 + float(player.player_id)), 0.33)
 
 		move.sanitise()
 		fire.sanitise()
@@ -4494,6 +4494,16 @@ func _test_interface() -> void:
 	hud.build(_game)
 
 	var subject := _game.players()[0]
+
+	for candidate in _game.players():
+		if candidate.is_alive():
+			subject = candidate
+			break
+
+	# A respawn at the match's end applies its loadout through an awaited store call.
+	for _frame in 4:
+		await get_tree().process_frame
+
 	hud.follow(subject)
 	hud.refresh_all()
 

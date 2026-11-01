@@ -393,11 +393,11 @@ func _test_moves() -> void:
 	# tools/render_wall_moves.gd).
 	_mover.controller.teleport(Vector3(-12.0, 0.05, -12.0), -90.0, 0.0)
 
-	# Up the stair: +x along z -12 from four metres short of the first tread; long enough for the 7.65 m/s run.
+	# Up the stair: +x along z -12 from four metres short of the first tread; long enough for the 5.74 m/s run.
 	_mover_command = _command(Vector2(0.0, 1.0), -90.0, 0)
 	_mover_frames = []
 	_measure()
-	await _wait(1.9)
+	await _wait(2.6)
 	var stair := _mover_frames.duplicate()
 	var stair_starved := _starvation(OFFLINE_FPS)
 

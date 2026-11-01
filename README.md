@@ -102,7 +102,7 @@ arena_timelimit 600            // seconds a match lasts; 0 for the mode's own
 arena_warmup -1                // seconds of warmup before a match; -1 for the mode's own
 arena_minplayers 1             // players needed before a round starts
 arena_wall_run 1               // run along a wall in the air (0 off); arena_wall_jump, arena_wall_slide likewise
-arena_wall_run_min_speed 9.5   // m/s along the wall to start a run (arena_wall_run_end_speed 3 ends it)
+arena_wall_run_min_speed 5.9   // m/s along the wall to start a run (arena_wall_run_end_speed 3 ends it)
 arena_wall_run_time 1          // longest a run lasts, seconds (at most 1.9)
 arena_wall_run_gravity 0.25    // share of gravity felt on the wall; arena_wall_run_damping 8, arena_wall_run_max_fall 6
 arena_wall_run_angle 60        // widest angle off the wall to start a run; head-on is no run
