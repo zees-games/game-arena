@@ -204,6 +204,7 @@ static func menu_rows(
 	catalogue: DotMapCatalogue, here: StringName, mode: ArenaMode, modes: Array
 ) -> Array:
 	var out: Array = []
+	var surf: Array = []
 	for def in catalogue.available():
 		if mode != null and not supports_mode(def, mode):
 			continue
@@ -211,11 +212,17 @@ static func menu_rows(
 			continue
 		var detail := ""
 		if bool(def.meta.get("imported", false)):
-			detail = "Combat surf map"
+			detail = imported_label(def.id)
 		elif is_workshop(def):
 			detail = "Workshop map"
-		out.append({"id": "map:%s" % def.id, "name": def.label(), "mode": "Map",
-			"detail": detail, "current": def.id == here})
+		var row := {"id": "map:%s" % def.id, "name": def.label(), "mode": "Map",
+			"detail": detail, "current": def.id == here}
+		# Fifty surf maps would otherwise push the deathmatch ones onto page 3.
+		if detail == "Combat surf map":
+			surf.append(row)
+		else:
+			out.append(row)
+	out.append_array(surf)
 	var current_def := catalogue.get_map(here)
 	for each: ArenaMode in modes:
 		if current_def != null and not supports_mode(current_def, each):
@@ -224,6 +231,16 @@ static func menu_rows(
 			"detail": each.description.get_slice("\n", 0),
 			"current": mode != null and each.id == mode.id})
 	return out
+
+
+## What an imported map is, by id: the surf maps are `surf_*`, gun game `gg-*`, the rest deathmatch.
+static func imported_label(id: StringName) -> String:
+	var text := String(id)
+	if text.begins_with("surf_"):
+		return "Combat surf map"
+	if text.begins_with("gg-"):
+		return "Gun game map"
+	return "Deathmatch map"
 
 
 static func _def_for(id: StringName, map: ArenaMap) -> DotMapDef:

@@ -3,6 +3,7 @@ extends DotGameCheckSuite
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
+const ArenaMode := preload("../game/arena_mode.gd")
 
 ## The deathmatch and gun game maps (arena-dm-maps, linked at maps/imported_dm): each in maps.json
 ## is discovered, answers to ArenaMap.by_id with its author's credit and spawns, and is walked,
@@ -65,7 +66,27 @@ func _run() -> void:
 			"%s's manifest declares movement walk" % id)
 
 	_check(found > 0, "at least one listed map is present (%d of %d)" % [found, listed.size()])
-	_report_sections(entered, entered, 2, 4 + 4 * found)
+
+	print("-- the solo map picker (M) lists them, named for what they are, ahead of the surf maps")
+	var rows := ArenaMaps.menu_rows(ArenaMaps.catalogue(), &"", ArenaMode.gun_game_mode(), [])
+	var names: Dictionary = {}
+	var first_surf := rows.size()
+	var last_dm := -1
+
+	for i in rows.size():
+		var row: Dictionary = rows[i]
+		names[str(row["id"])] = str(row["detail"])
+		if row["detail"] == "Combat surf map":
+			first_surf = mini(first_surf, i)
+		elif str(row["detail"]).ends_with("map") and row["detail"] != "Workshop map":
+			last_dm = i
+
+	for want: Dictionary in listed:
+		var wid := "map:%s" % want.id
+		if ArenaImportedMaps.has(StringName(str(want.id))):
+			_check(names.has(wid) and names[wid] != "Combat surf map", "%s is in the picker, not labelled a surf map" % wid)
+	_check(last_dm < first_surf, "deathmatch and gun game maps come before the surf maps")
+	_report_sections(entered + 1, entered + 1, 3, 5 + 5 * found)
 
 
 func _resolve(link: String) -> String:
