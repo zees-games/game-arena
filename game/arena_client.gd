@@ -1240,15 +1240,38 @@ func _process(delta: float) -> void:
 ## both before it shows up anywhere else.
 func _probe_extra() -> Dictionary:
 	if net == null or _offline:
-		return {"offline": true}
+		return _render_cost()
 	var clock := net.clock.describe()
-	return {
+	var out := _render_cost()
+	out.merge({
 		"rtt_ms": int(net.stats.rtt_percentile(0.5)),
 		"link_rtt_ms": int(ArenaNetBridge.link_rtt_ms(link)) if link != null else -1,
 		"lead": net.clock.tick - net.clock.server_tick(),
 		"snaps": clock.get("snaps", 0),
 		"lost_ms": clock.get("lost_ms", 0),
+	})
+	return out
+
+
+## What the renderer drew last frame, and the lights that cast shadows: the web's budget is draw calls.
+func _render_cost() -> Dictionary:
+	var lights := 0
+	var casters := 0
+	for l in get_tree().root.find_children("*", "Light3D", true, false):
+		lights += 1
+		if (l as Light3D).shadow_enabled:
+			casters += 1
+	return {
+		"draw_calls": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+		"objects": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
+		"lights": lights,
+		"shadow_lights": casters,
 	}
+
+
+## The roof probe's mask, looked up once per layout rather than built every frame.
+var _roof_layout: DotPhysicsLayout = null
+var _roof_mask := 0
 
 
 func _present_frame(delta: float) -> void:
@@ -1291,7 +1314,10 @@ func _present_frame(delta: float) -> void:
 		presentation.keep_walkers(game.players())
 		var stack_now := game.player_stack
 		if stack_now != null and stack_now.physics != null and stack_now.physics.layout != null:
-			presentation.follow_roof(delta, eye, get_viewport().world_3d.direct_space_state, stack_now.physics.layout.mask_of([&"world"]))
+			if _roof_layout != stack_now.physics.layout:
+				_roof_layout = stack_now.physics.layout
+				_roof_mask = _roof_layout.mask_of([&"world"])
+			presentation.follow_roof(delta, eye, get_viewport().world_3d.direct_space_state, _roof_mask)
 			var shot_rig: Object = player.weapons if player != null else null
 			if shot_rig != null and is_instance_valid(shot_rig) and shot_rig.has_method(&"shot_fx"):
 				var shot_fx: Object = shot_rig.call(&"shot_fx")
