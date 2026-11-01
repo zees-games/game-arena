@@ -96,6 +96,10 @@ __pycache__/
 # bootstrap-link: arena-surf-dm-maps/worlds
 /worlds
 
+# Converted worlds of the deathmatch maps.
+# bootstrap-link: arena-dm-maps/worlds
+/worlds_dm
+
 # The deathmatch and gun game maps: the arena-dm-maps repository, linked here beside the surf maps.
 # bootstrap-link: arena-dm-maps/maps
 /maps/imported_dm

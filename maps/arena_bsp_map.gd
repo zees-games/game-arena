@@ -89,6 +89,9 @@ const DRAWN_WORLD := "res://addons/dot_map/bsp/dot_map_drawn_world.gd"
 ## Where the converted worlds (`bsp.py regen`, arena-surf-dm-maps/worlds) are linked.
 const WORLD_ROOT := "res://worlds"
 
+## The deathmatch maps' worlds (arena-dm-maps/worlds), a second link because ids differ per repository.
+const WORLD_ROOT_DM := "res://worlds_dm"
+
 
 ## Where [param id]'s converted world is, without extension, or "" when there is none. A delivered map ([param map_dir], its manifest's directory) carries its own under `worlds/`, which wins over the linked root.
 static func world_prefix(id: String, map_dir: String = "") -> String:
@@ -96,6 +99,7 @@ static func world_prefix(id: String, map_dir: String = "") -> String:
 	if not map_dir.is_empty():
 		candidates.append(map_dir.path_join("worlds").path_join(id).path_join(id))
 	candidates.append(ArenaPaths.rebase(WORLD_ROOT).path_join(id).path_join(id))
+	candidates.append(ArenaPaths.rebase(WORLD_ROOT_DM).path_join(id).path_join(id))
 	for prefix in candidates:
 		if FileAccess.file_exists(prefix + ".json") and FileAccess.file_exists(prefix + ".bin"):
 			return prefix
@@ -134,8 +138,58 @@ static func _draw_plan(drawn: Node3D, id: String, map_dir: String) -> Dictionary
 		child.free()
 	var surfaces := ArenaPaths.rebase("res://assets/surfaces")
 	return {"script": load(DRAWN_WORLD), "mesh": got.value, "options": {
+		"props": true,
 		"surfaces_root": surfaces if DirAccess.dir_exists_absolute(surfaces) else DotMapSurfaces.DEFAULT_ROOT,
 	}}
+
+
+## Replaces the solid hulls of the world's breakable glass with [DotMapGlass] panes, so a window can be shot out and seen
+## through. The legacy hulls carry no owner, so a hull is the pane's when its box matches one of the pane's hulls.
+static func _swap_glass(body: StaticBody3D, id: String, dir: String) -> void:
+	var prefix := world_prefix(id, dir)
+	if prefix.is_empty():
+		return
+	var got: DotMapBspMesh = DotMapBspMesh.load_prefix(prefix).value
+	if got == null:
+		return
+	var solids: Array[CollisionShape3D] = []
+	for child in body.get_children():
+		if child is CollisionShape3D and (child as CollisionShape3D).shape is ConvexPolygonShape3D:
+			solids.append(child)
+	var swapped := 0
+	for rec: Dictionary in got.breakables():
+		if str(rec.get("glass", "")).is_empty() or rec.get("model") == null:
+			continue
+		var model := int(rec["model"])
+		var pane := DotMapGlass.new()
+		pane.name = "breakable_%d" % model
+		pane.model = model
+		pane.kind = StringName(str(rec["glass"]))
+		pane.health = float(rec.get("health", 1.0))
+		pane.collision_mask = 0
+		pane.position = got.model_origin(model)
+		for h: Dictionary in got.hull_shapes(model):
+			var want := _box_of((h["shape"] as ConvexPolygonShape3D).points, pane.position)
+			for s in solids:
+				var have := _box_of((s.shape as ConvexPolygonShape3D).points, Vector3.ZERO)
+				if have.position.distance_to(want.position) < 0.06 and have.size.distance_to(want.size) < 0.06:
+					solids.erase(s)
+					body.remove_child(s)
+					s.free()
+					break
+			var cs := CollisionShape3D.new()
+			cs.shape = h["shape"]
+			pane.add_child(cs)
+		body.add_child(pane)
+		swapped += 1
+	DotLog.debug("arena.maps", "glass swapped for breakable panes", {"map": id, "panes": swapped})
+
+
+static func _box_of(points: PackedVector3Array, origin: Vector3) -> AABB:
+	var box := AABB(points[0] + origin, Vector3.ZERO) if points.size() > 0 else AABB()
+	for p in points:
+		box = box.expand(p + origin)
+	return box
 
 
 ## A manifest, parsed, or empty when the file is missing or is not one.
@@ -363,6 +417,8 @@ static func build_collision(manifest: Dictionary, dir: String) -> StaticBody3D:
 		var shape := CollisionShape3D.new()
 		shape.shape = hull
 		body.add_child(shape)
+
+	_swap_glass(body, id, dir)
 
 	var vertex_count := int(info.get("displacement_vertex_count", 0))
 	var index_count := int(info.get("displacement_index_count", 0))
