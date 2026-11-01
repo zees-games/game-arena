@@ -510,6 +510,55 @@ func _stage_action(map: ArenaMap, id: StringName, kind: StringName, action: Stri
 	]
 
 
+## `--people`: each of the four bodies in first person (two-hand rifle) and in a row in third person, front and back.
+func _stage_people(map: ArenaMap, id: StringName) -> void:
+	var bodies: Array[StringName] = [&"matt", &"lis", &"sam", &"shaun"]
+	var casts: Array[ArenaPlayer] = []
+	for i in bodies.size():
+		var cast := _cast(map, 200 + i, String(bodies[i]), Vector3(-1.5 + i, 1.3, 0.0), 0.0)
+		var look := ArenaAvatars.look_of(cast.avatar, StringName("arena-player-%08d" % (200 + i)))
+		look.body = bodies[i]
+		cast.figure.build(look, 1.8)
+		casts.append(cast)
+	_local = ArenaPlayer.new()
+	_local.name = "Local"
+	_local.setup(ArenaPlayer.Mode.HEADLESS, map, 112, "You")
+	root.add_child(_local)
+	_local.spawn(Transform3D(Basis(), Vector3(-1.0, 0.05, 20.0)), 0)
+	_local.attach_camera(100.0)
+	_local.camera.current = false
+	ZeeModelCache.set_asset_root("res://")
+	_players.append(_local)
+	var arm_for := func(body: StringName) -> void:
+		var old_hands := _local.get_node_or_null(^"Camera/Hands")
+		if old_hands != null:
+			old_hands.get_parent().remove_child(old_hands)
+			old_hands.free()
+		var hands := ZeeViewModel.new()
+		hands.name = "Hands"
+		_local.camera.add_child(hands)
+		var old_arms := root.get_node_or_null(^"ViewArms")
+		if old_arms != null:
+			old_arms.free()
+		var look := ArenaAvatars.look_of(_local.avatar, &"arena-player-00000001")
+		look.body = body
+		ArenaViewArms.mount(root, hands, _local, look)
+		_local.arm_first_person(hands, true)
+		var _given := _local.weapons.give_everything()
+		var ask := DotWeaponCommand.new()
+		ask.slot = ZeeWeaponIds.SLOT_PRIMARY
+		for tick in range(0, 80):
+			var _o := _local.simulate_tick(tick, 1.0 / 64.0, DotFpsCommand.new(), ask)
+			ask = DotWeaponCommand.new()
+	_shots = []
+	for body in bodies:
+		_shots.append({"name": "%s_people_fp_%s" % [String(id), String(body)], "local": true, "arm": arm_for.bind(body), "wait": 30})
+	var from := Vector3(0.0, 2.2, -3.6)
+	var at := Vector3(0.0, 1.9, 0.0)
+	_shots.append({"name": "%s_people_third_a" % String(id), "from": from, "at": at, "wait": 20})
+	_shots.append({"name": "%s_people_third_b" % String(id), "from": Vector3(0.0, 2.2, 3.6), "at": at, "wait": 5})
+
+
 func _cast(map: ArenaMap, pid: int, name_text: String, at: Vector3, yaw: float) -> ArenaPlayer:
 	var body := ArenaPlayer.new()
 	body.name = name_text

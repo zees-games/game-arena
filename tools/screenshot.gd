@@ -80,6 +80,10 @@ func _initialize() -> void:
 		_stage_feel(map, id)
 		return
 
+	if args.has("--people"):
+		_stage_people(map, id)
+		return
+
 	var action_at := args.find("--action")
 	if action_at >= 0 and action_at + 2 < args.size():
 		_stage_action(map, id, StringName(args[action_at + 1]), args[action_at + 2])
