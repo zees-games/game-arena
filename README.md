@@ -214,7 +214,7 @@ The quiet ambience under each map is dot-audio's stock mood set (CC0 recordings 
 
 The combat surf maps are other people's work, imported by game-g2gfast. [arena-surf-dm-maps](https://github.com/zees-games/arena-surf-dm-maps) credits each one's author and where it came from (`maps.json`), and `arena_maps` names the author beside each one.
 
-The combat surf maps and the deathmatch maps are other people's work, shared with credit. Each map's author, its original page and its licence as stated there (often none) are in `licence.json` and, per map, in the `maps.json` of [arena-surf-dm-maps](https://github.com/zees-games/arena-surf-dm-maps) and [arena-dm-maps](https://github.com/zees-games/arena-dm-maps), which link back to the original download. They are published under the CDN's credited-community-map exception, not as our own work. **If you made one of these maps and want it removed, open an issue on the repository that holds it and it is taken down.**
+The combat surf maps and the deathmatch maps are other people's work, shared with credit. Each map's author, its original page and its licence as stated there (often none) are in the `licence.json` and `maps.json` of [arena-surf-dm-maps](https://github.com/zees-games/arena-surf-dm-maps) and [arena-dm-maps](https://github.com/zees-games/arena-dm-maps), which link back to the original download. They are published under the CDN's credited-community-map exception, not as our own work. This pack carries none of them; each map is its own pack. **If you made one of these maps and want it removed, open an issue on the repository that holds it and it is taken down.**
 
 ## License
 MIT. See [LICENSE](LICENSE).
