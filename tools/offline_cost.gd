@@ -2,6 +2,7 @@ extends Node
 
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
+const ArenaPlayer := preload("../game/arena_player.gd")
 const ClientBench := preload("client_bench.gd")
 
 ## Solo (offline) client with N bots on `--map`, frame and physics cost per frame:
@@ -27,6 +28,7 @@ func _ready() -> void:
 			"--bots": _bots = int(args[i + 1])
 			"--seconds": _seconds = float(args[i + 1])
 			"--reuse": _reuse = int(args[i + 1]) != 0
+			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
 	var _scratch := ArenaPresentation.use_scratch_settings("offline_cost")
 	_run.call_deferred()
 

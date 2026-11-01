@@ -1351,8 +1351,14 @@ func _present_frame(delta: float) -> void:
 		return
 
 	var t := Time.get_ticks_usec()
+	# The camera the viewer sees through (a spectator's or the death view's too), so that no
+	# body is thinned out in front of it. None: everything is drawn in full.
+	var view_cam := get_viewport().get_camera_3d()
 	for body in game.players():
-		body.present(delta)
+		if view_cam != null:
+			body.present_lod(delta, view_cam.global_position, -view_cam.global_transform.basis.z)
+		else:
+			body.present(delta)
 	ArenaFrameProbe.add(&"bodies", t)
 
 	_present_flashlights()

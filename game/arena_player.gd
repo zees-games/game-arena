@@ -1325,6 +1325,37 @@ func simulate_tick(
 	return out
 
 
+## Whether [method present_lod] may thin out the bodies nobody is looking at.
+static var present_lod_enabled: bool = true
+
+## A remote body nearer than this (metres) is always drawn in full.
+const LOD_NEAR := 6.0
+## A body further than this cosine off the view axis is out of sight (about 78 degrees).
+const LOD_CONE := 0.2
+## Frames between presents of a body out of sight.
+const LOD_EVERY := 4
+
+var _lod_frames: int = 0
+var _lod_delta: float = 0.0
+
+
+## [method present] for a remote body, one frame in [constant LOD_EVERY] while it is behind or
+## beside the viewer. Only the drawing is thinned: the tick and the hitboxes are untouched.
+func present_lod(delta: float, eye: Vector3, forward: Vector3) -> void:
+	if camera == null and present_lod_enabled:
+		var to := global_position - eye
+		var d2 := to.length_squared()
+		if d2 > LOD_NEAR * LOD_NEAR and to.dot(forward) < LOD_CONE * sqrt(d2):
+			_lod_frames += 1
+			_lod_delta += delta
+			if _lod_frames < LOD_EVERY:
+				return
+			delta = _lod_delta
+	_lod_frames = 0
+	_lod_delta = 0.0
+	present(delta)
+
+
 ## Draws this player at where they are BETWEEN ticks. Called once per rendered frame.
 ##
 ## [b]Nothing in this family rendered between ticks until it was measured.[/b]
@@ -1585,7 +1616,7 @@ func wall_roll() -> float:
 ##   1.5 more while sliding.
 ## - **Wall-run lean**: 6 degrees away from the wall at 6 a second, as before.
 ## - **Bound**: the three together never past 7 degrees.
-## - **Widening**: none at or under the 5.74 m/s run, 4 degrees (vertical; about 5 at 4:3)
+## - **Widening**: from 3 m/s, about 1 degree at the 5.74 m/s run and 4 degrees (vertical; about 5 at 4:3)
 ##   by 15 m/s, 2 more while sliding, 1 more on a wall; easing at 4 a second.
 static func camera_motion_picks() -> DotFpsViewMotion:
 	var m := DotFpsViewMotion.new()
@@ -1603,7 +1634,7 @@ static func camera_motion_picks() -> DotFpsViewMotion:
 	m.wall_run_roll_response = 6.0
 	m.roll_limit = 5.0
 	m.fov_speed_gain = 4.0
-	m.fov_speed_floor = 5.74
+	m.fov_speed_floor = 3.0
 	m.fov_speed_reference = 15.0
 	m.fov_response = 4.0
 	m.slide_fov_gain = 2.0
