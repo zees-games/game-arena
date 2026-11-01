@@ -319,6 +319,12 @@ func _run() -> void:
 	_switch_off()
 	_hide()
 	await _measure()
+	# `--seq PATH`: after the numbers, 16 frames of the play into "PATH" (a "<case>.seq" dir) for the QA post's clip.
+	var seq_at := OS.get_cmdline_user_args().find("--seq")
+	if seq_at >= 0 and seq_at + 1 < OS.get_cmdline_user_args().size():
+		OS.set_environment("DOT_SHOT_FRAMES", "16")
+		var seq_dir := ProjectSettings.globalize_path("res://").path_join(OS.get_cmdline_user_args()[seq_at + 1])
+		await DotShotSeq.new().record(get_tree(), seq_dir.trim_suffix(".seq") + ".png")
 	link.disconnect_from_server("done")
 	_finish(0)
 
