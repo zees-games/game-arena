@@ -23,6 +23,7 @@ var _every := 4.0
 var _score := 4
 var _vote_at := 30.0
 var _map := "dm_box"
+var _profile := false
 var _server_pid := -1
 var _client: Node = null
 
@@ -38,6 +39,7 @@ func _ready() -> void:
 			"--score": _score = int(args[i + 1])
 			"--vote-at": _vote_at = float(args[i + 1])
 			"--map": _map = args[i + 1]
+			"--profile": _profile = args[i + 1] == "1"
 	DotLog.set_level(DotLog.Level.WARN)
 	var _scratch := ArenaPresentation.use_scratch_settings("play_online_" + _role)
 	if _role == "server":
@@ -135,6 +137,48 @@ class Pilot extends Node:
 			2: Input.action_press(&"dot_fps_jump")
 
 
+var _profile_ok := false
+
+
+## `--profile 1`: with the client connected to the dedicated server, the profiler's overlay, a recording and its report path
+## must work, and the menu's Performance card must show (frame saved to screenshots/online/profiler_online.png).
+func _check_profiler(link: DotClientLink) -> void:
+	var prof: Object = DotRegistry.get_service(&"dot_profiler")
+	var menu: Object = _client.get(&"game_menu")
+	if prof == null:
+		print("PROFILE FAIL: no dot_profiler service")
+		return
+	prof.call(&"set_overlay_visible", true)
+	var started: DotResult = prof.call(&"start_recording", 3.0)
+	await get_tree().create_timer(1.0).timeout
+	var overlay_lines := str(prof.call(&"top_costs", 3))
+	var st: Dictionary = prof.call(&"status")
+	while prof.call(&"is_recording"):
+		await get_tree().create_timer(0.25).timeout
+	var path := str(prof.call(&"last_saved_path"))
+	var exists := path != "" and FileAccess.file_exists(path)
+	var body: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if exists else null
+	var frames := int((body as Dictionary).get("frames", 0)) if body is Dictionary else 0
+	if menu != null:
+		menu.call(&"open", &"advanced")
+		for i in 12:
+			await get_tree().process_frame
+		var perf := (menu as Node).find_child("Performance", true, false) as Control
+		var sc: Node = perf
+		while sc != null and not sc is ScrollContainer:
+			sc = sc.get_parent()
+		if sc != null:
+			(sc as ScrollContainer).ensure_control_visible(perf)
+		for i in 8:
+			await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("%s/profiler_online.png" % OUT))
+		print("PROFILE card=%s" % [perf != null])
+	_profile_ok = started.ok and exists and frames > 30 and link.is_playing()
+	print("PROFILE playing=%s start=%s recording_seen=%s overlay_status=%s path=%s exists=%s frames=%d ok=%s" % [
+		link.is_playing(), started.ok, st.get("recording"), overlay_lines.substr(0, 80), path, exists, frames, _profile_ok])
+
+
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
 	var args := PackedStringArray(["--headless", "--path", ProjectSettings.globalize_path("res://"),
@@ -171,6 +215,12 @@ func _run() -> void:
 	print("play_online: client ready after %.1f s" % t)
 	var pilot := Pilot.new()
 	add_child(pilot)
+	if _profile:
+		await _check_profiler(link)
+		link.disconnect_from_server("done")
+		OS.kill(_server_pid)
+		get_tree().quit(0 if _profile_ok else 1)
+		return
 	var n := 0
 	var elapsed := 0.0
 	while elapsed < _seconds:
