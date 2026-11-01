@@ -11,7 +11,7 @@ const ArenaTeamMenu := preload("../game/arena_team_menu.gd")
 ## godot --headless --path . res://examples/headless_teammenu.tscn
 ## [/codeblock]
 
-const EXPECTED_CHECKS := 58
+const EXPECTED_CHECKS := 62
 const EXPECTED_SECTIONS := 7
 
 var _checks := 0
@@ -218,6 +218,8 @@ func _run() -> void:
 		var tag := "offline %s: " % ("ffa" if mode.teams().is_empty() else "teams")
 		_check(offer["ffa"] == mode.teams().is_empty() and offer["spectate_ok"] and offer["enabled"], tag + "the offer works with no server", str(offer.keys()))
 		var rec := solo.match_node.scoreboard.record_for("71")
+		rec.kills = 3
+		var live_before := solo.match_node.is_live()
 		var deaths := rec.deaths
 		var kills_other := solo.match_node.scoreboard.record_for("72").kills
 		var r: DotResult = pair[1].call("spectate")
@@ -233,6 +235,11 @@ func _run() -> void:
 		r = pair[1].call("play" if mode.teams().is_empty() else "auto")
 		_check(r.ok and not rec.spectating and solo.player_for(71).is_alive(), tag + "Play puts them back in, spawned")
 		_check(not solo.spectate.is_spectating(71) and rec.present, tag + "no longer watching, still on the scoreboard")
+		for _f in 8:
+			await get_tree().process_frame
+		var back := solo.player_for(71)
+		_check(rec.kills == 3 and back.is_alive() and not back.arsenal.slots().is_empty(), tag + "the score is kept, and they come back with health and a loadout", "kills %d" % rec.kills)
+		_check(solo.player_for(72).is_alive() and solo.match_node.is_live() == live_before, tag + "the bot and the match carry on through both choices")
 		_now += 10.0
 		r = pair[1].call("play" if mode.teams().is_empty() else "spectate")
 		_check(r.ok or mode.teams().is_empty(), tag + "a second choice is answered")
