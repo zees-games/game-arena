@@ -9,6 +9,7 @@ static func stage(game, local, _hud) -> Array[Dictionary]:
 	var eye: Vector3 = local.camera.global_position
 	var dir := Vector3(0.0, -0.45, -1.0).normalized()
 	var aim_cam := func() -> void:
+		local.view_now = Vector2(0.0, rad_to_deg(asin(dir.y)))
 		local.camera.global_position = eye
 		local.camera.look_at(eye + dir * 2.0, Vector3.UP)
 		local.camera.current = true
