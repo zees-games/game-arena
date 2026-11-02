@@ -1,4 +1,5 @@
 extends RefCounted
+
 ## What a bot does with a tick, as the same two commands a client sends: dot-bot's brain,
 ## fed from this game. One brain for every bot arena has, solo and on a server.
 ##
@@ -37,6 +38,7 @@ extends RefCounted
 ## ([code]arena_surf.gd[/code], loaded only on a shell with dot-bot 4 and
 ## dot-player-controller 3).
 
+const ArenaContent := preload("arena_content.gd")
 const CHANNEL := "arena.bots"
 
 const ArenaPlayer := preload("arena_player.gd")
@@ -94,7 +96,7 @@ class World:
 	extends DotBotWorld
 
 	var game: Object = null
-	var tick_rate: float = float(ArenaGame.DEFAULT_TICK_RATE)
+	var tick_rate: float = float(ArenaContent.TICK_RATE)
 	var brains: Dictionary = {}
 	var _tick: int = -1
 	var _contacts: Array = []

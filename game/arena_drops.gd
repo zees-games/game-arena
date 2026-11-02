@@ -14,6 +14,8 @@ extends Node3D
 ## any kill drops them, and how long they lie there (all `arena_drop_*` cvars). See
 ## game-arena's docs/modes.md.
 
+const ArenaContent := preload("arena_content.gd")
+
 enum Kind { POINT, HEALTH, AMMO }
 
 ## A world pack's wire id is this plus its spot's index, so it can never meet a kill drop's
@@ -64,7 +66,7 @@ var draws: bool = false
 var points: Dictionary = {}
 
 var field: DotPickupField = null
-var _tick_rate: int = ArenaGame.DEFAULT_TICK_RATE
+var _tick_rate: int = ArenaContent.TICK_RATE
 var _next_id: int = 1
 
 ## id -> {"pickup": DotPickup, "kind": int, "value": int, "expires": int}. Authority side.

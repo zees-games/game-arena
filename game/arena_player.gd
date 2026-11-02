@@ -294,7 +294,7 @@ var _combat: DotCombatManager = null
 var _hand: Node3D = null
 var _seen_fire_seq: int = 0
 var _command := DotWeaponCommand.new()
-var _tick_rate: int = ArenaGame.DEFAULT_TICK_RATE
+var _tick_rate: int = ArenaContent.TICK_RATE
 
 
 ## A [DotFpsController] that collides against analytic geometry rather than physics.

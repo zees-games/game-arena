@@ -8,6 +8,7 @@ extends RefCounted
 ## never recorded. Loaded by path, and only on a shell that has dot-bot's recorder.
 ## Reasoning: dot-bot docs/demonstration-recorder.md, "The first consumer: surf rides".
 
+const ArenaContent := preload("arena_content.gd")
 const ArenaBots := preload("arena_bots.gd")
 const ArenaSurf := preload("arena_surf.gd")
 
@@ -60,7 +61,7 @@ var book: DotBotRideBook = null
 var rng: DotRandomStream = null
 var nav: DotBotNav = null
 var map: Object = null
-var tick_rate: float = float(ArenaGame.DEFAULT_TICK_RATE)
+var tick_rate: float = float(ArenaContent.TICK_RATE)
 
 ## Players' stretches that ended as a ride kept, and as one thrown away, for describe().
 var begun: int = 0

@@ -1,5 +1,6 @@
 extends RefCounted
 
+const ArenaContent := preload("arena_content.gd")
 const ArenaStats := preload("arena_stats.gd")
 
 ## What a player can earn here, as a document rather than as code.
@@ -124,7 +125,7 @@ class KillFacts:
 	var killer: int = 0
 	var victim: int = 0
 	var tick: int = 0
-	var tick_rate: int = ArenaGame.DEFAULT_TICK_RATE
+	var tick_rate: int = ArenaContent.TICK_RATE
 	var headshot: bool = false
 	## The victim's streak when they died, before it was reset.
 	var victim_streak: int = 0
