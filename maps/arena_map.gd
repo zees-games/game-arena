@@ -1540,7 +1540,7 @@ static func dm_pit() -> ArenaMap:
 	# at 0.72 off the other stair's first, a LANDING at 1.08 (1.92 of headroom) that
 	# runs a hull's width and a bit (0.8) past the bridge's west edge, and nine
 	# treads from 1.44 to 4.32 against the shelf. Every rise, the shelf's 0.18 lip
-	# included, is the 0.36 a bot walks; the nine are 0.58 deep, which is all the
+	# included, is the 0.36 a bot walks; the nine are 0.57 deep, which is all the
 	# room there is. The trade is the one the nest stairs make on dm_box: it climbs
 	# straight at the perch, so whoever holds the perch looks down every tread of it
 	# (`headless_match` traces all eleven boxes).
@@ -1549,7 +1549,7 @@ static func dm_pit() -> ArenaMap:
 	const SHELF_STAIR_TREADS := 9
 	const BRIDGE_WEST := -1.0
 	const BRIDGE_EAST := 1.0
-	const LANDING_WEST := BRIDGE_WEST - 0.8
+	const LANDING_WEST := BRIDGE_WEST - 0.9
 
 	map.add_box(AABB(
 		Vector3(BRIDGE_EAST, 0.0, 7.5),
