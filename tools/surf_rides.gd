@@ -929,6 +929,7 @@ static func _read(path: String) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	return parsed if parsed is Dictionary else {}
 
+	data["bake"] = ArenaSurf.bake_id(nav)
 
 static func _spread(times: Array) -> String:
 	if times.is_empty():

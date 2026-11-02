@@ -60,7 +60,11 @@ for m, i in jobs:
     if not os.path.exists(part):
         continue
     c = cache(m)
-    c["edges"][i] = json.load(open(part))["edges"][i]
+    done = json.load(open(part))
+    c["edges"][i] = done["edges"][i]
+    # Only a full replan (or a cache already on this bake) may take the new bake id.
+    if a.replan or c.get("bake") in (None, done.get("bake")) and "bake" in c:
+        c["bake"] = done.get("bake", "")
     json.dump(c, open(f"maps/surf/{m}.surf.json", "w"), separators=(",", ":"))
     os.remove(part)
 print("merged", flush=True)

@@ -125,11 +125,37 @@ static func load_for(p_map: Object, p_nav: DotBotNav) -> RefCounted:
 	return made
 
 
+## A short hash of [param p_nav]'s mesh (vertices to 5 cm, polygons), so a cache can tell which bake it was planned on.
+static func bake_id(p_nav: DotBotNav) -> String:
+	var mesh := p_nav.mesh
+	if mesh == null:
+		return ""
+	var bytes := PackedInt32Array()
+	for v in mesh.get_vertices():
+		bytes.append(roundi(v.x * 20.0))
+		bytes.append(roundi(v.y * 20.0))
+		bytes.append(roundi(v.z * 20.0))
+	for i in range(mesh.get_polygon_count()):
+		bytes.append_array(mesh.get_polygon(i))
+		bytes.append(-1)
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_MD5)
+	ctx.update(bytes.to_byte_array())
+	return ctx.finish().hex_encode().substr(0, 12)
+
+
 ## Builds the edges from [param data] and links them, and the map's teleports, into the mesh.
 func attach(p_map: Object, p_nav: DotBotNav, data: Dictionary) -> void:
 	map = p_map
 	nav = p_nav
 	var units := float(data.get("units", UNITS))
+	var recorded := str(data.get("bake", ""))
+	if recorded != "" and recorded != bake_id(nav):
+		# Edges were planned on other polygons: their landings no longer match this mesh.
+		DotLog.warn(CHANNEL, "a surf cache planned on another nav bake, rides skipped; replan with tools/surf_rides.gd",
+			{"map": str(map.get("id")), "cached": recorded, "bake": bake_id(nav)})
+		_link_teleports()
+		return
 	for row: Dictionary in data.get("edges", []):
 		var from := _vector(row.get("from", []), units)
 		var to := _vector(row.get("to", []), units)
