@@ -45,13 +45,18 @@ def plan(job):
     ok = run(m, ["--plan", str(i), "--out", out], f".godot/surf-rides/{m}.{i}.log", 5400)
     print("planned" if ok else "plan FAIL", m, "edge", i, flush=True)
 
+def stale(m):
+    # --check exits 3 when the cache was planned on another nav bake than the current one.
+    return run(m, ["--check"], f".godot/surf-rides/{m}.check.log", 1200) is False
+
 with cf.ThreadPoolExecutor(a.j) as ex:
     list(ex.map(explore, [m for m in maps if cache(m) is None]))
     jobs = []
+    replan = dict(zip(maps, ex.map(lambda m: a.replan or (cache(m) is not None and stale(m)), maps)))
     for m in maps:
         c = cache(m)
         if c:
-            jobs += [(m, i) for i, e in enumerate(c.get("edges", [])) if a.replan or not planned(e)]
+            jobs += [(m, i) for i, e in enumerate(c.get("edges", [])) if replan[m] or not planned(e)]
     print(len(jobs), "edges to plan", flush=True)
     list(ex.map(plan, jobs))
 
