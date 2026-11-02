@@ -263,7 +263,8 @@ func _test_prop_visuals() -> void:
 				continue
 			worlds += 1
 			var licence: Dictionary = (doc as Dictionary).get("licence", {})
-			var store := base.path_join(id).path_join(str(licence.get("model_store", "model-library"))).simplify_path()
+			# simplify_path is lexical and worlds/ is a link: follow the link first, as the importer's reader does.
+			var store := DotMapBspMesh.real_dir(base.path_join(id)).path_join(str(licence.get("model_store", "model-library"))).simplify_path()
 			var files := {}
 			for row: Dictionary in licence.get("model_stand_ins", []):
 				if row.has("store_file"):
