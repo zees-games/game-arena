@@ -501,11 +501,33 @@ func install_commands(host: Object) -> DotResult:
 			for row: Dictionary in rows:
 				row["mode"] = "Mode" if str(row["id"]).begins_with(ArenaVoteSource.MODE_PREFIX) else "Map"
 			return rows)
+		# A map and a mode picked on the two tabs arrive together (`/mapmenu map:x mode:y`).
+		(menu_half as Object).set(&"mode_fn", func(_id: StringName, mode: StringName) -> DotResult:
+			_menu_mode = mode
+			return DotResult.success(mode))
+		(menu_half as Object).set(&"change_fn", _menu_change)
 
 	if feed != null:
 		feed.command = commands.command_name("vote")
 
 	return bound
+
+
+## The mode picked with the map by the menu's last `/mapmenu <map> <mode>`, taken by the next [method _menu_change].
+var _menu_mode: StringName = &""
+
+
+func _menu_change(id: StringName) -> DotResult:
+	var picked := _menu_mode
+	_menu_mode = &""
+	var result: DotResult
+	if picked != &"":
+		result = await source.apply_with_mode(id, picked)
+	else:
+		result = await source.apply(id)
+	if result.ok and director.begin_on_apply:
+		director.begin(id)
+	return result
 
 
 # --- What a player does ----------------------------------------------------

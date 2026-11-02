@@ -186,6 +186,31 @@ func apply(id: StringName) -> DotResult:
 	)
 
 
+## The map menu's pick of a map and a mode together (`map:<id>`, `mode:<id>`): the map changes under the mode, as one change. The stamp is put back like [method _apply_mode]'s.
+func apply_with_mode(id: StringName, mode_id: StringName) -> DotResult:
+	if not supports_apply():
+		return DotResult.fail(DotError.CODE_STATE, "This vote source has nothing to change with.")
+	var map_text := String(id)
+	var mode_text := String(mode_id)
+	if not map_text.begins_with(MAP_PREFIX) or not mode_text.begins_with(MODE_PREFIX):
+		return DotResult.fail(DotError.CODE_INVALID, "A map and a mode must be a map and a mode.", "%s / %s" % [map_text, mode_text])
+	var mode := ArenaModes.by_id(StringName(mode_text.substr(MODE_PREFIX.length())))
+	var def: DotMapDef = catalogue.get_map(StringName(map_text.substr(MAP_PREFIX.length()))) if catalogue != null else null
+	if mode == null or def == null:
+		return DotResult.fail(DotError.CODE_INVALID, "There is no such map or mode.", "%s / %s" % [map_text, mode_text])
+	if not ArenaMaps.supports_mode(def, mode):
+		return DotResult.fail(DotError.CODE_INVALID, "%s cannot host %s." % [def.name_or_id(), mode.display_name])
+	var had_mode := def.meta.has("mode")
+	var old_mode: Variant = def.meta.get("mode")
+	def.meta["mode"] = String(mode.id)
+	var result: DotResult = await director.change_to(def.id)
+	if had_mode:
+		def.meta["mode"] = old_mode
+	else:
+		def.meta.erase("mode")
+	return result
+
+
 ## Changes the mode by re-running the current map with it.
 ##
 ## [b]There is no cheaper way, and pretending otherwise is the bug.[/b] The mode builds

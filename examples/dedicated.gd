@@ -45,7 +45,7 @@ const APP_URL := "arena"
 ## against a runtime error that aborts a test function part-way: the checks after the
 ## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
 ## show the difference. See docs/testing.md.
-const CHECKS := 188
+const CHECKS := 190
 
 
 var _server: DotServer = null
@@ -791,6 +791,30 @@ func _test_maps_and_vote() -> void:
 		await get_tree().create_timer(0.1).timeout
 	_check(_game.mode != null and _game.mode.id == &"ffa", "and back to free-for-all the same way",
 		str((mode_box[0] as Dictionary).get("text", "")) if not mode_box.is_empty() else "no answer")
+	# The two tabs together: `/mapmenu map:x mode:y` changes the map under the mode in one change.
+	var pair_target := &""
+	for row: Dictionary in (menu_half.call("offer", staff) as Dictionary)["maps"]:
+		if row["mode"] == "Map" and not bool(row["current"]) and module.vote.director.source.has(StringName(str(row["id"]))):
+			pair_target = StringName(str(row["id"]))
+			break
+	mode_box.clear()
+	var to_pair := func() -> void: mode_box.append(await menu_half.call("choose", staff, pair_target, &"mode:tdm"))
+	to_pair.call()
+	for _i in 300:
+		if not mode_box.is_empty():
+			break
+		await get_tree().create_timer(0.1).timeout
+	var pair_result: Dictionary = mode_box[0] if not mode_box.is_empty() else {}
+	_check(pair_target != &"" and _game.mode != null and _game.mode.id == &"tdm" and "map:%s" % _game.map.id == String(pair_target),
+		"a map and a mode picked together change both", "%s: %s" % [pair_target, pair_result.get("text", "no answer")])
+	_check(not module.maps.current.meta.has("mode"), "and leave no mode stamped in the map's def")
+	mode_box.clear()
+	var back_pair := func() -> void: mode_box.append(await menu_half.call("choose", staff, StringName(start_map), &"mode:ffa"))
+	back_pair.call()
+	for _i in 300:
+		if not mode_box.is_empty():
+			break
+		await get_tree().create_timer(0.1).timeout
 	# A mode vote is a one-off, not a standing order: the stamp it puts in the map's def is
 	# gone once the change is done, or the next visit to that map flips the mode back over
 	# whatever was chosen since.

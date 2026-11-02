@@ -156,9 +156,9 @@ func _build_interface() -> void:
 		var maps: Variant = game_menu.call(&"use_maps", map_menu_rows, change_from_menu)
 		if maps is Object:
 			(maps as Object).set(&"noun", "maps and modes")
-			# A mode applies at once (as before); the Game modes tab shows once rows say `kind: "mode"`.
+			# The server's rows say "Mode" or "Map" on their mode line; a mode pick is kept and the next map pick carries it.
 			if &"mode_group" in maps:
-				(maps as Object).set(&"apply_mode_now", true)
+				(maps as Object).set(&"mode_group", "Mode")
 	_use_loadout_menu()
 	if game_menu.has_method(&"use_teams"):
 		var offer := Callable()
