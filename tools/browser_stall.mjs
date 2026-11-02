@@ -1,5 +1,5 @@
 // Frames of the web client in a real browser, split at the loading cover (needs ?cl_perf, which
-// makes the client set window.arena_gate_open when the gate opens).
+// makes the client set window.dotWeb.publishedAt.arena_gate_open when the gate opens).
 //
 //   node tools/browser_stall.mjs [pageUrl] [--budget-ms N]
 //
@@ -22,7 +22,7 @@ await page.addInitScript(() => {
 });
 await page.goto(url, { waitUntil: 'load' });
 let open = null;
-for (let i = 0; i < 180 && open === null; i++) { await page.waitForTimeout(1000); open = await page.evaluate(() => window.arena_gate_open ?? null); }
+for (let i = 0; i < 180 && open === null; i++) { await page.waitForTimeout(1000); open = await page.evaluate(() => window.dotWeb?.publishedAt?.arena_gate_open ?? null); }
 await page.waitForTimeout(6000);
 const r = await page.evaluate(() => {
   const gl = document.createElement('canvas').getContext('webgl2');
