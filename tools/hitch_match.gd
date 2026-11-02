@@ -12,7 +12,7 @@ const ClientBench := preload("client_bench.gd")
 ## [/codeblock]
 ##
 ## `--score N` / `--time S` (default 6 kills, 45 s) end the match so MATCH_END and the kill-cam are reached;
-## `--threshold MS` (default 33); `--tail S` seconds kept after the end (default 8);
+## `--threshold MS` (default 33); `--top N` hitches listed (default 25); `--tail S` seconds kept after the end (default 8);
 ## `--no-pilot` leaves the local player still; `--boom S` (default 10) calls the presentation's explosion 6 m ahead of the camera S seconds in, marked "explosion" in the report (-1 skips it).
 
 var _bots := 3
@@ -23,6 +23,8 @@ var _tail := 8.0
 var _time := 45.0
 var _pilot := true
 var _boom := 10.0
+var _top := 25
+var _gate_open := false
 var _boomed := false
 var _hitch := DotHitchLog.new()
 var _client: Node = null
@@ -42,6 +44,7 @@ func _ready() -> void:
 			"--time": _time = float(args[i + 1])
 			"--tail": _tail = float(args[i + 1])
 			"--boom": _boom = float(args[i + 1])
+			"--top": _top = int(args[i + 1])
 	_pilot = not "--no-pilot" in args
 	var _scratch := ArenaPresentation.use_scratch_settings("hitch_match")
 	_run.call_deferred()
@@ -84,7 +87,7 @@ func _run() -> void:
 		if (ended_at >= 0.0 and t > ended_at + _tail) or t > _seconds:
 			break
 	print("hitch_match: %s after %.1f s" % ["match ended" if ended_at >= 0.0 else "NO MATCH END", (Time.get_ticks_usec() - _t0) / 1.0e6])
-	for line in _hitch.report(25):
+	for line in _hitch.report(_top):
 		print(line)
 	_hitch.stop()
 	get_tree().quit(0)
@@ -95,6 +98,11 @@ func _watch() -> void:
 	var g = _client.get("game")
 	if g == null or g.match_node == null:
 		return
+	var gate = _client.get("gate")
+	if not _gate_open and gate != null and gate.is_open():
+		_gate_open = true
+		_hitch.mark("gate open")
+		print("EVENT t=%.1fs gate open" % [(Time.get_ticks_usec() - _t0) / 1.0e6])
 	var st := int(g.match_node.state)
 	var t := (Time.get_ticks_usec() - _t0) / 1.0e6
 	if st != _state:

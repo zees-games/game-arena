@@ -114,6 +114,10 @@ class World:
 	var _surf_looked: bool = false
 	## The map's ladders joined into [member _nav] as climb edges, and how many got one.
 	var _ladders: DotBotLinks = null
+	## The drop and hop edges found on the mesh (kept so they are not collected).
+	var _edges: DotBotLinks = null
+	## False in a test that wants ladders to be the only way up.
+	var join_edges := true
 	## The body tunables of this tick, looked up once for all contacts (the lookup walks every player).
 	var _tunables: DotFpsTunables = null
 
@@ -125,6 +129,7 @@ class World:
 			game.connect(&"player_added", _hear_player)
 		for p in game.call("players"):
 			_hear_player(p)
+		walkable_fn = _walkable_near
 		DotBotArms.wire(self, func() -> Variant: return p_game.get("weapon_drops"), func() -> Object: return _any_arsenal(p_game))
 
 	## Rebuilds the contacts once a tick, however many bots ask.
@@ -279,6 +284,10 @@ class World:
 	func _link_ladders(nav: DotBotNav) -> void:
 		_ladders = null
 		ladder_fn = Callable()
+		# Drops off the rims and hops over gaps join a spawn island the plain bake leaves cut off.
+		if join_edges and DotAddonApi.build_level("dot_bot") >= 12:
+			_edges = DotBotLinks.new()
+			_edges.join(nav)
 		var mechanics: Variant = (game.get("map") as Object).get("mechanics")
 		if DotAddonApi.build_level("dot_bot") < 10 or not (mechanics is Object) or (mechanics as Object).get("ladders").is_empty():
 			return
@@ -351,6 +360,11 @@ class World:
 		if not started.ok:
 			DotLog.warn(CHANNEL, "bots cannot route on this map", {"map": str((map as Object).get("id")), "error": started.error.message})
 		return _nav
+
+	## The nearest standable point of the mesh, for a bot that cannot free itself; INF off it.
+	func _walkable_near(at: Vector3) -> Vector3:
+		var nav := _nav_for_map()
+		return nav.closest(at) if nav != null and nav.is_ready() else Vector3.INF
 
 	## Whether an imported map's mesh is still baking; false on a built-in map or once landed.
 	func is_route_pending() -> bool:

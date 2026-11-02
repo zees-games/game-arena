@@ -47,6 +47,7 @@ func _run() -> void:
 	await get_tree().process_frame
 
 	var world := ArenaBots.world_for(game)
+	world.join_edges = false
 	var _first := world.route(Vector3.ZERO, Vector3.ONE)
 	var frames := 0
 	while world.is_route_pending() and frames < 2400:
