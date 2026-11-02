@@ -27,6 +27,7 @@ fi
 out=${out:-.godot/fuzz/$(date +%Y%m%d-%H%M%S)}
 mkdir -p "$out"
 [ "$maps" = all ] && maps=dm_box,dm_atrium,dm_pit,$(ls maps/imported 2>/dev/null | paste -sd,)
+# No --report: heavy may run the pair on a GPU box where this path does not exist; the SOAK line in the log is the result.
 # Simulated minutes run slower than real time under load; leave room, then kill.
 limit=$(python3 -c "print(int($minutes*60*6+300))")
 
@@ -35,7 +36,7 @@ for m in ${maps//,/ }; do
         tag=$m-s$s
         echo "fuzz: $tag"
         heavy -- timeout -k 10 "$limit" "$GODOT" --headless --path . res://tools/soak.tscn -- \
-            --map "$m" --seed "$s" --minutes "$minutes" --report "$PWD/$out/$tag.report.json" \
+            --map "$m" --seed "$s" --minutes "$minutes" \
             >"$out/$tag.log" 2>&1
         echo $? >"$out/$tag.exit"
         pkill -f "res://tools/soak.tscn -- --map $m --seed $s " 2>/dev/null
