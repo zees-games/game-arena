@@ -125,7 +125,7 @@ class World:
 			game.connect(&"player_added", _hear_player)
 		for p in game.call("players"):
 			_hear_player(p)
-		drops_fn = _drops_lying
+		DotBotArms.wire(self, func() -> Variant: return p_game.get("weapon_drops"), func() -> Object: return _any_arsenal(p_game))
 
 	## Rebuilds the contacts once a tick, however many bots ask.
 	func refresh(tick: int, rate: float) -> void:
@@ -155,55 +155,16 @@ class World:
 				c.position = p.global_position
 			if p.health != null and p.health.max_health > 0.0:
 				c.health = p.health.health / p.health.max_health
-			c.loadout = _loadout_of(p)
+			c.loadout = DotBotArms.loadout_of(p.arsenal)
 			_contacts.append(c)
 			_by_id[c.id] = c
 			_players[c.id] = p
 
-	## What the bot carries per slot, rated as [method _rate].
-	func _loadout_of(p: ArenaPlayer) -> Dictionary:
-		var out := {}
-		if p.arsenal == null:
-			return out
-		for slot in range(1, 10):
-			var held: DotWeaponSlot = p.arsenal.slot_at(slot)
-			if held != null and held.def != null:
-				out[slot] = {"value": _rate(held.def), "ammo": _ammo_of(held.def, held.magazine, p.arsenal.ammo().count(held.def.ammo_type) if held.def.ammo_type != &"" else 0)}
-		return out
-
-	## The weapons lying about, in the shape [member DotBotWorld.drops_fn] wants.
-	func _drops_lying() -> Array:
-		var out := []
-		var drops: Variant = game.get("weapon_drops")
-		var arsenal: Variant = null
-		for p: ArenaPlayer in game.call("players"):
-			arsenal = p.arsenal
-			break
-		if not drops is DotWeaponDrops or arsenal == null or (arsenal as DotWeaponArsenal).catalogue == null:
-			return out
-		for d: Dictionary in (drops as DotWeaponDrops).snapshot():
-			var state: Dictionary = d["state"]
-			var def: DotWeaponDef = (arsenal as DotWeaponArsenal).catalogue.get_def(StringName(state["id"]))
-			if def == null:
-				continue
-			out.append({"id": d["id"], "position": (d["at"] as Transform3D).origin, "slot": def.slot,
-				"value": _rate(def), "ammo": _ammo_of(def, int(state.get("magazine", 0)), int(state.get("reserve", 0)))})
-		return out
-
-	## Damage per tick of delay, 0 to 1: crude on purpose, a game with a better idea overrides it.
-	static func _rate(def: DotWeaponDef) -> float:
-		var damage := 10.0
-		var pellets := 1.0
-		if def.tuning != null:
-			damage = float(def.tuning.get("damage")) if "damage" in def.tuning else damage
-			pellets = float(def.tuning.get("pellets")) if "pellets" in def.tuning else pellets
-		return clampf(damage * pellets / float(maxi(def.use_interval_ticks, 1)) / 12.0, 0.0, 1.0)
-
-	static func _ammo_of(def: DotWeaponDef, magazine: int, reserve: int) -> float:
-		if def.infinite_reserve:
-			return 1.0
-		var full := def.magazine + def.reserve_cap()
-		return clampf(float(magazine + reserve) / float(maxi(full, 1)), 0.0, 1.0)
+	## Arsenal of any player: its catalogue knows every weapon lying about.
+	static func _any_arsenal(g: Object) -> Object:
+		for p: ArenaPlayer in g.call("players"):
+			return p.arsenal
+		return null
 
 	## What the bot's body is doing, and whether the game would honour an air-jump press now.
 	func _motion_of(c: DotBotContact, state: DotFpsState) -> void:
