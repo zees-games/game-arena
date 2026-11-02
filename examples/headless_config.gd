@@ -13,7 +13,7 @@ const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ROOT := "user://arena_cfgtest"
 const GAME := "game-arena"
-const CHECKS := 41
+const CHECKS := 43
 
 
 func _ready() -> void:
