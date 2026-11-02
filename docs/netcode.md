@@ -119,7 +119,7 @@ How many is dot-server's `DotBotQuota` (`bot_quota` 4, `bot_quota_mode fill`, `b
 
 ## The team menu
 
-The Period key (a rebindable `ArenaBindings` row) opens dot-menu's team screen. It asks over chat (`/teams`, `/teams <id|auto|play|spectate>`) and the reply is a `team_menu` notice, so no wire kind is added. `ArenaTeamMenu` (game/arena_team_menu.gd) adapts dot-team's `DotTeamMenuServer`: the server checks every switch against `mp_teamswitch_enabled`, `_cooldown`, `_imbalance`, `_maxplayers`, `_anytime`, `_kill` and `_spectate`. Layout cvars: `mp_team_names` (comma list, more names than sides adds teams up to 8), `mp_team_colours` (`#rrggbb` list), `mp_team_max`. Free-for-all lists only Play and Spectate; Spectate is always offered. Suite: `headless_teammenu`; frames: `tools/screenshot.sh --team-menu`.
+The Period key (a rebindable `ArenaBindings` row) opens dot-menu's team screen. It asks over chat (`/teams`, `/teams <id|auto|play|spectate>`) and the reply is a `team_menu` notice, so no wire kind is added. `ArenaTeamMenu` (game/arena_team_menu.gd) adapts dot-team's `DotTeamMenuServer`: the server checks every switch against `mp_teamswitch_enabled`, `_cooldown`, `_imbalance`, `_maxplayers`, `_anytime`, `_kill` and `_spectate`. Layout cvars: `mp_team_names` (comma list, more names than sides adds teams, no limit), `mp_team_colours` (`#rrggbb` list), `mp_team_max`. Free-for-all lists only Play and Spectate; Spectate is always offered. Suite: `headless_teammenu`; frames: `tools/screenshot.sh --team-menu`.
 
 ## The map's toys
 

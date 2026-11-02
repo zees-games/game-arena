@@ -5,7 +5,6 @@ const CHANNEL := "arena.teams"
 ## Colours for the sides past the stock pair, and for any a config names without a colour.
 const PALETTE: PackedStringArray = ["#d94040", "#4073e6", "#40b85a", "#e6c040", "#a050d0", "#e68a30", "#40c8c8", "#d060a0"]
 const NAMES: PackedStringArray = ["Red", "Blue", "Green", "Yellow", "Purple", "Orange", "Teal", "Pink"]
-const MAX_TEAMS := 8
 const TeamMenuServer := preload("res://addons/dot_team/runtime/dot_team_menu_server.gd")
 
 ## dot-team's menu rules; the adapters below are what make it arena's.
@@ -21,7 +20,7 @@ func bind(p_game: ArenaGame, add: Callable, host: Object) -> void:
 	game = p_game
 	var flags := DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
 	var _switch: Variant = server.bind_cvars(add, flags)
-	names_cvar = add.call("mp_team_names", "", "Team names, comma separated (Red,Blue,Green); more names than the mode has teams adds teams, up to 8", flags)
+	names_cvar = add.call("mp_team_names", "", "Team names, comma separated (Red,Blue,Green); more names than the mode has teams adds teams, no limit", flags)
 	colours_cvar = add.call("mp_team_colours", "", "Team colours as #rrggbb, comma separated, in the same order as mp_team_names", flags)
 	max_cvar = add.call("mp_team_max", "0", "Most players on one team (0 for no limit)", flags)
 	for cv: DotConVar in [names_cvar, colours_cvar, max_cvar]:
@@ -64,20 +63,31 @@ func apply_layout() -> void:
 	var manager: DotTeamManager = game.match_node.teams
 	var wanted: PackedStringArray = _list(names_cvar)
 	var colours: PackedStringArray = _list(colours_cvar)
-	var count := mini(MAX_TEAMS, maxi(manager.teams.size(), wanted.size()))
+	var count := maxi(manager.teams.size(), wanted.size())
 	var limit := int(max_cvar.get_string()) if max_cvar != null and max_cvar.get_string().is_valid_int() else 0
 	while manager.teams.size() < count:
 		var index := manager.teams.size()
-		manager.teams.append(DotTeam.make(index + 1, NAMES[index], Color.html(PALETTE[index])))
+		manager.teams.append(DotTeam.make(index + 1, _default_name(index), _default_colour(index)))
 	for index in manager.teams.size():
 		var team := manager.teams[index]
 		if team.is_spectator:
 			continue
-		team.display_name = wanted[index] if index < wanted.size() and wanted[index] != "" else NAMES[index]
+		team.display_name = wanted[index] if index < wanted.size() and wanted[index] != "" else _default_name(index)
 		team.abbreviation = team.display_name.substr(0, 3).to_upper()
-		team.colour = Color.html(colours[index]) if index < colours.size() and Color.html(colours[index]) != Color() else Color.html(PALETTE[index])
+		team.colour = Color.html(colours[index]) if index < colours.size() and Color.html(colours[index]) != Color() else _default_colour(index)
 		team.max_players = maxi(0, limit)
 	manager.reindex()
+
+
+## Past the stock eight, "Team N" and a golden-ratio hue so neighbours stay distinct.
+static func _default_name(index: int) -> String:
+	return NAMES[index] if index < NAMES.size() else "Team %d" % (index + 1)
+
+
+static func _default_colour(index: int) -> Color:
+	if index < PALETTE.size():
+		return Color.html(PALETTE[index])
+	return Color.from_hsv(fmod(index * 0.618034, 1.0), 0.65, 0.9)
 
 
 static func _list(cv: DotConVar) -> PackedStringArray:

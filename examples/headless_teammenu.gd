@@ -191,14 +191,14 @@ func _run() -> void:
 	res = ffa_menu.server.request(41, "play")
 	_check(res.ok and ffa.player_for(41).is_alive() and not ffa.match_node.scoreboard.record_for("41").spectating, "play puts them back in, alive")
 
-	# 6. Eight is the most; the mode stays in charge of its own count.
+	# 6. No cap on teams; the mode stays in charge of its own count.
 	_sections += 1
 	var big := _game(ArenaMode.team_deathmatch())
 	var _d := big.add_player(51, "D")
 	var big_menu := _menu(big)
-	_cv("mp_team_names", "A,B,C,D,E,F,G,H,I,J")
+	_cv("mp_team_names", "A,B,C,D,E,F,G,H,I,J,K,L")
 	data = big_menu.server.menu_for(51)
-	_check(data["teams"].size() == 8, "ten names make eight teams, the most", str(data["teams"].size()))
+	_check(data["teams"].size() == 12 and str(data["teams"][11]["name"]) == "L" and Color.html(str(data["teams"][11]["colour"])) != Color.html(str(data["teams"][10]["colour"])), "twelve names make twelve teams with distinct colours", str(data["teams"].size()))
 	_check(ArenaMode.team_deathmatch().teams().size() == 2 and ArenaMode.free_for_all().teams().is_empty(), "the modes still say two teams and none")
 	var four := ArenaMode.team_deathmatch()
 	four.team_count = 4
