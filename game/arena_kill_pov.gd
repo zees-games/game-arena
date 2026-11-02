@@ -2,6 +2,7 @@ extends RefCounted
 
 ## What a kill view records of the killer's screen beyond the camera: held weapon, ADS, shots, ammo, spread, hits.
 
+const Roles := preload("arena_weapon_roles.gd")
 const CHANNEL := "arena.killpov"
 const HITS_META := &"kill_pov_hits"
 const RECOIL_META := &"kill_pov_recoil"
@@ -31,6 +32,7 @@ const CROUCHED := 2
 const SIGNED := 4
 
 static var _ids: Dictionary = {}
+static var _ids_generation := -1
 
 
 ## Marks [param cam] as showing a replay (the kill view or final killcam) while the view draws it.
@@ -125,7 +127,10 @@ static func watch_hits(game: Node) -> void:
 
 ## The weapon id an aux hash names, or empty.
 static func weapon_of(hash_value: float) -> StringName:
-	if _ids.is_empty():
+	Roles.ensure()
+	if _ids.is_empty() or _ids_generation != Roles.generation:
+		_ids_generation = Roles.generation
+		_ids.clear()
 		for k: Variant in ZeeWeaponArtTable.table().keys():
 			_ids[int(String(k).hash() & 0xFFFFFF)] = StringName(k)
 	return _ids.get(int(hash_value), &"")
