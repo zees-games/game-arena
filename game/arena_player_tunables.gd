@@ -3,6 +3,10 @@ extends RefCounted
 
 static func make() -> DotFpsTunables:
 	var tunables := DotFpsTunables.with_profile("classic")
+	# The body the bot routes, recorded rides and baked nav were made for; the library default is now 1.83 / 1.372 / 0.4064.
+	tunables.stand_height = 1.8
+	tunables.crouch_height = 0.9
+	tunables.radius = 0.35
 	tunables.walk_speed_scale = 0.45
 	tunables.max_velocity = 400.0
 	tunables.max_wish_speed = 0.0
