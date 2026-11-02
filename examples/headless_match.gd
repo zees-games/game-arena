@@ -5005,7 +5005,7 @@ func _test_map_change() -> void:
 	director.name = "Maps"
 	director.game = _game
 	director.map_seconds = 0.0
-	director.rotation_cooldown = 8
+	director.rotation_cooldown = 99
 	add_child(director)
 
 	var ready := director.setup()
@@ -5013,13 +5013,13 @@ func _test_map_change() -> void:
 	if not _check(ready.ok, "the map director sets up", str(ready.error)):
 		return
 
-	# Eight was asked for over a two-map catalogue, which would be a rotation that can
-	# never offer anything. dot-map's `on_cooldown` takes a pool size for this reason
-	# and the director clamps rather than letting the value silently mean "never".
+	# More was asked for than any catalogue holds. The director's catalogue also lists the
+	# delivered maps, so the size is read from it, not from the built-in one above.
+	var pool_size := director.session.catalogue.size()
 	_check(
-		director.session.rotation.cooldown <= maxi(catalogue.size() - 1, 0),
+		director.session.rotation.cooldown == maxi(pool_size - 1, 0),
 		"a cooldown larger than the catalogue is reduced to fit",
-		"%d over %d maps" % [director.session.rotation.cooldown, catalogue.size()]
+		"%d over %d maps" % [director.session.rotation.cooldown, pool_size]
 	)
 
 	_check(
