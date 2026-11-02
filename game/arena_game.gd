@@ -3,6 +3,7 @@ extends "arena_game_state.gd"
 
 const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
+const HULL_NEAR_SQ := 144.0
 
 
 ## The deathmatch itself: a match, a combat manager, a map, and some players.
@@ -1644,6 +1645,8 @@ func solid_hulls_for(id: int, tick: int = -1) -> Array:
 	var out: Array = []
 	if not body_rules.solid:
 		return out
+	var me: ArenaPlayer = _players.get(id)
+	var me_at := me.controller.state.position if me != null and me.controller != null and me.controller.state != null else Vector3.INF
 	for key: Variant in _players.keys():
 		if int(key) == id or not body_rules.blocks(id, int(key)):
 			continue
@@ -1651,6 +1654,9 @@ func solid_hulls_for(id: int, tick: int = -1) -> Array:
 		if other == null or not other.is_alive() or other.controller == null or other.controller.state == null:
 			continue
 		var feet := other.controller.state.position
+		# Beyond one tick of top speed plus a hull the mover cannot touch it.
+		if me_at != Vector3.INF and feet.distance_squared_to(me_at) > HULL_NEAR_SQ:
+			continue
 		if remote_feet_fn.is_valid() and tick >= 0:
 			var at: Variant = remote_feet_fn.call(int(key), id, tick)
 			if at is Vector3:
