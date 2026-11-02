@@ -73,6 +73,9 @@ func _run() -> void:
 	var bots: Dictionary = _client.get("_bots")
 	for id in bots:
 		bots[id].set_meta(&"bot_scripted", true)
+		# The last move the AI wrote stays in force once it is skipped; a bot that walks on is a moving target.
+		bots[id].set_meta(&"bot_move", DotFpsCommand.new())
+		bots[id].set_meta(&"bot_fire", DotWeaponCommand.new())
 	await _wait(4.0)
 	var killer: Object = bots.values()[0]
 	var hurt := DotDamage.make(me.player_id, killer.player_id, 5.0, gm.combat.damage_type(ArenaContent.DAMAGE_BULLET))
@@ -141,7 +144,7 @@ func _check_killer_screen(kv: Node, killer: Object) -> void:
 	_check(screen != null and screen.hands != null and screen.hands.find_child("Arms", true, false) == null and screen.arms != null and screen.arms.get_parent() == kv.camera, "the view model's own sleeve is off and the shared arms ride the camera instead")
 	_check(screen != null and screen.crosshair != null and screen.crosshair.is_visible_in_tree() and not kv.crosshair.visible, "the killer's crosshair is drawn, the plain one is not")
 	var eye: Vector3 = killer.controller.motor.eye_position(killer.controller.state)
-	_check(kv.camera.global_position.distance_to(eye) < 0.6, "the camera is at the killer's eye", str(kv.camera.global_position.distance_to(eye)))
+	_check(kv.camera.global_position.distance_to(eye) < 0.6, "the camera is at the killer's eye", "%.2f m: camera %s, eye %s" % [kv.camera.global_position.distance_to(eye), kv.camera.global_position, eye])
 
 
 ## A replayed shot kicks the replay camera through the view model's own recoil, and flashes the muzzle.

@@ -2980,7 +2980,7 @@ func _test_pit_shelf_stair(map: ArenaMap, shelf: AABB, perch: AABB) -> void:
 		% [2.0 - top_x, climb_time, pace, tunables.max_speed])
 
 	_check(
-		top >= 0 and lowest < 0.5,
+		top >= 0 and lowest < 0.8,   # the foot box is 0.72; a running hull may skip the 0.36 tread under it
 		"a bot runs the valley from the east arm down and up onto the shelf, jump never pressed",
 		"ended at (%.1f, %.2f, %.1f), lowest %.2f" % [arrived.x, arrived.y, arrived.z, lowest]
 	)
