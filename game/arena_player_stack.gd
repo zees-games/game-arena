@@ -209,6 +209,10 @@ func classify_tree(root: Node, layer_id: StringName) -> int:
 
 	var done := 0
 
+	# Jail glass keeps the layers the importer gave it, or sight and shots could not tell it from a wall.
+	if root.get_meta(&"hull_kind", "") == "glass":
+		return 0
+
 	if root is CollisionObject3D or root is CollisionObject2D:
 		if classify(root, layer_id).ok:
 			done += 1

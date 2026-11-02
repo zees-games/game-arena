@@ -1179,6 +1179,15 @@ func _build_world_collision() -> void:
 	_world_collision.name = "WorldCollision"
 	add_child(_world_collision)
 	map.collision_root = _world_collision
+	glass_rules.glass_mask = 0
+	map.glass = null
+	var cell: Variant = _world_collision.get_meta(&"glass_sight", null)
+	if cell is DotMapGlassSight:
+		glass_rules.centre = (cell as DotMapGlassSight).centre
+		glass_rules.radius = (cell as DotMapGlassSight).radius
+		glass_rules.glass_mask = (cell as DotMapGlassSight).glass_mask
+		glass_rules.world_mask = DotPhysicsLayout.shooter_3d().mask_of([&"world", &"player_clip"])
+		map.glass = glass_rules
 
 	# Before `_build_match` turns the spawns into spawn points: a mapper's spawn inside the
 	# floor would otherwise be a player rising through it. See `ArenaMap.settle_spawns`.

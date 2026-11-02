@@ -4,6 +4,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
+const ArenaBots := preload("../game/arena_bots.gd")
 
 ## A surf map's jail through the global importer: a pad beside the jail is a release to the top of the
 ## spawn, the cell's glass is one-way, and the use key on the button swings the jail doors.
@@ -13,7 +14,7 @@ const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 13
+const EXPECTED_CHECKS := 24
 const MAP := &"surf_10x_reloaded_fixed"
 const BUTTON := 271
 const DOOR := 308
@@ -119,9 +120,85 @@ func _run() -> void:
 	_check(pressed, "the use key presses the jail button")
 	_check(not after.is_equal_approx(before), "and the jail door swings")
 
+	_check_glass_sight(game, centre)
+
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
 	get_tree().quit(0 if ok else 1)
+
+
+## The jail glass as a rule for gameplay: a bot inside cannot see out, a shot from inside stops at the glass, a shooter
+## outside reaches in, and a camera (plain world-layer ray) is unaffected.
+func _check_glass_sight(game: ArenaGame, centre: Vector3) -> void:
+	var rules: DotMapGlassSight = game.glass_rules
+	_check(rules.glass_mask != 0 and rules.centre.distance_to(centre) < 0.01, "the game's glass rule has the cell and the glass layer", str(rules.glass_mask))
+	_check(rules.problem() == "" and rules.world_mask != 0 and rules.glass_mask & rules.world_mask == 0, "the glass has its own bit, apart from the world's", rules.problem())
+	var root := game.map.collision_root
+	var space := root.get_world_3d().direct_space_state
+	var glass_body: StaticBody3D = null
+	for child in root.find_children("*", "StaticBody3D", true, false):
+		if (child as StaticBody3D).collision_layer & rules.glass_mask != 0:
+			glass_body = child
+	_check(glass_body != null and (glass_body.collision_layer & rules.glass_mask) == rules.glass_mask, "the glass hulls sit on their own layer")
+	# The nearest window: a glass hit with open world-layer air 1.5 m inside and 5 m outside. The rule's cell is moved there
+	# for the checks (the map's own cell centre is not beside a window), and restored after.
+	var dir := Vector3.ZERO
+	var edge := Vector3.ZERO
+	var best := INF
+	var tried := 0
+	for body in root.find_children("*", "StaticBody3D", true, false):
+		if (body as StaticBody3D).collision_layer & rules.glass_mask == 0:
+			continue
+		for shape_node in body.get_children():
+			var sh := (shape_node as CollisionShape3D).shape as ConvexPolygonShape3D
+			if sh == null:
+				continue
+			var c := Vector3.ZERO
+			for pt in sh.points:
+				c += pt
+			c = (shape_node as Node3D).global_transform * (c / float(sh.points.size()))
+			for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
+				for sign in [-1.0, 1.0]:
+					var d: Vector3 = axis * sign
+					var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(c - d * 4.0, c, rules.glass_mask))
+					if hit.is_empty():
+						continue
+					tried += 1
+					var h: Vector3 = hit["position"]
+					if h.distance_to(centre) >= best:
+						continue
+					if space.intersect_ray(PhysicsRayQueryParameters3D.create(h - d * 1.5, h - d * 0.01, 1)).is_empty() \
+							and space.intersect_ray(PhysicsRayQueryParameters3D.create(h + d * 0.01, h + d * 3.5, 1)).is_empty():
+						best = h.distance_to(centre)
+						dir = d
+						edge = h
+	_check(dir != Vector3.ZERO, "a window of the glass layer with open air on both sides", "%s at %.1f, %d faces tried" % [edge, best, tried])
+	if dir == Vector3.ZERO:
+		return
+	var origin := edge - dir * 1.5
+	var real_centre := rules.centre
+	rules.centre = origin
+	var beyond := edge + dir * 3.0
+	var far := origin + dir * (rules.radius + 4.0)
+	var trace: DotTrace = game.combat.trace
+	var bots := ArenaBots.world_for(game)
+	_check(not bots.line_of_sight(origin, beyond), "a bot inside cannot see out through the glass")
+	rules.block_sight = false
+	var open := bots.line_of_sight(origin, beyond)
+	rules.block_sight = true
+	_check(open, "sv_glass_block_sight 0 lets it see out", "origin %s edge %s beyond %s" % [origin, edge, beyond])
+	_check(not rules.blocks(space, far, edge - dir * 0.5), "a query from outside the cell is never stopped by the glass layer")
+	var out_hit := trace.ray(origin, dir, 40.0)
+	_check(out_hit.blocked and out_hit.distance < origin.distance_to(edge) + 0.1, "a shot from inside stops at the glass", "%.2f of %.2f" % [out_hit.distance, origin.distance_to(edge)])
+	rules.block_shots = false
+	var through := trace.ray(origin, dir, 40.0)
+	rules.block_shots = true
+	_check(not through.blocked or through.distance > origin.distance_to(edge) + 0.1, "sv_glass_block_shots 0 lets it out", "%s %.2f vs %.2f edge, mask %d" % [through.blocked, through.distance, origin.distance_to(edge), trace.collision_mask])
+	var shot_in := trace.ray(far, -dir, 40.0)
+	_check(not (shot_in.blocked and absf(shot_in.distance - far.distance_to(edge)) < 0.1), "a shooter outside reaches in past the glass")
+	var cam := PhysicsRayQueryParameters3D.create(origin, beyond, 1)
+	_check(space.intersect_ray(cam).is_empty() or (space.intersect_ray(cam)["position"] as Vector3).distance_to(edge) > 0.1, "a camera ray (world layer) is not stopped by the glass")
+	rules.centre = real_centre
 
 
 ## Stands in for a player looking along a direction.

@@ -189,7 +189,13 @@ static func _swap_glass(body: StaticBody3D, id: String, dir: String) -> void:
 	DotLog.debug("arena.maps", "glass swapped for breakable panes", {"map": id, "panes": swapped})
 
 
-## Moves the legacy player-clip, fence, grate and vent hulls onto the player_clip layer: they still stop a body, and a shot passes.
+## Collision bit the jail glass is on besides player_clip: a body still stops on it, and a shot sees it only when its mask asks (`DotMapGlassSight`).
+const GLASS_BIT := 1 << 20
+const GLASS_META := &"glass_sight"
+
+
+## Moves the legacy player-clip, fence, grate, vent and glass hulls off the shot layer: they still stop a body, and a shot passes.
+## Glass goes on [constant GLASS_BIT] as well, and a jail cell gets a `DotMapGlassSight` stored as [constant GLASS_META] on [param body].
 static func _split_fences(body: StaticBody3D, id: String, dir: String) -> void:
 	var prefix := world_prefix(id, dir)
 	if prefix.is_empty():
@@ -198,8 +204,15 @@ static func _split_fences(body: StaticBody3D, id: String, dir: String) -> void:
 	if got == null:
 		return
 	var clip := DotPhysicsLayout.shooter_3d().mask_of([&"player_clip"])
-	var moved := got.split_legacy_hulls(body, {"clip": clip, "fence": clip})
-	DotLog.debug("arena.maps", "clip and fence hulls moved off the shot layer", {"map": id, "hulls": moved})
+	var cell := DotMapOneWayGlass.cell_of(got.manifest)
+	var layers := {"clip": clip, "fence": clip}
+	# Only a map with a jail cell moves its glass: elsewhere it stays a shot-blocking floor and wall.
+	if not cell.is_empty():
+		layers["glass"] = clip | GLASS_BIT
+	var moved := got.split_legacy_hulls(body, layers)
+	if not cell.is_empty() and int(moved.get("glass", 0)) > 0:
+		body.set_meta(GLASS_META, DotMapGlassSight.new(cell["centre"], float(cell["radius"]), GLASS_BIT))
+	DotLog.debug("arena.maps", "clip, fence and glass hulls moved off the shot layer", {"map": id, "hulls": moved})
 
 
 static func _box_of(points: PackedVector3Array, origin: Vector3) -> AABB:

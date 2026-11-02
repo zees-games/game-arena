@@ -2,6 +2,7 @@ extends RefCounted
 
 const ArenaMap := preload("arena_map.gd")
 const ArenaBspMap := preload("arena_bsp_map.gd")
+const ArenaGlassTrace := preload("../game/arena_glass_trace.gd")
 const ArenaImportedMaps := preload("arena_imported_maps.gd")
 const ArenaMapMechanics := preload("arena_map_mechanics.gd")
 const ArenaMapPaint := preload("arena_map_paint.gd")
@@ -203,6 +204,9 @@ var mechanics: ArenaMapMechanics = null
 ## the physics backends bind to it, which is why it has to be in the tree before any
 ## player is built or re-bodied on this map.
 var collision_root: Node3D = null
+
+## The jail glass rule of the game that built this map's solid, when the map has a cell. Set by [ArenaGame].
+var glass: DotMapGlassSight = null
 
 ## The bake laid over the level by [method to_scene], or null.
 var baked: LightmapGI = null
@@ -1912,7 +1916,8 @@ func shot_trace() -> DotTrace:
 	if not is_imported():
 		return to_trace()
 
-	var trace := DotTracePhysics.new()
+	var trace := ArenaGlassTrace.new()
+	trace.glass = glass
 	trace.material_fn = DotPhysicsSurfaceSet.material_of
 
 	if collision_root != null and collision_root.is_inside_tree():

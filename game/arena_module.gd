@@ -171,6 +171,7 @@ func _module_load() -> DotResult:
 	_add_rank_cvar()
 	_add_fire_buffer_cvar()
 	_add_grenade_cvars()
+	var _glass_cvars := game.glass_rules.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
 	_add_rate_cvar()
 	if game.config_binder != null:
 		game.config_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)

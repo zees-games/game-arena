@@ -199,6 +199,14 @@ class World:
 	func line_of_sight(from: Vector3, to: Vector3) -> bool:
 		var combat: Variant = game.get("combat")
 		var trace: Variant = (combat as Object).get("trace") if combat is Object else null
+		var rules: Variant = game.get("glass_rules")
+		# Bots inside the jail cell cannot see out through its glass; the trace itself ignores that layer for sight.
+		if rules is DotMapGlassSight and (rules as DotMapGlassSight).block_sight:
+			var map: Variant = game.get("map")
+			var root: Variant = (map as Object).get("collision_root") if map is Object else null
+			if root is Node3D and (root as Node3D).is_inside_tree() \
+					and (rules as DotMapGlassSight).blocks((root as Node3D).get_world_3d().direct_space_state, from, to):
+				return false
 		if trace is DotTrace:
 			return (trace as DotTrace).line_of_sight(from, to)
 		return true

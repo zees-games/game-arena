@@ -226,6 +226,8 @@ signal grenade_effect(info: Dictionary)
 var grenades: ArenaGrenades = null
 ## `sv_grenade_*`, kept across maps so a cvar bound once survives a rebuild.
 var grenades_rules := AwGrenadeRules.new()
+## The jail glass rule (`sv_glass_block_*`), kept across maps; takes the cell of each map as it loads and is inert on one without.
+var glass_rules := DotMapGlassSight.new()
 ## `sv_grenade_utility`: whether the utility grenades can be picked in a loadout.
 var utility_grenades := false
 
