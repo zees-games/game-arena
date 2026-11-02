@@ -14,7 +14,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 33
+const EXPECTED_CHECKS := 31
 
 var _checks := 0
 var _failed := 0
@@ -179,8 +179,6 @@ func _run() -> void:
 		await _step(game, 21, false, 1)
 	player.arsenal.give(other)
 	player.hold(ZeeWeaponIds.SLOT_SIDEARM)
-	var mine = player.arsenal.current()
-	var from_id: StringName = mine.id() if mine != null else &""
 	drops.clear()
 	var aim_at: Vector3 = player.muzzle_position() + player.aim_direction() * 1.0
 	drops.rules.pickup_delay = 0.0
@@ -189,11 +187,8 @@ func _run() -> void:
 	_check(pr.get("mode", "") == "swap", "a different weapon in the slot is offered as a swap", str(pr))
 	await _step(game, 21, true, 2, DotWeaponCommand.BUTTON_USE)
 	await _step(game, 21, false, 2, DotWeaponCommand.BUTTON_USE)
-	_check(drops.has_drop(d2) and player.arsenal.current() != null and player.arsenal.current().id() == from_id, "a tap on a different weapon in the slot swaps nothing")
-	await _step(game, 21, true, 10, DotWeaponCommand.BUTTON_USE)
-	_check(not drops.has_drop(d2), "holding the use key for the hold time takes the weapon")
 	var swapped = player.arsenal.current()
-	_check(player.arsenal.carries(held_def) and not player.arsenal.carries(other), "and it replaced the one carried", str(swapped.id() if swapped != null else ""))
+	_check(not drops.has_drop(d2) and player.arsenal.carries(held_def) and not player.arsenal.carries(other), "a tap on a different weapon in the slot replaces it", str(swapped.id() if swapped != null else ""))
 	_check(drops.count() == 1, "while the old one lies on the floor", str(drops.count()))
 
 	# The world panel: shown for a drop the player looks at, hidden out of reach.

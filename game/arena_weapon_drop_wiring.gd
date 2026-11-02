@@ -72,13 +72,16 @@ static func update_panel(client, pressed: bool, delta: float) -> void:
 	if game.weapon_drops != null and player != null and player.is_alive() and player.arsenal != null and game.weapon_drops.count() > 0:
 		info = game.weapon_drops.prompt_for(player.arsenal, player.camera.global_position, -player.camera.global_basis.z, game.weapon_drop_class_of(player.player_id), game.team_of(player.player_id) if not game.teams().is_empty() else 0)
 	hold.hold_time = game.weapon_drops.rules.hold_time if game.weapon_drops != null else 0.6
-	var _event := hold.step(pressed, delta, not info.is_empty() and info.get("mode", "") == "swap")
+	var _event := hold.step(pressed, delta, not info.is_empty() and info.get("mode", "") == "ammo")
+	var fill := hold.progress
 	if client.hud != null:
 		view.key_text = String(client.hud.keys.get(&"use", "E"))
 	view.name_of = func(id: StringName) -> String:
 		var def: Variant = player.arsenal.catalogue.get_def(id)
 		return def.name_or_id() if def != null else String(id)
-	view.show_prompt(info, hold.progress)
+	view.show_prompt(info, 0.0)
+	if client.hud != null and client.hud.crosshair != null:
+		client.hud.crosshair.hold_progress = fill
 
 
 ## Lets every traced shot and splash push a dropped weapon (a splash not through a wall); idempotent, as the trace is built later than the layer.
@@ -101,22 +104,16 @@ static func hook_shots(game) -> void:
 			var _n := drops.blast(centre, radius, 8.0)
 
 
-## The use key on a dropped weapon: a tap unloads ammo or fills an empty slot, a hold swaps.
+## The use key on a dropped weapon: the shared rules in [DotWeaponUseKey].
 static func _use_hold(game, id: int, player, def: DotPlayerClassDef, pressed: bool) -> bool:
-	var drops: DotWeaponDrops = game.weapon_drops
-	var holds: Dictionary = game.get_meta(&"use_holds", {})
-	game.set_meta(&"use_holds", holds)
-	var hold: DotWeaponUseHold = holds.get(id)
-	if hold == null:
-		hold = DotWeaponUseHold.new()
-		holds[id] = hold
-	hold.hold_time = drops.rules.resolve(def).hold_time
-	var aimed: bool = drops.count() > 0 and not drops.prompt_for(player.arsenal, player.muzzle_position(), player.aim_direction(), def, game.team_of(id)).is_empty()
-	var event := hold.step(pressed, game.get_physics_process_delta_time(), aimed)
-	if event == DotWeaponUseHold.Event.NONE:
-		return hold.is_holding()
-	var _used: int = drops.use(player.arsenal, player.muzzle_position(), player.aim_direction(), id, def, event == DotWeaponUseHold.Event.HOLD)
-	return true
+	var keys: Dictionary = game.get_meta(&"use_keys", {})
+	game.set_meta(&"use_keys", keys)
+	var key: DotWeaponUseKey = keys.get(id)
+	if key == null:
+		key = DotWeaponUseKey.new()
+		keys[id] = key
+	return key.step(game.weapon_drops, player.arsenal, player.muzzle_position(), player.aim_direction(), id, pressed,
+		game.get_physics_process_delta_time(), def, game.team_of(id) if not game.teams().is_empty() else 0)
 
 
 static func class_def_of(game, id: int) -> DotPlayerClassDef:
