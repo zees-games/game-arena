@@ -51,10 +51,6 @@ func _ready() -> void:
 		DotGameConfigBinder.fail_boot(get_tree(), loaded)
 		return
 	game.config_binder = binder
-	var blocks := game.make_noblock()
-	if not blocks.ok and blocks.error.code != DotError.CODE_UNSUPPORTED:
-		DotGameConfigBinder.fail_boot(get_tree(), blocks)
-		return
 	add_child(game)
 	_start_workbench(binder)
 
@@ -117,8 +113,6 @@ func _start_workbench(binder: DotGameConfigBinder) -> void:
 	wb.dedicated = DisplayServer.get_name() == "headless"
 	for set: DotProfileSet in binder.profile_sets():
 		wb.add_set(set, "Game settings: %s" % set.rel_path.trim_prefix("config_"))
-	if game.noblock != null:
-		wb.add_set(game.noblock.binder.profile_set(), "Noblock")
 	var _fl := game.flashlight_conf()
 	for set: DotProfileSet in game.flashlight_binder.profile_sets():
 		wb.add_set(set, "Flashlight")
