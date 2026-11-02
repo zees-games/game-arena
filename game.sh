@@ -114,6 +114,8 @@ run_suite() {
     # headless_imported walks 56 imported maps and takes about 25 minutes; the default would kill it mid-run.
     local limit="$TIMEOUT"
     [ "$scene" = headless_imported ] && [ "$limit" -lt 3000 ] && limit=3000
+    # headless_bots plays 4 presets x 3 seeds x 600 s at 66 Hz and takes 20-30 minutes under load; it progresses, it does not hang.
+    [ "$scene" = headless_bots ] && [ "$limit" -lt 2400 ] && limit=2400
     timeout "$limit" "$GODOT" --headless --path . "res://examples/$scene.tscn" >"$log" 2>&1
     status=$?
     summary="$(grep -Eo '[0-9]+ (passed|checks), [0-9]+ failed' "$log" | tail -1)"
