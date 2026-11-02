@@ -928,8 +928,8 @@ func _friend_positions(team: StringName, key: String = "") -> Array:
 ## a prop is not cover a spawn should count on. The physics query stays as the fallback for
 ## a game with no combat yet.
 func _can_see_site(from: Vector3, to: Vector3) -> bool:
-	var eye := from + Vector3(0, 1.6, 0)
-	var head := to + Vector3(0, 1.6, 0)
+	var eye := from + Vector3(0, 1.6268, 0)
+	var head := to + Vector3(0, 1.6268, 0)
 	var trace: DotTrace = game.combat.trace if game != null and game.combat != null else null
 
 	if trace != null:

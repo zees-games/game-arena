@@ -1062,7 +1062,7 @@ func _draw_body_hit(point: Vector3) -> void:
 	var fx: Object = player.weapons.call(&"shot_fx")
 	if fx == null or not fx.has_method(&"play_body_hit"):
 		return
-	var from: Vector3 = player.global_position + Vector3(0.0, 1.6, 0.0)
+	var from: Vector3 = player.global_position + Vector3(0.0, 1.6268, 0.0)
 	fx.call(&"play_body_hit", point, point - from)
 
 

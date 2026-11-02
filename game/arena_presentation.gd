@@ -222,7 +222,7 @@ static func schema() -> DotSettingsSchema:
 	# is a competitive advantage, so a server capping it is a legitimate rule -- and a
 	# server *reading* it, or the bindings, or the audio device, would be assembling a
 	# fingerprint that survives a new account and every ban a moderator issues.
-	s.add(DotSettingsDef.integer(&"field_of_view", 100, 70, 120, &"video").with_scope(
+	s.add(DotSettingsDef.integer(&"field_of_view", 90, 70, 120, &"video").with_scope(
 		DotSettingsDef.Scope.SERVER_CLAMPED
 	))
 	s.add(DotSettingsDef.boolean(&"view_model", true, &"video").with_scope(

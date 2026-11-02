@@ -78,7 +78,7 @@ var platform: DotGameClient = null
 var gate: DotLoadGate
 
 ## Field of view, horizontal at 4:3. An arena shooter's number, not Godot's.
-const FIELD_OF_VIEW := 100.0
+const FIELD_OF_VIEW := 90.0
 
 var game: ArenaGame = null
 var player: ArenaPlayer = null

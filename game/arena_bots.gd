@@ -58,8 +58,8 @@ const THROW_GIVE_UP_SEC := 2.5
 const WORLD_META := &"arena_bot_world"
 
 ## Height of the eye and of a target's chest above its feet, metres.
-const EYE := 1.6
-const CHEST := 1.25
+const EYE := 1.6268
+const CHEST := 1.27
 
 
 ## One bot's memory between ticks. Kept by the caller, one per bot.

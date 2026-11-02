@@ -351,8 +351,8 @@ func setup(p_mode: Mode, map: ArenaMap, id: int, name_text: String = "") -> void
 func _build_view() -> void:
 	view = Node3D.new()
 	view.name = "View"
-	# Eye height for a 1.8 m capsule, which is what the tunables below describe.
-	view.position = Vector3(0.0, 1.6, 0.0)
+	# Eye height of the default 1.83 m body.
+	view.position = Vector3(0.0, ArenaPlayerTunables.EYE_HEIGHT, 0.0)
 	add_child(view)
 
 
@@ -1399,7 +1399,7 @@ func present(delta: float) -> void:
 			view.global_position = (
 				controller.motor.eye_position(drawn)
 				if controller.motor != null
-				else drawn.position + Vector3(0.0, 1.6, 0.0)
+				else drawn.position + Vector3(0.0, ArenaPlayerTunables.EYE_HEIGHT, 0.0)
 			) - Vector3(0.0, _absorb_step(drawn_alpha, delta), 0.0)
 
 		var punch := _present_view_model(drawn)
@@ -2076,7 +2076,7 @@ func muzzle_position() -> Vector3:
 	if view != null and view.is_inside_tree():
 		return view.global_position
 
-	return controller.state.position + Vector3(0.0, 1.6, 0.0)
+	return controller.state.position + Vector3(0.0, ArenaPlayerTunables.EYE_HEIGHT, 0.0)
 
 
 func aim_direction() -> Vector3:

@@ -1597,7 +1597,7 @@ func make_killview_server() -> DotKillViewServer:
 			if not p.is_alive() or p.controller == null or p.controller.state == null:
 				continue
 			var st: DotFpsState = p.controller.state
-			var eye: Vector3 = p.controller.motor.eye_position(st) if p.controller.motor != null else st.position + Vector3(0.0, 1.6, 0.0)
+			var eye: Vector3 = p.controller.motor.eye_position(st) if p.controller.motor != null else st.position + Vector3(0.0, 1.6268, 0.0)
 			var basis := Basis.from_euler(Vector3(deg_to_rad(st.pitch), deg_to_rad(st.yaw), 0.0))
 			eyes.append({"id": p.player_id, "transform": Transform3D(basis, eye), "aux": KillPov.aux_of(p)})
 		return eyes

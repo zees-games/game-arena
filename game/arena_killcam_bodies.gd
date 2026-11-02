@@ -103,7 +103,7 @@ static func state_of(p: Node) -> Array:
 	if controller == null:
 		return []
 	var st := controller.state
-	var eye_h := 1.6
+	var eye_h := 1.6268
 	if controller.motor != null:
 		eye_h = controller.motor.eye_position(st).y - st.position.y
 	var yaw := st.yaw

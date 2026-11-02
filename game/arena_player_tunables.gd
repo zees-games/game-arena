@@ -1,6 +1,10 @@
 extends RefCounted
 ## The arena's movement tunables, held apart from the player so that file stays readable.
 
+## Eye height above the feet for the default body (1.83 m stand, radius 0.4064): the motor puts the eye a half radius under the top.
+const EYE_HEIGHT := 1.6268
+
+
 static func make() -> DotFpsTunables:
 	var tunables := DotFpsTunables.with_profile("classic")
 	tunables.walk_speed_scale = 0.45
