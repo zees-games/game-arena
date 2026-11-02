@@ -1,6 +1,7 @@
 @tool
 extends Node3D
 
+const Roles := preload("arena_weapon_roles.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaPlayerTunables := preload("arena_player_tunables.gd")
@@ -790,6 +791,7 @@ func refill_ammo(share: float) -> void:
 ## Validated on first use rather than per player, and loudly: a catalogue with a
 ## duplicate id hands somebody the wrong weapon and nothing reports it.
 static var _shared_catalogue: DotWeaponCatalogue = null
+static var _shared_generation := -1
 
 
 ## The shared weapon table, for anything else in the game that reads a definition.
@@ -798,7 +800,9 @@ static func weapon_catalogue() -> DotWeaponCatalogue:
 
 
 static func _catalogue() -> DotWeaponCatalogue:
-	if _shared_catalogue == null:
+	Roles.ensure()
+	if _shared_catalogue == null or _shared_generation != Roles.generation:
+		_shared_generation = Roles.generation
 		_shared_catalogue = ArenaContent.weapon_catalogue()
 		var res := _shared_catalogue.validate()
 		if not res.ok:

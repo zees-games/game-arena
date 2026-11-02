@@ -66,6 +66,8 @@ static var _sources: Array[StringName] = []
 ## Overrides `weapons.packs` when not empty (tests and a console).
 static var force_packs: Array = []
 static var _scanned := false
+## Bumped by every [method clear]; caches of the weapon table compare it to know the pack set changed.
+static var generation := 0
 
 
 ## Registers the packs named in `weapons.packs` and settles every role. Safe to call again; both ends call it, so both hold one list.
@@ -162,6 +164,7 @@ static func _class_sounds(script: GDScript, kept: PackedStringArray) -> void:
 
 
 static func clear() -> void:
+	generation += 1
 	for id in _classed:
 		ZeeWeaponSound.set_class(id, &"")
 

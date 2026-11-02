@@ -2,6 +2,7 @@ extends Node
 
 const Roles := preload("../game/arena_weapon_roles.gd")
 const ArenaContent := preload("../game/arena_content.gd")
+const ArenaPlayer := preload("../game/arena_player.gd")
 
 ## Weapons by role: with no pack zee fills every role and the wire numbers are zee's; with a pack enabled it fills them, its
 ## weapons carry a wire number and survive the round trip, and clearing puts everything back. Skips the pack half unless a
@@ -49,11 +50,13 @@ func _ready() -> void:
 		_check(ArenaContent.weapon_at(ArenaContent.weapon_index(first)) == first, "%s round-trips the wire" % first)
 		_check(ArenaContent.weapon_index(first) < (1 << ArenaContent.WEAPON_INDEX_BITS), "its index fits the field")
 		_check(ZeeWeaponArtTable.table().has(first), "%s has art" % first)
+		_check(ArenaPlayer.weapon_catalogue().ids() == ArenaContent.weapon_catalogue().ids(), "the shared rig catalogue follows the scan of %s" % dir)
 		_check(ArenaContent.loadout_schema().default_loadout().item_in(&"primary") == Roles.resolve(&"primary"), "the default loadout names the role's weapon")
 
 		Roles.force_packs = ["not_installed"]
 		Roles.scan()
 		_check(Roles.pack_ids.is_empty() and ArenaContent.weapons().size() == ZeeWeaponIds.all().size(), "clearing puts zee back")
+		_check(ArenaPlayer.weapon_catalogue().ids() == ArenaContent.weapon_catalogue().ids(), "the shared rig catalogue follows the clear")
 
 	Roles.clear()
 	print("RESULT: ", "PASS" if _failed == 0 and _checks >= 5 else "FAIL", " ", _checks, " checks, ", _failed, " failed")
