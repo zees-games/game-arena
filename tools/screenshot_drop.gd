@@ -1,5 +1,5 @@
 extends RefCounted
-## `--drop`: a dropped weapon in the local player's view with its panel, the hold circle filling, and a shot drop tumbling.
+## `--drop`: a dropped weapon in the local player's view with its panel, the hold ring round the crosshair filling, and a shot drop tumbling.
 
 
 static func stage(game, local, _hud) -> Array[Dictionary]:
@@ -34,7 +34,9 @@ static func stage(game, local, _hud) -> Array[Dictionary]:
 	var refresh := func(fill: float) -> void:
 		aim_cam.call()
 		info = drops.prompt_for(local.arsenal, eye, dir, game.weapon_drop_class_of(local.player_id))
-		view.show_prompt(info, fill)
+		view.show_prompt(info, 0.0)
+		if _hud != null and _hud.crosshair != null:
+			_hud.crosshair.hold_progress = fill
 	var circle := func() -> void:
 		refresh.call(0.62)
 	var shoot := func() -> void:
