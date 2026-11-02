@@ -5,6 +5,9 @@ const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const HULL_NEAR_SQ := 144.0
 
+## Beyond this a hull cannot touch one tick's sweep (top speed times a tick, plus both radii, with room to spare).
+const HULL_REACH_SQ := 16.0
+
 
 ## The deathmatch itself: a match, a combat manager, a map, and some players.
 ##
@@ -1376,6 +1379,7 @@ func add_player(
 	player.arsenal.fire_buffer_seconds = fire_buffer_seconds
 	player.solid_hulls_fn = solid_hulls_for
 	_players[id] = player
+	_roster_dirty = true
 
 	var added := match_node.add_player(str(id), display_name, _tick, wanted_team)
 
@@ -1439,6 +1443,7 @@ func remove_player(id: int) -> void:
 	match_node.remove_player(str(id))
 
 	_players.erase(id)
+	_roster_dirty = true
 	remove_child(player)
 	player.queue_free()
 
@@ -1647,23 +1652,46 @@ func solid_hulls_for(id: int, tick: int = -1) -> Array:
 		return out
 	var me: ArenaPlayer = _players.get(id)
 	var me_at := me.controller.state.position if me != null and me.controller != null and me.controller.state != null else Vector3.INF
-	for key: Variant in _players.keys():
-		if int(key) == id or not body_rules.blocks(id, int(key)):
+	if _roster_dirty:
+		_roster.clear()
+		_roster_ids.resize(0)
+		for key: Variant in _players.keys():
+			_roster.append(_players[key])
+			_roster_ids.append(int(key))
+		_roster_dirty = false
+	var remote := remote_feet_fn.is_valid() and tick >= 0
+	var near := me_at != Vector3.INF
+	# Position first: most of a crowd is out of reach, and the pair and alive tests cost more than the read.
+	var coarse := HULL_NEAR_SQ if remote else HULL_REACH_SQ
+	for i in range(_roster.size()):
+		var other_id := _roster_ids[i]
+		if other_id == id:
 			continue
-		var other: ArenaPlayer = _players[key]
-		if other == null or not other.is_alive() or other.controller == null or other.controller.state == null:
+		var other := _roster[i]
+		if other == null:
 			continue
-		var feet := other.controller.state.position
-		# Beyond one tick of top speed plus a hull the mover cannot touch it.
-		if me_at != Vector3.INF and feet.distance_squared_to(me_at) > HULL_NEAR_SQ:
+		var ctl := other.controller
+		if ctl == null or ctl.state == null:
 			continue
-		if remote_feet_fn.is_valid() and tick >= 0:
-			var at: Variant = remote_feet_fn.call(int(key), id, tick)
+		var feet := ctl.state.position
+		if near and feet.distance_squared_to(me_at) > coarse:
+			continue
+		if not body_rules.blocks(id, other_id) or not other.is_alive():
+			continue
+		if remote:
+			var at: Variant = remote_feet_fn.call(other_id, id, tick)
 			if at is Vector3:
 				feet = at
-		var tunables := other.controller.tunables
+			if near and feet.distance_squared_to(me_at) > HULL_REACH_SQ:
+				continue
+		var tunables := ctl.tunables
 		out.append(ArenaSolidBody.hull_at(feet, tunables.stand_height, tunables.radius))
 	return out
+
+
+var _roster: Array[ArenaPlayer] = []
+var _roster_ids := PackedInt64Array()
+var _roster_dirty := true
 
 
 func players() -> Array[ArenaPlayer]:
