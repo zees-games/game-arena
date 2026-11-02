@@ -331,7 +331,7 @@ func _build_classes() -> void:
 ## - `enemy_weight`: what each metre from the nearest enemy is worth.
 ##
 ## A mode may name its own (`ArenaMode.spawn_mode`); empty takes this one.
-var spawn_settings := {"mode": "avoid", "min_enemy": 10.0, "sight_penalty": 500.0, "enemy_weight": 1.5}
+var spawn_settings := {"mode": "scatter", "min_enemy": 10.0, "sight_penalty": 500.0, "enemy_weight": 1.5}
 
 const SPAWN_MODES := ["avoid", "weighted", "furthest", "random"]
 
@@ -346,6 +346,9 @@ func _build_spawns() -> void:
 	spawns.enemies_fn = _enemy_positions
 	spawns.friends_fn = _friend_positions
 	spawns.can_see_fn = _can_see_site
+	spawns.generate_fn = _generate_sites
+	spawns.rules.generate = "when_few"
+	spawns.rules.generate_count = 16
 	add_child(spawns)
 
 	refresh_spawn_rules()
@@ -369,12 +372,18 @@ func refresh_spawn_rules() -> void:
 
 	spawns.rules.protection_sec = game.match_node.rules.spawn_protection_sec
 
-	var mode := str(spawn_settings.get("mode", "avoid"))
+	var mode := str(spawn_settings.get("mode", "scatter"))
 
 	if game.mode != null and game.mode.spawn_mode != "":
 		mode = game.mode.spawn_mode
 
+	# Only `scatter` draws across the whole map; the others keep the map strategy and their scoring.
+	spawns.rules.strategy = "scatter,map" if mode == "scatter" else "map"
+
 	match mode:
+		"scatter":
+			spawns.rules.mode = DotSpawnRules.Mode.RANDOM
+			spawns.rules.minimum_enemy_distance = 0.0
 		"random":
 			spawns.rules.mode = DotSpawnRules.Mode.RANDOM
 			spawns.rules.minimum_enemy_distance = 0.0
@@ -438,7 +447,32 @@ func refresh_spawns() -> void:
 		site.team = _side_of_tags(point.tags)
 		spawns.add_site(site)
 
+	if game.map != null:
+		spawns.ensure_generated(String(game.map.id))
+		var applied := spawns.load_overrides(spawn_overrides, String(game.map.id))
+		if not applied.ok:
+			DotLog.warn(CHANNEL, "spawn overrides not read", {"why": applied.error.message})
+
 	DotLog.debug(CHANNEL, "spawn sites", {"count": spawns.sites().size()})
+
+
+## The per-map spawn edits an admin authors in the workbench (`spawn` profile kind); [method refresh_spawns] applies them.
+var spawn_overrides: DotProfileSet = DotSpawnOverrides.make_set("arena")
+
+
+## Floor candidates for a map that ships too few spawn points, found with the map's own trace.
+func _generate_sites(count: int, clearance: float, _map_id: String) -> Array[DotSpawnSite]:
+	var trace: DotTrace = game.combat.trace if game != null and game.combat != null else null
+	if trace == null or game.map == null:
+		return []
+	var ray := func(from: Vector3, to: Vector3) -> Dictionary:
+		var span := to - from
+		var length := span.length()
+		if length < 0.01:
+			return {}
+		var hit := trace.ray(from, span / length, length)
+		return {"position": hit.point, "normal": hit.normal} if hit.ok() else {}
+	return DotSpawnFloorSampler.sample(game.map.bounds, count, clearance, ray)
 
 
 func _build_spectate() -> void:

@@ -130,7 +130,7 @@ const DROP_CVARS := {
 
 ## cvar -> the key in `ArenaPlayerStack.spawn_settings` it sets, and what it means.
 const SPAWN_CVARS := {
-	"arena_spawn_mode": ["mode", "How a respawn picks its site: avoid, weighted, furthest or random"],
+	"arena_spawn_mode": ["mode", "How a respawn picks its site: scatter (default: random across the whole map), avoid, weighted, furthest or random"],
 	"arena_spawn_min_enemy": ["min_enemy", "In avoid mode, the nearest an enemy may be to a site, in metres"],
 	"arena_spawn_sight_penalty": ["sight_penalty", "What an enemy being able to see a site costs it"],
 	"arena_spawn_enemy_weight": ["enemy_weight", "What each metre from the nearest enemy is worth"],

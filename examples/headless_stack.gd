@@ -25,7 +25,7 @@ const TICK_RATE := 64
 const BOTS := 4
 
 const SECTIONS := 8
-const CHECKS := 74
+const CHECKS := 76
 
 var _section_count := 0
 
@@ -318,6 +318,8 @@ func _test_classes_and_spawns() -> void:
 	# Spawns keep away from enemies (2026-10-06): an enemy on a spawn point, and the site the
 	# director picks for player 1 is the furthest it can find from them, up to the floor.
 	var stack := _stack()
+	stack.spawn_settings["mode"] = "avoid"
+	stack.refresh_spawn_rules()
 	var mine := stack.teams.team_of("1")
 	var enemy: Node = null
 	var friend: Node = null
@@ -353,8 +355,25 @@ func _test_classes_and_spawns() -> void:
 	stack.spawn_settings["mode"] = "random"
 	stack.refresh_spawn_rules()
 	_check(stack.spawns.rules.mode == DotSpawnRules.Mode.RANDOM, "and a server can put it back to random")
-	stack.spawn_settings["mode"] = "avoid"
+	stack.spawn_settings["mode"] = "scatter"
 	stack.refresh_spawn_rules()
+	# Players stand on most points here; occupancy vetoes and enemy damping would funnel every pick to the free ones.
+	stack.spawns.rules.scatter_enemy_radius = 0.0
+	for cond in stack.spawns.conditions:
+		cond.enabled = false
+	var counts := {}
+	for i in 150:
+		# The draw is seeded by the tick, so a live game varies it and a test must too.
+		var c := stack.spawns.choose(DotSpawnRequest.make("1", stack.teams.team_of("1"), stack.classes.class_of("1"), 1000 + i))
+		if c.ok and (c.value as DotSpawnChoice).site != null:
+			var sid := String((c.value as DotSpawnChoice).site.id)
+			counts[sid] = int(counts.get(sid, 0)) + 1
+	var top := 0
+	for sid: String in counts:
+		top = maxi(top, int(counts[sid]))
+	var n_sites := stack.spawns.sites().size()
+	_check(counts.size() >= n_sites / 2, "the default scatter spreads 150 spawns over %d of %d points" % [counts.size(), n_sites])
+	_check(n_sites < 4 or top <= 150 * 0.4, "and no one point takes more than 40%% of them (top %d)" % top)
 
 	_check(
 		_stack().describe_lines().size() > 10,
