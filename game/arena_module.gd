@@ -1046,6 +1046,8 @@ func _start_workbench() -> void:
 	var wb := game.workbench
 	if wb == null:
 		return
+	if game.player_stack != null and game.player_stack.spawn_overrides != null:
+		wb.add_set(game.player_stack.spawn_overrides, "Spawn points (per map)")
 	var ambient_set := DotGameWorkbench.cvar_set(console, ArenaAmbience.cvar_types(), AMBIENT_KIND)
 	if ambient_set != null:
 		wb.add_set(ambient_set, "Ambience (arena_ambient*)")
