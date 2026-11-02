@@ -91,7 +91,8 @@ func update(motor: DotFpsMotor, state: DotFpsState) -> void:
 	var into := -flat.dot(away)
 	# A wall behind a thin ladder zeroes the velocity before this reads it, and the reach is
 	# shorter than one tick of travel, so pushing into the rungs is judged by the intent too.
-	var pushing := -wish.dot(away) > 0.5
+	# Not from the top: a player standing there walks off the lip into the face to climb down.
+	var pushing := -wish.dot(away) > 0.5 and state.position.y < box.end.y - 0.3
 	if (not state.is_grounded() and state.velocity.y < 0.0) or into > 10.0 * ArenaBspMap.METRES_PER_UNIT or pushing:
 		motor.set_mode(state, mode_id)
 		state.velocity = Vector3.ZERO
