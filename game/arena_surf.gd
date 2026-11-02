@@ -344,7 +344,7 @@ func steer(bot: Object, mind: Object, intent: DotBotIntent, tick: int, tick_rate
 		if id < 0 or id >= edges.size() or not edges[id].linked or state == null or not bool(bot.call(&"is_alive")):
 			return
 		var edge := edges[id]
-		var sim := _sim_for(edge, controller as DotFpsController) if edge.veto else null
+		var sim := _sim_for(edge, controller as DotFpsController, bot) if edge.veto else null
 		ride = DotBotSurfRide.new().begin(edge.cache, edge.course, sim, tick, tick_rate, RIDE_SECONDS)
 		# A recording starts at the takeoff arena_surf_rides.gd saw (airborne above no island), so the pilot runs up and the recording takes over there.
 		var recorded: Dictionary = rides.call(&"pick", edge.id) if rides != null else {}
@@ -384,7 +384,7 @@ func steer(bot: Object, mind: Object, intent: DotBotIntent, tick: int, tick_rate
 ## The simulator a ride's veto runs on: the riding player's own motor over the map's brushes
 ## (never its solid-players wrapper: the others' hulls would stand still in a forecast), the
 ## map's pushes as its mechanics, the edge's course as its oracle.
-func _sim_for(edge: Edge, controller: DotFpsController) -> DotFpsSimulator:
+func _sim_for(edge: Edge, controller: DotFpsController, bot: Object = null) -> DotFpsSimulator:
 	if edge.sim != null:
 		return edge.sim
 	var body: DotFpsBody = map.call(&"movement_body")
@@ -395,10 +395,9 @@ func _sim_for(edge: Edge, controller: DotFpsController) -> DotFpsSimulator:
 	if sim == null:
 		return null
 	sim.oracle = edge.course.event_at
-	var mechanics: Variant = map.get(&"mechanics")
-	if mechanics != null:
+	if map.get(&"mechanics") != null and bot != null and bot.has_method(&"step_mechanics"):
 		sim.mechanics = func(state: DotFpsState, motor: DotFpsMotor, delta: float, start: Vector3) -> int:
-			mechanics.call(&"simulate", motor, state, start, delta)
+			bot.call(&"step_mechanics", motor, state, start, delta)
 			return DotFpsSimulator.EVENT_NONE
 	edge.sim = sim
 	return sim

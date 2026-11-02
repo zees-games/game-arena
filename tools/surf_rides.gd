@@ -149,6 +149,10 @@ func _run() -> void:
 			_write(ProjectSettings.globalize_path(args[out_at + 1]) if out_at >= 0 else path, data)
 	if args.has("--demos") or args.has("--harvest"):
 		await demos(args.has("--harvest"))
+	if args.has("--trace"):
+		await trace(_read(path), _opt(args, "--trace", 1))
+	if args.has("--trace-live"):
+		await trace_live(_read(path), _opt(args, "--trace-live", 1))
 	if args.has("--measure"):
 		await measure(_read(path), _opt(args, "--runs", 40), _opt(args, "--live", 20))
 	get_tree().quit(0)
@@ -769,6 +773,128 @@ func measure(data: Dictionary, runs: int, live: int) -> void:
 			await _ride_live(i, row, course, live)
 
 
+## Rides edge [param index] once on the simulator from its exact start, then plays the very same
+## commands on the live player and prints the first tick where the two differ: the check that the
+## planner's motor and the game's are one motor.
+func trace(data: Dictionary, index: int) -> void:
+	var row: Dictionary = (data.get("edges", []) as Array)[index]
+	var course := ArenaSurf.course_for(game.map, nav, _metres(row["from"]), _metres(row["to"]), float(row.get("reference_yaw", NAN)))
+	var sim := _simulator(course.event_at)
+	var pilot := DotBotSurfPilot.new()
+	pilot.load_stage(row, ArenaSurf.UNITS)
+	pilot.sim = sim
+	pilot.score = course.score
+	pilot.reset()
+	var s := _standing_at(course.start, course.reference_yaw())
+	var cmds: Array = []
+	var log_sim: Array = []
+	var event := 0
+	while cmds.size() < 600 and event == 0:
+		var c: DotFpsCommand = DotBotSurfPilot.command_for(sim, pilot.action(s), s, pilot.reference_yaw)
+		cmds.append(c)
+		event = sim.step(s, c)
+		log_sim.append([s.position, s.velocity, s.mode, s.is_grounded()])
+	print("[trace] sim: event %d after %d ticks at %s" % [event, cmds.size(), str(s.position.round())])
+	var t_sim: DotFpsTunables = sim.motor.tunables
+	var t_live: DotFpsTunables = bot.controller.tunables
+	for prop: Dictionary in t_live.get_property_list():
+		if int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE != 0 and t_sim.get(prop["name"]) != t_live.get(prop["name"]):
+			print("[trace] tunable differs: %s sim %s live %s" % [prop["name"], str(t_sim.get(prop["name"])), str(t_live.get(prop["name"]))])
+	if not bot.is_alive():
+		game.respawn_player(1)
+	_standing_at(course.start, course.reference_yaw())
+	bot.controller.state.velocity = Vector3.ZERO
+	var shown := 0
+	for i in range(cmds.size()):
+		var fire := DotWeaponCommand.new()
+		game.tick({1: [cmds[i], fire]})
+		var st := bot.controller.state
+		var ref: Array = log_sim[i]
+		var gap := (st.position - (ref[0] as Vector3)).length()
+		if gap > 0.0005 and shown < 6:
+			shown += 1
+			print("[trace] tick %d gap %.4f: sim p %s v %s mode %d grounded %s | live p %s v %s mode %d grounded %s | cmd move %s yaw %.3f" % [
+				i, gap, str(ref[0]), str(ref[1]), ref[2], ref[3], str(st.position), str(st.velocity), st.mode, st.is_grounded(),
+				str((cmds[i] as DotFpsCommand).move), (cmds[i] as DotFpsCommand).yaw])
+		if i % 32 == 0:
+			await get_tree().physics_frame
+	print("[trace] live ends %s; sim ended %s" % [str(bot.controller.state.position.round()), str((log_sim[-1][0] as Vector3).round())])
+
+
+## Rides edge [param index] once in the game from its exact start, the way a bot does (the view
+## held on the map's middle), records the commands the player was given, replays them on the
+## simulator and prints the first tick where the two motors differ.
+func trace_live(data: Dictionary, index: int) -> void:
+	var row: Dictionary = (data.get("edges", []) as Array)[index]
+	var course := ArenaSurf.course_for(game.map, nav, _metres(row["from"]), _metres(row["to"]), float(row.get("reference_yaw", NAN)))
+	var surf := ArenaSurf.new()
+	surf.map = game.map
+	surf.nav = nav
+	var edge := ArenaSurf.Edge.new()
+	edge.id = 0
+	edge.from = course.start
+	edge.to = course.goal_centre
+	edge.course = course
+	edge.cache = DotBotSurfPilot.new()
+	edge.cache.load_stage(row, ArenaSurf.UNITS)
+	edge.linked = true
+	surf.edges.append(edge)
+	var mind := RideMind.new()
+	var aim_at := game.map.bounds.get_center()
+	if not bot.is_alive():
+		game.respawn_player(1)
+	var start := _standing_at(course.start, course.reference_yaw())
+	bot.controller.state.velocity = Vector3.ZERO
+	var cmds: Array = []
+	var states: Array = []
+	var first := true
+	var tick := 0
+	var outcome := -1
+	while tick < int(ArenaSurf.RIDE_SECONDS * TICK_RATE) + 2:
+		var intent := DotBotIntent.new()
+		var look := DotBotAim.angles_to(bot.controller.state.position + Vector3.UP * 1.6, aim_at)
+		intent.yaw = look.x
+		intent.pitch = look.y
+		intent.ride = 0 if first else -1
+		first = false
+		var landed_before := surf.landed
+		var fell_before := surf.fell + surf.timed_out
+		surf.steer(bot, mind, intent, tick, float(TICK_RATE))
+		if surf.landed > landed_before:
+			outcome = 1
+			break
+		if surf.fell + surf.timed_out > fell_before:
+			outcome = 0
+			break
+		var move := DotFpsCommand.new()
+		intent.write_move(move)
+		cmds.append(move)
+		var fire := DotWeaponCommand.new()
+		intent.write_fire(fire)
+		game.tick({1: [move, fire]})
+		var st := bot.controller.state
+		states.append([st.position, st.velocity, st.mode, st.is_grounded()])
+		tick += 1
+		if tick % 32 == 0:
+			await get_tree().physics_frame
+	print("[tracelive] live outcome %d after %d ticks, ends %s" % [outcome, tick, str(bot.controller.state.position.round())])
+	var sim := _simulator(course.event_at)
+	var s := start.duplicate_state()
+	s.velocity = Vector3.ZERO
+	var shown := 0
+	for i in range(cmds.size()):
+		var event := sim.step(s, cmds[i])
+		var ref: Array = states[i]
+		var gap := (s.position - (ref[0] as Vector3)).length()
+		if gap > 0.0005 and shown < 5:
+			shown += 1
+			var c: DotFpsCommand = cmds[i]
+			print("[tracelive] tick %d gap %.4f: live p %s v %s mode %d gr %s | sim p %s v %s mode %d gr %s | cmd move %s yaw %.3f jump %s" % [
+				i, gap, str(ref[0]), str(ref[1]), ref[2], ref[3], str(s.position), str(s.velocity), s.mode, s.is_grounded(), str(c.move), c.yaw, c.is_pressed(DotFpsCommand.BUTTON_JUMP)])
+		if event != 0:
+			break
+
+
 ## Rides edge [param index] [param count] times in the game: the arena's own tick, its teleports,
 ## its pushes, with the view held on the map's middle while the legs surf. Times the steering
 ## (lookup, forecast and veto) and the bot's whole command.
@@ -891,9 +1017,8 @@ func _simulator(oracle: Callable) -> DotFpsSimulator:
 	var sim := bot.controller.simulator(body)
 	sim.oracle = oracle
 	if game.map.mechanics != null:
-		var mechanics := game.map.mechanics
 		sim.mechanics = func(state: DotFpsState, motor: DotFpsMotor, delta: float, start: Vector3) -> int:
-			mechanics.simulate(motor, state, start, delta)
+			bot.step_mechanics(motor, state, start, delta)
 			return DotFpsSimulator.EVENT_NONE
 	return sim
 
