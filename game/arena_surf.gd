@@ -152,7 +152,7 @@ func attach(p_map: Object, p_nav: DotBotNav, data: Dictionary) -> void:
 	var recorded := str(data.get("bake", ""))
 	if recorded != "" and recorded != bake_id(nav):
 		# Edges were planned on other polygons: their landings no longer match this mesh.
-		DotLog.warn(CHANNEL, "a surf cache planned on another nav bake, rides skipped; replan with tools/surf_rides.gd",
+		DotLog.warn(CHANNEL, "a surf cache planned on another nav bake, rides skipped; replan with tools/surf_rides_all.py --replan",
 			{"map": str(map.get("id")), "cached": recorded, "bake": bake_id(nav)})
 		_link_teleports()
 		return
@@ -187,7 +187,7 @@ static func course_for(p_map: Object, p_nav: DotBotNav, from: Vector3, to: Vecto
 	course.nav = p_nav
 	course.start = from
 	course.goal_centre = to
-	course.landing_island = p_nav.island_at(to, 1.0)
+	course.landing_island = landing_island_at(p_nav, to)
 	course.landing_islands = landing_floor(p_nav, course.landing_island)
 	course.gravity = 800.0 * UNITS
 	var bounds: AABB = p_map.get("bounds")
@@ -200,6 +200,15 @@ static func course_for(p_map: Object, p_nav: DotBotNav, from: Vector3, to: Vecto
 	var _settled := course.settle()
 	course.start_yaw = course.reference_yaw() if is_nan(yaw) else yaw
 	return course
+
+
+## The island under [param to], or the one at the nearest mesh point within [constant LANDING_SNAP]: a bake with a bigger hull leaves a cached landing a hand's breadth outside the platform.
+static func landing_island_at(p_nav: DotBotNav, to: Vector3) -> int:
+	var island := p_nav.island_at(to, 1.0)
+	if island >= 0:
+		return island
+	var snapped := p_nav.closest(to)
+	return p_nav.island_at(snapped, 1.0) if snapped.distance_to(to) <= LANDING_SNAP else -1
 
 
 ## [param island] and every island whose outline comes within [constant FLOOR_JOIN] metres of
@@ -224,6 +233,9 @@ static func landing_floor(p_nav: DotBotNav, island: int) -> PackedInt32Array:
 const LANDED_FALL := 3.0
 
 const FLOOR_JOIN := 1.5
+
+## How far a cached landing may sit off the mesh and still count as on its nearest island, metres.
+const LANDING_SNAP := 0.5
 const FLOOR_STEP := 3.0
 
 

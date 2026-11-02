@@ -109,8 +109,18 @@ func _run() -> void:
 		get_tree().quit(1)
 		return
 	var path := ProjectSettings.globalize_path(ArenaSurf.path_for(map_id))
+	if args.has("--check") or args.has("--stamp"):
+		var cached := _read(path)
+		var stale := String(cached.get("bake", "")) != ArenaSurf.bake_id(nav)
+		print("[surf] %s: cache %s" % [map_id, "STALE (planned on another bake)" if stale else "matches the bake"])
+		if args.has("--stamp"):
+			_write(path, cached)
+		get_tree().quit(3 if stale and args.has("--check") else 0)
+		return
 	if args.has("--islands"):
 		list_islands()
+	if args.has("--landings"):
+		list_landings(_read(path))
 	var picture_at := args.find("--picture")
 	if picture_at >= 0:
 		picture(args[picture_at + 1], 1.0)
@@ -394,6 +404,19 @@ func list_islands() -> void:
 		var to: Vector3 = pits[i]["to"]
 		print("[surf] teleport %d: %s to %s, lands at %s (island %d) yaw %.0f" % [i, str(box.position.round()), str(box.end.round()),
 			str(to.round()), nav.island_at(to, 2.5), float(pits[i]["yaw"])])
+
+
+## Prints, per edge of the cache, the island its start and landing are on in this bake (-1: the edge lands nowhere).
+func list_landings(data: Dictionary) -> void:
+	var units := float(data.get("units", 0.01905))
+	var edges: Array = data.get("edges", [])
+	for i in range(edges.size()):
+		var row: Dictionary = edges[i]
+		var from := _metres(row["from"])
+		var to := _metres(row["to"])
+		print("[surf] edge %d: from island %d (cached %d), lands on %d (cached %d), %.2f m off the mesh (island %d within 4 m), planned %s" % [i,
+			nav.island_at(from, 1.0), int(row.get("from_island", -2)), ArenaSurf.landing_island_at(nav, to), int(row.get("to_island", -2)),
+			nav.closest(to).distance_to(to), nav.island_at(to, 4.0), row.has("lengths")])
 
 
 ## Writes a top-down picture of the map to [param out] (a PNG, [param scale] metres a pixel): the
@@ -915,6 +938,7 @@ static func _metres(row: Array) -> Vector3:
 func _write(path: String, data: Dictionary) -> void:
 	data["id"] = String(map_id)
 	data["units"] = ArenaSurf.UNITS
+	data["bake"] = ArenaSurf.bake_id(nav)
 	data["note"] = "Written by tools/surf_rides.gd: a combat surf map's ride edges (platform to platform, in genre units, Godot axes) and, per edge, every tick of every ride the planner found on the real motor as [x, y, z, vx, vy, vz, action]. Replan after a movement or collision change."
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var f := FileAccess.open(path, FileAccess.WRITE)
@@ -929,7 +953,6 @@ static func _read(path: String) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	return parsed if parsed is Dictionary else {}
 
-	data["bake"] = ArenaSurf.bake_id(nav)
 
 static func _spread(times: Array) -> String:
 	if times.is_empty():
