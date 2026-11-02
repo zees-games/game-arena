@@ -26,10 +26,6 @@ func cli_prefix() -> String:
 	return "--arena-"
 
 
-@export_group("Simulation")
-## Ticks a second for solo and a listen host (project.godot's physics rate is the same default); a dedicated server runs the host's sv_tickrate instead. Above 66 costs CPU in proportion, and the 32-bot solo budget was measured at 66.
-@export_range(30, 240, 1) var tick_rate: int = ArenaContent.TICK_RATE
-
 @export_group("Horde")
 ## Horde monsters per player at the most intense moment.
 @export_range(0.0, 40.0, 0.5) var horde_peak_per_player: float = 8.0
@@ -158,6 +154,10 @@ func validate() -> DotResult:
 ## Whether footsteps and landings stop while surfing.
 @export var surf_mute_steps: bool = true
 
+
+@export_group("Simulation")
+## Ticks a second for solo and a listen host (project.godot's physics rate is the same default); a dedicated server runs the host's sv_tickrate instead. Above 66 costs CPU in proportion; not yet measured with 32 bots.
+@export_range(30, 240, 1) var tick_rate: int = ArenaContent.TICK_RATE
 
 ## The surf fields as [method DotAudioSurfRules.apply_values] takes them.
 func surf_values() -> Dictionary:

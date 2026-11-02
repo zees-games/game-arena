@@ -12,3 +12,7 @@
 # --- Bots
 # Players a server fills to with bots when nothing else sets bot_quota. [0..]
 # bot_quota: 4
+
+# --- Simulation
+# Ticks a second for solo and a listen host (project.godot's physics rate is the same default); a dedicated s... [30..240]
+# tick_rate: 66
