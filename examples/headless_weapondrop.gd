@@ -14,7 +14,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 30
+const EXPECTED_CHECKS := 33
 
 var _checks := 0
 var _failed := 0
@@ -211,6 +211,41 @@ func _run() -> void:
 	view.show_prompt(away, 0.0)
 	_check(away.is_empty() and not view.visible, "and out of reach it hides")
 	view.queue_free()
+
+	# A splash is stopped by a wall: find a blocked and an open spot round one centre in the real level.
+	drops.clear()
+	_check(drops.can_see.is_valid(), "the arena gives the drop layer its sight check")
+	var trace: DotTrace = game.combat.trace
+	var centre := Vector3.ZERO
+	var wall_spot := Vector3.INF
+	var open_spot := Vector3.INF
+	for cx in range(-20, 21, 4):
+		for cz in range(-20, 21, 4):
+			var c := Vector3(cx, 1.5, cz)
+			var w := Vector3.INF
+			var o := Vector3.INF
+			for k in 24:
+				var dir := Vector3.RIGHT.rotated(Vector3.UP, TAU * k / 24.0)
+				var spot: Vector3 = c + dir * 4.0
+				if trace.line_of_sight(c, spot):
+					o = spot if o == Vector3.INF else o
+				else:
+					w = spot if w == Vector3.INF else w
+			if w != Vector3.INF and o != Vector3.INF and wall_spot == Vector3.INF:
+				centre = c
+				wall_spot = w
+				open_spot = o
+	_check(wall_spot != Vector3.INF and open_spot != Vector3.INF, "the level has a wall and an open line near the centre", "%s %s" % [wall_spot, open_spot])
+	drops.rules.blast_scale = 1.0
+	var behind := drops.spawn(snap["state"], wall_spot, Vector3.ZERO, 22)
+	var open_id := drops.spawn(snap["state"], open_spot, Vector3.ZERO, 22)
+	await get_tree().physics_frame
+	var hidden_body: RigidBody3D = drops._entries[behind]["body"]
+	var open_body: RigidBody3D = drops._entries[open_id]["body"]
+	hidden_body.linear_velocity = Vector3.ZERO
+	open_body.linear_velocity = Vector3.ZERO
+	var _pushed_n := drops.blast(centre, 6.0, 10.0)
+	_check(hidden_body.linear_velocity.length() < 0.001 and open_body.linear_velocity.length() > 0.5, "a blast pushes the drop in the open and leaves the one behind a wall", "%s %s" % [hidden_body.linear_velocity, open_body.linear_velocity])
 
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])

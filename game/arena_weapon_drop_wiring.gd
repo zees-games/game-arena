@@ -81,7 +81,7 @@ static func update_panel(client, pressed: bool, delta: float) -> void:
 	view.show_prompt(info, hold.progress)
 
 
-## Lets every traced shot and splash push a dropped weapon; idempotent, as the trace is built later than the layer.
+## Lets every traced shot and splash push a dropped weapon (a splash not through a wall); idempotent, as the trace is built later than the layer.
 static func hook_shots(game) -> void:
 	if game.weapon_drops == null or game.combat == null or not game.combat.trace is DotTrace:
 		return
@@ -89,6 +89,7 @@ static func hook_shots(game) -> void:
 	if trace.ray_observer.is_valid():
 		return
 	var drops: DotWeaponDrops = game.weapon_drops
+	drops.can_see = trace.line_of_sight
 	trace.ray_observer = func(from: Vector3, dir: Vector3, dist: float) -> void:
 		if drops.count() == 0:
 			return
