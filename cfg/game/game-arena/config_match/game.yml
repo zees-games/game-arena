@@ -10,5 +10,5 @@
 # friendly_fire: -1
 
 # --- Bots
-# Players a server fills to with bots when nothing else sets bot_quota. [0..32]
+# Players a server fills to with bots when nothing else sets bot_quota. [0..]
 # bot_quota: 4

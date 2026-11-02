@@ -19,7 +19,7 @@ const ArenaMap := preload("arena_map.gd")
 
 const MAX_BOXES := 512
 const MAX_EXTENT := 200.0
-const MAX_SPAWNS := 64
+const MAX_SPAWNS := 4096
 
 
 ## Builds the map from [param text]. [param entry_id] is the pack entry's id, which the

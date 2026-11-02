@@ -269,7 +269,7 @@ func _build_netcode() -> DotResult:
 	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
 	config.enable_prediction = true
 	config.enable_lag_compensation = false  # rewinding is a server's job
-	config.max_entities_per_snapshot = 64
+	config.max_entities_per_snapshot = 0
 	# From the game: a quantised position decoded against the wrong range is a different position.
 	config.world_extent = ArenaGame.NET_WORLD_EXTENT
 	# By name, as a pack runs on whatever dot-net its shell carries (docs/netcode.md, "A frame's cost").

@@ -443,7 +443,7 @@ func _build_netcode() -> DotResult:
 	config.enable_prediction = true
 	# On: a player shoots where they SEE someone, which is where that player was half a round trip ago.
 	config.enable_lag_compensation = true
-	config.max_entities_per_snapshot = 64
+	config.max_entities_per_snapshot = 0  # unlimited: interest management and the mtu bound a snapshot
 	# Unlimited: tools/net_probe.gd measured ~6 kB/s steady and ~16 kB/s at a join, so a cap
 	# could only hold a packet back (see _add_rate_cvar).
 	config.per_client_budget = _cv_maxrate.get_int() if _cv_maxrate != null else 0
