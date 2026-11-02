@@ -1,4 +1,3 @@
-class_name ArenaMatchText
 extends RefCounted
 ## Wording for the end-of-match reveal and summary.
 

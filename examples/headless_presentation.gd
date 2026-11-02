@@ -1,5 +1,7 @@
 extends "headless_presentation_base.gd"
 
+const ArenaFlashlight := preload("../game/arena_flashlight.gd")
+
 
 func _ready() -> void:
 	# Before anything builds a presentation layer: every settings document this suite writes

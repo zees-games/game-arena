@@ -1,4 +1,3 @@
-class_name ArenaFlashlight
 extends RefCounted
 
 ## The flashlight's config and binder for this game (the beam, the battery and the sounds are dot-flashlight's).
