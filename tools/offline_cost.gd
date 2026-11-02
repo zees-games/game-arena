@@ -34,13 +34,13 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	# A windowed client fills the model cache under its loading cover; headless skips that, so do it here.
-	var _warmed := ZeeModelCache.warm(ZeeWeaponArtTable.model_paths())
+	# Headless skips the loading-cover warm; do it after the client registers its own art table, or the default table's paths are warmed and the arena rifle loads mid-match.
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("force_offline", true)
 	_client.set("mouse_capture_override", true)
 	_client.set("offline_bots", _bots)
 	add_child(_client)
+	var _warmed := ZeeModelCache.warm(ZeeWeaponArtTable.model_paths())
 	var pilot := ClientBench.Pilot.new()
 	pilot.process_priority = -999
 	add_child(pilot)
