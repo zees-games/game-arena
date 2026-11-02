@@ -229,7 +229,7 @@ static func menu_rows(
 	for each: ArenaMode in modes:
 		if current_def != null and not supports_mode(current_def, each):
 			continue
-		out.append({"id": "mode:%s" % each.id, "name": each.display_name, "mode": "Mode",
+		out.append({"id": "mode:%s" % each.id, "name": each.display_name, "mode": "Mode", "kind": "mode",
 			"detail": each.description.get_slice("\n", 0),
 			"current": mode != null and each.id == mode.id})
 	return out

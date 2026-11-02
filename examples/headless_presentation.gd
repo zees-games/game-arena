@@ -1722,6 +1722,12 @@ func _test_the_map_menu() -> void:
 		"it lists more than one map, and the modes this map can host", str(rows.map(func(r: Dictionary) -> String: return str(r["id"]))))
 	menu.close_all()
 	_check(menu.handle_event(_key_press(KEY_M)) and menu.picker.is_open(), "M opens the picker")
+	var tabbed: bool = menu.maps.has_tabs() and keys.key_for(DotMenuBindings.MODES_ACTION) == "Minus"
+	var _tab1 := menu.handle_event(_key_press(KEY_MINUS))
+	var on_modes: bool = menu.picker.items.size() > 0 and menu.picker.items.all(func(r: Dictionary) -> bool: return str(r["id"]).begins_with("mode:"))
+	var _tab2 := menu.handle_event(_key_press(KEY_MINUS))
+	_check(tabbed and on_modes and menu.picker.items.all(func(r: Dictionary) -> bool: return str(r["id"]).begins_with("map:")),
+		"the picker has a Maps and a Game modes tab, switched by - (rebindable), maps first")
 	var wanted := &""
 	var key := KEY_NONE
 	for row in range(1, DotMenuPicker.PAGE_SIZE + 1):
