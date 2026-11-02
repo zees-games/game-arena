@@ -105,6 +105,15 @@ func _module_name() -> String:
 	return "arena"
 
 
+func _map_config_game() -> String:
+	return "game-arena"
+
+
+## FFA stays solid; see [method ArenaGame.block_side].
+func _noblock_side(id: Variant) -> Variant:
+	return game.block_side(id)
+
+
 func _module_version() -> String:
 	return "0.1.0"
 
@@ -401,16 +410,7 @@ func _bind_rule_cvars() -> void:
 	# mp_solidplayers: players and bots stop at each other (1) or pass through (0) (ArenaGame.solid_hulls_for).
 	var _solid_cvars := game.body_rules.bind_cvars(add_cvar, replicated)
 
-	# mp_teamblock, mp_enemyblock, mp_blockcmd*, mp_blockscope, mp_blockstate and !block / !noblock:
-	# dot-game's DotGameNoblock, REPLICATED for the same reason as mp_solidplayers. The server
-	# scene builds it (strict cfg layers); a suite that only builds a module gets a lenient one.
-	# A module loaded again over the same game gets fresh rules: the old ones are bound to the
-	# old console.
-	if game.noblock == null or game.noblock_bound:
-		DotLog.result(CHANNEL, "noblock", game.make_noblock(false))
-	if game.noblock != null:
-		DotLog.result(CHANNEL, "noblock cvars", game.noblock.bind(add_cvar, self))
-		game.noblock_bound = true
+	# mp_teamblock, mp_enemyblock, !block / !noblock: dot-game's module builds DotGameNoblock after this load.
 
 	# mp_vm_sway* and friends: zee-dot-weapons' view model feel, drawn on each client.
 	var _feel_cvars := game.feel_rules.bind_cvars(add_cvar, replicated)
@@ -1073,8 +1073,6 @@ func _start_workbench() -> void:
 		return
 	if game.config_binder != null:
 		game.config_binder.attach(rt)
-	if game.noblock != null:
-		game.noblock.binder.attach(rt)
 	if game.flashlight_binder != null:
 		game.flashlight_binder.attach(rt)
 	if ambient_set != null:
