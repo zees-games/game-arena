@@ -30,11 +30,9 @@ static var use_bakes: bool = true
 ## Whether an imported map is drawn from its converted world when one is linked at `res://worlds`.
 static var use_worlds: bool = true
 
-## A level as a list of boxes, and the three things that list becomes.
-##
-## The boxes are declared once here and become a [MeshInstance3D] set to see, [StaticBody3D]s for physics, and analytic [AABB]s for
-## [DotFpsFlatBody] and [DotTraceFlat] (a headless server has no physics space). Three separate descriptions would drift invisibly:
-## the server's wall moves a metre and shots pass through something clients can see.
+## A level as a list of boxes, and the three things that list becomes. The boxes are declared once
+## here and become a [MeshInstance3D] set to see, [StaticBody3D]s for physics, and analytic [AABB]s
+## for [DotFpsFlatBody] and [DotTraceFlat] (a headless server has no physics space).
 
 # No `CHANNEL`: a map is content and says nothing at runtime — it is built, turned into
 # three representations, and checked in `headless_match`. The session that loads it logs.
@@ -54,45 +52,24 @@ var wall_height: float = 8.0
 ## Where players appear. Fed into [DotMatch]'s spawn points.
 var spawns: Array[Transform3D] = []
 
-## What each spawn belongs to, parallel to [member spawns].
-##
-## Empty means every spawn is untagged and any player may use any of them, which is
-## what a free-for-all wants. Otherwise it is EXACTLY as long as [member spawns] and
-## `spawn_tags[i]` is the tag of `spawns[i]` — `DotTeam.spawn_tag` matches against it,
-## which is what sends a side to its own end of the map.
-##
-## [b]Always append through [method add_spawn].[/b] Two parallel arrays that can be
-## written independently are two lists that will disagree, which is this tree's most
-## repeated bug; the helper is the only reason they cannot.
+## What each spawn belongs to, parallel to [member spawns]. Empty means every spawn is untagged and
+## any player may use any of them, which is what a free-for-all wants.
 var spawn_tags: PackedStringArray = PackedStringArray()
 
 ## What [method by_id] answers to, and what a [DotMapDef] is keyed on.
-##
-## [b]Separate from [member display_name] even though the two happen to match.[/b] An
-## id is an address — a rotation entry, a leaderboard scope, a vote choice and a record
-## all name a map by it — and a display name is text somebody may want to change.
-## [ArenaMapDirector] used to read `display_name` as the id, which worked exactly until
-## the first map that wanted a nicer name than its filename.
 var id: StringName = &"dm_box"
 
 var display_name: String = "dm_box"
 
 
-## Every climb this map asks a player to make, derived from the boxes themselves.
-##
-## [b]Always append through [method add_climb], and never write this by hand.[/b] See
-## [method jump_reach] for why this list exists at all.
+## Every climb this map asks a player to make, derived from the boxes themselves. [b]Always append
+## through [method add_climb], and never write this by hand.[/b] See [method jump_reach] for why
+## this list exists at all.
 var climbs: Array[Climb] = []
 
 
-## Every route this map builds for the walls: a wall run or a wall jump from one box's top
-## to another's, past what the ordinary movement reaches.
-##
-## `{name, kind, from: AABB, to: AABB, walls: Array[AABB]}`, `kind` `&"run"` (along the
-## one wall in `walls`) or `&"jump"` (off the walls in `walls`, one jump each). Declared,
-## like [member climbs], so the suite can drive each one through the motor rather than
-## believe it, and so the survey can count it as a way from `from` to `to` (one way: a
-## wall route back is a second declaration). Append through [method add_wall_route].
+## Every route this map builds for the walls: a wall run or a wall jump from one box's top to
+## another's, past what the ordinary movement reaches.
 var wall_routes: Array[Dictionary] = []
 
 

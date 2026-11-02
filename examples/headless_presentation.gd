@@ -110,13 +110,7 @@ func _test_every_key_is_an_action() -> void:
 		"the wheel rows say Wheel up / Wheel down", str(named)
 	)
 
-	# A branch only matters if an older shell gets to run it. A pack asks for the level of
-	# every addon it was built against; dot-lighting is asked at that level (the maps are lit
-	# with `DotLightProfile.painted()`, API 3, and the level-1 `sky_top` repaint went with
-	# the floor that lowered it to 1); dot-ui's floor is 4, because the HUD names dot-ui's glance
-	# pieces (`DotVitals` and the rest, API 4) and a class name cannot be guarded (the
-	# wheel's level-1 branch went with it). dot-core's floor_audit refuses
-	# a floor once a guard it relies on is gone, here rather than at the release.
+	# A branch only matters if an older shell gets to run it.
 	var floors := DotAddonApi.parse(FileAccess.get_file_as_string("res://" + DotAddonApi.FLOOR_FILE), DotAddonApi.FLOOR_FILE)
 	var derived := DotAddonApi.derive()
 	var unsound := DotAddonApi.floor_audit(floors.value if floors.ok else {}, derived, DotAddonApi.guarded()) \
@@ -226,11 +220,14 @@ func _test_every_key_is_an_action() -> void:
 		"and with Launch moved to T, the grab moves with it",
 		"E %d, T %d" % [e_after, client.last_prop_asked])
 	client.game = null
+	_test_every_key_rest(p, client, stand_in, g)
+
+
+func _test_every_key_rest(p: ArenaPresentation, client: ArenaClient, stand_in: ArenaPlayer, g: ArenaGame) -> void:
 	g.free()
 
-	# Kept: what was rebound is in the document, and a new presentation reading it puts it
-	# back on the InputMap. The InputMap is put on the default first, so only the load can
-	# have moved it.
+	# Kept: what was rebound is in the document, and a new presentation reading it puts it back on
+	# the InputMap. The InputMap is put on the default first, so only the load can have moved it.
 	var flushed := p.settings.flush()
 	DotInputBinding.apply(&"arena_reload", "R")
 	var p2 := _make(false)
@@ -264,9 +261,8 @@ func _test_party_is_sandboxed() -> void:
 	add_child(party)
 	_check(party.setup().ok, "a party sets up")
 
-	# The decision this game makes and the lobby does not: arena reports to dot-stats,
-	# unlocks dot-achievements and files to dot-leaderboard, and a peer-to-peer host is a
-	# player's own machine that can lie about all of it.
+	# The decision this game makes and the lobby does not: arena reports to dot-stats, unlocks dot-
+	# achievements and files to dot-leaderboard.
 	_check(
 		party.session.config.trust == DotP2PConfig.Trust.SANDBOXED,
 		"a private arena match is sandboxed, because a host who can cheat and a "
@@ -291,22 +287,8 @@ func _test_party_is_sandboxed() -> void:
 	_done()
 
 
-## `[p2p-await-games]`: a private match over the HTTP rendezvous, host and join, each
-## awaited end to end — through `ArenaParty`, `DotP2PSession` and `DotP2PSignallerHttp` to
-## a socket and back.
-##
-## [b]What "awaited" is asserted as.[/b] The answer the caller gets back is the one the
-## stub sent, and it arrives at least [member RendezvousStub.delay] frames after the call:
-## a link in the chain that dropped its `await` hands its caller null or returns before
-## the stub has answered, and either fails here.
-##
-## [b]What differs from playground's copy.[/b] Arena's party is `Trust.SANDBOXED` with
-## migration off. dot-peer-to-peer's session does not branch on trust when it signals, so
-## every assertion playground makes applies here unchanged; the one thing added is that a
-## private match hosted over HTTP still files nothing (`reporting_allowed()`), because a
-## real rendezvous is the path a real private match takes. "Does not elect itself" is not
-## about migration: with migration off or on, a joiner that has just been told the host is
-## there must not think it is the host.
+## `[p2p-await-games]`: a private match over the HTTP rendezvous, host and join, each awaited end to
+## end — through `ArenaParty`, `DotP2PSession` and `DotP2PSignallerHttp` to a socket and back.
 func _test_party_over_http() -> void:
 	_section("A private match that meets over HTTP waits for the answer")
 
@@ -593,6 +575,10 @@ func _test_audio_is_a_firefight() -> void:
 		"and it took %d calls, none over 250 ms (longest %d ms)" % [calls, longest])
 
 	p.queue_free()
+	_audio_firefight_rest()
+
+
+func _audio_firefight_rest() -> void:
 	_done()
 
 
@@ -649,11 +635,8 @@ func _test_effects_and_the_player_who_asked_for_none() -> void:
 
 # --- 3b ---------------------------------------------------------------------
 
-## [b]Every effect this game names was refused until 2026-09-27[/b], because
-## `scenes/fx/` did not exist, and dot-fx logs a missing scene at DEBUG. Every check above
-## passed throughout: a catalogue validates without its scenes, by design. So this asks the
-## two questions that could not pass then: are the files there, and does a shot, taken the
-## way the client takes one, put nodes in the world.
+## [b]Every effect this game names was refused until 2026-09-27[/b], because `scenes/fx/` did not
+## exist, and dot-fx logs a missing scene at DEBUG.
 func _test_a_shot_is_drawn() -> void:
 	_section("A shot is drawn: a flash at the gun, a spark and a hole where it stopped")
 	var missing := ArenaPresentation.fx_catalogue().missing_scenes()
@@ -878,13 +861,7 @@ func _test_console() -> void:
 	_done()
 
 
-## Typing at the console must not walk the player. `DotFpsSampler` polls the keys every
-## tick, and a focused line edit does not stop `Input.is_action_pressed`; what stops it is
-## the client suspending the sampler while the console is open. Driven through the real
-## wiring with the key held down: the console is one of dot-menu's overlays
-## ([method ArenaMenus.build]), and the menu's `overlays_changed` is what the client
-## suspends on, through the platform's `input_blocked_changed` (polled in its _process, so the
-## steps below wait two frames) as the chat box does.
+## Typing at the console must not walk the player.
 func _test_console_stops_movement() -> void:
 	_section("A held movement key does not move the player while the console is open")
 
@@ -937,9 +914,8 @@ func _test_console_stops_movement() -> void:
 	_done()
 
 
-## The Escape menu is dot-menu's, over this game's settings document and key table, with
-## this game's pages on it. What no picture says: a row written from the menu reaches the
-## thing it is about, and a key rebound on the Controls page moves the InputMap.
+## The Escape menu is dot-menu's, over this game's settings document and key table, with this game's
+## pages on it.
 func _test_the_escape_menu() -> void:
 	_section("The Escape menu is dot-menu's, and its rows reach what they are about")
 
@@ -1134,19 +1110,16 @@ func _test_chat_box() -> void:
 		"an empty binding in the document is ignored rather than applied"
 	)
 
-	# The console and the chat box are the same question: does something on screen own
-	# the keyboard? A client that keeps reading movement while somebody types walks them
-	# across the map.
+	# The console and the chat box are the same question: does something on screen own the keyboard?
+	# A client that keeps reading movement while somebody types walks them across the map.
 	_check(not p.swallows_input(), "a closed box does not swallow input")
 	window.open()
 	_check(p.swallows_input(), "an open one does")
 	window.close()
 	_check(not p.swallows_input(), "and gives it back when it closes")
 
-	# A join notice is a name and NO text (dot-chat's `_presence`). Drawn as name and text
-	# it was a bare "Guest 435:" in the box, which read as a chat command echoed with its
-	# text stripped. The client is never added to the tree; only `_on_said` is used, fed
-	# exactly what the extras' `message_received` handler hands it.
+	# A join notice is a name and NO text (dot-chat's `_presence`). Drawn as name and text it was a
+	# bare "Guest 435:" in the box, which read as a chat command echoed with its text stripped.
 	var extras_script := preload("../game/arena_client_extras.gd")
 	var join := DotChatMessage.make(DotChatMessage.Kind.JOIN, &"all", "k2", "Guest 435", "")
 	var said_client := ArenaClient.new()
@@ -1187,10 +1160,8 @@ func _test_chat_box() -> void:
 
 # --- 8 ----------------------------------------------------------------------
 
-## `sensitivity`, `invert_pitch` and `crosshair` were on the settings screen and read by
-## nothing: the view turned at `DotFpsTunables`' default whatever the slider said. The
-## checks are about the two directions a binding like this goes wrong without erroring —
-## a saved value that is never pushed, and a changed value that is never heard.
+## `sensitivity`, `invert_pitch` and `crosshair` were on the settings screen and read by nothing:
+## the view turned at `DotFpsTunables`' default whatever the slider said.
 func _test_look_and_crosshair() -> void:
 	_section("The settings a player touches first reach what they are about")
 
@@ -1293,13 +1264,6 @@ func _test_look_and_crosshair() -> void:
 
 
 ## `ArenaClient`'s look guard, driven both ways through `mouse_capture_override`.
-##
-## [b]`Input.mouse_mode` is a no-op here.[/b] The dummy display server reads VISIBLE
-## however it is written, so a suite that set it directly would prove only the released
-## half and pass anyway — which is why the guard `_unhandled_input` had from the start
-## was never exercised. The client is built but not added to the tree: `_ready` builds
-## a whole networked client, and the branch under test needs a player, a sampler and
-## nothing else.
 func _test_mouse_drives_view() -> void:
 	_section("The mouse turns the view only while it is captured")
 
@@ -1379,11 +1343,7 @@ func _test_click_keeps_modal_pointer() -> void:
 	_done()
 
 
-## A connected client's respawn faces the way its spawn faces. The server's teleport turns
-## the server's controller, and its next command carries this client's old look; so the
-## client turns its own sampler when its player comes back alive on a map spawn.
-## The victim's kill view: the clip drives a camera and the killer's crosshair in place of the
-## death camera, Space skips and asks for the respawn, and the finished replay hands the camera back.
+## A connected client's respawn faces the way its spawn faces.
 func _test_the_kill_view() -> void:
 	_section("The kill view replaces the death camera, and Space skips it")
 	var rules := DotKillViewRules.new()
@@ -1512,12 +1472,6 @@ func _test_a_respawn_faces_its_spawn() -> void:
 
 
 ## A frame on which no tick ran still turns the view, and a correction's offset is drawn.
-##
-## This game ticks 64 times a second, so on a 144 Hz display more frames run no tick than
-## run one, and the view was the state's angles, which only a tick moves: the view stood
-## still while the mouse moved, then turned double. game-g2gfast measured the same thing
-## at 128 ticks over a real socket (`headless_feel`); here it is the drawing alone, with no
-## tick at all between the mouse and the frame.
 func _test_the_view_turns_every_frame() -> void:
 	_section("A frame with no tick in it still turns the view")
 
@@ -1574,10 +1528,8 @@ func _test_the_view_turns_every_frame() -> void:
 	_done()
 
 
-## A dead body falls as the server said: the death rides the KILL, the client builds a ragdoll
-## from the figure it draws, the body lies on the floor rather than through it, the server's
-## cvars turn it into a topple or nothing, and a respawn draws the figure again. What a fall
-## LOOKS like is the contact sheets (docs/client.md), not this.
+## A dead body falls as the server said: the death rides the KILL, the client builds a ragdoll from
+## the figure it draws, the body lies on the floor rather than through it.
 func _test_bodies_fall() -> void:
 	_section("A dead body falls the way the server picked, and gets up on respawn")
 
@@ -1690,6 +1642,10 @@ func _test_bodies_fall() -> void:
 	var entry := DotKillFeed.Entry.new()
 	entry.victim_key = "11"
 	entry.set_meta(&"death", fall)
+	_test_bodies_fall_rest(g, floor_body, yard, player, client, entry)
+
+
+func _test_bodies_fall_rest(g: ArenaGame, floor_body: StaticBody3D, yard: DotPlayerRagdolls, player: ArenaPlayer, client: ArenaClient, entry: DotKillFeed.Entry) -> void:
 	client._on_solo_kill(entry)
 	_check(client.ragdolls.live().size() == 1, "solo, a kill's entry carries the fall and the client draws it")
 	_check(client.ragdolls.rules == g.ragdoll_rules, "and it draws under the game's (the server's) rules")
@@ -1703,9 +1659,8 @@ func _test_bodies_fall() -> void:
 	_done()
 
 
-## The family's rule since the first play test: M opens the maps and the modes, and solo a
-## choice changes now. A whole offline client, because the change rebuilds its level. The
-## server's half (the owner's flag, the vote) is in `dedicated` and dot-vote's suite.
+## The family's rule since the first play test: M opens the maps and the modes, and solo a choice
+## changes now. A whole offline client, because the change rebuilds its level.
 func _test_the_map_menu() -> void:
 	_section("M opens the maps and the modes, and solo a choice changes the map")
 	var client := ArenaClient.new()
@@ -1751,9 +1706,8 @@ func _test_the_map_menu() -> void:
 	var changed := await client.change_from_menu(StringName("mode:%s" % mode_id))
 	_check(changed.ok and client.game.mode.id == mode_id and client.game.map.id == wanted,
 		"and a mode changes on the same map", "%s: %s" % [mode_id, changed.error.message if not changed.ok else "ok"])
-	# The Tab board draws dot-match's records, not whatever the roster says: the client builds
-	# it before the match node is in the tree, and it once kept the null scoreboard it was
-	# handed and drew the server's roster (the local player alone, no K or D) for ever.
+	# The Tab board draws dot-match's records, not whatever the roster says: the client builds it
+	# before the match node is in the tree.
 	var present := client.game.match_node.scoreboard.present_count()
 	menu.close_all()
 	menu.scoreboard.open()
@@ -1785,6 +1739,10 @@ func _test_the_map_menu() -> void:
 	client._reveal_hid.clear()
 	client.hud.visible = true
 	remove_child(client)
+	await _check_map_menu_tail(client)
+
+
+func _check_map_menu_tail(client: ArenaClient) -> void:
 	client.free()
 	await get_tree().process_frame
 	_done()
@@ -1848,11 +1806,8 @@ func _key_press(key: Key) -> InputEventKey:
 	return e
 
 
-## Christian's first play test: B opens the loadout (primary, secondary, melee, grenades), a
-## choice applies at once in warmup or spawn protection and otherwise on the next spawn, and an
-## owner's rules are what the menu offers and what the game takes. Solo, so the game here is the
-## authority; the server's command and cvars are `dedicated`'s. And the crosshair fades while the
-## gun is aimed down its sight.
+## Christian's first play test: B opens the loadout (primary, secondary, melee, grenades), a choice
+## applies at once in warmup or spawn protection and otherwise on the next spawn.
 func _test_the_loadout_menu() -> void:
 	_section("B is the loadout menu, and the crosshair fades down the sights")
 	var client := ArenaClient.new()
@@ -1938,10 +1893,8 @@ func _test_the_loadout_menu() -> void:
 	_done()
 
 
-## Christian's first play test: a darker HUD by default, which follows the menu's theme so a
-## player can change it. A whole offline client, because what is checked is the join the client
-## makes (`follow_hud`), and both dot-ui's pieces and this game's own (the feed, the slots, the
-## medals) are under its HUD.
+## Christian's first play test: a darker HUD by default, which follows the menu's theme so a player
+## can change it.
 func _test_the_hud_follows_the_theme() -> void:
 	_section("The HUD is dark by default and follows the menu's theme live")
 	var client := ArenaClient.new()
@@ -1990,10 +1943,9 @@ func _test_the_hud_follows_the_theme() -> void:
 	_done()
 
 
-## The pack carries its art (a delivered game has only what is vendored in assets/), so every
-## model the weapons table names must exist here. v0.1.13 shipped without low-poly-guns/ and
-## ammo/: eleven weapons were invisible in production and nothing failed. The list and the
-## check are the addon's; `tools/sync-art.sh` in zee-dot-weapons copies what it names.
+## The pack carries its art (a delivered game has only what is vendored in assets/), so every model
+## the weapons table names must exist here. v0.1.13 shipped without low-poly-guns/ and ammo/: eleven
+## weapons were invisible in production and nothing failed.
 func _test_the_weapon_art_is_vendored() -> void:
 	_section("Every model the weapon art table names is vendored in this game")
 	var count := ZeeWeaponArtTable.model_paths().size()
@@ -2076,13 +2028,8 @@ func _test_the_final_killcam() -> void:
 	_done()
 
 
-## Every piece of the HUD put up at once, as `screenshot.sh --glance` stages it, on five
-## frames, and no piece's drawn rect may meet another's. Standalone at 854x480 the
-## challenge ran over the scores, the ability bar and "Cancel slide" over the health, the
-## medals over the portraits; at 960x720 the scores reached the kill feed. A headless frame
-## is 64 px, so the HUD is laid out on each frame by hand (`fit_to_frame`): what is checked
-## is the arithmetic that places things, and the render (`--glance` at those sizes) is
-## still what says they look right.
+## Every piece of the HUD put up at once, as `screenshot.sh --glance` stages it, on five frames, and
+## no piece's drawn rect may meet another's.
 func _test_hud_fits_the_frame() -> void:
 	_section("No piece of the HUD lies over another, from a phone to a desktop frame")
 
@@ -2192,12 +2139,9 @@ func _test_hud_fits_the_frame() -> void:
 
 # --- The HUD under a ballot ----------------------------------------------------
 
-## The weapon slots under a ballot: this game's own map vote is seven rows (six maps and
-## Extend), and the client shell draws it down the right-hand side to y 437 at 1280x720, over
-## slots 1 and 2 of five. Anything in dot-ui's `dot_hud_cover` group is on top of the HUD;
-## `make_room` tightens the slots under it, then shows only the rows around the current one,
-## and drops the vote's centre line the ballot duplicates. How it looks is
-## `screenshot.sh dm_box --glance --map-ballot`; this is the arithmetic.
+## The weapon slots under a ballot: this game's own map vote is seven rows (six maps and Extend),
+## and the client shell draws it down the right-hand side to y 437 at 1280x720, over slots 1 and 2
+## of five.
 func _test_hud_makes_room_for_a_ballot() -> void:
 	_section("The weapon slots and the centre line make room for a ballot")
 
@@ -2498,12 +2442,8 @@ func _check_health_tag(player: ArenaPlayer) -> void:
 	player.health.health = player.health.max_health
 
 
-## A client turns the server's HIT and AWARD into the hit marker, a damage number, the
-## medals and "+points  Victim", read back off the wire exactly as a link delivers them.
-## A server's ids are consecutive (bots, a busy evening), and stock avatars are drawn in
-## the world and in the HUD's portrait row. The seed used to be the key's string hash,
-## which moves by a few per id, and `(seed / 7) % HEADS.size()` then gave players 112..118
-## the same head: a row of one face. Each slot now chooses from its own mix of the seed.
+## A client turns the server's HIT and AWARD into the hit marker, a damage number, the medals and
+## "+points  Victim", read back off the wire exactly as a link delivers them.
 func _test_stock_avatars_differ() -> void:
 	_section("Consecutive players do not wear the same stock face")
 

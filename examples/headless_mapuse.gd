@@ -129,6 +129,15 @@ func _run() -> void:
 	_check(sky_info.is_empty(), "looking away shows no prompt, so a pickup's prompt may show")
 	_check(not mio.press_for(_AimAway.new(stand + Vector3(0.0, 1.6, 0.0)), 21), "and the key is not spent on nothing, so a dropped weapon can take it")
 
+	_test_bodies_and_plain(mio, world, player)
+
+	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
+	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
+	get_tree().quit(0 if ok else 1)
+
+
+## Movers see the host's living players as bodies; a map without movers builds none.
+func _test_bodies_and_plain(mio: Object, world: DotMapWorld, player: Object) -> void:
 	var live: Array = mio.bodies()
 	_check(live.size() == 1 and int(live[0]["id"]) == 21 and (live[0]["position"] as Vector3).is_equal_approx(player.controller.state.position), "the host hands its living players to the movers as bodies")
 	var before: Vector3 = player.controller.state.position
@@ -147,10 +156,6 @@ func _run() -> void:
 	add_child(plain)
 	var _s := plain.setup(ArenaMap.dm_atrium())
 	_check(plain.map_io == null, "a map with no movers builds no mover world and costs nothing")
-
-	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
-	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
-	get_tree().quit(0 if ok else 1)
 
 
 ## Stands in for a player who looks along +Y.

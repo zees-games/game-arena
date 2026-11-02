@@ -363,13 +363,6 @@ func _test_owner_only() -> void:
 # --- Maps and voice over the link -------------------------------------------
 
 ## A player dies and THEIR CLIENT draws the death camera, then hands it over.
-##
-## [b]Until 2026-09-25 a networked client drew no death camera at all.[/b] The spectate
-## layer was built on every side, but on a client it was fed by `game.player_killed`, which
-## only the authority emits (dot-combat resolves no deaths on a mirror), and ticked by
-## `game.tick`, which a networked client never calls — so `is_spectating` was false for the
-## whole of every death and the camera stayed on the body. Every check about the camera
-## ran on an offline or authoritative game, where the same code is fed and ticked.
 func _test_client_death_camera() -> void:
 	print("")
 	_section("[the death camera on a client]")
@@ -727,13 +720,8 @@ func _test_toys_reach_a_client() -> void:
 	_done()
 
 
-## The horde reaches a connected client: a monster the server spawns is drawn, follows the
-## server's, and goes when the server's does.
-##
-## [b]Monsters were never replicated.[/b] The horde ran on the server only, so a player on a
-## dedicated server was hurt by monsters they could not see; every check about the horde ran
-## on an authoritative game, where the monsters are real bodies in the same tree. Last,
-## because the disconnect section counts the registry, and a monster is an entity in it.
+## The horde reaches a connected client: a monster the server spawns is drawn, follows the server's,
+## and goes when the server's does.
 func _test_monsters_reach_a_client() -> void:
 	print("")
 	_section("[monsters reach a client]")
@@ -788,25 +776,8 @@ func _test_monsters_reach_a_client() -> void:
 	_done()
 
 
-## An administrator noclips a player on the server, and the player's own client — which
-## has no noclip permission of its own — has to PREDICT it.
-##
-## [b]The symptom this exists for is rubber-banding, and no server-side check can see
-## it.[/b] Set naively — `state.mode = NOCLIP` on the server — the client's replay runs its
-## own noclip gate, which is closed, drops the player to AIR on every replayed tick, and is
-## pulled back by every snapshot: the player flickers between flying and falling while
-## every number on the server is right. So this flies the player straight up for a second
-## and compares, tick by tick, where the client predicted them against where the server
-## put them — once the shipped way and once the naive way, and requires the first to agree
-## and the second not to. Without the second half, "agrees" could be a window in which the
-## client was never asked to disagree.
-##
-## [b]Not `DotNetPredictor.correction_rate`.[/b] That was the first measure written here and
-## it read 0.0% for BOTH, with a worst error of 0.000 m across the whole run: it measures
-## the player NODE before and after a reconcile, and in this harness nothing moves the
-## node of a headless player between the two. A measure that cannot see the bug it is
-## pointed at is the family's "reports its healthy case while blind", so the comparison is
-## on the simulated state, which is what a player's camera follows.
+## An administrator noclips a player on the server, and the player's own client — which has no
+## noclip permission of its own — has to PREDICT it.
 func _test_forced_noclip_is_predicted() -> void:
 	print("")
 	_section("[an admin's noclip, predicted by the client it happens to]")
@@ -875,13 +846,9 @@ func _test_forced_noclip_is_predicted() -> void:
 	_done()
 
 
-## A server owner's movement rules (`arena_slide*`, `arena_launch*`) reach every client.
-##
-## [b]A client predicting with different numbers mispredicts every slide and every launch[/b],
-## and the symptom is rubber-banding that looks like lag. So: the rule lands on the client's
-## game and its copy of the player, the two ends' fingerprints match, a launch is predicted
-## to within a hand's width — and, the negative control, a launch changed on the server
-## alone is not.
+## A server owner's movement rules (`arena_slide*`, `arena_launch*`) reach every client. [b]A client
+## predicting with different numbers mispredicts every slide and every launch[/b], and the symptom
+## is rubber-banding that looks like lag.
 func _test_movement_rules_reach_clients() -> void:
 	print("")
 	_section("[movement rules reach every client]")
@@ -930,11 +897,8 @@ func _test_movement_rules_reach_clients() -> void:
 		"%s vs %s" % [client_player.controller.tunables.fingerprint(), server_player.controller.tunables.fingerprint()]
 	)
 
-	# Somewhere with nothing overhead: the noclip section's spot is under the south
-	# arcade, whose roof stopped the first launch measured here at 1.19 m.
-	# The match may still be moving WARMUP to COUNTDOWN here (join and loading timing
-	# decide when), and the state change respawns everybody: a launch cut by that is a
-	# respawn, not a misprediction (5.59 m at the tick it happened). Wait for it first.
+	# Somewhere with nothing overhead: the noclip section's spot is under the south arcade, whose
+	# roof stopped the first launch measured here at 1.19 m.
 	var waited_live := 0
 	while not _server_game.match_node.is_live() and waited_live < 40:
 		var _wait_live := _flight_window(0, 32, 0)
@@ -967,10 +931,7 @@ func _test_movement_rules_reach_clients() -> void:
 	_check(float(launch["worst_gap"]) < 0.05, "and the client predicts it to within five centimetres",
 		"worst %.2f m" % float(launch["worst_gap"]))
 
-	# The negative control: the same change made on the server's player alone. In this
-	# lockstep harness a wrong impulse is corrected within a snapshot or two, so the gap
-	# above cannot tell a shared rule from a server-only one (0.38 m against 0.42 m when it
-	# was tried); what can is the fingerprint the two ends compare at connect.
+	# The negative control: the same change made on the server's player alone.
 	server_player.controller.tunables.launch_velocity = 24.0
 	_check(
 		client_player.controller.tunables.fingerprint() != server_player.controller.tunables.fingerprint(),
@@ -987,15 +948,8 @@ func _test_movement_rules_reach_clients() -> void:
 	_done()
 
 
-## A wall run and a wall jump, predicted by the client and run by the server, over this
-## harness's one-in-five loss.
-##
-## [b]Every bit of a wall move the next tick reads rides in `net_flags`[/b] (the run's
-## time, the jump counts, the wall's heading), and a client that replays a tick without
-## one of them puts the player somewhere else: off the wall, or allowed a second jump off
-## it. So the north gallery's two wall routes are driven from the client's own predicted
-## state, the way a player would, and both ends have to make the route, agree to within the
-## snapshot's rounding all the way through the loss, and end up in the same place.
+## A wall run and a wall jump, predicted by the client and run by the server, over this harness's
+## one-in-five loss.
 func _test_wall_moves_predicted() -> void:
 	print("")
 	_section("[a wall run and a wall jump, predicted]")
@@ -1042,12 +996,9 @@ func _test_wall_moves_predicted() -> void:
 			"%s: the server's player makes it, and so does the client's prediction" % name,
 			"server %s, client %s" % [server_player.controller.state.position, client_player.controller.state.position]
 		)
-		# Five centimetres. `_driven_window` plays the link the way a real one plays (the
-		# client ahead of its snapshots, each command early with its copies), so what is
-		# left is the snapshot's own rounding, 5 to 7 mm whichever tick the presses fall
-		# on. A wall jump a tick late is 0.1 m in its first tick; this used to allow 0.35
-		# because the harness itself made every jump a tick late on the client, and the
-		# gap was then only as big as the wait for the next snapshot.
+		# Five centimetres. `_driven_window` plays the link the way a real one plays (the client
+		# ahead of its snapshots, each command early with its copies), so what is left is the
+		# snapshot's own rounding, 5 to 7 mm whichever tick the presses fall on.
 		_check(
 			float(measured["worst_aligned"]) < 0.05 and landed_apart < 0.01,
 			"%s: the client predicted it within five centimetres of the server, and lands where it does" % name,
@@ -1060,13 +1011,8 @@ func _test_wall_moves_predicted() -> void:
 	_done()
 
 
-## An administrator's blind and beacon, through the real handlers, over the lossy link.
-##
-## [b]The audience is the whole point of both.[/b] Client 2 owns player 11. A blind is
-## that player's screen and nobody else's, so client 2 must get it and client 3 must NOT —
-## an opponent who could read it would know the moment somebody could not see them. A
-## beacon is for everybody, so both must get it. Asserted on each client's own copy of
-## the player, which is what its HUD and its renderer read.
+## An administrator's blind and beacon, through the real handlers, over the lossy link. [b]The
+## audience is the whole point of both.[/b] Client 2 owns player 11.
 func _test_blind_and_beacon() -> void:
 	print("")
 	_section("[an admin's blind and beacon: who is told]")
@@ -1132,15 +1078,8 @@ func _test_blind_and_beacon() -> void:
 	_done()
 
 
-## What a player carries reaches their own client, what they hold reaches everybody, the
-## use counter crosses, a replayed tick is silent, and a launch flies on a client.
-##
-## [b]Before this, a connected client's arsenal was EMPTY for the whole match.[/b] A
-## loadout is resolved from a store on the server and nothing sent the result, so the
-## client predicted no shot, drew no flash, its HUD read zero and its number keys selected
-## nothing, while the server fired everything correctly — and `[audience]` above wrote it
-## down as "not asserted". `net_carry` (owner-only) and `net_weapon` (everybody's) are the
-## two fields that close it.
+## What a player carries reaches their own client, what they hold reaches everybody, the use counter
+## crosses, a replayed tick is silent, and a launch flies on a client.
 func _test_weapons_over_the_wire() -> void:
 	print("")
 	_section("[weapons over the wire]")
@@ -1271,12 +1210,9 @@ func _test_launch_flies_on_client(own: ArenaPlayerNet) -> void:
 	)
 
 
-## Players are solid to each other (`mp_solidplayers`, 1 by default): a walk into another
-## player stops two radii apart on the server, and the walker's own client predicts the same
-## stop. Then, at 0 on both ends (the cvar is replicated), the same walk passes through.
-##
-## [b]Arena's own, not the family's hull.[/b] Movement here is analytic on the server and on
-## every predicting client, so dot-player-controller's physics capsule reached neither.
+## Players are solid to each other (`mp_solidplayers`, 1 by default): a walk into another player
+## stops two radii apart on the server, and the walker's own client predicts the same stop. Then, at
+## 0 on both ends (the cvar is replicated), the same walk passes through.
 func _test_solid_players_predicted() -> void:
 	print("")
 	_section("[players are solid, and predicted so]")
@@ -1340,11 +1276,9 @@ func _test_ready_gate() -> void:
 	print("")
 	_section("[the ready gate]")
 
-	# **Nothing may be sent to a peer before it says it can receive.** dot-server's
-	# signon finishes and THEN the client builds its scene, so everything sent in
-	# between lands on a node that does not exist and is lost — one "Node not found"
-	# per call, and a client that never learns who it is. game-hungario found this the
-	# hard way and the gate is what came out of it.
+	# **Nothing may be sent to a peer before it says it can receive.** dot-server's signon finishes
+	# and THEN the client builds its scene, so everything sent in between lands on a node that does
+	# not exist and is lost — one "Node not found" per call.
 	var sent: Array = []
 	var bridge := ArenaNetBridge.new()
 	bridge.name = "GateBridge"
@@ -1424,17 +1358,9 @@ func _test_predicted_node_is_not_moved() -> void:
 	print("")
 	_section("[the predicted entity's node]")
 
-	# `DotNetManager.receive_snapshot` calls `read_state` — and therefore
-	# `_net_state_applied` — BEFORE `DotNetPredictor.reconcile`, and the first thing
-	# reconcile does is read the node as "what the client is showing" so it can measure
-	# the correction. Writing the server's position there first makes that measurement
-	# the entire replay distance: every reconciliation logs a snap, the correction rate
-	# reads near 1.0, and the simulation is right the whole time.
-	#
-	# game-hungario had this exact line and the family's notes have listed it as unfixed
-	# here ever since. Nothing in this file could see it before: the check is not on a
-	# position, it is on WHETHER THE NODE MOVED, which no assertion about the
-	# simulation can reach.
+	# `DotNetManager.receive_snapshot` calls `read_state` — and therefore `_net_state_applied` —
+	# BEFORE `DotNetPredictor.reconcile`, and the first thing reconcile does is read the node as
+	# "what the client is showing" so it can measure the correction.
 	var behaviour := (_clients[2]["bridge"] as ArenaNetBridge).behaviour_for(11)
 
 	if not _check(behaviour != null, "the local player's behaviour is found"):
@@ -1486,19 +1412,9 @@ func _test_config_agreement() -> void:
 	print("")
 	_section("[the two ends agree]")
 
-	# **A quantised value decoded against a different range is a different value, not a
-	# less precise one.** `world_extent` is the range every replicated position is an
-	# integer over, and the server and the client used to write it separately — 128 in
-	# `ArenaModule`, 256 in `ArenaClient`, in two files a hundred lines apart.
-	#
-	# What that looked like, in a real browser against a real server: the client
-	# connected, sealed an identical message schema, adopted its own player alive with
-	# 100 health, logged every stage correctly — and drew sky in every direction with a
-	# HUD reading zero. No error anywhere, because there is no error: both ends did
-	# exactly what they were told.
-	#
-	# The fix is that there is now one constant and nothing to keep in step. This check
-	# is what stops somebody typing a number into one of the two again.
+	# **A quantised value decoded against a different range is a different value, not a less precise
+	# one.** `world_extent` is the range every replicated position is an integer over, and the
+	# server and the client used to write it separately — 128 in `ArenaModule`.
 	_check(
 		is_equal_approx(_server_net.config.world_extent, ArenaGame.NET_WORLD_EXTENT),
 		"the server quantises positions over the game's extent",
@@ -2108,6 +2024,10 @@ func _test_event_wire() -> void:
 	_check(ArenaEvents.prop_acts_fit(), "every prop act fits the prop request's act field",
 		"%d acts in %d bits" % [ArenaEvents.PropAct.size(), ArenaEvents.PROP_ACT_BITS])
 
+	_test_event_wire_rest()
+
+
+func _test_event_wire_rest() -> void:
 	_done()
 
 

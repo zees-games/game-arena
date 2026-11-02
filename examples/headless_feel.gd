@@ -10,33 +10,8 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 
 ## What a player SEES, frame by frame: the real client, offline and through a real socket.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_feel.tscn
-## godot --headless --path . res://examples/headless_feel.tscn -- --verbose
-## godot --headless --path . res://examples/headless_feel.tscn -- --only offline   # or moves, or a window's name
-## [/codeblock]
-##
-## Every other suite asserts a simulated value, and a simulation-to-screen bug passes all of
-## them (docs/testing.md). This one draws at a display rate (`Engine.max_fps`), not the tick
-## rate, and samples what each rendered frame shows: the eye and the view, the view model's
-## offset under the camera, and everybody else as this client draws them.
-##
-## - [b]Offline[/b], the real `ArenaClient` runs, strafes and turns among its bots, which run
-##   circles (a bot that hunts shoots the player, and a death is not a measurement).
-## - [b]Moves[/b]: a player of its own on dm_box, through `ArenaPlayer.present`, up the stair
-##   at a run, a slide, a jump and a landing, a drop from 5 m and a strafe each way: the
-##   camera's motion (landing dip, lean, widening) eases and never snaps.
-## - [b]Connected[/b]: a dual-stack `DotServer` running `ArenaModule` with one bot whose every
-##   command is written here (circles), and the real client over ENet through dot-net's relay,
-##   in windows at 60 and 144 Hz, steady and then with loss and jitter. (The process draws
-##   about 145 frames a second at most with a server in it, so no 240 Hz window.)
-##
-## Each frame's step is judged against the motion it was drawn on: the local eye and an
-## offline bot against the step between their last two ticks, a connected bot against the
-## server's own track at the render time the interpolator drew. Frames across a corner (a
-## wall, a landing) are not judged: no one velocity says where they should have ended.
-## Armed: each check fails with its fix taken out (docs/testing.md has the numbers).
+## [codeblock] godot --headless --path . res://examples/headless_feel.tscn godot --headless --path .
+## res://examples/headless_feel.tscn -- --verbose godot --headless --path .
 
 const PORT := 27194
 const DATA := "user://arena_feel"
@@ -518,6 +493,10 @@ func _test_moves() -> void:
 	_check(lean["step"] < 0.1 and lean["jerk"] < 0.02,
 		"and the lean eases: under 0.1 degrees a frame, its rate changing under 0.02 a frame, even reversing",
 		"largest turn in a frame %.3f, largest change of that %.4f degrees" % [lean["step"], lean["jerk"]])
+	_test_moves_rest(stair_starved, slide_starved, widen_slide, widen_run)
+
+
+func _test_moves_rest(stair_starved: String, slide_starved: String, widen_slide: Dictionary, widen_run: Dictionary) -> void:
 	_starved_reason = slide_starved if slide_starved != "" else stair_starved
 	_check(widen_run["high"] < 0.05 and widen_slide["high"] > 1.0 and widen_slide["step"] < 0.15 and widen_slide["jerk"] < 0.04,
 		"a run does not widen the view, a slide does, and it eases in",

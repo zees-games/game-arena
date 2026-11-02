@@ -14,49 +14,8 @@ const ArenaDrops := preload("../game/arena_drops.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaJail := preload("../maps/arena_jail.gd")
 
-## The combat surf maps game-g2gfast imported, played as an arena deathmatch.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_imported.tscn
-## [/codeblock]
-##
-## [b]Every other suite here plays a list of boxes, and an imported map is not one.[/b] Its
-## movement and its shots are physics queries against a few thousand convex brushes that
-## the game puts in the tree on every machine, its spawns are the mapper's, its pits are
-## teleports, and its air control is the genre's. Not one of those is reachable from
-## `headless_match`, which is why this file exists: a map that loads and that nobody can
-## stand on passes every check written for the built-ins.
-##
-## What it asserts, on [constant MAP] (the first map in the default rotation):
-##
-## - the map is found by its manifest's kind and catalogued, in or out of the rotation;
-## - the game loads it with its solid in the tree and the physics backends bound to it;
-## - every player appears on one of the map's OWN spawn points, standing on its floor;
-## - bots ride its ramps: the map's ride edges (`maps/surf/<id>.surf.json`) are in their
-##   routes, a bot handed one rides it to the platform below and lands alive, and a roaming bot's
-##   own route hands it one; on the rotation's own maps ([constant ROTATION_RIDE_MAPS]) a bot
-##   rides one across the map, several flights long, and lands alive;
-## - a deathmatch is played on it for [constant PLAY_SECONDS] seconds and nobody falls
-##   through, leaves the map or ends up inside a brush, and kills are scored until the
-##   score limit ends the round;
-## - the surf air control is on there, back off on a built-in map, and back on again;
-## - a pit sends a player where it aims, and the floor under the map catches anybody past it;
-## - the map's own mechanics run: a booster throws a player at its speed, water is swum in
-##   (and sunk in, and climbed out of), a ladder is climbed;
-## - a hurt volume on [constant HURT_MAP] hurts through dot-combat, every half second, and
-##   kills as the world, and a negative one heals;
-## - a map is lit from its manifest's `lighting` block (its sun, its sky by name where the
-##   ambient is the editor's white, its own six sky faces where it packed them), on a
-##   dot-lighting that draws `sky_top` and on one that does not;
-## - as a sweep, every combat surf map found builds and puts its spawns on a floor;
-## - and a map only the SERVER names (a pack key in `games.current_maps()`, on a fake mount
-##   under `res://dot_cloud/`) is catalogued as delivered without being fetched, is built from
-##   the mount on a change, is gone when the server stops naming it, and a named pack that is
-##   not `"kind": "arena"` is skipped.
-##
-## [b]Skips, loudly, when the maps are not linked[/b] — a checkout without arena-surf-dm-maps
-## plays the built-ins only, which is a supported state (dot-ci has no link). It is allowed
-## to skip; it is not allowed to pass: the exit code is 0 and the line says why.
+## The combat surf maps game-g2gfast imported, played as an arena deathmatch. [codeblock] godot
+## --headless --path .
 
 const TICK_RATE := 64
 const BOTS := 6
@@ -213,10 +172,9 @@ func _test_catalogue() -> void:
 
 # --- Lighting --------------------------------------------------------------
 
-## The three maps each put one rule in the state it exists for: surf_mai_remix has a sun and
-## a blue ambient of its own, surf_29_12_06 the editor's white ambient under a sky the
-## table knows, surf_buck_wild a sky it packed. Until 2026-10-11 every imported map got
-## one fixed sun and a flat grey-blue, whatever its manifest said.
+## The three maps each put one rule in the state it exists for: surf_mai_remix has a sun and a blue
+## ambient of its own, surf_29_12_06 the editor's white ambient under a sky the table knows,
+## surf_buck_wild a sky it packed.
 func _test_worlds() -> void:
 	_section("a map with a converted world is drawn from it, the rest keep their legacy meshes")
 	var linked := ArenaBspMap.world_prefix("surf_grave_reloaded") != ""
@@ -639,10 +597,7 @@ func _test_bot_routes() -> void:
 	_check(not world.is_route_pending() and route.size() >= 2,
 		"the mesh lands and gives a route between spawns %.0f m apart (%d corners, %d frames waited)" % [a.distance_to(b), route.size(), frames])
 
-	# From that spawn to every other: every leg clear at knee height. A combat surf map is two
-	# halves joined by ramps and drops, which a walking mesh does not hold, so a route to the
-	# far half ends at the edge of this one (the bot walks straight on from there); the near
-	# half is reached in full.
+	# From that spawn to every other: every leg clear at knee height.
 	var trace := _game.combat.trace
 	var clear := 0
 	var reached := 0

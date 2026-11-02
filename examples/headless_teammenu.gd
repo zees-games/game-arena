@@ -151,6 +151,11 @@ func _run() -> void:
 	res = server.request(32, "1")
 	_check(res.ok and not game.player_for(32).is_alive(), "mp_teamswitch_kill 1 kills the player who switches")
 	_check(game.match_node.scoreboard.record_for("32").deaths == 0, "and counts no death against them")
+	_run_first(game, server, data, other, res)
+	await _run_second(server)
+
+
+func _run_first(game: ArenaGame, server: Variant, data: Dictionary, other: int, res: DotResult) -> void:
 	_cv("mp_teamswitch_kill", "0")
 	_cv("mp_teamswitch_imbalance", "1")
 
@@ -206,6 +211,9 @@ func _run() -> void:
 
 	# 7. Offline: the menu's own callables (no server, no console) run the same rules.
 	_sections += 1
+
+
+func _run_second(server: Variant) -> void:
 	for mode: ArenaMode in [ArenaMode.free_for_all(), ArenaMode.team_deathmatch()]:
 		var solo := _game(mode)
 		var _me := solo.add_player(71, "Me")

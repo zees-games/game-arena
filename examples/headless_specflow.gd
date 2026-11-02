@@ -80,18 +80,7 @@ func _build() -> bool:
 	_game.match_node.rules.countdown_sec = 0.0
 	_game.match_node.rules.min_players = 1
 
-	var config := DotServerConfig.new()
-	config.hostname = "arena specflow"
-	config.port = PORT
-	config.bind_address = "127.0.0.1"
-	config.rcon_password = ""
-	config.admins_path = "%s/admins.json" % SERVER_DIR
-	config.bans_path = "%s/bans.json" % SERVER_DIR
-	config.audit_log_path = "%s/audit.jsonl" % SERVER_DIR
-	config.hibernate_when_empty = false
-	config.startup_config = ""
-	config.autoexec_config = ""
-	config.query_enabled = false
+	var config := _server_config()
 
 	_server = DotServer.new()
 	_server.name = "Server"
@@ -142,6 +131,23 @@ func _build() -> bool:
 
 	_step(8)
 	return _game.player_for(73) != null and _game.player_for(71) != null
+
+
+## A loopback server config whose files live in this run's own directory.
+func _server_config() -> DotServerConfig:
+	var config := DotServerConfig.new()
+	config.hostname = "arena specflow"
+	config.port = PORT
+	config.bind_address = "127.0.0.1"
+	config.rcon_password = ""
+	config.admins_path = "%s/admins.json" % SERVER_DIR
+	config.bans_path = "%s/bans.json" % SERVER_DIR
+	config.audit_log_path = "%s/audit.jsonl" % SERVER_DIR
+	config.hibernate_when_empty = false
+	config.startup_config = ""
+	config.autoexec_config = ""
+	config.query_enabled = false
+	return config
 
 
 func _adopt(

@@ -672,9 +672,8 @@ func build(p_game: ArenaGame) -> void:
 	blind_overlay = ColorRect.new()
 	blind_overlay.name = "Blind"
 	blind_overlay.color = BLIND_COLOUR
-	# Not anchored to this HUD's rect: `DotHud` insets itself by the safe area, and a
-	# blind the size of the HUD left a 16-pixel frame of the world visible round the edge
-	# of the first rendered frame. Sized to the whole viewport in `present_blind` instead.
+	# Not anchored to this HUD's rect: `DotHud` insets itself by the safe area, and a blind the size
+	# of the HUD left a 16-pixel frame of the world visible round the edge of the first rendered.
 	blind_overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	blind_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	blind_overlay.modulate.a = 0.0

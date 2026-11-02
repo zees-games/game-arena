@@ -241,6 +241,10 @@ func _play(preset: String) -> void:
 			b = spawn.origin
 	var route := world.route(a, b)
 	var clear := route.size() >= 2
+	await _play_rest(preset, game, trace, world, a, b, route, clear)
+
+
+func _play_rest(preset: String, game: ArenaGame, trace: DotTrace, world: ArenaBots.World, a: Vector3, b: Vector3, route: PackedVector3Array, clear: bool) -> void:
 	var from := a
 	for corner in route:
 		clear = clear and trace.line_of_sight(from + Vector3.UP * 0.5, corner + Vector3.UP * 0.5)

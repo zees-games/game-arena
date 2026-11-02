@@ -26,20 +26,6 @@ const ArenaTeamMenu := preload("arena_team_menu.gd")
 const ArenaVote := preload("arena_vote.gd")
 
 ## Binds an [ArenaGame] to a [DotServer].
-##
-## [b]This is the only file in the project that names dot-server, and it is the only
-## place the family's own documentation says such a bridge belongs.[/b] dot-match does
-## not import dot-server, dot-combat does not, and dot-loadout does not — so a game
-## that wants a dedicated server writes about forty lines, and they are these.
-##
-## Loaded the way any module is:
-##
-## [codeblock]
-## server.modules.load_module("res://game/arena_module.gd")
-## [/codeblock]
-##
-## The game itself is found through [DotRegistry] rather than being handed in, which is
-## what makes loading by path rather than by instance work at all.
 
 const CHANNEL := "arena.module"
 
@@ -63,12 +49,6 @@ var services: ArenaServices = null
 
 ## Where the services keep punishments. Empty is dot-moderation's own default,
 ## `user://moderation.json` — the store a real server enforces.
-##
-## [b]Static, because nothing holds this module before it exists[/b]: dot-server constructs
-## it from a path inside `load_module`, so there is no instance for a host to set a field on
-## first. `examples/dedicated.tscn` points it at a directory of its own; before it could,
-## every run wrote an hour-long gag against the same test uid into the real store, 457
-## records by the time anybody counted.
 static var punishments_file: String = ""
 
 ## The live tools' commands. See [method _build_mod_commands].
@@ -89,11 +69,9 @@ var vote: ArenaVote = null
 ## dot-server session id -> whether we have put them in the match.
 var _joined: Dictionary = {}
 
-## Who is still behind their loading cover, from dot-game's roster used for that alone: this
-## module is not on DotGameModule, so it seats people itself and only borrows the bookkeeping
-## (loading from the spawn event until the client says its cover lifted, again from a map
-## change). A player id is the userid, so [method ArenaGame.can_be_harmed] asks it by that.
-## Bots are never seated here, so they are never loading.
+## Who is still behind their loading cover, from dot-game's roster used for that alone: this module
+## is not on DotGameModule, so it seats people itself and only borrows the bookkeeping (loading from
+## the spawn event until the client says its cover lifted, again from a map change).
 var loading: DotGameRoster = null
 var _handles_cover: bool = false
 
@@ -206,22 +184,13 @@ func _module_load() -> DotResult:
 				)
 	)
 
-	# npc_skill, npc_reaction_scale, npc_reaction_min. Registered whether or not this mode
-	# has monsters, so a config that sets them does not fail on a deathmatch map and then
-	# not apply when the rotation reaches a horde one. Through `add_cvar`, so they go when
-	# the module does; NOTIFY, because players should know the monsters just got harder.
+	# npc_skill, npc_reaction_scale, npc_reaction_min. Registered whether or not this mode has
+	# monsters, so a config that sets them does not fail on a deathmatch map and then not apply when
+	# the rotation reaches a horde one.
 	game.npc_skill.bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY)
 
 	# Whether shots pass through team-mates: `mp_teammate_passthrough` 0 never, 1 a team-mate
-	# holding the muzzle (the default), 2 every team-mate in the line. dot-combat's cvar,
-	# defined there once for every game and live from the next shot; the projectile sweep
-	# reads the same rules. By name, like ArenaProjectiles' pass_through_sets: a host whose
-	# dot-combat predates it loads arena without the cvar.
-	#
-	# REPLICATED, because each client's own manager predicts tracers under it and follows the
-	# server's value through its link (ArenaClient). And re-applied on every map change: the
-	# world builds a NEW combat manager per map, and the one bind_cvars tied the cvar to is
-	# gone, so without this a server on 0 or 2 was back on 1 from the second map on.
+	# holding the muzzle (the default), 2 every team-mate in the line.
 	if game.combat != null and game.combat.has_method(&"bind_cvars"):
 		var bound: Variant = game.combat.call(
 			&"bind_cvars", add_cvar,
@@ -252,22 +221,13 @@ func _module_load() -> DotResult:
 			game.map.id if game.map != null else &"", game.horde.spawner.now(), game.horde.spawner
 		)
 
-	# [b]How many players before a round starts, and it has to be an operator's
-	# choice.[/b] The default is 2, which is right for a deathmatch and makes a public
-	# demonstration server look broken: one person connects, the match sits in WARMUP
-	# for ever, nobody spawns, and the only thing on screen is a HUD saying WARMUP. A
-	# server with one player and no bots is a legitimate configuration and the operator
-	# is the one who knows whether it is theirs.
-	# [b]Bots, on by default.[/b] Fill mode: a server with one person on it plays a match of
-	# four, and every person who joins takes a bot's place. dot-server's DotBotQuota is the
-	# rule and its three cvars (bot_quota, bot_quota_mode, bot_quota_empty) are the
-	# operator's; `bot_quota_mode off` is a server with no bots.
+	# [b]How many players before a round starts, and it has to be an operator's choice.[/b] The
+	# default is 2, which is right for a deathmatch and makes a public demonstration server look
+	# broken: one person connects, the match sits in WARMUP for ever, nobody spawns.
 	_bot_quota = DotBotQuota.install(self, game.config.bot_quota)
 
-	# [b]How the bots play[/b]: dot-bot's `bot_difficulty` (easy, medium, hard, nightmare;
-	# medium by default) and every `bot_*` setting it bundles, each overridable. On the game,
-	# where the bots' brains read it (ArenaBots), never in the registry: two servers in one
-	# process must not share a difficulty.
+	# [b]How the bots play[/b]: dot-bot's `bot_difficulty` (easy, medium, hard, nightmare; medium by
+	# default) and every `bot_*` setting it bundles, each overridable.
 	var _bot_cvars := DotBotSettings.of(game).bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY, add_command)
 
 	# Through `game.min_players` like the other match cvars (`_add_match_cvars`): written to
@@ -287,18 +247,9 @@ func _module_load() -> DotResult:
 			})
 	)
 
-	# **What is being played, on a running server.**
-	#
-	# Without this the two modes that are not about killing people are unreachable from
-	# a deployment: `ArenaGame.mode_id` is an export read once at setup, and a vote can
-	# offer a mode only where somebody has configured one. A game with modes nobody can
-	# select is a game with one mode and some dead code — the family's own "produced
-	# correctly and consumed by nothing", at the level of a whole feature.
-	#
-	# It goes through `change_map`, which is the only re-entrant path this game has:
-	# `setup` builds the combat trace, the match node and every spawn point in one pass
-	# and calling it twice leaves two of each. The map stays the same unless the new
-	# mode asks for another one.
+	# **What is being played, on a running server.**  Without this the two modes that are not about
+	# killing people are unreachable from a deployment: `ArenaGame.mode_id` is an export read once
+	# at setup, and a vote can offer a mode only where somebody has configured one.
 	add_cvar(
 		"arena_mode",
 		String(game.mode.id),
@@ -327,14 +278,9 @@ func _module_load() -> DotResult:
 	if not netted.ok:
 		return netted.wrap("The arena netcode could not start")
 
-	# Everything below this line is optional in the sense that the game runs without
-	# it. None of it is optional in the sense that matters: a server with no chat, no
-	# rotation and no vote is a server nobody stays on.
-	#
-	# [b]Each one logs and continues rather than refusing to load.[/b] A module that
-	# would not load because a punishment file was unreadable is a module that takes
-	# the whole game down over a permissions mistake, and the game is what the players
-	# came for.
+	# Everything below this line is optional in the sense that the game runs without it. None of it
+	# is optional in the sense that matters: a server with no chat, no rotation and no vote is a
+	# server nobody stays on.
 	var identified: DotResult = await _build_identity()
 	DotLog.result(CHANNEL, "the identity layer", identified)
 
@@ -507,11 +453,6 @@ func _build_netcode() -> DotResult:
 # --- The rest of the server ------------------------------------------------
 
 ## Content, profiles, avatars and admission.
-##
-## Loaded as a SECOND module rather than wired in here, because dot-platform ships one
-## and it is the right shape: everything it registers is removed again when it unloads,
-## and a server that wants a different admission flow replaces one module instead of
-## editing this one.
 func _build_identity() -> DotResult:
 	identity = ArenaIdentity.new()
 	identity.name = "Identity"

@@ -2,27 +2,6 @@ extends "screenshot_stages.gd"
 
 
 ## Renders a map to a PNG so a person can look at it.
-##
-## [b]A map is a rendered thing and this family has shipped a 0 x 0 Control twice and a
-## black screen once.[/b] Every other check on a map is an assertion about a list of
-## boxes, and a list of boxes passes just as happily when they are all in the same
-## place. This is the only tool here whose output is looked at rather than compared.
-##
-##   xvfb-run -a godot --path . --script tools/screenshot.gd -- --map dm_atrium
-##   tools/screenshot.sh dm_box --admin      # an administrator's beacon and blind
-##   tools/screenshot.sh dm_atrium --view keep -30,3,-28 -15,2,-12   # one more frame
-##   tools/screenshot.sh dm_box --fx 0,1.7,10 30,1.5,12   # shots from the first point at the second
-##   tools/screenshot.sh surf_10x_reloaded_fixed          # an imported map, played for a while
-##
-## [b]`--admin` puts players in the map and renders what the two screen-shaped mod tools
-## look like[/b]: a beaconed player on open floor beside one who is not, the same beacon
-## behind a pillar (its column is drawn through walls, which is the half no check can see),
-## and a first-person view through the real HUD before and after a blind. The players are
-## real `ArenaPlayer`s drawn by their own `present`, and the darkness is the real HUD's.
-##
-## Needs a real rendering context, so it does NOT run under `--headless`; `xvfb-run` is
-## how it runs on a machine with no display. It writes into `screenshots/`, which is
-## gitignored — the frame is evidence for a review, not an asset.
 
 const OUT_DIR := "screenshots"
 const ScreenshotGlanceStates := preload("screenshot_glance_states.gd")
@@ -30,8 +9,7 @@ const ScreenshotGlanceStates := preload("screenshot_glance_states.gd")
 
 func _initialize() -> void:
 	# A scratch settings document, never this machine's real one (see
-	# `ArenaPresentation.use_scratch_settings`): a render must not save into a player's file,
-	# and must draw from the defaults rather than whatever the last run left there.
+	# `ArenaPresentation.use_scratch_settings`): a render must not save into a player's file.
 	var _scratch := ArenaPresentation.use_scratch_settings("screenshot")
 	var args := OS.get_cmdline_user_args()
 	var map_index := args.find("--map")
@@ -111,9 +89,8 @@ func _initialize() -> void:
 
 	var far := map.extent * 1.5
 
-	# Three frames, because one camera angle is one thing you did not get wrong. An
-	# overview says whether there is a map; eye level says whether it is a space a
-	# person could be inside of.
+	# Three frames, because one camera angle is one thing you did not get wrong. An overview says
+	# whether there is a map; eye level says whether it is a space a person could be inside of.
 	_shots = [
 		{
 			"name": "%s_overview" % String(id),
@@ -133,6 +110,10 @@ func _initialize() -> void:
 	]
 
 	# `--view <name> <x,y,z> <x,y,z>`, repeatable: one more frame. The three above stay fixed so renders compare across nights.
+	_initialize_rest(args, id)
+
+
+func _initialize_rest(args: PackedStringArray, id: StringName) -> void:
 	_append_views(args, id)
 
 
@@ -196,11 +177,8 @@ var _wait := 0
 var _armed := false
 
 
-## [b]Frame-counted rather than awaited.[/b] `SceneTree._process` is expected to return
-## a bool synchronously; making it a coroutine returns a signal object instead, which is
-## truthy, so the tree quits on the first frame and writes nothing. That is what the
-## first version of this file did, and its symptom was a clean exit with an empty
-## `screenshots/`.
+## [b]Frame-counted rather than awaited.[/b] `SceneTree._process` is expected to return a bool
+## synchronously; making it a coroutine returns a signal object instead, which is truthy.
 
 
 ## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
@@ -235,9 +213,8 @@ func _process(delta: float) -> bool:
 
 	if _wait > 0:
 		_wait -= 1
-		# `late`: [frames before the grab, Callable] pairs, for what must still be on screen
-		# when the frame is taken. The HUD animates in real time and a frame here takes
-		# about 70 ms, so a hit marker (0.6 s) staged with the shot was gone by the grab.
+		# `late`: [frames before the grab, Callable] pairs, for what must still be on screen when
+		# the frame is taken.
 		var current: Dictionary = _shots[_index]
 		if _armed and current.has("late"):
 			for stage: Array in current["late"]:
@@ -256,10 +233,6 @@ func _process(delta: float) -> bool:
 			_camera.position = shot["from"]
 			_camera.look_at(shot["at"], Vector3.UP)
 		_armed = true
-		# Three frames before grabbing. The viewport's texture is the last COMPLETED
-		# frame, so grabbing in the same frame the camera moved saves the previous
-		# shot under the new shot's name — which looks exactly like a camera that did
-		# not move. More for a shot that has something fading in.
 		_wait = int(shot.get("wait", 3))
 		return false
 
@@ -291,12 +264,8 @@ func _process(delta: float) -> bool:
 
 # --- --glance: the whole HUD over a real match -------------------------------
 
-## The HUD as a player sees it mid-match, every piece with something in it: a real
-## [ArenaGame] (free-for-all, or `--glance tdm`) with eight players and a few kills filed
-## through dot-match, so the scores, the clock, the portraits and the kill feed are the
-## match's own; the local player's hands, a weapon with a part-spent magazine, abilities
-## charging, a slide on, and the kill feedback staged late so it is still up at the grab.
-## What `ArenaHud`'s layout is judged by, at 16:9 and 4:3 (`RESOLUTION=1280x960`).
+## The HUD as a player sees it mid-match, every piece with something in it: a real [ArenaGame]
+## (free-for-all, or `--glance tdm`) with eight players and a few kills filed through dot-match.
 var _glance_game: ArenaGame = null
 
 ## `--glance --ballot`: the game vote open over the HUD, as a server running several games
@@ -394,7 +363,6 @@ func _play_glance() -> void:
 	var _caught := _hud.catch_up()
 	# `--theme <id>`: the HUD in one of dot-menu's themes, as the menu sets it
 	# (`DotMenu.follow_hud`); without it, dot-ui's default, which is the dark HUD.
-	# `--hud-scale <k>`: at the player's HUD size.
 	var args := OS.get_cmdline_user_args()
 	var theme_at := args.find("--theme")
 	if theme_at >= 0 and theme_at + 1 < args.size():
@@ -450,11 +418,14 @@ func _play_glance() -> void:
 		return
 	if _glance_chat:
 		_stage_full_chat()
+	_play_glance_rest(game, args, late, streak_at)
+
+
+func _play_glance_rest(game: ArenaGame, args: PackedStringArray, late: Array, streak_at: int) -> void:
 	if _glance_ballot:
 		_stage_shell_ballot()
 		# What the server says in chat as the ballot opens, which this client centre-prints
 		# (`ArenaClient._on_said`, a system line). Staged late: the notice fades in 4 s.
-		# dot-vote's opening line for this game's own map vote, the same shape.
 		var said := "Vote: Box, Atrium, Pit, Foundry, Canals, Spire (20s)" if _glance_map_ballot \
 			else "Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)"
 		late.append([10, func() -> void: _hud.notice(said)])
@@ -526,13 +497,8 @@ func _play_killview(game: ArenaGame, killer_id: int) -> void:
 		view.kv.advance(0.1)
 
 
-## A stand-in for the client shell's notice overlay with the game vote open: its drawn
-## ballot, placed where dot-server-deploy's `client/notice_overlay.gd` places it (a copy,
-## since that project is not an addon this game links; keep the two in step). The shell
-## draws one column down the right-hand side, 110 px down and a third of the frame wide
-## (240..360 px), and does not draw the vote's HUD line while its ballot is open. The shell
-## draws over every game, so whether it covers this HUD is a question only a frame of both
-## together answers.
+## A stand-in for the client shell's notice overlay with the game vote open: its drawn ballot,
+## placed where dot-server-deploy's `client/notice_overlay.gd` places it (a copy.
 func _stage_full_chat() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "ChatLayer"
@@ -554,10 +520,8 @@ func _stage_shell_ballot() -> void:
 	layer.name = "ShellStandIn"
 	layer.layer = 20
 	root.add_child(layer)
-	# Below 1280x720 the shell draws on a 1280x720 canvas stretched to the window, its
-	# ballot and the game's HUD alike, so the stand-in is scaled by the HUD's own factor
-	# (`ArenaHud.fit_scale`): a full-size ballot over a scaled HUD is a frame the shell
-	# never draws. 1 from 1280x720 up, where nothing changes.
+	# Below 1280x720 the shell draws on a 1280x720 canvas stretched to the window, its ballot and
+	# the game's HUD alike.
 	var fit := ArenaHud.fit_scale(Vector2(root.size))
 	var canvas := Vector2(root.size) / fit
 	var overlay := Control.new()
@@ -608,14 +572,6 @@ func _stage_shell_ballot() -> void:
 # --- An imported map --------------------------------------------------------
 
 ## An imported combat surf map, with a deathmatch played on it for a few seconds first.
-##
-## [b]Played rather than posed, because what can be wrong is where people END UP[/b]: a
-## spawn inside a brush, a floor nobody lands on, a map at the wrong scale under a 1.8 m
-## player, textures that never loaded, a lightmap drawn black. So a real [ArenaGame] —
-## authority, the map's solid in the tree, bots shooting at each other — runs
-## [constant IMPORTED_TICKS] ticks, and the frames are taken of where its players are:
-## behind one at head height looking at the others, one player's own eye, the spawn area
-## from above, and the map's biggest surf ramp from beside it.
 const IMPORTED_TICKS := 160
 var _imported_game: ArenaGame = null
 
@@ -651,10 +607,7 @@ var _overview_box := AABB()
 var _overview_reach := 1.0
 
 
-## What the overview frames: the map's bounds, but for an imported map only what is drawn. The
-## manifest's bounds take in the 3D skybox (the backdrop of a map built to float in one, scaled
-## far outside the play space, and never drawn here), which put surf_snipers_island's whole island
-## in a corner of an empty frame.
+## What the overview frames: the map's bounds, but for an imported map only what is drawn.
 func _frame_overview() -> void:
 	_overview_box = _staged_map.bounds
 	_overview_reach = _staged_map.extent
@@ -820,11 +773,8 @@ func _play_imported() -> void:
 	_camera.far = 2000.0
 
 
-## Two of the walking bots handed to the map's own mechanics, and a frame of each: one put
-## in its deepest pool to the chest and left to sink (`<id>_water`), one put on its
-## strongest floor booster and ticked until it has been thrown off the end
-## (`<id>_booster`). A map with neither gets neither frame. The players are moved by the
-## game's own tick, so what is drawn is where the mechanics put them.
+## Two of the walking bots handed to the map's own mechanics, and a frame of each: one put in its
+## deepest pool to the chest and left to sink (`<id>_water`).
 func _stage_mechanics(game: ArenaGame) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var mech := _staged_map.mechanics
@@ -900,43 +850,3 @@ func _stage_mechanics(game: ArenaGame) -> Array[Dictionary]:
 		})
 
 	return out
-
-
-## The biggest triangle the map draws as a surf ramp, `{centre, normal}`.
-static func _biggest_ramp(map: ArenaMap) -> Dictionary:
-	var manifest: Dictionary = ArenaMap.ArenaImportedMaps.manifest(map.id)
-	var dir := map.manifest_path.get_base_dir()
-	var blob := FileAccess.get_file_as_bytes(dir.path_join("%s.bin" % String(map.id)))
-	var stride := ArenaMap.ArenaBspMap.VERTEX_FLOATS
-	var scale := ArenaMap.ArenaBspMap.METRES_PER_UNIT
-	var best := {}
-	var best_area := 0.0
-
-	for entry: Variant in manifest.get("surfaces", []):
-		var surface: Dictionary = entry
-
-		if str(surface.get("role", "")) != "RAMP":
-			continue
-
-		var vcount := int(surface["vertex_count"])
-		var icount := int(surface["index_count"])
-		var floats := blob.slice(int(surface["vertex_offset"]),
-			int(surface["vertex_offset"]) + vcount * stride * 4).to_float32_array()
-		var indices := blob.slice(int(surface["index_offset"]),
-			int(surface["index_offset"]) + icount * 4).to_int32_array()
-
-		for t in range(0, icount - 2, 3):
-			var p: Array[Vector3] = []
-
-			for k in range(3):
-				var o := int(indices[t + k]) * stride
-				p.append(Vector3(floats[o], floats[o + 1], floats[o + 2]) * scale)
-
-			var cross := (p[1] - p[0]).cross(p[2] - p[0])
-
-			if cross.length() * 0.5 > best_area:
-				best_area = cross.length() * 0.5
-				var normal := cross.normalized()
-				best = {"centre": (p[0] + p[1] + p[2]) / 3.0, "normal": normal if normal.y >= 0.0 else -normal}
-
-	return best

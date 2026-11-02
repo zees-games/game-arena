@@ -74,7 +74,8 @@ func _fall(me: Object, yard: DotPlayerRagdolls, wall: Dictionary, out_body: Arra
 	return behind
 
 
-func _run() -> void:
+## An offline client with an instant, one-player match.
+func _start_client() -> Object:
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("force_offline", true)
 	_client.set("mouse_capture_override", true)
@@ -86,6 +87,11 @@ func _run() -> void:
 	gm.match_node.rules.warmup_sec = 0.0
 	gm.match_node.rules.countdown_sec = 0.0
 	gm.match_node.rules.min_players = 1
+	return gm
+
+
+func _run() -> void:
+	var gm: Object = await _start_client()
 	var map := ArenaMap.by_id(&"crackhouse")
 	_check(map != null and gm.change_map(map).ok, "the game moves to crackhouse")
 	var me: Object = null
@@ -145,6 +151,21 @@ func _run() -> void:
 		layered += 1 if p.collision_layer != 0 else 0
 	_check(layered == 0, "no part is on a collision layer (bullets, blades and blasts skip it)", "%d" % layered)
 	var torso: Vector3 = parts[0].global_position
+	_check_unqueryable(parts, torso)
+
+	var n: Vector3 = last_wall.normal
+	var hit_point: Vector3 = torso
+	yard.rules.shootable = false
+	_check(not yard.shoot(hit_point, -n, 4.0, 0.6), "shoot does nothing with sv_ragdoll_shootable off")
+	yard.rules.shootable = true
+	var far: Vector3 = (last_wall.position as Vector3) - n * 1.0
+	var from_behind := yard.shoot(last_wall.position, n, 4.0, 1.0, far)
+	_check(not from_behind, "shoot from behind the wall does not move the body")
+	_check(yard.shoot(hit_point, -n, 4.0, 0.6, torso + n * 0.5), "shoot from the open side works with it on")
+	_report(EXPECTED_CHECKS)
+
+## No part answers a point, shape or ray query.
+func _check_unqueryable(parts: Array, torso: Vector3) -> void:
 	var q := PhysicsPointQueryParameters3D.new()
 	q.position = torso
 	q.collision_mask = 0xFFFFFFFF
@@ -166,13 +187,3 @@ func _run() -> void:
 	var rh := _space().intersect_ray(rq)
 	_check(rh.is_empty() or not parts.has(rh.collider), "a ray through the body does not hit a part")
 
-	var n: Vector3 = last_wall.normal
-	var hit_point: Vector3 = torso
-	yard.rules.shootable = false
-	_check(not yard.shoot(hit_point, -n, 4.0, 0.6), "shoot does nothing with sv_ragdoll_shootable off")
-	yard.rules.shootable = true
-	var far: Vector3 = (last_wall.position as Vector3) - n * 1.0
-	var from_behind := yard.shoot(last_wall.position, n, 4.0, 1.0, far)
-	_check(not from_behind, "shoot from behind the wall does not move the body")
-	_check(yard.shoot(hit_point, -n, 4.0, 0.6, torso + n * 0.5), "shoot from the open side works with it on")
-	_report(EXPECTED_CHECKS)

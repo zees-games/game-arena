@@ -15,24 +15,9 @@ const ArenaSolidBody := preload("arena_solid_body.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 const ArenaSpriteWeapon := preload("arena_sprite_weapon.gd")
 
-## One player: movement, weapons, health and hitboxes, assembled.
-##
-## [b]This is the piece every one of the addons says belongs in the game.[/b]
-## dot-player-controller does not know about dot-combat; dot-combat does not know about
-## dot-match; none of them knows about the others' node layout. Something has to own
-## the wiring, and it is deliberately here rather than in an addon — an addon that did
-## it would be an addon that dictates a scene shape.
-##
-## Built in code rather than as a `.tscn` for the same reason [ArenaMap] is: the
-## headless test and the played game must get the same player, and a scene that is
-## instantiated in one and hand-built in the other is two players that drift.
-##
-## [codeblock]
-## var player := ArenaPlayer.new()
-## player.setup(ArenaPlayer.Mode.HEADLESS, map, session_id)
-## add_child(player)
-## player.give_loadout(loadout_entries)
-## [/codeblock]
+## One player: movement, weapons, health and hitboxes, assembled. [b]This is the piece every one of
+## the addons says belongs in the game.[/b] dot-player-controller does not know about dot-combat;
+## dot-combat does not know about dot-match; none of them knows about the others' node layout.
 
 const CHANNEL := "arena.player"
 
@@ -51,11 +36,9 @@ signal spawned(at: Transform3D)
 
 ## How the collision and tracing backends are chosen.
 enum Mode {
-	## Analytic geometry from [ArenaMap]. A dedicated server, and every test.
-	##
-	## Not a degraded mode: it is exact, it needs no physics space, and — the part
-	## that matters — it gives the same answer on a client replaying a tick and a
-	## server that ran it. See dot-player-controller's `DotFpsFlatBody`.
+	## Analytic geometry from [ArenaMap]. A dedicated server, and every test. Not a degraded mode:
+	## it is exact, it needs no physics space, and — the part that matters — it gives the same
+	## answer on a client replaying a tick and a server that ran it.
 	HEADLESS,
 	## Godot physics. A client, and a listen server.
 	PHYSICS,
@@ -63,11 +46,9 @@ enum Mode {
 
 @export_group("Identity")
 
-## Stable id. A dot-server session id in a real deployment; an index in a test.
-##
-## The same value is the scoreboard key, the combat entity id and the damage
-## attribution, which is what stops three id spaces having to be mapped onto each
-## other at every seam.
+## Stable id. A dot-server session id in a real deployment; an index in a test. The same value is
+## the scoreboard key, the combat entity id and the damage attribution, which is what stops three id
+## spaces having to be mapped onto each other at every seam.
 @export var player_id: int = 0
 
 @export var display_name: String = "Player"
@@ -112,10 +93,9 @@ var view: Node3D = null
 ## The local player's camera. Null on a server, on a remote player, and headless.
 var camera: Camera3D = null
 
-## The view to draw this frame, (yaw, pitch) in degrees, or null for the simulated
-## state's. Set every frame by the client from `DotFpsSampler.look_now()`.
-##
-## A frame with no tick in it would not turn: at 144 Hz against 64 ticks most frames have none (`headless_view`).
+## The view to draw this frame, (yaw, pitch) in degrees, or null for the simulated state's. Set
+## every frame by the client from `DotFpsSampler.look_now()`. A frame with no tick in it would not
+## turn: at 144 Hz against 64 ticks most frames have none (`headless_view`).
 var view_now: Variant = null
 
 ## Added to where the local player is drawn this frame: what is left of the last
@@ -123,19 +103,14 @@ var view_now: Variant = null
 ## correction moves the eye in one frame.
 var drawn_offset: Vector3 = Vector3.ZERO
 
-## How far through the current tick this frame is drawn (usually 0..1, -1 to 2 just after a
-## slip), or NAN for the engine's physics fraction. Set every frame by a connected client from
-## dot-net's `DotNetClock.render_alpha`.
-##
-## A connected client's ticks are the clock's, which drifts: a physics frame may run 0 or 2 ticks,
-## and at the engine's fraction the eye stalls then jumps double (`headless_feel`). Offline it is exact.
+## How far through the current tick this frame is drawn (usually 0..1, -1 to 2 just after a slip),
+## or NAN for the engine's physics fraction. Set every frame by a connected client from dot-net's
+## `DotNetClock.render_alpha`.
 var drawn_alpha: float = NAN
 
-## Whether [method present] draws this body between its ticks: a player this machine
-## simulates and somebody else watches -- an offline bot. Set by the client.
-##
-## An offline bot was drawn where its last tick left it and stood still on most frames at 144 Hz
-## (`headless_feel`). A mirrored player never is: dot-net's interpolator moves its node each frame.
+## Whether [method present] draws this body between its ticks: a player this machine simulates and
+## somebody else watches -- an offline bot. Set by the client. An offline bot was drawn where its
+## last tick left it and stood still on most frames at 144 Hz (`headless_feel`).
 var interpolate_body: bool = false
 
 ## The yaw this player started its last tick with, for [member interpolate_body]: the
@@ -201,22 +176,11 @@ const THIRD_PERSON_OFFSET := Vector3(0.45, 0.35, 2.6)
 var _base_fov: float = 75.0
 
 ## A displacement added to the camera this frame, and a roll. Written by the client.
-##
-## [b]The shake is added here rather than applied to the camera by whoever computed
-## it[/b], because this is the one place the camera's transform is written — the comment
-## in [method present] below says why, and a second writer would fight it every frame for
-## the same value. dot-fx computes a displacement and touches no camera, which is
-## dot-spectate's rule and is what lets one implementation serve this rig, a spectator's
-## and a headless suite.
 var camera_offset: Vector3 = Vector3.ZERO
 var camera_roll: float = 0.0
 
-## The camera's motion cues: the landing dip, the strafe and slide roll, the wall-run lean
-## and the widening with speed. dot-player-controller's `DotFpsViewMotion`, the arithmetic
-## `DotFpsView` uses, without the view: this game writes its camera in [method present] and
-## nowhere else, so it asks for the numbers and adds them there. Built by
-## [method attach_camera] from [method camera_motion_picks], scaled by the player's camera
-## motion settings ([method set_camera_motion_scales]). Null on a player with no camera.
+## The camera's motion cues: the landing dip, the strafe and slide roll, the wall-run lean and the
+## widening with speed.
 var camera_motion: DotFpsViewMotion = null
 
 ## The aim's zoom this frame, from the view model: [method present] multiplies the lens by it.
@@ -230,17 +194,13 @@ var body_mesh: Node3D = null
 ## server, and for the capsule a build without the people's art falls back to.
 var figure: DotHumanoidFigure = null
 
-## What this player looks like, as a dot-user-avatar document; null is the stock figure.
-##
-## Set on a server from the identity layer and carried to every client in JOIN, so a
-## member who dressed on the site is that figure on every screen.
+## What this player looks like, as a dot-user-avatar document; null is the stock figure. Set on a
+## server from the identity layer and carried to every client in JOIN, so a member who dressed on
+## the site is that figure on every screen.
 var avatar: DotAvatar = null
 
-## An administrator's `blind`: this player's own screen is blacked out.
-##
-## [b]Set on the server and replicated to the OWNER ONLY[/b] (`ArenaPlayerNet.net_blind`).
-## Nobody else's screen changes, so nobody else needs to know — and an opponent who could
-## read it would know exactly when somebody could not see them coming. `ArenaHud` draws it.
+## An administrator's `blind`: this player's own screen is blacked out. [b]Set on the server and
+## replicated to the OWNER ONLY[/b] (`ArenaPlayerNet.net_blind`).
 var blinded: bool = false
 
 ## The achievement this player is nearest to, for the HUD's challenge bar: an index into
@@ -249,12 +209,9 @@ var blinded: bool = false
 var challenge: int = -1
 var challenge_value: int = 0
 
-## An administrator's `beacon`: a pulsing ring and a column over this player that every
-## client draws, and a ping every client hears, until it is turned off.
-##
-## Set on the server and replicated to everybody (`ArenaPlayerNet.net_beacon`), who each
-## draw it in [method present]. A beaconed player's entity is also made always-relevant,
-## so the beacon reaches a client however far away they are — see `ArenaPlayerNet.pull`.
+## An administrator's `beacon`: a pulsing ring and a column over this player that every client
+## draws, and a ping every client hears, until it is turned off. Set on the server and replicated to
+## everybody (`ArenaPlayerNet.net_beacon`), who each draw it in [method present].
 var beacon: bool = false
 
 ## The marker [member beacon] draws, while it does. Client side; built and freed by
@@ -272,18 +229,12 @@ var _flashlight_held: bool = false
 var flashlight_cfg: DotFlashlightConfig = null
 var flashlight_map: String = ""
 
-## The movement this player was built with, before any class scaled it.
-##
-## See [method apply_class_movement]. Captured on the first application rather than at
-## build time, so a game that never uses classes never duplicates a tunables object.
+## The movement this player was built with, before any class scaled it. See [method
+## apply_class_movement]. Captured on the first application rather than at build time, so a game
+## that never uses classes never duplicates a tunables object.
 var _class_base: DotFpsTunables = null
 
-## Swimming, in an imported map's water. [b]Registered on every player on every map, the
-## same on every machine[/b], because a mode's id travels on the wire in the state's flags:
-## a client that registered it only on a map with water would read a swimming player's
-## mode as whatever its own next mode was, or as nothing. With no water it is never
-## entered, so a built-in map moves exactly as it did. game-g2gfast registers its two for
-## the same reason.
+## Swimming, in an imported map's water.
 var swim := DotFpsSwimMode.new()
 
 ## Climbing, on an imported map's ladders. Registered beside [member swim], after it, in
@@ -298,11 +249,9 @@ var _command := DotWeaponCommand.new()
 var _tick_rate: int = ArenaContent.TICK_RATE
 
 
-## A [DotFpsController] that collides against analytic geometry rather than physics.
-##
-## `_make_body` is dot-player-controller's documented seam for exactly this, and using it
-## is what lets the same [ArenaPlayer] run on a dedicated server with no physics space
-## and in a client with one.
+## A [DotFpsController] that collides against analytic geometry rather than physics. `_make_body` is
+## dot-player-controller's documented seam for exactly this, and using it is what lets the same
+## [ArenaPlayer] run on a dedicated server with no physics space and in a client with one.
 class HeadlessController extends DotFpsController:
 	var flat_body: DotFpsBody = null
 
@@ -310,11 +259,9 @@ class HeadlessController extends DotFpsController:
 		return flat_body
 
 
-## The other players' standing hulls this player's sweeps stop at (`Array[AABB]`, its own
-## left out; empty while `mp_solidplayers` is 0). Set by the game that holds the player
-## ([method ArenaGame.solid_hulls_for]); unset, nobody is solid to this player. Read through
-## [method _solid_hulls] by the movement body ([code]arena_solid_body.gd[/code]), so a game
-## that sets it after the body was built still reaches it. Called with `(player_id, tick)`.
+## The other players' standing hulls this player's sweeps stop at (`Array[AABB]`, its own left out;
+## empty while `mp_solidplayers` is 0). Set by the game that holds the player ([method
+## ArenaGame.solid_hulls_for]); unset, nobody is solid to this player.
 var solid_hulls_fn: Callable = Callable()
 
 ## The tick [method simulate_tick] is running, replays included: where a predicting client
@@ -380,11 +327,9 @@ func _build_controller() -> void:
 	# and a client that had not registered it would read that index as something else.
 	controller.admin_abilities = true
 	controller.body_ref = DotNodeRef.of_path(NodePath(".."))
-	# The genre's water, in the genre's numbers, because the maps were built for them: 200
-	# u/s at most, and a player who presses nothing sinks at 60 u/s rather than floating,
-	# so a pit full of water is climbed out of by holding jump. The waist and the float
-	# depth are the genre's proportions of the ARENA's 1.8 m hull (half its height, and
-	# 56/72 of it), not its 72-unit ones, because they are measured up from these feet.
+	# The genre's water, in the genre's numbers, because the maps were built for them: 200 u/s at
+	# most, and a player who presses nothing sinks at 60 u/s rather than floating, so a pit full of
+	# water is climbed out of by holding jump.
 	swim.swim_speed = 200.0 * GENRE_UNIT
 	swim.idle_sink_speed = 60.0 * GENRE_UNIT
 	swim.accelerate = 10.0
@@ -397,15 +342,9 @@ func _build_controller() -> void:
 	add_child(controller)
 
 
-## The collision layers this player's movement sweeps against.
-##
-## [b]Not left at `DotFpsTunables`' default of 1.[/b] One means bit 0, which is right
-## only while every body in the game is on bit 0 — the state the layout exists to end.
-## Once props moved to the prop layer a mask of 1 was a player who walks through every
-## crate on the map, and nothing would have said so: a sweep that hits nothing is a
-## sweep, not an error.
-##
-## Called by `ArenaGame` once the stack is up, because the layout is the stack's.
+## The collision layers this player's movement sweeps against. [b]Not left at `DotFpsTunables`'
+## default of 1.[/b] One means bit 0, which is right only while every body in the game is on bit 0 —
+## the state the layout exists to end.
 func use_collision_mask(mask: int) -> void:
 	if controller == null or controller.tunables == null:
 		return
@@ -416,11 +355,6 @@ func use_collision_mask(mask: int) -> void:
 
 
 ## Scales this player's movement by their class.
-##
-## [b]Against a kept base, not against whatever the tunables currently say.[/b] A class's
-## `move_speed_scale` is a multiplier, so applying it to an object that already carries it
-## compounds — four respawns as a 0.8-speed class is 0.41, arrived at silently. The base
-## is the tunables this player was built with, captured once.
 func apply_class_movement(def: DotPlayerClassDef) -> void:
 	if controller == null or controller.tunables == null or def == null:
 		return
@@ -441,11 +375,8 @@ static func look_down_back_of(def: DotPlayerClassDef) -> float:
 	return 0.45
 
 
-## Movement that feels like an arena shooter rather than a modern one.
-##
-## Fast, floaty, high air control, and no sprint: the speed is the speed, and the way to go
-## faster is to move well. Built on the library's classic default, then every member the
-## old profile differed in is set outright, so the maps' numbers do not move with the base.
+## Movement that feels like an arena shooter rather than a modern one. Fast, floaty, high air
+## control, and no sprint: the speed is the speed, and the way to go faster is to move well.
 static func arena_tunables() -> DotFpsTunables:
 	return ArenaPlayerTunables.make()
 
@@ -455,14 +386,9 @@ const BODY_RULES := ArenaPlayerTunables.BODY_RULES
 const SURF_TUNABLES := ArenaPlayerTunables.SURF_TUNABLES
 
 
-## Puts this player's movement on what the map asks for: [param overrides] (keys from
-## [constant SURF_TUNABLES]) on top of [method arena_tunables], and every key it does not
-## name back to the arena's own.
-##
-## [b]Back as well as on, and that is the half that matters.[/b] A rule written only when a
-## surf map loads is a rule still in force on the next map, where the arena's 1.2 m/s air
-## cap is a quarter of what the player now has. Into the class base too, for
-## [method apply_movement_rules]' reason.
+## Puts this player's movement on what the map asks for: [param overrides] (keys from [constant
+## SURF_TUNABLES]) on top of [method arena_tunables], and every key it does not name back to the
+## arena's own.
 func apply_map_movement(overrides: Dictionary) -> void:
 	if controller == null or controller.tunables == null:
 		return
@@ -477,17 +403,8 @@ func apply_map_movement(overrides: Dictionary) -> void:
 			_class_base.set(key, value)
 
 
-## Sends this player through a teleport volume of an imported map, or back to a spawn when
-## they have fallen out of the bottom of it.
-##
-## [b]Inside the simulated tick, on every machine that simulates it[/b] — the server and the
-## owning client's prediction — because it reads only the simulated state and the map both
-## ends loaded. Done by the server alone, the client would predict a fall the server ended
-## a tick ago and be corrected across the map on every pit.
-##
-## The fall-out floor is ten metres under the map's own bounds, for a map whose pits leave
-## gaps (a teleport aimed at nothing is dropped at import): without it a player who fell
-## past every volume falls for ever, alive, and the round cannot end on him.
+## Sends this player through a teleport volume of an imported map, or back to a spawn when they have
+## fallen out of the bottom of it.
 func _follow_map_volumes() -> void:
 	if _map == null or not _map.is_imported():
 		return
@@ -506,12 +423,8 @@ func _follow_map_volumes() -> void:
 		_forget_drawn()
 
 
-## Drops what the drawing carries from tick to tick: the stair easing, the frame two ticks
-## back, the camera's motion. After a spawn or a teleport, which the eye jumps with.
-##
-## [b]These lines sat at the end of [method _follow_map_volumes] from 2026-10-11[/b], which
-## runs every tick on an imported map: the stair easing never saw a step there and the
-## frame two ticks back was always forgotten (`arena-camera-feel-1` found it).
+## Drops what the drawing carries from tick to tick: the stair easing, the frame two ticks back, the
+## camera's motion. After a spawn or a teleport, which the eye jumps with.
 func _forget_drawn() -> void:
 	_yaw_before_tick = controller.state.yaw
 	_position_two_back = Vector3(NAN, NAN, NAN)
@@ -551,19 +464,8 @@ func apply_vitals(max_health: float, max_armour: float, regen: float, fall_out_d
 const GENRE_UNIT := 0.01905
 
 
-## What the map's brush entities do to this player this tick: its pushes, gravity and
-## conveyors, then into the water or onto a ladder.
-##
-## [b]Inside the simulated tick, for [method _follow_map_volumes]' reason[/b], and from
-## the same data on both ends: the server and the owning client's prediction each run it
-## from the map they loaded and the state the tick started from ([param start], which a
-## rewind restores), so a booster throws the predicted player exactly as it throws the
-## server's and nothing has to be sent. A ladder is asked before the water, as the engine
-## these maps come from asks its ladder move first: a climb out of a pit is ladder walls
-## over water, and with the water asked last a climber was put back to swimming every tick
-## (g2gfast's finding).
-##
-## Hurt is not here: it is health, which is the server's, so `ArenaGame` deals it.
+## What the map's brush entities do to this player this tick: its pushes, gravity and conveyors,
+## then into the water or onto a ladder.
 func _run_map_mechanics(start: Vector3, delta: float) -> void:
 	if _map == null or _map.mechanics == null or controller.motor == null:
 		return
@@ -704,19 +606,9 @@ func _build_arsenal() -> void:
 const MAX_SLOTS := ZeeWeaponIds.SLOT_THROWN
 
 
-## Puts a [ZeeWeaponRig] over [member arsenal], replacing any rig that was there.
-##
-## [b]The rig is handed THIS player's arsenal rather than building its own[/b]
-## (`arsenal_ref`), and that is what lets it be rebuilt. A rig's role decides what it
-## draws and is fixed at `setup()`; a player is built before anybody knows whether it is
-## the one at this keyboard, so the client rebuilds the rig as LOCAL when it adopts its
-## player ([method arm_first_person]) — and everything carried, every magazine and the
-## slot in hand survive, because they live in the arsenal and not in the rig. Every
-## reader of `player.arsenal` (the HUD, the netcode, the mod tools, the loadout) keeps
-## reading the same node.
-##
-## [b]SERVER on a server and for every player a client merely mirrors.[/b] A server draws
-## nothing; a mirrored player is drawn by [member held] from the snapshot, not by a rig.
+## Puts a [ZeeWeaponRig] over [member arsenal], replacing any rig that was there. [b]The rig is
+## handed THIS player's arsenal rather than building its own[/b] (`arsenal_ref`), and that is what
+## lets it be rebuilt.
 func _build_rig(role: ZeeWeaponRig.Role, authority: bool, view_model: Node3D) -> void:
 	if weapons != null:
 		remove_child(weapons)
@@ -754,11 +646,8 @@ func _build_rig(role: ZeeWeaponRig.Role, authority: bool, view_model: Node3D) ->
 	weapons.used.connect(_on_used)
 
 
-## Makes this the player at this keyboard: the hands under [param view_model] and a rig
-## that draws them, its tracers and its reports. Client side, once, on adoption.
-##
-## [param authority] is whether this machine decides — offline, yes; connected, no: the
-## server's rig is the one whose shots land and this one is the gun that moves.
+## Makes this the player at this keyboard: the hands under [param view_model] and a rig that draws
+## them, its tracers and its reports. Client side, once, on adoption.
 func arm_first_person(view_model: Node3D, authority: bool) -> void:
 	_build_rig(ZeeWeaponRig.Role.LOCAL, authority, view_model)
 
@@ -786,10 +675,9 @@ func refill_ammo(share: float) -> void:
 			var _added := arsenal.add_ammo(def.ammo_type, int(ceil(float(def.reserve_cap()) * share)))
 
 
-## The shared weapon table, built once for the whole process.
-##
-## Validated on first use rather than per player, and loudly: a catalogue with a
-## duplicate id hands somebody the wrong weapon and nothing reports it.
+## The shared weapon table, built once for the whole process. Validated on first use rather than per
+## player, and loudly: a catalogue with a duplicate id hands somebody the wrong weapon and nothing
+## reports it.
 static var _shared_catalogue: DotWeaponCatalogue = null
 static var _shared_generation := -1
 
@@ -853,17 +741,6 @@ func map_in_hand() -> ArenaMap:
 
 
 ## Rebuilds this player's collision against a different map.
-##
-## [b]Assigning the body is not enough, and that is the whole reason this is a
-## method.[/b] `DotFpsMotor` holds a reference to the body it was built with — the same
-## trap `DotFpsController.set_style` documents for the tunables — so a player handed
-## new geometry without a rebuilt motor keeps colliding against the level they are no
-## longer standing in. The symptom is a player wedged in mid-air where a wall used to
-## be, with every property reading correctly.
-##
-## Only the analytic backend is rebuilt. Under [constant Mode.PHYSICS] the collision
-## comes from Godot's physics space, which the host project has already repopulated by
-## the time this runs, and there is nothing here that knows about it.
 func rebind_map(new_map: ArenaMap) -> void:
 	_map = new_map
 
@@ -888,11 +765,8 @@ func rebind_map(new_map: ArenaMap) -> void:
 
 # --- Registration ----------------------------------------------------------
 
-## Registers with the combat manager so this player can shoot and be shot.
-##
-## Both halves matter and they are separate calls in dot-combat: hitboxes make you
-## hittable, health makes you damageable. A player with one and not the other is a
-## player shots pass through, or one who takes hits and never dies.
+## Registers with the combat manager so this player can shoot and be shot. Both halves matter and
+## they are separate calls in dot-combat: hitboxes make you hittable, health makes you damageable.
 func join_combat(combat: DotCombatManager) -> void:
 	_combat = combat
 	hitboxes.register_with(combat, player_id)
@@ -908,15 +782,8 @@ func leave_combat() -> void:
 
 # --- Loadout ---------------------------------------------------------------
 
-## Gives the weapons a resolved loadout names.
-##
-## [param entries] is what [method DotLoadoutManager.resolve] returns: dictionaries of
-## `slot`, `arsenal_slot`, `item` and `count`.
-##
-## [b]Not [DotWeaponLoadoutBridge], deliberately.[/b] The bridge does the weapon half
-## and would do it correctly, but this game's loadout also carries armour, which is not
-## a weapon and which the bridge is right to skip. Doing both here keeps the one place
-## that knows about both id spaces down to one loop.
+## Gives the weapons a resolved loadout names. [param entries] is what [method
+## DotLoadoutManager.resolve] returns: dictionaries of `slot`, `arsenal_slot`, `item` and `count`.
 func give_loadout(entries: Array[Dictionary]) -> void:
 	arsenal.clear()
 
@@ -935,13 +802,9 @@ func give_loadout(entries: Array[Dictionary]) -> void:
 		var res := arsenal.give(item.id)
 
 		if not res.ok:
-			# [b]`DotLog`, not `push_warning`.[/b] A loadout entry the arsenal refused is
-			# a RUNTIME condition an operator would want to see -- somebody spawned
-			# without the weapon they picked -- so it belongs in the log file, on a
-			# channel, with the item that caused it. `push_warning` reaches only the
-			# editor's Errors dock, and the engine staples an unsuppressible backtrace to
-			# it, which on a dedicated server is eight lines of stderr that read like a
-			# crash and never reach the log at all.
+			# [b]`DotLog`, not `push_warning`.[/b] A loadout entry the arsenal refused is a RUNTIME
+			# condition an operator would want to see -- somebody spawned without the weapon they
+			# picked -- so it belongs in the log file, on a channel, with the item that caused it.
 			DotLog.warn(
 				CHANNEL,
 				"a loadout item could not be given",
@@ -966,10 +829,6 @@ func give_loadout(entries: Array[Dictionary]) -> void:
 
 
 ## Which of two slots to spawn holding: the heaviest GUN, never the grenade.
-##
-## [b]"The highest slot" was the rule while the highest slot was a rocket launcher.[/b]
-## In the pack's layout it is the throwable, and a spawn holding a grenade with the pin
-## out is a spawn that walks into a fight unable to shoot.
 static func _better_hand(have: int, slot: int) -> int:
 	if slot >= ZeeWeaponIds.SLOT_THROWN:
 		return have if have > 0 else slot
@@ -1254,16 +1113,9 @@ func is_alive() -> bool:
 
 # --- Simulation ------------------------------------------------------------
 
-## Advances the player one tick.
-##
-## [b]The order is not arbitrary.[/b] Movement runs first so the shot leaves from
-## where the player ends the tick rather than where they started it — half a tick of
-## movement at arena speeds is fifteen centimetres, which at range is a miss. The
-## arsenal's spread inputs are taken from the movement state afterwards, and the shots
-## come out last.
-##
-## Returns the shots produced, unresolved. The caller decides whether it is
-## authoritative enough to resolve them.
+## Advances the player one tick. [b]The order is not arbitrary.[/b] Movement runs first so the shot
+## leaves from where the player ends the tick rather than where they started it — half a tick of
+## movement at arena speeds is fifteen centimetres, which at range is a miss.
 func simulate_tick(
 	tick: int,
 	delta: float,

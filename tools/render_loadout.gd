@@ -109,6 +109,10 @@ func _run() -> void:
 	await _wait(1.0)
 	await _shot("arena_ads_hip")
 	var hud = client.get("hud")
+	await _run_rest(me, hud)
+
+
+func _run_rest(me, hud) -> void:
 	var hip: float = hud.crosshair.aim_opacity
 	Input.action_press(&"arena_aim")
 	await _wait(0.12)

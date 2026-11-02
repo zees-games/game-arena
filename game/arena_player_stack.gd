@@ -5,17 +5,8 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("arena_player.gd")
 
-## The player-facing addons, stood up once and bound to the game.
-##
-## Seven addons that each know nothing about the arena, met here: session roster, sides, classes, spawns and physics settings.
-## Adds no authority: dot-match decides the round, dot-combat damage, `ArenaGame` owns the tick; this keeps one set of records in step.
-## dot-physics (collision layout), dot-player (one row per participant), dot-team, dot-player-class, dot-spawn, dot-spectate.
-##
-## [b]Why dot-team drives dot-match rather than replacing it.[/b] `ArenaGame` assigns a
-## side through `DotTeamManager`, which balances and refuses a full team — behaviour
-## worth keeping. So the assignment is made here, in the session-scoped roster that
-## survives a map change, and pushed down into dot-match through its duck-typed
-## `assign`. One decision, in one place, visible to both.
+## The player-facing addons, stood up once and bound to the game. Seven addons that each know
+## nothing about the arena, met here: session roster, sides, classes, spawns and physics settings.
 
 const CHANNEL := "arena.stack"
 
@@ -25,11 +16,6 @@ const SERVICE := &"arena_player_stack"
 const LOADOUT_STANDARD := &"arena_standard"
 
 ## What each `loadout_id` in the class catalogue means, in weapon ids.
-##
-## [b]The game's table, and dot-weapon is explicit about why it is not the addon's.[/b]
-## A loadout id and a weapon id are two different id spaces and joining them is a content
-## decision — a mode that swapped the rifle for a shotgun would edit this and nothing
-## else. `DotWeaponLoadoutBridge` carries the same argument for dot-loadout.
 static func loadout_weapons() -> Dictionary:
 	return {"arena_standard": ArenaContent.default_loadout()}
 
@@ -41,10 +27,9 @@ signal physics_applied(profile: DotPhysicsProfile)
 
 @export var register_service: bool = true
 
-## Whether to apply a physics profile at all.
-##
-## Off for a client joined to a server: the server's tick rate is what matters and a
-## client that re-applied a different one would simulate at a rate the server does not.
+## Whether to apply a physics profile at all. Off for a client joined to a server: the server's tick
+## rate is what matters and a client that re-applied a different one would simulate at a rate the
+## server does not.
 @export var apply_physics: bool = true
 
 ## Which physics preset. The arena is an arcade shooter.
@@ -65,11 +50,9 @@ var _registered: bool = false
 var _sites_from: ArenaMap = null
 
 
-## Builds everything and binds it to [param p_game].
-##
-## Returns a failure without having built anything when the game is not set up, because
-## half a stack is worse than none: the roster would exist, nothing would feed it, and
-## every consumer would read an empty scoreboard on a running server.
+## Builds everything and binds it to [param p_game]. Returns a failure without having built anything
+## when the game is not set up, because half a stack is worse than none: the roster would exist,
+## nothing would feed it, and every consumer would read an empty scoreboard on a running server.
 func setup(p_game: ArenaGame) -> DotResult:
 	if p_game == null:
 		return DotResult.fail(DotError.CODE_INVALID, "No game to bind to.")
@@ -117,17 +100,6 @@ func _exit_tree() -> void:
 # --- Building ---------------------------------------------------------------
 
 ## Builds the physics node, and applies the engine half of it only where that is wanted.
-##
-## [b]The LAYOUT is built on every instance, including a client that applies nothing.[/b]
-## It used to return before creating the node at all when `apply_physics` was off, which
-## left a client with no layout — and a collision layout is not a local preference, it is
-## the numbers in `collision_layer` on nodes both ends build. A server that put props on
-## the prop bit while its clients left them on bit 0 would be two worlds with different
-## collision matrices, agreeing only because nothing had ever read the layout.
-##
-## What `apply_physics` still gates is `setup()`, which writes ProjectSettings: the tick
-## rate, gravity and damping. Those are the server's to decide, and a client that
-## re-applied its own would simulate at a rate the server does not.
 func _build_physics() -> DotResult:
 	physics = DotPhysicsWorld.new()
 	physics.name = "Physics"
@@ -136,18 +108,13 @@ func _build_physics() -> DotResult:
 	if physics.profile == null:
 		physics.profile = DotPhysicsProfile.arcade_shooter()
 
-	# The game's tick rate wins over the preset's. Two numbers meaning "how often the
-	# world advances" is exactly the disagreement NET_WORLD_EXTENT's comment is about,
-	# one layer down: dot-match, dot-net and the movement all count in ArenaGame's
-	# ticks, and a physics profile quietly running at 128 while they run at 64 makes
-	# every rigid body move at twice the rate of every player.
+	# The game's tick rate wins over the preset's.
 	physics.profile.tick_rate = game.tick_rate
 
 	physics.layout = DotPhysicsLayout.shooter_3d()
-	# The map's loose toys (dot-props'): a ball or a barrel on `toy`, which the level, props
-	# and other toys stop and a person never does (they walk through and push it,
-	# `ArenaGame._advance_toys`). And `footprint`, which nothing collides with: arena places
-	# only loose toys, so there are none, but the box asks for a bit.
+	# The map's loose toys (dot-props'): a ball or a barrel on `toy`, which the level, props and
+	# other toys stop and a person never does (they walk through and push it,
+	# `ArenaGame._advance_toys`).
 	physics.layout.layers.append(DotPhysicsLayer.make(
 		&"toy", [&"world", &"prop", &"debris", &"toy"],
 		"A map's loose toy: a ball, a barrel, a tyre. People walk through it and push it."
@@ -180,16 +147,6 @@ func _build_physics() -> DotResult:
 
 
 ## Puts [param node] on the layout's [param layer_id] layer, with that layer's mask.
-##
-## [b]The half of dot-physics that was never used.[/b] The layout was assigned, its layer
-## names were written into ProjectSettings for the inspector to show — and every body in
-## the game stayed on Godot's default layer 1 with mask 1, so the inspector labelled
-## layers nothing followed and props could not touch each other. Naming a layer is only
-## half of a layout; this is the other half.
-##
-## Quiet about a node that is not a collision object: [ArenaPlayer] is a [Node3D] and its
-## movement is a shape query rather than a body, so "classify the player" has nothing to
-## write. That is not an error, it is this game's movement model.
 func classify(node: Node, layer_id: StringName) -> DotResult:
 	if physics == null or physics.layout == null:
 		return DotResult.fail(DotError.CODE_STATE, "No collision layout.")

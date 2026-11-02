@@ -169,6 +169,10 @@ func _run() -> void:
 	skim.scatter()
 	skim.penetration = round_of.make_penetration()
 	skim.penetration.ricochet_materials = PackedStringArray(["concrete"])
+	await _run_rest(game, me, size, shot, pres, decals, skim_from, skim)
+
+
+func _run_rest(game, me, size: Vector3, shot, pres, decals: Array[Node3D], skim_from, skim) -> void:
 	skim.penetration.ricochet_angle = 40.0
 	game.combat.ricochet_enabled = true
 	game.combat.set_authoritative_origin(me.player_id, skim_from)

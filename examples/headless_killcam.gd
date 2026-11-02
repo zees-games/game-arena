@@ -108,6 +108,12 @@ func _run() -> void:
 	await _check_recoil(screen, killer)
 	_check(await _until(func() -> bool: return me.is_alive(), 15.0), "then the player respawns")
 
+	await _test_final_killcam(gm, me, killer, bots)
+	_report(EXPECTED_CHECKS)
+
+
+## The match-ending kill starts a final killcam that shows the real last kill.
+func _test_final_killcam(gm: Object, me: Object, killer: Object, bots: Dictionary) -> void:
 	var host: Node = _client.get("killcam")
 	_check(host != null, "the client has a final killcam")
 	await _wait(1.0)
@@ -131,7 +137,6 @@ func _run() -> void:
 	_check(host.is_playing() and (reveal == null or not reveal.is_active()), "after 1.5 s it plays on and the podium waits")
 	await _until(func() -> bool: return not host.is_playing(), 12.0)
 	_check(float(Time.get_ticks_msec() - shown) > 2000.0, "it played several seconds before the summary")
-	_report(EXPECTED_CHECKS)
 
 
 ## The kill view is the killer's own screen: camera at their eye, their viewmodel, a crosshair.

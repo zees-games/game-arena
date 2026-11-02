@@ -101,6 +101,10 @@ func _one(id: StringName) -> void:
 		Array(map.spawn_tags).count(""), points, counts.size(), topid, share * 100.0, stacked, dupes, fell])
 	_check(share <= maxf(0.12, 3.0 / maxf(points, 1)), "%s: no point over its share" % id, "%s %.1f%%" % [topid, share * 100.0])
 	_check(counts.size() >= int(points * 0.9), "%s: nearly every point used" % id, "%d of %d" % [counts.size(), points])
+	_check_apart(game, id, dupes, total)
+
+## Points at least 2 m apart decide how strict the repeat check is.
+func _check_apart(game: ArenaGame, id: StringName, dupes: int, total: int) -> void:
 	var apart: Array[Vector3] = []
 	for site in game.player_stack.spawns.sites():
 		var clear := true
@@ -115,3 +119,4 @@ func _one(id: StringName) -> void:
 		_check(dupes == 0, "%s: no point drawn twice in one batch" % id, "%d of %d" % [dupes, total])
 	else:
 		_check(dupes <= total * 3 / 4, "%s: fewer points than players, repeats are bounded" % id, "%d of %d" % [dupes, total])
+

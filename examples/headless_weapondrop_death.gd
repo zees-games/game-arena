@@ -84,38 +84,7 @@ func _run() -> void:
 	drops.dropped.connect(func(i: int, s: Dictionary, at: Transform3D, v: Vector3, _o: int) -> void: client.mirror_drop(i, s, at, v))
 	drops.settled.connect(func(i: int, at: Transform3D) -> void: client.mirror_settled(i, at))
 
-	var spots: Array[Vector2] = []
-	for xi in range(-8, 9, 2):
-		for zi in range(-8, 9, 2):
-			spots.append(Vector2(xi, zi))
-	var ids: Array = ZeeWeaponArtTable.table().keys()
-	ids.sort()
-	_check(ids.size() > 10, "the art table has weapons", str(ids.size()))
-	var sent := {}
-	var no_spot := 0
-	var given := 0
-	for w_i in ids.size():
-		var id: StringName = ids[w_i]
-		for k in SPOTS_PER_WEAPON:
-			var sp := spots[(w_i * 7 + k * 13) % spots.size()]
-			var g := _ground(sp.x, sp.y, 8.0, mask)
-			if is_nan(g):
-				no_spot += 1
-				continue
-			if not player.arsenal.give(id).ok:
-				continue
-			var def: Variant = player.arsenal.catalogue.get_def(id)
-			if def == null or not player.arsenal.equip(def.slot):
-				continue
-			given += 1
-			player.controller.state.position = Vector3(sp.x, g, sp.y)
-			var before: Array = drops.get("_entries").keys()
-			Wiring.drop_for_death(game, player)
-			for e: int in drops.get("_entries").keys():
-				if not before.has(e):
-					sent[e] = [id, Vector2(sp.x, sp.y)]
-	_check(given > ids.size(), "most weapons could be given and dropped", "%d of %d" % [given, ids.size() * SPOTS_PER_WEAPON])
-	_check(not sent.is_empty(), "kills dropped weapons", str(sent.size()))
+	var sent := _drop_deaths(game, player, drops, mask)
 	var trail := {}
 	for t in RUN_TICKS:
 		await get_tree().physics_frame
@@ -150,3 +119,40 @@ func _run() -> void:
 	_check(unrested == 0, "every drop came to rest", str(unrested))
 	print("weapondrop_death: %d checks, %d failed" % [_checks, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
+
+
+## Kills the player holding each weapon at spread spots; returns drop id -> [weapon, spot].
+func _drop_deaths(game: ArenaGame, player: Object, drops: DotWeaponDrops, mask: int) -> Dictionary:
+	var spots: Array[Vector2] = []
+	for xi in range(-8, 9, 2):
+		for zi in range(-8, 9, 2):
+			spots.append(Vector2(xi, zi))
+	var ids: Array = ZeeWeaponArtTable.table().keys()
+	ids.sort()
+	_check(ids.size() > 10, "the art table has weapons", str(ids.size()))
+	var sent := {}
+	var no_spot := 0
+	var given := 0
+	for w_i in ids.size():
+		var id: StringName = ids[w_i]
+		for k in SPOTS_PER_WEAPON:
+			var sp := spots[(w_i * 7 + k * 13) % spots.size()]
+			var g := _ground(sp.x, sp.y, 8.0, mask)
+			if is_nan(g):
+				no_spot += 1
+				continue
+			if not player.arsenal.give(id).ok:
+				continue
+			var def: Variant = player.arsenal.catalogue.get_def(id)
+			if def == null or not player.arsenal.equip(def.slot):
+				continue
+			given += 1
+			player.controller.state.position = Vector3(sp.x, g, sp.y)
+			var before: Array = drops.get("_entries").keys()
+			Wiring.drop_for_death(game, player)
+			for e: int in drops.get("_entries").keys():
+				if not before.has(e):
+					sent[e] = [id, Vector2(sp.x, sp.y)]
+	_check(given > ids.size(), "most weapons could be given and dropped", "%d of %d" % [given, ids.size() * SPOTS_PER_WEAPON])
+	_check(not sent.is_empty(), "kills dropped weapons", str(sent.size()))
+	return sent

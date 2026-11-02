@@ -571,3 +571,43 @@ func _cast(map: ArenaMap, pid: int, name_text: String, at: Vector3, yaw: float) 
 	)
 	_players.append(body)
 	return body
+
+
+## The biggest triangle the map draws as a surf ramp, `{centre, normal}`.
+static func _biggest_ramp(map: ArenaMap) -> Dictionary:
+	var manifest: Dictionary = ArenaMap.ArenaImportedMaps.manifest(map.id)
+	var dir := map.manifest_path.get_base_dir()
+	var blob := FileAccess.get_file_as_bytes(dir.path_join("%s.bin" % String(map.id)))
+	var stride := ArenaMap.ArenaBspMap.VERTEX_FLOATS
+	var scale := ArenaMap.ArenaBspMap.METRES_PER_UNIT
+	var best := {}
+	var best_area := 0.0
+
+	for entry: Variant in manifest.get("surfaces", []):
+		var surface: Dictionary = entry
+
+		if str(surface.get("role", "")) != "RAMP":
+			continue
+
+		var vcount := int(surface["vertex_count"])
+		var icount := int(surface["index_count"])
+		var floats := blob.slice(int(surface["vertex_offset"]),
+			int(surface["vertex_offset"]) + vcount * stride * 4).to_float32_array()
+		var indices := blob.slice(int(surface["index_offset"]),
+			int(surface["index_offset"]) + icount * 4).to_int32_array()
+
+		for t in range(0, icount - 2, 3):
+			var p: Array[Vector3] = []
+
+			for k in range(3):
+				var o := int(indices[t + k]) * stride
+				p.append(Vector3(floats[o], floats[o + 1], floats[o + 2]) * scale)
+
+			var cross := (p[1] - p[0]).cross(p[2] - p[0])
+
+			if cross.length() * 0.5 > best_area:
+				best_area = cross.length() * 0.5
+				var normal := cross.normalized()
+				best = {"centre": (p[0] + p[1] + p[2]) / 3.0, "normal": normal if normal.y >= 0.0 else -normal}
+
+	return best

@@ -110,6 +110,10 @@ func _physics_process(delta: float) -> void:
 			_last_sent = sent
 			_last_got = got
 
+	_physics_rest(server_tick)
+
+
+func _physics_rest(server_tick: int) -> void:
 	if not _w.is_empty():
 		_sample_clock(server_tick)
 		# What the server will find for A on the tick it runs next: there, a hole in what

@@ -14,28 +14,12 @@ const ArenaViewArms := preload("arena_view_arms.gd")
 const ArenaPlayer := preload("arena_player.gd")
 
 ## Settings, audio, effects and a console, on the client.
-##
-## [b]This is the game where audio was the sharpest gap in the family, and the reason is
-## worth writing down:[/b] arena has a camera rig, input sampling, a renderer, a HUD and
-## menus, and firing a weapon produced no sound and drew nothing for the gun in your own
-## hands. The only feedback was the crosshair and the ammunition counter. What was missing
-## was never the files — it was the decision about what is audible, how many at once, how
-## loud, and how far away it stops mattering, which is a document.
-##
-## [b]dot-effects and dot-fx are not the same thing and this game has both.[/b]
-## `ArenaEffects` is burning, slows, invulnerability and being down: things that happen
-## **over time to an entity** and change the simulation. `ArenaPresentation` is what any
-## of that looks like, and **an effect here never changes the simulation** — which is the
-## property that lets a frame budget drop one, a quality tier refuse one, and a client
-## still downloading its content never see one, with two machines still agreeing about
-## everything that matters.
 
 const CHANNEL := "arena.presentation"
 
 const SCHEMA_VERSION := 1
 
-## Where the player's settings document lives. Only a suite or a render tool changes it,
-## through [method use_scratch_settings]; see that.
+## Where the player's settings live; only [method use_scratch_settings] moves it.
 const PLAYER_SETTINGS := "user://arena_settings"
 
 ## The directory the next [ArenaPresentation] stores its settings in.
@@ -60,10 +44,9 @@ const WALL_JUMP_SOUND := &"wall_jump"
 ## Seconds between one kill's medal sounds; the HUD's `MedalRow.STAGGER_SEC`.
 const MEDAL_STAGGER_SEC := 0.14
 
-## Each medal's stand-in: a voice and a pitch, so eleven medals are eleven sounds until
-## real recordings land. Up is good news, so most are the upward sweep at a pitch that
-## climbs with how rare the medal is; Nemesis is the low one.
-## The synthesized "boing" of a stomp: a rising chirp pitched high. Made at runtime, so there is no asset or licence.
+## Each medal's stand-in: a voice and a pitch, so eleven medals are eleven sounds until real
+## recordings land. Up is good news, so most are the upward sweep at a pitch that climbs with how
+## rare the medal is; Nemesis is the low one.
 const STOMP_SOUND := &"stomp"
 const STOMP_PITCH := 1.9
 
@@ -86,14 +69,6 @@ const EXPLOSION_SHAKE_RANGE := 18.0
 const EXPLOSION_SHAKE := 0.6
 
 ## Degrees of view per unit of mouse motion at a sensitivity of 1.
-##
-## The genre's own yaw constant, and the reason `sensitivity` defaults to 2.5 rather than
-## to a number of degrees: a player's sensitivity is a number they carry between games,
-## and it only survives the trip if it is converted the way every game they carried it
-## from converts it. It is also an `ACCOUNT` setting under the shared `tmc_account`
-## namespace, so it is one number for the person across the family and has to mean one
-## turning speed wherever it is read; game-g2gfast's `G2GUnits.sensitivity_to_degrees`
-## is the same conversion.
 const DEGREES_PER_COUNT := 0.022
 
 ## Where a muzzle flash is drawn, from the eye, in the aim's frame: forward, down, right.
@@ -168,10 +143,7 @@ func setup() -> DotResult:
 	_build_chat()
 	net_stat = DotMenuNetStat.follow(self, settings)
 
-	# Every value pushed once, after everything exists. See the same call in the lobby
-	# and hungario: the builders read what they need today, and the arrangement rots the
-	# moment something reacts to `changed` alone -- because a value loaded from disk has
-	# not changed, and the player's saved setting then does nothing until they touch it.
+	# Every value pushed once, after everything exists.
 	apply_all()
 	return DotResult.success(null)
 
@@ -218,10 +190,7 @@ static func schema() -> DotSettingsSchema:
 		&"controls"
 	).with_scope(DotSettingsDef.Scope.ACCOUNT))
 
-	# SERVER_CLAMPED, and this is the whole reason that scope exists. A wide field of view
-	# is a competitive advantage, so a server capping it is a legitimate rule -- and a
-	# server *reading* it, or the bindings, or the audio device, would be assembling a
-	# fingerprint that survives a new account and every ban a moderator issues.
+	# SERVER_CLAMPED, and this is the whole reason that scope exists.
 	s.add(DotSettingsDef.integer(&"field_of_view", 100, 70, 120, &"video").with_scope(
 		DotSettingsDef.Scope.SERVER_CLAMPED
 	))
@@ -243,10 +212,9 @@ static func schema() -> DotSettingsSchema:
 	# their ACCOUNT scope, which the table leaves alone.
 	ArenaBindings.make().add_to_schema(s)
 
-	# dot-menu's stock video and interface settings: the window, V-Sync, the frame cap,
-	# render scale, the theme, the frame-rate counter and net_stat. Keys already declared
-	# above keep this game's default (a field of view of 100, horizontal at 4:3).
-	# Applied by the client's DotMenuApplier and DotMenu; the console binds them by name.
+	# dot-menu's stock video and interface settings: the window, V-Sync, the frame cap, render
+	# scale, the theme, the frame-rate counter and net_stat. Keys already declared above keep this
+	# game's default (a field of view of 100, horizontal at 4:3).
 	return DotMenuStock.declare(s, [DotMenuStock.GROUP_VIDEO, DotMenuStock.GROUP_INTERFACE] as Array[StringName])
 
 ## Chat, accessibility, camera motion, HUD inset and the solo bots, split from [method schema] for length.
@@ -293,8 +261,6 @@ static func _add_chat_and_comfort(s: DotSettingsSchema) -> void:
 
 	# How well the bots of a solo match play, saved with the player's other settings; the menu's
 	# General page has it, and `ArenaClient._bind_bot_console` applies it to `DotBotSettings`.
-	# Not `bot_difficulty`: that name is dot-bot's console variable for the match in hand (and a
-	# server's cvar), which this sets. A server's bots are the server's, never this.
 	s.add(DotSettingsDef.choice(
 		&"solo_bot_difficulty",
 		&"medium",
@@ -313,14 +279,8 @@ const CAMERA_MOTION_KEYS := {
 }
 
 
-## Points every [ArenaPresentation] made after this at a fresh, empty settings directory
-## named [param tag], and returns it.
-##
-## [b]For a suite or a render tool, never a player.[/b] `headless_presentation` types
-## `field_of_view 120` at the console and used to leave it in this machine's real
-## `user://arena_settings`, so the next real session, and every screenshot after it, drew
-## at 120. A scratch directory emptied first also makes a run start from the defaults
-## rather than from whatever the last one left.
+## Points every [ArenaPresentation] made after this at a fresh, empty settings directory named
+## [param tag], and returns it.
 static func use_scratch_settings(tag: String) -> String:
 	var dir := "user://scratch/%s" % tag
 	var abs_dir := ProjectSettings.globalize_path(dir)
@@ -408,16 +368,6 @@ func _on_setting_changed(key: StringName, value: Variant, _why: StringName) -> v
 
 
 ## Points the look settings at the tunables the client's sampler reads, and applies them.
-##
-## [b]`sensitivity` and `invert_pitch` were in the settings screen and read by nothing.[/b]
-## A player could drag the slider end to end and the view turned at `DotFpsTunables`'
-## default 0.25 degrees per unit throughout — this family's "a value produced correctly
-## and consumed by nobody", on the one setting everybody touches first.
-##
-## Called again whenever the sampler is handed a different tunables object, because that
-## is a new object carrying the default again. Only the look fields are written, and those
-## are the ones `DotFpsTunables.fingerprint` leaves out: a sensitivity is a preference and
-## never enters the simulation, so writing it cannot desynchronise a client from its server.
 func bind_look(tunables: DotFpsTunables) -> void:
 	_look = tunables
 	_apply_look()
@@ -455,10 +405,9 @@ static func look_degrees_per_count(sensitivity: float) -> float:
 	return maxf(sensitivity, 0.0) * DEGREES_PER_COUNT
 
 
-## Hands the crosshair setting a crosshair to shape, and shapes it.
-##
-## Like [method bind_look], and for the same reason: the `crosshair` choice was on the
-## settings screen and nothing drew anything differently for any of its four answers.
+## Hands the crosshair setting a crosshair to shape, and shapes it. Like [method bind_look], and for
+## the same reason: the `crosshair` choice was on the settings screen and nothing drew anything
+## differently for any of its four answers.
 func bind_crosshair(crosshair: DotCrosshair) -> void:
 	_crosshair = crosshair
 	_crosshair_length = crosshair.length if crosshair != null else 0.0
@@ -476,10 +425,8 @@ func _apply_crosshair() -> void:
 	_crosshair.suppressed = style == &"none"
 	_crosshair.centre_dot = true
 
-	# **`circle` draws the cross**, because `DotCrosshair` has no ring to draw and a
-	# setting that drew nothing at all would be worse than one that draws the default.
-	# The choice stays in the document rather than being removed, because it is an
-	# `ACCOUNT` setting another game may be storing it for.
+	# **`circle` draws the cross**, because `DotCrosshair` has no ring to draw and a setting that
+	# drew nothing at all would be worse than one that draws the default.
 	_crosshair.length = 0.0 if style == &"dot" else _crosshair_length
 	_crosshair.queue_redraw()
 
@@ -487,11 +434,6 @@ func _apply_crosshair() -> void:
 # --- Audio ------------------------------------------------------------------
 
 ## What a deathmatch makes a noise about.
-##
-## Every weapon sound is `POSITIONAL_3D` with a real cull distance, because **a shot you
-## cannot hear the direction of is a shot you cannot answer.** That is the one thing audio
-## contributes to this game that the HUD cannot, and it is why the listener's position is
-## fed every frame rather than the sounds being played flat.
 static func sound_catalogue() -> DotAudioCatalogue:
 	var c := DotAudioCatalogue.new()
 	DotAudioStock.add_to(c)
@@ -608,10 +550,9 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	spawn.priority = 60
 	c.add(spawn)
 
-	# The map vote's cues. Flat and on the interface bus: a ballot is about the server,
-	# not about a place in the world, and a countdown that got quieter the further you
-	# stood from the origin would be a countdown some players never heard. The ids are
-	# ArenaVote's, which is also what its rules name — one copy.
+	# The map vote's cues. Flat and on the interface bus: a ballot is about the server, not about a
+	# place in the world, and a countdown that got quieter the further you stood from the origin
+	# would be a countdown some players never heard.
 	for vote_id in [ArenaVote.CUE_START, ArenaVote.CUE_END, ArenaVote.CUE_WARNING, ArenaVote.CUE_COUNT]:
 		var cue := DotAudioDef.new()
 		cue.id = vote_id
@@ -621,12 +562,9 @@ static func sound_catalogue() -> DotAudioCatalogue:
 		cue.priority = 70
 		c.add(cue)
 
-	# An administrator's beacon: a ping once a second from the beaconed player, heard by
-	# everybody. Positional, because the beacon's whole job is to say WHERE somebody is and
-	# a flat ping would say only that somebody somewhere is beaconed. And far-reaching —
-	# further than a shot — because a beacon that went quiet at the edge of a fight would
-	# fail in the one place it is used. Pitched an octave under the hit marker it shares a
-	# voice with, so a ping is never heard as "I hit something".
+	# An administrator's beacon: a ping once a second from the beaconed player, heard by everybody.
+	# Positional, because the beacon's whole job is to say WHERE somebody is and a flat ping would
+	# say only that somebody somewhere is beaconed.
 	var ping := DotAudioDef.new()
 	ping.id = BEACON_SOUND
 	ping.path = "%s/beacon.ogg" % SOUND_DIR
@@ -705,12 +643,9 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	return c
 
 
-## Which synthesised voice stands in for each id until real audio is dropped into
-## [constant SOUND_DIR].
-##
-## Which noise belongs to which id is this game's decision, not an addon's guess from an id like `fire_rail`.
-##
-## The three weapons get three DIFFERENT voices: hearing what somebody holds is the point of their shot.
+## Which synthesised voice stands in for each id until real audio is dropped into [constant
+## SOUND_DIR]. Which noise belongs to which id is this game's decision, not an addon's guess from an
+## id like `fire_rail`.
 static func sound_recipes() -> Dictionary:
 	var out := _base_recipes()
 	out[KILL_CONFIRMED] = DotAudioSynth.Voice.BLIP
@@ -777,9 +712,8 @@ func _build_audio() -> DotResult:
 	# that the pool is holding sounds nobody can pick out of the mix.
 	audio.voices = 32
 	# Measured toward the family's -17 LUFS (dot-audio docs/loudness.md) with the local player
-	# driven by tools/loudness_pilot.gd (walking, turning off walls, firing bursts): at 4.0 a
-	# 40 s round read -19.5 LUFS, at 7.5 three rounds read -16.8, -17.6 and -17.2. The earlier
-	# 4.0 came from a stand-in that pushed against the first wall it met.
+	# driven by tools/loudness_pilot.gd (walking, turning off walls, firing bursts): at 4.0 a 40 s
+	# round read -19.5 LUFS, at 7.5 three rounds read -16.8, -17.6 and -17.2.
 	audio.loudness_trim_db = 7.5
 	add_child(audio)
 
@@ -913,11 +847,9 @@ func _build_fx() -> DotResult:
 	break_fx.add_to_group(&"arena_break_fx")
 	break_fx.follow(settings)
 
-	# [b]Said out loud, because a missing scene is otherwise a DEBUG line.[/b] Until
-	# 2026-09-27 all four scenes this catalogue names were missing and every muzzle flash,
-	# spark, hole and gib in this game was refused for it, with no suite noticing.
-	# `headless_presentation` now asserts the list is empty; this is for a build that
-	# lost one anyway.
+	# [b]Said out loud, because a missing scene is otherwise a DEBUG line.[/b] Until 2026-09-27 all
+	# four scenes this catalogue names were missing and every muzzle flash, spark, hole and gib in
+	# this game was refused for it, with no suite noticing.
 	var missing := fx.catalogue.missing_scenes()
 	if not missing.is_empty():
 		DotLog.warn(CHANNEL, "effect scenes missing; those effects will not draw", {
@@ -928,12 +860,9 @@ func _build_fx() -> DotResult:
 
 # --- Console ----------------------------------------------------------------
 
-## dot-console's kit: `help`, `clear`, `settings`, every setting by its own name, the
-## in-process server's console, and the panel on layer 128, registered with [param menu].
-## This game adds its own four.
-##
-## Between the kit's commands and the server's: this game's `quit` must be claimed before a listen server's own.
-## Called after the menu exists (the console is one of its overlays); a suite calls it with no menu.
+## dot-console's kit: `help`, `clear`, `settings`, every setting by its own name, the in-process
+## server's console, and the panel on layer 128, registered with [param menu]. This game adds its
+## own four.
 func build_console(menu: Object = null) -> DotResult:
 	console = DotConsoleKit.build(self, settings, menu)
 
@@ -951,23 +880,16 @@ func build_console(menu: Object = null) -> DotResult:
 
 # --- Chat -------------------------------------------------------------------
 
-## The box a player types in, and the three settings that decide it.
-##
-## A HUD widget, not a [DotScreenStack] screen: it is eight lines in a corner that leave the game visible.
-##
-## [b]Below the console, above everything else.[/b] Both can be open; the console is the
-## one that must be on top, because it is what an operator opens when the rest of the
-## screen is misbehaving.
+## The box a player types in, and the three settings that decide it. A HUD widget, not a
+## [DotScreenStack] screen: it is eight lines in a corner that leave the game visible.
 func _build_chat() -> void:
 	_chat_layer = CanvasLayer.new()
 	_chat_layer.name = "ChatLayer"
 	_chat_layer.layer = 100
 	add_child(_chat_layer)
 
-	# [b]Scaled with the HUD.[/b] Below 1280x720 `ArenaHud.fit_scale` shrinks the killstreak
-	# meter and the key hints, and an unscaled box beside them reached both at 854x480. The
-	# screen is sized frame / fit and scaled by fit, so the window, which anchors itself to
-	# its parent's rect, still lands bottom-left; at 1280x720 and up it is exactly as before.
+	# [b]Scaled with the HUD.[/b] Below 1280x720 `ArenaHud.fit_scale` shrinks the killstreak meter
+	# and the key hints, and an unscaled box beside them reached both at 854x480.
 	_chat_screen = Control.new()
 	_chat_screen.name = "ChatScreen"
 	_chat_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -984,15 +906,12 @@ static func make_chat_window() -> DotChatWindow:
 	chat_window.name = "ChatWindow"
 	chat_window.open_action = &"arena_chat"
 	chat_window.team_action = &"arena_chat_team"
-	# [b]An outline, because the floors are pale.[/b] Light-blue names and white text over
-	# light grey tiles were a log the players asked, in that log, to be able to read. dot-ui
-	# outlines rather than panels on purpose (see `DotFeedView`): a backing box is a grey
-	# rectangle in the corner of the view even when nobody is talking.
+	# [b]An outline, because the floors are pale.[/b] Light-blue names and white text over light
+	# grey tiles were a log the players asked, in that log, to be able to read.
 	chat_window.outline_size = 5
-	# Flush with the left edge the health and armour bars use, and lifted clear of them.
-	# `ArenaHud` puts health at 96 pixels off the bottom and armour at 56; a box at the
-	# default inset draws its log straight through both, which is the kind of thing only a
-	# rendered frame says.
+	# Flush with the left edge the health and armour bars use, and lifted clear of them. `ArenaHud`
+	# puts health at 96 pixels off the bottom and armour at 56; a box at the default inset draws its
+	# log straight through both, which is the kind of thing only a rendered frame says.
 	chat_window.margin_left = 24.0
 	chat_window.margin_bottom = 110.0
 	# Narrower than the default 460: the slide prompt ("Cancel slide  C") is drawn from
@@ -1040,10 +959,9 @@ func _process(_delta: float) -> void:
 	_fit_chat()
 
 
-## Puts one binding from the settings document onto its action.
-##
-## Empty is left alone rather than applied: a settings file somebody cleared the field in
-## would otherwise unbind chat with no way to get it back from inside the game.
+## Puts one binding from the settings document onto its action. Empty is left alone rather than
+## applied: a settings file somebody cleared the field in would otherwise unbind chat with no way to
+## get it back from inside the game.
 func _bind_chat(action: StringName, text: String) -> void:
 	if action == &"" or text.strip_edges() == "":
 		return
@@ -1056,10 +974,8 @@ func _bind_chat(action: StringName, text: String) -> void:
 		})
 
 
-## The server said whether anything else is carrying this conversation.
-##
-## Called by [ArenaClient] when the state payload arrives, and again if a relay comes up
-## or goes down mid-match.
+## The server said whether anything else is carrying this conversation. Called by [ArenaClient] when
+## the state payload arrives, and again if a relay comes up or goes down mid-match.
 func set_chat_relayed(relayed: bool) -> void:
 	if _chat_relayed == relayed:
 		return
@@ -1068,12 +984,9 @@ func set_chat_relayed(relayed: bool) -> void:
 	_apply_chat_visibility()
 
 
-## Resolves the three-way setting against what the server said.
-##
-## `auto` draws the box unless this server already puts these lines where the player can see them (a web client whose page holds the relay's room).
-##
-## In every case the log keeps drawing what other people said. Turning the box off is
-## "you type somewhere else", never "you are out of the conversation".
+## Resolves the three-way setting against what the server said. `auto` draws the box unless this
+## server already puts these lines where the player can see them (a web client whose page holds the
+## relay's room). In every case the log keeps drawing what other people said.
 func _apply_chat_visibility() -> void:
 	if chat_window == null or settings == null:
 		return
@@ -1123,6 +1036,29 @@ func _local_commands() -> DotConsoleLocal:
 			ArenaViewArms.debug_pose = str(v).strip_edges() == "1"
 			return DotResult.success(1 if ArenaViewArms.debug_pose else 0)
 	)
+	_add_arm_vars(local)
+	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
+	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",
+		func() -> Variant: return 1 if ArenaWeaponIcons.shared.sprites else 0,
+		func(v: Variant) -> Variant:
+			ArenaWeaponIcons.shared.sprites = str(v).strip_edges() == "1"
+			return DotResult.success(1 if ArenaWeaponIcons.shared.sprites else 0)
+	)
+	local.add_command(&"where", "Where this client thinks it is", func(_a: PackedStringArray) -> Variant:
+		# The one thing no assertion and no screenshot can give you, and the reason ArenaClient
+		# already logs a position once a second: when a browser client draws sky in every direction.
+		if client == null or not client.has_method("describe_position"):
+			return "no client"
+		return client.call("describe_position")
+	)
+
+	return local
+
+
+# --- What the game asks for -------------------------------------------------
+
+## The first-person arm tuning variables.
+func _add_arm_vars(local: DotConsoleLocal):
 	local.add_var(&"cl_fp_hand_scale", "Multiplier on the first-person hand size of every weapon (1: as the weapon's profile says).",
 		func() -> Variant: return ArenaViewArms.hand_scale_mult,
 		func(v: Variant) -> Variant:
@@ -1153,27 +1089,7 @@ func _local_commands() -> DotConsoleLocal:
 			ArenaPlayer.look_down_back_override = clampf(str(v).to_float(), -1.0, 2.0)
 			return DotResult.success(ArenaPlayer.look_down_back_override)
 	)
-	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
-	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",
-		func() -> Variant: return 1 if ArenaWeaponIcons.shared.sprites else 0,
-		func(v: Variant) -> Variant:
-			ArenaWeaponIcons.shared.sprites = str(v).strip_edges() == "1"
-			return DotResult.success(1 if ArenaWeaponIcons.shared.sprites else 0)
-	)
-	local.add_command(&"where", "Where this client thinks it is", func(_a: PackedStringArray) -> Variant:
-		# The one thing no assertion and no screenshot can give you, and the reason
-		# ArenaClient already logs a position once a second: when a browser client draws
-		# sky in every direction, "the player is somewhere wrong" and "the world is
-		# somewhere wrong" look identical and have completely different fixes.
-		if client == null or not client.has_method("describe_position"):
-			return "no client"
-		return client.call("describe_position")
-	)
 
-	return local
-
-
-# --- What the game asks for -------------------------------------------------
 
 ## Once a frame, with where the camera is and which way it is looking.
 func present(delta: float, eye: Vector3, forward: Vector3) -> void:
@@ -1184,10 +1100,9 @@ func present(delta: float, eye: Vector3, forward: Vector3) -> void:
 	blood.advance(delta)
 
 
-## The camera offset to add this frame, which the rig applies and this does not.
-##
-## dot-spectate's rule: it computes a transform and touches no camera. One implementation
-## then serves the play rig, a spectator's, and a headless suite with no camera at all.
+## The camera offset to add this frame, which the rig applies and this does not. dot-spectate's
+## rule: it computes a transform and touches no camera. One implementation then serves the play rig,
+## a spectator's, and a headless suite with no camera at all.
 func camera_shake() -> Vector3:
 	return fx.shake.offset()
 
@@ -1196,12 +1111,8 @@ func camera_roll() -> float:
 	return fx.shake.roll()
 
 
-## Whether something on screen owns the keyboard right now.
-##
-## Movement must not read while somebody types (the chat box is the same bug as a console, for everybody).
-##
-## [b]Open, not focused.[/b] A click inside an open console can take focus off its line,
-## and the console is still in front of the game; [ArenaClient] suspends its sampler on this.
+## Whether something on screen owns the keyboard right now. Movement must not read while somebody
+## types (the chat box is the same bug as a console, for everybody).
 func swallows_input() -> bool:
 	if console != null and console.is_open():
 		return true
@@ -1213,13 +1124,9 @@ func swallows_input() -> bool:
 
 # --- The events a deathmatch has -------------------------------------------
 
-## A transform at [param at] whose -Z points along [param direction].
-##
-## What every effect scene here is built against: a muzzle flash sprays along -Z, a spark
-## flies back up +Z toward whoever fired, and the bullet hole's decal projects along -Z.
-## [b]Projecting along the shot rather than against a surface normal[/b] is what lets a
-## hole land on a wall, a floor or a ramp with nothing but the point the shot stopped at,
-## which is all a [DotShot] carries.
+## A transform at [param at] whose -Z points along [param direction]. What every effect scene here
+## is built against: a muzzle flash sprays along -Z, a spark flies back up +Z toward whoever fired,
+## and the bullet hole's decal projects along -Z.
 static func facing(at: Vector3, direction: Vector3) -> Transform3D:
 	var forward := direction.normalized() if direction.length_squared() > 0.0 else Vector3.FORWARD
 	# Straight up or down has no yaw to keep; any other up vector will do. 4.7's
@@ -1228,13 +1135,9 @@ static func facing(at: Vector3, direction: Vector3) -> Transform3D:
 	return Transform3D(Basis.looking_at(forward, up), at)
 
 
-## One tick of the local player's weapon use: a flash per shot, a spark and a hole per
-## impact, and the hit marker.
-##
-## [b]The flash is pushed out in front of the eye.[/b] A shot starts at the view, and a
-## flash drawn there is drawn around the camera. Half a metre along the aim and a little
-## below it is where a gun would be, for a client whose weapon does not draw its own —
-## [param weapon_draws] says it does, and then only the holes and the hit marker are here.
+## One tick of the local player's weapon use: a flash per shot, a spark and a hole per impact, and
+## the hit marker. [b]The flash is pushed out in front of the eye.[/b] A shot starts at the view,
+## and a flash drawn there is drawn around the camera.
 func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 	if outcome == null or not outcome.used:
 		return

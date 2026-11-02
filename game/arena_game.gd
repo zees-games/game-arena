@@ -10,20 +10,9 @@ const HULL_REACH_SQ := 16.0
 
 
 ## The deathmatch itself: a match, a combat manager, a map, and some players.
-##
-## [b]This is the seam nothing else runs.[/b] dot-match knows nothing about damage,
-## dot-combat knows nothing about scoring, dot-loadout knows nothing about weapons, and
-## dot-player-controller knows about none of them. Six addons, each correct alone. This is
-## the fifty lines where they meet, and the only place a mistake in the joins between
-## them can show up.
-##
-## It is deliberately independent of dot-server: a listen server, a test and a
-## dedicated server all run this, and only the last of them also runs
-## [ArenaModule].
 
 ## The snapshot rate at [param rate] ticks a second: the nearest to [constant NET_SNAPSHOT_RATE]
-## that is a whole number of ticks apart (64 and 128 give 32, 60 gives 30). dot-net divides
-## with integers, so 32 at 60 Hz sent every tick, twice the bytes.
+## that is a whole number of ticks apart (64 and 128 give 32, 60 gives 30).
 static func snapshot_rate_for(rate: int) -> int:
 	return rate / maxi(1, roundi(float(rate) / float(NET_SNAPSHOT_RATE)))
 
@@ -103,9 +92,6 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 
 	if mode.is_team_mode() and Array(map.spawn_tags).count("") == map.spawns.size():
 		# Not fatal: dot-match falls back to the shared pool and everyone still spawns.
-		# It is worth a line anyway, because the symptom of playing a team mode on an
-		# untagged map is "the sides keep spawning in each other's base", which reads
-		# as a spawn-selection bug rather than as a map that was never tagged.
 		DotLog.warn(
 			CHANNEL,
 			"a team mode on a map with no tagged spawns; both sides share one pool",
@@ -135,9 +121,8 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 	if not progress_result.ok:
 		return progress_result
 
-	# Last, and after the combat manager: a monster is a combat entity and a prop is a
-	# rigid body that has to land on the map. Both read `mode`, which is why neither is
-	# an export on this class — see `ArenaMode.horde`.
+	# Last, and after the combat manager: a monster is a combat entity and a prop is a rigid body
+	# that has to land on the map.
 	_reconcile_world_layers()
 
 	var stack_result := _build_player_stack()
@@ -165,12 +150,6 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 ## Keeps this world's combat manager on the server's replicated cvars (dot-combat's
 ## `mp_teammate_passthrough`), as [param source] reports them: the client's `DotClientLink`.
 ## Remembered, because a map change builds a new manager. True when it is following.
-##
-## [b]Why a client needs it.[/b] This end traces its own shots for tracers and impacts, and
-## on the default 1 against a server on 0 or 2 they ended in (or went through) a team-mate
-## where the server's did the opposite. A family cvar, so it rides dot-server's replicated
-## cvars rather than RULES: one path for every game. By name, like the module's bind: an older
-## host's dot-combat or link cannot follow, and the manager keeps its default.
 func follow_server_cvars(source: Object) -> bool:
 	_cvar_source = source
 	# The ragdoll rules are the game's, not the map's, so they follow once and keep following.
@@ -527,11 +506,9 @@ func _sync_award_config() -> void:
 	medals.nemesis_at = config.award_nemesis_at
 
 
-## Puts [member score_limit], [member time_limit_sec], [member warmup_sec] and
-## [member min_players] on the match being played, from the next tick (dot-match reads its
-## rules every tick). The authority's to call; a client is told the score limit and the clock
-## by MATCH. A limit the match has already passed ends it on the next check, which is what a
-## lowered frag limit does in the genre.
+## Puts [member score_limit], [member time_limit_sec], [member warmup_sec] and [member min_players]
+## on the match being played, from the next tick (dot-match reads its rules every tick). The
+## authority's to call; a client is told the score limit and the clock by MATCH.
 func apply_match_limits() -> void:
 	if match_node == null or match_node.rules == null or mode == null:
 		return
@@ -594,10 +571,6 @@ func _build_match() -> DotResult:
 
 	# Built here rather than left to dot-match, which would otherwise make an untagged
 	# `DotTeam.standard_pair()`. The tags are the whole point — see `ArenaMode.teams`.
-	#
-	# It has to be assigned AND parented before `add_child(match_node)`, because that
-	# is what runs `DotMatch._ready` and therefore `setup`, and setup only creates a
-	# manager when it finds none.
 	if mode.is_team_mode():
 		var manager := DotTeamManager.new()
 		manager.name = "Teams"
@@ -611,21 +584,9 @@ func _build_match() -> DotResult:
 	config.balance_between_rounds = false
 	match_node.config = config
 
-	# **Collect spawn points from THIS game and nowhere else.**
-	#
-	# `DotMatch.setup` calls `refresh_spawns`, which with no `spawns_ref` walks
-	# `get_tree().current_scene` — the whole tree. That is right for a game that is the
-	# scene and wrong for every other arrangement, and this project has two of them:
-	# a suite that builds several `ArenaGame`s in one process, and a `changelevel`,
-	# where the outgoing map's points are still children for the rest of the frame
-	# because `queue_free` is deferred.
-	#
-	# Measured: a second game in the tree contributed ten spawn points to this one's
-	# match, so players spawned in a map they were not in. Nothing errored — a spawn
-	# point is a spawn point, and dot-match had been handed exactly what it asked for.
-	# PARENT rather than SELF: `DotMatch` resolves the ref against ITSELF, so SELF is
-	# the match node, whose only child is the team manager. The spawn points are
-	# children of the game, which is the match node's parent.
+	# **Collect spawn points from THIS game and nowhere else.**  `DotMatch.setup` calls
+	# `refresh_spawns`, which with no `spawns_ref` walks `get_tree().current_scene` — the whole
+	# tree.
 	var mine := DotNodeRef.new()
 	mine.mode = DotNodeRef.Mode.PARENT
 	match_node.spawns_ref = mine
@@ -789,16 +750,6 @@ func rearm_if_allowed(id: int) -> bool:
 
 
 ## Statistics, achievements and boards, if this instance keeps any.
-##
-## [b]Built last, and after the match node exists.[/b] [method ArenaProgress.attach]
-## connects to the combat manager's shot and damage signals and to dot-match's round
-## and match signals; every one of those is created by the three builders above, and
-## attaching before them would connect to null with no error until the first kill.
-## Stands up the player-facing addons and binds them to this game.
-##
-## After everything else, because it reads the match's team manager, the match's spawn
-## points and this node's tick rate, and a stack built before any of those exists binds
-## to nothing and reports success.
 func _build_player_stack() -> DotResult:
 	if player_stack != null:
 		player_stack.queue_free()
@@ -838,19 +789,6 @@ func _build_progress() -> DotResult:
 
 
 ## The monsters and the props the mode asks for.
-##
-## [b]Neither is fatal and neither logs at warning level when it is simply off.[/b] A
-## mode with no monsters is the ordinary case; a mode that wanted them and could not
-## have them is worth a line, because the symptom is an empty arena in a game called
-## Siege and nothing to say why.
-## Build the layers a mode asks for, and take away the ones it does not.
-##
-## [b]Called from `change_map` as well as from `setup`, and that is the whole point.[/b]
-## Before it was, the layers were built once and never reconsidered — so switching from
-## free-for-all to `koth` produced a game whose mode said it had objectives and whose
-## `objectives` was null, and switching to `siege` produced one with no monsters in it.
-## Nothing errored: a null layer is a legitimate thing for a mode with no layer to have,
-## and the only symptom was a mode that did not do what it says.
 func _reconcile_world_layers() -> void:
 	if not is_authority and mode != null:
 		# A networked client builds one layer of the world's: the spectator camera, which
@@ -904,21 +842,15 @@ func _build_spectate() -> void:
 		spectate = null
 
 
-## Build whatever is missing. Idempotent, because [method _reconcile_world_layers]
-## calls it on every map change as well as at setup.
-##
-## Each layer is built once and then left alone: a rebuilt layer is a layer whose signal
-## connections have to be remade, and a connection to a freed object is an error at the
-## next emit rather than at the disconnect that was skipped. What a MODE change needs is
-## the layer to exist or not exist, which the reconcile above does by taking it away.
+## Build whatever is missing. Idempotent, because [method _reconcile_world_layers] calls it on every
+## map change as well as at setup.
 func _build_world_layers() -> void:
 	if not is_authority or mode == null:
 		return
 
-	# Effects first, and the order matters: ArenaObjectives asks the effects layer
-	# whether a player may capture, and a layer that is not there yet answers "no
-	# layer", which is a legitimate answer and would silently let an invulnerable
-	# player take a point.
+	# Effects first, and the order matters: ArenaObjectives asks the effects layer whether a player
+	# may capture, and a layer that is not there yet answers "no layer", which is a legitimate
+	# answer and would silently let an invulnerable player take a point.
 	if effects == null:
 		effects = ArenaEffects.new()
 		effects.name = "Effects"
@@ -995,30 +927,6 @@ func start(tick: int = 0) -> void:
 # --- Changing the map ------------------------------------------------------
 
 ## Replaces the world under the players who are standing in it.
-##
-## [b]This is what `ArenaGame.setup` could never be asked to do twice.[/b] setup builds
-## the combat trace, the match node and every spawn point as children in one pass and
-## is not re-entrant: calling it again leaves two matches, two combat managers and two
-## sets of spawns in one tree, all of them connected to the same signals, and the
-## second of each quietly wins. So the teardown is the feature, and it is the half that
-## has to be right — every one of the joins this game exists to test is a signal
-## connection, and a connection to a freed object is an error at the next emit rather
-## than at the disconnect that was skipped.
-##
-## What survives a change and what does not:
-##
-## - [b]The players do.[/b] Their nodes, their statistics and their loadouts are about
-##   a person on this server, not about a room. They are re-bodied against the new
-##   geometry and put back into the new match.
-## - [b]The match does not.[/b] A new map is a new match; scores from the last one
-##   belong to the last one. dot-stats' session totals are deliberately not reset,
-##   because a session is a visit to the server.
-## - [b]The combat manager does not[/b], because its trace is the map.
-##
-## [param new_mode] is optional; null keeps the mode that is running. A mode change is
-## the one thing that must happen HERE rather than afterwards — the match rules, the
-## team manager and the damage rules are all built from it, and assigning it after the
-## rebuild would leave every one of them describing the previous mode.
 func change_map(new_map: ArenaMap, new_mode: ArenaMode = null) -> DotResult:
 	if new_map == null:
 		return DotResult.fail(DotError.CODE_INVALID, "There is no map to change to.")
@@ -1071,10 +979,9 @@ func change_map(new_map: ArenaMap, new_mode: ArenaMode = null) -> DotResult:
 		if player == null:
 			continue
 
-		# The body first. A player whose collision is still the old map's geometry is
-		# one standing inside a wall that no longer exists, and the first tick after
-		# the change would push them out of a room they are not in.
-		# The movement first, so the motor `rebind_map` rebuilds (and logs) is the map's.
+		# The body first. A player whose collision is still the old map's geometry is one standing
+		# inside a wall that no longer exists, and the first tick after the change would push them
+		# out of a room they are not in.
 		player.ads_rules = ads_rules
 		player.apply_map_movement(map_movement())
 		player.rebind_map(map)
@@ -1094,11 +1001,8 @@ func change_map(new_map: ArenaMap, new_mode: ArenaMode = null) -> DotResult:
 	if progress != null:
 		progress.rebind_world()
 
-	# The layers the NEW mode asks for, and only them: a changegame must not leave
-	# a mode with objectives whose objectives are null, or a siege with no monsters.
-	#
-	# Before the announcement, because a HUD and a net bridge both read these off the
-	# game inside their `map_changed` handlers.
+	# The layers the NEW mode asks for, and only them: a changegame must not leave a mode with
+	# objectives whose objectives are null, or a siege with no monsters.
 	_reconcile_world_layers()
 
 	# Before the announcement: the net bridge registers them inside its `map_changed`.
@@ -1122,25 +1026,9 @@ func change_map(new_map: ArenaMap, new_mode: ArenaMode = null) -> DotResult:
 	return DotResult.success(map)
 
 
-## Puts every player in the match at a spawn point of the map that was just built.
-##
-## [b]A position is a place in a room, and the room was replaced.[/b] Before this, a map
-## change re-bodied each player against the new geometry and left them where they had
-## been standing in the old one. Wherever the new map has a box, a player carried over
-## into it is inside solid geometry, and the flat body resolves that by whichever face
-## is nearest — which for a player standing on the floor inside a box is the floor.
-## Found building `dm_atrium`'s keep: a box across its south door landed on a position
-## a `dm_box` player had carried over, and headless_match found him under the floor.
-##
-## Through [method _on_respawn_due], which is the round start's path: the director's
-## choice with its enemy distance and team sides, spawn protection, a cleared effect set
-## and the loadout. A player who was dead is put back too, because the timer that would
-## have revived them belonged to the match that was just freed and the new one's warmup
-## does not drain a queue. Spectators stay out, exactly as the round start leaves them.
-##
-## [b]The authority only.[/b] A mirroring client runs `change_map` to rebuild its own
-## geometry; where anybody stands is the server's decision, and the snapshot after the
-## respawn carries it — the predictor adopts the server's state and replays on top.
+## Puts every player in the match at a spawn point of the map that was just built. [b]A position is
+## a place in a room, and the room was replaced.[/b] Before this, a map change re-bodied each player
+## against the new geometry and left them where they had been standing in the old one.
 func _respawn_for_new_map() -> void:
 	if not is_authority or match_node == null:
 		return
@@ -1159,15 +1047,7 @@ func _respawn_for_new_map() -> void:
 var defer_map_io := false
 
 
-## Puts an imported map's solid in the tree, replacing the last one; nothing on a
-## built-in map.
-##
-## [b]On every machine, the dedicated server included.[/b] A built-in map is analytic and a
-## headless server never builds its level; an imported map's movement and shots are
-## physics queries (`ArenaMap.movement_body`), so the brushes have to be in this process's
-## physics space wherever anybody moves. [b]`free()`, not `queue_free()`[/b]: the next
-## map's solid goes in on the next line, and two maps' brushes in one space for a frame
-## is a player standing on the wrong one.
+## Puts an imported map's solid in the tree, replacing the last one; nothing on a built-in map.
 func _build_world_collision() -> void:
 	if _world_collision != null and is_instance_valid(_world_collision):
 		remove_child(_world_collision)
@@ -2007,6 +1887,10 @@ func tick(commands: Dictionary = {}) -> void:
 
 	_sweep_jail_button()
 
+	_tick_rest(delta)
+
+
+func _tick_rest(delta: float) -> void:
 	match_node.tick(_tick)
 
 	if surf_rides != null:

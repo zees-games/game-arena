@@ -359,6 +359,10 @@ func _test_classes_and_spawns() -> void:
 	stack.refresh_spawn_rules()
 	# Players stand on most points here; occupancy vetoes and enemy damping would funnel every pick to the free ones.
 	stack.spawns.rules.scatter_enemy_radius = 0.0
+	_test_classes_rest(classes, spawns, stack)
+
+
+func _test_classes_rest(classes: DotPlayerClassManager, spawns: DotSpawnDirector, stack: ArenaPlayerStack) -> void:
 	for cond in stack.spawns.conditions:
 		cond.enabled = false
 	var counts := {}

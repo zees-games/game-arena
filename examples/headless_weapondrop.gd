@@ -1,6 +1,7 @@
 extends Node
 
 const ArenaGame := preload("../game/arena_game.gd")
+const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
@@ -130,8 +131,17 @@ func _run() -> void:
 	_check(thrown == 1, "a thrown weapon with pickup off stays on the floor", str(thrown))
 	rules.pickup_radius = 1.4
 
+	await _run_end(game, drops, player, rules)
+## The second half of the weapon drop checks.
+
+
+func _run_end(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, rules: DotWeaponDropRules) -> void:
 	var victim := game.player_for(22)
 	victim.controller.state.position = Vector3(30.0, victim.controller.state.position.y, 30.0)
+	await _run_middle(game, drops, player, rules)
+
+
+func _run_middle(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, rules: DotWeaponDropRules) -> void:
 	var before := drops.count()
 	var fatal := DotDamage.make(21, 22, 5000.0, game.combat.damage_type(&""))
 	game.combat.health_of(22).spawn_protection_ticks = 0
@@ -167,6 +177,10 @@ func _run() -> void:
 		await _step(game, 21, false, 1)
 	_check(drops.active_count() == 0, "the shot drop comes to rest again", str(drops.active_count()))
 	var _spl := tr.sphere_overlap(lie_body.global_position, 3.0, game.combat.hitbox_sets(), true)
+	await _run_second(game, drops, player, rules, snap)
+
+
+func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, rules: DotWeaponDropRules, snap: Dictionary) -> void:
 	_check(drops.active_count() > 0, "an explosion's sphere wakes it too")
 
 	var held_def: StringName = StringName(str((snap["state"] as Dictionary).get("id", "")))

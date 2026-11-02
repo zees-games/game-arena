@@ -52,6 +52,10 @@ func _run() -> void:
 		await _holds(args)
 		return
 
+	await _run_rest(frames, left, ids)
+
+
+func _run_rest(frames: int, left: int, ids: Array) -> void:
 	for id_s in ids:
 		var id := StringName(id_s)
 		var def: DotWeaponDef = ZeeWeaponPack.table().get(id)

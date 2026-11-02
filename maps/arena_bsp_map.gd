@@ -447,6 +447,12 @@ static func build_collision(manifest: Dictionary, dir: String) -> StaticBody3D:
 	_swap_glass(body, id, dir)
 	_split_fences(body, id, dir)
 
+	_add_terrain(body, blob, info)
+
+	return body
+
+
+static func _add_terrain(body: StaticBody3D, blob: PackedByteArray, info: Dictionary) -> void:
 	var vertex_count := int(info.get("displacement_vertex_count", 0))
 	var index_count := int(info.get("displacement_index_count", 0))
 
@@ -473,8 +479,6 @@ static func build_collision(manifest: Dictionary, dir: String) -> StaticBody3D:
 		var shape := CollisionShape3D.new()
 		shape.shape = terrain
 		body.add_child(shape)
-
-	return body
 
 
 static func _surface_arrays(blob: PackedByteArray, s: Dictionary) -> Array:

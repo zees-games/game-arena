@@ -12,36 +12,15 @@ const ArenaBots := preload("arena_bots.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaRequest := preload("arena_request.gd")
 
-## Joins [ArenaGame] to a [DotNetManager]. The netcode seam, and the only file in
-## game-arena that names both.
-##
-## dot-net drives simulation per entity, but this game's tick order is a whole-game
-## property (everybody moves, then shots resolve, then the match clock runs); this file reconciles the two.
-##
-## [codeblock]
-## # server
-## bridge.attach(game, net)
-## bridge.add_player(peer_id, session_id, "Ada")
-## bridge.server_tick(tick)                      # instead of game.tick()
-##
-## # client
-## bridge.attach(game, net)
-## bridge.apply_join(join_bytes)                 # from the server
-## socket.send(bridge.encode_input(tick, move, fire))
-## bridge.receive_snapshot(payload)
-## bridge.client_tick(tick, move, fire)
-## [/codeblock]
+## Joins [ArenaGame] to a [DotNetManager]. The netcode seam, and the only file in game-arena that
+## names both.
 
 ## Bytes [method DotNetManager.encode_ack] produces, and the prefix of every input
 ## packet. Fixed width, so the command that follows starts at a known offset.
 const ACK_BYTES := 4
 
-## Commands in every input packet: this tick's and the four before it, so a packet lost
-## costs the server no tick unless four more after it are lost too. See [method encode_input].
-##
-## [b]Five, not three:[/b] at 20% loss, three left the server short of the command on 1.7% of
-## ticks and the prediction off by over 5 cm more than once in twenty ticks. Two more copies
-## cost a few bytes each.
+## Commands in every input packet: this tick's and the four before it, so a packet lost costs the
+## server no tick unless four more after it are lost too. See [method encode_input].
 const INPUT_COPIES := 5
 
 ## Input packets taken, per peer. Server side; what `arena_net` reads to tell one client's
@@ -75,12 +54,8 @@ var _tick: int = 0
 ## The RPC surface, on both ends. Created by [method attach].
 var link: ArenaNetLink = null
 
-## [code]func(bytes: PackedByteArray) -> void[/code]. Where a received voice frame
-## goes on a client. [ArenaClient] points it at `DotVoiceManager.receive`.
-##
-## A callable rather than a typed reference, because this file must not name dot-voice:
-## a server build with no voice addon installed would otherwise fail to parse, and the
-## whole point of the bridge is that it is the only file naming two things at once.
+## [code]func(bytes: PackedByteArray) -> void[/code]. Where a received voice frame goes on a client.
+## [ArenaClient] points it at `DotVoiceManager.receive`.
 var voice_in_fn: Callable = Callable()
 
 ## [code]func(speaker_peer: int, bytes: PackedByteArray) -> void[/code]. Where a
@@ -96,17 +71,12 @@ var map_in_fn: Callable = Callable()
 ## or readiness, server side. [ArenaModule] points it at `DotMapSyncHost.handle`.
 var map_report_fn: Callable = Callable()
 
-## [code]func(peer: int) -> void[/code]. A peer said READY, server side. [ArenaModule]
-## points it at [method ArenaMapDirector.admit_peer], which tells the peer the map the
-## server is on: a client builds its world on the default map and, without this, stays
-## there until the next change, predicting against walls the server does not have.
+## [code]func(peer: int) -> void[/code]. A peer said READY, server side.
 var peer_ready_fn: Callable = Callable()
 
-## How the client learns its round-trip time, in milliseconds.
-##
-## [b]Nothing in dot-net writes an RTT sample, and the clock needs one.[/b] Without it the
-## input lead is a guess, and on a link past about 30 ms every input arrives after its tick and
-## is discarded as late. A client points this at [method link_rtt_ms].
+## How the client learns its round-trip time, in milliseconds. [b]Nothing in dot-net writes an RTT
+## sample, and the clock needs one.[/b] Without it the input lead is a guess, and on a link past
+## about 30 ms every input arrives after its tick and is discarded as late.
 var rtt_source: Callable = Callable()
 
 
@@ -117,20 +87,9 @@ static func link_rtt_ms(link: Node) -> float:
 
 
 ## Peers that have said they can receive. Server side.
-##
-## [b]Nothing may be sent to a peer before it says READY.[/b] dot-server's signon
-## finishes and *then* the client builds its scene, so everything sent in between lands
-## on a node that does not exist and is lost — one "Node not found" per call, and a
-## client that never learns who it is.
 var _ready_peers: Dictionary = {}
 
 ## Peers whose READY came before their seat ([method add_player]). Server side.
-##
-## [b]Kept, not answered.[/b] A client sends READY when its link says PLAYING, which the link
-## decides itself after sending `loaded` on another channel; over ENet with loss the READY can
-## overtake `loaded` and so the seat. Answered then, its HELLO named session 0 and its signon
-## no player of its own: a client with a world and no idea which body is its own, for good,
-## because nothing sends a HELLO again. The seat answers it instead.
 var _ready_unseated: Dictionary = {}
 
 ## Whether this end has had its HELLO. Client side.

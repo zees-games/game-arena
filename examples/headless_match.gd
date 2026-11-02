@@ -30,9 +30,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 const WallRouteDriver := preload("wall_route_driver.gd")
 const ArenaWeaponIcons := preload("res://game/arena_weapon_icons.gd")
 
-## A whole deathmatch played out headlessly with nothing called by hand; exits non-zero on failure. The only place the addons meet:
-## their suites each run one addon alone, this runs the joins (a movement state into a spread cone, a kill into a score, a respawn into a loadout).
-## Four bots, no netcode, no rendering: they hold the trigger on the nearest enemy until the score limit ends the match.
+## A whole deathmatch played out headlessly with nothing called by hand; exits non-zero on failure.
 
 const TICK_RATE := 64
 const BOTS := 4
@@ -130,9 +128,8 @@ func _run() -> void:
 	await _test_toys()
 	await _test_instant_loadout()
 
-	# Last, and it has to be: it replaces the combat manager, the match node and the map, so everything above that reads any
-	# of them (the kill feed, the shot-blocking trace) must already have run. Earlier it failed one assertion four sections
-	# later, about a HUD that was working.
+	# Last, and it has to be: it replaces the combat manager, the match node and the map, so
+	# everything above that reads any of them (the kill feed.
 	await _test_map_change()
 
 	_check(_stats_errors.is_empty(), "the stats layer logged no error", str(_stats_errors))
@@ -217,9 +214,7 @@ func _test_team_deathmatch() -> void:
 
 	_check(tagged > 0, "the map's spawns carry team tags", "%d tagged" % tagged)
 
-	# Six players, and dot-match decides the sides. Asserting the COUNTS rather than
-	# any one assignment: `DotTeamManager.assign` balances, so which side a given
-	# player lands on is its business and not a thing to pin.
+	# Six players, and dot-match decides the sides.
 	var counts := {}
 
 	for index in range(6):
@@ -243,9 +238,8 @@ func _test_team_deathmatch() -> void:
 		"%d vs %d" % [sizes[0], sizes[1]]
 	)
 
-	# ArenaPlayer.team was declared and assigned by NOTHING since the class was
-	# written, so the scoreboard, the renderer and the friendly-fire check all read a
-	# zero. This is the check that says it is wired.
+	# ArenaPlayer.team was declared and assigned by NOTHING since the class was written, so the
+	# scoreboard, the renderer and the friendly-fire check all read a zero.
 	var mirrored := 0
 
 	for index in range(6):
@@ -256,9 +250,8 @@ func _test_team_deathmatch() -> void:
 
 	_check(mirrored == 6, "the player carries the side it was given", "%d of 6" % mirrored)
 
-	# And the reason any of that matters: dot-combat asks a callable for two entity
-	# ids and compares the answers. Unwired, every pair looks like strangers and
-	# friendly_fire = false protects nobody.
+	# And the reason any of that matters: dot-combat asks a callable for two entity ids and compares
+	# the answers.
 	var resolver := game.combat.resolver
 	_check(resolver.team_of.is_valid(), "combat can ask who is on whose side")
 
@@ -294,9 +287,7 @@ func _first_team_mate(game: ArenaGame, id: int) -> int:
 
 # --- Effects ---------------------------------------------------------------
 
-## dot-effects, and the one line that makes it count: the damage check. Burns expiring and slows slowing are dot-effects'
-## own suite; what only this project can test is that `DotDamageResolver.adjust` is wired, because a layer computing
-## multipliers nothing multiplies by is this family's most repeated bug.
+## dot-effects, and the one line that makes it count: the damage check.
 func _test_effects() -> void:
 	_section("effects")
 
@@ -326,9 +317,8 @@ func _test_effects() -> void:
 		"dot-combat's per-hit hook is filled, which nothing in this game had ever done"
 	)
 
-	# Out of the spawn window first: a freshly spawned player is protected (DotHealth's window, the PROTECTED effect and
-	# dot-spawn's ledger, all off the mode's `spawn_protection_sec`), so a hit inside it measures the protection, not the
-	# scaling. This once passed because none of that was reachable here: right about its subject for the wrong reason.
+	# Out of the spawn window first: a freshly spawned player is protected (DotHealth's window, the
+	# PROTECTED effect and dot-spawn's ledger, all off the mode's `spawn_protection_sec`).
 	for _protect in range(game.match_node.spawn_protection_ticks() + 2):
 		game.tick({})
 
@@ -436,9 +426,8 @@ func _hit(game: ArenaGame, attacker: int, victim: int, amount: float) -> float:
 
 # --- zee-dot-weapons ---------------------------------------------------------
 
-## The weapons pack in a real game: the rig drives the arsenal, a spawn holds the right thing, a shot leaves the eye, the bash
-## works, and projectiles behave as defined (a frag bounces and goes off on its fuse, a sticky stops where it lands, a
-## grenade cooked past its fuse goes off in the hand).
+## The weapons pack in a real game: the rig drives the arsenal, a spawn holds the right thing, a
+## shot leaves the eye, the bash works, and projectiles behave as defined.
 func _test_zee_weapons() -> void:
 	_section("zee-dot-weapons in the arena")
 
@@ -508,9 +497,7 @@ func _test_zee_weapons() -> void:
 	)
 	_settle(game, 900, TICK_RATE)
 
-	# A shot, from the eye along the aim. The rig builds its own context when handed
-	# none, from the player bridge; this game hands it one, and this is what says the
-	# shot it gets still leaves where the player is looking.
+	# A shot, from the eye along the aim.
 	var used: Array[DotWeaponOutcome] = []
 	p.used.connect(func(o: DotWeaponOutcome) -> void: used.append(o))
 
@@ -665,6 +652,10 @@ func _test_zee_weapons() -> void:
 		"the HUD counts a beamer's cells, where a magazine count read 0",
 		"%d against %d" % [ArenaHud.rounds_in_hand(p), cells]
 	)
+	await _test_zee_weapons_rest(game, p)
+
+
+func _test_zee_weapons_rest(game: ArenaGame, p: ArenaPlayer) -> void:
 	_check(
 		ArenaHud.weapon_line(p) == "Plasma Beamer",
 		"and names it", ArenaHud.weapon_line(p)
@@ -1196,9 +1187,7 @@ func _test_lag_compensation() -> void:
 	_done()
 
 
-## A rocket or grenade launched from inside a team-mate goes on to where it was aimed. Team-mates do not collide, so the muzzle
-## can sit inside a friend's hitboxes; dot-combat leaves a friend out of a gun's trace, and the projectile sweep must too
-## (`ArenaProjectiles._sweep`), else it goes off at the muzzle. Armed: an enemy at the muzzle is still a point-blank hit.
+## A rocket or grenade launched from inside a team-mate goes on to where it was aimed.
 func _test_launch_inside_team_mate() -> void:
 	_section("a launch from inside a team-mate")
 	var ids := [950, 951, 952, 953]
@@ -1347,9 +1336,7 @@ func _test_launch_inside_team_mate() -> void:
 			"%.2f m from the muzzle" % at.distance_to(muzzle))
 		rules.set(&"pass_through_team_mate_at_muzzle", true)
 
-	# --- mp_teammate_passthrough 2: a team-mate merely in the line does not stop a rocket
-	# either. At the default (1) it goes off in the friend halfway to the enemy; at 2 the
-	# sweep keeps every team-mate out for the whole flight and it reaches the enemy.
+	# --- mp_teammate_passthrough 2: a team-mate merely in the line does not stop a rocket either.
 	if rules != null and "pass_through_team_mates" in rules:
 		var between := Vector3(0.0, floor_y, -4.0)
 		arrange.call({shooter_id: here, mate_id: between, enemy_id: ahead, spare: aside})
@@ -1624,6 +1611,10 @@ func _test_free_roam() -> void:
 	_check(rules.set_cvar("mp_forcecamera", "1"), "mp_forcecamera 1 is read")
 	for t in range(4):
 		game.tick({})
+	await _test_free_roam_rest(game, victim, rules)
+
+
+func _test_free_roam_rest(game: ArenaGame, victim: int, rules: DotSpectatorRules) -> void:
 	_check(
 		not game.spectate.is_roaming(victim),
 		"a restricted camera moves a roamer back onto a player"
@@ -1650,9 +1641,7 @@ func _first_other_team(game: ArenaGame, id: int) -> int:
 
 # --- Spawning in a free-for-all ---------------------------------------------
 
-## In a free-for-all, every other player is an enemy to the spawn director. The roster hands out sides even when the mode
-## has none, so a side-aware answer would treat half the lobby as friends (`[arena-ffa-sides-1]`); the last check switches
-## the director to furthest-from-enemies for one choice, the only way to watch a roster "friend" being avoided as an enemy.
+## In a free-for-all, every other player is an enemy to the spawn director.
 func _test_ffa_spawn_sides() -> void:
 	_section("free-for-all: nobody is a friend at a spawn")
 
@@ -1679,9 +1668,8 @@ func _test_ffa_spawn_sides() -> void:
 	_go_live(game)
 	_ffa_spawn_scenario(game, "from the start")
 
-	# [b]The case the queue item was written about.[/b] A team mode's sides stay in the
-	# roster across a change into a free-for-all: `_adopt_match_sides` only forces a side
-	# dot-match gave, and a free-for-all gives none, so the four keep red and blue.
+	# [b]The case the queue item was written about.[/b] A team mode's sides stay in the roster
+	# across a change into a free-for-all.
 	var team := _first_team_mode()
 	var to_team := game.change_map(ArenaMap.dm_atrium(), team)
 	var to_ffa := game.change_map(ArenaMap.dm_atrium(), ArenaMode.free_for_all(50))
@@ -1775,9 +1763,7 @@ func _ffa_spawn_scenario(game: ArenaGame, when: String) -> void:
 	)
 
 
-## A wall hides a spawn from an enemy in a headless game, and the director prefers the hidden site. The sight test once asked
-## Godot's physics space, which holds no built-in map on a dedicated server, so every site was seen and a player respawned
-## in view of his killer.
+## A wall hides a spawn from an enemy in a headless game, and the director prefers the hidden site.
 func _spawn_sight_scenario(game: ArenaGame) -> void:
 	var stack := game.player_stack
 	var map := game.map
@@ -1852,6 +1838,10 @@ func _spawn_sight_scenario(game: ArenaGame) -> void:
 	stack.spawns.rules.minimum_enemy_distance = saved_floor
 	stack.refresh_spawns()
 
+	_sight_scenario_rest(chosen, picked)
+
+
+func _sight_scenario_rest(chosen: DotResult, picked: String) -> void:
 	_check(
 		picked == "behind_the_wall",
 		"and of two sites as far from the enemy, the director picks the one it cannot see",
@@ -2063,9 +2053,8 @@ func _test_capture_the_flag() -> void:
 	_done()
 
 
-## dot-props' toys on the built-in maps, on a headless authority: every map's built, clear of its boxes and spawns; a walk into a
-## ball sends it on; a shot pushes it and is still the combat's (a ball is no cover); a rocket's blast throws a barrel;
-## going live puts them home; sv_toys 0 takes them away.
+## dot-props' toys on the built-in maps, on a headless authority: every map's built, clear of its
+## boxes and spawns; a walk into a ball sends it on; a shot pushes it and is still the combat's.
 func _test_toys() -> void:
 	_section("the maps' toys")
 	var bad: Array = []
@@ -2200,9 +2189,7 @@ func _go_live(game: ArenaGame) -> void:
 		guard += 1
 
 
-## Kill somebody the way the game does it, through dot-combat. `DotMatch.report_kill` scores a death and emits nothing the game
-## listens to, so the spectator camera and the flag drop would never hear it and the test would skip the path a real
-## death takes.
+## Kill somebody the way the game does it, through dot-combat.
 func _kill_through_combat(game: ArenaGame, killer: int, victim: int, weapon: StringName = &"") -> void:
 	var health := game.combat.health_of(victim)
 	if health == null:
@@ -2272,9 +2259,8 @@ func _test_content() -> void:
 	_check(schema.validate().ok, "the loadout schema validates",
 		str(schema.validate().error))
 
-	# Every weapon must be reachable from a loadout. A content set where a weapon
-	# exists and no loadout can name it is a weapon nobody will ever hold, and nothing
-	# reports it.
+	# Every weapon must be reachable from a loadout. A content set where a weapon exists and no
+	# loadout can name it is a weapon nobody will ever hold, and nothing reports it.
 	var everything := DotLoadoutEntitlements.everything()
 	var reachable := {}
 
@@ -2321,8 +2307,6 @@ func _test_content() -> void:
 	)
 
 	# A melee weapon in the primary slot is a player who spawns with nothing to shoot.
-	# A loadout saved before the melee and throwable slots existed is conformed, not
-	# refused: what loading one does, and what puts a grenade under 5 for its owner.
 	var saved := DotLoadout.empty(&"arena")
 	saved.set_item(&"primary", ZeeWeaponIds.RIFLE)
 	saved.set_item(&"secondary", ZeeWeaponIds.PISTOL)
@@ -2347,10 +2331,13 @@ func _test_content() -> void:
 		"and refuses a knife as a primary"
 	)
 
-	# The launcher is the one paid item, so an unentitled player must not get it —
-	# which is dot-loadout's default and is worth checking here because this game's
-	# entitlement source is the thing that grants it.
+	# The launcher is the one paid item, so an unentitled player must not get it — which is dot-
+	# loadout's default and is worth checking here because this game's entitlement source is the.
 	var unowned := DotLoadout.empty(&"arena")
+	_test_content_rest(schema, unowned)
+
+
+func _test_content_rest(schema: DotLoadoutSchema, unowned: DotLoadout) -> void:
 	unowned.set_item(&"primary", ZeeWeaponIds.LAUNCHER)
 	unowned.set_item(&"secondary", ZeeWeaponIds.PISTOL)
 	_check(
@@ -2415,9 +2402,7 @@ func _test_map() -> void:
 	_done()
 
 
-## The built-in maps' paint and lighting. A frame is the check for whether it looks right (`tools/screenshot.sh`); this checks
-## the wiring: painting left the box list alone, so the survey and `MAP_VERSIONS` still describe the map, and the sky, sun and
-## tone map come out of the map's document rather than a default.
+## The built-in maps' paint and lighting.
 func _test_map_look() -> void:
 	_section("map paint and lighting")
 
@@ -2528,9 +2513,7 @@ func _test_map_look() -> void:
 	_done()
 
 
-## `dm_pit`: the geometry, the bot that has to get out of the pit, and the mode gate. The first two are what every new map owes;
-## the gate is new: `dm_pit`'s spawns carry no team tags, so it is the first map for which [method ArenaMaps.supports_mode]
-## can answer no, where every caller had only ever been told yes.
+## `dm_pit`: the geometry, the bot that has to get out of the pit, and the mode gate.
 func _test_pit() -> void:
 	_section("dm_pit")
 
@@ -2700,9 +2683,7 @@ func _test_pit() -> void:
 		"at %s" % str(on_ring)
 	)
 
-	# And across the bridge. It is 2 m wide over 22 m of open air, so a bot that walks
-	# it is a bot the geometry lines up for; a bot that falls is a bridge that does not
-	# meet the ring it is drawn as meeting.
+	# And across the bridge.
 	bot.teleport(Vector3(0.0, 3.9, -10.0), 180.0, 0.0)
 
 	var crossed := false
@@ -2757,9 +2738,8 @@ func _test_pit() -> void:
 	# reaches, `[gate-sweep-1]`'s second question), then the second question about the third tier.
 	var jump: float = ArenaPlayer.arena_tunables().jump_height
 
-	# Both boxes found by their footprint rather than by an index into the list:
-	# `add_box` order is an implementation detail and an index is a check that
-	# silently starts measuring a different box the day somebody inserts one.
+	# Both boxes found by their footprint rather than by an index into the list: `add_box` order is
+	# an implementation detail and an index is a check that silently starts measuring a different.
 	var shelf := AABB()
 	var perch := AABB()
 	var found_shelf := false
@@ -2815,9 +2795,7 @@ func _test_pit() -> void:
 	_done()
 
 
-## `dm_pit`'s shelf stair, the pit floor to the third tier, walked. The treads are read off the box list and their shape asserted
-## (eleven, each rise under `step_height`); then three bots: step off the pit floor and walk up, run the whole valley holding west
-## without jump (pace PRINTED and asserted within 1.5 of `max_speed`, `[bot-drive-1]`), and end against the perch one hop under it.
+## `dm_pit`'s shelf stair, the pit floor to the third tier, walked.
 func _test_pit_shelf_stair(map: ArenaMap, shelf: AABB, perch: AABB) -> void:
 	var tunables := ArenaPlayer.arena_tunables()
 	var shelf_top: float = shelf.position.y + shelf.size.y
@@ -3063,9 +3041,8 @@ func _test_pit_shelf_stair(map: ArenaMap, shelf: AABB, perch: AABB) -> void:
 	)
 
 
-## What a bot driven the way every bot here is driven MOVES at: `move = Vector2(0, 1)` walks, holding jump too is seven times slower
-## (`auto_hop` leaves the ground the tick it lands, and `max_air_wish_speed` 1.2 caps air acceleration, deliberately). Do not
-## "fix" that; the rule is that a bot that has to cover ground does not hold jump, and nobody had printed either number.
+## What a bot driven the way every bot here is driven MOVES at: `move = Vector2(0, 1)` walks,
+## holding jump too is seven times slower (`auto_hop` leaves the ground the tick it lands.
 func _test_bot_ground_speed() -> void:
 	_section("what a bot actually travels at")
 
@@ -3112,9 +3089,8 @@ func _test_bot_ground_speed() -> void:
 	_done()
 
 
-## The highest horizontal speed [param bot] reaches in two seconds of holding forward, driven east over 30 m of flat south of
-## `dm_atrium`'s yard (the first half second is discarded). The best speed, not the last: the claim is that the hopping bot
-## CANNOT go fast, and its best moment is the strongest form of that.
+## The highest horizontal speed [param bot] reaches in two seconds of holding forward, driven east
+## over 30 m of flat south of `dm_atrium`'s yard (the first half second is discarded).
 func _top_speed(
 	bot: DotFpsController, jumping: bool, delta: float, tick_base: int
 ) -> float:
@@ -3138,9 +3114,7 @@ func _top_speed(
 	return speed
 
 
-## Every climb on every map, against what the movement can do. Three maps shipped with a climb nobody could make (crates rising
-## 1.5 m a step against a 1.25 m jump peak) and every other assertion passed. The sweep is over `ArenaMap.climbs`, derived from
-## the boxes, so moving a crate moves the climb; it does not FIND routes, which pairs a player may use is the one thing a human writes.
+## Every climb on every map, against what the movement can do.
 func _test_reach() -> void:
 	_section("what a player can climb")
 
@@ -3212,9 +3186,8 @@ func _test_reach() -> void:
 	_done()
 
 
-## dot-core's [DotCollisionAudit] over every built-in map as a client draws it: drawn geometry with no shape near it is a wall a
-## player walks into. The lenient audit (`anywhere`) because the drawn level and the solid are separate subtrees; what is meant
-## to be walked through carries the opt-out where it is built, with the reason.
+## dot-core's [DotCollisionAudit] over every built-in map as a client draws it: drawn geometry with
+## no shape near it is a wall a player walks into.
 func _test_collision_audit() -> void:
 	_section("every map: nothing drawn is walked through")
 
@@ -3246,9 +3219,8 @@ func _test_collision_audit() -> void:
 	_done()
 
 
-## `[gate-sweep-1]`, asked of every map over its box list: can a player pass every gap that looks like a way through (faces
-## under 0.8 m apart, a jump the map does not declare), and is any surface unreachable or a trap. The areas are printed.
-## Armed below: a 0.5 m slot, a tower nothing climbs and a courtyard you cannot climb out of must each be found.
+## `[gate-sweep-1]`, asked of every map over its box list: can a player pass every gap that looks
+## like a way through (faces under 0.8 m apart, a jump the map does not declare).
 func _test_survey() -> void:
 	_section("every map: slots and reach, as a rule")
 
@@ -3326,9 +3298,8 @@ func _test_survey() -> void:
 	# Two walls 0.5 m apart, the slot dm_pit's shelf would have made.
 	bad.add_box(AABB(Vector3(-7.0, 0.0, 4.0), Vector3(4.0, 2.0, 1.0)))
 	bad.add_box(AABB(Vector3(-7.0, 0.0, 5.5), Vector3(4.0, 2.0, 1.0)))
-	# A tower 4 m high with nothing to climb it by — 2 m over the courtyard's wall
-	# tops too, which a 3 m tower was not: the survey jumped onto it from the wall,
-	# correctly, and the fixture was what was wrong.
+	# A tower 4 m high with nothing to climb it by — 2 m over the courtyard's wall tops too, which a
+	# 3 m tower was not: the survey jumped onto it from the wall, correctly.
 	var tower := AABB(Vector3(4.0, 0.0, 4.0), Vector3(2.0, 4.0, 2.0))
 	bad.add_box(tower)
 	# A courtyard walled at 2 m, reached over its west wall from a 1 m crate and left
@@ -3374,17 +3345,15 @@ func _test_survey() -> void:
 	_done()
 
 
-## `dm_box`'s upper level, climbed and walked by a bot rather than believed: from the floor up the west crates onto the ledge, one
-## across each gantry, one up the north nest. Each leg holds ONE direction (as `_test_crate_climb`); gantry and nest legs start
-## from a teleport, because turning a bot at 9 m/s on a 2.5 m walkway measures its friction, not the map.
+## `dm_box`'s upper level, climbed and walked by a bot rather than believed: from the floor up the
+## west crates onto the ledge, one across each gantry, one up the north nest.
 func _test_box_upper() -> void:
 	_section("dm_box: the upper level, climbed")
 
 	var map := ArenaMap.dm_box()
 
-	# [b]The property dm_box exists for, asked of the whole list.[/b] Every box has a
-	# twin turned half a circle about the origin, so every spawn scores identically —
-	# the gantries and nests had to keep that or not be added.
+	# [b]The property dm_box exists for, asked of the whole list.[/b] Every box has a twin turned
+	# half a circle about the origin, so every spawn scores identically.
 	var unpaired := PackedStringArray()
 
 	for box in map.boxes:
@@ -3415,9 +3384,8 @@ func _test_box_upper() -> void:
 	var delta := 1.0 / 64.0
 	var tick := 0
 
-	# Floor, three crates, the west ledge: +Z (yaw 180) with jump up the crates, a quarter second still on the top one, then -X (yaw 90)
-	# with jump. The pause is the honest part: air control only adds speed along the wish direction, so a bot that
-	# turns mid-hop keeps its +Z speed and drifts off the crate, which is a bot that never stopped to turn.
+	# Floor, three crates, the west ledge: +Z (yaw 180) with jump up the crates, a quarter second
+	# still on the top one, then -X (yaw 90) with jump.
 	var start := Vector3(-15.75, 0.1, -7.8)
 	climber.controller.teleport(start, 180.0, 0.0)
 
@@ -3521,9 +3489,8 @@ func _test_box_upper() -> void:
 		"ended at (%.1f, %.2f, %.1f)" % [perched.x, perched.y, perched.z]
 	)
 
-	# The two nest stairs, walked and each separately: a turned box list meets a different gantry (`[gate-sweep-1]`). Held along
-	# the stair with NO jump (a hop bleeds to the 1.2 m/s air cap), the time first tread to last is PRINTED against max_speed
-	# and asserted within 1.5 (`[bot-drive-1]`); then turned toward the gantry, the step the stair leads to.
+	# The two nest stairs, walked and each separately: a turned box list meets a different gantry
+	# (`[gate-sweep-1]`).
 	var tunables := ArenaPlayer.arena_tunables()
 	var trace := map.to_trace()
 
@@ -3619,9 +3586,8 @@ func _test_box_upper() -> void:
 			"ended at (%.1f, %.2f, %.1f)" % [across.x, across.y, across.z]
 		)
 
-		# [b]The trade, traced.[/b] The stair climbs straight at the nest, so an eye on
-		# the nest sees a player's chest on every tread of it. A stair the nest could not
-		# see down would be a free way to the third tier.
+		# [b]The trade, traced.[/b] The stair climbs straight at the nest, so an eye on the nest
+		# sees a player's chest on every tread of it.
 		var eye := Vector3(s * 4.0, 5.0 + 1.6, s * -12.0)
 		var hidden := PackedStringArray()
 
@@ -3639,9 +3605,8 @@ func _test_box_upper() -> void:
 			", ".join(hidden)
 		)
 
-	# The two corner stairs, read off the box list first (north-west frame: ten treads under step_height, the top one flush
-	# with a landing flush with the west ledge), then walked each separately as the nest stairs are: west up with no jump,
-	# paced; on across the landing to the wall; south onto the ledge's old stub. The south-east one is the same in its frame.
+	# The two corner stairs, read off the box list first (north-west frame: ten treads under
+	# step_height, the top one flush with a landing flush with the west ledge).
 	var corner_treads: Array[AABB] = []
 	var corner_landing := AABB()
 
@@ -3804,9 +3769,7 @@ func _test_box_upper() -> void:
 	_done()
 
 
-## The walls' routes on every map, driven through the motor. A wall route is made (the intended slide-jump or chimney jump lands
-## on the route's end) and is a WALL route (the same inputs without the wall moves fall short), and it is smooth: speed along
-## the wall never moves and the arriving vertical is eased away tick by tick (`wall_run_vertical_damping` 8), never set.
+## The walls' routes on every map, driven through the motor.
 func _test_wall_routes() -> void:
 	_section("every map: the wall routes, run and climbed")
 
@@ -3844,9 +3807,7 @@ func _test_wall_routes() -> void:
 
 	_check(routes >= 2, "the maps declare wall routes (%d)" % routes)
 
-	# The trade every way up on dm_atrium makes: the gallery is watched from higher. From
-	# the rampart (5.86) a chest every 3 m along both ledges, and from the keep roof's
-	# north-west corner (5.5) a chest at the chimney's top.
+	# The trade every way up on dm_atrium makes: the gallery is watched from higher.
 	var atrium := ArenaMap.dm_atrium()
 	var trace := atrium.shot_trace()
 	var hidden := PackedStringArray()
@@ -3881,9 +3842,8 @@ func _test_wall_routes() -> void:
 	_done()
 
 
-## Drives [param route] through a bare motor on [param body]: `made`, `at`, `runs`,
-## `jumps`, and `worst_on_wall`, the largest tick-to-tick change of velocity from the first
-## tick on a wall to the end of the run.
+## Drives [param route] through a bare motor on [param body]: `made`, `at`, `runs`, `jumps`, and
+## `worst_on_wall`.
 func _drive_route(map: ArenaMap, body: DotFpsBody, route: Dictionary, how: StringName, walls: bool) -> Dictionary:
 	var t := ArenaPlayer.arena_tunables()
 	if not walls:
@@ -3904,9 +3864,8 @@ func _drive_route(map: ArenaMap, body: DotFpsBody, route: Dictionary, how: Strin
 		idle.yaw = driver.yaw
 		motor.simulate(state, idle, step)
 
-	# How the run treats the velocity: what the entry tick changed against what easing the
-	# arriving vertical speed allows, the largest rise from one tick's change to the next
-	# (a jolt; an ease only ever shrinks them), and the most the speed along the wall moved.
+	# How the run treats the velocity: what the entry tick changed against what easing the arriving
+	# vertical speed allows, the largest rise from one tick's change to the next (a jolt.
 	var dt := step
 	var entry_excess := -INF
 	var jolt := 0.0
@@ -3961,9 +3920,8 @@ func _test_crate_climb() -> void:
 	var top_of_stack := false
 	var on_the_ring := false
 
-	# Two held directions, and the switch is the honest part: the column climbs north and the ring is west of its top, so
-	# north and jump until up, then west and no jump (re-aiming continuously would test the steering). Twenty-four seconds:
-	# a jump-holding bot is slow (`_test_bot_ground_speed`) and sixteen left two ticks to spare.
+	# Two held directions, and the switch is the honest part: the column climbs north and the ring
+	# is west of its top, so north and jump until up, then west and no jump.
 	for tick in range(tick_rate * 24):
 		var command := DotFpsCommand.new()
 		command.yaw = 0.0
@@ -3983,9 +3941,8 @@ func _test_crate_climb() -> void:
 		var at: Vector3 = climber.controller.state.position
 		peak = maxf(peak, at.y)
 
-		# Standing on the top of the stack is `is_grounded`, not a height band: a bot that never reached the fifth crate crosses 4.45
-		# twice on its way past (the fourth crate's top is 3.6, an apex is 1.25 above). A height briefly passed is not a height
-		# reached (`[bonus-run-2]`).
+		# Standing on the top of the stack is `is_grounded`, not a height band: a bot that never
+		# reached the fifth crate crosses 4.45 twice on its way past.
 		if (
 			not top_of_stack
 			and climber.controller.state.is_grounded()
@@ -4091,9 +4048,7 @@ func _build() -> void:
 	_done()
 
 
-## The wall moves arena turns on, the cvar for each, and what "off" means. Off must mean exactly the game before walls: the same
-## 400 ticks of a slide-jump into the north gallery's wall and a chimney scramble are hashed with arena's three wall cvars at 0
-## and with the tunables' pre-wall defaults, so this proves arena's "off" is those defaults.
+## The wall moves arena turns on, the cvar for each, and what "off" means.
 func _test_wall_rules() -> void:
 	_section("wall movement: on in the arena, a cvar each, and off is what it was")
 
@@ -4225,9 +4180,8 @@ func _commands_for_tick(tick: int) -> Dictionary:
 
 			fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
 
-			# Strafe, so they are not four statues: it exercises the movement-based
-			# spread and the ground friction, and it means the shots are not all
-			# fired from a standstill. Forward 0.33 is the old 0.25 at the 75% run speed.
+			# Strafe, so they are not four statues: it exercises the movement-based spread and the
+			# ground friction, and it means the shots are not all fired from a standstill.
 			move.move = Vector2(sin(float(tick) * 0.05 + float(player.player_id)), 0.33)
 
 		move.sanitise()
@@ -4323,9 +4277,8 @@ func _build_vote() -> void:
 		_vote = null
 		return
 
-	# A score limit ABOVE the match's own, so the clock is still running when the round
-	# ends and the round end can be seen arriving. Due at four frags: two short of the
-	# match's limit of six, which is where a frag-limit chooser opens its ballot.
+	# A score limit ABOVE the match's own, so the clock is still running when the round ends and the
+	# round end can be seen arriving.
 	var rules := _vote.director.rules
 	rules.trigger = DotVoteRules.Trigger.SCORE_LIMIT
 	rules.duration_sec = 0.0
@@ -4409,9 +4362,7 @@ func _test_outcome() -> void:
 
 	_check(_kills.size() > 0, "bots killed each other", "%d kills" % _kills.size())
 
-	# Every kill must have a killer and a victim the scoreboard knows about. A kill
-	# credited to nobody is the "the attacker disconnected" path, and at four bots that
-	# never leave it should not happen.
+	# Every kill must have a killer and a victim the scoreboard knows about.
 	var orphans := 0
 	for entry in _kills:
 		if entry.suicide:
@@ -4695,6 +4646,10 @@ func _test_interface() -> void:
 	menu.open(&"controls")
 	_check(menu.any_open() and not menu.scoreboard.is_open(), "the menu opened over the board drops the board")
 	menu.close()
+	_test_interface_rest(hud, menu, board)
+
+
+func _test_interface_rest(hud: ArenaHud, menu, board) -> void:
 	_check(not menu.any_open(), "and closes")
 	board.follow("")
 
@@ -4919,6 +4874,10 @@ func _test_progression() -> void:
 	# Every board this game defines has to be one the manager will accept. A
 	# definition rejected at boot is a board that silently holds nothing.
 	var defined := progress.boards.definitions().size()
+	_test_progression_rest(defined)
+
+
+func _test_progression_rest(defined: int) -> void:
 	_check(
 		defined == ArenaBoards.definitions().size(),
 		"every board definition was accepted",
@@ -5134,30 +5093,17 @@ func _test_map_change() -> void:
 			0
 		)
 
-		# [b]And out of dot-spawn's ledger, which `victim.spawn(..., 0)` does not
-		# clear.[/b] The zero above is `DotHealth`'s window; the map change respawned
-		# everybody through `_on_respawn_due` and that is what grants the session-scoped
-		# protection the resolver now asks about. Two records of one idea, and hand-
-		# spawning somebody only clears the one it was handed.
+		# [b]And out of dot-spawn's ledger, which `victim.spawn(..., 0)` does not clear.[/b] The
+		# zero above is `DotHealth`'s window; the map change respawned everybody through
+		# `_on_respawn_due` and that is what grants the session-scoped protection the resolver now.
 		if _game.player_stack != null and _game.player_stack.spawns.protection != null:
 			_game.player_stack.spawns.protection.revoke(
 				str(victim.player_id), _game.current_tick()
 			)
 
-		# [b]And THREE records, not two.[/b] `ArenaPlayerStack.refresh_spawn_rules`
-		# says it outright -- spawn protection is enforced by [DotHealth]'s window,
-		# by dot-spawn's ledger, and by the `arena_protected` effect -- and this
-		# cleared the first two. `ArenaEffects.adjust_damage` asks the effect manager
-		# first of all three, so on any run where the respawn above happened recently
-		# enough for the effect to still be up, `apply_damage` came back refused and
-		# the check read as a rebind that had not happened.
-		#
-		# It went unnoticed because whether the effect was still up depended on the
-		# emergent end state of a simulated deathmatch. Changing DotSpread's mixer --
-		# which changed no behaviour, only which numbers came out -- moved it to
-		# roughly one run in ten. A check about `rebind_world` should not be sampling
-		# a match, and the failure message now carries `damage.refusal` so the next
-		# one of these says which gate refused instead of only "0.0".
+		# [b]And THREE records, not two.[/b] `ArenaPlayerStack.refresh_spawn_rules` says it outright
+		# -- spawn protection is enforced by [DotHealth]'s window, by dot-spawn's ledger, and by the
+		# `arena_protected` effect -- and this cleared the first two.
 		if _game.effects != null and _game.effects.manager != null:
 			_game.effects.manager.remove(
 				ArenaEffects.PROTECTED, victim.player_id
@@ -5307,12 +5253,9 @@ func _test_map_change() -> void:
 		"%d before, %d after" % [int(kills_before), int(kills_after)]
 	)
 
-	# --- Players can still move -------------------------------------------
-	#
-	# The motor holds a reference to the body it was built with, so a player handed
-	# new geometry without a rebuilt motor keeps colliding against the level they are
-	# no longer in. The symptom is a player wedged in mid-air with every property
-	# reading correctly, which no assertion about a property can see.
+	# --- Players can still move -------------------------------------------  The motor holds a
+	# reference to the body it was built with, so a player handed new geometry without a rebuilt
+	# motor keeps colliding against the level they are no longer in.
 	for tick in range(32):
 		_game.tick(_commands_for_tick(1000 + tick))
 
@@ -5328,16 +5271,9 @@ func _test_map_change() -> void:
 		"%d below it" % below
 	)
 
-	# --- A box where somebody was standing -------------------------------
-	#
-	# [b]The check above passes on the shipped maps by luck of layout.[/b] A map change
-	# used to keep every player's position and swap the geometry under them, so a
-	# player standing where the next map has a box was inside it, and the flat body
-	# resolved that downwards: building `dm_atrium`'s keep, a box across its south door
-	# landed on a position carried over from `dm_box` and one player ended the section
-	# under the floor. Here the coincidence is made on purpose: a player is put on a
-	# known patch of open floor, and the map changed to is this one plus a box on
-	# exactly that patch.
+	# --- A box where somebody was standing -------------------------------  [b]The check above
+	# passes on the shipped maps by luck of layout.[/b] A map change used to keep every player's
+	# position and swap the geometry under them.
 	var trap_map := ArenaMap.by_id(_game.map.id)
 	var standing: Variant = _open_floor_away_from_spawns(trap_map)
 
@@ -5397,18 +5333,15 @@ func _test_map_change() -> void:
 			"%d under it, inside: %s" % [under, str(inside)]
 		)
 
-	# --- The mode gate, over a live rotation -------------------------------
-	#
-	# [b]Last, because it moves the game into a team mode and back.[/b] Nothing below
-	# depends on the state this leaves, and nothing above should have to care.
-	#
-	# What is being checked is the hole `dm_pit` opened. dot-map's rotation filters on
-	# player count and cooldown and knows nothing about modes, and until this map every
-	# map here could host every mode -- so an unfiltered rotation and a filtered one
-	# were the same rotation. The first map that answers no is the first map a team game
-	# could have been dropped into with nothing said about it.
+	# --- The mode gate, over a live rotation -------------------------------  [b]Last, because it
+	# moves the game into a team mode and back.[/b] Nothing below depends on the state this leaves,
+	# and nothing above should have to care. What is being checked is the hole `dm_pit` opened.
 	var team := _first_team_mode()
 
+	await _test_map_change_rest(director, team)
+
+
+func _test_map_change_rest(director: ArenaMapDirector, team: ArenaMode) -> void:
 	if team != null:
 		var to_team := _game.change_map(ArenaMap.by_id(_game.map.id), team)
 
@@ -5447,10 +5380,8 @@ func _test_map_change() -> void:
 				"and still offers the two that can host it"
 			)
 
-			# Asked for by name, which is what an admin typing `changelevel` does and
-			# what a rotation cannot be made to stop doing. This is the backstop: even
-			# reached directly, the change has to be refused rather than quietly produce
-			# a team game with one shared spawn pool.
+			# Asked for by name, which is what an admin typing `changelevel` does and what a
+			# rotation cannot be made to stop doing.
 			var refused: DotResult = await director.change_to(&"dm_pit")
 
 			_check(
@@ -5564,13 +5495,6 @@ func _players_inside_boxes(map: ArenaMap) -> Array[int]:
 # --- Monsters --------------------------------------------------------------
 
 ## dot-npc, dot-npc-ai and dot-npc-ai-director, over this game's own geometry.
-##
-## [b]Every one of the three passes its own suite with the other two absent, and with
-## no combat layer at all.[/b] What is untested anywhere else is the joins: navigation
-## generated from a map that is a list of boxes rather than a scene, a brain reaching
-## the game through the registry because it was loaded from a path and could not be
-## handed anything, and a monster registered with dot-combat in an id space it must
-## never share with a player.
 func _test_horde() -> void:
 	_section("monsters")
 
@@ -5613,16 +5537,9 @@ func _test_horde() -> void:
 		"and does not match a different map's"
 	)
 
-	# No graph point may have a monster standing in a solid. A generator that put them
-	# there would produce paths straight through the pillars, and an NPC walking into
-	# a wall is indistinguishable from an NPC with no path at all.
-	#
-	# [b]Measured half a metre above the point, not at the box's mid-height.[/b] The
-	# first version of this check flattened every point to the middle of each box and
-	# reported 108 failures — every one of them a perfectly good floor point UNDER one
-	# of dm_box's two ledges, which sit at y = 3. Walking beneath a ledge is not
-	# walking through it, and a test that cannot tell the difference fails the
-	# generator for being right.
+	# No graph point may have a monster standing in a solid. A generator that put them there would
+	# produce paths straight through the pillars, and an NPC walking into a wall is
+	# indistinguishable from an NPC with no path at all.
 	var inside := 0
 
 	for index in nav.point_count():
@@ -5673,13 +5590,9 @@ func _test_horde() -> void:
 		"which built a behaviour tree"
 	)
 
-	# The character is per NPC, seeded from the spawn. Twenty monsters sharing one
-	# preset's seed all take the same shot with the same error at the same moment,
-	# which reads as a firing squad rather than as a fight. The seed is the spawner's
-	# per-spawn number, never the object id: an id moves whenever anything earlier in
-	# the process allocates one more object, and every monster's choices moved with it.
-	# This horde has spawned nothing yet, so the grunt is its first spawn and must carry
-	# exactly the first spawn's seed, whatever object ids this run happened to hand out.
+	# The character is per NPC, seeded from the spawn. Twenty monsters sharing one preset's seed all
+	# take the same shot with the same error at the same moment, which reads as a firing squad
+	# rather than as a fight.
 	var brain := monster.brain as DotNpcAiBrain
 	_check(
 		brain.character != null and monster.seed > 1 and brain.character.seed_value == monster.seed,
@@ -5714,10 +5627,9 @@ func _test_horde() -> void:
 	else:
 		_check(false, "and it hears a player fire", "no living player to shoot")
 
-	# The gunner: same brain, its ranged branch chosen by its definition, and a shot that
-	# dot-combat resolves against a real player's hitboxes.
-	# A breath first, and a different spot: the horde's limits space spawns a quarter of a
-	# second apart, and the grunt is standing on the first one.
+	# The gunner: same brain, its ranged branch chosen by its definition, and a shot that dot-combat
+	# resolves against a real player's hitboxes. A breath first, and a different spot: the horde's
+	# limits space spawns a quarter of a second apart, and the grunt is standing on the first one.
 	for step in range(TICK_RATE / 2):
 		horde.tick(1.0 / float(TICK_RATE))
 	var gunner := horde.spawn_one(ArenaNpcs.GUNNER, nav.points[nav.point_count() / 3])
@@ -5733,11 +5645,9 @@ func _test_horde() -> void:
 		"a gunner builds the ranged branch from its definition"
 	)
 
-	# Spawn protection off the target. The match above is over and cycling, so whoever is
-	# alive was most likely respawned a moment ago, and a shot at a protected player is
-	# refused "invulnerable" whatever it hit — which made this check pass or fail on where
-	# the deathmatch happened to end. Ticking past the window does not help: a cycling
-	# match respawns everybody again. This is about the gunner, not the protection.
+	# Spawn protection off the target. The match above is over and cycling, so whoever is alive was
+	# most likely respawned a moment ago, and a shot at a protected player is refused "invulnerable"
+	# whatever it hit — which made this check pass or fail on where the deathmatch happened to end.
 	if shooter != null and _game.effects != null:
 		_game.effects.remove(ArenaEffects.PROTECTED, shooter.player_id)
 		shooter.health.invulnerable_until_tick = -1
@@ -5749,18 +5659,13 @@ func _test_horde() -> void:
 			)
 
 	if shooter != null and gunner != null:
-		# From the gunner's own muzzle, four metres from the player toward the middle of the
-		# room. A shot from anywhere else is relocated by dot-combat to where the horde says
-		# the gunner stands — the anti-cheat that stops a client shooting from somewhere it
-		# is not — and the first version of this check fired from a made-up point and hit
-		# the floor at the gunner's feet.
+		# From the gunner's own muzzle, four metres from the player toward the middle of the room.
 		var body := shooter.controller.state.position
 		var inward := Vector3(-body.x, 0.0, -body.z)
 		inward = inward.normalized() if inward.length() > 0.1 else Vector3.RIGHT
-		# Toward the middle first, then round the player until nothing is in between:
-		# where the match left the player is wherever the bots' fight ended, and on
-		# dm_box "four metres toward the middle" is sometimes the far side of a box —
-		# which made this check pass or fail on how the deathmatch above happened to go.
+		# Toward the middle first, then round the player until nothing is in between: where the
+		# match left the player is wherever the bots' fight ended, and on dm_box "four metres toward
+		# the middle" is sometimes the far side of a box.
 		var placed := inward
 		for turn in range(12):
 			var way := inward.rotated(Vector3.UP, TAU * float(turn) / 12.0)
@@ -5808,12 +5713,7 @@ func _test_horde() -> void:
 		", ".join(clashes)
 	)
 
-	# The property the old scheme did not have. It was
-	# `ENTITY_BASE + (instance_id % ENTITY_BASE)`, so two monsters whose engine
-	# instance ids differ by exactly a million shared an id -- and the second
-	# `register_health` overwrote the first, leaving one of them unkillable with no
-	# error anywhere. Assert uniqueness over every monster alive rather than trusting
-	# the arithmetic, because trusting the arithmetic is what shipped the bug.
+	# The property the old scheme did not have.
 	var ids := {}
 	var duplicated := PackedStringArray()
 
@@ -5840,11 +5740,9 @@ func _test_horde() -> void:
 		"a monster is both shootable and damageable"
 	)
 
-	# --- Killing one ------------------------------------------------------
-	#
-	# Through dot-combat, which is the only way a monster is supposed to die here: the
-	# resolver owns armour, the damage type and spawn protection, and a hit that went
-	# straight to DotHealth would skip all three.
+	# --- Killing one ------------------------------------------------------  Through dot-combat,
+	# which is the only way a monster is supposed to die here: the resolver owns armour, the damage
+	# type and spawn protection, and a hit that went straight to DotHealth would skip all three.
 	var killed: Array[int] = []
 	horde.npc_killed.connect(
 		func(_npc: DotNpcInstance, killer: int) -> void: killed.append(killer)
@@ -5925,11 +5823,7 @@ func _test_horde() -> void:
 		"%d of %d" % [horde.count(), ArenaNpcs.limits().world_budget]
 	)
 
-	# Every monster must be somewhere a monster can be. `place()` snaps to the graph
-	# and refuses a spawn it cannot snap, so a monster outside the room means the
-	# refusal is not working — and dot-npc's own notes name that exact bug: `snap()`
-	# returns the point it was handed when nothing is near it, so a spawn two hundred
-	# metres off the graph measures as perfect.
+	# Every monster must be somewhere a monster can be.
 	var stray := 0
 
 	for npc in horde.spawner.all_npcs():
@@ -5951,16 +5845,6 @@ func _test_horde() -> void:
 # --- Siege -----------------------------------------------------------------
 
 ## The mode where every addon in this game is live at once.
-##
-## [b]This is the deployment shape the project exists for, one level up.[/b]
-## `headless_match` above runs dot-player-controller, dot-combat, dot-loadout, dot-match
-## and dot-core together; this adds dot-npc, dot-npc-ai, dot-npc-ai-director,
-## dot-props, dot-stats, dot-achievements and dot-leaderboard on top and plays it. Every
-## one of those passes its own suite with the others absent.
-##
-## A second [ArenaGame] rather than reconfiguring the first: `setup` builds the mode's
-## match rules, teams, damage rules, monsters and props in one pass, and the mode is
-## what decides all five.
 func _test_siege() -> void:
 	_section("siege")
 
@@ -6054,10 +5938,7 @@ func _test_siege() -> void:
 	_check(game.props.count() == before + 1, "and it is in the world")
 
 	if made != null:
-		# The catalogue's mass, on the body. dot-props puts it there at spawn rather
-		# than leaving it to whatever the scene was saved with — the bug being that
-		# `mass` is otherwise read in exactly one place, against the grab limit, so a
-		# prop is refused for being heavy and then thrown like a beach ball.
+		# The catalogue's mass, on the body.
 		var body := made.body()
 		_check(
 			body != null and absf(body.mass - ArenaProps.catalogue().get_prop(
@@ -6067,10 +5948,9 @@ func _test_siege() -> void:
 			"%.1f kg" % (body.mass if body != null else -1.0)
 		)
 
-	# The budget. Twelve is the per-player limit and the interval is three quarters of
-	# a second, so this asks for far more than either allows and checks that neither
-	# gave way — a budget nothing enforces is the shape this family's own sweep for
-	# "settings nothing reads" was built to find.
+	# The budget. Twelve is the per-player limit and the interval is three quarters of a second, so
+	# this asks for far more than either allows and checks that neither gave way — a budget nothing
+	# enforces is the shape this family's own sweep for "settings nothing reads" was built to find.
 	for attempt in range(40):
 		game.props.tick(1.0)
 		game.props.spawn_for(1, ArenaProps.CRATE, Vector3(2.0, 3.0, 2.0))
@@ -6084,19 +5964,9 @@ func _test_siege() -> void:
 
 	_check(game.props.undo(1), "undo takes one back")
 
-	# --- The tools, which is what makes dot-props reachable ---------------
-	#
-	# [b]A physics gun nothing can call is a physics gun that does not exist.[/b]
-	# `phys_gun()` and `grav_gun()` were built, documented and called by nobody until
-	# the family's own detector — a public method whose name occurs once in its
-	# repository — found them. `ArenaProps.act` is the one door, and it is reached
-	# from the wire by `ArenaEvents.Ask.PROP_TOOL`.
-	# [b]Two and a half metres up, not one.[/b] `dm_box`'s raised centre is a box from
-	# y = 0 to y = 1 spanning the middle twelve metres, and `ArenaProps` puts the whole
-	# map into the physics space so a prop has something to land on — so a ray cast at
-	# exactly y = 1 grazes the platform's top face, hits a StaticBody3D, and
-	# `prop_for_node` answers null. "Nothing there" for a crate three metres in front
-	# of you, which is the geometry being right and the probe being wrong.
+	# --- The tools, which is what makes dot-props reachable ---------------  [b]A physics gun
+	# nothing can call is a physics gun that does not exist.[/b] `phys_gun()` and `grav_gun()` were
+	# built, documented and called by nobody until the family's own detector.
 	var eye := game.map.floor_y + 2.5
 
 	var target := game.props.spawn_for(1, ArenaProps.CRATE, Vector3(0.0, eye, -3.0))
@@ -6240,12 +6110,8 @@ func _test_geometry_held() -> void:
 	_done()
 
 
-## [b]The second map, walked rather than asserted.[/b]
-##
-## A map is a rendered, playable thing and this family has shipped a 0 x 0 Control twice
-## and a black screen once — so the check that matters is not "the list has 40 boxes in
-## it" but "a body starting on the yard floor ends up on the roof by using the stair".
-## Box counts pass on a pile of boxes in the same place.
+## [b]The second map, walked rather than asserted.[/b]  A map is a rendered, playable thing and this
+## family has shipped a 0 x 0 Control twice and a black screen once.
 func _test_atrium() -> void:
 	_section("dm_atrium")
 
@@ -6324,11 +6190,9 @@ func _test_atrium() -> void:
 		"x %.1f -> %.1f" % [start.x, landed.x]
 	)
 
-	# --- The south arcade ---------------------------------------------------
-	#
-	# [b]The arcade is COVER, which a box count cannot check.[/b] What makes it an arcade is that
-	# the sky is not visible from under it and is visible from beside it; a roof over the whole
-	# south yard would pass the first half and be a worse map.
+	# --- The south arcade ---------------------------------------------------  [b]The arcade is
+	# COVER, which a box count cannot check.[/b] What makes it an arcade is that the sky is not
+	# visible from under it and is visible from beside it.
 	var under_arcade := trace.ray(Vector3(0.0, 1.0, 15.5), Vector3.UP, 40.0)
 	var beside_arcade := trace.ray(Vector3(0.0, 1.0, 11.0), Vector3.UP, 40.0)
 	var above_arcade := trace.ray(Vector3(0.0, 4.0, 15.5), Vector3.UP, 40.0)
@@ -6346,10 +6210,7 @@ func _test_atrium() -> void:
 		"and its own roof is a firing position rather than a crawlspace"
 	)
 
-	# The doorway cut in the bunker's east wall, checked from both sides of the cut. A
-	# doorway is a hole in a list of boxes and a hole is invisible: a wall built as one
-	# box from z 8 to 20.2 -- which is what was there before -- passes every other check
-	# on this map and makes the arcade unreachable from the bunker it exists to serve.
+	# The doorway cut in the bunker's east wall, checked from both sides of the cut.
 	var through_door := trace.ray(Vector3(-18.0, 1.0, 15.5), Vector3.RIGHT, 8.0)
 	var into_wall := trace.ray(Vector3(-18.0, 1.0, 10.5), Vector3.RIGHT, 8.0)
 
@@ -6362,11 +6223,8 @@ func _test_atrium() -> void:
 		"and is still a wall either side of the doorway"
 	)
 
-	# [b]No spawn is inside a solid.[/b] The weaker version of this -- inside the room,
-	# above the floor -- is what `_test_map` checks, and a spawn buried in a stair tread
-	# passes it. This map has grown two stairs, ten piers and a roof slab since its
-	# spawns were placed, which is exactly the way a spawn ends up inside something: not
-	# by being put there, but by geometry arriving on top of it.
+	# [b]No spawn is inside a solid.[/b] The weaker version of this -- inside the room, above the
+	# floor -- is what `_test_map` checks, and a spawn buried in a stair tread passes it.
 	var buried := PackedStringArray()
 
 	for index in range(map.spawns.size()):
@@ -6380,19 +6238,13 @@ func _test_atrium() -> void:
 
 	_check(buried.is_empty(), "and no spawn is inside a solid", ", ".join(buried))
 
-	# [b]The map moved, so the map's version moved, and only this map's.[/b] A record
-	# and a rotation cooldown are both about a map AT a version. The failure this
-	# catches is the one a single shared constant makes unavoidable: bumping it for the
-	# arcade would declare `dm_box` and `dm_pit` to be new maps too, invalidating two
-	# sets of records to describe a change neither of them had.
+	# [b]The map moved, so the map's version moved, and only this map's.[/b] A record and a rotation
+	# cooldown are both about a map AT a version.
 	var versions := ArenaMaps.catalogue()
 
-	# [b]All three moved on 2026-09-22, which is the first time that has happened and
-	# does not weaken the check.[/b] They moved for one cause — every climb on every
-	# map was above the jump apex — but they are still three separate changes to three
-	# separate maps. dm_box reached 1.4.0 by its own four steps — the crates on
-	# 2026-09-22, the gantries and nests on 2026-09-24, the nest stairs on 2026-09-29,
-	# the corner stairs on 2026-10-02.
+	# [b]All three moved on 2026-09-22, which is the first time that has happened and does not
+	# weaken the check.[/b] They moved for one cause — every climb on every map was above the jump
+	# apex — but they are still three separate changes to three separate maps.
 	var expected := {&"dm_atrium": "1.7.1", &"dm_pit": "1.5.0", &"dm_box": "1.4.0"}
 	var wrong := PackedStringArray()
 
@@ -6409,26 +6261,17 @@ func _test_atrium() -> void:
 		"the catalogue carries every map at the version its geometry is at",
 		"; ".join(wrong)
 	)
-	# [b]Was "two maps that moved by different amounts do not share a version", which
-	# is not a rule versions keep.[/b] Two minor bumps on two maps land on the same
-	# string whenever they happen to — dm_box went 1.1.0 -> 1.2.0 on 2026-09-24, where
-	# dm_atrium had been two days — and a check that fails on a coincidence is one
-	# people learn to edit. What it was for is that a map that moved takes its version
-	# from the per-map table rather than the catalogue-wide default; asked directly.
+	# [b]Was "two maps that moved by different amounts do not share a version", which is not a rule
+	# versions keep.[/b] Two minor bumps on two maps land on the same string whenever they happen to
+	# — dm_box went 1.1.0 -> 1.2.0 on 2026-09-24, where dm_atrium had been two days.
 	_check(
 		versions.get_map(&"dm_box").version != ArenaMaps.MAP_VERSION,
 		"and a map that moved is not at the catalogue-wide default"
 	)
 
-	# [b]The stair onto the arcade roof, walked.[/b] Same shape as the north-west stair
-	# above and for the same reason: ten treads of 0.36 is a number that only means
-	# anything once something has climbed it. Driven north (-Z at yaw 0) from the back
-	# of the yard.
-	#
-	# The arrival is recorded DURING the run rather than read at the end, because the
-	# roof is only 5 m deep and a bot at 9 m/s crosses it in half a second — it reaches
-	# the roof and then walks off the far edge of it, which is correct behaviour for a
-	# bot holding one direction and would read as never having got there.
+	# [b]The stair onto the arcade roof, walked.[/b] Same shape as the north-west stair above and
+	# for the same reason: ten treads of 0.36 is a number that only means anything once something
+	# has climbed it. Driven north (-Z at yaw 0) from the back of the yard.
 	walker.controller.teleport(Vector3(-8.0, 0.5, 28.0))
 
 	var north := DotFpsCommand.new()
@@ -6459,12 +6302,9 @@ func _test_atrium() -> void:
 		"peaked at %.2f, ring is at 4.60" % roof_peak
 	)
 
-	# [b]The covered route, walked end to end.[/b] The arcade's whole reason is that a
-	# player can get from the bunker to the foot of the crates without the ring seeing
-	# them, so the check is a bot that starts inside the bunker, holds east, and comes
-	# out the far end — through the doorway, between two rows of piers, under 25 m of
-	# roof. Anything in the way of that lane is a corridor that is drawn and cannot be
-	# used, which no assertion about boxes can tell from one that can.
+	# [b]The covered route, walked end to end.[/b] The arcade's whole reason is that a player can
+	# get from the bunker to the foot of the crates without the ring seeing them, so the check is a
+	# bot that starts inside the bunker, holds east, and comes out the far end.
 	walker.controller.teleport(Vector3(-18.0, 0.5, 15.5))
 
 	var east := DotFpsCommand.new()
@@ -6488,11 +6328,9 @@ func _test_atrium() -> void:
 		"ended at %s" % str(emerged)
 	)
 
-	# --- The north-west keep ------------------------------------------------
-	#
-	# [b]Cover, asked the way the arcade's is: of the sky and of the ring.[/b] A room is
-	# the one shape a box count reads identically whether it is a room or a solid
-	# block, and a solid block would pass every assertion on this map except these.
+	# --- The north-west keep ------------------------------------------------  [b]Cover, asked the
+	# way the arcade's is: of the sky and of the ring.[/b] A room is the one shape a box count reads
+	# identically whether it is a room or a solid block.
 	var in_keep := Vector3(-15.25, 1.0, -12.0)
 	var under_keep := trace.ray(in_keep, Vector3.UP, 40.0)
 	var ring_eye := Vector3(-8.0, 4.6 + 1.6, -8.0)
@@ -6528,13 +6366,9 @@ func _test_atrium() -> void:
 		"and its west wall is a firing slit at eye height, wall above and below"
 	)
 
-	# [b]In at the north door and out at the south, walked.[/b] A doorway is a hole in a
-	# list of boxes and a hole is invisible, so the only thing that says the room is a
-	# room is something passing through it. Held south (+Z) from the north yard; the
-	# lane south of the keep ends against the side of the north-west stair, so the bot
-	# stops there. Distance and speed are PRINTED against the route and max_speed,
-	# because a crawling bot also gets through a doorway eventually and a check that it
-	# passes as well is not a check (`[bot-drive-1]`).
+	# [b]In at the north door and out at the south, walked.[/b] A doorway is a hole in a list of
+	# boxes and a hole is invisible, so the only thing that says the room is a room is something
+	# passing through it.
 	var tunables := ArenaPlayer.arena_tunables()
 	var keep_start := Vector3(-15.25, 0.2, -23.0)
 	# Where the lane south of the keep ends for a bot holding south: the stair's side
@@ -6583,11 +6417,9 @@ func _test_atrium() -> void:
 		"%.2f m/s against max_speed %.2f" % [keep_speed, tunables.max_speed]
 	)
 
-	# [b]The roof, reached the only way it is reached: off the ring's north arm.[/b]
-	# Held west along the arm and jump pressed at its west edge, which is what a player
-	# does -- holding jump the whole way would bleed the run to the air cap, see
-	# `_test_bot_ground_speed`. Grounded on the roof at 5.5, west of the alley, is the
-	# arrival.
+	# [b]The roof, reached the only way it is reached: off the ring's north arm.[/b] Held west along
+	# the arm and jump pressed at its west edge, which is what a player does -- holding jump the
+	# whole way would bleed the run to the air cap, see `_test_bot_ground_speed`.
 	var arm_start := Vector3(-2.0, 4.7, -8.0)
 	walker.controller.teleport(arm_start)
 
@@ -6631,10 +6463,9 @@ func _test_atrium() -> void:
 			% [roof_at.x, roof_at.y, roof_at.z, takeoff_speed]
 	)
 
-	# --- The east stair (1.5.0) ---------------------------------------------
-	#
-	# Read back off the box list: twelve treads at x 13..16, every rise and the step
-	# onto the landing under `step_height`, the top tread flush with the landing.
+	# --- The east stair (1.5.0) ---------------------------------------------  Read back off the
+	# box list: twelve treads at x 13..16, every rise and the step onto the landing under
+	# `step_height`, the top tread flush with the landing.
 	var east_treads: Array[AABB] = []
 	var landing_box := AABB()
 
@@ -6736,12 +6567,9 @@ func _test_atrium() -> void:
 		", ".join(east_hidden)
 	)
 
-	# --- The rampart (1.6.0) ------------------------------------------------
-	#
-	# Read back off the box list: the walkway, the keep roof it leaves, the perch it
-	# reaches and the ring's north arm it runs beside. A walked step off the roof, a hop
-	# onto the perch, flush at both ends, and out of a jump's reach from the ring, so it
-	# is joined at its ends only.
+	# --- The rampart (1.6.0) ------------------------------------------------  Read back off the
+	# box list: the walkway, the keep roof it leaves, the perch it reaches and the ring's north arm
+	# it runs beside.
 	var rampart := AABB()
 	var keep_top := AABB()
 	var perch_top := AABB()

@@ -325,6 +325,10 @@ func _run() -> void:
 		OS.set_environment("DOT_SHOT_FRAMES", "16")
 		var seq_dir := ProjectSettings.globalize_path("res://").path_join(OS.get_cmdline_user_args()[seq_at + 1])
 		await DotShotSeq.new().record(get_tree(), seq_dir.trim_suffix(".seq") + ".png")
+	_run_rest(link)
+
+
+func _run_rest(link: DotClientLink) -> void:
 	link.disconnect_from_server("done")
 	_finish(0)
 
@@ -511,6 +515,10 @@ func _measure() -> void:
 		int(Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS)),
 		int(Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)),
 		int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))])
+	_measure_rest()
+
+
+func _measure_rest() -> void:
 	if "--nodes" in OS.get_cmdline_user_args():
 		var by := {}
 		var stack: Array[Node] = [get_tree().root]

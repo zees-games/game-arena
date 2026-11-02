@@ -36,12 +36,7 @@ func _ready() -> void:
 		_load_solo_config()
 	add_child(game)
 
-	# Connected here, before anything can create a player, rather than inside
-	# `_watch`. HELLO and JOIN are both reliable and ordered so HELLO does arrive
-	# first — but "the ordering happens to save us" is exactly the reasoning that put
-	# this bug in game-g2gfast, and a connection that costs nothing is cheaper than
-	# depending on it. `_watch_id` is -1 until HELLO names us, so nothing matches
-	# before then.
+	# Connected here, before anything can create a player, rather than inside `_watch`.
 	game.player_added.connect(_on_player_added)
 	# The mode's banner, the moment a client learns it: "Gun Game: every kill gives you a
 	# different gun", the way the genre says it when you spawn into one.
@@ -59,10 +54,8 @@ func _ready() -> void:
 		DotLog.result(CHANNEL, "the arena could not be built", built)
 		return
 
-	# The world, which the server does not need and a player cannot do without. Held,
-	# because a map change has to take it away again — see `_on_map_changed`.
-	# Connected, this level is a placeholder: the first `_on_map_changed` releases the
-	# hold, since the server names its map only after READY (lifting it here showed dm_box).
+	# The world, which the server does not need and a player cannot do without. Held, because a map
+	# change has to take it away again — see `_on_map_changed`.
 	_enter_level.call(_offline)
 
 	projectile_view = ArenaProjectileView.new()
@@ -130,9 +123,7 @@ func _build_interface() -> void:
 	if presentation != null:
 		hud.flash_source = presentation.fx
 
-	# The server browser: the one page that is about something other than this game. Built
-	# whether or not this client is connected, because looking for a server is what you do
-	# when you are not on one. A list that did not come up leaves the page out.
+	# The server browser: the one page that is about something other than this game.
 	browser = ArenaBrowser.new()
 	browser.name = "Browser"
 	add_child(browser)
@@ -140,18 +131,14 @@ func _build_interface() -> void:
 	DotLog.result(CHANNEL, "the server browser", listed)
 	browser.join_requested.connect(_on_join_requested)
 
-	# [b]dot-menu's menu, and the client still owns the pointer.[/b] The menu is told not
-	# to manage it: pointer lock needs a click in a browser, which only this client knows
-	# about ([method _apply_mouse]), and two owners fighting is a cursor that flickers.
+	# [b]dot-menu's menu, and the client still owns the pointer.[/b] The menu is told not to manage
+	# it: pointer lock needs a click in a browser, which only this client knows about.
 	game_menu = ArenaMenus.build(self, presentation, browser if listed.ok else null)
 	# The HUD in the menu's theme and at the player's HUD size, switched live (dot-menu 7). By
 	# name, so a client shell older than that still runs the game in dot-ui's dark default.
 	if game_menu.has_method(&"follow_hud"):
 		game_menu.call(&"follow_hud", hud, ArenaHud.accent_theme())
-	# M: the maps and the modes (dot-menu's map menu). Solo a choice changes here at once;
-	# connected the server decides, by the owner's `sv_map_menu_flag`, and anybody without it
-	# gets a vote instead (dot-vote's map menu, over this game's ballot). By name, so a client
-	# shell older than the map menu still runs the game without it.
+	# M: the maps and the modes (dot-menu's map menu).
 	if game_menu.has_method(&"use_maps"):
 		var maps: Variant = game_menu.call(&"use_maps", map_menu_rows, change_from_menu)
 		if maps is Object:
@@ -205,6 +192,10 @@ func _build_interface() -> void:
 				_add_slide_key.call_deferred()
 				_hud_keys.call_deferred())
 		hud.set_safe_area(presentation.settings.get_float(&"hud_safe_area", 16.0))
+	_build_interface_rest()
+
+
+func _build_interface_rest() -> void:
 	_add_slide_key()
 	_hud_keys()
 
@@ -364,49 +355,21 @@ func _build_netcode() -> DotResult:
 
 
 ## The world was replaced under this client.
-##
-## [b]The meshes have to go with it, and nothing else does that.[/b]
-## `ArenaGame.change_map` replaces the collision, the trace and the match; the level a
-## player can SEE is a scene this client added, and a client that rebuilt one and not
-## the other would walk through walls it can see and stop at walls it cannot.
 func _on_map_changed(map: DotMapDef) -> void:
 	# Cover and stop the frozen body until the new level is in (released below).
 	gate.hold(&"map", "Loading the map")
 	while _level_busy:
 		await get_tree().process_frame
-	# **The client has to ADOPT the map it was handed, and this is where that was
-	# missing.** `ArenaGame.map` is assigned in exactly three places — `setup`, the
-	# module's mode change, and `change_map` — and every one of them runs on the
-	# SERVER. A mirroring client never calls `change_map`; it is told the new map by
-	# `DotMapSyncClient` and that is the only notice it ever gets.
-	#
-	# So this handler received the correct `DotMapDef` and then rebuilt the level from
-	# `game.map`, which was still whatever it had been at signon. Measured on a live
-	# server: the server swapped dm_atrium for dm_box and reported `all peers have the
-	# map`, and the client tore down its level and rebuilt **the same one**. The player
-	# was then standing in geometry the server no longer had, with the server's
-	# collision somewhere else entirely — which reads as the client freezing, because
-	# every move they make is refused by a wall they cannot see.
-	#
-	# Nothing errored on either end. The server was right, the protocol completed, the
-	# handshake reported success, and the one line that mattered read a stale field.
-	# [b]Only when it is not already the one in hand.[/b] The client's own
-	# `ArenaMapSession` ran `ArenaGame.change_map` before this signal, so normally
-	# `game.map` IS the announced map — and for an imported one it is the instance the game
-	# bound its solid to (`collision_root`). Replacing it with a fresh `by_id` would leave
-	# the trace below bound to nothing: every shot through every wall.
+	# **The client has to ADOPT the map it was handed, and this is where that was missing.**
+	# `ArenaGame.map` is assigned in exactly three places — `setup`, the module's mode change, and
+	# `change_map` — and every one of them runs on the SERVER.
 	var adopted := (
 		game.map if game.map != null and game.map.id == map.id else ArenaMap.by_id(map.id)
 	)
 
 	if adopted != null:
 		game.map = adopted
-		# **And every player already here moves with it** (2026-10-18). `change_map` rebinds
-		# its roster, but a joining client adopts the announced map here without it, after
-		# its own player was built against the signon map (`dm_box`): the server walked
-		# dm_atrium while the client predicted dm_box's walls, so every snapshot near a wall
-		# disagreed. `client_bench --play` on dm_atrium: 83-95% of reconciles corrected,
-		# about 2.5 ticks replayed a frame, and a client predicting a level it cannot see.
+		# **And every player already here moves with it** (2026-10-18).
 		for player in game.players():
 			if player != null and player.map_in_hand() != adopted:
 				player.apply_map_movement(game.map_movement())
@@ -475,13 +438,6 @@ func _level_mask() -> int:
 
 
 ## The camera's two guards from dot-core, once a player is adopted.
-##
-## [b]The fade is what keeps a bot's face out of the lens.[/b] Players here are not in the
-## physics space (their movement is a shape query and their hitboxes are analytic), so
-## nothing stops one walking into another; the fade is handed the figures and hides any
-## within a hand of the camera, and in third person fades one standing between the camera
-## and the player. The third-person camera itself is swept by the player's probe against
-## [method _level_mask].
 func _guard_camera(p: ArenaPlayer) -> void:
 	if p == null or p.camera == null:
 		return
@@ -764,15 +720,9 @@ func _watch(session_id: int) -> void:
 	_watch_id = session_id
 	_adopt(game.player_for(session_id))
 
-## A player exists. Ours is one of them; the rest need something to be seen as.
-##
-## [b]`player_added`, not `player_spawned`.[/b] `player_spawned` comes out of
-## dot-match's respawn queue, which runs on the AUTHORITY — a mirroring client never
-## fires it, so a client waiting on it waits for ever. The symptom is precise and
-## misleading: the HUD binds by id and works, the scoreboard works, the connection is
-## live, and there is no camera and no world at all, because both hang off the
-## reference this sets. Seen in a real browser against a real server; nothing headless
-## could show it, because nothing headless has a camera to be missing.
+## A player exists. Ours is one of them; the rest need something to be seen as. [b]`player_added`,
+## not `player_spawned`.[/b] `player_spawned` comes out of dot-match's respawn queue, which runs on
+## the AUTHORITY — a mirroring client never fires it, so a client waiting on it waits for ever.
 func _on_player_added(added: ArenaPlayer) -> void:
 	if added == null:
 		return
@@ -790,11 +740,7 @@ func _on_player_added(added: ArenaPlayer) -> void:
 		added.interpolate_body = _offline
 
 	if added != player and added.body_mesh == null:
-		# A stock avatar until the server says otherwise. It is a real document over
-		# the same schema and deterministic in the player's storage key, so a remote
-		# player looks the same on every client that draws them — which is the whole
-		# reason `stock_avatar` hashes an id rather than picking at random.
-		# What the server said they look like, when it said; JOIN carries it.
+		# A stock avatar until the server says otherwise.
 		added.attach_body_mesh(
 			Color.from_hsv(fmod(float(added.player_id) * 0.37, 1.0), 0.55, 0.85),
 			added.avatar if added.avatar != null else ArenaAvatars.stock_avatar(
@@ -857,14 +803,8 @@ func _adopt(candidate: ArenaPlayer) -> void:
 			presentation.bind_look(_sampler.tunables)
 
 		# [b]A spawn faces the way its mapper faced it, and the look is the sampler's.[/b]
-		# `DotFpsController.teleport` turns the controller's OWN sampler, and this client
-		# samples with its own — so every spawn's yaw was overwritten by the next command
-		# and an offline player always started looking along -Z. On the built-in maps that
-		# is a room; on an imported combat surf map it is the spawn room's back wall, three
-		# metres away, which is what the first rendered frame showed. `spawned` fires where
-		# the spawn is simulated: offline and on a listen server. A connected client's
-		# respawn is the server's and does not fire it; [method _face_a_respawn] turns that
-		# client's look instead, when its own snapshot shows the player alive again.
+		# `DotFpsController.teleport` turns the controller's OWN sampler, and this client samples
+		# with its own.
 		player.spawned.connect(func(at: Transform3D) -> void:
 			if _sampler != null:
 				_sampler.look_at_angles(rad_to_deg(at.basis.get_euler().y), 0.0)
@@ -874,11 +814,8 @@ func _adopt(candidate: ArenaPlayer) -> void:
 	_restore_loadout.call_deferred()
 	gate.freeze(player)
 
-	# Logged because this is the moment everything a person can see comes into
-	# existence — the camera, the HUD's subject and every key below the `player == null`
-	# guard. When a client draws a world and shows a dead HUD, this line is what says
-	# whether the local player was ever found; without it the two failures look
-	# identical from a browser console.
+	# Logged because this is the moment everything a person can see comes into existence — the
+	# camera, the HUD's subject and every key below the `player == null` guard.
 	DotLog.info(CHANNEL, "following the local player", {
 		"id": player.player_id,
 		"name": player.display_name,
@@ -891,13 +828,9 @@ func is_ready_to_show() -> bool:
 	return gate != null and gate.is_open()
 
 
-## What a shell draws once under its loading screen besides what is already in the tree:
-## the meshes and materials of every weapon model the art table names, so the first time
-## somebody draws a gun nobody has held yet is not also the first time its materials compile
-## (in a browser, a stall of a few hundred milliseconds in the middle of a fight). Loading
-## them here also fills `ZeeModelCache`, so the first equip does not read the file either.
-## Collected here rather than with dot-core's `DotRenderWarmup.collect`: a pack runs on
-## whatever dot-core its shell carries, and naming a class an older one lacks fails to parse.
+## What a shell draws once under its loading screen besides what is already in the tree: the meshes
+## and materials of every weapon model the art table names, so the first time somebody draws a gun
+## nobody has held yet is not also the first time its materials compile (in a browser.
 func warm_up_items() -> Array:
 	return gate.warm_items() if gate != null else []
 
@@ -944,11 +877,6 @@ func _present_sprite_view() -> void:
 
 
 ## The hands under the camera, and the player's rig rebuilt to draw them.
-##
-## [b]With the authority only offline.[/b] Connected, the server's rig is the one whose
-## shots land; this one predicts, animates the hands and draws the shot the moment the
-## button goes down, which is the one piece of feedback a player judges the whole game's
-## responsiveness by.
 func _arm(body: ArenaPlayer) -> void:
 	if body == null or body.camera == null or view_model != null:
 		return
@@ -965,10 +893,6 @@ func _arm(body: ArenaPlayer) -> void:
 
 
 ## Builds every weapon's first-person view once on a spare view model, under the loading cover.
-## The first equip of each weapon measures its hands (50 ms) and loads a model nobody warmed
-## (90 ms), and every equip of a knife or grenade made its materials afresh (60 ms): a hitch on
-## each switch, in the middle of a fight. The materials are kept by [ZeeViewModel] and handed to
-## the gate to draw once.
 func _prewarm_weapons(body: ArenaPlayer) -> void:
 	# Headless draws nothing, so the spare views only add nodes, memory and frames (perf smoke).
 	if DotPlatform.is_headless() or gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
@@ -1051,11 +975,7 @@ func _prewarm_end() -> void:
 		gate.release(&"weapons")
 
 
-## The hit drawn on the body the server says was hit: zee's red burst at [param point]. The
-## presentation ray draws one already when it meets the victim's body here, and the rig's
-## effects skip a second within a fifth of a second; this is for the hit the ray missed (a
-## lag-compensated hit on a body that has since moved). Through `has_method`: an older
-## shell's zee has no `play_body_hit`.
+## The hit drawn on the body the server says was hit: zee's red burst at [param point].
 func _draw_body_hit(point: Vector3) -> void:
 	if not weapon_draws_shots():
 		return
@@ -1164,13 +1084,9 @@ func _physics_step(delta: float) -> void:
 	bridge.advance_latency(delta)
 	var ticks := net.clock.advance(delta)
 
-	# [b]Each pass is its own tick.[/b] `advance` has already moved the clock by all of
-	# them, so `input_tick()` is the LAST one on every pass: a frame worth two ticks sent
-	# the second twice and the first never, the server repeated a stale command for the
-	# one it never got, and the predictor's replay stopped at the hole and drew the player
-	# short of where they were -- after every hitch, and on every frame the display and
-	# the tick rate do not line up. Arithmetic here rather than a new dot-net call,
-	# because a pack has to run on whatever client shell the player already has.
+	# [b]Each pass is its own tick.[/b] `advance` has already moved the clock by all of them, so
+	# `input_tick()` is the LAST one on every pass: a frame worth two ticks sent the second twice
+	# and the first never, the server repeated a stale command for the one it never got.
 	for i in range(ticks):
 		if not net.clock.is_synced():
 			continue
@@ -1198,19 +1114,9 @@ func _local_commands(move: DotFpsCommand) -> Dictionary:
 var _was_alive: bool = true
 
 
-## A connected client's respawn faces the way its spawn faces.
-##
-## [b]Only the client can turn the view[/b]: the server teleports the player facing the spawn,
-## then applies the next command, whose angles are this client's sampler's -- the look the
-## mouse left before the death. Offline `spawned` does this (see [method _adopt]); a mirror
-## never fires it, so a respawn is read where the spectate layer reads one, off the
-## replicated health: dead last frame, alive now. The spawn is the map's own nearest one,
-## which this client holds, rather than a yaw off the wire, because by the time the client
-## sees the snapshot the server has already put this client's old angles back.
-##
-## A pit's teleport is not turned here: it runs inside the predicted tick, replays included,
-## and a look turned on a replayed tick would snap a player's view back to the destination's
-## yaw after they had moved the mouse.
+## A connected client's respawn faces the way its spawn faces. [b]Only the client can turn the
+## view[/b]: the server teleports the player facing the spawn, then applies the next command, whose
+## angles are this client's sampler's -- the look the mouse left before the death.
 func _face_a_respawn() -> void:
 	if _offline or player == null or player.controller == null or _sampler == null or game == null:
 		return
@@ -1367,19 +1273,18 @@ func _present_frame(delta: float) -> void:
 	ArenaFrameProbe.add(&"bodies", t)
 
 	_present_flashlights()
+	_present_frame_rest()
+
+
+func _present_frame_rest() -> void:
 	_watch_projectiles()
 
 	_drive_spectator_camera()
 	_killcam_frame()
 
 
-## Hands the local player this frame's view, this frame's mouse motion folded in, so a
-## frame on which no tick ran still turns. See [member ArenaPlayer.view_now].
-##
-## By name, with the state's angles as the fallback: a pack runs on whatever
-## dot-player-controller the client shell carries, and one older than `look_now` draws
-## exactly what it drew before. Not while the mouse is a pointer: nothing moves the view
-## then, and the state's angles are the honest answer.
+## Hands the local player this frame's view, this frame's mouse motion folded in, so a frame on
+## which no tick ran still turns. See [member ArenaPlayer.view_now].
 func _fold_look() -> void:
 	if player == null:
 		return
@@ -1402,11 +1307,8 @@ func _fold_correction() -> void:
 		player.drawn_offset = net.predictor.visual_offset(mine.identity.net_id)
 
 
-## Hands the local player how far through the clock's current tick this frame is, which
-## a connected client's ticks are counted on. See [member ArenaPlayer.drawn_alpha].
-##
-## By name: a pack runs on whatever dot-net the client shell carries, and one older than
-## `render_alpha` draws at the engine's fraction, as before.
+## Hands the local player how far through the clock's current tick this frame is, which a connected
+## client's ticks are counted on. See [member ArenaPlayer.drawn_alpha].
 func _fold_alpha() -> void:
 	if player == null:
 		return
@@ -1427,10 +1329,9 @@ func own_body_mode() -> int:
 const OWN_BODY_CHOICES: Array[StringName] = [&"auto", &"off", &"legs", &"body"]
 
 
-## Points the drawing and the explosions at whichever projectile layer the game has now.
-##
-## Every frame and cheap, because a map change builds a new layer on the authority and a
-## layer connected once at boot would go deaf after the first `changelevel`.
+## Points the drawing and the explosions at whichever projectile layer the game has now. Every frame
+## and cheap, because a map change builds a new layer on the authority and a layer connected once at
+## boot would go deaf after the first `changelevel`.
 func _watch_projectiles() -> void:
 	var layer: RefCounted = game.projectiles if game != null else null
 
@@ -1460,18 +1361,9 @@ func _pickup_hint() -> String:
 
 
 
-## Where a dead player looks.
-##
-## [b]Until this existed the camera stayed where the body fell.[/b] That is the one
-## thing a first-person game must not do: the corpse is on the floor, so the view is on
-## the floor, and the seconds before a respawn are spent looking at a wall from ankle
-## height. dot-spectate decides what to look at and the server decides whether it is
-## allowed; this is the four lines that put the answer on the camera.
-##
-## Once a FRAME rather than once a tick, deliberately. A camera moved on the tick
-## timeline steps at the tick rate however smoothly the thing it is following is
-## interpolated — which is the jitter this family measured at 47% in g2gfast and spent
-## a day on.
+## Where a dead player looks. [b]Until this existed the camera stayed where the body fell.[/b] That
+## is the one thing a first-person game must not do: the corpse is on the floor, so the view is on
+## the floor, and the seconds before a respawn are spent looking at a wall from ankle height.
 func _drive_spectator_camera() -> void:
 	if game.spectate == null or player == null or player.camera == null:
 		return
@@ -1563,22 +1455,16 @@ static func _strength(action: StringName) -> float:
 	return Input.get_action_strength(action) if InputMap.has_action(action) else 0.0
 
 
-## The fire command, from the keyboard and the mouse.
-##
-## [b]`DotWeaponCommand` is a button BITMASK, not a set of booleans.[/b] `set_button`
-## is the accessor; assigning `.attack` creates nothing and errors at runtime with
-## "Invalid assignment of property or key 'attack'". Also the aim, which is read from
-## the movement command's angles rather than sampled again — sampling the mouse twice
-## gives a shot that leaves at a different angle than the player was looking along.
+## The fire command, from the keyboard and the mouse. [b]`DotWeaponCommand` is a button BITMASK, not
+## a set of booleans.[/b] `set_button` is the accessor; assigning `.attack` creates nothing and
+## errors at runtime with "Invalid assignment of property or key 'attack'".
 func _read_fire(move: DotFpsCommand) -> void:
 	var firing := mouse_drives_view() and _held(ArenaBindings.FIRE)
 
 	_fire.set_button(DotWeaponCommand.BUTTON_ATTACK, firing)
-	# The Aim key (right mouse) aims down the sights, by default; the Bash key (X) is the
-	# pack's alt-fire ("quick melee"). A player who would rather bash with the Aim key turns
-	# the `right_mouse_aims` setting off. Same guard as the trigger, so a right click on a
-	# menu neither zooms nor swings a rifle butt. In a mode where the Bash key is the prop
-	# tool's freeze, the bash is the Aim key's whatever the setting says.
+	# The Aim key (right mouse) aims down the sights, by default; the Bash key (X) is the pack's
+	# alt-fire ("quick melee"). A player who would rather bash with the Aim key turns the
+	# `right_mouse_aims` setting off.
 	var right := mouse_drives_view() and _held(ArenaBindings.AIM) \
 		and not _aim_break.blocked(Time.get_ticks_msec() * 0.001)
 	var aims := right_mouse_aims() and not props_on_e()
@@ -1600,11 +1486,8 @@ func _read_fire(move: DotFpsCommand) -> void:
 	_fire.yaw = move.yaw
 	_fire.pitch = move.pitch
 
-	# `DotArsenal` reads `command.slot > 0` as "switch to this" and 0 as "leave it
-	# alone", so this is a REQUEST that is cleared once made rather than a mirror of
-	# the current slot. Reading the arsenal back into the command instead would make
-	# every tick a switch to the weapon already held, and `select()` refuses that — so
-	# it would have looked like it worked while doing nothing.
+	# `DotArsenal` reads `command.slot > 0` as "switch to this" and 0 as "leave it alone", so this
+	# is a REQUEST that is cleared once made rather than a mirror of the current slot.
 	_fire.slot = _wanted_slot
 	_wanted_slot = 0
 
@@ -1639,12 +1522,8 @@ func _cycled_slot(step: int) -> int:
 
 # --- The mouse -------------------------------------------------------------
 
-## Asks a browser for the cursor rather than telling it.
-##
-## Pointer lock needs **transient user activation** — a real click — and `_ready()` is
-## the one moment guaranteed not to have one. A browser refuses it *silently*:
-## `Input.mouse_mode` reads back as CAPTURED, the view still turns, and the cursor sits
-## on top of the game and wanders out of the window.
+## Asks a browser for the cursor rather than telling it. Pointer lock needs **transient user
+## activation** — a real click — and `_ready()` is the one moment guaranteed not to have one.
 func _grab_mouse() -> void:
 	if not DotPlatform.is_web():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -1658,11 +1537,6 @@ func _grab_mouse() -> void:
 
 
 ## Puts the drawn level on the layout's `world` layer.
-##
-## A client draws the level and that is what puts it in the physics space, so the client
-## is where its collision layers have to be set — and they have to be the SAME numbers the
-## server used, which is why the layout is built on every instance rather than only where
-## `apply_physics` is on. See `ArenaPlayerStack._build_physics`.
 func _classify_level() -> void:
 	if _level == null or game == null or game.player_stack == null:
 		return
@@ -1677,20 +1551,6 @@ var mouse_capture_override: Variant = null
 
 
 ## Whether the pointer is currently the player's aim rather than a pointer.
-##
-## [b]Only while the cursor is actually captured.[/b] Escape releases it, and on the web
-## [member _awaiting_click] leaves it released before the first click — in both states
-## the pointer is a pointer, so spending its motion on the view turns the player away
-## from the "Click to play" notice they are being asked to click, and a click on a menu
-## would fire the rifle. Both the look and the trigger ask here.
-##
-## [b]A method with an override rather than a read of `Input.mouse_mode` at the call
-## site, because that read cannot be tested.[/b] The dummy display server pins the mode
-## to `MOUSE_MODE_VISIBLE` and drops every write to it without erroring, so no headless
-## suite could put a client into the state a player plays in: the guard this game had
-## from the start had never once been exercised, in either direction.
-## `headless_presentation` drives it both ways now. Same shape as game-g2gfast's and
-## game-playground's.
 func mouse_drives_view() -> bool:
 	if mouse_capture_override != null:
 		return bool(mouse_capture_override)
@@ -1722,10 +1582,8 @@ func _notification(what: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# [b]The console first, and before the click that captures the mouse.[/b] Without it,
-	# a click inside an open console grabs pointer lock and the next keystroke goes to
-	# movement -- so typing `noclip` walks the player forward, which is the single most
-	# reported bug in every game that ships a console and forgets this line.
+	# [b]The console first, and before the click that captures the mouse.[/b] Without it, a click
+	# inside an open console grabs pointer lock and the next keystroke goes to movement.
 	if presentation != null and presentation.swallows_input():
 		return
 

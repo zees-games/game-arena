@@ -19,32 +19,22 @@ const ArenaVoteSource := preload("../game/arena_vote_source.gd")
 ## Exits non-zero on any failure.
 ##
 ## [b]What this proves that [code]headless_match[/code] cannot.[/b] That test drives an
-## [ArenaGame] directly and never opens a socket. This boots a [DotServer], binds a
-## port, loads [ArenaModule] into it, and exercises the module's own surface — its
-## console commands, its cvar, its session bookkeeping and its unload path.
+## [ArenaGame] directly. This boots a [DotServer], binds a port, loads [ArenaModule] and
+## exercises its console commands, cvar, session bookkeeping and unload path.
 ##
-## dot-platform found two long-standing dot-server bugs the first time it did
-## something like this, neither of which was reachable from dot-server's own 104-check
-## suite. **A code path only one deployment shape reaches is a code path nothing has
-## run**, and a module loaded by no server is exactly that.
-##
-## It does not connect a client. dot-platform already runs that seam — a real
-## `DotClientLink` over a real socket into a real `DotServer` — and repeating it here
-## would test dot-server rather than this game.
+## It does not connect a client: dot-platform runs that seam, and repeating it would test
+## dot-server rather than this game.
 
 const PORT := 27078
 const SERVER_DIR := "user://arena_dedicated"
 
 ## The app's URL segment on the website, which is this game's code name.
 ##
-## Unique and lowercase because the site already made it so. Display only — a
-## listing prints it to say which game this is, and nothing treats it as proof.
+## Unique and lowercase because the site made it so. Display only, never proof.
 const APP_URL := "arena"
 
 ## Every check this suite runs. It has no section counter, so this is its only guard
-## against a runtime error that aborts a test function part-way: the checks after the
-## error never happen, the ones before it still print ok, and "N passed, 0 failed" cannot
-## show the difference. See docs/testing.md.
+## against a runtime error that aborts a function part-way. See docs/testing.md.
 const CHECKS := 190
 
 
@@ -169,13 +159,9 @@ func _build() -> bool:
 	# named here so a suite that stopped exercising it fails rather than skipping.
 	config.query_enabled = true
 	config.query_port = PORT + 1
-	# A self-test takes no commands, and its stdin is whatever the runner left open — for the
-	# exit probe's copy, a pipe this suite holds for as long as it waits. The console's reader
-	# thread blocks in `read_string_from_stdin`, which nothing can wake, and a process with a
-	# reader blocked on an open pipe prints its whole result, its leak report, and then never
-	# exits: the copy ran to its deadline on every run until this was off.
-	# Kept after dot-server 5f46687, which no longer reads a pipe unless `stdin_console_pipes`
-	# is on: a terminal is still read, and a suite takes no commands from either.
+	# A self-test takes no commands, and a console reader blocked on an open stdin pipe
+	# (the exit probe's copy holds one) keeps the process from ever exiting. dot-server no
+	# longer reads a pipe unless `stdin_console_pipes` is on; a terminal is still read.
 	config.stdin_console_enabled = false
 
 	_server = DotServer.new()
@@ -185,10 +171,8 @@ func _build() -> bool:
 	_server.auto_boot = false
 	add_child(_server)
 
-	# The query responder is its own addon now, and a server only answers queries
-	# if one is plugged in. `_test_browser` asks this server over a real UDP
-	# socket, so without the host that section fails rather than skipping — which
-	# is the right way round.
+	# A server only answers queries if the query responder is plugged in, and `_test_browser`
+	# asks over a real UDP socket, so without it that section fails rather than skipping.
 	var query_host := DotQueryHost.new()
 	query_host.name = "QueryHost"
 	query_host.app_url = APP_URL
@@ -249,10 +233,8 @@ func _test_module_loaded() -> void:
 			spacing.append("%d->%d" % [rate, snaps])
 	_check(spacing.is_empty(), "snapshots are a whole number of ticks apart near 32 a second", ", ".join(spacing))
 
-	# The registration helpers exist so that unloading is safe by construction. A
-	# module that registered directly would leave a console command pointing at a
-	# freed object, and the console would crash the server the next time anyone ran
-	# it.
+	# Registration helpers make unloading safe: a direct registration would leave a console
+	# command pointing at a freed object.
 	for command in ["arena_status", "arena_score", "arena_restart"]:
 		_check(
 			_server.console.find_command(command) != null,
@@ -323,10 +305,8 @@ func _test_module_loaded() -> void:
 		"while `game` is what changes the game, which is what dot-server's `map` used to do"
 	)
 
-	# It read "NOT typable in chat" until `sv_chat_commands` landed. Ending a round in
-	# progress is still a thing only CHANGEMAP does — what changed is that the flag is what
-	# says so, on the line where it was typed, instead of a prefix check that ran first and
-	# never looked at who was asking.
+	# Ending a round in progress is still only CHANGEMAP; the `sv_chat_commands` flag says so
+	# on the line where it was typed, not a prefix check that ignored who was asking.
 	var map_command := _server.console.find_command("map")
 	_check(
 		map_command != null
@@ -340,11 +320,9 @@ func _test_module_loaded() -> void:
 
 ## Chat, voice, moderation and the identity chain, on a real server.
 ##
-## [b]Every one of these five addons passes its own suite with a stub host.[/b] What is
-## untested anywhere else is that they can all be brought up in one process against one
-## [DotServer] — and specifically that dot-moderation is up before the two routers that
-## look up its `dot_mute_source`, because a router that starts first finds nothing,
-## warns once, and then enforces no gag for the life of the server.
+## [b]Each of these five addons passes its own suite with a stub host.[/b] Untested elsewhere:
+## all of them up in one process on one [DotServer], with dot-moderation before the two routers
+## that look up its `dot_mute_source` (a router that starts first enforces no gag).
 func _test_services() -> void:
 	print("")
 	print("chat, voice and moderation")
@@ -418,10 +396,8 @@ func _test_services() -> void:
 		str(dirty.value)
 	)
 
-	# --- Moderation, which is the whole reason it is not dot-server's mute ---
-	#
-	# dot-server's mute is two booleans on a session object and a session dies with
-	# its connection, so a muted player reconnects and talks. A punishment is a record.
+	# --- Moderation: dot-server's mute is two booleans that die with the connection, so a muted
+	# player reconnects and talks. A punishment is a record. ---
 	var subject := DotPunishmentSubject.for_uid("4242")
 
 	# [b]The store, and that it is empty before this run writes to it.[/b] The gag below is
@@ -596,6 +572,81 @@ func _test_map_rotation_file() -> void:
 	_check(module._rotation_commands.call().is_empty(), "and no command is renamed")
 
 
+## The vote and map clocks, the ballot's ids and cooldown, and dot-vote's commands.
+func _test_vote_wiring(module: ArenaModule, options: Array) -> void:
+	# Both map clocks follow hibernation; their own suites assert what following does.
+	_check(
+		_server.hibernation_changed.is_connected(module.vote.director.set_hibernating),
+		"the vote's clock follows the server's hibernation"
+	)
+	_check(
+		_server.hibernation_changed.is_connected(module.maps.session.set_hibernating),
+		"and so does the map director's fallback clock"
+	)
+
+	# A bare id would be ambiguous the day somebody names a mode after a map.
+	var unprefixed := PackedStringArray()
+
+	for choice in options:
+		var text := String(choice.id)
+
+		if not text.begins_with(ArenaVoteSource.MAP_PREFIX) 				and not text.begins_with(ArenaVoteSource.MODE_PREFIX):
+			unprefixed.append(text)
+
+	_check(
+		unprefixed.is_empty(),
+		"and every choice says whether it is a map or a mode",
+		", ".join(unprefixed)
+	)
+
+	_check(
+		module.vote.director.source.has(StringName("map:dm_atrium")),
+		"dm_atrium is on the ballot"
+	)
+
+	# Two maps ship, so "not in the last five" would leave nothing to offer.
+	_check(
+		module.vote.director.rules.cooldown <= 1,
+		"the cooldown fits a two-map catalogue",
+		"%d" % module.vote.director.rules.cooldown
+	)
+
+	# `begin_on_apply` off stops one play being counted twice in the cooldown history.
+	_check(
+		not module.vote.director.begin_on_apply,
+		"and the director does not announce a change the host already announces"
+	)
+
+	# A refusal is a legitimate answer; the point is that the clock did not latch.
+	var opened := module.vote.director.open_vote(DotVoteClock.REASON_MANUAL)
+	_check(
+		opened.ok or opened.error != null,
+		"a vote can be asked for and answers either way",
+		"" if opened.ok else opened.error.message
+	)
+
+	if opened.ok:
+		_check(module.vote.is_voting(), "and the ballot is open")
+		module.vote.director.close_vote()
+		_check(not module.vote.is_voting(), "and closes again")
+
+	# The operator's four commands once did not exist here at all.
+	var absent := PackedStringArray()
+
+	for name in [
+		"rtv", "unrtv", "nominate", "vote", "timeleft", "nextmap",
+		"setnextmap", "nominate_addmap", "forcertv", "votereload",
+	]:
+		if _server.console.find_command(name) == null:
+			absent.append(name)
+
+	_check(
+		absent.is_empty(),
+		"dot-vote's commands are on the console, the operator's with the players'",
+		"missing: %s" % ", ".join(absent)
+	)
+
+
 ## dot-map and dot-vote, on a server with a rotation and a ballot.
 func _test_maps_and_vote() -> void:
 	print("")
@@ -625,89 +676,7 @@ func _test_maps_and_vote() -> void:
 	var options := module.vote.source.choices()
 	_check(options.size() > 0, "and there is something to vote for", "%d" % options.size())
 
-	# Both map clocks follow the server's hibernation: they wait while nobody is here and
-	# start again from the top when somebody joins (dot-vote's and dot-map's own suites
-	# assert what following does; this asserts the game wired it).
-	_check(
-		_server.hibernation_changed.is_connected(module.vote.director.set_hibernating),
-		"the vote's clock follows the server's hibernation"
-	)
-	_check(
-		_server.hibernation_changed.is_connected(module.maps.session.set_hibernating),
-		"and so does the map director's fallback clock"
-	)
-
-	# Every choice id says what kind of change it is. A bare id would have to be
-	# looked up in the map catalogue and then in the mode catalogue, which is a lookup
-	# that silently does the wrong thing the day somebody names a mode after a map.
-	var unprefixed := PackedStringArray()
-
-	for choice in options:
-		var text := String(choice.id)
-
-		if not text.begins_with(ArenaVoteSource.MAP_PREFIX) 				and not text.begins_with(ArenaVoteSource.MODE_PREFIX):
-			unprefixed.append(text)
-
-	_check(
-		unprefixed.is_empty(),
-		"and every choice says whether it is a map or a mode",
-		", ".join(unprefixed)
-	)
-
-	# A player types `dm_atrium`, not `map:dm_atrium`. The qualifier resolves against
-	# the ballot's own options rather than guessing.
-	_check(
-		module.vote.director.source.has(StringName("map:dm_atrium")),
-		"dm_atrium is on the ballot"
-	)
-
-	# The cooldown. Two maps ship, so "not in the last five" would leave nothing to
-	# offer — dot-vote caps it against the pool at runtime and the rules ask for one.
-	_check(
-		module.vote.director.rules.cooldown <= 1,
-		"the cooldown fits a two-map catalogue",
-		"%d" % module.vote.director.rules.cooldown
-	)
-
-	# `begin_on_apply` off is what stops one play being counted twice. Two entries in
-	# the history for one play is a "last five" cooldown that is quietly two or three.
-	_check(
-		not module.vote.director.begin_on_apply,
-		"and the director does not announce a change the host already announces"
-	)
-
-	# Opening one. With one player the quorum and `min_players_to_vote` decide whether
-	# it can, so the assertion is that it answers rather than that it succeeds — a
-	# refusal is a legitimate answer and the point is that the clock did not latch.
-	var opened := module.vote.director.open_vote(DotVoteClock.REASON_MANUAL)
-	_check(
-		opened.ok or opened.error != null,
-		"a vote can be asked for and answers either way",
-		"" if opened.ok else opened.error.message
-	)
-
-	if opened.ok:
-		_check(module.vote.is_voting(), "and the ballot is open")
-		module.vote.director.close_vote()
-		_check(not module.vote.is_voting(), "and closes again")
-
-	# dot-vote's commands, which this game never installed. The operator's four did not
-	# exist here at all, and the players' five were the module's own chat handler — a
-	# second path to the director with none of the first's commands.
-	var absent := PackedStringArray()
-
-	for name in [
-		"rtv", "unrtv", "nominate", "vote", "timeleft", "nextmap",
-		"setnextmap", "nominate_addmap", "forcertv", "votereload",
-	]:
-		if _server.console.find_command(name) == null:
-			absent.append(name)
-
-	_check(
-		absent.is_empty(),
-		"dot-vote's commands are on the console, the operator's with the players'",
-		"missing: %s" % ", ".join(absent)
-	)
+	_test_vote_wiring(module, options)
 
 	# The map menu's server half (M): the maps and the modes of this ballot, each said to be
 	# which; the owner's flag changes the map now through the director (so peers follow),
@@ -732,10 +701,8 @@ func _test_maps_and_vote() -> void:
 	var staff := DotCmdContext.new()
 	staff.source = DotCmdContext.Source.CHAT
 	staff.permissions = PackedStringArray(["generic"])
-	# The adopted player has no client to say it has the map, and the sync host would wait
-	# out its whole timeout for it (headless_admin's note), so it is off the host for the
-	# change and back on after. Not awaited directly either: a suite that hung on a change
-	# would say nothing at all.
+	# The adopted player has no client to say it has the map, so it is off the sync host for the
+	# change and back on after. Not awaited directly: a hung change would say nothing.
 	var sync_peers := module.maps.sync.peers.duplicate()
 	for peer in sync_peers:
 		module.maps.sync.remove_peer(int(peer))
@@ -760,11 +727,8 @@ func _test_maps_and_vote() -> void:
 			break
 		await get_tree().create_timer(0.1).timeout
 
-	# Every row the menu lists is one the source offers, and a mode row chosen changes the
-	# mode on the same map. Found by dot-server-deploy's burst_probe walking a list fetched
-	# once: after a change to dm_pit the team-mode rows were refused as "There is no map
-	# called 'mode:tdm'". A list from now offers only what can run now; a stale row is
-	# refused with the reason (ArenaVoteSource.unavailable_reason).
+	# Every row the menu lists is one the source offers, and a mode row changes the mode on the
+	# same map. A stale row is refused with the reason (ArenaVoteSource.unavailable_reason).
 	var fresh: Array = (menu_half.call("offer", staff) as Dictionary)["maps"]
 	var unknown := fresh.filter(func(r: Dictionary) -> bool:
 		return not module.vote.director.source.has(StringName(str(r["id"]))))
@@ -897,11 +861,9 @@ func _test_maps_and_vote() -> void:
 	module.vote.director.cancel_countdown()
 
 
-## [b]`time_up: finish_round` waits for a round being played, never for warmup.[/b] The game
-## hands dot-vote its match's answer (`round_in_progress_fn`); without it a limit that ran out
-## in warmup held the change for `finish_round_max_sec` over a round that had not started.
-## Run on a director of its own carrying the game's own hook, so the real vote's clock is
-## untouched; the match's state is set by hand and put back.
+## [b]`time_up: finish_round` waits for a round being played, never for warmup.[/b] Run on a
+## director of its own carrying the game's `round_in_progress_fn`; the match state is set by
+## hand and put back.
 func _test_finish_round_waits_for_a_live_round() -> void:
 	print("")
 	print("finish_round waits for a live round, not warmup")
@@ -987,10 +949,8 @@ func _finish_round_probe(hook: Callable, applied: Array) -> DotVoteDirector:
 
 ## What a server browser is told.
 ##
-## [b]dot-browser is the client half of this and it has never asked a real DotServer
-## anything.[/b] This is the server half: a query provider contributing the numbers a
-## person filtering a list actually filters on. Without one, a query says only that the
-## game is called Arena.
+## [b]dot-browser is the client half and has never asked a real DotServer anything.[/b] This is
+## the server half: a query provider contributing the numbers a browser filters on.
 func _test_query() -> void:
 	print("")
 	print("the server browser's half")
@@ -1022,16 +982,8 @@ func _test_query() -> void:
 	)
 
 
-## dot-browser asking a real [DotServer] — which nothing in this family had done.
-##
-## [b]This is the seam the family's own notes name.[/b] dot-server has answered A2S and
-## its own richer protocol since it was written; dot-browser's suite queries a DQP
-## server over a real loopback socket. Neither had ever met the other, and by this
-## family's repeated lesson that is where the next bugs are.
-##
-## The listening query port is the server's own, so this is a real UDP round trip
-## between two objects in one process — which is exactly the deployment shape a player
-## opening a server list is in, minus the distance.
+## dot-browser asking a real [DotServer]: a real UDP round trip between two objects in one
+## process, the shape a player opening a server list is in.
 func _test_browser() -> void:
 	print("")
 	print("a browser asking this server")
@@ -1062,10 +1014,8 @@ func _test_browser() -> void:
 		remove_child(browser)
 		return
 
-	# The query port as a separate argument, not a third part of the string. A
-	# three-part address parses as a malformed IPv6 one and fails at `connect_to_host`
-	# with "Invalid IPv6 address", several layers below anything that could say what
-	# was actually wrong.
+	# The query port as a separate argument: a three-part address parses as a malformed IPv6 one
+	# and fails at `connect_to_host` far from the cause.
 	var added := browser.add("127.0.0.1:%d" % PORT, query_port)
 	_check(added.ok, "a server can be added by address", str(added.error))
 
@@ -1099,17 +1049,9 @@ func _test_browser() -> void:
 			"%d vs %d" % [entry.max_players, _server.config.max_players]
 		)
 
-		# The game half, which is what `ArenaModule`'s query provider contributes. A
-		# `DotGameDescriptor` alone would say only that the game is called Arena — the
-		# mode, the map and the state are the provider's, and until a browser asked,
-		# nothing had ever read them.
-		#
-		# [b]It is NOT `entry.map`.[/b] That is dot-server's `info.map`, which means
-		# "the content id of the loaded game" and is empty on a server that has never
-		# switched games — so the first version of this check read it, got "", and
-		# reported a browser fault for a browser that was working. dot-browser nests
-		# the game's own section under `rules["game"]` precisely so a game putting a
-		# field called `map` in it cannot overwrite the other one.
+		# The game half, which is what `ArenaModule`'s query provider contributes. It is NOT
+		# `entry.map` (dot-server's `info.map`, empty before any game switch); dot-browser nests
+		# the game's section under `rules["game"]` so a field named `map` cannot overwrite it.
 		_check(
 			ArenaBrowser.game_field(entry, "map") == String(_game.map.id),
 			"and the map the GAME says it is running",
@@ -1153,18 +1095,10 @@ func _test_client_spawn() -> void:
 	print("")
 	print("a client spawning")
 
-	# **`client_spawn` carries `userid` and `name`. It does not carry `peer_id`.**
-	#
-	# This module read `event.get_int("peer_id")` and looked the session up by it. That
-	# is 0 on every event, `session_of(0)` is null, and a null session is a legitimate
-	# thing to find — so the handler returned and **nobody ever joined a dedicated arena
-	# server**, silently, for as long as this module has existed.
-	#
-	# This suite passed its twenty-one checks the whole time, because it never connected
-	# a client. It still does not: connecting one is dot-platform's seam and repeating it
-	# here would test dot-server. What it does instead is fire the event dot-server fires,
-	# with the payload dot-server puts in it, and assert somebody joined — which is the
-	# smallest thing that can tell the two spellings apart.
+	# **`client_spawn` carries `userid` and `name`, not `peer_id`.** The module once looked the
+	# session up by `peer_id` (0 on every event), found null and returned: nobody joined.
+	# This suite never connects a client, so it fires the event dot-server fires and asserts
+	# somebody joined.
 	var module := _server.modules.get_module("arena") as ArenaModule
 
 	if not _check(module != null, "the module is loaded"):
@@ -1172,11 +1106,8 @@ func _test_client_spawn() -> void:
 
 	var before := _game.player_ids().size()
 
-	# `adopt_session` exists for exactly this: dot-server's own documentation calls it
-	# "a test that needs the session table populated without a socket". Everything that
-	# counts players counts sessions, so a participant without one is invisible to the
-	# roster, the slots and the queries — and to `session_by_userid`, which is what the
-	# module has to call.
+	# `adopt_session` is for exactly this: a test that needs the session table populated without
+	# a socket. A participant without a session is invisible to the roster, slots and queries.
 	var session := DotClientSession.new()
 	session.peer_id = 4242
 	session.userid = 77
@@ -1185,14 +1116,9 @@ func _test_client_spawn() -> void:
 	if not _check(_server.adopt_session(session).ok, "a session is adopted"):
 		return
 
-	# 4242 has no socket behind it, so everything the bridge sends it from here on (the
-	# schema announcement on join, then a snapshot every server tick through the services,
-	# maps, query and browser sections) was an `rpc_id` to a peer the multiplayer API has
-	# never heard of, and every green run printed "Attempt to call RPC with unknown peer
-	# ID: 4242" six times. Caught on the link's loopback instead, for the rest of the run
-	# (the module's reload in `_test_unload` builds a new link without it): what was sent
-	# becomes a check, and a real unknown-peer line in this suite's stderr is a real one.
-	# `_test_bots` silences dot-net's own send for the same reason, before its sessions.
+	# 4242 has no socket, so everything the bridge sends it was an `rpc_id` to an unknown peer
+	# ("Attempt to call RPC with unknown peer ID" on every run). Caught on the link's loopback:
+	# what was sent becomes a check. `_test_bots` silences dot-net's own send the same way.
 	var link: Variant = module.bridge.link if module.bridge != null else null
 	if link != null:
 		link.loopback = func(method: StringName, peer_id: int, _payload: PackedByteArray) -> void:
@@ -1221,12 +1147,9 @@ func _test_client_spawn() -> void:
 		"and the peer id is not a player key here"
 	)
 
-	# **The map sync admits a peer at its READY, and that admission is what names the map.**
-	# The module used to register a joiner at the seat with `add_peer`, which only enrolls it
-	# for the NEXT change, so a client that joined a server on any map but dm_box stayed on
-	# dm_box until the next change: drawn on the wrong level, predicting against walls the
-	# server did not have (4773e55). Nothing asserted the wiring; this is the module's own
-	# path, seat then READY, read off the link.
+	# **The map sync admits a peer at its READY, and that admission names the map.** `add_peer`
+	# only enrolls for the NEXT change, leaving a joiner on dm_box (4773e55). This is the
+	# module's own path, seat then READY, read off the link.
 	var sync: DotMapSyncHost = module.maps.sync if module.maps != null else null
 	var announced: Array = []
 	if link != null:
@@ -1283,10 +1206,8 @@ func _test_commands() -> void:
 		String(_game.objectives.layout) if _game.objectives != null else "<none>"
 	)
 
-	# A mode that does not exist is refused AND the cvar is put back. A cvar reading
-	# `koth` on a server playing free-for-all is worse than one that refused, because
-	# an operator believes it — and the put-back must not recurse through its own
-	# `changed` signal.
+	# A mode that does not exist is refused AND the cvar is put back, without recursing through
+	# its own `changed` signal: a cvar reading `koth` on a free-for-all server is believed.
 	var bad := _server.console.execute("arena_mode not_a_mode")
 	_check(bad.ok, "a bad mode does not error the console", str(bad.error))
 	_check(
@@ -1306,10 +1227,8 @@ func _test_commands() -> void:
 	_check(_game.mode.id == StringName(was), "to the mode it started on")
 
 
-## The match cvars on a real console: `arena_scorelimit` was registered and read by nothing,
-## and there was no cvar for the time limit or warmup, so a config's numbers were ignored.
-## `set_cvar` is the path a game.yml / content.yml value takes after the module loads (dot-
-## server's descriptor cvars); `execute` is the console's and rcon's.
+## The match cvars on a real console. `set_cvar` is the path a game.yml / content.yml value
+## takes after the module loads; `execute` is the console's and rcon's.
 func _test_match_cvars() -> void:
 	print("")
 	print("the match cvars")
@@ -1371,8 +1290,7 @@ func _test_match_cvars() -> void:
 ## B's server half: the `loadout` command and the owner's mp_loadout_* cvars, enforced HERE,
 ## whatever a client's screen showed. From the session the client-spawn section adopted (77).
 func _test_loadout_command() -> void:
-	print("")
-	print("the loadout command and the owner's rules")
+	print("\nthe loadout command and the owner's rules")
 
 	var cmd: Object = _game.loadout_command
 	if not _check(cmd != null and _server.console.find_command("loadout") != null
@@ -1592,17 +1510,12 @@ func _test_unload() -> void:
 	)
 
 
-## [b]The one line that leaked mg-buses-from-hell's whole script graph at exit.[/b]
+## [b]The one line that leaked mg-buses-from-hell's whole script graph at exit.[/b] A script
+## that `extends DotNetMessage` and preloads ITSELF, loaded from a module a running
+## [DotServer] loads, leaves every script alive at exit on Godot 4.7.2.
 ##
-## A script that `extends DotNetMessage` and preloads ITSELF, first loaded from a module a
-## running [DotServer] loads — which is how every deployed server loads this game — leaves
-## every loaded script alive at exit on Godot 4.7.2 (measured in mg-buses-from-hell,
-## 8ed866c). This game's event and request both did it, for a typed `of()` factory.
-##
-## [b]Asserted on the source, because the symptom is where no check can reach.[/b] The
-## leak is reported after `quit()`, by the engine, as warnings a CI filter already treats
-## as noise; an assertion here runs before any of it exists. So this checks the cause
-## instead: every message script in `game/`, read as text.
+## [b]Asserted on the source[/b], because the engine reports the leak after `quit()`: every
+## message script in `game/`, read as text.
 func _test_no_message_preloads_itself() -> void:
 	print("")
 	print("exiting clean")
@@ -1660,11 +1573,8 @@ const EXIT_PROBE_FLAG := "--exit-probe"
 const EXIT_PROBE_CHECKS := 3
 
 
-## How long the copy may run before it is killed and this probe fails. A copy that is still
-## running this long after it started is hung, and the likeliest reason is the one that says
-## nothing at all: a scene whose script failed to parse never reaches `quit()` and prints
-## nothing. `-- --exit-probe-seconds N` lowers it, which is how the deadline itself is armed —
-## any N shorter than the suite takes is a copy that is still running when it expires.
+## How long the copy may run before it is killed. A copy still running is hung, likeliest a
+## scene whose script failed to parse. `-- --exit-probe-seconds N` lowers it.
 const EXIT_PROBE_SECONDS := 300
 
 
@@ -1683,34 +1593,15 @@ func _exit_probe_seconds() -> int:
 ## Runs this same suite in a fresh process: `[exit code, its stdout, its stderr, whether it
 ## had to be killed, the seconds it was allowed]`.
 ##
-## [b]A leak is reported after `quit()`, by the engine, where nothing in the process that
-## leaked can read it.[/b] "N ObjectDB instances were leaked at exit" is printed once the
-## scene tree is gone, so the only process that can check a run's exit is another one. On
-## Godot 4.7.2 a script that names itself, loaded after its base, cuts the engine's exit
-## teardown short and every script loaded before it is reported leaked — hundreds of lines
-## a passing run printed for weeks, which is why this is a check now and not a warning.
+## A leak is reported after `quit()`, so only another process can check a run's exit. It runs
+## first, before this run opens a port, so the two never contend for a socket.
 ##
-## [b]First, before this run opens a port[/b], so the two never contend for a socket — and
-## so this run is always the second one against the same `user://`, which is the other
-## thing no single run can see.
-##
-## [b]Not `OS.execute`.[/b] That blocks until the copy exits, so a copy that hangs held this
-## run for ever; and when the outer `timeout` then killed this run, the copy was left behind
-## holding the suite's directory and port. So the copy is started, polled against a deadline
-## and killed at it. Two deadlines, because Godot dies on SIGTERM without running a line of
-## script — nothing in this process can clean up after it is killed:
-##
-## - coreutils `timeout` wraps the copy where it exists. It is an exec wrapper, not a shell,
-##   and it outlives this process, so a copy orphaned by the outer `timeout` still dies on
-##   time. Its exit status 124 is how its expiry is recognised.
-## - this loop's own deadline, a little later, for a platform without it.
-##
-## `execute_with_pipe` rather than `create_process`, because the latter captures nothing and
-## the whole point is reading what the copy printed. Non-blocking, and drained on every pass
-## rather than once at the end: a pipe holds 64 KiB, and a copy that fills it blocks on its
-## next print — a hang this probe would then report as the suite's own. The copy's stdin is
-## the other end of a pipe this process holds open, which is why every suite turns the
-## server's stdin console off: a reader blocked on it never lets the copy exit.
+## Not `OS.execute`: it blocks until the copy exits, and an outer `timeout` then orphaned the
+## copy holding the suite's directory and port. Godot dies on SIGTERM without running a line
+## of script, so there are two deadlines: coreutils `timeout` around the copy (status 124),
+## and this loop's own for a platform without it. `execute_with_pipe` captures output; it is
+## drained on every pass because a full 64 KiB pipe blocks the copy's next print. The copy's
+## stdin is held open by this process, which is why every suite turns the stdin console off.
 func _run_exit_probe() -> Array:
 	var seconds := _exit_probe_seconds()
 	print("(running this suite once more in a fresh process, to read what it leaves at exit — %d s allowed)" % seconds)
@@ -1774,10 +1665,8 @@ func _test_exits_clean(probe: Array) -> void:
 	var stderr: String = probe[2]
 	var hung: bool = probe[3]
 	var seconds: int = probe[4]
-	# Every leak line is the engine's, and the engine writes them to stderr; both are
-	# searched so that stays a fact about the engine rather than an assumption here. Shown
-	# apart, because a pipe each is two streams whose interleaving is lost, and where a hung
-	# copy had got to is the end of its stdout.
+	# Leak lines are the engine's, on stderr; both streams are searched and shown apart because
+	# their interleaving is lost, and where a hung copy got to is the end of its stdout.
 	var text := stdout + "\n" + stderr
 	var tail := "its last lines:\n%s\nand the last on stderr:\n%s" % [
 		_last_lines(stdout, 15), _last_lines(stderr, 10)
