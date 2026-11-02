@@ -9,6 +9,7 @@ func _watch_panes() -> void:
 		if pane.has_meta(&"arena_watched"):
 			continue
 		pane.set_meta(&"arena_watched", true)
+		_pane_quiet(pane)
 		pane.connect(&"broken", _on_pane_broken.bind(pane))
 
 
@@ -16,7 +17,8 @@ func _send_event(peer_id: int, kind: int, body: PackedByteArray) -> void:
 	call(&"send_event", peer_id, kind, body)
 
 
-func _on_pane_broken(_at: Vector3, _by: StringName, pane: Node) -> void:
+func _on_pane_broken(at: Vector3, _by: StringName, pane: Node) -> void:
+	_pane_fx(pane, at)
 	_send_event(0, ArenaEvents.Kind.PANE_BROKEN, ArenaEvents.write_taken(int(pane.get("model")), 0))
 
 
@@ -37,4 +39,20 @@ func _apply_pane_broken(reader: DotNetReader) -> void:
 	for pane: Node in get_tree().get_nodes_in_group(&"dot_map_glass"):
 		if int(pane.get("model")) == int(told["id"]):
 			pane.set(&"authoritative", false)
+			_pane_quiet(pane)
 			pane.call(&"apply_broken")
+			_pane_fx(pane, pane.global_position)
+
+
+## Glass shards and the crack, from dot-fx; the pane's own bare quads are switched off for them.
+func _pane_fx(pane: Node, at: Vector3) -> void:
+	var fx := get_tree().get_first_node_in_group(&"arena_break_fx") as DotFxBreak if is_inside_tree() else null
+	if fx == null:
+		return
+	fx.burst(String(pane.get(&"kind")), at, Vector3.UP, 1.0)
+
+
+## The pane's own bare quads would double dot-fx's shards, so they go before it breaks.
+func _pane_quiet(pane: Node) -> void:
+	if is_inside_tree() and get_tree().get_first_node_in_group(&"arena_break_fx") != null:
+		pane.set(&"shard_count", 0)

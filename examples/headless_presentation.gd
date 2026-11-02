@@ -752,6 +752,7 @@ func _test_blood() -> void:
 	var chest := Vector3(0, 1.2, -1)
 
 	_check(p.blood != null and p.blood.decals.blood_count() == 0, "the presentation owns a blood layer, empty")
+	_check(p.break_fx != null and p.break_fx.is_in_group(&"arena_break_fx"), "the presentation owns the break effects, found by the panes")
 	p.on_body_hit(DotEntity.make_id(DotEntity.KIND_PROP, 3), chest, eye)
 	_check(p.blood.decals.blood_count() == 0, "a prop bleeds nothing")
 	p.on_body_hit(npc, chest, eye)

@@ -123,6 +123,8 @@ var ambient: DotAmbienceDirector = null
 var fx: DotFxManager = null
 ## Blood behind a body the local player hit; drawn only while `gore` is on.
 var blood: ArenaBlood = null
+## Splinters, shards and the crack of whatever breaks; the panes and map props call `burst`.
+var break_fx: DotFxBreak = null
 ## The player's console, built by [method build_console] once the client has a menu.
 var console: DotConsoleController = null
 var console_panel: DotConsolePanel = null
@@ -905,6 +907,11 @@ func _build_fx() -> DotResult:
 	blood = ArenaBlood.new()
 	add_child(blood)
 	blood.follow(settings)
+
+	break_fx = DotFxBreak.new()
+	add_child(break_fx)
+	break_fx.add_to_group(&"arena_break_fx")
+	break_fx.follow(settings)
 
 	# [b]Said out loud, because a missing scene is otherwise a DEBUG line.[/b] Until
 	# 2026-09-27 all four scenes this catalogue names were missing and every muzzle flash,
