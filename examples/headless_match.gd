@@ -1751,6 +1751,8 @@ func _ffa_spawn_scenario(game: ArenaGame, when: String) -> void:
 	)
 
 	var saved_mode := stack.spawns.rules.mode
+	# The default scatter strategy draws across the map; these checks score the map sites.
+	stack.spawns.rules.strategy = "map"
 	stack.spawns.rules.mode = DotSpawnRules.Mode.FURTHEST
 	stack.spawns.clear_sites()
 	stack.spawns.add_site(DotSpawnSite.point(&"beside_the_friend", site_a))
@@ -1836,6 +1838,7 @@ func _spawn_sight_scenario(game: ArenaGame) -> void:
 	_stand(game, 900, Vector3(0, -500, 0))
 	var saved_mode := stack.spawns.rules.mode
 	var saved_floor := stack.spawns.rules.minimum_enemy_distance
+	stack.spawns.rules.strategy = "map"
 	stack.spawns.rules.mode = DotSpawnRules.Mode.SAFEST
 	stack.spawns.rules.minimum_enemy_distance = 0.0
 	stack.spawns.clear_sites()
