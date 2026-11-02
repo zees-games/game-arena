@@ -5237,7 +5237,7 @@ func _test_map_change() -> void:
 		var lifetime := rk.publish_lifetime(shooter.player_id, sess, tracker.schema)
 		_check(lifetime > session_only, "a player with a stored baseline ranks above the session-only figure", "%s vs %s" % [lifetime, session_only])
 		_check(
-			is_equal_approx(rk.publish_lifetime(victim.player_id, sess, tracker.schema), maxf(0.0, rk.weighted(sess.to_dictionary()))),
+			is_equal_approx(rk.publish_lifetime(victim.player_id, sess, tracker.schema), rk.weighted(sess.to_dictionary())),
 			"a player with no baseline ranks on the session alone"
 		)
 		tracker.store = store
