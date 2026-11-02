@@ -203,16 +203,12 @@ static func _split_fences(body: StaticBody3D, id: String, dir: String) -> void:
 	var got: DotMapBspMesh = DotMapBspMesh.load_prefix(prefix).value
 	if got == null:
 		return
-	var clip := DotPhysicsLayout.shooter_3d().mask_of([&"player_clip"])
-	var cell := DotMapOneWayGlass.cell_of(got.manifest)
-	var layers := {"clip": clip, "fence": clip}
-	# Only a map with a jail cell moves its glass: elsewhere it stays a shot-blocking floor and wall.
-	if not cell.is_empty():
-		layers["glass"] = clip | GLASS_BIT
-	var moved := got.split_legacy_hulls(body, layers)
-	if not cell.is_empty() and int(moved.get("glass", 0)) > 0:
-		body.set_meta(GLASS_META, DotMapGlassSight.new(cell["centre"], float(cell["radius"]), GLASS_BIT))
-	DotLog.debug("arena.maps", "clip, fence and glass hulls moved off the shot layer", {"map": id, "hulls": moved})
+	var layout := DotPhysicsLayout.shooter_3d()
+	var rules := DotMapGlassSight.install(got, body, layout.mask_of([&"player_clip"]), GLASS_BIT,
+		layout.mask_of([&"world"]), layout.mask_of([&"world", &"player_clip"]))
+	if rules != null:
+		body.set_meta(GLASS_META, rules)
+	DotLog.debug("arena.maps", "clip, fence and glass hulls moved off the shot layer", {"map": id, "glass": rules != null})
 
 
 static func _box_of(points: PackedVector3Array, origin: Vector3) -> AABB:

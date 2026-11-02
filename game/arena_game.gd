@@ -1181,7 +1181,7 @@ func _build_world_collision() -> void:
 	map.collision_root = _world_collision
 	glass_rules.glass_mask = 0
 	map.glass = null
-	var cell: Variant = _world_collision.get_meta(&"glass_sight", null)
+	var cell: Variant = _world_collision.get_meta(&"glass_sight") if _world_collision.has_meta(&"glass_sight") else null
 	if cell is DotMapGlassSight:
 		glass_rules.centre = (cell as DotMapGlassSight).centre
 		glass_rules.radius = (cell as DotMapGlassSight).radius

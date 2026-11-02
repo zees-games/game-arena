@@ -209,8 +209,8 @@ func classify_tree(root: Node, layer_id: StringName) -> int:
 
 	var done := 0
 
-	# Jail glass keeps the layers the importer gave it, or sight and shots could not tell it from a wall.
-	if root.get_meta(&"hull_kind", "") == "glass":
+	# Importer hull bodies (clip, fence, glass) keep their layers, or shots and sight could not tell them from a wall.
+	if DotMapGlassSight.is_exempt(root):
 		return 0
 
 	if root is CollisionObject3D or root is CollisionObject2D:

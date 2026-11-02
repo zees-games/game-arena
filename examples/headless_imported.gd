@@ -1932,6 +1932,10 @@ func _test_every_map() -> void:
 		# stuck: surf_akai_final, 24 of 32, and none when checked on its own (2026-10-09).
 		if solid is CollisionObject3D:
 			(solid as CollisionObject3D).collision_layer = ISOLATED_LAYER
+		# Glass the importer split onto its own layers is still a floor to this map's rays.
+		for hull in solid.find_children("*", "StaticBody3D", true, false):
+			if String((hull as Node).get_meta(&"hull_kind", "")).begins_with("glass"):
+				(hull as StaticBody3D).collision_layer |= ISOLATED_LAYER
 		body.collision_mask = ISOLATED_LAYER
 		var trace := map.shot_trace()
 		if "collision_mask" in trace:
