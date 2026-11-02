@@ -13,7 +13,6 @@ const ArenaSurfRides := preload("../game/arena_surf_rides.gd")
 ##
 ##     godot --headless --path . tools/surf_rides.tscn -- surf_10x_reloaded_fixed --explore
 ##     godot --headless --path . tools/surf_rides.tscn -- surf_10x_reloaded_fixed --plan 0 --starts 6 --repairs 32 --rounds 3
-##     godot --headless --path . tools/surf_rides.tscn -- surf_10x_reloaded_fixed --measure --runs 40 --live 20
 ##
 ## [b]--explore[/b] bakes the bots' mesh exactly as the game does, takes its islands, and from
 ## every platform that holds a spawn or a teleport's landing searches (dot-bot's
@@ -915,6 +914,7 @@ static func _metres(row: Array) -> Vector3:
 func _write(path: String, data: Dictionary) -> void:
 	data["id"] = String(map_id)
 	data["units"] = ArenaSurf.UNITS
+	data["bake"] = ArenaSurf.bake_id(nav)
 	data["note"] = "Written by tools/surf_rides.gd: a combat surf map's ride edges (platform to platform, in genre units, Godot axes) and, per edge, every tick of every ride the planner found on the real motor as [x, y, z, vx, vy, vz, action]. Replan after a movement or collision change."
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var f := FileAccess.open(path, FileAccess.WRITE)
@@ -928,8 +928,6 @@ static func _read(path: String) -> Dictionary:
 		return {}
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	return parsed if parsed is Dictionary else {}
-
-	data["bake"] = ArenaSurf.bake_id(nav)
 
 static func _spread(times: Array) -> String:
 	if times.is_empty():
