@@ -334,7 +334,7 @@ static var _tunables: DotFpsTunables = null
 
 static func _movement() -> DotFpsTunables:
 	if _tunables == null:
-		_tunables = load("res://game/arena_player.gd").arena_tunables()
+		_tunables = load(ArenaPaths.rebase("res://game/arena_player.gd")).arena_tunables()
 
 	return _tunables
 
