@@ -2,6 +2,10 @@ extends "arena_client_view.gd"
 ## The solo client's offline bots, split out of [ArenaClient] so that file stays under the size gate.
 
 
+## Not a game limit: the solo player cap is only what one process can think for.
+const MAX_SOLO_BOTS := 255
+
+
 ## The offline bots: the brain a server's bots run (ArenaBots, dot-bot), with the same
 ## `bot_difficulty`. Offline only; a server's bots are the server's.
 ##
@@ -67,7 +71,7 @@ func _launch_bots() -> int:
 	var args := OS.get_cmdline_user_args()
 	var index := args.find("--bots")
 	if index >= 0 and index + 1 < args.size() and args[index + 1].is_valid_int():
-		return clampi(args[index + 1].to_int(), 0, 15)
+		return clampi(args[index + 1].to_int(), 0, MAX_SOLO_BOTS)
 	return offline_bots
 
 
@@ -91,13 +95,13 @@ func _bind_bot_console() -> void:
 	var local := presentation.local_console
 	var _bound := settings.bind_console(local)
 	var _crosshair_bound := game.combat_feel.bind_console(local, hud.crosshair if hud != null else null)
-	local.add_var(&"bot_quota", "Players in a solo match, you included; the rest are bots (0 to 16).",
+	local.add_var(&"bot_quota", "Players in a solo match, you included; the rest are bots (no fixed cap; each bot costs CPU).",
 		func() -> Variant: return _bots.size() + 1,
 		func(v: Variant) -> Variant:
 			var text := str(v).strip_edges()
 			if not text.is_valid_int():
 				return DotResult.fail(DotError.CODE_INVALID, "bot_quota takes a number")
-			_keep_offline_bots(DotBotRoster.solo_wanted(clampi(text.to_int(), 0, 16)))
+			_keep_offline_bots(DotBotRoster.solo_wanted(clampi(text.to_int(), 0, MAX_SOLO_BOTS + 1)))
 			return DotResult.success(_bots.size() + 1)
 	)
 

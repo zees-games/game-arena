@@ -129,7 +129,7 @@ func validate() -> DotResult:
 
 @export_group("Bots")
 ## Players a server fills to with bots when nothing else sets bot_quota.
-@export_range(0, 32, 1) var bot_quota: int = 4
+@export_range(0, 255, 1) var bot_quota: int = 4
 
 @export_group("Surf")
 ## Whether surfing plays a quiet glide.

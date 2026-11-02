@@ -120,7 +120,7 @@ var extras: ArenaClientExtras = null
 
 ## How many bots to add when playing offline. Zero is an empty arena. `bot_quota` at the
 ## console changes it while playing (people + bots, as on a server); `-- --bots N` at launch.
-@export_range(0, 15, 1) var offline_bots: int = 3
+@export_range(0, 255, 1) var offline_bots: int = 3
 
 var _offline := true
 var _solo_binder: DotGameConfigBinder = null

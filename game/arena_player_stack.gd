@@ -240,7 +240,7 @@ func _build_roster() -> void:
 
 	var config := DotPlayerConfig.new()
 	config.tick_rate = game.tick_rate
-	config.max_players = 32
+	config.max_players = 256
 	# Long enough to survive a map change, which is what a player reconnecting into an
 	# arena is most often doing.
 	config.reconnect_window_sec = 90.0
