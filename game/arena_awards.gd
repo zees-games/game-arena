@@ -124,7 +124,7 @@ class KillFacts:
 	var killer: int = 0
 	var victim: int = 0
 	var tick: int = 0
-	var tick_rate: int = 64
+	var tick_rate: int = ArenaGame.DEFAULT_TICK_RATE
 	var headshot: bool = false
 	## The victim's streak when they died, before it was reset.
 	var victim_streak: int = 0

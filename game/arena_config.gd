@@ -5,7 +5,7 @@ extends DotConfig
 
 ## `@export_group` -> the cfg file it lives in: `cfg/game/game-arena/config_<file>/game.yml`.
 const CFG_FILES := {
-	"Horde": "horde", "Players": "players", "Stomp": "players", "Match": "match", "Bots": "match", "Awards": "awards", "Surf": "surf",
+	"Horde": "horde", "Players": "players", "Stomp": "players", "Match": "match", "Bots": "match", "Awards": "awards", "Surf": "surf", "Simulation": "match",
 }
 
 
@@ -24,6 +24,10 @@ func env_prefix() -> String:
 func cli_prefix() -> String:
 	return "--arena-"
 
+
+@export_group("Simulation")
+## Ticks a second for solo and a listen host (project.godot's physics rate is the same default); a dedicated server runs the host's sv_tickrate instead. Above 66 costs CPU in proportion, and the 32-bot solo budget was measured at 66.
+@export_range(30, 240, 1) var tick_rate: int = ArenaGame.DEFAULT_TICK_RATE
 
 @export_group("Horde")
 ## Horde monsters per player at the most intense moment.

@@ -305,6 +305,9 @@ func _load_solo_config() -> void:
 	_solo_binder = ArenaConfig.make_binder(game.config, "user://cfg/arena.json")
 	DotLog.result(CHANNEL, "solo config", _solo_binder.load_layers())
 	game.config_binder = _solo_binder
+	# The engine steps once per tick in solo, so it takes the same rate the game declares.
+	game.tick_rate = game.config.tick_rate
+	Engine.physics_ticks_per_second = game.tick_rate
 	DotLog.result(CHANNEL, "solo noblock", game.make_noblock())
 
 

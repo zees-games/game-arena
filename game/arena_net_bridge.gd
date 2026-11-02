@@ -601,7 +601,7 @@ func _commands() -> Dictionary:
 		var behaviour: ArenaPlayerNet = _behaviours.get(session_id)
 		if behaviour == null or behaviour.player == null:
 			continue
-		var made := ArenaBots.think(game, behaviour.player, _bot_minds[session_id], _tick, float(Engine.physics_ticks_per_second))
+		var made := ArenaBots.think(game, behaviour.player, _bot_minds[session_id], _tick, float(game.tick_rate))
 		behaviour.last_move = made[0]
 		behaviour.last_fire = made[1]
 		behaviour.last_view_lag = -1.0

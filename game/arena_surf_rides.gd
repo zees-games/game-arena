@@ -60,7 +60,7 @@ var book: DotBotRideBook = null
 var rng: DotRandomStream = null
 var nav: DotBotNav = null
 var map: Object = null
-var tick_rate: float = 64.0
+var tick_rate: float = float(ArenaGame.DEFAULT_TICK_RATE)
 
 ## Players' stretches that ended as a ride kept, and as one thrown away, for describe().
 var begun: int = 0

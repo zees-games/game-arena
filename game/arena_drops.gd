@@ -64,7 +64,7 @@ var draws: bool = false
 var points: Dictionary = {}
 
 var field: DotPickupField = null
-var _tick_rate: int = 64
+var _tick_rate: int = ArenaGame.DEFAULT_TICK_RATE
 var _next_id: int = 1
 
 ## id -> {"pickup": DotPickup, "kind": int, "value": int, "expires": int}. Authority side.

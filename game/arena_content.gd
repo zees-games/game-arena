@@ -99,7 +99,7 @@ static func damage_types() -> Array[DotDamageType]:
 # rates on a 64 Hz server and a 128 Hz one, which is two different games — the pack
 # says the same and is tuned at this rate.
 
-const TICK_RATE := 64
+const TICK_RATE := ArenaGame.DEFAULT_TICK_RATE
 
 ## What a player spawns with when nothing else says: a knife in the melee slot, so the
 ## number keys always have something under 1, a pistol and a rifle, and one frag.

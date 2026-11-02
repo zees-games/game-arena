@@ -58,6 +58,9 @@ const NET_WORLD_EXTENT := 512.0
 ## Snapshots a second aimed at; the rate sent is [method snapshot_rate_for] the tick rate.
 const NET_SNAPSHOT_RATE := 32
 
+## The one tick rate: project.godot's physics rate, ArenaConfig.tick_rate (solo) and every default below read this. 66 divides into a 33 Hz snapshot.
+const DEFAULT_TICK_RATE := 66
+
 
 ## A player was killed. After the scoreboard and the feed have seen it.
 signal player_killed(entry: DotKillFeed.Entry)
@@ -113,7 +116,7 @@ signal mode_shown(shown: ArenaMode)
 
 @export_group("Simulation")
 
-@export_range(1, 240, 1) var tick_rate: int = 64
+@export_range(1, 240, 1) var tick_rate: int = DEFAULT_TICK_RATE
 
 @export_group("Rules")
 

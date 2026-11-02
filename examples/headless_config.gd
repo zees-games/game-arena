@@ -236,3 +236,5 @@ func _workbench(binder: DotGameConfigBinder, game: Node) -> void:
 	_check(amb.ok and is_equal_approx(console.get_float("arena_ambient_volume"), 0.2), "an edit of the ambience set moves the cvar")
 	wb.free()
 	console.free()
+	_check(int(ProjectSettings.get_setting("physics/common/physics_ticks_per_second")) == ArenaGame.DEFAULT_TICK_RATE, "project.godot's physics rate is ArenaGame.DEFAULT_TICK_RATE")
+	_check(game.config.tick_rate == ArenaGame.DEFAULT_TICK_RATE and ArenaGame.snapshot_rate_for(ArenaGame.DEFAULT_TICK_RATE) == 33, "the config default is the one rate and its snapshot rate is whole ticks")

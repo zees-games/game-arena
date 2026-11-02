@@ -28,6 +28,10 @@ texture={
 
 enabled=PackedStringArray("res://addons/dot_lighting/plugin.cfg")
 
+[physics]
+
+common/physics_ticks_per_second=66
+
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0

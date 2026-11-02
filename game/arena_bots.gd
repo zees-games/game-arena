@@ -94,7 +94,7 @@ class World:
 	extends DotBotWorld
 
 	var game: Object = null
-	var tick_rate: float = 64.0
+	var tick_rate: float = float(ArenaGame.DEFAULT_TICK_RATE)
 	var brains: Dictionary = {}
 	var _tick: int = -1
 	var _contacts: Array = []
