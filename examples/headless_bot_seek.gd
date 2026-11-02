@@ -99,6 +99,20 @@ func _one(id: StringName) -> void:
 			if found >= 0.0:
 				break
 			await get_tree().physics_frame
+	if found < 0.0 and human != null:
+		var hp := human.controller.state.position
+		var nv: Object = world._nav
+		print("DIAG human %s closest %s ready %s" % [hp, nv.call(&"closest", hp) if nv != null else "nonav", nv.call(&"is_ready") if nv != null else false])
+		var isl: Array = nv.call(&"islands")
+		print("DIAG islands %d; first areas %s; human island %d" % [isl.size(), isl.slice(0, 5).map(func(d): return snappedf(d.get("area", 0.0), 1.0)), nv.call(&"island_at", hp)])
+		for b in BOTS:
+			var q := game.player_for(b + 1)
+			if q == null:
+				continue
+			print("DIAG bot%d island %d" % [b, nv.call(&"island_at", q.controller.state.position)])
+			var bp := q.controller.state.position
+			var path: PackedVector3Array = world.route(bp, hp)
+			print("DIAG bot%d pos %s closest %s dist %.1f route pts %d end %s" % [b, bp, nv.call(&"closest", bp) if nv != null else "nonav", bp.distance_to(hp), path.size(), path[path.size() - 1] if path.size() > 0 else "none"])
 	print("MAP %s: start gap %.1f m; nearest bot %.1f m; reached within %.0f m after %s s" % [id, first, best, REACH, "%.1f" % found if found >= 0.0 else "never"])
 	_check(found >= 0.0, "%s: a bot reaches the player" % id, "nearest %.1f m in %.0f s" % [best, SECONDS])
 	remove_child(game)
