@@ -1316,6 +1316,8 @@ func simulate_tick(
 	ctx.sprint_blocks_fire = not controller.tunables.sprint_can_shoot
 	ctx.sprint_shot_follows_barrel = controller.tunables.sprint_shot_follows_barrel
 	ctx.authority = arsenal.authority
+	# Sideways speed across the aim, positive right: the client's gun tilts with it, so the wall shot must too.
+	ctx.extra[&"strafe"] = 0.0 if state.is_wall_running() else state.velocity.dot(Basis(Vector3.UP, deg_to_rad(state.yaw)).x)
 
 	# Through the rig, which runs the arsenal and then the bash. It keeps the previous
 	# command itself, for the same edge triggers the arsenal used to be handed it for.
