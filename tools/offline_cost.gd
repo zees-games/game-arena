@@ -11,6 +11,7 @@ const ClientBench := preload("client_bench.gd")
 
 var _bots := 10
 var _reuse := true
+var _solid := true
 var _seconds := 25.0
 var _client: Node = null
 var _frames := PackedFloat64Array()
@@ -28,6 +29,8 @@ func _ready() -> void:
 			"--bots": _bots = int(args[i + 1])
 			"--seconds": _seconds = float(args[i + 1])
 			"--reuse": _reuse = int(args[i + 1]) != 0
+			"--solid": _solid = int(args[i + 1]) != 0
+			"--prof": DotFpsPhysicsBody.profile = int(args[i + 1]) != 0
 			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
 	var _scratch := ArenaPresentation.use_scratch_settings("offline_cost")
 	_run.call_deferred()
@@ -45,6 +48,8 @@ func _run() -> void:
 	pilot.process_priority = -999
 	add_child(pilot)
 	_set_reuse(self)
+	if not _solid:
+		_client.game.body_rules.solid = false
 	var warm := 8.0
 	ArenaFrameProbe.set_interval(1.0e9)
 	var t0 := Time.get_ticks_usec()
@@ -88,6 +93,8 @@ func _run() -> void:
 		var row: PackedInt64Array = ArenaFrameProbe._sections[key]
 		print("  section %-14s %.3f ms/frame | %.3f ms/call x%d | max %.2f ms" % [key, float(row[0]) / _n / 1000.0, float(row[0]) / maxi(row[1], 1) / 1000.0, row[1], row[2] / 1000.0])
 	print("  controller queries per physics step: %.1f" % (float(_queries(self) - _q0) / maxf(float(Engine.get_physics_frames() - _steps0), 1.0)))
+	var pr := DotFpsPhysicsBody.prof
+	print("  engine queries/frame: cast %.1f (%.2f ms) rest %.1f (%.2f ms) overlap %.1f (%.2f ms) ray %.1f (%.2f ms)" % [pr[0] / float(_n), pr[1] / 1000.0 / _n, pr[2] / float(_n), pr[3] / 1000.0 / _n, pr[4] / float(_n), pr[5] / 1000.0 / _n, pr[6] / float(_n), pr[7] / 1000.0 / _n])
 	_ticks = 0; _reused = 0; _settled = 0
 	var _qq := _queries(self)
 	print("  motor ticks %d settled-skips %d reused start probes %d (queries per tick %.2f)" % [_ticks, _settled, _reused, float(_qq) / maxf(_ticks, 1.0)])
