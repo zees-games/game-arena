@@ -2,10 +2,6 @@ extends "arena_client_view.gd"
 ## The solo client's offline bots, split out of [ArenaClient] so that file stays under the size gate.
 
 
-## Not a game limit: the solo player cap is only what one process can think for.
-const MAX_SOLO_BOTS := 255
-
-
 ## The offline bots: the brain a server's bots run (ArenaBots, dot-bot), with the same
 ## `bot_difficulty`. Offline only; a server's bots are the server's.
 ##
@@ -71,7 +67,7 @@ func _launch_bots() -> int:
 	var args := OS.get_cmdline_user_args()
 	var index := args.find("--bots")
 	if index >= 0 and index + 1 < args.size() and args[index + 1].is_valid_int():
-		return clampi(args[index + 1].to_int(), 0, MAX_SOLO_BOTS)
+		return maxi(0, args[index + 1].to_int())
 	return offline_bots
 
 
@@ -101,7 +97,7 @@ func _bind_bot_console() -> void:
 			var text := str(v).strip_edges()
 			if not text.is_valid_int():
 				return DotResult.fail(DotError.CODE_INVALID, "bot_quota takes a number")
-			_keep_offline_bots(DotBotRoster.solo_wanted(clampi(text.to_int(), 0, MAX_SOLO_BOTS + 1)))
+			_keep_offline_bots(DotBotRoster.solo_wanted(maxi(0, text.to_int())))
 			return DotResult.success(_bots.size() + 1)
 	)
 
