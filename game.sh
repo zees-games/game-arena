@@ -111,11 +111,14 @@ run_suite() {
     mkdir -p .godot/test-logs
     log=".godot/test-logs/$scene.log"
     [ -t 1 ] && printf '  ..   %s' "$scene"
-    timeout "$TIMEOUT" "$GODOT" --headless --path . "res://examples/$scene.tscn" >"$log" 2>&1
+    # headless_imported walks 56 imported maps and takes about 25 minutes; the default would kill it mid-run.
+    local limit="$TIMEOUT"
+    [ "$scene" = headless_imported ] && [ "$limit" -lt 3000 ] && limit=3000
+    timeout "$limit" "$GODOT" --headless --path . "res://examples/$scene.tscn" >"$log" 2>&1
     status=$?
     summary="$(grep -Eo '[0-9]+ (passed|checks), [0-9]+ failed' "$log" | tail -1)"
     if [ "$status" -eq 124 ]; then
-        out="did not finish within ${TIMEOUT}s"
+        out="did not finish within ${limit}s"
     elif [ "$status" -ne 0 ]; then
         out="exited $status"
     elif grep -qE 'SCRIPT ERROR|Parse Error|Lambda capture' "$log"; then
