@@ -2,6 +2,7 @@
 # Renders a map to screenshots/<map>_{overview,eye,roof}.png so a person can look at it.
 #
 #   tools/screenshot.sh dm_atrium
+#   tools/screenshot.sh --weapon-drops [out.png]   # dropped weapons settled on floor, step; any sunk one shows
 #   tools/screenshot.sh --profiler-menu [out.png]   # the real client, menu on Advanced, Performance card
 #   tools/screenshot.sh --map-menu [dir]   # the solo map picker (M), every page
 #   tools/screenshot.sh --team-menu-key [--unwired] [out.png]   # the period key in the real client (or a bare menu: Play, Spectate)
@@ -25,6 +26,10 @@ set -euo pipefail
 # A short frame sequence beside each still (DotShotSeq), so Nightly -> Review can play and scrub it.
 export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-16} DOT_SHOT_SECS=${DOT_SHOT_SECS:-2}
 cd "$(dirname "$0")/.."
+if [ "${1:-}" = "--weapon-drops" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/weapondrop_shot.gd -- "$@"
+fi
 if [ "${1:-}" = "--profiler-menu" ]; then
   shift
   exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/profiler_menu_shot.gd -- "$@"
