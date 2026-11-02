@@ -56,6 +56,10 @@ func _uses_crouch() -> bool:
 	return false
 
 
+## Horizontal direction the player is commanding this tick, set by the caller before the move.
+var wish := Vector3.ZERO
+
+
 ## The ladder the hull at [param feet] touches, or AABB() for none.
 func touching(feet: Vector3, radius: float, height: float) -> AABB:
 	var hull := AABB(feet - Vector3(radius + reach, 0.0, radius + reach),
@@ -83,8 +87,12 @@ func update(motor: DotFpsMotor, state: DotFpsState) -> void:
 	if state.time_since_jump < 0.15 or (since >= 0 and since < JUMP_OFF_GRACE_TICKS):
 		return    # a jump at the foot of a ladder, or off it, is a jump
 	var flat := Vector3(state.velocity.x, 0.0, state.velocity.z)
-	var into := -flat.dot(_away(box, state.position))
-	if (not state.is_grounded() and state.velocity.y < 0.0) or into > 10.0 * ArenaBspMap.METRES_PER_UNIT:
+	var away := _away(box, state.position)
+	var into := -flat.dot(away)
+	# A wall behind a thin ladder zeroes the velocity before this reads it, and the reach is
+	# shorter than one tick of travel, so pushing into the rungs is judged by the intent too.
+	var pushing := -wish.dot(away) > 0.5
+	if (not state.is_grounded() and state.velocity.y < 0.0) or into > 10.0 * ArenaBspMap.METRES_PER_UNIT or pushing:
 		motor.set_mode(state, mode_id)
 		state.velocity = Vector3.ZERO
 

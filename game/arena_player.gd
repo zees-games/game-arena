@@ -1276,6 +1276,9 @@ func simulate_tick(
 	# The previous state's position before this tick replaces it: two ticks back after it.
 	_position_two_back = controller.render_state(0.0).position
 	ladder.now = tick
+	var view := DotFpsMotor._view_basis(controller.state.yaw, 0.0)
+	var intent: Vector3 = view.right * movement_command.move.x + view.forward * movement_command.move.y
+	ladder.wish = Vector3(intent.x, 0.0, intent.z).normalized()
 	_hull_tick = tick
 	controller.apply_command(movement_command)
 	var t_ctl := Time.get_ticks_usec()
