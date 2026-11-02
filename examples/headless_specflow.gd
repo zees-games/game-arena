@@ -6,12 +6,8 @@ const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 
-## Spectate then Play from the team menu, on a dedicated server with real sessions: `/teams spectate` and `/teams play` typed as a player. A free-for-all, so the menu's unwired-style Play/Spectate pair is what the player has.
+## Spectate then Play from the team menu, on a dedicated server with real sessions: `/teams spectate` and `/teams play` typed as a player, in a free-for-all.
 ## The world is asserted: the scoreboard row, the one player entity, the bot fill, who is alive.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_specflow.tscn
-## [/codeblock]
 
 const PORT := 27085
 const SERVER_DIR := "user://arena_specflow"
@@ -134,12 +130,8 @@ func _build() -> bool:
 	_module.set_physics_process(false)
 	_game.match_node.rules.min_players = 1
 
-	# Snapshots go nowhere. The three sessions are adopted, which is dot-server's own
-	# documented way to populate the session table without a socket — so there is no
-	# peer behind them, and the netcode's real send would be an engine RPC error per peer
-	# per tick: 1,287 lines on the first run, burying the one line this suite exists to
-	# print. The server's tick path is otherwise the real one; whether a CLIENT predicts a
-	# forced noclip is headless_net's question.
+	# Snapshots go nowhere: the three sessions are adopted (dot-server's way to fill the session table without a socket), so a real send
+	# would be an engine RPC error per peer per tick, burying this suite's output. The tick path is otherwise the real one.
 	_module.net.send_fn = func(_peer: int, _payload: PackedByteArray, _delivery: int) -> void:
 		pass
 
@@ -177,16 +169,9 @@ func _teardown() -> void:
 		_game.queue_free()
 
 
-# --- Driving -------------------------------------------------------------------
-
 ## Types a `!command` into chat as [param speaker], and waits for the reply.
-##
-## [b]What `DotChatManager._handle_command` does, step for step, minus the socket.[/b] The
-## prefix comes off, `player_command` is fired — which is where this game's own services
-## layer claims `!rtv` and the rest, and a mod tool must NOT be claimed there — and the
-## line goes to the console with a CHAT context made from the speaker's own session. The
-## one difference is the reply sink, which here is a list instead of an RPC, because an
-## adopted session has no socket to send a system line down.
+## Mirrors `DotChatManager._handle_command` minus the socket: `player_command` fires (where this game's services claim `!rtv` and the rest), then the line goes to the console
+## with a CHAT context from the speaker's session; the reply sink is a list instead of an RPC, since an adopted session has no socket.
 func _say(speaker: DotClientSession, line: String) -> PackedStringArray:
 	_replies.clear()
 	var trimmed := line.trim_prefix("!").strip_edges()

@@ -4,13 +4,8 @@ const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 
-## Bots roaming an imported map must find a player who stands still: some bot must come within
-## [constant REACH] m of the player inside [constant SECONDS] s. Prints the time per map.
-##
-## [codeblock]
-## ./game.sh test headless_bot_seek            # the default maps
-## godot --headless --path . res://examples/headless_bot_seek.tscn -- crackhouse gg-woods
-## [/codeblock]
+## Bots roaming an imported map must find a player who stands still: some bot must come within [constant REACH] m of the player inside [constant SECONDS] s. Prints the time per map.
+## Run: [code]./game.sh test headless_bot_seek[/code], or with map names after [code]--[/code].
 const TICK_RATE := 64
 const BOTS := 4
 const SECONDS := 120.0

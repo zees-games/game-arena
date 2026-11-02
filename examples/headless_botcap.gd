@@ -6,11 +6,8 @@ const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 
-## `bot_quota N` with `sv_maxplayers 0` (unlimited) spawns exactly N bots in the arena, for N past every number a cap might hide at (16, 32, 64, 255, 256). No silent clamp.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_botcap.tscn
-## [/codeblock]
+## `bot_quota N` with `sv_maxplayers 0` (unlimited) spawns exactly N bots, for N past every number a cap might hide at (16, 32, 64, 255, 256). No silent clamp.
+## Run: [code]godot --headless --path . res://examples/headless_botcap.tscn[/code]
 
 const PORT := 27086
 const SERVER_DIR := "user://arena_botcap"
@@ -129,12 +126,8 @@ func _build() -> bool:
 	_module.set_physics_process(false)
 	_game.match_node.rules.min_players = 1
 
-	# Snapshots go nowhere. The three sessions are adopted, which is dot-server's own
-	# documented way to populate the session table without a socket — so there is no
-	# peer behind them, and the netcode's real send would be an engine RPC error per peer
-	# per tick: 1,287 lines on the first run, burying the one line this suite exists to
-	# print. The server's tick path is otherwise the real one; whether a CLIENT predicts a
-	# forced noclip is headless_net's question.
+	# Snapshots go nowhere: the three sessions are adopted (dot-server's way to fill the session table without a socket), so a real send
+	# would be an engine RPC error per peer per tick, burying this suite's output. The tick path is otherwise the real one.
 	_module.net.send_fn = func(_peer: int, _payload: PackedByteArray, _delivery: int) -> void:
 		pass
 

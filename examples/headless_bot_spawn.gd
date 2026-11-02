@@ -4,13 +4,8 @@ const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 
-## Bots set loose on each imported map must leave their spawns: no bot may move less than
-## [constant MIN_MOVE] m in [constant SECONDS] s. Prints one measured line per map.
-##
-## [codeblock]
-## ./game.sh test headless_bot_spawn            # the default maps
-## godot --headless --path . res://examples/headless_bot_spawn.tscn -- crackhouse gg-woods
-## [/codeblock]
+## Bots set loose on each imported map must leave their spawns: no bot may move less than [constant MIN_MOVE] m in [constant SECONDS] s. Prints one line per map.
+## Run: [code]./game.sh test headless_bot_spawn[/code], or with map names after [code]--[/code].
 const TICK_RATE := 64
 const BOTS := 8
 const SECONDS := 20.0

@@ -1,12 +1,7 @@
 extends Node
 
-## Every weapon kind dropped by a kill (the game's own death drop, from a live game) at spots over
-## dm_atrium (open floor, plinth, stairs, beside walls): after settling, the client's lowest mesh
-## point is not below the surface, the drop does not jitter, and it came to rest.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_weapondrop_death.tscn
-## [/codeblock]
+## Every weapon kind dropped by a kill (the game's own death drop, from a live game) at spots over dm_atrium (open floor, plinth, stairs, beside walls): after settling, the client's lowest mesh point
+## is not below the surface, the drop does not jitter, and it came to rest. Run: [code]godot --headless --path . res://examples/headless_weapondrop_death.tscn[/code]
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMode := preload("../game/arena_mode.gd")

@@ -1,13 +1,8 @@
 extends Node
 
-## Dropped weapons at rest on a server (no drawing: a plain box) and on a client (the real model),
-## over flat floor, ramp, stairs, a crate, a bumpy trimesh floor, a wall, and the spawn floors of
-## imported maps, dropped still and thrown: after 10 s the client's lowest mesh point is not below
-## the surface, the drop does not jitter, and the client's box is the server's box.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_weapondrop_depth.tscn
-## [/codeblock]
+## Dropped weapons at rest on a server (a plain box) and on a client (the real model), over flat floor, ramp, stairs, a crate, a bumpy trimesh floor, a wall and imported maps' spawn floors, dropped still and thrown:
+## after 10 s the client's lowest mesh point is not below the surface, the drop does not jitter, and the client's box is the server's box.
+## Run: [code]godot --headless --path . res://examples/headless_weapondrop_depth.tscn[/code]
 
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
