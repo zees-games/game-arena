@@ -130,6 +130,9 @@ func attach(p_map: Object, p_nav: DotBotNav, data: Dictionary) -> void:
 	map = p_map
 	nav = p_nav
 	var units := float(data.get("units", UNITS))
+	var planned_on := String(data.get("nav", ""))
+	if planned_on != nav_signature(nav):
+		DotLog.warn(CHANNEL, "ride cache planned on another nav bake: edges may land off the mesh and be skipped; replan with tools/surf_rides_all.py --replan", {"map": str(map.get("id")), "cached": planned_on, "baked": nav_signature(nav)})
 	for row: Dictionary in data.get("edges", []):
 		var from := _vector(row.get("from", []), units)
 		var to := _vector(row.get("to", []), units)
@@ -161,7 +164,7 @@ static func course_for(p_map: Object, p_nav: DotBotNav, from: Vector3, to: Vecto
 	course.nav = p_nav
 	course.start = from
 	course.goal_centre = to
-	course.landing_island = p_nav.island_at(to, 1.0)
+	course.landing_island = landing_island_at(p_nav, to)
 	course.landing_islands = landing_floor(p_nav, course.landing_island)
 	course.gravity = 800.0 * UNITS
 	var bounds: AABB = p_map.get("bounds")
@@ -174,6 +177,24 @@ static func course_for(p_map: Object, p_nav: DotBotNav, from: Vector3, to: Vecto
 	var _settled := course.settle()
 	course.start_yaw = course.reference_yaw() if is_nan(yaw) else yaw
 	return course
+
+
+## Identifies the baked mesh a cache was planned on (polygon and vertex counts, hash of the vertices to 1 cm).
+static func nav_signature(p_nav: DotBotNav) -> String:
+	var vertices := p_nav.mesh.get_vertices()
+	var rounded := PackedVector3Array()
+	for v in vertices:
+		rounded.append(v.snapped(Vector3.ONE * 0.01))
+	return "%d:%d:%d" % [p_nav.mesh.get_polygon_count(), vertices.size(), hash(rounded)]
+
+
+## The island under [param to], or the one at the nearest mesh point within [constant LANDING_SNAP]: a landing is the mesh point nearest where a ride ended on the bake that explored it, which a bake with a bigger hull leaves a hand's breadth outside the platform.
+static func landing_island_at(p_nav: DotBotNav, to: Vector3) -> int:
+	var island := p_nav.island_at(to, 1.0)
+	if island >= 0:
+		return island
+	var snapped := p_nav.closest(to)
+	return p_nav.island_at(snapped, 1.0) if snapped.distance_to(to) <= LANDING_SNAP else -1
 
 
 ## [param island] and every island whose outline comes within [constant FLOOR_JOIN] metres of
@@ -198,6 +219,9 @@ static func landing_floor(p_nav: DotBotNav, island: int) -> PackedInt32Array:
 const LANDED_FALL := 3.0
 
 const FLOOR_JOIN := 1.5
+
+## How far a cached landing may sit off the mesh and still count as on its nearest island, metres.
+const LANDING_SNAP := 0.5
 const FLOOR_STEP := 3.0
 
 
