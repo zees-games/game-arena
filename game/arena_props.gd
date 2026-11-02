@@ -45,6 +45,13 @@ const PALLET := &"arena_pallet"
 ## A prop was spawned by somebody. Carries the player id, for a stat.
 signal prop_spawned(player_id: int, prop: DotPropInstance)
 
+## A prop broke on the server; the net layer tells clients, and the break effect plays from this on every end.
+signal prop_broke(material: String, at: Vector3)
+
+const PropTarget := preload("arena_prop_target.gd")
+
+var prop_damage: DotPropDamage = null
+
 @export_group("Rules")
 
 ## Whether players may spawn props at all.
@@ -106,6 +113,14 @@ func setup() -> DotResult:
 	add_child(spawner)
 
 	spawner.spawned.connect(_on_spawned)
+
+	prop_damage = DotPropDamage.new()
+	prop_damage.name = "PropDamage"
+	prop_damage.spawner_ref = DotNodeRef.of_path(NodePath("../PropSpawner"))
+	prop_damage.authoritative = game.is_authority
+	add_child(prop_damage)
+	prop_damage.broken.connect(_on_prop_broken)
+	add_to_group(&"arena_props")
 
 	game.map_changed.connect(_on_map_changed)
 
@@ -189,6 +204,7 @@ static func _crate() -> DotPropDef:
 	def.size = DotPropDef.Size.SMALL
 	def.mass = 35.0
 	def.cost = 1
+	def.max_health = 50.0
 	return def
 
 
@@ -199,6 +215,8 @@ static func _barrel() -> DotPropDef:
 	def.size = DotPropDef.Size.MEDIUM
 	def.mass = 90.0
 	def.cost = 2
+	def.max_health = 80.0
+	def.material = &"metal"
 	return def
 
 
@@ -225,6 +243,7 @@ static func _pallet() -> DotPropDef:
 	# to shoot it or push it — which is what makes the mass limit a rule somebody can
 	# feel rather than a number in a config.
 	def.mass = 260.0
+	def.max_health = 120.0
 	def.cost = 3
 	return def
 
@@ -521,10 +540,19 @@ func _on_spawned(prop: DotPropInstance) -> void:
 	if game != null and game.player_stack != null and prop.node != null:
 		var _put := game.player_stack.classify(prop.node, &"prop")
 
+	if prop.node is RigidBody3D and prop_damage != null and prop.def != null and prop.def.max_health > 0.0 and prop.node.get_script() == null:
+		prop.node.set_script(PropTarget)
+		prop.node.set(&"damage", prop_damage)
+		prop.node.set(&"prop_id", prop.instance_id)
+
 	prop_spawned.emit(owner_id, prop)
 
 	if owner_id > 0 and game != null and game.progress != null:
 		game.progress.record(owner_id, ArenaStats.PROPS_SPAWNED)
+
+
+func _on_prop_broken(prop: DotPropInstance, at: Vector3, _by: StringName) -> void:
+	prop_broke.emit(String(prop.def.material) if prop.def != null else "wood", at)
 
 
 func _on_map_changed(_map: ArenaMap) -> void:

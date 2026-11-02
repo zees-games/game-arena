@@ -158,13 +158,17 @@ static func _swap_glass(body: StaticBody3D, id: String, dir: String) -> void:
 			solids.append(child)
 	var swapped := 0
 	for rec: Dictionary in got.breakables():
-		if str(rec.get("glass", "")).is_empty() or rec.get("model") == null:
+		if rec.get("model") == null:
 			continue
+		var kind := str(rec.get("glass", "")) if rec.get("glass") != null else ""
+		if kind.is_empty():
+			var mi := int(rec.get("material", 1))
+			kind = DotMapBreakable.MATERIALS[mi] if mi >= 0 and mi < DotMapBreakable.MATERIALS.size() else "wood"
 		var model := int(rec["model"])
 		var pane := DotMapGlass.new()
 		pane.name = "breakable_%d" % model
 		pane.model = model
-		pane.kind = StringName(str(rec["glass"]))
+		pane.kind = StringName(kind)
 		pane.health = float(rec.get("health", 1.0))
 		pane.collision_mask = 0
 		pane.position = got.model_origin(model)

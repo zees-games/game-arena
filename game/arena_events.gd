@@ -110,6 +110,10 @@ enum Kind {
 	##
 	## After MAP_STATE, for the reason VOTE gives.
 	PANE_BROKEN,
+	## A prop broke on the server: its material (as the kind id) and where, for the break effect. Not repeated at signon.
+	##
+	## After PANE_BROKEN, for the reason VOTE gives.
+	PROP_BROKEN,
 }
 
 enum Ask {

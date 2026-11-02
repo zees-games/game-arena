@@ -5,6 +5,10 @@ extends "arena_net_toys.gd"
 func _watch_panes() -> void:
 	if net == null or not net.is_server or game == null or not is_inside_tree():
 		return
+	var props := get_tree().get_first_node_in_group(&"arena_props")
+	if props != null and not props.has_meta(&"arena_watched"):
+		props.set_meta(&"arena_watched", true)
+		props.connect(&"prop_broke", _on_prop_broke)
 	for pane: Node in get_tree().get_nodes_in_group(&"dot_map_glass"):
 		if pane.has_meta(&"arena_watched"):
 			continue
@@ -20,6 +24,24 @@ func _send_event(peer_id: int, kind: int, body: PackedByteArray) -> void:
 func _on_pane_broken(at: Vector3, _by: StringName, pane: Node) -> void:
 	_pane_fx(pane, at)
 	_send_event(0, ArenaEvents.Kind.PANE_BROKEN, ArenaEvents.write_taken(int(pane.get("model")), 0))
+
+
+func _on_prop_broke(material: String, at: Vector3) -> void:
+	_burst_at(material, at)
+	_send_event(0, ArenaEvents.Kind.PROP_BROKEN, ArenaEvents.write_npc(0, StringName(material), at))
+
+
+## Client: a prop the server broke.
+func _apply_prop_broken(reader: DotNetReader) -> void:
+	var told := ArenaEvents.read_npc(reader)
+	if bool(told["ok"]) and is_inside_tree():
+		_burst_at(String(told["kind_id"]), told["position"])
+
+
+func _burst_at(material: String, at: Vector3) -> void:
+	var fx := get_tree().get_first_node_in_group(&"arena_break_fx") as DotFxBreak
+	if fx != null:
+		var _n := fx.burst(material, at, Vector3.UP, 1.0)
 
 
 ## Tells a joiner which panes are already gone.
