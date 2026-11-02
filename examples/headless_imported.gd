@@ -4,6 +4,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaModes := preload("../game/arena_modes.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
+const ArenaPaths := preload("../game/arena_paths.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
@@ -92,6 +93,7 @@ func _run() -> void:
 	_test_catalogue()
 	_test_lighting()
 	_test_worlds()
+	_test_prop_visuals()
 
 	if not await _test_loads():
 		_finish()
@@ -242,6 +244,40 @@ func _test_worlds() -> void:
 	for ext in ["json", "bin"]:
 		FileAccess.open(wdir.path_join("surf_grave_reloaded." + ext), FileAccess.WRITE).store_string("x")
 	_check(ArenaBspMap.world_prefix("surf_grave_reloaded", mount) == wdir.path_join("surf_grave_reloaded"), "a delivered map's own worlds/ wins over the linked root")
+	_done()
+
+
+func _test_prop_visuals() -> void:
+	_section("no prop collides without a visual: every library model a world's prop names is on disk")
+	var worlds := 0
+	var props := 0
+	var unseen: Array[String] = []
+	for root in [ArenaBspMap.WORLD_ROOT, ArenaBspMap.WORLD_ROOT_DM]:
+		var base := ArenaPaths.rebase(root)
+		for id in DirAccess.get_directories_at(base):
+			var manifest := base.path_join(id).path_join(id + ".json")
+			if not FileAccess.file_exists(manifest):
+				continue
+			var doc: Variant = JSON.parse_string(FileAccess.get_file_as_string(manifest))
+			if not doc is Dictionary:
+				continue
+			worlds += 1
+			var licence: Dictionary = (doc as Dictionary).get("licence", {})
+			var store := base.path_join(id).path_join(str(licence.get("model_store", "model-library"))).simplify_path()
+			var files := {}
+			for row: Dictionary in licence.get("model_stand_ins", []):
+				if row.has("store_file"):
+					files[str(row["stand_in"])] = str(row["store_file"])
+			for rec: Dictionary in (doc as Dictionary).get("props", []):
+				var stand_in := str(rec.get("stand_in", ""))
+				if not stand_in.begins_with("lib/") or rec.has("box"):
+					continue
+				props += 1
+				if not files.has(stand_in) or not FileAccess.file_exists(store.path_join(files[stand_in])):
+					unseen.append("%s: %s" % [id, stand_in])
+	if worlds == 0:
+		_line("  (no worlds linked: skipped)")
+	_check(unseen.is_empty(), "%d library props over %d worlds all resolve to a model file" % [props, worlds], str(unseen.slice(0, 5)))
 	_done()
 
 
