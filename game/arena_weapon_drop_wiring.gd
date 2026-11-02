@@ -129,6 +129,8 @@ static func look(weapon_id: StringName) -> Node3D:
 	if not (art is ZeeWeaponArt):
 		return null
 	var model := ZeeWorldModel.new()
+	# Its wall probe would slide the mesh out of the collision box beside any wall or step.
+	model.wall_response = false
 	var _drawn := model.equip(art as ZeeWeaponArt)
 	return model
 

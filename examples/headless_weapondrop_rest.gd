@@ -110,9 +110,7 @@ func _run() -> void:
 			var art: Variant = ZeeWeaponArtTable.table().get(w)
 			if not (art is ZeeWeaponArt):
 				return null
-			var m := ZeeWorldModel.new()
-			var _r := m.equip(art as ZeeWeaponArt)
-			return m
+			return (load("res://game/arena_weapon_drop_wiring.gd") as GDScript).call("look", w)
 		drops.rules.lifetime = 0.0
 		drops.rules.max_count = 0
 		world.add_child(drops)
