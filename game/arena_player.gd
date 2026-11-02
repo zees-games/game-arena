@@ -567,18 +567,27 @@ func _run_map_mechanics(start: Vector3, delta: float) -> void:
 	if _map == null or _map.mechanics == null or controller.motor == null:
 		return
 
-	var state := controller.state
-	_map.mechanics.simulate(controller.motor, state, start, delta)
-
-	if not ladder.volumes.is_empty():
-		ladder.update(controller.motor, state)
-
-	if not swim.volumes.is_empty() and state.mode != ladder.mode_id:
-		swim.update(controller.motor, state)
+	step_mechanics(controller.motor, controller.state, start, delta)
 
 	# A push moved the state after the controller wrote it out; the node follows, as the
 	# controller's own publish does, so the muzzle and the hitboxes are where the player is.
-	global_position = state.position
+	global_position = controller.state.position
+
+
+## The map's mechanics for one tick on [param state] under [param motor]: pushes, then the
+## ladder, then the water. A ride's simulator calls this too, or a forecast lands in water
+## the live player floats in.
+func step_mechanics(motor: DotFpsMotor, state: DotFpsState, start: Vector3, delta: float) -> void:
+	if _map == null or _map.mechanics == null:
+		return
+
+	_map.mechanics.simulate(motor, state, start, delta)
+
+	if not ladder.volumes.is_empty():
+		ladder.update(motor, state)
+
+	if not swim.volumes.is_empty() and state.mode != ladder.mode_id:
+		swim.update(motor, state)
 
 
 ## Hands the swim and ladder modes the map's water and ladders, or nothing. A player left
