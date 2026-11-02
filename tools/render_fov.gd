@@ -33,12 +33,14 @@ func _run() -> void:
 	me.health.invulnerable = true
 	var settings = client.get("presentation").settings
 	for combo in args:
+		if String(combo).begins_with("weapons="):
+			continue
 		var parts := String(combo).split(":")
 		var fov := int(parts[0])
 		var vm := int(parts[1]) if parts.size() > 1 else DotMenuStock.VIEWMODEL_FOV
 		var _r1 = settings.set_value(&"field_of_view", fov)
 		var _r2 = settings.set_value(&"viewmodel_fov", vm)
-		for id in [&"sniper", &"rifle"]:
+		for id in _weapons():
 			var _g = me.arsenal.give(id)
 			var _s = me.arsenal.select(me.arsenal.catalogue.get_def(id).slot, 0)
 			await _wait(3.5)
@@ -48,6 +50,17 @@ func _run() -> void:
 			var _saved := root.get_viewport().get_texture().get_image().save_png(path)
 			print("wrote %s (camera fov %.1f, hands scale %.2f)" % [path, me.camera.fov, me.weapons.view_model().scale.x])
 	quit(0)
+
+
+## `weapons=pistol,rifle` as an argument picks the weapons; the default is the sniper and the rifle.
+func _weapons() -> Array:
+	for arg in OS.get_cmdline_user_args():
+		if String(arg).begins_with("weapons="):
+			var ids: Array = []
+			for part in String(arg).substr(8).split(","):
+				ids.append(StringName(part))
+			return ids
+	return [&"sniper", &"rifle"]
 
 
 func _wait(sec: float) -> void:

@@ -1,0 +1,71 @@
+extends DotGameCheckSuite
+
+const ArenaGame := preload("../game/arena_game.gd")
+const ArenaMap := preload("../maps/arena_map.gd")
+
+## The COUNTDOWN-start bulk spawn: the director's cost per player, and what ArenaGame.respawn_player costs, on the largest map.
+const PLAYERS := 11
+const BUDGET_MS := 4.0
+
+
+func _ready() -> void:
+	DotLog.set_level(DotLog.Level.ERROR)
+	_run.call_deferred()
+
+
+func _run() -> void:
+	print("game-arena spawn cost")
+	var maps: Array[StringName] = []
+	for a in OS.get_cmdline_user_args():
+		maps.append(StringName(a))
+	if maps.is_empty():
+		maps = [&"crackhouse", &"dm-overwatch"]
+	var ran := 0
+	for id in maps:
+		if ArenaMap.by_id(id) == null:
+			print("skip %s: not linked" % id)
+			continue
+		await _one(id)
+		ran += 1
+	_report_sections(maps.size(), ran, maps.size(), ran * 2)
+
+
+func _one(id: StringName) -> void:
+	var game := ArenaGame.new()
+	game.tick_rate = 64
+	game.score_limit = 100000
+	game.time_limit_sec = 0.0
+	game.headless = true
+	game.is_authority = true
+	game.register_service = false
+	add_child(game)
+	if not game.setup(ArenaMap.by_id(id)).ok:
+		_check(false, "%s sets up" % id)
+		return
+	for b in PLAYERS:
+		var _a := game.add_player(b + 1, "P%d" % b)
+	game.player_stack.refresh_spawn_rules()
+	game.start(0)
+	game.tick({})
+	var worst_choose := 0.0
+	var sum_choose := 0.0
+	var worst_respawn := 0.0
+	for r in 5:
+		var t_batch := Time.get_ticks_usec()
+		for b in PLAYERS:
+			var t0 := Time.get_ticks_usec()
+			var _c := game.player_stack.choose_spawn(b + 1)
+			var ms := (Time.get_ticks_usec() - t0) / 1000.0
+			worst_choose = maxf(worst_choose, ms)
+			sum_choose += ms
+		for b in PLAYERS:
+			var t0 := Time.get_ticks_usec()
+			var _r := game.respawn_player(b + 1)
+			worst_respawn = maxf(worst_respawn, (Time.get_ticks_usec() - t0) / 1000.0)
+		game.tick({})
+		var _tb := t_batch
+	var mean := sum_choose / float(PLAYERS * 5)
+	print("COST %s: choose_spawn mean %.2f ms worst %.2f ms; respawn_player worst %.2f ms (sites %d)" % [id, mean, worst_choose, worst_respawn, game.player_stack.spawns.sites().size()])
+	_check(mean <= BUDGET_MS, "%s: choose_spawn mean under %.0f ms" % [id, BUDGET_MS], "%.2f ms" % mean)
+	_check(worst_respawn <= BUDGET_MS * 4.0, "%s: respawn_player worst under %.0f ms" % [id, BUDGET_MS * 4.0], "%.2f ms" % worst_respawn)
+	game.queue_free()

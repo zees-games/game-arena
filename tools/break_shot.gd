@@ -52,7 +52,7 @@ func _run(body: Node, fx: DotFxBreak, id: String) -> void:
 				axis = a
 		var n := Vector3.ZERO
 		n[axis] = 1.0
-		var eye := box.get_center() + n * (maxf(box.size.length(), 1.5) * 1.3) + Vector3(0, 0.3, 0)
+		var eye := _clear_eye(box, n, pane)
 		_cam.look_at_from_position(eye, box.get_center(), Vector3.UP)
 		for _i in 6:
 			await process_frame
@@ -64,6 +64,21 @@ func _run(body: Node, fx: DotFxBreak, id: String) -> void:
 		_save("screenshots/%s_break_%s_after.png" % [id, want])
 		print("kind ", pane.get(&"kind"), " health left ", pane.get(&"health"), " broken ", pane.call(&"is_broken"))
 	quit()
+
+
+func _clear_eye(box: AABB, n: Vector3, pane: Node3D) -> Vector3:
+	var space := root.world_3d.direct_space_state
+	var c := box.get_center()
+	var best := c + n * 2.0
+	for dist in [1.0, 1.5, 2.5]:
+		for sgn in [1.0, -1.0]:
+			var eye: Vector3 = c + n * sgn * (maxf(box.size.length(), 1.0) * dist)
+			eye.y += 0.2
+			var q := PhysicsRayQueryParameters3D.create(eye, c)
+			var hit := space.intersect_ray(q)
+			if hit.is_empty() or hit.collider == pane or (hit.position as Vector3).distance_to(c) < 0.6:
+				return eye
+	return best
 
 
 func _box(pane: Node3D) -> AABB:

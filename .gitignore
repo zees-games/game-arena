@@ -103,3 +103,6 @@ __pycache__/
 # The deathmatch and gun game maps: the arena-dm-maps repository, linked here beside the surf maps.
 # bootstrap-link: arena-dm-maps/maps
 /maps/imported_dm
+
+# Git worktrees some sessions put inside the checkout.
+/wt-*/
