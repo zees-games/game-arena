@@ -803,6 +803,8 @@ static func _catalogue() -> DotWeaponCatalogue:
 		var res := _shared_catalogue.validate()
 		if not res.ok:
 			push_error(res.error.message)
+		# Built once at setup, under the loading cover; the first spawn then loads no script.
+		_shared_catalogue.warm_scripts()
 	return _shared_catalogue
 
 
