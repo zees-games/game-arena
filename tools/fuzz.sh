@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Seeded bot-soak sweep: every (map, seed) pair through tools/soak.tscn, one at a time under heavy.
 #   tools/fuzz.sh [--seeds N] [--minutes M] [--maps a,b|all] [--out DIR] [--first-seed S]
+#   add --post to send the summary to the nightly panel's /qa (through dev01)
 #   tools/fuzz.sh --repro MAP SEED [--minutes M]     one pair, full log kept in .godot/fuzz-repro
 # Exit 1 when any pair fails. Default maps: the three built-ins.
 set -u
 cd "$(dirname "$0")/.."
 GODOT="${GODOT:-godot}"
-seeds=3; minutes=1; maps=dm_box,dm_atrium,dm_pit; out=""; first=1; repro=""; rmap=""; rseed=""
+seeds=3; minutes=1; maps=dm_box,dm_atrium,dm_pit; out=""; first=1; post=0; repro=""; rmap=""; rseed=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --seeds) seeds=$2; shift 2 ;;
@@ -14,8 +15,9 @@ while [ $# -gt 0 ]; do
         --maps) maps=$2; shift 2 ;;
         --out) out=$2; shift 2 ;;
         --first-seed) first=$2; shift 2 ;;
+        --post) post=1; shift ;;
         --repro) repro=1; rmap=$2; rseed=$3; shift 3 ;;
-        -h|--help) sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown argument $1" >&2; exit 2 ;;
     esac
 done
@@ -73,3 +75,9 @@ open(out + "/summary.txt", "w").write("\n".join(lines) + "\n")
 print("\n".join(lines))
 sys.exit(1 if bad else 0)
 E2
+rc=$?
+# qa-post.sh lives with the panel on dev01; a repro run is not a sweep result.
+if [ $post -eq 1 ] && [ -z "$repro" ]; then
+    ssh dev01 "f=\$(mktemp) && cat >\$f && QA_URL=http://127.0.0.1:3010 QA_COMMIT=$(git rev-parse HEAD 2>/dev/null) ~/stack/nightly/scripts/qa-post.sh fuzz game-arena \$f; r=\$?; rm -f \$f; exit \$r" <"$out/summary.json" || echo "fuzz: post failed" >&2
+fi
+exit $rc
