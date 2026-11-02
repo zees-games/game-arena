@@ -110,6 +110,8 @@ static func make() -> DotMenuBindings:
 	# M is the map menu, in every game of the family (dot-menu's `dot_menu_maps`).
 	var _m := keys.add_maps("Interface")
 	# B is the loadout menu (dot-menu's `dot_menu_loadout`), where the host has it (API 6).
+	if DotAddonApi.build_level("dot_menu") >= 21 and keys.has_method(&"add_modes"):
+		var _g: Variant = keys.call(&"add_modes", "Interface")
 	if DotAddonApi.build_level("dot_menu") >= 6 and keys.has_method(&"add_loadout"):
 		var _l: Variant = keys.call(&"add_loadout", "Weapons")
 	# Period is the team menu (dot-menu API 17): the teams, or Play and Spectate in a free-for-all.

@@ -156,6 +156,9 @@ func _build_interface() -> void:
 		var maps: Variant = game_menu.call(&"use_maps", map_menu_rows, change_from_menu)
 		if maps is Object:
 			(maps as Object).set(&"noun", "maps and modes")
+			# A mode applies at once (as before); the Game modes tab shows once rows say `kind: "mode"`.
+			if &"mode_group" in maps:
+				(maps as Object).set(&"apply_mode_now", true)
 	_use_loadout_menu()
 	if game_menu.has_method(&"use_teams"):
 		var offer := Callable()
@@ -208,7 +211,7 @@ func _build_interface() -> void:
 
 ## Solo: a map (`map:<id>`) or a mode on this map (`mode:<id>`), now. The game changes and the
 ## level is rebuilt as a server's change would have it rebuilt ([method _on_map_changed]).
-func change_from_menu(id: StringName) -> DotResult:
+func change_from_menu(id: StringName, picked_mode: StringName = &"") -> DotResult:
 	if not _offline:
 		return DotResult.fail(DotError.CODE_STATE, "The server changes the map.")
 	var text := String(id)
@@ -222,6 +225,8 @@ func change_from_menu(id: StringName) -> DotResult:
 		if not built.ok:
 			return built
 		map = built.value
+		if String(picked_mode).begins_with("mode:"):
+			mode = ArenaModes.by_id(StringName(String(picked_mode).substr(5)))
 	elif text.begins_with("mode:"):
 		mode = ArenaModes.by_id(StringName(text.substr(5)))
 		if mode == null:
