@@ -217,6 +217,7 @@ class World:
 		return true
 
 	const SPAWN_THINNING := 25.0
+	const ROAM_PLACES := 24
 
 	static func _near_any(points: PackedVector3Array, at: Vector3, within: float) -> bool:
 		for point in points:
@@ -288,6 +289,8 @@ class World:
 		if join_edges and DotAddonApi.build_level("dot_bot") >= 12:
 			_edges = DotBotLinks.new()
 			_edges.join(nav)
+		if DotAddonApi.build_level("dot_bot") >= 13:
+			extra_waypoints = nav.spread_points(ROAM_PLACES, DotRandomStream.new(7919, &"roam"))
 		var mechanics: Variant = (game.get("map") as Object).get("mechanics")
 		if DotAddonApi.build_level("dot_bot") < 10 or not (mechanics is Object) or (mechanics as Object).get("ladders").is_empty():
 			return
