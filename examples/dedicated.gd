@@ -33,9 +33,11 @@ const SERVER_DIR := "user://arena_dedicated"
 ## Unique and lowercase because the site made it so. Display only, never proof.
 const APP_URL := "arena"
 
-## Every check this suite runs. It has no section counter, so this is its only guard
-## against a runtime error that aborts a function part-way. See docs/testing.md.
+const SECTIONS := 15
 const CHECKS := 190
+
+var _entered := 0
+var _finished := 0
 
 
 var _server: DotServer = null
@@ -109,7 +111,8 @@ func _run() -> void:
 	_cleanup()
 
 	# The copy of this suite that the exit probe runs does not run the probe itself.
-	_report(CHECKS - (EXIT_PROBE_CHECKS if _is_exit_probe() else 0))
+	var probe_copy := _is_exit_probe()
+	_report_sections(_entered, _finished, SECTIONS - (1 if probe_copy else 0), CHECKS - (EXIT_PROBE_CHECKS if probe_copy else 0))
 
 
 func _cleanup() -> void:
@@ -212,6 +215,7 @@ func _teardown() -> void:
 # --- Checks ----------------------------------------------------------------
 
 func _test_module_loaded() -> void:
+	_begin()
 	print("")
 	print("the module")
 
@@ -314,6 +318,7 @@ func _test_module_loaded() -> void:
 			and map_command.allows_chat(_server.console.chat_commands_are_open()),
 		"and changing the map is typable in chat by whoever holds changemap, and nobody else"
 	)
+	_end()
 
 
 # --- The rest of the server -------------------------------------------------
@@ -324,6 +329,7 @@ func _test_module_loaded() -> void:
 ## all of them up in one process on one [DotServer], with dot-moderation before the two routers
 ## that look up its `dot_mute_source` (a router that starts first enforces no gag).
 func _test_services() -> void:
+	_begin()
 	print("")
 	print("chat, voice and moderation")
 
@@ -469,11 +475,13 @@ func _test_services() -> void:
 			"and a stock avatar conforms to the schema it was built from",
 			str(conformed.error)
 		)
+	_end()
 
 
 ## maps.yml on the live module: a map outside the active rotation stays installed and is never
 ## chosen, balloted or nominated; a rotation switch takes effect; a renamed command exists.
 func _test_map_rotation_file() -> void:
+	_begin()
 	print("")
 	print("maps.yml")
 
@@ -570,6 +578,7 @@ func _test_map_rotation_file() -> void:
 		all_in = all_in and def.in_rotation
 	_check(all_in, "with no file every map is in rotation again")
 	_check(module._rotation_commands.call().is_empty(), "and no command is renamed")
+	_end()
 
 
 ## The vote and map clocks, the ballot's ids and cooldown, and dot-vote's commands.
@@ -649,6 +658,7 @@ func _test_vote_wiring(module: ArenaModule, options: Array) -> void:
 
 ## dot-map and dot-vote, on a server with a rotation and a ballot.
 func _test_maps_and_vote() -> void:
+	_begin()
 	print("")
 	print("maps and the vote")
 
@@ -859,12 +869,14 @@ func _test_maps_and_vote() -> void:
 
 	module.vote.cue_due.disconnect(probe)
 	module.vote.director.cancel_countdown()
+	_end()
 
 
 ## [b]`time_up: finish_round` waits for a round being played, never for warmup.[/b] Run on a
 ## director of its own carrying the game's `round_in_progress_fn`; the match state is set by
 ## hand and put back.
 func _test_finish_round_waits_for_a_live_round() -> void:
+	_begin()
 	print("")
 	print("finish_round waits for a live round, not warmup")
 	var module := _server.modules.get_module("arena") as ArenaModule
@@ -899,6 +911,7 @@ func _test_finish_round_waits_for_a_live_round() -> void:
 	match_node.state = was
 	warm.queue_free()
 	live.queue_free()
+	_end()
 
 
 ## A director under `time_up: finish_round` carrying [param hook], its clock run out with a
@@ -952,6 +965,7 @@ func _finish_round_probe(hook: Callable, applied: Array) -> DotVoteDirector:
 ## [b]dot-browser is the client half and has never asked a real DotServer anything.[/b] This is
 ## the server half: a query provider contributing the numbers a browser filters on.
 func _test_query() -> void:
+	_begin()
 	print("")
 	print("the server browser's half")
 
@@ -980,11 +994,13 @@ func _test_query() -> void:
 		"and the query's own map field names it too, not the content id",
 		_server.games.reported_map()
 	)
+	_end()
 
 
 ## dot-browser asking a real [DotServer]: a real UDP round trip between two objects in one
 ## process, the shape a player opening a server list is in.
 func _test_browser() -> void:
+	_begin()
 	print("")
 	print("a browser asking this server")
 
@@ -1089,9 +1105,11 @@ func _test_browser() -> void:
 
 	browser.queue_free()
 	remove_child(browser)
+	_end()
 
 
 func _test_client_spawn() -> void:
+	_begin()
 	print("")
 	print("a client spawning")
 
@@ -1163,9 +1181,11 @@ func _test_client_spawn() -> void:
 	_check(sync != null and sync.peers.has(4242) and announced == [String(_game.map.id)],
 		"its READY admits it and announces the server's map (%s), once" % _game.map.id,
 		str(announced))
+	_end()
 
 
 func _test_commands() -> void:
+	_begin()
 	print("")
 	print("its commands")
 
@@ -1225,11 +1245,13 @@ func _test_commands() -> void:
 	var restored := _server.console.execute("arena_mode %s" % was)
 	_check(restored.ok, "and it changes back", str(restored.error))
 	_check(_game.mode.id == StringName(was), "to the mode it started on")
+	_end()
 
 
 ## The match cvars on a real console. `set_cvar` is the path a game.yml / content.yml value
 ## takes after the module loads; `execute` is the console's and rcon's.
 func _test_match_cvars() -> void:
+	_begin()
 	print("")
 	print("the match cvars")
 
@@ -1285,11 +1307,13 @@ func _test_match_cvars() -> void:
 	var _b := _server.console.set_cvar("arena_timelimit", "600")
 	var _c := _server.console.set_cvar("arena_warmup", "-1")
 	var _d := _server.console.set_cvar("arena_minplayers", str(was_min))
+	_end()
 
 
 ## B's server half: the `loadout` command and the owner's mp_loadout_* cvars, enforced HERE,
 ## whatever a client's screen showed. From the session the client-spawn section adopted (77).
 func _test_loadout_command() -> void:
+	_begin()
 	print("\nthe loadout command and the owner's rules")
 
 	var cmd: Object = _game.loadout_command
@@ -1366,6 +1390,7 @@ func _test_loadout_command() -> void:
 	_check(bool(only.get("ok", false)) and (after.value as DotLoadout).item_in(&"secondary") == sec_before,
 		"mp_loadout_random_slots primary leaves the other slots as they were", str(only))
 	var _r_clear := _server.console.set_cvar("mp_loadout_random_slots", "")
+	_end()
 
 
 ## Waits [param seconds] of the server's own physics ticks.
@@ -1375,6 +1400,7 @@ func _wait_ticks(seconds: float) -> void:
 
 
 func _test_bots() -> void:
+	_begin()
 	print("")
 	print("bots")
 
@@ -1391,6 +1417,7 @@ func _test_bots() -> void:
 	_check(module.bridge.bot_ids().is_empty(), "bot_quota_mode off takes them all out",
 		"%d left" % module.bridge.bot_ids().size())
 	_server.console.execute("bot_quota_mode fill")
+	_end()
 
 
 ## Fill mode tops the game up to bot_quota; returns the bot ids that were added.
@@ -1477,6 +1504,7 @@ func _test_bots_fight(module: ArenaModule) -> void:
 
 
 func _test_unload() -> void:
+	_begin()
 	print("")
 	print("unloading")
 
@@ -1508,6 +1536,7 @@ func _test_unload() -> void:
 		_server.console.find_command("arena_status") != null,
 		"with its commands back"
 	)
+	_end()
 
 
 ## [b]The one line that leaked mg-buses-from-hell's whole script graph at exit.[/b] A script
@@ -1517,6 +1546,7 @@ func _test_unload() -> void:
 ## [b]Asserted on the source[/b], because the engine reports the leak after `quit()`: every
 ## message script in `game/`, read as text.
 func _test_no_message_preloads_itself() -> void:
+	_begin()
 	print("")
 	print("exiting clean")
 
@@ -1555,6 +1585,7 @@ func _test_no_message_preloads_itself() -> void:
 		"and none of them preloads itself, which leaks every script at exit",
 		", ".join(offenders)
 	)
+	_end()
 
 
 func _extends_message(source: String) -> bool:
@@ -1657,6 +1688,7 @@ func _drain_exit_probe(pipes: Array[FileAccess], bytes: Array[PackedByteArray]) 
 
 
 func _test_exits_clean(probe: Array) -> void:
+	_begin()
 	print("")
 	print("exiting clean, as a second process saw it")
 
@@ -1686,6 +1718,7 @@ func _test_exits_clean(probe: Array) -> void:
 		"it was killed before it reached its exit" if hung else _line_with(text, "leaked at exit"))
 	_check(not hung and not text.contains("still in use at exit"), "and no resource",
 		"it was killed before it reached its exit" if hung else _line_with(text, "still in use at exit"))
+	_end()
 
 
 func _line_with(text: String, needle: String) -> String:
@@ -1698,3 +1731,11 @@ func _line_with(text: String, needle: String) -> String:
 func _last_lines(text: String, count: int) -> String:
 	var lines := text.strip_edges().split("\n")
 	return "\n".join(lines.slice(maxi(0, lines.size() - count)))
+
+
+func _begin() -> void:
+	_entered += 1
+
+
+func _end() -> void:
+	_finished += 1

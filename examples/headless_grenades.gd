@@ -19,10 +19,13 @@ const ArenaNpcs := preload("../game/arena_npcs.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
+const EXPECTED_SECTIONS := 4
 const EXPECTED_CHECKS := 32
 
 var _checks := 0
 var _failed := 0
+var _entered := 0
+var _finished := 0
 
 
 func _ready() -> void:
@@ -148,12 +151,15 @@ func _run() -> void:
 	await _test_flash_and_smoke(game, thrower, enemy, here, seen)
 	await _test_monsters(game, thrower, here)
 
-	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
+	print("")
+	print("%d sections entered, %d finished" % [_entered, _finished])
+	var ok := _failed == 0 and _entered == EXPECTED_SECTIONS and _finished == EXPECTED_SECTIONS and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
 	get_tree().quit(0 if ok else 1)
 
 
 func _test_loadout(game: ArenaGame) -> void:
+	_entered += 1
 	var cat := ArenaContent.catalogue()
 	var flash := cat.find(&"flash")
 	_check(flash != null and not flash.free, "the flash is not a free item")
@@ -164,9 +170,11 @@ func _test_loadout(game: ArenaGame) -> void:
 	var on: DotLoadoutEntitlements = game.loadouts.entitlement_source.call("k")
 	_check(on.allows(flash) and on.allows(cat.find(&"smoke")) and on.allows(cat.find(&"incendiary")), "sv_grenade_utility 1: flash, smoke and incendiary are allowed")
 	game.utility_grenades = false
+	_finished += 1
 
 
 func _test_flash_and_smoke(game: ArenaGame, thrower: int, enemy: int, here: Vector3, seen: Array) -> void:
+	_entered += 1
 	seen.clear()
 	var victim := game.player_for(enemy)
 	victim.spawn(Transform3D(Basis(), here), game.team_of(enemy))
@@ -201,10 +209,12 @@ func _test_flash_and_smoke(game: ArenaGame, thrower: int, enemy: int, here: Vect
 	_check(bots.sight_blockers.size() == 1 and not bots.line_of_sight(Vector3(0.0, 4.0, -9.0), Vector3(0.0, 4.0, 5.0)) and bots.line_of_sight(Vector3(0.0, 40.0, -9.0), Vector3(0.0, 40.0, 5.0)), "the smoke cloud blocks the bots' line of sight")
 	var self_hp_ok: bool = game.combat.health_of(enemy).health > 0.0
 	_check(self_hp_ok, "neither deals damage on its own")
+	_finished += 1
 
 
 ## The horde: a flash blinds the monster beside it and not the far one, smoke blocks the horde's sight.
 func _test_monsters(game: ArenaGame, thrower: int, here: Vector3) -> void:
+	_entered += 1
 	var horde := ArenaHorde.new()
 	horde.name = "Horde"
 	horde.game = game
@@ -263,9 +273,11 @@ func _test_monsters(game: ArenaGame, thrower: int, here: Vector3) -> void:
 	_check(not horde.senses.sight_blocked(here + Vector3(0.0, 30.0, -8.0), here + Vector3(0.0, 30.0, 8.0)), "and not above it")
 	game.horde = null
 	horde.queue_free()
+	_finished += 1
 
 
 func _test_wire() -> void:
+	_entered += 1
 	var bytes := ArenaEvents.write_grenade_fx(ArenaGrenades.Fx.BLIND, Vector3(12.5, 1.0, -30.0), 0.0, 3.5, 7)
 	var back := ArenaEvents.read_grenade_fx(DotNetReader.new(bytes))
 	_check(bool(back["ok"]) and int(back["fx"]) == ArenaGrenades.Fx.BLIND and int(back["victim"]) == 7, "GRENADE_FX round-trips its kind and victim")
@@ -275,3 +287,4 @@ func _test_wire() -> void:
 	var soft := ArenaEvents.read_grenade_fx(DotNetReader.new(ArenaEvents.write_grenade_fx(ArenaGrenades.Fx.BLIND, Vector3.ZERO, 0.0, 3.0, 7, 0.4)))
 	_check(absf(float(soft["strength"]) - 0.4) < 0.04 and absf(float(back["strength"]) - 1.0) < 0.001, "GRENADE_FX carries the flash strength, full by default")
 	_check(ArenaEvents.Kind.GRENADE_FX == ArenaEvents.Kind.STOMP + 1, "the kind is appended right after STOMP")
+	_finished += 1

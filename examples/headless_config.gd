@@ -13,7 +13,11 @@ const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ROOT := "user://arena_cfgtest"
 const GAME := "game-arena"
+const SECTIONS := 5
 const CHECKS := 43
+
+var _entered := 0
+var _finished := 0
 
 
 func _ready() -> void:
@@ -76,17 +80,14 @@ func _run() -> void:
 	_layers()
 	_templates(binder)
 	_workbench(binder, game)
-	print("%d passed, %d failed" % [_passed, _failed])
 	horde.free()
 	game.free()
-	if _passed + _failed != CHECKS:
-		_failed += 1
-		print("FAIL: expected %d checks" % CHECKS)
-	get_tree().quit(1 if _failed > 0 else 0)
+	_report_sections(_entered, _finished, SECTIONS, CHECKS)
 
 
 ## sv_falldamage: the controller's landed(impact) is what the component hears.
 func _falls(game: ArenaGame) -> void:
+	_begin()
 	var faller := game.player_for(1)
 	var fall := faller.get_node_or_null("FallDamage") as DotFallDamage
 	_check(game.fall_rules.enabled and fall != null, "fall damage is on, a component per player")
@@ -108,6 +109,7 @@ func _falls(game: ArenaGame) -> void:
 	game.map.movement_profile = &""
 	faller.controller.landed.emit(60.0)
 	_check(150.0 - faller.health.health <= game.fall_rules.max_damage and faller.health.health > 0.0, "a huge drop is capped, never lethal")
+	_end()
 
 
 ## Child process: loads the layers strictly over the test root and prints what the live config holds.
@@ -119,6 +121,7 @@ class _Member extends RefCounted:
 
 ## Stats go under dot-game's stable per-server key once a session is known, the seat's key without one.
 func _stats_keys(game: ArenaGame) -> void:
+	_begin()
 	var p := game.progress
 	if not _check(p != null, "the authority keeps progress"):
 		return
@@ -134,6 +137,7 @@ func _stats_keys(game: ArenaGame) -> void:
 	p.session_fn = Callable()
 	_check(p._key_of(3) == ArenaGame.storage_key(3), "with no session, the seat's key")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
+	_end()
 
 
 func _probe() -> void:
@@ -168,6 +172,7 @@ func _child() -> String:
 
 ## A value set in a cfg file, the environment and argv each reaches the live config, and later layers win.
 func _layers() -> void:
+	_begin()
 	_write("game/%s/config_horde/game.yml" % GAME, "horde_cap: 77\n")
 	_write("game/%s/config_awards/game.yml" % GAME, "award_nemesis_at: 4\n")
 	_write("game/%s/config_match/game.yml" % GAME, "respawn_delay_sec: 2.0\n")
@@ -183,10 +188,12 @@ func _layers() -> void:
 	_check(_child().contains("PROBE ok=false"), "strict: a key in the wrong file is refused")
 	for f in ["config_horde", "config_awards", "config_match"]:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(ROOT.path_join("game/%s/%s/game.yml" % [GAME, f])))
+	_end()
 
 
 ## The shipped cfg files hold every key, in step with ArenaConfig, and change nothing as they are.
 func _templates(binder: DotGameConfigBinder) -> void:
+	_begin()
 	var files := binder.template_files()
 	_check(files.size() == 5, "five shipped cfg files: " + str(files.size()))
 	var stale := PackedStringArray()
@@ -194,10 +201,12 @@ func _templates(binder: DotGameConfigBinder) -> void:
 		if not FileAccess.file_exists("res://" + path) or FileAccess.get_file_as_string("res://" + path) != files[path]:
 			stale.append(path)
 	_check(stale.is_empty(), "the shipped files match the config (run addons/dot_game/qa/dot_game_cfg_templates.gd): " + ",".join(stale))
+	_end()
 
 
 ## Every key is listed by the workbench, an edit lands in the right file, and the ambience cvars are a set.
 func _workbench(binder: DotGameConfigBinder, game: Node) -> void:
+	_begin()
 	var keys := PackedStringArray()
 	for e: Dictionary in binder.schema():
 		keys.append(e["key"])
@@ -238,3 +247,12 @@ func _workbench(binder: DotGameConfigBinder, game: Node) -> void:
 	console.free()
 	_check(int(ProjectSettings.get_setting("physics/common/physics_ticks_per_second")) == ArenaGame.DEFAULT_TICK_RATE, "project.godot's physics rate is ArenaGame.DEFAULT_TICK_RATE")
 	_check(game.config.tick_rate == ArenaGame.DEFAULT_TICK_RATE and ArenaGame.snapshot_rate_for(ArenaGame.DEFAULT_TICK_RATE) == 33, "the config default is the one rate and its snapshot rate is whole ticks")
+	_end()
+
+
+func _begin() -> void:
+	_entered += 1
+
+
+func _end() -> void:
+	_finished += 1

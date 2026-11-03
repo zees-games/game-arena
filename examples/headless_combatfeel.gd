@@ -18,7 +18,8 @@ const EXPECTED_CHECKS := 36
 
 var _checks := 0
 var _failed := 0
-var _sections := 0
+var _entered := 0
+var _finished := 0
 var _tick := 1
 var _feel: DotGameCombatFeel = null
 var last_slid := false
@@ -35,9 +36,10 @@ func _run() -> void:
 	await _test_recoil()
 	_test_console()
 	_test_wiring()
-	var ok := _failed == 0 and _sections == EXPECTED_SECTIONS and _checks == EXPECTED_CHECKS
-	print("%d checks, %d failed, %d sections of %d (expected %d checks)" % [
-		_checks, _failed, _sections, EXPECTED_SECTIONS, EXPECTED_CHECKS])
+	print("")
+	print("%d sections entered, %d finished" % [_entered, _finished])
+	var ok := _failed == 0 and _entered == EXPECTED_SECTIONS and _finished == EXPECTED_SECTIONS and _checks == EXPECTED_CHECKS
+	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
 	get_tree().quit(0 if ok else 1)
 
 
@@ -95,7 +97,7 @@ func _widest(p: ArenaPlayer, ticks: int, move: Callable, settle: Callable = Call
 
 
 func _test_spread() -> void:
-	_sections += 1
+	_entered += 1
 	print("== spread follows the movement")
 	var p := _player(1)
 	await get_tree().physics_frame
@@ -124,6 +126,7 @@ func _test_spread() -> void:
 	settled = p.arsenal.spread_now()
 	_check(absf(settled - still) < 0.01, "and it settles back once still", "%.3f vs %.3f" % [settled, still])
 	p.queue_free()
+	_finished += 1
 
 
 func _burst(id: int, forward: float, crouch: bool) -> Array:
@@ -142,7 +145,7 @@ func _burst(id: int, forward: float, crouch: bool) -> Array:
 
 
 func _test_recoil() -> void:
-	_sections += 1
+	_entered += 1
 	print("== recoil is a pattern")
 	var a: Array = await _burst(10, 0.0, false)
 	var b: Array = await _burst(11, 0.0, false)
@@ -157,10 +160,11 @@ func _test_recoil() -> void:
 	_check(a.any(func(k: Vector2) -> bool: return k.y > 0.0) and a.any(func(k: Vector2) -> bool: return k.y < 0.0) or a.any(func(k: Vector2) -> bool: return k.y != 0.0), "the pattern has a sideways component", str(yaws.size()))
 	_check(not moving.is_empty() and not a.is_empty() and (moving[0] as Vector2).length() > (a[0] as Vector2).length(), "moving kicks harder than standing")
 	_check(not crouched.is_empty() and not a.is_empty() and (crouched[0] as Vector2).length() < (a[0] as Vector2).length(), "crouching kicks less than standing")
+	_finished += 1
 
 
 func _test_console() -> void:
-	_sections += 1
+	_entered += 1
 	print("== cl_crosshair_* at the console")
 	if _feel.crosshair_cvars == null:
 		_check(false, "dot-ui's crosshair cvars are present")
@@ -178,10 +182,11 @@ func _test_console() -> void:
 	_check(not console.execute("cl_crosshair_size banana").ok, "garbage is refused")
 	_check(console.execute("cl_crosshair_show 0").ok and not cross.visible, "show 0 hides it")
 	cross.queue_free()
+	_finished += 1
 
 
 func _test_wiring() -> void:
-	_sections += 1
+	_entered += 1
 	print("== the opt-in wiring")
 	_check(_feel.spread != null and _feel.recoil != null, "dot-weapon's rules are loaded by path")
 	_check(_feel.sprint == null, "a game may opt out of the sprint rules")
@@ -225,3 +230,4 @@ func _test_wiring() -> void:
 	for cvar in ["arena_speed_scale", "arena_run_speed", "arena_walk_scale", "arena_sprint_scale", "arena_crouch_scale"]:
 		speed_ok = speed_ok and ArenaModuleCvars.MOVEMENT_CVARS.has(cvar) and ArenaPlayer.MOVEMENT_RULES.has(ArenaModuleCvars.MOVEMENT_CVARS[cvar][0])
 	_check(speed_ok, "every speed cvar is a replicated movement rule, so prediction agrees")
+	_finished += 1
