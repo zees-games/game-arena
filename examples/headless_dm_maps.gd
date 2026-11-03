@@ -76,7 +76,7 @@ func _run() -> void:
 		if ArenaImportedMaps.has(StringName(str(want.id))):
 			_check(names.has(wid) and names[wid] != "Combat surf map", "%s is in the picker, not labelled a surf map" % wid)
 	_check(last_dm < first_surf, "deathmatch and gun game maps come before the surf maps")
-	_report_sections(entered + 2, entered + 2, 4, 14 + 5 * found)
+	_report_sections(entered + 2, entered + 2, 4, 19 + 5 * found)
 
 
 ## Solo play with no server: the published maps, their labels and pickability.
@@ -106,6 +106,8 @@ func _test_solo() -> void:
 	var pick := await ArenaMaps.mount_delivered(solo.get_map(&"crackhouse"), DotMapLoader.new(), solo)
 	_check(not pick.ok, "picking an unfetched pack with no cloud client fails")
 	_check(solo.get_map(&"gg-woods") != null, "the failed pick leaves the catalogue usable")
+	var surf := solo.get_map(&"surf_adverse")
+	_check(surf != null and ArenaMaps.is_delivered(surf), "a surf map (prefixed pack file, bare id) counts as delivered")
 
 	print("-- a pack the origin does not have (HTTP 404) says so and leaves the solo list")
 	var fake := _Missing404.new()

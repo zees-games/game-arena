@@ -591,7 +591,7 @@ static func manifest_in_mount(def: DotMapDef) -> String:
 static func is_delivered(def: DotMapDef) -> bool:
 	return (
 		def != null and not def.is_local()
-		and String(def.content_id).get_file() == String(def.id)
+		and String(def.content_id).get_file().trim_prefix(PACK_PREFIX) == String(def.id)
 		and def.scene_path == manifest_in_mount(def)
 	)
 

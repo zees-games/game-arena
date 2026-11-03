@@ -36,7 +36,7 @@ const ROOT := "user://arena_delivered_check"
 const STAGE := "res://.godot/arena_delivered_stage"
 const SECTIONS := 5
 ## Without a frame; two more with `--shot`.
-const CHECKS := 21
+const CHECKS := 22
 
 var _entered := 0
 var _completed := 0
@@ -290,6 +290,7 @@ func _test_surf_keys() -> void:
 	_section("the published surf packs are in the solo list, under their manifest ids")
 	var def := ArenaMaps.delivered_def("gamemann/arena-surf-dm-maps-surf_10x_final@1.2.0")
 	_check(def != null and String(def.id) == "surf_10x_final", "the pack prefix is stripped from the map id (%s)" % (String(def.id) if def != null else "null"))
+	_check(ArenaMaps.is_delivered(def), "a prefixed surf pack counts as delivered (is_delivered)")
 	var surf := 0
 	for key in ArenaMaps.STANDALONE_KEYS:
 		if key.begins_with("gamemann/" + ArenaMaps.PACK_PREFIX) and key.ends_with("@1.2.0"):
