@@ -406,8 +406,10 @@ func list_landings(data: Dictionary) -> void:
 		var row: Dictionary = edges[i]
 		var from := _metres(row["from"])
 		var to := _metres(row["to"])
-		print("[surf] edge %d: from island %d (cached %d), lands on %d (cached %d), planned %s" % [i, nav.island_at(from, 1.0),
-			int(row.get("from_island", -2)), nav.island_at(to, 1.0), int(row.get("to_island", -2)), row.has("lengths")])
+		var off := nav.closest(to).distance_to(to)
+		print("[surf] edge %d: from island %d (cached %d), lands on %d (cached %d; %d bare, %.2f m off the mesh), planned %s" % [i,
+			ArenaSurf.landing_island_at(nav, from), int(row.get("from_island", -2)), ArenaSurf.landing_island_at(nav, to),
+			int(row.get("to_island", -2)), nav.island_at(to, 1.0), off, row.has("lengths")])
 
 
 ## Writes a top-down picture of the map to [param out] (a PNG, [param scale] metres a pixel): the
