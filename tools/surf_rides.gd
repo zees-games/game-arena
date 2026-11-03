@@ -14,28 +14,22 @@ const ArenaSurfRides := preload("../game/arena_surf_rides.gd")
 ##     godot --headless --path . tools/surf_rides.tscn -- surf_10x_reloaded_fixed --explore
 ##     godot --headless --path . tools/surf_rides.tscn -- surf_10x_reloaded_fixed --plan 0 --starts 6 --repairs 32 --rounds 3
 ##
-## [b]--explore[/b] bakes the bots' mesh exactly as the game does, takes its islands, and from
-## every platform that holds a spawn or a teleport's landing searches (dot-bot's
-## [DotBotSurfPlanner], score: distance from the start plus energy) for a ride that ends standing
-## on another platform. The landings tried are the platforms that are not a teleport's floor,
-## lowest first and at least [constant MIN_RIDE_METRES] away; landing on any of them counts.
-## Each one found is an edge; its landing platform is explored in turn (`--platforms N` caps
-## how many are explored from). The edges are written with no rides yet, replacing the file, and
-## rewritten as each is found, so a run its timeout cuts short keeps what it found.
+## [b]--explore[/b] bakes the bots' mesh as the game does and, from every platform that holds a spawn
+## or a teleport's landing, searches (dot-bot's [DotBotSurfPlanner]) for a ride that ends standing on
+## another platform at least [constant MIN_RIDE_METRES] away (not a teleport's floor, lowest first).
+## Each one found is an edge, and its landing is explored in turn (`--platforms N` caps how many).
+## Edges are rewritten as each is found, so a run its timeout cuts short keeps what it found.
 ##
 ## [b]--plan i,j[/b] plans those edges (all, without a list): a ride searched from each of
 ## `--starts` starts perturbed round the edge's start (the first exactly there, standing), then
 ## `--rounds` rounds of repair from `--repairs` more. About twenty minutes an edge on one core:
 ## run one at a time.
 ##
-## [b]--measure[/b] rides every planned edge `--runs` times on the simulator and `--live` times in
-## the game itself, from perturbed starts with the view held on a fixed point (a bot that fights
+## [b]--measure[/b] rides every planned edge `--runs` times on the simulator and `--live` times in the game, from perturbed starts with the view held on a fixed point (a bot that fights
 ## while it rides), and prints how many land and what steering a ride costs.
 ##
-## [b]--demos[/b] lists what the recorder's store (`bot_record_store`, `bot_record_path`) holds for the
-## map, per edge. [b]--harvest[/b] replays every stored ride of the map on the real motor
-## ([code]arena_surf_rides.gd[/code]), keeps the ones that land, marks the rest, and prints each edge's
-## rides ranked next to the planned ones.
+## [b]--demos[/b] lists what the recorder's store holds for the map, per edge. [b]--harvest[/b] replays
+## every stored ride on the real motor, keeps the ones that land, and ranks them with the planned ones.
 ##
 ## For a map that finds nothing: `--probe`, `--section`, `--hold`, `--search`, `--wander`, `--islands` and `--picture` (read the code for arguments).
 ## `--measure --think` drives the live rides through `ArenaBots.think`. Everything is seeded, so two runs print the same numbers.
@@ -44,8 +38,7 @@ const TICK_RATE := 64
 
 ## Platforms smaller than this are not worth a ride (a ramp's walkable seam), m².
 const MIN_ISLAND_AREA := 12.0
-## A landing worth a ride is at least this big, m², at most this far away, metres; this many
-## are tried from each platform; and a map gets at most so many edges.
+## A landing's least area (m²) and farthest distance (m); landings tried per platform; edges per map.
 const LANDING_AREA := 40.0
 const MAX_RIDE_METRES := 450.0
 ## Closer than this is a step off the platform, not a ride.
@@ -118,8 +111,6 @@ func _run() -> void:
 		return
 	if args.has("--islands"):
 		list_islands()
-	if args.has("--landings"):
-		list_landings(_read(path))
 	var picture_at := args.find("--picture")
 	if picture_at >= 0:
 		picture(args[picture_at + 1], 1.0)
@@ -403,19 +394,6 @@ func list_islands() -> void:
 		var to: Vector3 = pits[i]["to"]
 		print("[surf] teleport %d: %s to %s, lands at %s (island %d) yaw %.0f" % [i, str(box.position.round()), str(box.end.round()),
 			str(to.round()), nav.island_at(to, 2.5), float(pits[i]["yaw"])])
-
-
-## Prints, per edge of the cache, the island its start and landing are on in this bake (-1: the edge lands nowhere).
-func list_landings(data: Dictionary) -> void:
-	var units := float(data.get("units", 0.01905))
-	var edges: Array = data.get("edges", [])
-	for i in range(edges.size()):
-		var row: Dictionary = edges[i]
-		var from := _metres(row["from"])
-		var to := _metres(row["to"])
-		print("[surf] edge %d: from island %d (cached %d), lands on %d (cached %d), %.2f m off the mesh (island %d within 4 m), planned %s" % [i,
-			nav.island_at(from, 1.0), int(row.get("from_island", -2)), ArenaSurf.landing_island_at(nav, to), int(row.get("to_island", -2)),
-			nav.closest(to).distance_to(to), nav.island_at(to, 4.0), row.has("lengths")])
 
 
 ## Writes a top-down picture of the map to [param out] (a PNG, [param scale] metres a pixel): the
