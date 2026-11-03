@@ -237,6 +237,18 @@ func _run() -> void:
 	# Warmup, countdown, and the respawn queue placing everybody: about 13 s at 64 ticks.
 	await _wait(32.0)
 
+	# --fp=knife,pistol,smg: the player's own hands at the hip with each gun, for the first-person look.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--fp="):
+			var me: Node = client.get("player")
+			for id in arg.trim_prefix("--fp=").split(",", false):
+				var _given: DotResult = me.arsenal.give(StringName(id))
+				me.arsenal.equip(me.arsenal.catalogue.get_def(StringName(id)).slot)
+				await _wait(2.0)
+				await _shot("fp_%s" % id)
+			quit()
+			return
+
 	if not _stage():
 		quit(1)
 		return
