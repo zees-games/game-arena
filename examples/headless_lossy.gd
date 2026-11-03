@@ -1,6 +1,9 @@
 extends "lossy_windows.gd"
 
 
+const SECTIONS := 14
+
+
 func _ready() -> void:
 	_verbose = "--verbose" in OS.get_cmdline_user_args()
 	DotLog.set_level(DotLog.Level.INFO if _verbose else DotLog.Level.ERROR)
@@ -29,14 +32,7 @@ func _run() -> void:
 	await _teardown()
 	DotPaths.remove_tree(DATA)
 
-	print("")
-	_check(_completed == _entered,
-		"every section ran to its last line (%d of %d)" % [_completed, _entered])
-	_check(_passed + _failed + 1 == CHECKS,
-		"every check ran (%d of %d)" % [_passed + _failed + 1, CHECKS],
-		"a section that aborted part-way stops adding checks, and only a total can show it")
-
-	_report()
+	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
 func _physics_process(delta: float) -> void:

@@ -79,14 +79,7 @@ func _run() -> void:
 	_teardown()
 	DotPaths.remove_tree(SERVER_DIR)
 
-	print("")
-	_check(
-		_completed == _entered and _entered == SECTIONS,
-		"every section ran to its last line (%d of %d, %d expected)" % [_completed, _entered, SECTIONS]
-	)
-
-	print("")
-	_report(CHECKS + 1)
+	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
 func _section(title: String) -> void:

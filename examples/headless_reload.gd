@@ -18,6 +18,7 @@ const PORT := 27096
 const DATA := "user://arena_reload"
 const TICK_RATE := 64
 const MODULE := "res://game/arena_module.gd"
+const SECTIONS := 3
 const CHECKS := 11
 
 var _entered := 0
@@ -45,10 +46,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	DotPaths.remove_tree(DATA)
 
-	print("")
-	_check(_completed == _entered and _entered == 3,
-		"every section ran to its last line (%d of %d)" % [_completed, _entered])
-	_report(CHECKS + 1)
+	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
 func _section(title: String) -> void:

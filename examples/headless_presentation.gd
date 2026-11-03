@@ -59,12 +59,7 @@ func _run() -> void:
 		"the player's own settings file was not touched",
 		ArenaPresentation.PLAYER_SETTINGS
 	)
-	_check(
-		_completed == _entered,
-		"every section ran to its last line (%d of %d)" % [_completed, _entered],
-		"a section that aborted stops adding checks and the total cannot show it"
-	)
-	_report(CHECKS)
+	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
 ## Every key `ArenaClient` reads is a row in `ArenaBindings`; the action names are written out here

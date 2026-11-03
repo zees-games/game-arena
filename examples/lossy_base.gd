@@ -80,7 +80,7 @@ const RELIABLE_SECONDS := 35.0
 ## Checks per window, and outside them.
 const MEASURE_ATTEMPTS := 6
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 59
+const OTHER_CHECKS := 57
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
