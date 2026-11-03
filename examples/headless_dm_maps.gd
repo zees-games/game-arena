@@ -29,7 +29,7 @@ func _run() -> void:
 
 	if resolved.is_empty() or not FileAccess.file_exists(json_path):
 		print("no maps/imported_dm link — nothing more to check (link arena-dm-maps)")
-		_report_sections(2, 2, 2, 13)
+		_report_sections(2, 2, 2, 16)
 		return
 
 	var listed: Array = JSON.parse_string(FileAccess.get_file_as_string(json_path)).get("maps", [])
@@ -76,7 +76,7 @@ func _run() -> void:
 		if ArenaImportedMaps.has(StringName(str(want.id))):
 			_check(names.has(wid) and names[wid] != "Combat surf map", "%s is in the picker, not labelled a surf map" % wid)
 	_check(last_dm < first_surf, "deathmatch and gun game maps come before the surf maps")
-	_report_sections(entered + 2, entered + 2, 4, 11 + 5 * found)
+	_report_sections(entered + 2, entered + 2, 4, 14 + 5 * found)
 
 
 ## Solo play with no server: the published maps, their labels and pickability.
@@ -117,6 +117,21 @@ func _test_solo() -> void:
 	_check(missing.ok or missing.error.detail.contains("not published"), "the cause says it is not published (%s)" % missing.error.detail)
 	_check(solo.get_map(&"crackhouse") == null, "an unpublished map leaves the solo list")
 
+	print("-- a pack already mounted at another version (the Workshop's) is named and fetched at that version")
+	var index := DotContentIndex.new()
+	var _p := index.add_pack({"content_id": "gamemann/crackhouse", "version": "9.9.9", "provides": {}, "session": "solo"})
+	var swapped := ArenaMaps.standalone_keys(DotMapCatalogue.new(), index)
+	_check(swapped.has("gamemann/crackhouse@9.9.9") and not swapped.has("gamemann/crackhouse@1.0.4"),
+		"the mounted version replaces the pinned one")
+	var mounted_cat := DotMapCatalogue.new()
+	var _m := ArenaMaps.adopt_delivered(mounted_cat, swapped)
+	var only := _OnlyVersion.new()
+	DotRegistry.register(DotMapLoader.CLOUD_SERVICE, only)
+	var got := await ArenaMaps.mount_delivered(mounted_cat.get_map(&"crackhouse"), DotMapLoader.new(), mounted_cat)
+	DotRegistry.unregister(DotMapLoader.CLOUD_SERVICE)
+	_check(only.asked == PackedStringArray(["gamemann/crackhouse@9.9.9"]), "the pick asks for the mounted version (%s)" % ", ".join(only.asked))
+	_check(got.ok or not got.error.message.contains("could not fetch"), "and the fetch is not what fails")
+
 	var ffa: ArenaMode = ArenaModes.by_id(&"ffa")
 	var gungame: ArenaMode = ArenaModes.by_id(&"gungame")
 	var ffa_ids: Dictionary = {}
@@ -148,3 +163,14 @@ class _Missing404 extends RefCounted:
 	func ensure(_id: StringName, _version: String, _groups: Variant = null, _url: String = "") -> DotResult:
 		var e := DotError.from_http(404)
 		return DotResult.failure(e).wrap("Could not download the content manifest.")
+
+
+## A dot-cloud stand-in that has only 9.9.9 (as if mounted) and answers 404 for any other version.
+class _OnlyVersion extends RefCounted:
+	var asked := PackedStringArray()
+
+	func ensure(id: StringName, version: String, _groups: Variant = null, _url: String = "") -> DotResult:
+		asked.append("%s@%s" % [id, version])
+		if version == "9.9.9":
+			return DotResult.success("res://dot_cloud/%s/%s" % [id, version])
+		return DotResult.failure(DotError.from_http(404))

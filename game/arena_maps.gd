@@ -460,8 +460,11 @@ const PACK_PREFIX := "arena-surf-dm-maps-"
 
 ## [constant STANDALONE_KEYS] minus the maps [param catalogue] already has (a linked local
 ## import wins), so solo play lists the published maps and fetches one when it is picked.
-static func standalone_keys(catalogue: DotMapCatalogue) -> PackedStringArray:
+## A pack [param content] already has mounted at another version is named at that version:
+## a pinned version can go unpublished, and a mounted pack needs no fetch.
+static func standalone_keys(catalogue: DotMapCatalogue, content: DotContentIndex = null) -> PackedStringArray:
 	var out := PackedStringArray()
+	var mounted := mounted_versions(content if content != null else DotContentIndex.shared())
 
 	for key in STANDALONE_KEYS:
 		var def := delivered_def(key)
@@ -472,7 +475,18 @@ static func standalone_keys(catalogue: DotMapCatalogue) -> PackedStringArray:
 		var have: DotMapDef = catalogue.get_map(def.id) if catalogue != null else null
 
 		if have == null or bool(have.meta.get("delivered", false)):
-			out.append(key)
+			var cid := String(def.content_id)
+			out.append("%s@%s" % [cid, mounted[cid]] if mounted.has(cid) else key)
+
+	return out
+
+
+## content id -> version of each pack [param content] lists for the current session; the last mounted wins.
+static func mounted_versions(content: DotContentIndex) -> Dictionary:
+	var out := {}
+
+	for pack in content.packs():
+		out[str(pack.get("content_id", ""))] = str(pack.get("version", ""))
 
 	return out
 
