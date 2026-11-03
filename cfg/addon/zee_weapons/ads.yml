@@ -1,0 +1,5 @@
+# Arena's hip hold, over the view runtime's shipped defaults; an operator still overrides it in cfg/server/addon/zee_weapons/.
+# Arena's guns converge on the crosshair 20 m out, so they point forward from the hip; a near zero turns them across the screen.
+ads:
+  default:
+    hip_zero: 20.0
