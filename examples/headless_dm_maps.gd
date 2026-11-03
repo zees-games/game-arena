@@ -91,7 +91,7 @@ func _test_solo() -> void:
 		"gg-woods and dm-morpheus are catalogued without a server")
 	_check(solo.maps.size() == ArenaMaps.STANDALONE_KEYS.size() and solo.maps.size() >= 16,
 		"all %d published maps are listed, and a second pass keeps them" % solo.maps.size())
-	_check(solo.get_map(&"gg-woods").scene_path == "res://dot_cloud/gamemann/gg-woods/1.0.3/gg-woods.json",
+	_check(solo.get_map(&"gg-woods").scene_path == "res://dot_cloud/gamemann/gg-woods/1.0.4/gg-woods.json",
 		"gg-woods mounts at its hyphenated manifest")
 
 	print("-- an unlinked picker lists the suggested packs by label, and a pick with no cloud fails naming it")
