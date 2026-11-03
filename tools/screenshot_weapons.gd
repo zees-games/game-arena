@@ -231,6 +231,41 @@ func _wait(sec: float) -> void:
 	await create_timer(sec, true, false, true).timeout
 
 
+## Holds the view model's sprint on; the rig clears it every tick for a player who is standing.
+func _force_sprint() -> void:
+	var me = client.get("player")
+	if me != null:
+		me.weapons.view_model().set_sprinting(true)
+
+
+## The long-gun carry from before zee v0.1.58 (yaw 52-55), to compare against the current one.
+func _use_old_carry() -> void:
+	var vm = client.get("player").weapons.view_model()
+	var tun = vm.get("_pose").tunables
+	if vm.get("_art").pose == &"heavy":
+		tun.sprint_offset = Vector3(-0.1, -0.18, 0.07)
+		tun.sprint_rotation = Vector3(-18.0, 52.0, -28.0)
+	else:
+		tun.sprint_offset = Vector3(-0.1, -0.16, 0.06)
+		tun.sprint_rotation = Vector3(-14.0, 55.0, -24.0)
+
+
+## Teleports the player to 0.3 m from the nearest wall within 4 m, looking square at it.
+func _face_wall(me: Node) -> void:
+	var feet: Vector3 = me.controller.state.position
+	var best := 99.0
+	var best_yaw := 0.0
+	for i in 16:
+		var yaw := i * 22.5
+		var d := _clear(feet + Vector3.UP * CHEST, _dir_of(yaw), 4.0)
+		if d < best:
+			best = d
+			best_yaw = yaw
+	me.controller.teleport(feet + _dir_of(best_yaw) * (best - 0.3), best_yaw, 0.0)
+	client.get("_sampler").look_at_angles(best_yaw, 0.0)
+	print("wall at %.2f m, yaw %.1f" % [best, best_yaw])
+
+
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 
@@ -238,14 +273,26 @@ func _run() -> void:
 	await _wait(32.0)
 
 	# --fp=knife,pistol,smg: the player's own hands at the hip with each gun, for the first-person look.
+	# --carry=sprint|sprint_old|wall adds the sprint carry, or the gun backed against the nearest wall.
+	var carry := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--carry="):
+			carry = arg.trim_prefix("--carry=")
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--fp="):
 			var me: Node = client.get("player")
+			if carry == "wall":
+				_face_wall(me)
+			if carry == "sprint" or carry == "sprint_old":
+				process_frame.connect(_force_sprint)
 			for id in arg.trim_prefix("--fp=").split(",", false):
 				var _given: DotResult = me.arsenal.give(StringName(id))
 				me.arsenal.equip(me.arsenal.catalogue.get_def(StringName(id)).slot)
-				await _wait(2.0)
-				await _shot("fp_%s" % id)
+				await _wait(0.5)
+				if carry == "sprint_old":
+					_use_old_carry()
+				await _wait(1.5)
+				await _shot("fp_%s%s" % [id, "" if carry.is_empty() else "_" + carry])
 			quit()
 			return
 
