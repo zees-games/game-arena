@@ -266,6 +266,36 @@ func _face_wall(me: Node) -> void:
 	print("wall at %.2f m, yaw %.1f" % [best, best_yaw])
 
 
+## Puts a real wall [param dist] metres in front of the camera, square on, so the retract pose is photographed even where the map has none near.
+func _put_wall(me: Node, dist: float) -> void:
+	var cam: Camera3D = me.get_viewport().get_camera_3d()
+	var forward := -cam.global_basis.z
+	var flat := Vector3(forward.x, 0.0, forward.z).normalized()
+	var body: StaticBody3D = root.get_node_or_null("TestWall")
+	if body == null:
+		body = StaticBody3D.new()
+		body.name = "TestWall"
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(6.0, 4.0, 0.2)
+		shape.shape = box
+		body.add_child(shape)
+		var mesh := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = box.size
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.55, 0.5, 0.45)
+		bm.material = mat
+		mesh.mesh = bm
+		# --bare keeps the collision but hides the slab, to see the gun where the wall would cover it.
+		mesh.visible = not OS.get_cmdline_user_args().has("--bare")
+		body.add_child(mesh)
+		root.add_child(body)
+	var at := cam.global_position + flat * (dist + 0.1)
+	at.y = cam.global_position.y
+	body.global_transform = Transform3D(Basis.looking_at(-flat, Vector3.UP), at)
+
+
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 
@@ -273,7 +303,7 @@ func _run() -> void:
 	await _wait(32.0)
 
 	# --fp=knife,pistol,smg: the player's own hands at the hip with each gun, for the first-person look.
-	# --carry=sprint|sprint_old|wall adds the sprint carry, or the gun backed against the nearest wall.
+	# --carry=box puts a real wall at 3 (open-air baseline), 1, 0.6 and 0.3 m. --carry=sprint|sprint_old|wall adds the sprint carry, or the gun backed against the nearest wall.
 	var carry := ""
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--carry="):
@@ -283,6 +313,16 @@ func _run() -> void:
 			var me: Node = client.get("player")
 			if carry == "wall":
 				_face_wall(me)
+			# --tilt= and --retract= scale the wall response (cl_vm_wall_tilt, cl_vm_wall), to find a pose that reads right.
+			var rules = me.weapons.view_model().feel_rules
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--tilt="):
+					rules.wall_tilt = float(a.trim_prefix("--tilt="))
+				if a.begins_with("--retract="):
+					rules.wall_retract = float(a.trim_prefix("--retract="))
+			var dists: Array = [0.0]
+			if carry == "box":
+				dists = [1.0, 0.6, 0.3]
 			if carry == "sprint" or carry == "sprint_old":
 				process_frame.connect(_force_sprint)
 			for id in arg.trim_prefix("--fp=").split(",", false):
@@ -292,7 +332,13 @@ func _run() -> void:
 				if carry == "sprint_old":
 					_use_old_carry()
 				await _wait(1.5)
-				await _shot("fp_%s%s" % [id, "" if carry.is_empty() else "_" + carry])
+				for d in dists:
+					if carry == "box":
+						_put_wall(me, d)
+						await _wait(1.0)
+						var vm = me.weapons.view_model()
+						print("box %.1f m: wall amount %.3f lean %s" % [d, vm.wall_amount(), vm.wall_lean()])
+					await _shot("fp_%s%s" % [id, "" if carry.is_empty() else "_" + carry + ("_%dcm" % roundi(d * 100.0) if carry == "box" else "")])
 			quit()
 			return
 
