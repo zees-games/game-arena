@@ -461,6 +461,7 @@ func _push_weapons() -> void:
 
 	if owned:
 		DotWeaponNetSync.correct_ammo(self, player.arsenal)
+		DotWeaponNetSync.correct_fire_mode(self, player.arsenal)
 		player.mirrored = false
 		return
 
