@@ -64,6 +64,14 @@ func _run() -> void:
 		get_tree().quit(1 if _failed > 0 else 0)
 		return
 
+	# `-- --fallout=<map id>`: only the faller walk-off check, on that map (the suite's own totals then do not hold).
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--fallout="):
+			_fallout_only = arg.trim_prefix("--fallout=")
+			await _test_fallout_all()
+			get_tree().quit(1 if _failed > 0 else 0)
+			return
+
 	# `-- --band`: only the bots' band, for measuring it (the suite's own totals then do not hold).
 	if OS.get_cmdline_user_args().has("--band"):
 		await _test_bot_band()
@@ -1333,6 +1341,8 @@ const FALLOUT_WALK := 4.0
 ## Destinations tried per map, biggest volume first: the catch-all under the map is the one
 ## everybody reaches, and a second is the jail or pit someone is sent to on purpose.
 const FALLOUT_PER_MAP := 2
+## Set by `-- --fallout=<map id>`: the one map the walk-off check visits.
+var _fallout_only := ""
 
 ## [b]General detector for a destination nobody can leave.[/b] The importer runs no outputs,
 ## so a door or floor that only a button moves stays as it rests, and a teleport aimed behind
@@ -1351,6 +1361,8 @@ func _test_fallout_all() -> void:
 	var player := _fresh(2)
 
 	for id in ArenaMap.imported_ids():
+		if _fallout_only != "" and String(id) != _fallout_only:
+			continue
 		var changed := _game.change_map(ArenaMap.by_id(id))
 		if not changed.ok:
 			sealed.append("%s (does not load)" % id)
@@ -1377,9 +1389,13 @@ func _test_fallout_all() -> void:
 
 			var best := 0.0
 			var best_yaw := 0.0
+			var tries: Array[String] = []
 			for heading in range(8):
 				var yaw := heading * 45.0
-				player = _fresh(2)
+				# A respawn, not just a teleport: crouch, modifiers and loadout left by earlier
+				# sections change the walking speed and so the reach.
+				_game.respawn_player(2)
+				player = _game.player_for(2)
 				player.controller.teleport(cell, yaw, 0.0)
 				_game.tick({})
 				var start := player.controller.state.position
@@ -1407,12 +1423,15 @@ func _test_fallout_all() -> void:
 				if reach > best:
 					best = reach
 					best_yaw = yaw
+				tries.append("heading %d: reach %.1f, fell %.1f m, end %s, mode %s" % [heading, reach, start.y - lowest, player.controller.state.position.snapped(Vector3.ONE * 0.1), player.controller.state.mode])
 				if best >= FALLOUT_OUT_AT:
 					break
 			report.append("%s pit %d -> (%.0f, %.0f, %.0f): got %.1f m (yaw %.0f)" % [
 				id, index, cell.x, cell.y, cell.z, best, best_yaw])
 			if best < FALLOUT_OUT_AT:
 				sealed.append("%s pit %d" % [id, index])
+				for line in tries:
+					_line("       " + line)
 
 	for line in report:
 		_line("     " + line)
