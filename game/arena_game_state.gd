@@ -548,7 +548,15 @@ var noblock_bound := false
 var feel_rules: ZeeViewFeel = ZeeViewFeel.new()
 
 ## Aim-down-sights and hip-size numbers (`zee_ads_rules`, REPLICATED): the server's cfg over the shipped defaults. One per game, shared by every rig and the view model.
-var ads_rules: ZeeAdsRules = ZeeAdsRules.load_config()
+var ads_rules: ZeeAdsRules = _arena_ads_rules()
+
+
+## Arena's hip hold crosses the crosshair 20 m out; zee's shipped 3 m turns every gun across the screen. An operator's cfg still wins.
+static func _arena_ads_rules() -> ZeeAdsRules:
+	var rules := ZeeAdsRules.load_config()
+	if is_equal_approx(float(rules.base.get("hip_zero", 0.0)), 3.0):
+		var _ok := rules.set_value(&"", "hip_zero", 20.0)
+	return rules
 
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.
