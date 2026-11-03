@@ -28,9 +28,9 @@ const SCORE_LIMIT := 4
 ## The map whose hurt volumes are checked: MAP has none.
 const HURT_MAP := &"surf_xiv_v2a"
 
-const SECTIONS := 24
-## 145 fixed, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 150
+const SECTIONS := 25
+## Fixed checks, plus one audit check per imported map: the catalogue grows without this changing.
+const CHECKS_FIXED := 151
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
