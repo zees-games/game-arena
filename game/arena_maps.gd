@@ -396,7 +396,7 @@ static func server_map_keys(server: Object) -> PackedStringArray:
 const STANDALONE_KEYS: PackedStringArray = [
 	"gamemann/aim-forts@1.0.3",
 	"gamemann/blackhawkdown@1.0.1",
-	"gamemann/crackhouse@1.0.3",
+	"gamemann/crackhouse@1.0.4",
 	"gamemann/welcometomexicov6@1.0.1",
 	"gamemann/dm-hot-cn-v1@1.0.3",
 	"gamemann/dm-industrial-gamma@1.0.3",

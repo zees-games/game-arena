@@ -99,7 +99,7 @@ func _test_solo() -> void:
 	var solo_detail: Dictionary = {}
 	for each: Dictionary in solo_rows:
 		solo_detail[str(each["id"])] = str(each["detail"])
-	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/crackhouse@1.0.3") and solo.get_map(&"crackhouse") != null,
+	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/crackhouse@1.0.4") and solo.get_map(&"crackhouse") != null,
 		"crackhouse is a suggested pack")
 	_check(solo_detail.get("map:crackhouse", "") == "Deathmatch map", "crackhouse reads 'Deathmatch map'")
 	_check(solo_detail.get("map:gg-woods", "") == "Gun game map", "gg-woods reads 'Gun game map'")
