@@ -111,6 +111,8 @@ func _run() -> void:
 		return
 	if args.has("--islands"):
 		list_islands()
+	if args.has("--landings"):
+		list_landings(_read(path))
 	var picture_at := args.find("--picture")
 	if picture_at >= 0:
 		picture(args[picture_at + 1], 1.0)
@@ -394,6 +396,18 @@ func list_islands() -> void:
 		var to: Vector3 = pits[i]["to"]
 		print("[surf] teleport %d: %s to %s, lands at %s (island %d) yaw %.0f" % [i, str(box.position.round()), str(box.end.round()),
 			str(to.round()), nav.island_at(to, 2.5), float(pits[i]["yaw"])])
+
+
+## Prints, per edge of the cache, the island its start and landing are on in this bake (-1: the edge lands nowhere).
+func list_landings(data: Dictionary) -> void:
+	var units := float(data.get("units", 0.01905))
+	var edges: Array = data.get("edges", [])
+	for i in range(edges.size()):
+		var row: Dictionary = edges[i]
+		var from := _metres(row["from"])
+		var to := _metres(row["to"])
+		print("[surf] edge %d: from island %d (cached %d), lands on %d (cached %d), planned %s" % [i, nav.island_at(from, 1.0),
+			int(row.get("from_island", -2)), nav.island_at(to, 1.0), int(row.get("to_island", -2)), row.has("lengths")])
 
 
 ## Writes a top-down picture of the map to [param out] (a PNG, [param scale] metres a pixel): the
