@@ -1475,7 +1475,7 @@ func wall_roll() -> float:
 ##   drop off a ledge or a launch does. A 0.25 s recovery; a nod of 1 degree at the deepest.
 ## - **Strafe roll**: 1 degree at a 5.74 m/s strafe (the run), easing in and out at 8 a second;
 ##   1.5 more while sliding.
-## - **Wall-run lean**: 6 degrees away from the wall at 6 a second, as before.
+## - **Wall-run lean**: 3.5 degrees toward the wall (negative wall_run_roll) at 6 a second.
 ## - **Bound**: the three together never past 7 degrees.
 ## - **Widening**: none at or under the 5.74 m/s run, 4 degrees (vertical; about 5 at 4:3)
 ##   by 15 m/s, 2 more while sliding, 1 more on a wall; easing at 4 a second.
@@ -1490,7 +1490,7 @@ static func camera_motion_picks() -> DotFpsViewMotion:
 	m.strafe_roll_reference = 5.74
 	m.strafe_roll_response = 8.0
 	m.slide_roll = 1.5
-	m.wall_run_roll = 3.5
+	m.wall_run_roll = -3.5
 	m.wall_run_eye_shift = 0.3
 	m.wall_run_roll_response = 6.0
 	m.roll_limit = 5.0

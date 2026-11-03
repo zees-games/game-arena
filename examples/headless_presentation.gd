@@ -1238,6 +1238,22 @@ func _test_look_and_crosshair() -> void:
 		"binding the camera pushes the saved camera motion: the dip at 50%, the lean at the pick",
 		str(motion.describe() if motion != null else {})
 	)
+	# Wall on the right has normal LEFT; positive wall_roll() leans left (away from it).
+	var lean := ArenaPlayer.camera_motion_picks()
+	var ws := DotFpsState.new()
+	ws.mode = DotFpsState.Mode.AIR
+	ws.velocity = Vector3(0.0, 0.0, -9.0)
+	ws.wall_run_time = 0.1
+	ws.wall_normal = Vector3.LEFT
+	for _i in range(240):
+		lean.advance(ws, 1.0 / 144.0)
+	var on_right := lean.wall_roll()
+	ws.wall_normal = Vector3.RIGHT
+	for _i in range(240):
+		lean.advance(ws, 1.0 / 144.0)
+	_check(on_right < -1.0 and lean.wall_roll() > 1.0,
+		"the wall-run lean tilts toward the wall: right wall leans right, left wall leans left",
+		"right wall %.2f, left wall %.2f" % [on_right, lean.wall_roll()])
 	for key: StringName in [&"camera_landing_dip", &"camera_strafe_roll", &"camera_wall_lean", &"camera_speed_fov"]:
 		p.settings.set_value(key, 0.0)
 	_check(
