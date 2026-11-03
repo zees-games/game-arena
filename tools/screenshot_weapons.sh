@@ -10,4 +10,4 @@ set -euo pipefail
 export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-16} DOT_SHOT_SECS=${DOT_SHOT_SECS:-2}
 cd "$(dirname "$0")/.."
 exec timeout 400 xvfb-run -a godot --path . --resolution 1280x720 \
-  --script res://tools/screenshot_weapons.gd
+  --script res://tools/screenshot_weapons.gd -- "$@"

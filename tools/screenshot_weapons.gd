@@ -246,6 +246,23 @@ func _run() -> void:
 	await _wait(1.0)
 	await _shot("1_facing_a_bot")
 
+	# --guns=smg,knife: the staged bot takes each in turn, for the third-person look.
+	var guns := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--guns="):
+			guns = arg.trim_prefix("--guns=")
+	if guns != "":
+		for id in guns.split(",", false):
+			var given: DotResult = _subject.arsenal.give(StringName(id))
+			var slot: int = _subject.arsenal.catalogue.get_def(StringName(id)).slot
+			_subject.hold(slot)
+			print("gun %s given ok=%s slot %d" % [id, given.ok, slot])
+			await _wait(2.0)
+			print("held now: %s" % _subject.arsenal.current().def.id)
+			await _shot("gun_%s" % id)
+		quit()
+		return
+
 	# The trigger at full speed until the rig counts a use, THEN the clock slowed: a
 	# tick at a tenth of the speed is 0.16 s of real time, so pressing and photographing
 	# at once photographs a frame from before anything fired.
