@@ -11,6 +11,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 const OUT_DIR := "screenshots/crosshair"
 const NAMES := ["still", "moving", "crouched", "crouched_firing", "rested", "firing", "air"]
 const SETTLE := [90, 50, 90, 40, 120, 40, 8]
+const FILES := ["still.png", "moving.png", "crouched.png", "crouched_firing.png", "rested.png", "firing.png", "air.png"]
 const TICK_RATE := 64
 
 var _player: ArenaPlayer = null
@@ -71,7 +72,7 @@ func _process(delta: float) -> bool:
 	if _frames < SETTLE[_phase]:
 		return false
 	var spread: float = _player.arsenal.spread_now()
-	root.get_texture().get_image().save_png(OUT_DIR.path_join(NAMES[_phase] + ".png"))
+	root.get_texture().get_image().save_png(OUT_DIR.path_join(FILES[_phase]))
 	print(NAMES[_phase], " (", _player.arsenal.current().def.id, "): cone ", snappedf(spread, 0.01), " degrees, crosshair spread ", snappedf(float(_cross.get("_spread_degrees")), 0.01))
 	_phase += 1
 	_frames = 0

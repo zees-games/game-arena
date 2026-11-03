@@ -145,6 +145,6 @@ func _process(delta: float) -> bool:
 
 func _save(view: String, _from: Camera3D) -> void:
 	var image := root.get_texture().get_image()
-	var name := "%s_%s_%03d.png" % [_tag, view, _frame]
+	var name := "".join(["_".join([_tag, view, String.num_int64(_frame).pad_zeros(3)]), ".png"])
 	image.save_png(OUT.path_join(name))
-	print("%s phase %d y %.2f mode %d" % [name, _phase, _player.controller.state.position.y, _player.controller.state.mode])
+	print(name, " phase ", _phase, " y ", snappedf(_player.controller.state.position.y, 0.01), " mode ", _player.controller.state.mode)

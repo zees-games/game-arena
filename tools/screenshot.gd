@@ -5,6 +5,9 @@ extends "screenshot_stages.gd"
 
 const OUT_DIR := "screenshots"
 const ScreenshotGlanceStates := preload("screenshot_glance_states.gd")
+const GLANCE_MEDALS: Array = [ArenaAwards.Medal.HEADSHOT, ArenaAwards.Medal.DOUBLE_KILL]
+const ScreenshotUse := preload("screenshot_use.gd")
+const ScreenshotDrop := preload("screenshot_drop.gd")
 
 
 func _initialize() -> void:
@@ -373,21 +376,21 @@ func _play_glance() -> void:
 		_hud.user_scale = float(args[scale_at + 1])
 
 	if OS.get_cmdline_user_args().has("--use"):
-		_shots = load("res://tools/screenshot_use.gd").stage(game, _local, _hud)
+		_shots = ScreenshotUse.stage(game, _local, _hud)
 		if _shots.is_empty():
 			push_error("--use needs a converted map with the jail button")
 			quit(1)
 		return
 
 	if OS.get_cmdline_user_args().has("--drop"):
-		_shots = load("res://tools/screenshot_drop.gd").stage(game, _local, _hud)
+		_shots = ScreenshotDrop.stage(game, _local, _hud)
 		if _shots.is_empty():
 			push_error("--drop needs a game with the weapon drop layer")
 			quit(1)
 		return
 
 	if OS.get_cmdline_user_args().has("--flashlight"):
-		_stage_flashlight(game)
+		ScreenshotGlanceStates.stage_flashlight(_local, game)
 
 	if OS.get_cmdline_user_args().has("--fire-mode"):
 		# An automatic rifle with the selector moved once, as N does.
@@ -431,11 +434,11 @@ func _play_glance_rest(game: ArenaGame, args: PackedStringArray, late: Array, st
 		late.append([10, func() -> void: _hud.notice(said)])
 
 	_shots = [{
-		"name": "%s_glance_%s%s" % [String(_staged_id), String(game.mode_id), ("_mapballot" if _glance_map_ballot else "_ballot") if _glance_ballot else ""] + ("_chat" if _glance_chat else "") + ("_low" if args.has("--low") else "") + ("_streak" if streak_at >= 0 else "") + ("_killcam" if OS.get_cmdline_user_args().has("--killcam") else "") + ("_" + _glance_theme if _glance_theme != "" else ""),
+		"name": ScreenshotGlanceStates.shot_name(self, game, args, streak_at),
 		"local": true,
 		"late": [
 			[12, func() -> void:
-				var medals := [ArenaAwards.Medal.HEADSHOT, ArenaAwards.Medal.DOUBLE_KILL]
+				var medals := GLANCE_MEDALS
 				_hud.note_award(
 					{"killer_id": 112, "victim_id": 118, "medals": medals,
 						"points": ArenaAwards.points_for(medals), "streak": 3},
@@ -448,26 +451,6 @@ func _play_glance_rest(game: ArenaGame, args: PackedStringArray, late: Array, st
 		] + late,
 		"wait": 34,
 	}]
-
-
-## `--glance --flashlight`: the map gone dark and the local player's flashlight on, to look at the beam.
-func _stage_flashlight(game: ArenaGame) -> void:
-	for node in root.find_children("*", "WorldEnvironment", true, false):
-		var env := (node as WorldEnvironment).environment
-		env.background_mode = Environment.BG_COLOR
-		env.background_color = Color(0.01, 0.01, 0.02)
-		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = Color(0.02, 0.02, 0.03)
-		env.ambient_light_energy = 1.0
-	for node in root.find_children("*", "DirectionalLight3D", true, false):
-		(node as DirectionalLight3D).visible = false
-	var beam := DotFlashlight.new()
-	beam.name = "Flashlight"
-	beam.config = game.flashlight_conf()
-	beam.handle_input = false
-	beam.authoritative = false
-	_local.camera.add_child(beam)
-	beam.apply_state({"on": true})
 
 
 ## `--killcam`: the kill view as a victim sees it, played from a clip of [param killer_id]'s eye swinging onto the local

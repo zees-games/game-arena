@@ -60,11 +60,15 @@ var hints: DotKeyHints = null
 ## "ask the match", which is what a server and an offline client do.
 var remaining_override: float = NAN
 
+var _weapon_label := ""
+var _label_slot: DotWeaponSlot = null
+var _label_mode := -1
+var _label_key := ""
+const SLOT_KEYS: Array[StringName] = [&"slot_0", &"slot_1", &"slot_2", &"slot_3", &"slot_4", &"slot_5", &"slot_6", &"slot_7", &"slot_8", &"slot_9"]
+
 ## The key each prompt, hint and button names, as the player has it bound. The client
 ## writes these from its key table ([method ArenaClient._hud_keys]); the defaults are the
 ## table's.
-var _weapon_label := ""
-
 var keys: Dictionary = {
 	&"slide": "C", &"launch": "E", &"dash": "Shift", &"jump": "Space",
 	&"scoreboard": "Tab", &"menu": "Esc", &"chat": "Y", &"reload": "R", &"help": "H",
@@ -444,8 +448,8 @@ static func mode_label(slot: DotWeaponSlot, key: String) -> String:
 	var name := slot.def.display_name
 	if slot.def.allowed_fire_modes().size() < 2:
 		return name
-	var mode := str(DotWeaponDef.Fire.keys()[slot.fire_mode()])
-	return "%s  %s%s" % [name, mode, " [%s]" % key if key != "" else ""]
+	var mode := String(DotWeaponDef.Fire.keys()[slot.fire_mode()])
+	return "".join([name, "  ", mode, "".join([" [", key, "]"]) if key != "" else ""])
 
 
 ## "1 point", "5 points": the count and the noun, agreed (the play test read "+1 POINTS").
@@ -1090,8 +1094,12 @@ func present_gear() -> void:
 			vitals.show_vitals(player.health.health, player.health.max_health, player.health.armour, player.health.max_armour)
 
 	var slot: DotWeaponSlot = player.arsenal.current() if live and player.arsenal != null else null
-	if ammo != null and slot != null:
-		_weapon_label = mode_label(slot, str(keys.get(&"fire_mode", "")))
+	var fire_key := String(keys.get(&"fire_mode", ""))
+	if ammo != null and slot != null and (slot != _label_slot or slot.fire_mode() != _label_mode or fire_key != _label_key):
+		_label_slot = slot
+		_label_mode = slot.fire_mode()
+		_label_key = fire_key
+		_weapon_label = mode_label(slot, fire_key)
 	if ammo != null:
 		if slot == null:
 			ammo.show_ammo("", -1, -1, false)
@@ -1112,7 +1120,7 @@ func present_gear() -> void:
 				var held := player.arsenal.slot_at(index)
 				if held != null:
 					rows.append({"slot": index, "id": held.def.id, "name": held.def.display_name,
-						"key": str(keys.get(StringName("slot_%d" % index), str(index)))})
+						"key": String(keys.get(SLOT_KEYS[index] if index < SLOT_KEYS.size() else &"", String.num_int64(index)))})
 		slots.show_slots(rows, player.arsenal.current_slot() if live and player.arsenal != null else 0)
 
 	if hints != null:
@@ -1124,7 +1132,7 @@ func present_gear() -> void:
 		# The loadout's key only where there is a loadout menu: an older shell, or a mode that
 		# hands out the weapons, has none to open.
 		var shown_mode: Variant = game.displayed_mode() if game != null else null
-		if str(keys.get(&"loadout", "")) != "" and (shown_mode == null or not bool(shown_mode.call(&"arms_players"))):
+		if String(keys.get(&"loadout", "")) != "" and (shown_mode == null or not bool(shown_mode.call(&"arms_players"))):
 			shown.append(["Loadout", keys[&"loadout"]])
 		shown.append_array([["Chat", keys[&"chat"]], ["Slide", keys[&"slide"]]])
 		hints.show_hints(shown)
@@ -1204,13 +1212,13 @@ func present_body() -> void:
 	# What can be done right now, as the genre prompts it.
 	if slide_label != null:
 		if state != null and state.is_sliding():
-			slide_label.show_prompt("Cancel slide", str(keys[&"slide"]))
+			slide_label.show_prompt("Cancel slide", String(keys[&"slide"]))
 		elif live and player.is_alive() and _needs_reload():
-			slide_label.show_prompt("Reload", str(keys[&"reload"]))
+			slide_label.show_prompt("Reload", String(keys[&"reload"]))
 		elif live and player.is_alive() and use_hint != "":
-			slide_label.show_prompt(use_hint, str(keys[&"use"]))
+			slide_label.show_prompt(use_hint, String(keys[&"use"]))
 		elif roam_hint != "" and player != null and not player.is_alive():
-			slide_label.show_prompt(roam_hint, str(keys[&"roam"]))
+			slide_label.show_prompt(roam_hint, String(keys[&"roam"]))
 		else:
 			slide_label.show_prompt("", "")
 
@@ -1246,7 +1254,7 @@ func present_body() -> void:
 	points_label.text = points_text(count)
 
 	if _points_seen >= 0 and count > _points_seen:
-		popup("+" + points_text(count - _points_seen), Color(1.0, 0.82, 0.25))
+		popup("".join(["+", points_text(count - _points_seen)]), Color(1.0, 0.82, 0.25))
 	_points_seen = count
 
 	_advance_popups(get_process_delta_time())

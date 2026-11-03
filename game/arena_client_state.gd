@@ -148,6 +148,7 @@ var flash: DotFlashlight = null
 var flash_crowd: DotFlashlightCrowd = null
 var _flash_ticks := 0
 var _flash_msec := -100000
+var _flash_seen: Array = []
 
 ## What the server last said was left on the clock, in seconds. Negative for "no
 ## limit", which is what `DotMatch.seconds_remaining` returns and what the HUD reads as

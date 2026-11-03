@@ -41,7 +41,7 @@ func _initialize() -> void:
 		dists = Array(OS.get_cmdline_user_args()).map(func(a: String) -> float: return a.to_float())
 	for dist: float in dists:
 		for view: String in views:
-			_cases.append({"name": "d%.1f_%s" % [dist, view], "dist": dist, "view": views[view]})
+			_cases.append({"name": "d%.1f_%s" % [dist, view], "file": "d%.1f_%s.png" % [dist, view], "dist": dist, "view": views[view]})
 
 
 func _physics_process(_delta: float) -> bool:
@@ -77,7 +77,7 @@ func _process(delta: float) -> bool:
 	if _settle > 0:
 		_settle -= 1
 		return false
-	root.get_texture().get_image().save_png(OUT_DIR.path_join("%s.png" % _case["name"]))
+	root.get_texture().get_image().save_png(OUT_DIR.path_join(_case["file"]))
 	print("wrote ", _case["name"])
 	_case = {}
 	return false

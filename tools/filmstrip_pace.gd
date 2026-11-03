@@ -83,6 +83,6 @@ func _process(delta: float) -> bool:
 	_have = true
 	if _t >= SECONDS:
 		_steps.sort()
-		print("PACE %s max_deg=%.2f p99_deg=%.2f max_cm=%.2f frames=%d" % [_mode, _max_deg, _steps[int(_steps.size() * 0.99)], _max_cm, _steps.size()])
+		print("PACE ", _mode, " max_deg=", snappedf(_max_deg, 0.01), " p99_deg=", snappedf(_steps[int(_steps.size() * 0.99)], 0.01), " max_cm=", snappedf(_max_cm, 0.01), " frames=", _steps.size())
 		quit(0)
 	return false

@@ -38,8 +38,8 @@ func _initialize() -> void:
 	root.add_child(_cam)
 	_cam.current = true
 	for dist: float in [0.9, 0.5, 0.3]:
-		_cases.append({"name": "d%.1f_side" % dist, "dist": dist, "cam": Vector3(2.2, 1.4, 1.0)})
-		_cases.append({"name": "d%.1f_back" % dist, "dist": dist, "cam": Vector3(0.6, 1.9, -2.2)})
+		_cases.append({"name": "d%.1f_side" % dist, "file": "d%.1f_side.png" % dist, "dist": dist, "cam": Vector3(2.2, 1.4, 1.0)})
+		_cases.append({"name": "d%.1f_back" % dist, "file": "d%.1f_back.png" % dist, "dist": dist, "cam": Vector3(0.6, 1.9, -2.2)})
 
 
 func _physics_process(_delta: float) -> bool:
@@ -66,7 +66,7 @@ func _process(delta: float) -> bool:
 	if _settle > 0:
 		_settle -= 1
 		return false
-	root.get_texture().get_image().save_png(OUT_DIR.path_join("%s.png" % _case["name"]))
+	root.get_texture().get_image().save_png(OUT_DIR.path_join(_case["file"]))
 	print("wrote ", _case["name"], " held=", _player.held != null)
 	_case = {}
 	return false

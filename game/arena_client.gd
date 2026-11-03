@@ -591,7 +591,7 @@ func _tick_solo_killview() -> void:
 func _on_killview(clip: Dictionary, info: Dictionary) -> void:
 	if killview == null or (killcam != null and killcam.is_playing()):
 		return
-	var shown := info.duplicate()
+	var shown := info.merged({})
 	shown["killer"] = String(info.get("killer", ""))
 	shown["victim_id"] = player.player_id if player != null else 0
 	var weapon := String(info.get("weapon", ""))
@@ -1745,11 +1745,10 @@ func _present_flashlights() -> void:
 		flash.config = cfg
 		flash.handle_input = false
 		flash.authoritative = false
-		flash.allowed = DotFlashlightRules.allowed_on(cfg, str(game.map.id if game.map != null else ""))
+		flash.allowed = DotFlashlightRules.allowed_on(cfg, String(game.map.id if game.map != null else ""))
 		flash.audio = _flash_audio_ref()
-		flash.switch_requested.connect(func(_want: bool) -> void:
-			_flash_ticks = ArenaFlashlight.HOLD_TICKS
-			_flash_msec = Time.get_ticks_msec())
+		if not flash.switch_requested.is_connected(_on_flash_switch):
+			flash.switch_requested.connect(_on_flash_switch)
 		player.camera.add_child(flash)
 	if flash.get_parent() != player.camera:
 		flash.reparent(player.camera, false)
@@ -1765,13 +1764,18 @@ func _present_flashlights() -> void:
 		flash_crowd.audio = _flash_audio_ref()
 		add_child(flash_crowd)
 	flash_crowd.set_viewer(camera_position())
-	var seen: Array = []
+	_flash_seen.clear()
 	for other: ArenaPlayer in game.players():
 		var key: Variant = other.player_id
-		seen.append(key)
+		_flash_seen.append(key)
 		flash_crowd.set_lit(key, other != player and other.flashlight and other.is_alive())
 		flash_crowd.place(key, other.muzzle_position(), other.aim_direction())
-	flash_crowd.retain(seen)
+	flash_crowd.retain(_flash_seen)
+
+
+func _on_flash_switch(_want: bool) -> void:
+	_flash_ticks = ArenaFlashlight.HOLD_TICKS
+	_flash_msec = Time.get_ticks_msec()
 
 
 ## Whether [param event] is on [param action], pressed or released. False for an action the
