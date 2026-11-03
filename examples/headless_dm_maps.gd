@@ -29,7 +29,7 @@ func _run() -> void:
 
 	if resolved.is_empty() or not FileAccess.file_exists(json_path):
 		print("no maps/imported_dm link — nothing more to check (link arena-dm-maps)")
-		_report_sections(2, 2, 2, 9)
+		_report_sections(2, 2, 2, 13)
 		return
 
 	var listed: Array = JSON.parse_string(FileAccess.get_file_as_string(json_path)).get("maps", [])
@@ -107,6 +107,16 @@ func _test_solo() -> void:
 	_check(not pick.ok, "picking an unfetched pack with no cloud client fails")
 	_check(solo.get_map(&"gg-woods") != null, "the failed pick leaves the catalogue usable")
 
+	print("-- a pack the origin does not have (HTTP 404) says so and leaves the solo list")
+	var fake := _Missing404.new()
+	DotRegistry.register(DotMapLoader.CLOUD_SERVICE, fake)
+	var missing := await ArenaMaps.mount_delivered(solo.get_map(&"crackhouse"), DotMapLoader.new(), solo)
+	DotRegistry.unregister(DotMapLoader.CLOUD_SERVICE)
+	_check(not missing.ok and missing.error.http_status == 404, "a 404 pack fails keeping the status")
+	_check(missing.ok or missing.error.message.contains("could not fetch the map crackhouse"), "outer sentence names the map")
+	_check(missing.ok or missing.error.detail.contains("not published"), "the cause says it is not published (%s)" % missing.error.detail)
+	_check(solo.get_map(&"crackhouse") == null, "an unpublished map leaves the solo list")
+
 	var ffa: ArenaMode = ArenaModes.by_id(&"ffa")
 	var gungame: ArenaMode = ArenaModes.by_id(&"gungame")
 	var ffa_ids: Dictionary = {}
@@ -131,3 +141,10 @@ func _resolve(link: String) -> String:
 		return ""
 
 	return str(out[0]).strip_edges()
+
+
+## A dot-cloud stand-in whose origin answers 404 for every pack.
+class _Missing404 extends RefCounted:
+	func ensure(_id: StringName, _version: String, _groups: Variant = null, _url: String = "") -> DotResult:
+		var e := DotError.from_http(404)
+		return DotResult.failure(e).wrap("Could not download the content manifest.")

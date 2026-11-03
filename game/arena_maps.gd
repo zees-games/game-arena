@@ -539,6 +539,10 @@ static func mount_delivered(
 	var fetched: DotResult = await loader.ensure_content(map)
 
 	if not fetched.ok:
+		# Unpublished on this origin: drop it from the solo list so it is not offered again.
+		if fetched.error != null and fetched.error.http_status == 404 and catalogue != null:
+			catalogue.remove(map.id)
+
 		return fetched.wrap("could not fetch the map %s" % String(map.id))
 
 	var dir := mount_of(map)
