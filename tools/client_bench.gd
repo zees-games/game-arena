@@ -55,7 +55,7 @@ var _play := false
 ## covers a predicted wall run. The 2026-11-10 "0 mismatches" ran on dm_box, which has none.
 var _wallrun := false
 ## The server game's tick rate. 60 is dot-server's default `sv_tickrate`; 64 is ArenaGame's.
-var _tick := 60
+var _tick := ArenaContent.TICK_RATE
 
 var _server_pid := -1
 var _relay = null
