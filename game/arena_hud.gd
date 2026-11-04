@@ -1213,13 +1213,13 @@ func present_body() -> void:
 	# What can be done right now, as the genre prompts it.
 	if slide_label != null:
 		if state != null and state.is_sliding():
-			slide_label.show_prompt("Cancel slide", String(keys[&"slide"]))
+			slide_label.show_prompt("Cancel slide", _key_label(&"slide"))
 		elif live and player.is_alive() and _needs_reload():
-			slide_label.show_prompt("Reload", String(keys[&"reload"]))
+			slide_label.show_prompt("Reload", _key_label(&"reload"))
 		elif live and player.is_alive() and use_hint != "":
-			slide_label.show_prompt(use_hint, String(keys[&"use"]))
+			slide_label.show_prompt(use_hint, _key_label(&"use"))
 		elif roam_hint != "" and player != null and not player.is_alive():
-			slide_label.show_prompt(roam_hint, String(keys[&"roam"]))
+			slide_label.show_prompt(roam_hint, _key_label(&"roam"))
 		else:
 			slide_label.show_prompt("", "")
 
@@ -1268,6 +1268,11 @@ func _fill_viewport(control: Control) -> void:
 	var inverse := get_global_transform().affine_inverse()
 	control.position = inverse * Vector2.ZERO
 	control.size = inverse.basis_xform(get_viewport_rect().size)
+
+
+## The key a prompt names; none on a touch device, which has no keyboard.
+func _key_label(action: StringName) -> String:
+	return "" if DotPlatform.has_touch() else String(keys[action])
 
 
 ## The red edge from low health and from a flash.
