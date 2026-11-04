@@ -211,11 +211,6 @@ func _touch_held(id: StringName) -> bool:
 	return _touch != null and bool(_touch.call(&"is_held", id))
 
 
-## The touch NEXT button: the carried slot after the one in hand.
-func touch_next_weapon() -> void:
-	_wanted_slot = _cycled_slot(1)
-
-
 ## Remembers the slot before the one in hand, for Q.
 func _note_held_slot() -> void:
 	if player == null or player.arsenal == null:

@@ -120,6 +120,10 @@ func _cycled_slot(step: int) -> int:
 	var at := carried.find(player.arsenal.current_slot())
 	return carried[posmod(at + step, carried.size())]
 
+## The touch NEXT button: the carried slot after the one in hand.
+func touch_next_weapon() -> void:
+	_wanted_slot = _cycled_slot(1)
+
 ## Alt-tabbing away leaves a captured pointer on a window nobody is looking at; give the cursor
 ## back and ask for a click on return, which also re-arms browser pointer lock.
 func _exit_tree() -> void:
