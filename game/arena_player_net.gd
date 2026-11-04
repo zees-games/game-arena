@@ -184,7 +184,8 @@ func _register_net_vars() -> void:
 	# ammunition above is the owner's.
 	replicate(&"net_blind", DotNetVar.Type.BOOL).to_owner_only()
 	replicate(&"net_challenge", DotNetVar.Type.UINT).bits(7).to_owner_only()
-	replicate(&"net_challenge_value", DotNetVar.Type.UINT).bits(16).to_owner_only()
+	# Server-driven: achievement progress, which the owner's simulation never computes.
+	replicate(&"net_challenge_value", DotNetVar.Type.UINT).bits(16).to_owner_only().server_driven()
 	replicate(&"net_beacon", DotNetVar.Type.BOOL)
 	replicate(&"net_flashlight", DotNetVar.Type.BOOL)
 
