@@ -957,6 +957,14 @@ func _prewarm_tick() -> void:
 					var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
 					presentation.fx.warm([ArenaPresentation.EXPLOSION, &"impact_spark"], at)
 				_warm.phase = 2
+		2:
+			# Drop bodies for the first throw (a death drops one), a slice a frame like the views.
+			var ids: Array = _warm.get("drop_ids", ArenaWeaponDropWiring.prewarm_ids())
+			_warm.drop_ids = ids
+			var slice := int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8
+			_warm.drop_next = ArenaWeaponDropWiring.prewarm_step(game, ids, int(_warm.get("drop_next", 0)), Time.get_ticks_msec() + slice)
+			if _warm.drop_next >= ids.size():
+				_warm.phase = 3
 		_:
 			_warm.frames += 1
 			if _warm.frames >= 3 and DotWeaponMuzzle.warm_done():
