@@ -4,6 +4,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaContent := preload("../game/arena_content.gd")
+const ArenaWeaponDropWiring := preload("../game/arena_weapon_drop_wiring.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 
 ## Dropped weapons through the whole game: the drop key throws the gun in hand, the thrower's empty
@@ -15,7 +16,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 32
+const EXPECTED_CHECKS := 38
 
 var _checks := 0
 var _failed := 0
@@ -258,6 +259,35 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 	open_body.linear_velocity = Vector3.ZERO
 	var _pushed_n := drops.blast(centre, 6.0, 10.0)
 	_check(hidden_body.linear_velocity.length() < 0.001 and open_body.linear_velocity.length() > 0.5, "a blast pushes the drop in the open and leaves the one behind a wall", "%s %s" % [hidden_body.linear_velocity, open_body.linear_velocity])
+
+	# Pre-warm: bodies are parked under the loading cover, so the first throw builds no model.
+	var builds := [0]
+	var inner: Callable = drops.look_of
+	drops.look_of = func(w: StringName) -> Node3D:
+		builds[0] += 1
+		return inner.call(w)
+	drops.draws = true
+	var ids: Array = ArenaWeaponDropWiring.prewarm_ids()
+	_check(ids.size() > 3, "the pre-warm walks every weapon with art", str(ids.size()))
+	var orphans_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	var next := ArenaWeaponDropWiring.prewarm_step(game, ids, 0, Time.get_ticks_msec() + 60000)
+	_check(next == ids.size() and builds[0] == ids.size(), "one body is built per weapon under the cover", "%d of %d, %d builds" % [next, ids.size(), builds[0]])
+	_check(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) - orphans_before >= ids.size(), "the bodies wait out of the tree")
+	var built_warm: int = builds[0]
+	var warmed: StringName = ids[0]
+	var warm_state: Dictionary = (snap["state"] as Dictionary).duplicate()
+	warm_state["id"] = warmed
+	var _w := drops.spawn(warm_state, open_spot, Vector3.ZERO, 22)
+	_check(builds[0] == built_warm, "the first drop of a pre-warmed weapon builds no model", "%d builds" % (builds[0] - built_warm))
+	var _w2 := drops.spawn(warm_state, open_spot, Vector3.ZERO, 22)
+	_check(builds[0] == built_warm + 1, "a second drop beyond the parked body builds one (control)", "%d builds" % (builds[0] - built_warm))
+
+	var shot := AwShotFx.new()
+	add_child(shot)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(shot._lights.built() > 0 and shot._meshes.built() > 0, "a shot effect has its light and quad pools built before the first shot", "%d lights %d quads" % [shot._lights.built(), shot._meshes.built()])
+	shot.queue_free()
 
 	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
 	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])

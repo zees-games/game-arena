@@ -18,6 +18,20 @@ static func build(game) -> void:
 	game.add_child(layer)
 
 
+## Weapons worth parking a drop body for: every one with art, the same set the first-person warm-up walks.
+static func prewarm_ids() -> Array:
+	return AwWeaponArtTable.table().keys()
+
+
+## Parks one body per weapon of [param ids] from index [param from] until [param until_msec]; returns the next index. Under the loading cover, a slice a frame, so the first throw builds nothing.
+static func prewarm_step(game, ids: Array, from: int, until_msec: int) -> int:
+	var next := from
+	while next < ids.size() and Time.get_ticks_msec() < until_msec and game.weapon_drops != null:
+		game.weapon_drops.prewarm(ids[next], 1)
+		next += 1
+	return next
+
+
 static func teardown(game) -> void:
 	if game.weapon_drops != null:
 		game.remove_child(game.weapon_drops)
