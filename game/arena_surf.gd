@@ -35,6 +35,9 @@ const UNITS := 0.01905
 
 ## Ride ids are edge indices; a teleport link's id is this plus the pit's index.
 const TELEPORT_BASE := 1000
+## A ride edge's route cost per metre: a ride covers its ground several times faster than walking,
+## and at a walked metre's cost a drop off a pad's rim (dot-bot's drop links) outbid the ride from it.
+const RIDE_COST := 0.25
 
 ## The longest a ride may run before the bot is told it did not land, seconds.
 const RIDE_SECONDS := 30.0
@@ -175,7 +178,7 @@ func attach(p_map: Object, p_nav: DotBotNav, data: Dictionary) -> void:
 		if edge.course.landing_island < 0:
 			DotLog.warn(CHANNEL, "a ride edge that lands nowhere on this mesh", {"map": str(map.get("id")), "edge": edge.id})
 			continue
-		nav.add_ride(from, to, edge.id)
+		nav.add_ride(from, to, edge.id, RIDE_COST)
 		edge.linked = true
 	nav.end_batch()
 	_link_teleports()
@@ -321,7 +324,10 @@ func landing_points() -> PackedVector3Array:
 	# a point on it ends on the floor beneath, never through the teleport's link.
 	var spawn_islands := PackedInt32Array()
 	for spawn: Transform3D in map.get("spawns"):
-		spawn_islands.append(nav.island_at(spawn.origin, 2.0))
+		# A spawn off the mesh is no island: kept as -1 it matched every pad off the mesh too.
+		var island := nav.island_at(spawn.origin, 2.0)
+		if island >= 0:
+			spawn_islands.append(island)
 	for id in teleports:
 		var link: Array = teleports[id]
 		for edge in edges:
