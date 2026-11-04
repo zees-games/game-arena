@@ -159,13 +159,13 @@ static func imported_document(lighting: Dictionary) -> Dictionary:
 
 ## What this machine draws of an imported map: g2gfast's choice for the same maps.
 ##
-## [b]A browser drops the sun's shadows and keeps the glow[/b] (dot-lighting's `web()`): a
+## [b]A browser drops the sun's shadows and keeps the glow[/b], a phone drops more (`for_platform()`): a
 ## surf map is a large open volume, so a shadow pass costs the whole canyon, while the glow
 ## is what makes a neon strip read as a light. [b]The sky continues under the horizon[/b]:
 ## these maps float inside their sky, and the default dark ground half turns every glance
 ## down between two ramps into a floor that is not there.
 static func imported_profile() -> DotLightProfile:
-	var p := DotLightProfile.web() if OS.has_feature("web") else DotLightProfile.high()
+	var p := DotLightProfile.for_platform()
 	p.sky_below_horizon = true
 	return p
 
