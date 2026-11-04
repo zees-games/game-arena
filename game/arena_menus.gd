@@ -48,6 +48,8 @@ static func build(host: Node, presentation: Node, browser: ArenaBrowser = null) 
 	menu.bindings = presentation.bindings if presentation != null else ArenaBindings.make()
 	var config := DotMenuConfig.new()
 	config.brand_name = "Arena"
+	# The kill feed owns the top right, where the touch Menu button now defaults.
+	config.menu_button_corner = &"top_left"
 	var _layered := config.load_layered()
 	menu.config = config
 	# Escape keeps its two steps here (the first releases the pointer, the second opens the
