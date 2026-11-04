@@ -72,14 +72,14 @@ static func update_panel(client, pressed: bool, delta: float) -> void:
 	if game.weapon_drops != null and player != null and player.is_alive() and player.arsenal != null and game.weapon_drops.count() > 0:
 		info = game.weapon_drops.prompt_for(player.arsenal, player.camera.global_position, -player.camera.global_basis.z, game.weapon_drop_class_of(player.player_id), game.team_of(player.player_id) if not game.teams().is_empty() else 0)
 	hold.hold_time = game.weapon_drops.rules.hold_time if game.weapon_drops != null else 0.6
-	var _event := hold.step(pressed, delta, not info.is_empty() and info.get("mode", "") == "ammo")
+	var _event := hold.step(pressed, delta, not info.is_empty() and (info.get("mode", "") == "ammo" or bool(info.get("hold", false))))
 	var fill := hold.progress
 	if client.hud != null:
 		view.key_text = String(client.hud.keys.get(&"use", "E"))
 	view.name_of = func(id: StringName) -> String:
 		var def: Variant = player.arsenal.catalogue.get_def(id)
 		return def.name_or_id() if def != null else String(id)
-	view.show_prompt(info, 0.0)
+	view.show_prompt(info, fill)
 	if client.hud != null and client.hud.crosshair != null:
 		client.hud.crosshair.hold_progress = fill
 
