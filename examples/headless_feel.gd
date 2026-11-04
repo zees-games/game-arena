@@ -13,7 +13,7 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 ## [codeblock] godot --headless --path . res://examples/headless_feel.tscn godot --headless --path .
 ## res://examples/headless_feel.tscn -- --verbose godot --headless --path .
 
-const PORT := 27194
+var PORT := ArenaTestPorts.free_port()
 const DATA := "user://arena_feel"
 const TICK_RATE := 64
 

@@ -14,7 +14,7 @@ const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaNetLink := preload("../game/arena_net_link.gd")
 
-const PORT := 27096
+var PORT := ArenaTestPorts.free_port()
 const DATA := "user://arena_reload"
 const TICK_RATE := 64
 const MODULE := "res://game/arena_module.gd"
