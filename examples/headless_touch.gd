@@ -5,7 +5,7 @@ const ArenaTouch := preload("../game/arena_touch.gd")
 ## The touch layout: the buttons fit a phone at three sizes without overlapping, and each DotTouchButtons is freed.
 ## Run: `godot --headless --path . res://examples/headless_touch.tscn`
 
-const CHECKS := 8
+const CHECKS := 9
 
 
 func _ready() -> void:
@@ -22,6 +22,10 @@ func _run() -> void:
 		for b: Dictionary in layout:
 			ids.append(b["id"])
 		_check(ids.size() >= 4, "%s: the layout has its buttons" % label)
+		var smallest := 999.0
+		for b: Dictionary in layout:
+			smallest = minf(smallest, float(b["radius"]))
+		_check(smallest * 2.0 >= 44.0, "%s: every button is thumb size (44 px or more)" % label, str(smallest * 2.0))
 		for size: Vector2 in [Vector2(844, 390), Vector2(667, 375), Vector2(932, 430)]:
 			var buttons := DotTouchButtons.new()
 			buttons.size = size

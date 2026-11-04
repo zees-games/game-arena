@@ -1124,7 +1124,8 @@ func present_gear() -> void:
 		slots.show_slots(rows, player.arsenal.current_slot() if live and player.arsenal != null else 0)
 
 	if hints != null:
-		hints.visible = live
+		# Keyboard keys mean nothing on a phone, and the list covers the view there.
+		hints.visible = live and not DotPlatform.has_touch()
 		var shown: Array = [
 			["Scoreboard", keys[&"scoreboard"]], ["Menu", keys[&"menu"]], ["Help", keys[&"help"]],
 			["Maps", keys[&"maps"]],

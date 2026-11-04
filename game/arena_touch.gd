@@ -3,14 +3,14 @@ extends RefCounted
 ## The on-screen buttons of a phone: dot-ui's [DotTouchButtons] over the HUD, wired to the client's own
 ## command bits. The sampler's stick and look drag are dot-player-controller's; this is only the buttons.
 
-## Offsets are from the bottom-right corner (see [DotTouchButtons]). Small radii and the whole cluster
-## above the ammunition plate, which sits in the corner on a phone-size frame.
+## Offsets are from the bottom-right corner (see [DotTouchButtons]). Every radius is at least 24 so a
+## button is 48 px across, thumb size, and the cluster still sits above the ammunition plate.
 const LAYOUT: Array[Dictionary] = [
-	{"id": &"fire", "label": "FIRE", "offset": Vector2(80, 150), "radius": 46.0},
-	{"id": &"jump", "label": "JUMP", "offset": Vector2(180, 130), "radius": 36.0},
-	{"id": &"crouch", "label": "DUCK", "offset": Vector2(60, 250), "radius": 30.0},
-	{"id": &"reload", "label": "R", "offset": Vector2(160, 220), "radius": 28.0},
-	{"id": &"next", "label": "NEXT", "offset": Vector2(250, 190), "radius": 28.0},
+	{"id": &"fire", "label": "FIRE", "offset": Vector2(86, 150), "radius": 52.0},
+	{"id": &"jump", "label": "JUMP", "offset": Vector2(200, 130), "radius": 42.0},
+	{"id": &"crouch", "label": "DUCK", "offset": Vector2(60, 272), "radius": 36.0},
+	{"id": &"reload", "label": "R", "offset": Vector2(170, 244), "radius": 36.0},
+	{"id": &"next", "label": "NEXT", "offset": Vector2(268, 200), "radius": 36.0},
 ]
 
 var buttons: DotTouchButtons = null
