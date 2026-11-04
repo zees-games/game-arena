@@ -1,6 +1,6 @@
 extends Node3D
 
-## Your own arms on dot-player-char's DotPlayerViewArms, holding the weapon where ZeeViewModel
+## Your own arms on dot-player-char's DotPlayerViewArms, holding the weapon where AwViewModel
 ## measured its grip. Absent below API 8: the view model draws its own hands then.
 
 const NEEDS_LEVEL := 8
@@ -32,8 +32,8 @@ static func available() -> bool:
 	return DotAddonApi.build_level("dot_player_char") >= NEEDS_LEVEL
 
 
-## Puts a view model's hands on [param body]'s camera: ZeeViewModel's own when there is no API, else these arms under [param parent].
-static func mount(parent: Node, model: ZeeViewModel, body: Node3D, look: DotHumanoidLook) -> Node3D:
+## Puts a view model's hands on [param body]'s camera: AwViewModel's own when there is no API, else these arms under [param parent].
+static func mount(parent: Node, model: AwViewModel, body: Node3D, look: DotHumanoidLook) -> Node3D:
 	if not available() or not model.has_signal(&"hands_reached"):
 		return null
 	model.show_arms = false
@@ -69,7 +69,7 @@ func _process(delta: float) -> void:
 	var camera: Camera3D = body.camera if body != null else null
 	if camera == null or arms == null:
 		return
-	var model: ZeeViewModel = body.weapons.view_model() if body.weapons != null else null
+	var model: AwViewModel = body.weapons.view_model() if body.weapons != null else null
 	global_position = camera.global_position
 	global_rotation = Vector3(camera.global_rotation.x if holding() else 0.0, camera.global_rotation.y, 0.0)
 	visible = model != null and model.visible and not model.arms_hidden_by_scope() and body.is_alive()

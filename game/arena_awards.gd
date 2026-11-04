@@ -131,7 +131,7 @@ class KillFacts:
 	var victim_streak: int = 0
 	## Eye to eye, metres.
 	var distance: float = 0.0
-	## The weapon's tags (`ZeeWeaponIds.TAG_*`).
+	## The weapon's tags (`AwWeaponIds.TAG_*`).
 	var tags: Array = []
 	## Whether the killer held the aim on the tick of the kill.
 	var aiming: bool = false
@@ -217,14 +217,14 @@ class MedalBook:
 
 		# Range, for a gun. A knife is always close and a grenade lands where it lands,
 		# so neither earns a distance medal.
-		var melee := k.tags.has(ZeeWeaponIds.TAG_MELEE)
-		var thrown := k.tags.has(ZeeWeaponIds.TAG_THROWN) or k.tags.has(ZeeWeaponIds.TAG_EXPLOSIVE)
+		var melee := k.tags.has(AwWeaponIds.TAG_MELEE)
+		var thrown := k.tags.has(AwWeaponIds.TAG_THROWN) or k.tags.has(AwWeaponIds.TAG_EXPLOSIVE)
 		if not melee and not thrown:
 			if k.distance < point_blank_m:
 				out.append(Medal.POINT_BLANK)
 			elif k.distance >= long_shot_m:
 				out.append(Medal.LONG_SHOT)
-			if k.tags.has(ZeeWeaponIds.TAG_SCOPED) and not k.aiming:
+			if k.tags.has(AwWeaponIds.TAG_SCOPED) and not k.aiming:
 				out.append(Medal.NO_SCOPE)
 
 		# The run: the killer's kills of this victim since the victim last got one back.

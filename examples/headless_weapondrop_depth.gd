@@ -7,6 +7,7 @@ extends Node
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const Wiring := preload("../game/arena_weapon_drop_wiring.gd")
+const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")
 
 const TOLERANCE := 0.02
 const RUN_TICKS := 640
@@ -178,7 +179,8 @@ func _grid(origin: Vector3, count: int, cols: int = 10, pitch: float = 1.5) -> A
 
 
 func _run() -> void:
-	var ids: Array = ZeeWeaponArtTable.table().keys()
+	ArenaWeaponRoles.ensure()
+	var ids: Array = AwWeaponArtTable.table().keys()
 	ids.sort()
 	_check(ids.size() > 10, "the art table has weapons", str(ids.size()))
 	var n := ids.size()

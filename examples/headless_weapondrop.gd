@@ -152,7 +152,7 @@ func _run_middle(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 
 	rules.max_count = 1
 	rules.pickup_radius = 0.0
-	player.hold(ZeeWeaponIds.SLOT_SIDEARM)
+	player.hold(AwWeaponIds.SLOT_SIDEARM)
 	await _step(game, 21, true, 1)
 	await _step(game, 21, false, 2)
 	_check(drops.count() == 1, "sv_weapon_drop_max 1 keeps one, the oldest cleaned first", str(drops.count()))
@@ -185,14 +185,14 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 
 	var held_def: StringName = StringName(str((snap["state"] as Dictionary).get("id", "")))
 	var other := &""
-	for cid in player.arsenal.catalogue.ids_in_slot(ZeeWeaponIds.SLOT_SIDEARM):
+	for cid in player.arsenal.catalogue.ids_in_slot(AwWeaponIds.SLOT_SIDEARM):
 		if cid != held_def:
 			other = cid
 			break
 	for _k in TICK_RATE * 3:
 		await _step(game, 21, false, 1)
 	player.arsenal.give(other)
-	player.hold(ZeeWeaponIds.SLOT_SIDEARM)
+	player.hold(AwWeaponIds.SLOT_SIDEARM)
 	drops.clear()
 	var aim_at: Vector3 = player.muzzle_position() + player.aim_direction() * 1.0
 	drops.rules.pickup_delay = 0.0

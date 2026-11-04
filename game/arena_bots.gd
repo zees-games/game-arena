@@ -507,7 +507,7 @@ static func _throw(bot: ArenaPlayer, mind: Mind, intent: DotBotIntent, move: Dot
 		mind.throw_back = arsenal.current_slot()
 		mind.throw_at = tick
 
-	var thrown := ZeeWeaponIds.SLOT_THROWN
+	var thrown := AwWeaponIds.SLOT_THROWN
 	if tick - mind.throw_at > int(THROW_GIVE_UP_SEC * tick_rate) and mind.throw_stage < THROW_RELEASE:
 		mind.throw_stage = THROW_RELEASE if mind.throw_stage == THROW_COOK else THROW_BACK
 
@@ -542,7 +542,7 @@ static func _throw(bot: ArenaPlayer, mind: Mind, intent: DotBotIntent, move: Dot
 
 ## Whether [param arsenal] holds a throwable it can pay for.
 static func _has_throwable(arsenal: DotWeaponArsenal) -> bool:
-	var slot := arsenal.slot_at(ZeeWeaponIds.SLOT_THROWN)
+	var slot := arsenal.slot_at(AwWeaponIds.SLOT_THROWN)
 	if slot == null or slot.def == null:
 		return false
 	var def := slot.def

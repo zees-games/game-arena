@@ -30,7 +30,7 @@ const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 ## `docs/hud.md`, "The glance pieces"); [ArenaHud] places them beside these. The colours
 ## below are the same as `DotHudPiece.DEFAULTS`, so the two sets read as one HUD.
 ##
-## Art: the weapon pictures are Jestan's CC0 sprites ([ArenaWeaponIcons]); the older silhouettes are rendered from zee's models by
+## Art: the weapon pictures are Jestan's CC0 sprites ([ArenaWeaponIcons]); the older silhouettes are rendered from the weapon models by
 ## `tools/build_weapon_icons.sh` (Kenney's CC0 blaster and tool kits); the ability icons are
 ## Kenney's CC0 game and mobile-control icons (`assets/hud_icons/`). A missing file draws
 ## the words instead.

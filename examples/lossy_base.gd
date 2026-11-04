@@ -579,7 +579,7 @@ func _test_ambient_cvars_reach_the_client() -> void:
 	_done()
 
 
-## [b]zee-dot-weapons' `mp_vm_*` and the map's packs on a client.[/b] The hands are drawn on the
+## [b]arena-weapons' `mp_vm_*` and the map's packs on a client.[/b] The hands are drawn on the
 ## client, so the server's sway, tilt, bob, landing and aim steadiness have to reach it, at the
 ## join and live; and a pack lives the whole map, so a client that joined after the server built
 ## the map has to be told the packs that are out.

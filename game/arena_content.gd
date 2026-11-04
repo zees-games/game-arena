@@ -11,19 +11,16 @@ const Grenades := preload("arena_grenades.gd")
 ## that. What a *reference* game wants is the opposite: one file you can read top to
 ## bottom and see the whole content set, with the reasoning next to the numbers.
 ##
-## [b]The weapons are zee-dot-weapons', all twenty-seven, and none of them is defined
-## here.[/b] This file used to carry four of its own — a pistol, a rifle, a shotgun and a
-## rocket launcher — which drew nothing in anybody's hands, because dot-weapon refuses to
-## draw and this game never filled that half in. The pack is that half, already tuned in
-## ticks and validated as one document; what is left for the game is which of them a
-## loadout may name and what each costs, which is below.
+## [b]The weapons are arena-weapons', and none of them is defined here.[/b] The pack
+## defines and draws them; what is left for the game is which of them a loadout may name
+## and what each costs, which is below.
 
 ## A bullet: what the horde's gunner fires. Not a player weapon's type any more — the
 ## pack's darts are — but monsters still shoot bullets, so it stays registered.
 const DAMAGE_BULLET := &"bullet"
 ## The pack's explosion type. One id with the pack, so a rocket and a grenade and a
 ## monster's death blast all answer to the same rule.
-const DAMAGE_BLAST := ZeeWeaponIds.DAMAGE_BLAST
+const DAMAGE_BLAST := AwWeaponIds.DAMAGE_BLAST
 const DAMAGE_FALL := &"fall"
 const DAMAGE_WORLD := &"world"
 const DAMAGE_STOMP := &"stomp"
@@ -78,7 +75,7 @@ static var _damage: Dictionary = {}
 
 static func damage_table() -> Dictionary:
 	if _damage.is_empty():
-		_damage = ZeeWeaponDamage.table()
+		_damage = AwWeaponDamage.table()
 		_damage[DAMAGE_BULLET] = bullet()
 		_damage[DAMAGE_FALL] = fall()
 		_damage[DAMAGE_WORLD] = world()
@@ -108,7 +105,7 @@ const TICK_RATE := 66
 ## weapon is defined, and everything this game decides about one is which ids it hands
 ## out — so a mode that wants shotguns for everybody edits this and nothing else.
 const DEFAULT_LOADOUT: Array[StringName] = [
-	ZeeWeaponIds.KNIFE, ZeeWeaponIds.PISTOL, ZeeWeaponIds.RIFLE, ZeeWeaponIds.FRAG,
+	AwWeaponIds.KNIFE, AwWeaponIds.PISTOL, AwWeaponIds.RIFLE, AwWeaponIds.FRAG,
 ]
 
 
@@ -122,13 +119,13 @@ static func melee_id() -> StringName:
 	return Roles.resolve(&"melee")
 
 ## The slot a fresh spawn is holding: the primary.
-const DEFAULT_SLOT := ZeeWeaponIds.SLOT_PRIMARY
+const DEFAULT_SLOT := AwWeaponIds.SLOT_PRIMARY
 
 
 ## The pack's weapons, against this game's damage types.
 static func weapons() -> Array[DotWeaponDef]:
 	Roles.ensure()
-	return ZeeWeaponPack.weapons(damage_table())
+	return AwWeaponCatalogue.weapons(damage_table())
 
 
 ## The whole weapon table, validated as one document.
@@ -137,18 +134,18 @@ static func weapons() -> Array[DotWeaponDef]:
 ## moment anybody is watching.
 static func weapon_catalogue() -> DotWeaponCatalogue:
 	Roles.ensure()
-	return ZeeWeaponPack.catalogue(damage_table())
+	return AwWeaponCatalogue.catalogue(damage_table())
 
 
 ## Weapons by id, for a module that has an item id and needs the weapon.
 static func weapon_table() -> Dictionary:
 	Roles.ensure()
-	return ZeeWeaponPack.table(damage_table())
+	return AwWeaponCatalogue.table(damage_table())
 
 
 # --- On the wire -------------------------------------------------------------
 #
-# A weapon travels as its place in `ZeeWeaponIds.all()`, plus one, so nothing is 0. The
+# A weapon travels as its place in `AwWeaponIds.all()`, plus one, so nothing is 0. The
 # same addon is compiled into both ends — the server and the client shell — so the list is
 # the same list on both, and a number is five bits where a StringName would be a string.
 
@@ -236,11 +233,11 @@ static func apply_carry(arsenal: DotWeaponArsenal, mask: int) -> int:
 ## changing its weapons. The heavies go in `primary` with the rifles: a launcher is
 ## something you carry INSTEAD of a rifle, and the budget is what makes that a choice.
 const LOADOUT_SLOT_FOR := {
-	ZeeWeaponIds.SLOT_MELEE: &"melee",
-	ZeeWeaponIds.SLOT_SIDEARM: &"secondary",
-	ZeeWeaponIds.SLOT_PRIMARY: &"primary",
-	ZeeWeaponIds.SLOT_HEAVY: &"primary",
-	ZeeWeaponIds.SLOT_THROWN: &"thrown",
+	AwWeaponIds.SLOT_MELEE: &"melee",
+	AwWeaponIds.SLOT_SIDEARM: &"secondary",
+	AwWeaponIds.SLOT_PRIMARY: &"primary",
+	AwWeaponIds.SLOT_HEAVY: &"primary",
+	AwWeaponIds.SLOT_THROWN: &"thrown",
 }
 
 ## The one item a player has to have unlocked. Everything else is free.
@@ -248,7 +245,7 @@ const LOADOUT_SLOT_FOR := {
 ## Kept rather than made free with the rest, because it is the only thing exercising
 ## dot-loadout's entitlement path in this game, and a path nothing exercises is one
 ## nobody knows still works. The game's entitlement source grants it to everybody.
-const PAID_WEAPON := ZeeWeaponIds.LAUNCHER
+const PAID_WEAPON := AwWeaponIds.LAUNCHER
 
 
 ## The order a loadout is put in a player's hands: melee, the primary (or heavy), the sidearm,
@@ -258,8 +255,8 @@ const PAID_WEAPON := ZeeWeaponIds.LAUNCHER
 ## in is the arsenal's own order, which every bot's weapon choice walks: giving the knife third
 ## moved `headless_bots`' measured reactions (hard slower than medium on the same seed).
 const GIVE_RANK := {
-	ZeeWeaponIds.SLOT_MELEE: 0, ZeeWeaponIds.SLOT_PRIMARY: 1, ZeeWeaponIds.SLOT_HEAVY: 1,
-	ZeeWeaponIds.SLOT_SIDEARM: 2, ZeeWeaponIds.SLOT_THROWN: 3,
+	AwWeaponIds.SLOT_MELEE: 0, AwWeaponIds.SLOT_PRIMARY: 1, AwWeaponIds.SLOT_HEAVY: 1,
+	AwWeaponIds.SLOT_SIDEARM: 2, AwWeaponIds.SLOT_THROWN: 3,
 }
 
 
@@ -321,7 +318,7 @@ static func loadout_schema() -> DotLoadoutSchema:
 	var melee := DotLoadoutSlot.make(&"melee", true, Roles.resolve(&"melee"))
 	melee.display_name = "Melee"
 	melee.kinds = [DotItem.KIND_WEAPON]
-	melee.arsenal_slot = ZeeWeaponIds.SLOT_MELEE
+	melee.arsenal_slot = AwWeaponIds.SLOT_MELEE
 	# After the guns: the order is the B menu's, where a player looks for the primary first.
 	# Nothing stored depends on it (a loadout is keyed by slot id), and the hand a spawn
 	# holds is ArenaPlayer._better_hand's, not the first slot given.
@@ -330,19 +327,19 @@ static func loadout_schema() -> DotLoadoutSchema:
 	var primary := DotLoadoutSlot.make(&"primary", true, Roles.resolve(&"primary"))
 	primary.display_name = "Primary"
 	primary.kinds = [DotItem.KIND_WEAPON]
-	primary.arsenal_slot = ZeeWeaponIds.SLOT_PRIMARY
+	primary.arsenal_slot = AwWeaponIds.SLOT_PRIMARY
 	primary.order = 10
 
 	var secondary := DotLoadoutSlot.make(&"secondary", true, Roles.resolve(&"secondary"))
 	secondary.display_name = "Secondary"
 	secondary.kinds = [DotItem.KIND_WEAPON]
-	secondary.arsenal_slot = ZeeWeaponIds.SLOT_SIDEARM
+	secondary.arsenal_slot = AwWeaponIds.SLOT_SIDEARM
 	secondary.order = 20
 
 	var thrown := DotLoadoutSlot.make(&"thrown", true, Roles.resolve(&"thrown"))
 	thrown.display_name = "Grenades"
 	thrown.kinds = [DotItem.KIND_WEAPON]
-	thrown.arsenal_slot = ZeeWeaponIds.SLOT_THROWN
+	thrown.arsenal_slot = AwWeaponIds.SLOT_THROWN
 	thrown.order = 25
 
 	var gear := DotLoadoutSlot.make(&"gear")

@@ -15,6 +15,7 @@ var _frame := 0
 
 
 func _initialize() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
 	var _scratch := ArenaPresentation.use_scratch_settings("review_clips")
 	client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	client.set("force_offline", true)
@@ -38,7 +39,7 @@ func _run() -> void:
 			break
 		await _wait(0.5)
 	var ids: Array = []
-	for id: StringName in ZeeWeaponPack.table():
+	for id: StringName in AwWeaponCatalogue.table():
 		ids.append(str(id))
 	var only := _arg(args, "--only", "")
 	if only != "":
@@ -47,7 +48,7 @@ func _run() -> void:
 	var done := 0
 	for id_s in ids:
 		var id := StringName(id_s)
-		var def: DotWeaponDef = ZeeWeaponPack.table().get(id)
+		var def: DotWeaponDef = AwWeaponCatalogue.table().get(id)
 		if def == null:
 			print("%s: unknown weapon, skipped" % id)
 			continue

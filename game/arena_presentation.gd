@@ -1158,7 +1158,7 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 		# pellet directions are not kept per impact.
 		#
 		# [b]With the weapon drawing its own shot, only the hole is this layer's.[/b]
-		# zee-dot-weapons' `ZeeShotFx` puts the flash at the real muzzle, a tracer, a spark
+		# arena-weapons' `AwShotFx` puts the flash at the real muzzle, a tracer, a spark
 		# and a report per weapon; drawing this layer's as well was two flashes, two sparks
 		# and a stand-in rifle report under the real one.
 		for at in shot.impacts:
@@ -1365,7 +1365,7 @@ func use_shot_rules(rules: DotShotRules) -> void:
 		shot_enclosure.rules = rules
 
 
-## The roof probe the weapon's shot sounds read (`ZeeShotFx.roof`): roofed means a room tail follows a shot.
+## The roof probe the weapon's shot sounds read (`AwShotFx.roof`): roofed means a room tail follows a shot.
 var shot_roof := DotAmbienceRoof.new()
 
 

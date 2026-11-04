@@ -1,6 +1,7 @@
 extends "headless_presentation_base.gd"
 
 const ArenaFlashlight := preload("../game/arena_flashlight.gd")
+const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")
 
 
 func _ready() -> void:
@@ -419,9 +420,9 @@ func _test_schema() -> void:
 		stock_ok = stock_ok and ArenaPresentation.sound_catalogue().find(DotAudioWeaponStock.id_of(sound)) != null
 	_check(stock_ok, "the game's sound catalogue carries every stock weapon sound")
 	var stock_streams := true
-	for sound in [ZeeWeaponSound.LIGHT, ZeeWeaponSound.SHOTGUN, ZeeWeaponSound.DRY, ZeeWeaponSound.EQUIP,
-			ZeeWeaponSound.RELOAD_OUT, ZeeWeaponSound.RELOAD_SHELL, ZeeWeaponSound.SUPPRESSED]:
-		var stock_stream := ZeeWeaponSound.stream(sound)
+	for sound in [AwWeaponSound.LIGHT, AwWeaponSound.SHOTGUN, AwWeaponSound.DRY, AwWeaponSound.EQUIP,
+			AwWeaponSound.RELOAD_OUT, AwWeaponSound.RELOAD_SHELL, AwWeaponSound.SUPPRESSED]:
+		var stock_stream := AwWeaponSound.stream(sound)
 		stock_streams = stock_streams and stock_stream is AudioStreamOggVorbis and stock_stream.resource_path.begins_with(DotWeaponSound.DIR)
 	_check(stock_streams, "weapon shots, dry, equip and reloads play the stock recordings, not the synth fallback")
 	var stock_problems := DotWeaponSound.check_stock()
@@ -1550,7 +1551,7 @@ func _test_bodies_fall() -> void:
 	var _set := g.setup(ArenaMap.dm_box())
 	var dmg := DotDamage.new()
 	dmg.attacker = 3
-	dmg.weapon_id = ZeeWeaponIds.SNIPER
+	dmg.weapon_id = AwWeaponIds.SNIPER
 	dmg.amount = 120.0
 	dmg.direction = Vector3(0, 0, -1)
 	var plain := g.decide_death(9, dmg)
@@ -1559,7 +1560,7 @@ func _test_bodies_fall() -> void:
 	var sniped := g.decide_death(9, dmg)
 	_check(sniped.reaction == &"power_launch", "with sv_ragdoll_exaggerate a sniper kill is a power launch (%s)" % sniped.reaction)
 	g.ragdoll_rules.set_cvar("sv_ragdoll_exaggerate", "0")
-	dmg.weapon_id = ZeeWeaponIds.PISTOL
+	dmg.weapon_id = AwWeaponIds.PISTOL
 	var counted := {}
 	for tick in range(200):
 		g._tick = tick
@@ -1603,7 +1604,7 @@ func _test_bodies_fall() -> void:
 	var gun_mesh := BoxMesh.new()
 	var gun_node := MeshInstance3D.new()
 	gun_node.mesh = gun_mesh
-	player.held = ZeeWorldModel.new()
+	player.held = AwWorldModel.new()
 	player.held.add_child(gun_node)
 	player.body_mesh.add_child(player.held)
 	var body := player.fall_body(yard, fall, false)
@@ -1959,9 +1960,11 @@ func _test_the_hud_follows_the_theme() -> void:
 ## weapons were invisible in production and nothing failed.
 func _test_the_weapon_art_is_vendored() -> void:
 	_section("Every model the weapon art table names is vendored in this game")
-	var count := ZeeWeaponArtTable.model_paths().size()
+	# The table holds only registered packs; the suite's order must not decide whether it is empty.
+	ArenaWeaponRoles.ensure()
+	var count := AwWeaponArtTable.model_paths().size()
 	_check(count > 20, "the table names models (%d)" % count)
-	var models := ZeeWeaponArtTable.validate_models()
+	var models := AwWeaponArtTable.validate_models()
 	_check(models.ok, "no weapon model is missing", "" if models.ok else models.error.message)
 	_done()
 

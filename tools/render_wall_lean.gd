@@ -47,7 +47,7 @@ func _initialize() -> void:
 func _physics_process(_delta: float) -> bool:
 	if not _armed:
 		_armed = true
-		var hands := ZeeViewModel.new()
+		var hands := AwViewModel.new()
 		hands.name = "Hands"
 		_player.camera.add_child(hands)
 		_player.arm_first_person(hands, true)

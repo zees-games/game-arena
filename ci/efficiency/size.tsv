@@ -46,7 +46,7 @@ examples/headless_match.gd::_test_spectating	93
 examples/headless_match.gd::_test_survey	128
 examples/headless_match.gd::_test_team_deathmatch	97
 examples/headless_match.gd::_test_toys	119
-examples/headless_match.gd::_test_zee_weapons	230
+examples/headless_match.gd::_test_pack_weapons	230
 examples/headless_net.gd	2077
 examples/headless_net.gd::_test_event_wire	199
 examples/headless_net.gd::_test_map_sync_wire	175

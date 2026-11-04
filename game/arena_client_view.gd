@@ -17,7 +17,7 @@ func _avatar_figure(peer_id: int) -> Object:
 func _exit_tree() -> void:
 	# A static outlives this game: the next one a shell loads must not look for its art
 	# under this game's mount.
-	ZeeModelCache.set_asset_root("res://")
+	AwModelCache.set_asset_root("res://")
 	ArenaWeaponSkins.clear()
 
 
@@ -89,10 +89,6 @@ var _account_auth: Object = null
 ## without a shell, or from a shell that predates it: then every loadout is "local".
 const AUTH_SERVICE := &"dot_auth_client"
 
-const WEAPON_CARDS_SCRIPT := "res://addons/zee_weapons/content/zee_weapon_cards.gd"
-var _weapon_cards: Script = null
-## Older zee_weapons shells lack it; the sprite is the fallback.
-const WEAPON_PREVIEW_SCRIPT := "res://addons/zee_weapons/view/zee_weapon_preview.gd"
 var _weapon_table: Dictionary = {}
 var _previews: Node = null
 
@@ -186,12 +182,12 @@ func random_spawn_loadout(on: bool) -> Variant:
 	return await game.loadout_command.call(&"set_random_spawn", ArenaGame.storage_key(player.player_id), on)
 
 
-## A card's picture (the HUD's rendered weapon silhouettes) and numbers (zee's cards).
+## A card's picture (the HUD's rendered weapon silhouettes) and numbers (arena-weapons' cards).
 func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
 	var id := StringName(str(choice.get("id", "")))
 	var out: Dictionary = {}
-	if _previews == null and ResourceLoader.exists(WEAPON_PREVIEW_SCRIPT):
-		_previews = (load(WEAPON_PREVIEW_SCRIPT) as GDScript).new()
+	if _previews == null:
+		_previews = AwWeaponPreview.new()
 		_previews.name = "WeaponPreviews"
 		add_child(_previews)
 	var icon: Texture2D = _previews.texture(id) if _previews != null else null
@@ -206,14 +202,10 @@ func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary
 		out["kind"] = "Gear"
 		out["stats"] = [{"label": "Armour", "value": 1.0, "text": "100"}]
 		return out
-	if _weapon_cards == null and DotAddonApi.build_level("zee_weapons") >= 3 and ResourceLoader.exists(WEAPON_CARDS_SCRIPT):
-		_weapon_cards = load(WEAPON_CARDS_SCRIPT) as Script
 	if _weapon_table.is_empty():
 		_weapon_table = ArenaContent.weapon_table()
-	if _weapon_cards != null and _weapon_table.has(id):
-		var card: Variant = _weapon_cards.call(&"card", _weapon_table[id])
-		if card is Dictionary:
-			out.merge(card as Dictionary)
+	if _weapon_table.has(id):
+		out.merge(AwWeaponCards.card(_weapon_table[id]))
 	return out
 
 

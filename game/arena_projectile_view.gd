@@ -10,7 +10,7 @@ const ArenaProjectiles := preload("arena_projectiles.gd")
 ## reads the same list the simulation advances, once a frame, and moves one node per
 ## entry; it writes nothing back, so dropping it changes no outcome.
 ##
-## A grenade is its own model from zee-dot-weapons' art table, turned and scaled the way
+## A grenade is its own model from arena-weapons' art table, turned and scaled the way
 ## the pack draws it in a hand. The launcher's round has no model in the kit worth the
 ## name at this size, so it is a small hot sphere with a light, which is also what reads
 ## at forty metres. On a networked client the list is the copies the server's LAUNCH
@@ -89,15 +89,15 @@ func _make(f: ArenaProjectiles.Flying) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Projectile"
 
-	var art: Variant = ZeeWeaponArtTable.table().get(f.spawn.id)
+	var art: Variant = AwWeaponArtTable.table().get(f.spawn.id)
 
-	if f.spawn.fuse_ticks > 0 and art is ZeeWeaponArt and (art as ZeeWeaponArt).has_model():
-		var model := ZeeModelCache.instantiate((art as ZeeWeaponArt).model_path)
+	if f.spawn.fuse_ticks > 0 and art is AwWeaponVisual and (art as AwWeaponVisual).has_model():
+		var model := AwModelCache.instantiate((art as AwWeaponVisual).model_path)
 
 		if model != null:
 			# The hand's turn and scale, without the hand's offset: the origin is the
 			# grenade's own, and the entry's position is where it is.
-			var placed := (art as ZeeWeaponArt).world_transform()
+			var placed := (art as AwWeaponVisual).world_transform()
 			placed.origin = Vector3.ZERO
 			model.transform = placed
 			root.add_child(model)

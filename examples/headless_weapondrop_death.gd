@@ -7,6 +7,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const Wiring := preload("../game/arena_weapon_drop_wiring.gd")
+const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")
 
 const TOLERANCE := 0.02
 const TICK_RATE := 64
@@ -127,7 +128,8 @@ func _drop_deaths(game: ArenaGame, player: Object, drops: DotWeaponDrops, mask: 
 	for xi in range(-8, 9, 2):
 		for zi in range(-8, 9, 2):
 			spots.append(Vector2(xi, zi))
-	var ids: Array = ZeeWeaponArtTable.table().keys()
+	ArenaWeaponRoles.ensure()
+	var ids: Array = AwWeaponArtTable.table().keys()
 	ids.sort()
 	_check(ids.size() > 10, "the art table has weapons", str(ids.size()))
 	var sent := {}

@@ -118,7 +118,7 @@ func _stage_feel(map: ArenaMap, id: StringName) -> void:
 	_local.camera.current = false
 	# Where the arena's vendored weapon art is; the client says so at boot, and without it
 	# the hands are drawn holding nothing.
-	ZeeModelCache.set_asset_root("res://")
+	AwModelCache.set_asset_root("res://")
 	_players.append(_local)
 
 	# The hands are armed on the first frame, not here: this runs in the script's _init,
@@ -130,7 +130,7 @@ func _stage_feel(map: ArenaMap, id: StringName) -> void:
 		if old_hands != null:
 			old_hands.get_parent().remove_child(old_hands)
 			old_hands.free()
-		var hands := ZeeViewModel.new()
+		var hands := AwViewModel.new()
 		hands.name = "Hands"
 		_local.camera.add_child(hands)
 		var old_arms := root.get_node_or_null(^"ViewArms")
@@ -176,8 +176,8 @@ func _feel_shots_view(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, ar
 			"local": true,
 			"arm": func() -> void:
 				arm_hands.call()
-				var _g := _local.arsenal.give(ZeeWeaponIds.SNIPER)
-				hold.call(ZeeWeaponIds.SLOT_HEAVY),
+				var _g := _local.arsenal.give(AwWeaponIds.SNIPER)
+				hold.call(AwWeaponIds.SLOT_HEAVY),
 			"wait": 30,
 		},
 		{
@@ -187,8 +187,8 @@ func _feel_shots_view(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, ar
 				arm_hands.call()
 				# The sniper itself: give_everything leaves the heavy slot holding the last
 				# heavy it gave, which is not the sniper.
-				var _g := _local.arsenal.give(ZeeWeaponIds.SNIPER)
-				hold.call(ZeeWeaponIds.SLOT_HEAVY)
+				var _g := _local.arsenal.give(AwWeaponIds.SNIPER)
+				hold.call(AwWeaponIds.SLOT_HEAVY)
 				_local.aim_held = true
 				_hud.visible = true,
 			"wait": 30,
@@ -198,7 +198,7 @@ func _feel_shots_view(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, ar
 			"local": true,
 			"arm": func() -> void:
 				_local.aim_held = false
-				hold.call(ZeeWeaponIds.SLOT_PRIMARY)
+				hold.call(AwWeaponIds.SLOT_PRIMARY)
 				_local.health.health = _local.health.max_health * 0.12
 				_local.controller.state.launch_cooldown_left = 5.5
 				_local.controller.state.slide_time = 0.3
@@ -310,15 +310,15 @@ func _feel_shots_world(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, a
 ## `--feel --muzzle`: only the muzzle flash, first-person, one frame per weapon, grabbed two frames after the trigger (a flash lives about 0.1 s).
 func _stage_muzzle(id: StringName, arm_hands: Callable, hold: Callable) -> void:
 	_shots = []
-	var picks: Array = [[ZeeWeaponIds.PISTOL, ZeeWeaponIds.SLOT_SIDEARM], [ZeeWeaponIds.RIFLE, ZeeWeaponIds.SLOT_PRIMARY],
-			[ZeeWeaponIds.SHOTGUN, ZeeWeaponIds.SLOT_PRIMARY], [ZeeWeaponIds.SNIPER, ZeeWeaponIds.SLOT_HEAVY]]
+	var picks: Array = [[AwWeaponIds.PISTOL, AwWeaponIds.SLOT_SIDEARM], [AwWeaponIds.RIFLE, AwWeaponIds.SLOT_PRIMARY],
+			[AwWeaponIds.SHOTGUN, AwWeaponIds.SLOT_PRIMARY], [AwWeaponIds.SNIPER, AwWeaponIds.SLOT_HEAVY]]
 	# `--weapons=smg:3,knife:1` (id:slot) replaces the default four with any weapon in any slot.
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--weapons="):
 			picks = []
 			for pair: String in arg.trim_prefix("--weapons=").split(",", false):
 				var parts := pair.split(":")
-				picks.append([StringName(parts[0]), int(parts[1]) if parts.size() > 1 else ZeeWeaponIds.SLOT_PRIMARY])
+				picks.append([StringName(parts[0]), int(parts[1]) if parts.size() > 1 else AwWeaponIds.SLOT_PRIMARY])
 	for pick: Array in picks:
 		var weapon: StringName = pick[0]
 		var slot: int = pick[1]
@@ -527,14 +527,14 @@ func _stage_people(map: ArenaMap, id: StringName) -> void:
 	_local.spawn(Transform3D(Basis(), Vector3(-1.0, 0.05, 20.0)), 0)
 	_local.attach_camera(100.0)
 	_local.camera.current = false
-	ZeeModelCache.set_asset_root("res://")
+	AwModelCache.set_asset_root("res://")
 	_players.append(_local)
 	var arm_for := func(body: StringName) -> void:
 		var old_hands := _local.get_node_or_null(^"Camera/Hands")
 		if old_hands != null:
 			old_hands.get_parent().remove_child(old_hands)
 			old_hands.free()
-		var hands := ZeeViewModel.new()
+		var hands := AwViewModel.new()
 		hands.name = "Hands"
 		_local.camera.add_child(hands)
 		var old_arms := root.get_node_or_null(^"ViewArms")
@@ -546,7 +546,7 @@ func _stage_people(map: ArenaMap, id: StringName) -> void:
 		_local.arm_first_person(hands, true)
 		var _given := _local.weapons.give_everything()
 		var ask := DotWeaponCommand.new()
-		ask.slot = ZeeWeaponIds.SLOT_PRIMARY
+		ask.slot = AwWeaponIds.SLOT_PRIMARY
 		for tick in range(0, 80):
 			var _o := _local.simulate_tick(tick, 1.0 / 64.0, DotFpsCommand.new(), ask)
 			ask = DotWeaponCommand.new()

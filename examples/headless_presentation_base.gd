@@ -176,8 +176,8 @@ func _check_loadout_accounts(client: ArenaClient) -> void:
 ## The crosshair, down the sights: hip draws it, aimed hides it, released brings it back.
 func _check_crosshair_sights(client: ArenaClient, me: ArenaPlayer, game: ArenaGame) -> void:
 	var hud: ArenaHud = client.hud
-	var hands: ZeeViewModel = me.weapons.view_model() as ZeeViewModel if me.weapons != null else null
-	me.arsenal.select(ZeeWeaponIds.SLOT_PRIMARY, game.current_tick())
+	var hands: AwViewModel = me.weapons.view_model() as AwViewModel if me.weapons != null else null
+	me.arsenal.select(AwWeaponIds.SLOT_PRIMARY, game.current_tick())
 	for _i in 30:
 		await get_tree().process_frame
 	if _check(hud != null and hud.crosshair != null and hands != null, "the HUD has a crosshair and the player hands"):

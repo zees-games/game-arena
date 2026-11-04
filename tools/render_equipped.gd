@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## The real offline flow, two frames: the local player's first-person hands, then a bot's held weapon from a debug camera.
-## Written to screenshots/equipped_{view,bot}.png; proves the equipped weapon is the weapon pack's art, not zee's stand-in.
+## Written to screenshots/equipped_{view,bot}.png; proves the equipped weapon is the weapon pack's art, not the base stand-in.
 ##
 ##   xvfb-run -a godot --path . --resolution 1280x720 --script tools/render_equipped.gd
 
@@ -11,6 +11,7 @@ var client: Node = null
 
 
 func _initialize() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
 	var _scratch := ArenaPresentation.use_scratch_settings("render_equipped")
 	client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	client.set("force_offline", true)
@@ -39,7 +40,7 @@ func _run() -> void:
 	print("SELECT ", me.arsenal.select(3, Engine.get_physics_frames()))
 	await _wait(2.5)
 	var def = me.arsenal.current_def()
-	var art = ZeeWeaponArtTable.table().get(def.id)
+	var art = AwWeaponArtTable.table().get(def.id)
 	print("EQUIPPED ", def.id, " model=", art.model_path if art else "none")
 	(await _grab("screenshots/equipped_view.png"))
 
@@ -55,7 +56,7 @@ func _run() -> void:
 	for other in client.get("game").players():
 		if other == me or other.held == null or other.held.equipped() == &"":
 			continue
-		var bart = ZeeWeaponArtTable.table().get(other.held.equipped())
+		var bart = AwWeaponArtTable.table().get(other.held.equipped())
 		print("BOT ", other.name, " holds ", other.held.equipped(), " model=", bart.model_path if bart else "none")
 		var at: Vector3 = other.held.global_position
 		cam.global_position = at + Vector3(0.9, 0.3, 0.9)

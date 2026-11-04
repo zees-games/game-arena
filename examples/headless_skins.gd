@@ -17,12 +17,12 @@ var _failed := 0
 
 
 func _ready() -> void:
-	var zee_models := _models()
-	_check(zee_models.size() == ROLES.size(), "zee art has a model for every role: %d" % zee_models.size())
+	Roles.ensure()
+	var own_models := _models()
+	_check(own_models.values().all(func(m: String) -> bool: return m != ""), "the own pack has a model for every role: %s" % str(own_models))
 
 	var none := ArenaWeaponSkins.apply("res://nonexistent")
 	_check(none.is_empty(), "no pack root: nothing applied")
-	# apply() registers the default weapon provider's own art source, so "undressed" is this, not the bare zee table.
 	var undressed := _models()
 	_check(undressed.size() == ROLES.size(), "no pack: every role still has art")
 
@@ -38,14 +38,14 @@ func _ready() -> void:
 		var skinned := _models()
 
 		for role in ROLES:
-			_check(skinned[role] != "" and skinned[role] != zee_models[role], "%s is dressed by the pack: %s" % [role, skinned[role]])
+			_check(skinned[role].begins_with("res://addons/arena_weapons/"), "%s wears the pack's model: %s" % [role, skinned[role]])
 
-		# Anything that rebuilds the table after apply() must not bring zee's art back.
-		ZeeWeaponArtTable.drop_cache()
+		# Anything that rebuilds the table after apply() must keep it.
+		AwWeaponArtTable.drop_cache()
 		_check(_models() == skinned, "drop_cache after apply keeps the dressing")
-		ZeeWeaponArtTable.add_source(&"skins_probe", Callable(self, &"_no_art"))
+		AwWeaponArtTable.add_source(&"skins_probe", Callable(self, &"_no_art"))
 		_check(_models() == skinned, "add_source after apply keeps the dressing")
-		ZeeWeaponArtTable.remove_source(&"skins_probe")
+		AwWeaponArtTable.remove_source(&"skins_probe")
 		_check(_models() == skinned, "remove_source after apply keeps the dressing")
 		Roles.clear()
 		Roles.ensure()
@@ -58,7 +58,7 @@ func _ready() -> void:
 	ArenaWeaponSkins.clear()
 	_check(_models() == undressed, "clear restores the undressed art")
 
-	var art := ZeeWeaponArtTable.table().get(&"rifle") as ZeeWeaponArt
+	var art := AwWeaponArtTable.table().get(&"rifle") as AwWeaponVisual
 	_check(art != null and art.model_path != "", "rifle art resolves after every case")
 
 	print("RESULT: ", "PASS" if _failed == 0 and _checks >= 1 else "FAIL", " ", _checks, " checks, ", _failed, " failed")
@@ -67,10 +67,10 @@ func _ready() -> void:
 
 func _models() -> Dictionary:
 	var out := {}
-	var table := ZeeWeaponArtTable.table()
+	var table := AwWeaponArtTable.table()
 
 	for role in ROLES:
-		var art := table.get(role) as ZeeWeaponArt
+		var art := table.get(role) as AwWeaponVisual
 		out[role] = "" if art == null else art.model_path
 
 	return out
@@ -84,5 +84,5 @@ func _check(ok: bool, what: String) -> void:
 		print("FAIL: ", what)
 
 
-func _no_art() -> Array[ZeeWeaponArt]:
+func _no_art() -> Array[AwWeaponVisual]:
 	return []

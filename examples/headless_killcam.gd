@@ -230,18 +230,18 @@ func _check_events(killer: Object, me: Object) -> void:
 	var was: Array = [bot.mirrored, bot.mirror_fire_seq, bot.mirror_fire_kind]
 	bot.mirrored = true
 	bot.mirror_fire_seq = 7
-	bot.mirror_fire_kind = ZeeWeaponNet.KIND_SHOT
+	bot.mirror_fire_kind = AwWeaponNet.KIND_SHOT
 	var aux := KillPov.aux_of(bot)
 	bot.mirrored = was[0]
 	bot.mirror_fire_seq = was[1]
 	bot.mirror_fire_kind = was[2]
-	_check(aux[2] == 7.0 and aux[3] == float(ZeeWeaponNet.KIND_SHOT), "a remote body records its fire count and kind", str(aux))
+	_check(aux[2] == 7.0 and aux[3] == float(AwWeaponNet.KIND_SHOT), "a remote body records its fire count and kind", str(aux))
 	var row := func(seq: float, alive: bool) -> Array:
-		return [Vector3.ZERO, 0.0, 0.0, alive, 1.6] + [0.0, 0.0, seq, float(ZeeWeaponNet.KIND_SHOT)]
+		return [Vector3.ZERO, 0.0, 0.0, alive, 1.6] + [0.0, 0.0, seq, float(AwWeaponNet.KIND_SHOT)]
 	var flashes := func() -> int:
 		var n := 0
-		for f: Node in get_tree().root.find_children("*", "ZeeShotFx", true, false):
-			n += (f as ZeeShotFx).live_count()
+		for f: Node in get_tree().root.find_children("*", "AwShotFx", true, false):
+			n += (f as AwShotFx).live_count()
 		return n
 	var yard: DotPlayerRagdolls = _client.get("ragdolls")
 	var body: Node3D = bot.body_mesh
@@ -306,8 +306,8 @@ func _check_lens(gm: Object, me: Object, killer: Object) -> void:
 	cam.look_at_from_position(wall_eye, wall_eye + wall_dir)
 	var view := KillPovView.new()
 	view.world_mask = mask
-	view.feel_rules = gm.get(&"feel_rules") as ZeeViewFeel
-	view.ads_rules = gm.get(&"ads_rules") as ZeeAdsRules
+	view.feel_rules = gm.get(&"feel_rules") as AwViewFeel
+	view.ads_rules = gm.get(&"ads_rules") as AwAdsRules
 	add_child(view)
 	var aux := KillPov.aux_of(killer)
 	var peak := 0.0

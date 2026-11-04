@@ -38,7 +38,7 @@ func _run() -> void:
 		return
 	var me = _client.get("player")
 	me.health.invulnerable = true
-	var ids: Array = ZeeWeaponPack.table().keys()
+	var ids: Array = AwWeaponCatalogue.table().keys()
 	ids.sort()
 	_sections = ids.size()
 	for id: StringName in ids:
@@ -50,7 +50,7 @@ func _weapon(me: Node, id: StringName) -> void:
 	_entered += 1
 	print("")
 	print(id)
-	var def: DotWeaponDef = ZeeWeaponPack.table()[id]
+	var def: DotWeaponDef = AwWeaponCatalogue.table()[id]
 	var _given = me.arsenal.give(id)
 	me.arsenal.equip(def.slot)
 	var held := await _until(func() -> bool: return me.arsenal.current() != null and me.arsenal.current().def.id == id and _holding(), 3.0)
@@ -106,14 +106,14 @@ func _weapon(me: Node, id: StringName) -> void:
 
 ## How far the gun sits right of the eye's centre line, metres.
 func _holder_x() -> float:
-	var vm: ZeeViewModel = _client.get("view_model")
+	var vm: AwViewModel = _client.get("view_model")
 	var camera: Camera3D = _client.get("player").camera
 	return absf((camera.global_transform.affine_inverse() * (vm.get(&"_holder") as Node3D).global_position).x)
 
 
 ## Held aim must bring a weapon that can aim fully up, and its gun nearer the centre than at the hip.
 func _check_centred(id: StringName, hip_x: float) -> void:
-	var vm: ZeeViewModel = _client.get("view_model")
+	var vm: AwViewModel = _client.get("view_model")
 	if not vm.can_aim():
 		return
 	var x := _holder_x()
@@ -129,7 +129,7 @@ func _sample(worst: Dictionary, seconds: float) -> void:
 		# A zero timer fires after the frame's _process, as drawn: at process_frame the player has stepped and the arms have not yet followed.
 		await get_tree().process_frame
 		await get_tree().create_timer(0.0).timeout
-		var vm: ZeeViewModel = _client.get("view_model")
+		var vm: AwViewModel = _client.get("view_model")
 		var arms: Node3D = _client.get("view_arms")
 		if vm == null or vm.is_scoped() or not _holding() or not arms.visible:
 			continue
@@ -172,13 +172,13 @@ func _sample(worst: Dictionary, seconds: float) -> void:
 			worst.sets = sets
 
 
-## Visible arm sets near the eye: zee's own, dot-player-char's view arms, a first-person figure.
+## Visible arm sets near the eye: the pack's own, dot-player-char's view arms, a first-person figure.
 func _arm_sets(camera: Camera3D) -> int:
 	var found: Array = []
 	for node in _client.find_children("*", "Node3D", true, false):
 		var script: Script = node.get_script()
 		var named := str(script.get_global_name()) if script != null else ""
-		if named in ["ZeeViewArms", "DotPlayerViewArms"] and (node as Node3D).is_visible_in_tree() and (node as Node3D).global_position.distance_to(camera.global_position) < 2.0:
+		if named in ["AwViewArms", "DotPlayerViewArms"] and (node as Node3D).is_visible_in_tree() and (node as Node3D).global_position.distance_to(camera.global_position) < 2.0:
 			found.append(node)
 	return found.size()
 

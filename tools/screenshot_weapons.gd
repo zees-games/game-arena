@@ -238,7 +238,7 @@ func _force_sprint() -> void:
 		me.weapons.view_model().set_sprinting(true)
 
 
-## The long-gun carry from before zee v0.1.58 (yaw 52-55), to compare against the current one.
+## The long-gun carry from before the v0.1.58 view runtime (yaw 52-55), to compare against the current one.
 func _use_old_carry() -> void:
 	var vm = client.get("player").weapons.view_model()
 	var tun = vm.get("_pose").tunables

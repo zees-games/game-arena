@@ -1,14 +1,13 @@
 {
   "format": 1,
   "addons": {
-    "arena_weapons": 5,
+    "arena_weapons": 8,
     "dot_bot": 11,
     "dot_loadout": 1,
     "dot_menu": 5,
     "dot_player_controller": 2,
     "dot_props": 6,
     "dot_replay": 8,
-    "dot_ui": 17,
-    "zee_weapons": 2
+    "dot_ui": 17
   }
 }

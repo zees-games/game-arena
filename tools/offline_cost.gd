@@ -23,6 +23,7 @@ var _last := 0
 
 
 func _ready() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
 	var args := OS.get_cmdline_user_args()
 	for i in range(args.size() - 1):
 		match args[i]:
@@ -43,7 +44,7 @@ func _run() -> void:
 	_client.set("mouse_capture_override", true)
 	_client.set("offline_bots", _bots)
 	add_child(_client)
-	var _warmed := ZeeModelCache.warm(ZeeWeaponArtTable.model_paths())
+	var _warmed := AwModelCache.warm(AwWeaponArtTable.model_paths())
 	var pilot := ClientBench.Pilot.new()
 	pilot.process_priority = -999
 	add_child(pilot)

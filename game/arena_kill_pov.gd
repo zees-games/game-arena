@@ -131,6 +131,6 @@ static func weapon_of(hash_value: float) -> StringName:
 	if _ids.is_empty() or _ids_generation != Roles.generation:
 		_ids_generation = Roles.generation
 		_ids.clear()
-		for k: Variant in ZeeWeaponArtTable.table().keys():
+		for k: Variant in AwWeaponArtTable.table().keys():
 			_ids[int(String(k).hash() & 0xFFFFFF)] = StringName(k)
 	return _ids.get(int(hash_value), &"")

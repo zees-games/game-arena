@@ -105,7 +105,7 @@ func _run() -> void:
 	await _shot("arena_loadout_equipped")
 
 	# The crosshair: at the hip, then down the sights with the aim key held.
-	me.arsenal.select(ZeeWeaponIds.SLOT_PRIMARY, client.get("game").current_tick())
+	me.arsenal.select(AwWeaponIds.SLOT_PRIMARY, client.get("game").current_tick())
 	await _wait(1.0)
 	await _shot("arena_ads_hip")
 	var hud = client.get("hud")
@@ -134,7 +134,7 @@ func _run_rest(me, hud) -> void:
 
 	# A scoped gun: its own reticle, the crosshair hidden as it always was.
 	var _given = me.arsenal.give(&"marksman")
-	me.arsenal.select(ZeeWeaponIds.SLOT_PRIMARY, client.get("game").current_tick())
+	me.arsenal.select(AwWeaponIds.SLOT_PRIMARY, client.get("game").current_tick())
 	await _wait(1.0)
 	Input.action_press(&"arena_aim")
 	await _wait(1.0)

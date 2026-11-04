@@ -2,7 +2,7 @@ extends SceneTree
 
 ## The offline client's first-person hands for every role an installed weapon pack skins: a frame at the hip and one aimed,
 ## written to screenshots/weapons/<role>_{hip,aim}.png (tools/render_weapons.sh joins them into a sheet).
-## `--arena-no-weapon-skins` renders zee's own art for the comparison.
+## `--arena-no-weapon-skins` renders the base art for the comparison.
 ##
 ##   xvfb-run -a godot --path . --resolution 1280x720 --script tools/render_weapons.gd [-- --arena-no-weapon-skins]
 
@@ -17,6 +17,7 @@ var failed: Array[String] = []
 
 
 func _initialize() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
 	var _scratch := ArenaPresentation.use_scratch_settings("render_weapons")
 	var scene: PackedScene = load("res://game/arena.tscn")
 	client = scene.instantiate()
@@ -48,7 +49,7 @@ func _run() -> void:
 
 	# A game whose own pack holds the plain ids skins nothing by role: every weapon in the catalogue is its art.
 	if roles.is_empty():
-		for id: StringName in ZeeWeaponPack.table():
+		for id: StringName in AwWeaponCatalogue.table():
 			roles.append(str(id))
 
 	var only := OS.get_environment("RENDER_ONLY")
@@ -57,7 +58,7 @@ func _run() -> void:
 
 	for role in roles:
 		var id := StringName(role)
-		var def: DotWeaponDef = ZeeWeaponPack.table().get(id)
+		var def: DotWeaponDef = AwWeaponCatalogue.table().get(id)
 		if def == null:
 			continue
 		# A warmup ending respawns the player with the default loadout: hand the weapon over again until both frames hold it.
@@ -67,9 +68,9 @@ func _run() -> void:
 			var _g = me.arsenal.give(id)
 			me.arsenal.equip(def.slot)
 			await _wait(1.4)
-			var vms := client.find_children("*", "ZeeViewModel", true, false)
+			var vms := client.find_children("*", "AwViewModel", true, false)
 			if not vms.is_empty():
-				print("%s wall=%.3f" % [role, (vms[0] as ZeeViewModel).wall_amount()])
+				print("%s wall=%.3f" % [role, (vms[0] as AwViewModel).wall_amount()])
 			await _shot("%s_hip" % role)
 			Input.action_press(&"arena_aim")
 			await _wait(0.9)
@@ -90,20 +91,20 @@ func _run() -> void:
 ## from the frame without the view model; the camera's far plane hides the world and the post alike. A red dot's lens is a
 ## faint tint and its centre is red. Measured with the default cone, so a server that turns the cut off fails it.
 func _see_through(role: String) -> void:
-	var vms := client.find_children("*", "ZeeViewModel", true, false)
+	var vms := client.find_children("*", "AwViewModel", true, false)
 	if vms.is_empty():
 		return
-	var vm := vms[0] as ZeeViewModel
+	var vm := vms[0] as AwViewModel
 	if vm.is_scoped() or vm.aim_fraction() < 0.99 or vm._art == null or vm._weapon == null:
 		return
-	var cone: Dictionary = ZeeViewModel.SightFit.cone_for(vm._art, ZeeAdsRules.new(), [vm._weapon], vm._holder, vm._aim_target(), vm._sight_line)
+	var cone: Dictionary = AwViewModel.SightFit.cone_for(vm._art, AwAdsRules.new(), [vm._weapon], vm._holder, vm._aim_target(), vm._sight_line)
 	if cone.is_empty():
 		return
 	var camera := root.get_viewport().get_camera_3d()
 	var to_camera := camera.global_transform.affine_inverse() * vm._holder.global_transform
 	var axis: Vector3 = cone.axis
 	var eye: Vector3 = cone.eye
-	var lens := ZeeViewModel.SightFit.red_of(vm._sight)
+	var lens := AwViewModel.SightFit.red_of(vm._sight)
 	var reach := minf(float(cone.stop), 2.0)
 	if cone.red and lens != null:
 		reach = (vm._holder.global_transform.affine_inverse() * lens.global_position - eye).dot(axis)

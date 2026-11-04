@@ -97,7 +97,7 @@ var objective_label: Label = null
 var blind_overlay: ColorRect = null
 
 ## The scope, drawn at full aim with a scoped weapon. Under every widget, over the world.
-var scope: ZeeScopeOverlay = null
+var scope: AwScopeOverlay = null
 
 ## Red at the screen's edge when the followed player is badly hurt, and a short pulse of it
 ## on every hit. Drawn by a shader per pixel ([constant HURT_SHADER]), so no art and no
@@ -701,7 +701,7 @@ func build(p_game: ArenaGame) -> void:
 	hurt_overlay.modulate.a = 0.0
 	add_child(hurt_overlay)
 
-	scope = ZeeScopeOverlay.new()
+	scope = AwScopeOverlay.new()
 	scope.name = "Scope"
 	add_child(scope)
 
@@ -1179,11 +1179,11 @@ static func weapon_line(who: ArenaPlayer) -> String:
 ## followed player. Public so a suite can drive it without a frame.
 func present_body() -> void:
 	var live := _live()
-	var hands: ZeeViewModel = (
-		player.weapons.view_model() as ZeeViewModel
+	var hands: AwViewModel = (
+		player.weapons.view_model() as AwViewModel
 		if live and player.weapons != null else null
 	)
-	# The scope's view comes up over the aim-in (zee_ads_rules), so the crosshair gives way as it does.
+	# The scope's view comes up over the aim-in (aw_ads_rules), so the crosshair gives way as it does.
 	var scope_up := hands != null and hands.scope_fraction() > 0.0
 
 	if scope != null:

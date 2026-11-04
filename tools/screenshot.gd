@@ -336,8 +336,8 @@ func _play_glance() -> void:
 
 	_local = game.player_for(112)
 	_local.attach_camera(100.0)
-	ZeeModelCache.set_asset_root("res://")
-	var hands := ZeeViewModel.new()
+	AwModelCache.set_asset_root("res://")
+	var hands := AwViewModel.new()
 	hands.name = "Hands"
 	_local.camera.add_child(hands)
 	_local.arm_first_person(hands, true)
@@ -350,7 +350,7 @@ func _play_glance() -> void:
 		_local.camera.add_child(flat)
 		flat.show_weapon(&"marksman")
 	var ask := DotWeaponCommand.new()
-	ask.slot = ZeeWeaponIds.SLOT_PRIMARY
+	ask.slot = AwWeaponIds.SLOT_PRIMARY
 	for tick in range(game.current_tick() + 1, game.current_tick() + 60):
 		var _o := _local.simulate_tick(tick, 1.0 / 64.0, DotFpsCommand.new(), ask)
 		ask = DotWeaponCommand.new()

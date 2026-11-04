@@ -11,7 +11,7 @@ static func build(game) -> void:
 	# `game.headless` is the collision backend and is true on every client; a screen decides drawing.
 	layer.draws = not DotPlatform.is_headless()
 	layer.collision_mask = game.ragdoll_rules.collision_mask
-	layer.keep_slots = [ZeeWeaponIds.SLOT_MELEE]
+	layer.keep_slots = [AwWeaponIds.SLOT_MELEE]
 	layer.team_of = func(pid: int) -> int: return game.team_of(pid) if not game.teams().is_empty() else 0
 	layer.look_of = look
 	game.weapon_drops = layer
@@ -123,13 +123,13 @@ static func class_def_of(game, id: int) -> DotPlayerClassDef:
 
 
 static func look(weapon_id: StringName) -> Node3D:
-	var art: Variant = ZeeWeaponArtTable.table().get(weapon_id)
-	if not (art is ZeeWeaponArt):
+	var art: Variant = AwWeaponArtTable.table().get(weapon_id)
+	if not (art is AwWeaponVisual):
 		return null
-	var model := ZeeWorldModel.new()
+	var model := AwWorldModel.new()
 	# Its wall probe would slide the mesh out of the collision box beside any wall or step.
 	model.wall_response = false
-	var _drawn := model.equip(art as ZeeWeaponArt)
+	var _drawn := model.equip(art as AwWeaponVisual)
 	return model
 
 

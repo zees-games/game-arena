@@ -15,6 +15,7 @@ var _failed := 0
 
 
 func _initialize() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
 	var _scratch := ArenaPresentation.use_scratch_settings("render_reload")
 	client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	client.set("force_offline", true)
@@ -36,8 +37,8 @@ func _run() -> void:
 		await _wait(0.5)
 
 	var ids: Array = []
-	for id: StringName in ZeeWeaponPack.table():
-		var def: DotWeaponDef = ZeeWeaponPack.table()[id]
+	for id: StringName in AwWeaponCatalogue.table():
+		var def: DotWeaponDef = AwWeaponCatalogue.table()[id]
 		if def.uses_magazine():
 			ids.append(str(id))
 	ArenaViewArms.debug_pose = args.has("--pose-debug")
@@ -58,7 +59,7 @@ func _run() -> void:
 func _run_rest(frames: int, left: int, ids: Array) -> void:
 	for id_s in ids:
 		var id := StringName(id_s)
-		var def: DotWeaponDef = ZeeWeaponPack.table().get(id)
+		var def: DotWeaponDef = AwWeaponCatalogue.table().get(id)
 		if def == null:
 			continue
 		var me = client.get("player")
@@ -130,13 +131,13 @@ func _run_rest(frames: int, left: int, ids: Array) -> void:
 
 ## `--holds`: every weapon in the catalogue (or `--only`) at the hip and down the sights, the hands' reach to each grip printed.
 func _holds(args: PackedStringArray) -> void:
-	var ids: Array = ZeeWeaponPack.table().keys()
+	var ids: Array = AwWeaponCatalogue.table().keys()
 	ids.sort()
 	var only := _arg(args, "--only", "")
 	if only != "":
 		ids = Array(only.split(",")).map(func(s: String) -> StringName: return StringName(s))
 	for id: StringName in ids:
-		var def: DotWeaponDef = ZeeWeaponPack.table()[id]
+		var def: DotWeaponDef = AwWeaponCatalogue.table()[id]
 		var me = client.get("player")
 		me.health.invulnerable = true
 		if me.arsenal.carry != null:
@@ -187,14 +188,14 @@ func _drawn_sets(me: Node) -> Array:
 	return out
 
 
-## Every visible arms node near the eye: zee's own arms, dot-player-char's view arms, and any first-person figure.
+## Every visible arms node near the eye: the pack's own arms, dot-player-char's view arms, and any first-person figure.
 func _arm_owners(me: Node) -> Array:
 	var camera: Camera3D = me.camera
 	var out: Array = []
 	for node in client.find_children("*", "Node3D", true, false):
 		var script: Script = node.get_script()
 		var named := str(script.get_global_name()) if script != null else ""
-		if not named in ["ZeeViewArms", "DotPlayerViewArms", "DotHumanoidFigure"] or not (node as Node3D).is_visible_in_tree():
+		if not named in ["AwViewArms", "DotPlayerViewArms", "DotHumanoidFigure"] or not (node as Node3D).is_visible_in_tree():
 			continue
 		if (node as Node3D).global_position.distance_to(camera.global_position) < 2.0:
 			out.append(node)
@@ -218,9 +219,9 @@ func _changed(full_a: Image, full_b: Image) -> int:
 	return n
 
 
-func _view_model(me: Node) -> ZeeViewModel:
-	var found := (me.camera as Node).find_children("*", "ZeeViewModel", true, false)
-	return found[0] as ZeeViewModel if not found.is_empty() else null
+func _view_model(me: Node) -> AwViewModel:
+	var found := (me.camera as Node).find_children("*", "AwViewModel", true, false)
+	return found[0] as AwViewModel if not found.is_empty() else null
 
 
 ## How far each drawn hand is from where the view model asked it to be (metres): the arms' reach, not the sequence.
@@ -241,7 +242,7 @@ func _hand_gaps() -> String:
 	return "R %.2f L %.2f" % [right, left]
 
 
-func _phase(view: ZeeViewModel) -> String:
+func _phase(view: AwViewModel) -> String:
 	var seq: Variant = view.call(&"reload_sequence")
 	return "-" if seq == null else str(seq.call(&"phase_at", float(view.get(&"_reload_fraction"))))
 

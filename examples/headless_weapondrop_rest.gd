@@ -7,6 +7,7 @@ extends Node
 ## godot --headless --path . res://examples/headless_weapondrop_rest.tscn
 ## [/codeblock]
 
+const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")
 const TOLERANCE := 0.02
 const SETTLE_TICKS := 360
 
@@ -87,7 +88,8 @@ func _sunk(node: Node, course: String) -> float:
 
 
 func _run() -> void:
-	var ids: Array = ZeeWeaponArtTable.table().keys()
+	ArenaWeaponRoles.ensure()
+	var ids: Array = AwWeaponArtTable.table().keys()
 	ids.sort()
 	_check(ids.size() > 10, "the art table has weapons", str(ids.size()))
 	# Courses: flat floor (top y=0); a 20 degree ramp (surface through y=0 at z=0).
@@ -107,8 +109,8 @@ func _run() -> void:
 		drops.is_authority = true
 		drops.draws = true
 		drops.look_of = func(w: StringName) -> Node3D:
-			var art: Variant = ZeeWeaponArtTable.table().get(w)
-			if not (art is ZeeWeaponArt):
+			var art: Variant = AwWeaponArtTable.table().get(w)
+			if not (art is AwWeaponVisual):
 				return null
 			return (load("res://game/arena_weapon_drop_wiring.gd") as GDScript).call("look", w)
 		drops.rules.lifetime = 0.0

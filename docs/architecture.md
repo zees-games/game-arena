@@ -6,7 +6,7 @@ Every addon passes its own suite, and every one of those suites runs one addon w
 
 ```
 the fight        dot-player-controller  dot-combat  dot-weapon  dot-loadout  dot-match
-                 zee-dot-weapons (the weapons, and everything about them anybody sees)
+                 arena-weapons (the weapons, and everything about them anybody sees)
 what you keep    dot-stats  dot-achievements  dot-leaderboard
 the world        dot-map  dot-props  dot-npc  dot-npc-ai  dot-npc-ai-director  dot-entity
 what plays next  dot-vote
@@ -27,8 +27,8 @@ Every join between two addons is a few lines, and each is a few lines because th
 | Join | What it is |
 | --- | --- |
 | loadout → combat | `ArenaPlayer.give_loadout`, item ids that are the pack's weapon ids |
-| weapons → player | `ArenaPlayer._build_rig`, a `ZeeWeaponRig` handed the player's own arsenal by `arsenal_ref` |
-| weapons → wire | `ArenaPlayerNet`: `ZeeWeaponNet.all_specs()`, `net_weapon` for everybody, `net_carry` for the owner |
+| weapons → player | `ArenaPlayer._build_rig`, a `AwWeaponRig` handed the player's own arsenal by `arsenal_ref` |
+| weapons → wire | `ArenaPlayerNet`: `AwWeaponNet.all_specs()`, `net_weapon` for everybody, `net_carry` for the owner |
 | projectiles → clients | `ArenaProjectiles.launched` → `ArenaEvents.Kind.LAUNCH` → a copy flown by `client_tick` |
 | combat → match | `ArenaGame._on_entity_killed`, `entity_killed` → `report_kill` |
 | match → loadout | `ArenaGame._on_respawn_due` → `_apply_loadout_deferred` |

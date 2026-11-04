@@ -162,7 +162,7 @@ func _play(preset: String) -> void:
 		# Grenades the bot let go of: a throw is not a shot (a frag lobbed at where a target went
 		# behind cover is meant to be blind), so it is counted here and not judged by sight.
 		game.player_for(BOT).used.connect(func(outcome: DotWeaponOutcome) -> void:
-			if outcome != null and outcome.used and not outcome.spawns.is_empty() and game.player_for(BOT).arsenal.current_slot() == ZeeWeaponIds.SLOT_THROWN:
+			if outcome != null and outcome.used and not outcome.spawns.is_empty() and game.player_for(BOT).arsenal.current_slot() == AwWeaponIds.SLOT_THROWN:
 				thrown[0] += 1
 		)
 
@@ -257,7 +257,7 @@ func _play_rest(preset: String, game: ArenaGame, trace: DotTrace, world: ArenaBo
 	var bot := game.player_for(BOT)
 	# Into an empty arsenal, so it is in hand at once.
 	bot.arsenal.clear()
-	var _given := bot.arsenal.give(ZeeWeaponIds.LAUNCHER)
+	var _given := bot.arsenal.give(AwWeaponIds.LAUNCHER)
 	var rocket := world.projectile_speed(me)
 	_check(rifle == 0.0 and rocket > 0.0, "%s: the brain is told a rocket's speed (%.0f m/s) and a rifle's is none" % [preset, rocket], "rifle %.0f" % rifle)
 

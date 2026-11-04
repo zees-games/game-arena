@@ -542,21 +542,13 @@ var noblock: DotGameNoblock = null
 ## Whether a module has bound [member noblock]'s cvars and commands (they cannot be bound twice).
 var noblock_bound := false
 
-## The view model's motion amounts: zee-dot-weapons' `mp_vm_*` cvars. Bound by the module
+## The view model's motion amounts: arena-weapons' `mp_vm_*` cvars. Bound by the module
 ## (REPLICATED) and followed by the client, which is the end that draws the hands. The
 ## client's view model is handed this object, so one cvar change reaches the sway.
-var feel_rules: ZeeViewFeel = ZeeViewFeel.new()
+var feel_rules: AwViewFeel = AwViewFeel.new()
 
-## Aim-down-sights and hip-size numbers (`zee_ads_rules`, REPLICATED): the server's cfg over the shipped defaults. One per game, shared by every rig and the view model.
-var ads_rules: ZeeAdsRules = _arena_ads_rules()
-
-
-## Arena's hip hold crosses the crosshair 20 m out; zee's shipped 3 m turns every gun across the screen. An operator's cfg still wins.
-static func _arena_ads_rules() -> ZeeAdsRules:
-	var rules := ZeeAdsRules.load_config()
-	if is_equal_approx(float(rules.base.get("hip_zero", 0.0)), 3.0):
-		var _ok := rules.set_value(&"", "hip_zero", 20.0)
-	return rules
+## Aim-down-sights and hip-size numbers (`aw_ads_rules`, REPLICATED): the server's cfg over arena-weapons' defaults. One per game, shared by every rig and the view model.
+var ads_rules: AwAdsRules = AwAdsRules.load_config()
 
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
 ## kill rather than per kill: the table is twenty-seven fresh resources.

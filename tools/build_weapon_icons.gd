@@ -1,12 +1,12 @@
 extends SceneTree
 
-## Renders every zee weapon as a white side-on silhouette into `assets/weapon_icons/<id>.png`,
+## Renders every weapon as a white side-on silhouette into `assets/weapon_icons/<id>.png`,
 ## for the kill feed and the weapon slots on the HUD.
 ##
 ## [b]Generated from the models, not drawn by hand[/b], for the reason the avatar parts are:
 ## twenty-six hand-made icons are twenty-six chances to draw a weapon the model is not, and a
 ## pack that swaps a model would leave its icon behind. The model, its forward axis and its
-## scale all come from `ZeeWeaponArtTable`, the one table that knows a filename. The art is
+## scale all come from `AwWeaponArtTable`, the one table that knows a filename. The art is
 ## Kenney's CC0 blaster and tool kits, already vendored under `assets/`.
 ##
 ## Run `tools/build_weapon_icons.sh` (xvfb-run: under `--headless` every frame is empty)
@@ -26,13 +26,14 @@ const SETTLE := 4
 var _viewport: SubViewport = null
 var _camera: Camera3D = null
 var _holder: Node3D = null
-var _arts: Array[ZeeWeaponArt] = []
+var _arts: Array[AwWeaponVisual] = []
 var _at := 0
 var _wait := SETTLE
 var _written := 0
 
 
 func _initialize() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
 	DotLog.set_level(DotLog.Level.ERROR)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
 
@@ -51,7 +52,7 @@ func _initialize() -> void:
 	_viewport.add_child(_camera)
 	_camera.current = true
 
-	for art in ZeeWeaponArtTable.all():
+	for art in AwWeaponArtTable.all():
 		if art.model_path != "":
 			_arts.append(art)
 
@@ -96,13 +97,13 @@ func _process(_delta: float) -> bool:
 
 ## The model of [param art], turned so its barrel (or blade) points right, flat white, and
 ## the camera fitted to it.
-func _place(art: ZeeWeaponArt) -> void:
+func _place(art: AwWeaponVisual) -> void:
 	if _holder != null:
 		_holder.queue_free()
 	_holder = Node3D.new()
 	_viewport.add_child(_holder)
 
-	var model := ZeeModelCache.instantiate(art.model_path)
+	var model := AwModelCache.instantiate(art.model_path)
 	if model == null:
 		return
 	_holder.add_child(model)
@@ -118,7 +119,7 @@ func _place(art: ZeeWeaponArt) -> void:
 	white.albedo_color = Color.WHITE
 	_paint(model, white)
 
-	var box := Transform3D(model.basis, Vector3.ZERO) * ZeeModelCache.bounds(art.model_path)
+	var box := Transform3D(model.basis, Vector3.ZERO) * AwModelCache.bounds(art.model_path)
 	model.position = -box.get_center()
 	_camera.size = maxf(box.size.x, box.size.y * float(RENDER.x) / float(RENDER.y)) * 1.08
 

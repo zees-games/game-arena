@@ -33,6 +33,7 @@ func _slab(pos: Vector3, size: Vector3, tilt: float = 0.0) -> void:
 
 
 func _initialize() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		_out = args[0]
@@ -60,7 +61,7 @@ func _initialize() -> void:
 	root.add_child(client)
 	server.dropped.connect(func(i: int, s: Dictionary, at: Transform3D, v: Vector3, _o: int) -> void: client.mirror_drop(i, s, at, v))
 	server.settled.connect(func(i: int, at: Transform3D) -> void: client.mirror_settled(i, at))
-	var ids: Array = ZeeWeaponArtTable.table().keys()
+	var ids: Array = AwWeaponArtTable.table().keys()
 	ids.sort()
 	var k := 0
 	for w in ["pistol", "smg", "charge_rifle", "pickaxe", "spade", "sticky", "hatchet", "shotgun"]:

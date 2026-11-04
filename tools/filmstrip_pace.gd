@@ -10,7 +10,7 @@ const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 
 const SECONDS := 6.0
 var _fig: DotHumanoidFigure = null
-var _held: ZeeWorldModel = null
+var _held: AwWorldModel = null
 var _cam: Camera3D = null
 var _mode := "noisy"
 var _t := 0.0
@@ -25,6 +25,7 @@ var _next_pace := 0.0
 
 
 func _initialize() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
 	var args := OS.get_cmdline_user_args()
 	if not args.is_empty():
 		_mode = args[0]
@@ -39,10 +40,10 @@ func _initialize() -> void:
 	_fig.set_run_speeds(4.4, 3.6)
 	_fig.sprint_speed = 6.0
 	_fig.global_position = Vector3(0.0, 1.05, 0.0)
-	_held = ZeeWorldModel.new()
+	_held = AwWorldModel.new()
 	if not _held.attach_to(_fig):
 		printerr("pace: no hand")
-	var table := ZeeWeaponArtTable.table()
+	var table := AwWeaponArtTable.table()
 	var key: Variant = null
 	for k: Variant in table:
 		if str(k).contains("assault") or str(k).contains("rifle"):
@@ -52,7 +53,7 @@ func _initialize() -> void:
 		key = table.keys()[0]
 	print("pace: keys ", table.keys().slice(0, 12))
 	print("pace: weapon ", key, " mode ", _mode)
-	var _r := _held.equip(table[key] as ZeeWeaponArt)
+	var _r := _held.equip(table[key] as AwWeaponVisual)
 	_cam = Camera3D.new()
 	root.add_child(_cam)
 	_cam.current = true

@@ -1438,7 +1438,7 @@ func rule(key: String) -> float:
 ##
 ## The direction is the shot's; a death with none (a fall, a slay) is pushed by nothing. The
 ## killing weapon's def is what lets the sniper and the launcher throw a body
-## (zee-dot-weapons' `params.death_reaction`).
+## (arena-weapons' `params.death_reaction`).
 func decide_death(entity_id: int, damage: DotDamage) -> DotPlayerDeath:
 	if _weapon_defs.is_empty():
 		_weapon_defs = ArenaContent.weapon_table()
@@ -1652,7 +1652,7 @@ func arm_for_mode(player: ArenaPlayer) -> void:
 		if catalogue.has(id) and player.arsenal.give(id).ok:
 			# The heaviest gun, never the grenade: the loadout's own rule.
 			hand = ArenaPlayer._better_hand(hand, catalogue.get_def(id).slot)
-	if mode.pool_keeps_melee and not player.arsenal.has_slot(ZeeWeaponIds.SLOT_MELEE):
+	if mode.pool_keeps_melee and not player.arsenal.has_slot(AwWeaponIds.SLOT_MELEE):
 		var _knife := player.arsenal.give(ArenaContent.melee_id())
 	if hand > 0:
 		player.hold(hand)
@@ -2103,7 +2103,7 @@ func _kill_facts(damage: DotDamage, victim: ArenaPlayer, entry: DotKillFeed.Entr
 		k.tags = Array(def.tags)
 	elif weapon == &"":
 		# Not a weapon at all (a world hazard pushed by somebody): no range medals.
-		k.tags = [ZeeWeaponIds.TAG_THROWN]
+		k.tags = [AwWeaponIds.TAG_THROWN]
 	return k
 
 
@@ -2121,7 +2121,7 @@ func _demote_for_melee(damage: DotDamage, killer: ArenaPlayer) -> void:
 	if weapon_id == &"":
 		return
 	var def := killer.arsenal.catalogue.get_def(weapon_id)
-	if def == null or not def.tags.has(ZeeWeaponIds.TAG_MELEE):
+	if def == null or not def.tags.has(AwWeaponIds.TAG_MELEE):
 		return
 
 	var record := match_node.scoreboard.find(str(damage.victim))

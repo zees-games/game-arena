@@ -61,7 +61,7 @@ func _initialize() -> void:
 	_player.spawn(Transform3D(Basis(), Vector3.ZERO), 0)
 	_player.attach_camera(100.0)
 	_player.attach_body_mesh(Color(0.3, 0.5, 0.85), ArenaAvatars.stock_avatar(&"arena-player-00000007"))
-	var hands := ZeeViewModel.new()
+	var hands := AwViewModel.new()
 	hands.name = "Hands"
 	# The rig finds the hands by path, so they hang under the drawn camera before it is armed.
 	_fp_cam = _view(0)

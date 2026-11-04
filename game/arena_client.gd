@@ -10,10 +10,10 @@ var _local_team_menu: ArenaTeamMenu = null
 
 
 func _ready() -> void:
-	# zee-dot-weapons' art is this game's copy of it, wherever this game is mounted. A
+	# arena-weapons' art is this game's copy of it, wherever this game is mounted. A
 	# delivered pack sits under `res://dot_cloud/<id>/<version>/`, and the pack's art table
 	# names `res://assets/...` — so without this every gun loads invisible, one WARN each.
-	ZeeModelCache.set_asset_root(ArenaPaths.root())
+	AwModelCache.set_asset_root(ArenaPaths.root())
 	# Before anything reads the art table: the first read caches it.
 	ArenaWeaponSkins.apply()
 	ArenaFrameProbe.from_launch()
@@ -837,8 +837,8 @@ func warm_up_items() -> Array:
 
 func _weapon_warm_items() -> Array:
 	var out: Array = []
-	for path in ZeeWeaponArtTable.model_paths():
-		var model := ZeeModelCache.instantiate(path)
+	for path in AwWeaponArtTable.model_paths():
+		var model := AwModelCache.instantiate(path)
 		if model == null:
 			continue
 		var stack: Array[Node] = [model]
@@ -881,7 +881,7 @@ func _arm(body: ArenaPlayer) -> void:
 	if body == null or body.camera == null or view_model != null:
 		return
 
-	view_model = ZeeViewModel.new()
+	view_model = AwViewModel.new()
 	view_model.name = "Hands"
 	view_model.feel_rules = game.feel_rules
 	body.ads_rules = game.ads_rules
@@ -897,7 +897,7 @@ func _prewarm_weapons(body: ArenaPlayer) -> void:
 	# Headless draws nothing, so the spare views only add nodes, memory and frames (perf smoke).
 	if DotPlatform.is_headless() or gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
 		return
-	var spare := ZeeViewModel.new()
+	var spare := AwViewModel.new()
 	spare.name = "WeaponPrewarm"
 	spare.feel_rules = view_model.feel_rules
 	spare.ads_rules = view_model.ads_rules
@@ -912,7 +912,7 @@ func _prewarm_weapons(body: ArenaPlayer) -> void:
 	spare.visible = false
 	body.camera.add_child(spare)
 	gate.hold(&"weapons", "Preparing weapons")
-	_warm = {"body": body, "spare": spare, "arts": ZeeWeaponArtTable.table().values(), "next": 0, "phase": 0, "frames": 0, "rig": null}
+	_warm = {"body": body, "spare": spare, "arts": AwWeaponArtTable.table().values(), "next": 0, "phase": 0, "frames": 0, "rig": null}
 	# A tick on process_frame, not an await: a coroutine resumed after this client was freed is an
 	# engine error, while a connection to a method dies with the object.
 	get_tree().process_frame.connect(_prewarm_tick)
@@ -932,14 +932,14 @@ func _prewarm_tick() -> void:
 			while _warm.next < arts.size() and Time.get_ticks_msec() < until:
 				if not is_instance_valid(_warm.spare):
 					break
-				(_warm.spare as ZeeViewModel).prewarm(arts[_warm.next] as ZeeWeaponArt)
+				(_warm.spare as AwViewModel).prewarm(arts[_warm.next] as AwWeaponVisual)
 				_warm.next += 1
 			if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
 				if is_instance_valid(_warm.spare):
 					(_warm.spare as Node).queue_free()
 				_warm.erase("spare")
-				gate.warm_up(ZeeViewModel.prepared_materials())
-				gate.warm_up(ZeeShotFx.warm())
+				gate.warm_up(AwViewModel.prepared_materials())
+				gate.warm_up(AwShotFx.warm())
 				_warm.phase = 1
 		1:
 			if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
@@ -975,7 +975,7 @@ func _prewarm_end() -> void:
 		gate.release(&"weapons")
 
 
-## The hit drawn on the body the server says was hit: zee's red burst at [param point].
+## The hit drawn on the body the server says was hit: the pack's red burst at [param point].
 func _draw_body_hit(point: Vector3) -> void:
 	if not weapon_draws_shots():
 		return
@@ -987,7 +987,7 @@ func _draw_body_hit(point: Vector3) -> void:
 
 
 ## Whether the local weapon draws its own shot. True on a client shell carrying a
-## zee-dot-weapons with `ZeeShotFx`; through `has_method`, because an older shell's copy
+## arena-weapons with `AwShotFx`; through `has_method`, because an older shell's copy
 ## of the rig has no `shot_fx` and a call by name would not compile there.
 func weapon_draws_shots() -> bool:
 	if player == null or player.weapons == null or not player.weapons.has_method(&"shot_fx"):

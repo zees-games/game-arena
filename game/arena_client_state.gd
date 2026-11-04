@@ -220,7 +220,7 @@ var _holding: bool = false
 var last_prop_asked: int = -1
 
 ## The local player's hands, under their camera. Built on adoption.
-var view_model: ZeeViewModel = null
+var view_model: AwViewModel = null
 var view_arms: Node3D = null
 var _sprite_view: ArenaSpriteWeapon = null
 

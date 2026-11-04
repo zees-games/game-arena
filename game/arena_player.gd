@@ -62,15 +62,15 @@ var arsenal: DotWeaponArsenal = null
 ## Run as the player dies, while the arsenal still gives up its weapon; the game sets it.
 var before_death: Callable = Callable()
 
-## zee-dot-weapons' rig over [member arsenal]: the bash, the view model, the shot effects
+## arena-weapons' rig over [member arsenal]: the bash, the view model, the shot effects
 ## and the replication counter. See [method _build_rig].
-var weapons: ZeeWeaponRig = null
+var weapons: AwWeaponRig = null
 
 ## The game's aim and hip-size numbers, handed to every rig built here; null keeps the addon's own.
-var ads_rules: ZeeAdsRules = null
+var ads_rules: AwAdsRules = null
 
 ## Somebody else's gun, in their hand. Client side, on every player but the local one.
-var held: ZeeWorldModel = null
+var held: AwWorldModel = null
 var _held_sprite: ArenaSpriteWeapon = null
 
 ## What a MIRROR knows of this player's weapon: written from the snapshot by
@@ -599,17 +599,17 @@ func _build_arsenal() -> void:
 	if not res.ok:
 		push_error(res.error.message)
 
-	_build_rig(ZeeWeaponRig.Role.SERVER, false, null)
+	_build_rig(AwWeaponRig.Role.SERVER, false, null)
 
 
 ## How many arsenal slots a player has: the pack's five.
-const MAX_SLOTS := ZeeWeaponIds.SLOT_THROWN
+const MAX_SLOTS := AwWeaponIds.SLOT_THROWN
 
 
-## Puts a [ZeeWeaponRig] over [member arsenal], replacing any rig that was there. [b]The rig is
+## Puts a [AwWeaponRig] over [member arsenal], replacing any rig that was there. [b]The rig is
 ## handed THIS player's arsenal rather than building its own[/b] (`arsenal_ref`), and that is what
 ## lets it be rebuilt.
-func _build_rig(role: ZeeWeaponRig.Role, authority: bool, view_model: Node3D) -> void:
+func _build_rig(role: AwWeaponRig.Role, authority: bool, view_model: Node3D) -> void:
 	if weapons != null:
 		remove_child(weapons)
 		# free(), not queue_free(): the old rig is connected to the arsenal's signals, and
@@ -617,7 +617,7 @@ func _build_rig(role: ZeeWeaponRig.Role, authority: bool, view_model: Node3D) ->
 		weapons.free()
 		weapons = null
 
-	weapons = ZeeWeaponRig.new()
+	weapons = AwWeaponRig.new()
 	weapons.name = "Weapons"
 	weapons.role = role
 	weapons.authority = authority
@@ -649,7 +649,7 @@ func _build_rig(role: ZeeWeaponRig.Role, authority: bool, view_model: Node3D) ->
 ## Makes this the player at this keyboard: the hands under [param view_model] and a rig that draws
 ## them, its tracers and its reports. Client side, once, on adoption.
 func arm_first_person(view_model: Node3D, authority: bool) -> void:
-	_build_rig(ZeeWeaponRig.Role.LOCAL, authority, view_model)
+	_build_rig(AwWeaponRig.Role.LOCAL, authority, view_model)
 
 
 ## Whether any carried weapon's reserve is below its cap: what an ammo pack asks before it
@@ -821,7 +821,7 @@ func give_loadout(entries: Array[Dictionary]) -> void:
 	# Something under the 1 key whatever the document said. A loadout from before the
 	# melee slot names none, and a player whose last magazine runs dry should still have
 	# something to swing.
-	if not arsenal.has_slot(ZeeWeaponIds.SLOT_MELEE):
+	if not arsenal.has_slot(AwWeaponIds.SLOT_MELEE):
 		var _knife := arsenal.give(ArenaContent.melee_id())
 
 	if hand > 0:
@@ -830,9 +830,9 @@ func give_loadout(entries: Array[Dictionary]) -> void:
 
 ## Which of two slots to spawn holding: the heaviest GUN, never the grenade.
 static func _better_hand(have: int, slot: int) -> int:
-	if slot >= ZeeWeaponIds.SLOT_THROWN:
+	if slot >= AwWeaponIds.SLOT_THROWN:
 		return have if have > 0 else slot
-	if have == 0 or have >= ZeeWeaponIds.SLOT_THROWN or slot > have:
+	if have == 0 or have >= AwWeaponIds.SLOT_THROWN or slot > have:
 		return slot
 	return have
 
@@ -1345,12 +1345,12 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 	var def := weapon_catalogue().get_def(id) if id != &"" else null
 	var kind := DotHumanoidFigure.Hold.NONE
 	if def != null:
-		kind = DotHumanoidFigure.Hold.MELEE if def.slot == ZeeWeaponIds.SLOT_MELEE else (
-			DotHumanoidFigure.Hold.NONE if def.slot == ZeeWeaponIds.SLOT_THROWN else DotHumanoidFigure.Hold.GUN)
+		kind = DotHumanoidFigure.Hold.MELEE if def.slot == AwWeaponIds.SLOT_MELEE else (
+			DotHumanoidFigure.Hold.NONE if def.slot == AwWeaponIds.SLOT_THROWN else DotHumanoidFigure.Hold.GUN)
 	figure.set_hold(kind)
 
-	var seq := mirror_fire_seq if mirrored else (weapons.fire_seq % ZeeWeaponNet.FIRE_SEQ_WRAP if weapons != null else 0)
-	if ZeeWeaponNet.uses_between(_figure_fire_seq, seq) > 0 and kind == DotHumanoidFigure.Hold.MELEE:
+	var seq := mirror_fire_seq if mirrored else (weapons.fire_seq % AwWeaponNet.FIRE_SEQ_WRAP if weapons != null else 0)
+	if AwWeaponNet.uses_between(_figure_fire_seq, seq) > 0 and kind == DotHumanoidFigure.Hold.MELEE:
 		figure.swing()
 	_figure_fire_seq = seq
 
@@ -1584,7 +1584,7 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 	# Aiming down: the hands come up, and the lens zooms by what the weapon's art says,
 	# from the player's own field of view so a zoom never compounds. Dead or watching
 	# somebody else, nobody is aiming.
-	var hands := view_model as ZeeViewModel
+	var hands := view_model as AwViewModel
 	if hands != null:
 		hands.aim(aim_held and is_alive() and camera.current)
 		_aim_fov_scale = hands.aim_fov_scale()
@@ -1628,7 +1628,7 @@ func mirror_mode_click() -> void:
 		_mode_click_audio.unit_size = 4.0
 		_mode_click_audio.max_distance = 30.0
 		add_child(_mode_click_audio)
-	_mode_click_audio.stream = ZeeWeaponSound.stream(ZeeWeaponSound.mode_click_for(mirror_weapon))
+	_mode_click_audio.stream = AwWeaponSound.stream(AwWeaponSound.mode_click_for(mirror_weapon))
 	_mode_click_audio.play()
 
 
@@ -1645,7 +1645,7 @@ func _present_held() -> void:
 	if not mirrored and weapons != null and arsenal != null:
 		var def := arsenal.current_def()
 		id = def.id if def != null else &""
-		seq = weapons.fire_seq % ZeeWeaponNet.FIRE_SEQ_WRAP
+		seq = weapons.fire_seq % AwWeaponNet.FIRE_SEQ_WRAP
 		kind = weapons.fire_kind
 		switching = arsenal.is_switching()
 		reloading = arsenal.is_reloading()
@@ -1654,9 +1654,9 @@ func _present_held() -> void:
 	_present_held_sprite(id)
 
 	if id != held.equipped():
-		var art: Variant = ZeeWeaponArtTable.table().get(id)
-		if art is ZeeWeaponArt:
-			var _drawn := held.equip(art as ZeeWeaponArt)
+		var art: Variant = AwWeaponArtTable.table().get(id)
+		if art is AwWeaponVisual:
+			var _drawn := held.equip(art as AwWeaponVisual)
 		else:
 			held.clear()
 
@@ -1667,10 +1667,10 @@ func _present_held() -> void:
 	if held.has_method(&"on_charge"):
 		held.call(&"on_charge", mirror_charge if mirrored else 0.0)
 
-	var fired := ZeeWeaponNet.uses_between(_seen_fire_seq, seq)
+	var fired := AwWeaponNet.uses_between(_seen_fire_seq, seq)
 	_seen_fire_seq = seq
 
-	# One kick however many uses the snapshot covered, the way `ZeeWeaponNet.apply` does:
+	# One kick however many uses the snapshot covered, the way `AwWeaponNet.apply` does:
 	# a burst's worth of recoil in one frame reads as the gun jumping.
 	if fired > 0 and is_alive():
 		held.on_fired(WATCHED_RECOIL.get(kind, Vector2(0.6, 0.1)), kind)
@@ -1680,16 +1680,16 @@ func _present_held() -> void:
 ## not travel, so a watcher's is approximate on purpose — the same numbers the pack gives
 ## its own watchers, kept here because the pack's copy is private to it.
 const WATCHED_RECOIL := {
-	ZeeWeaponNet.KIND_SWING: Vector2(1.2, 0.0),
-	ZeeWeaponNet.KIND_SPAWN: Vector2(2.0, 0.0),
-	ZeeWeaponNet.KIND_THROW: Vector2(2.0, 0.0),
-	ZeeWeaponNet.KIND_BEAM: Vector2(0.05, 0.0),
+	AwWeaponNet.KIND_SWING: Vector2(1.2, 0.0),
+	AwWeaponNet.KIND_SPAWN: Vector2(2.0, 0.0),
+	AwWeaponNet.KIND_THROW: Vector2(2.0, 0.0),
+	AwWeaponNet.KIND_BEAM: Vector2(0.05, 0.0),
 }
 
 
-## The node a held weapon hangs from, by the name [ZeeWorldModel] asks for.
+## The node a held weapon hangs from, by the name [AwWorldModel] asks for.
 ##
-## [b]Duck-typed, which is the whole contract.[/b] `ZeeWorldModel.attach_to` takes any
+## [b]Duck-typed, which is the whole contract.[/b] `AwWorldModel.attach_to` takes any
 ## object answering `attachment(point)`, and the arena's avatar rig has a body, a head and
 ## a crest and no hand — so the player answers for it, with a hand placed where a figure
 ## this size holds a gun: chest high, right of centre, in front.
@@ -1853,12 +1853,12 @@ func attach_body_mesh(colour: Color, avatar: DotAvatar = null) -> void:
 	body_mesh.add_child(nose)
 
 
-## Hangs a [ZeeWorldModel] on [method attachment]'s hand. Client side, with the body.
+## Hangs a [AwWorldModel] on [method attachment]'s hand. Client side, with the body.
 func _hold_weapon() -> void:
 	if held != null:
 		return
 
-	held = ZeeWorldModel.new()
+	held = AwWorldModel.new()
 	held.name = "Held"
 
 	if not held.attach_to(self):

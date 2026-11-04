@@ -1,6 +1,6 @@
 # game-arena
 
-The reference game: a 3D deathmatch in six kinds of mode on three built-in maps and arena-surf-dm-maps' combat surf maps (delivered, not shipped), with bots and zee-dot-weapons, over dot-net, as a signed dot-cloud pack: the only test of the joins between the addons.
+The reference game: a 3D deathmatch in six kinds of mode on three built-in maps and arena-surf-dm-maps' combat surf maps (delivered, not shipped), with bots and arena-weapons, over dot-net, as a signed dot-cloud pack: the only test of the joins between the addons.
 
 Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is specific to this game. **The detail is in [docs/](docs/README.md)**.
 
@@ -13,7 +13,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | [docs/client.md](docs/client.md) | the client, keys, camera, menus, HUD, chat box, render tools |
 | [docs/modes.md](docs/modes.md) | movement, modes, spawning, criticals, streaks |
 | [docs/maps.md](docs/maps.md), [docs/imported-maps.md](docs/imported-maps.md) | a built-in map or the catalogue; the combat surf maps |
-| [docs/horde.md](docs/horde.md), [docs/weapons.md](docs/weapons.md) | monsters and props tools; zee-dot-weapons, projectiles |
+| [docs/horde.md](docs/horde.md), [docs/weapons.md](docs/weapons.md) | monsters and props tools; arena-weapons, projectiles |
 | [docs/services.md](docs/services.md) | progression, chat, moderation, voice, admin tools, the vote |
 | [docs/testing.md](docs/testing.md) | adding a check, or believing a green run |
 | [docs/history.md](docs/history.md), [docs/not-yet.md](docs/not-yet.md) | a bug that "cannot be happening"; planning what is not built yet |
@@ -24,7 +24,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | --- | --- |
 | `game/` | everything that runs, flat; the client half is never loaded by a dedicated server. File by file: [architecture](docs/architecture.md#where-the-code-is) |
 | `maps/` | the built-in maps as box lists (survey, paint, lighting); the combat surf maps' loader; `maps/imported` links arena-surf-dm-maps |
-| `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monsters, props, avatar parts, effects, vendored zee art, Kenney's grid and medal icons |
+| `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monsters, props, avatar parts, effects, vendored base weapon art, Kenney's grid and medal icons |
 | `examples/` | the nine suites; `wall_route_driver.gd` drives a map's wall routes |
 | `tools/` | render tools (`screenshot.sh --glance`), avatar and icon builders, `audio_probe.sh`, `loudness_pilot.gd`. [client](docs/client.md#looking-at-it) |
 | `scenes/arena_server.tscn`, `game.yml` | the server scene and the descriptor that travels in the pack |
@@ -119,7 +119,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - A built-in map's light is its `lighting` document; render a look change under `gl_compatibility` too. [maps](docs/maps.md#colour-and-light)
 - An imported map is lit from its manifest (`imported_profile`), a built-in map with `painted()` (dot-lighting 3). [imported](docs/imported-maps.md#lit-from-the-manifest)
 - A guard on a host addon's level needs that addon in `requires.floor.json` at the older path's level. [client](docs/client.md#keys)
-- `arena_weapons` is reached only through `cfg/addon/game_arena_weapons`, so `requires.uses.json` declares it (dot-core API 24) and `requires.floor.json` carries it at level 3 (grenade blasts), backed by `ArenaGrenades.supported()` (utility grenades stay off below it) and the guard in `arena_weapon_roles.gd` that falls back to zee below it.
+- `arena_weapons` is the whole weapon runtime (its `Aw*` classes are named directly), so `requires.floor.json` carries it at level 8, the level that brought the runtime into the pack; no other weapon addon is linked.
 - An imported map's solid is in the tree on every machine before any player is bodied; spawns are settled. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 - Bots route on an imported map over a `DotBotNav` baked in the background, never in the tick. [imported](docs/imported-maps.md#bots-route-over-a-mesh-baked-from-the-brushes)
 - Ride edges are planned by `tools/surf_rides.tscn`, never at load; `arena_surf.gd` loads by path only with dot-bot 4, dot-player-controller 3. [imported](docs/imported-maps.md#bots-ride-the-ramps)
@@ -132,7 +132,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - Monster entity ids come from the `DotEntityTable`; players keep session ids on purpose. [horde](docs/horde.md#a-monsters-entity-id)
 - A non-player death goes to `non_player_killed`, never `report_kill`. [horde](docs/horde.md#a-non-player-entity-in-dot-combat)
 - `DotPhysGun.hold` every tick; the prop tool is an intent. [horde](docs/horde.md#props)
-- The rig drives the player's own `Arsenal`; call newer zee methods through `has_method`. [weapons](docs/weapons.md#the-rig-drives-the-players-own-arsenal)
+- The rig drives the player's own `Arsenal`; call newer rig methods through `has_method`. [weapons](docs/weapons.md#the-rig-drives-the-players-own-arsenal)
 - A detonation pins the attacker's origin to the blast. [weapons](docs/weapons.md#projectiles)
 - A projectile passes through a team-mate holding its launch point, and at `mp_teammate_passthrough` 2 misses every team-mate all flight (dot-combat's, by name). [weapons](docs/weapons.md#projectiles)
 - `DotAchievementStatsLink`, never `recorded.connect`. [services](docs/services.md#progression)

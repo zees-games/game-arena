@@ -67,7 +67,7 @@ var net_fire_mode: int = 0
 var net_magazine: int = 0
 var net_reserve: int = 0
 
-# --- zee-dot-weapons' four, from ZeeWeaponNet.specs() ---
+# --- arena-weapons' four, from AwWeaponNet.specs() ---
 var net_fire_seq: int = 0
 var net_fire_kind: int = 0
 var net_reloading: bool = false
@@ -153,7 +153,7 @@ func _register_net_vars() -> void:
 	# The pack's `all_specs()` is dot-weapon's three plus its own four, and is the one call
 	# its README asks a game to make: concatenating the halves by hand is how a game forgets
 	# the second one and has weapons that are silent for everybody but their owner.
-	for spec in DotCombatNetSync.specs() + ZeeWeaponNet.all_specs() + ZeeWeaponNet.charge_specs() + DotWeaponNetSync.fire_mode_specs(false):
+	for spec in DotCombatNetSync.specs() + AwWeaponNet.all_specs() + AwWeaponNet.charge_specs() + DotWeaponNetSync.fire_mode_specs(false):
 		var declaration := replicate(spec["property"], DotNetVar.Type[spec["type"]])
 
 		if int(spec["bits"]) > 0:
@@ -252,7 +252,7 @@ func _net_simulate(tick: int, delta: float) -> void:
 ## first time; nothing in the call says which is which. Unmarked, every use inside the
 ## replayed window emitted `used` again — so the client heard its own shot, saw its flash
 ## and kicked its view once per snapshot that covered it, which at 64 ticks and a tenth of
-## a second of latency is several times per shot. `ZeeWeaponRig.begin_replay` is the
+## a second of latency is several times per shot. `AwWeaponRig.begin_replay` is the
 ## pack's switch for exactly this: the simulation re-runs and the drawing does not.
 ##
 ## The movement is marked too (`DotFpsController.begin_replay`), and it was not until
@@ -306,7 +306,7 @@ func pull() -> void:
 
 	# The rig's pull is dot-weapon's three and the pack's four.
 	if player.weapons != null:
-		ZeeWeaponNet.pull(player.weapons, self)
+		AwWeaponNet.pull(player.weapons, self)
 	else:
 		DotWeaponNetSync.pull(player.arsenal, self)
 
@@ -470,7 +470,7 @@ func _push_weapons() -> void:
 	player.mirror_fire_seq = net_fire_seq
 	player.mirror_fire_kind = net_fire_kind
 	player.mirror_switching = net_switching
-	player.mirror_charge = float(net_charge) / ZeeWeaponNet.CHARGE_MAX
+	player.mirror_charge = float(net_charge) / AwWeaponNet.CHARGE_MAX
 	player.mirror_reloading = net_reloading
 	if clicks:
 		player.mirror_mode_click()

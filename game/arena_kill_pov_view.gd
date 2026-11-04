@@ -11,11 +11,11 @@ const EASE_SPEED := 6.0
 
 ## Layers the replay lens must stay out of (world and props); 0 skips the clearance.
 var world_mask := 0
-var feel_rules: ZeeViewFeel = null
-var ads_rules: ZeeAdsRules = null
+var feel_rules: AwViewFeel = null
+var ads_rules: AwAdsRules = null
 
-var hands: ZeeViewModel = null
-var flashes: ZeeShotFx = null
+var hands: AwViewModel = null
+var flashes: AwShotFx = null
 ## The killer's arms on dot-player-char's rig, as the live view draws them; null below its API 8.
 var arms: DotPlayerViewArms = null
 
@@ -88,7 +88,7 @@ func _start(cam: Camera3D) -> void:
 	_camera = cam
 	_fire = -1.0
 	_hits = -1.0
-	hands = ZeeViewModel.new()
+	hands = AwViewModel.new()
 	hands.name = "KillerHands"
 	if feel_rules != null:
 		hands.feel_rules = feel_rules
@@ -96,7 +96,7 @@ func _start(cam: Camera3D) -> void:
 	hands.show_arms = not _shares_arms()
 	cam.add_child(hands)
 	_mount_arms(cam)
-	flashes = ZeeShotFx.new()
+	flashes = AwShotFx.new()
 	flashes.name = "KillerShotFx"
 	flashes.catalogue = ArenaContent.weapon_catalogue()
 	cam.add_child(flashes)
@@ -147,9 +147,9 @@ func _on_hands(anchor: Node3D, grip: Vector3, fore: Vector3, pose: StringName) -
 func _move_hands(aux: PackedFloat32Array, cam: Camera3D) -> void:
 	var id := KillPov.weapon_of(aux[0])
 	if id != &"" and hands.equipped() != id:
-		var art: Variant = ZeeWeaponArtTable.table().get(id)
-		if art is ZeeWeaponArt:
-			var _drawn := hands.equip(art as ZeeWeaponArt)
+		var art: Variant = AwWeaponArtTable.table().get(id)
+		if art is AwWeaponVisual:
+			var _drawn := hands.equip(art as AwWeaponVisual)
 	hands.aim(aux[1] > 0.5)
 	var flags := int(aux[10])
 	var look := cam.global_basis.get_euler()
@@ -171,7 +171,7 @@ func _fired(id: StringName, recoil: Vector2, signed: bool, cam: Camera3D) -> voi
 	outcome.recoil_signed = signed and recoil != Vector2.ZERO
 	hands.on_used(outcome)
 	if flashes != null:
-		flashes.play_remote(ZeeWeaponNet.KIND_SHOT, hands.muzzle_transform(), -cam.global_basis.z, id)
+		flashes.play_remote(AwWeaponNet.KIND_SHOT, hands.muzzle_transform(), -cam.global_basis.z, id)
 
 
 func _hud(aux: PackedFloat32Array, fov: float) -> void:
@@ -207,8 +207,8 @@ func _end() -> void:
 static func mount(parent: Node, game: Object, target: Object, label: String) -> void:
 	var view := new()
 	view.name = label
-	view.feel_rules = game.get(&"feel_rules") as ZeeViewFeel
-	view.ads_rules = game.get(&"ads_rules") as ZeeAdsRules
+	view.feel_rules = game.get(&"feel_rules") as AwViewFeel
+	view.ads_rules = game.get(&"ads_rules") as AwAdsRules
 	var stack: Variant = game.get(&"player_stack")
 	if stack != null and stack.physics != null and stack.physics.layout != null:
 		var layers: Array[StringName] = [&"world", &"prop"]

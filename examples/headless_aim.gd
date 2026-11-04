@@ -103,7 +103,7 @@ func _trial(dist: float, crouch: bool, follow_up: bool) -> Dictionary:
 	victim.spawn(Transform3D(Basis(), Vector3(-10.0 - dist, 0.05, -20.0)), tick)
 	# Tough enough to survive: a dead target is respawned by the game at a spawn point mid-trial.
 	_game.combat.health_of(2).health = 100000.0
-	var _fill := shooter.arsenal.give(ZeeWeaponIds.SNIPER)
+	var _fill := shooter.arsenal.give(AwWeaponIds.SNIPER)
 	for _i in 4:
 		await _step(0, 0.0, 0.0)
 	var eye := shooter.muzzle_position()
@@ -131,15 +131,15 @@ func _trial(dist: float, crouch: bool, follow_up: bool) -> Dictionary:
 func _run() -> void:
 	await _boot()
 	var shooter := _game.player_for(1)
-	var give := shooter.arsenal.give(ZeeWeaponIds.SNIPER)
+	var give := shooter.arsenal.give(AwWeaponIds.SNIPER)
 	_check(give.ok, "the sniper is given", str(give.error))
 	shooter.give_default_loadout()
-	var _g2 := shooter.arsenal.give(ZeeWeaponIds.SNIPER)
+	var _g2 := shooter.arsenal.give(AwWeaponIds.SNIPER)
 	_select_sniper(shooter)
 	for _i in 120:
 		_game.tick({})
 		await get_tree().physics_frame
-	_check(shooter.arsenal.current_def().id == ZeeWeaponIds.SNIPER, "the sniper is in the hands", str(shooter.arsenal.current_def().id))
+	_check(shooter.arsenal.current_def().id == AwWeaponIds.SNIPER, "the sniper is in the hands", str(shooter.arsenal.current_def().id))
 	for d in DISTANCES:
 		var t := await _trial(d, false, true)
 		var f: Array = t.one
@@ -164,7 +164,7 @@ func _run() -> void:
 
 
 func _select_sniper(shooter: ArenaPlayer) -> void:
-	var _ok := shooter.arsenal.select(ZeeWeaponIds.SLOT_HEAVY, _now())
+	var _ok := shooter.arsenal.select(AwWeaponIds.SLOT_HEAVY, _now())
 
 
 ## Fires once, then presses again [param press_at] ticks later (or holds from there) and counts the extra hits.
@@ -251,8 +251,8 @@ func _probe_client() -> void:
 	audio.played.connect(func(id: StringName, _h: int, why: StringName) -> void:
 		if why == &"ok":
 			sounds.append(id))
-	var _fill := me.arsenal.give(ZeeWeaponIds.SNIPER)
-	var _sel := me.arsenal.select(ZeeWeaponIds.SLOT_HEAVY, g.current_tick())
+	var _fill := me.arsenal.give(AwWeaponIds.SNIPER)
+	var _sel := me.arsenal.select(AwWeaponIds.SLOT_HEAVY, g.current_tick())
 	for scoped in [false, true]:
 		var hits: Array = []
 		var on_hit := func(a: int, v: int, _amt: float, _pt: Vector3, _h: bool, _l: bool) -> void:

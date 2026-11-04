@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Frames of every skinned weapon role in the hands, and a contact sheet: screenshots/weapons/sheet.png
 #   tools/render_weapons.sh            # with the installed weapon packs
-#   tools/render_weapons.sh --zee      # zee-dot-weapons' own art, for the comparison
+#   tools/render_weapons.sh --base     # the base stand-in art, for the comparison
 set -euo pipefail
 # A short frame sequence beside each hip/aim still (DotShotSeq), so Nightly -> Review can play and scrub it.
 export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-8} DOT_SHOT_SECS=${DOT_SHOT_SECS:-1}
 cd "$(dirname "$0")/.."
 rm -rf screenshots/weapons
 extra=()
-[ "${1:-}" = "--zee" ] && extra=(-- --arena-no-weapon-skins)
+[ "${1:-}" = "--base" ] && extra=(-- --arena-no-weapon-skins)
 # Exits 1 when an aimed gun hides the screen's middle (render_weapons.gd's see-through check),
 # or when the run prints any "must be normalized" error (a rotation built from an unnormalised axis).
 status=0

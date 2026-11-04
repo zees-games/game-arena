@@ -43,7 +43,7 @@ var _frame := 0
 var _frames := 0
 var _save_every := 1
 var _log: PackedStringArray = []
-var _hands: ZeeViewModel = null
+var _hands: AwViewModel = null
 var _flinch := DotFpsAimBreak.new()
 var _flinch_wobble := Vector2.ZERO
 ## Physics frames to let a scenario settle before it is recorded.
@@ -85,7 +85,7 @@ func _initialize() -> void:
 
 ## The hands, once the player's nodes are in the tree (the rig asks for paths).
 func _arm() -> void:
-	_hands = ZeeViewModel.new()
+	_hands = AwViewModel.new()
 	_hands.name = "Hands"
 	_player.camera.add_child(_hands)
 	_player.arm_first_person(_hands, true)

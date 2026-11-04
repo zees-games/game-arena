@@ -1182,7 +1182,7 @@ func _test_launch_flies_on_client(own: ArenaPlayerNet) -> void:
 		gone.append(at)
 	)
 	var spawn := DotWeaponSpawn.make(
-		ZeeWeaponIds.FRAG, own.player.controller.state.position + Vector3(0.0, 1.5, 0.0),
+		AwWeaponIds.FRAG, own.player.controller.state.position + Vector3(0.0, 1.5, 0.0),
 		Vector3(0.0, 3.0, -6.0), 12
 	)
 	spawn.gravity_scale = 1.0
@@ -1194,7 +1194,7 @@ func _test_launch_flies_on_client(own: ArenaPlayerNet) -> void:
 	var read := ArenaEvents.read_launch(DotNetReader.new(wire))
 	_check(
 		bool(read["ok"]) and int(read["fuse"]) == 24 and int(read["owner"]) == 12
-		and ArenaContent.weapon_at(int(read["weapon"])) == ZeeWeaponIds.FRAG
+		and ArenaContent.weapon_at(int(read["weapon"])) == AwWeaponIds.FRAG
 		and (read["velocity"] as Vector3).distance_to(spawn.velocity) < 0.01,
 		"a LAUNCH round-trips: who, which weapon, how fast, the fuse"
 	)

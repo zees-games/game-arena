@@ -95,7 +95,7 @@ func _run() -> void:
 	await _test_box_upper()
 	_test_modes()
 	await _test_team_deathmatch()
-	await _test_zee_weapons()
+	await _test_pack_weapons()
 
 	await _build()
 	_build_vote()
@@ -424,15 +424,15 @@ func _hit(game: ArenaGame, attacker: int, victim: int, amount: float) -> float:
 	return 0.0 if out.refused else out.amount
 
 
-# --- zee-dot-weapons ---------------------------------------------------------
+# --- arena-weapons ---------------------------------------------------------
 
 ## The weapons pack in a real game: the rig drives the arsenal, a spawn holds the right thing, a
 ## shot leaves the eye, the bash works, and projectiles behave as defined.
-func _test_zee_weapons() -> void:
-	_section("zee-dot-weapons in the arena")
+func _test_pack_weapons() -> void:
+	_section("arena-weapons in the arena")
 
 	var game := ArenaGame.new()
-	game.name = "ZeeGame"
+	game.name = "AwGame"
 	game.tick_rate = TICK_RATE
 	game.headless = true
 	game.register_service = false
@@ -446,7 +446,7 @@ func _test_zee_weapons() -> void:
 		return
 
 	game.start(0)
-	var _a := game.add_player(900, "Zee")
+	var _a := game.add_player(900, "Pack")
 	var _b := game.add_player(901, "Far")
 	_go_live(game)
 
@@ -456,10 +456,10 @@ func _test_zee_weapons() -> void:
 	var p := game.player_for(900)
 
 	_check(
-		p.weapons is ZeeWeaponRig and p.weapons.arsenal == p.arsenal,
+		p.weapons is AwWeaponRig and p.weapons.arsenal == p.arsenal,
 		"the rig drives the player's own arsenal, so every reader of it keeps working"
 	)
-	_check(p.arsenal.max_slots == ZeeWeaponIds.SLOT_THROWN, "with the pack's five slots")
+	_check(p.arsenal.max_slots == AwWeaponIds.SLOT_THROWN, "with the pack's five slots")
 
 	# The default: something in every slot that matters, and the GUN in hand.
 	p.give_default_loadout()
@@ -478,21 +478,21 @@ func _test_zee_weapons() -> void:
 		str(p.arsenal.current_def().id if p.arsenal.current_def() != null else &"")
 	)
 	_check(
-		ArenaWeaponRoles.own_pack == "" or ZeeWeaponSound.class_for(&"lmg", &"") == &"lmg",
-		"the arena pack's lmg has the lmg sound class, not the rifle's", str(ZeeWeaponSound.class_for(&"lmg", &""))
+		ArenaWeaponRoles.own_pack == "" or AwWeaponSound.class_for(&"lmg", &"") == &"lmg",
+		"the arena pack's lmg has the lmg sound class, not the rifle's", str(AwWeaponSound.class_for(&"lmg", &""))
 	)
 
 	# A loadout saved before the melee slot existed still gives something under 1.
 	var old := DotLoadout.empty(&"arena")
-	old.set_item(&"primary", ZeeWeaponIds.SMG)
-	old.set_item(&"secondary", ZeeWeaponIds.REVOLVER)
+	old.set_item(&"primary", AwWeaponIds.SMG)
+	old.set_item(&"secondary", AwWeaponIds.REVOLVER)
 	p.give_loadout(game.loadouts.resolve(old))
 	_check(
-		p.arsenal.carries(ZeeWeaponIds.KNIFE) and p.arsenal.carries(ZeeWeaponIds.SMG),
+		p.arsenal.carries(AwWeaponIds.KNIFE) and p.arsenal.carries(AwWeaponIds.SMG),
 		"a primary-and-sidearm loadout from before the melee slot still gets a knife"
 	)
 	_check(
-		p.arsenal.current_slot() == ZeeWeaponIds.SLOT_PRIMARY,
+		p.arsenal.current_slot() == AwWeaponIds.SLOT_PRIMARY,
 		"and spawns holding its primary", str(p.arsenal.current_slot())
 	)
 	_settle(game, 900, TICK_RATE)
@@ -542,10 +542,10 @@ func _test_zee_weapons() -> void:
 		gone.append([at, s, game.current_tick()])
 	)
 
-	p.arsenal.give(ZeeWeaponIds.FRAG)
-	_switch_to(game, 900, ZeeWeaponIds.SLOT_THROWN)
+	p.arsenal.give(AwWeaponIds.FRAG)
+	_switch_to(game, 900, AwWeaponIds.SLOT_THROWN)
 	_check(
-		p.arsenal.current_def().id == ZeeWeaponIds.FRAG,
+		p.arsenal.current_def().id == AwWeaponIds.FRAG,
 		"the 5 key's slot holds the frag", str(p.arsenal.current_def().id)
 	)
 
@@ -582,8 +582,8 @@ func _test_zee_weapons() -> void:
 
 	# A sticky stops on what it lands on.
 	gone.clear()
-	p.arsenal.give(ZeeWeaponIds.STICKY)
-	p.arsenal.add_ammo(ZeeWeaponIds.AMMO_GRENADE, 4)
+	p.arsenal.give(AwWeaponIds.STICKY)
+	p.arsenal.add_ammo(AwWeaponIds.AMMO_GRENADE, 4)
 	_settle(game, 900, TICK_RATE)
 	# Down at the floor a few metres out: at the thrower's own feet its splash would kill
 	# them, the respawn would hand back a rifle, and the cook-off below would be a rifle.
@@ -614,8 +614,8 @@ func _test_zee_weapons() -> void:
 	# Cooked past its fuse: in the hand, at once, and it hurts.
 	_check(p.is_alive(), "the thrower survived their own sticky at range")
 	gone.clear()
-	p.arsenal.give(ZeeWeaponIds.FRAG)
-	p.arsenal.add_ammo(ZeeWeaponIds.AMMO_GRENADE, 4)
+	p.arsenal.give(AwWeaponIds.FRAG)
+	p.arsenal.add_ammo(AwWeaponIds.AMMO_GRENADE, 4)
 	p.health.invulnerable = false
 	p.health.spawn_protection_ticks = 0
 	var before := p.health.health + p.health.armour
@@ -644,24 +644,24 @@ func _test_zee_weapons() -> void:
 	# The counter on a weapon with no magazine reads its pool, not zero.
 	if not p.is_alive():
 		var _again := game.respawn_player(900)
-	p.arsenal.give(ZeeWeaponIds.BEAMER)
-	_switch_to(game, 900, ZeeWeaponIds.SLOT_HEAVY)
-	var cells := p.arsenal.ammo().count(ZeeWeaponIds.AMMO_CELL)
+	p.arsenal.give(AwWeaponIds.BEAMER)
+	_switch_to(game, 900, AwWeaponIds.SLOT_HEAVY)
+	var cells := p.arsenal.ammo().count(AwWeaponIds.AMMO_CELL)
 	_check(
 		ArenaHud.rounds_in_hand(p) == cells and cells > 0,
 		"the HUD counts a beamer's cells, where a magazine count read 0",
 		"%d against %d" % [ArenaHud.rounds_in_hand(p), cells]
 	)
-	await _test_zee_weapons_rest(game, p)
+	await _test_pack_weapons_rest(game, p)
 
 
-func _test_zee_weapons_rest(game: ArenaGame, p: ArenaPlayer) -> void:
+func _test_pack_weapons_rest(game: ArenaGame, p: ArenaPlayer) -> void:
 	_check(
 		ArenaHud.weapon_line(p) == "Plasma Beamer",
 		"and names it", ArenaHud.weapon_line(p)
 	)
 	_check(
-		ArenaHud.cause_label(ZeeWeaponIds.MACHINE_PISTOL) == "Machine Pistol",
+		ArenaHud.cause_label(AwWeaponIds.MACHINE_PISTOL) == "Machine Pistol",
 		"the kill feed says Machine Pistol, not machine_pistol"
 	)
 
@@ -846,7 +846,7 @@ func _facts(killer: int, victim: int, tick: int, extra: Dictionary = {}) -> Aren
 	k.headshot = bool(extra.get("headshot", false))
 	k.victim_streak = int(extra.get("victim_streak", 0))
 	k.aiming = bool(extra.get("aiming", true))
-	k.tags = extra.get("tags", [ZeeWeaponIds.TAG_PRIMARY])
+	k.tags = extra.get("tags", [AwWeaponIds.TAG_PRIMARY])
 	k.team_kill = bool(extra.get("team_kill", false))
 	return k
 
@@ -898,11 +898,11 @@ func _test_medal_rules() -> void:
 	book.reset_round()
 	_check(book.judge(_facts(40, 41, 10, {"distance": 2.0})).has(M.POINT_BLANK), "a kill from 2 m is Point Blank")
 	_check(not book.judge(_facts(40, 42, 900, {"distance": 3.5})).has(M.POINT_BLANK), "from 3.5 m it is not")
-	_check(not book.judge(_facts(40, 43, 1800, {"distance": 1.0, "tags": [ZeeWeaponIds.TAG_MELEE]})).has(M.POINT_BLANK),
+	_check(not book.judge(_facts(40, 43, 1800, {"distance": 1.0, "tags": [AwWeaponIds.TAG_MELEE]})).has(M.POINT_BLANK),
 		"and a knife is always close, so never")
 
 	book.reset_round()
-	var scoped := [ZeeWeaponIds.TAG_HEAVY, ZeeWeaponIds.TAG_SCOPED]
+	var scoped := [AwWeaponIds.TAG_HEAVY, AwWeaponIds.TAG_SCOPED]
 	_check(book.judge(_facts(50, 51, 10, {"tags": scoped, "aiming": false})).has(M.NO_SCOPE),
 		"a scoped weapon's kill without aiming is No Scope")
 	_check(not book.judge(_facts(50, 52, 900, {"tags": scoped, "aiming": true})).has(M.NO_SCOPE),
@@ -915,7 +915,7 @@ func _test_medal_rules() -> void:
 		"a kill from %d m is a Long Shot" % int(ArenaAwards.LONG_SHOT_M + 5.0))
 	_check(not book.judge(_facts(60, 62, 900, {"distance": ArenaAwards.LONG_SHOT_M - 5.0})).has(M.LONG_SHOT),
 		"from %d m it is not" % int(ArenaAwards.LONG_SHOT_M - 5.0))
-	_check(not book.judge(_facts(60, 63, 1800, {"distance": 50.0, "tags": [ZeeWeaponIds.TAG_EXPLOSIVE]})).has(M.LONG_SHOT),
+	_check(not book.judge(_facts(60, 63, 1800, {"distance": 50.0, "tags": [AwWeaponIds.TAG_EXPLOSIVE]})).has(M.LONG_SHOT),
 		"and a rocket lands where it lands, so never")
 
 	book.reset_round()
@@ -968,7 +968,7 @@ func _test_medals_from_a_game() -> void:
 	var type := game.combat.damage_type(&"bullet")
 	var chip := DotDamage.make(950, 951, 20.0, type)
 	chip.tick = game.current_tick()
-	chip.weapon_id = ZeeWeaponIds.RIFLE
+	chip.weapon_id = AwWeaponIds.RIFLE
 	var _c := game.combat.apply_damage(chip)
 	_check(hits.size() == 1 and int(hits[0]["a"]) == 950 and is_equal_approx(float(hits[0]["amount"]), 20.0) and not bool(hits[0]["lethal"]),
 		"a hit that lands is confirmed to its attacker with what it took (%s)" % [hits])
@@ -979,7 +979,7 @@ func _test_medals_from_a_game() -> void:
 	var shot := DotDamage.make(950, 951, 500.0, type)
 	shot.tick = game.current_tick()
 	shot.hit_group = DotHitGroup.HEAD
-	shot.weapon_id = ZeeWeaponIds.SNIPER
+	shot.weapon_id = AwWeaponIds.SNIPER
 	var _k := game.combat.apply_damage(shot)
 	_check(hits.size() == 2 and bool(hits[1]["lethal"]) and bool(hits[1]["head"]), "the killing hit is confirmed as lethal and to the head")
 	var got: Array = awards[0]["medals"] if not awards.is_empty() else []
@@ -1251,14 +1251,14 @@ func _test_launch_inside_team_mate() -> void:
 
 	var launch := func(fuse: int, toward: Vector3 = Vector3.FORWARD) -> DotWeaponSpawn:
 		var s := DotWeaponSpawn.new()
-		s.id = ZeeWeaponIds.LAUNCHER if fuse <= 0 else ZeeWeaponIds.FRAG
+		s.id = AwWeaponIds.LAUNCHER if fuse <= 0 else AwWeaponIds.FRAG
 		s.origin = shooter.muzzle_position()
 		s.velocity = toward.normalized() * (44.0 if fuse <= 0 else 14.0)
 		s.gravity_scale = 0.0 if fuse <= 0 else 1.0
 		s.radius = 0.1
 		s.fuse_ticks = fuse
 		s.life_ticks = TICK_RATE * 4
-		s.damage_type = game.combat.damage_type(ZeeWeaponIds.DAMAGE_BLAST)
+		s.damage_type = game.combat.damage_type(AwWeaponIds.DAMAGE_BLAST)
 		s.splash_radius = 3.0
 		s.splash_damage = 60.0
 		s.owner_entity = shooter_id
@@ -1399,17 +1399,17 @@ func _test_weapon_modes() -> void:
 	var knifed := game.match_node.scoreboard.find("920")
 	var knifer := game.match_node.scoreboard.find("921")
 	_revive(game, 921)
-	_kill_through_combat(game, 920, 921, ZeeWeaponIds.KNIFE)
+	_kill_through_combat(game, 920, 921, AwWeaponIds.KNIFE)
 	_check(knifer != null and knifer.score == 0 and knifer.deaths == 2,
 		"a knife kill on the first gun leaves the victim there (921 at %d, %d deaths)" % [knifer.score if knifer else -1, knifer.deaths if knifer else -1])
 	_revive(game, 920)
-	_kill_through_combat(game, 921, 920, ZeeWeaponIds.KNIFE)
+	_kill_through_combat(game, 921, 920, AwWeaponIds.KNIFE)
 	_check(knifed != null and knifed.score == 1,
 		"a knife kill sets the victim back one gun (920 from 2 to %d)" % (knifed.score if knifed else -1))
 	_check(knifer.score == 1, "and moves the knifer on (921 at %d)" % knifer.score)
 	gun.gun_game_melee_demotes = false
 	_revive(game, 920)
-	_kill_through_combat(game, 921, 920, ZeeWeaponIds.KNIFE)
+	_kill_through_combat(game, 921, 920, AwWeaponIds.KNIFE)
 	_check(knifed.score == 1 and knifer.score == 2,
 		"with gun_game_melee_demotes off, a knife kill is only a kill (920 %d, 921 %d)" % [knifed.score, knifer.score])
 	gun.gun_game_melee_demotes = true
@@ -1426,7 +1426,7 @@ func _test_weapon_modes() -> void:
 	var carried := _carried(sniping, 930)
 	var stray: Array[StringName] = []
 	for id in carried:
-		if not allowed.has(id) and id != ZeeWeaponIds.KNIFE:
+		if not allowed.has(id) and id != AwWeaponIds.KNIFE:
 			stray.append(id)
 	_check(stray.is_empty() and carried.size() >= 1,
 		"only snipers carries scoped guns and the knife (%s)" % ", ".join(carried))
@@ -2276,16 +2276,16 @@ func _test_content() -> void:
 
 	# Free by default; a server that prices weapons gets the budget enforced.
 	var greedy := DotLoadout.empty(&"arena")
-	greedy.set_item(&"melee", ZeeWeaponIds.KNIFE)
-	greedy.set_item(&"primary", ZeeWeaponIds.LAUNCHER)
-	greedy.set_item(&"secondary", ZeeWeaponIds.REVOLVER)
-	greedy.set_item(&"thrown", ZeeWeaponIds.FRAG)
+	greedy.set_item(&"melee", AwWeaponIds.KNIFE)
+	greedy.set_item(&"primary", AwWeaponIds.LAUNCHER)
+	greedy.set_item(&"secondary", AwWeaponIds.REVOLVER)
+	greedy.set_item(&"thrown", AwWeaponIds.FRAG)
 	greedy.set_item(&"gear", &"armour")
 	_check(
 		DotLoadoutValidator.validate(greedy, schema, everything).ok,
 		"a heavy with armour and a grenade is free by default"
 	)
-	var launcher := schema.catalogue.find(ZeeWeaponIds.LAUNCHER)
+	var launcher := schema.catalogue.find(AwWeaponIds.LAUNCHER)
 	launcher.cost = 6
 	schema.point_budget = 5
 	_check(
@@ -2296,10 +2296,10 @@ func _test_content() -> void:
 	schema.point_budget = 0
 
 	var sensible := DotLoadout.empty(&"arena")
-	sensible.set_item(&"melee", ZeeWeaponIds.KNIFE)
-	sensible.set_item(&"primary", ZeeWeaponIds.RIFLE)
-	sensible.set_item(&"secondary", ZeeWeaponIds.PISTOL)
-	sensible.set_item(&"thrown", ZeeWeaponIds.FRAG)
+	sensible.set_item(&"melee", AwWeaponIds.KNIFE)
+	sensible.set_item(&"primary", AwWeaponIds.RIFLE)
+	sensible.set_item(&"secondary", AwWeaponIds.PISTOL)
+	sensible.set_item(&"thrown", AwWeaponIds.FRAG)
 	sensible.set_item(&"gear", &"armour")
 	_check(
 		DotLoadoutValidator.validate(sensible, schema, everything).ok,
@@ -2308,13 +2308,13 @@ func _test_content() -> void:
 
 	# A melee weapon in the primary slot is a player who spawns with nothing to shoot.
 	var saved := DotLoadout.empty(&"arena")
-	saved.set_item(&"primary", ZeeWeaponIds.RIFLE)
-	saved.set_item(&"secondary", ZeeWeaponIds.PISTOL)
+	saved.set_item(&"primary", AwWeaponIds.RIFLE)
+	saved.set_item(&"secondary", AwWeaponIds.PISTOL)
 	var _changes := DotLoadoutValidator.conform(saved, schema, everything)
 	_check(
 		saved.item_in(&"melee") == ArenaWeaponRoles.resolve(&"melee")
 		and saved.item_in(&"thrown") == ArenaWeaponRoles.resolve(&"thrown")
-		and saved.item_in(&"primary") == ZeeWeaponIds.RIFLE
+		and saved.item_in(&"primary") == AwWeaponIds.RIFLE
 		and DotLoadoutValidator.validate(saved, schema, everything).ok,
 		"an old primary-and-sidearm loadout gains a knife and a frag and keeps its choices"
 	)
@@ -2324,8 +2324,8 @@ func _test_content() -> void:
 	)
 
 	var knives := DotLoadout.empty(&"arena")
-	knives.set_item(&"primary", ZeeWeaponIds.KNIFE)
-	knives.set_item(&"secondary", ZeeWeaponIds.PISTOL)
+	knives.set_item(&"primary", AwWeaponIds.KNIFE)
+	knives.set_item(&"secondary", AwWeaponIds.PISTOL)
 	_check(
 		not DotLoadoutValidator.validate(knives, schema, everything).ok,
 		"and refuses a knife as a primary"
@@ -2338,8 +2338,8 @@ func _test_content() -> void:
 
 
 func _test_content_rest(schema: DotLoadoutSchema, unowned: DotLoadout) -> void:
-	unowned.set_item(&"primary", ZeeWeaponIds.LAUNCHER)
-	unowned.set_item(&"secondary", ZeeWeaponIds.PISTOL)
+	unowned.set_item(&"primary", AwWeaponIds.LAUNCHER)
+	unowned.set_item(&"secondary", AwWeaponIds.PISTOL)
 	_check(
 		not DotLoadoutValidator.validate(
 			unowned, schema, DotLoadoutEntitlements.none()

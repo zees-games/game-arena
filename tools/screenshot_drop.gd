@@ -16,7 +16,7 @@ static func stage(game, local, _hud) -> Array[Dictionary]:
 		local.camera.current = true
 	var held := &""
 	for n: int in local.arsenal.slots():
-		if local.arsenal.slot_at(n).def.slot == ZeeWeaponIds.SLOT_PRIMARY:
+		if local.arsenal.slot_at(n).def.slot == AwWeaponIds.SLOT_PRIMARY:
 			held = local.arsenal.slot_at(n).def.id
 	var other := &"rifle" if held != &"rifle" else &"smg"
 	var state := {"id": other, "magazine": 17, "reserve": 40}
