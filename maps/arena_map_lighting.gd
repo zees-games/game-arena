@@ -102,6 +102,7 @@ static func _build_imported(root: Node3D, map: Object) -> void:
 	var lighting: Dictionary = manifest.get("lighting", {}) if manifest.get("lighting") is Dictionary else {}
 	var document := imported_document(lighting)
 	var _sun := DotLightRig.apply(root, DotLightDocument.from_dictionary(document), imported_profile())
+	_apply_named_sky(root, str(lighting.get("sky_name", "")))
 
 
 	if is_black_sky(lighting):
@@ -221,6 +222,28 @@ static func _darken(root: Node3D) -> void:
 ## The map's own six-face sky, over the procedural one, when the importer found one in its
 ## pakfile (`lighting.sky_faces`). All six or none: a missing face is a hole in the
 ## horizon, so one that does not load leaves the procedural sky.
+## The family's panorama for the map's sky name; an unknown or missing name keeps the gradient.
+static func _apply_named_sky(root: Node3D, sky_name: String) -> void:
+	var mat := DotMapBspMesh.sky_material_for(sky_name)
+
+	if mat == null:
+		return
+
+	for child in root.get_children():
+		var world := child as WorldEnvironment
+
+		if world == null or world.environment == null:
+			continue
+
+		var env := world.environment
+
+		if env.sky == null:
+			env.sky = Sky.new()
+
+		env.sky.sky_material = mat
+		env.background_mode = Environment.BG_SKY
+
+
 static func _apply_packed_sky(root: Node3D, lighting: Dictionary, dir: String) -> void:
 	var faces: Variant = lighting.get("sky_faces", null)
 

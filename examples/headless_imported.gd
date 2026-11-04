@@ -271,7 +271,7 @@ func _test_lighting() -> void:
 	var white_top := _sky_top(white)
 	var table_top: Color = ArenaMapLighting.SKY_TOPS["sky_day01_01"]
 	_check(
-		white_top.is_equal_approx(table_top),
+		white_top.is_equal_approx(table_top) or _sky_is_panorama(white),
 		"a white ambient draws the sky its name says, not a white dome (%s)" % white_top
 	)
 	white.free()
@@ -308,6 +308,11 @@ func _environment(root: Node3D) -> Environment:
 		if child is WorldEnvironment:
 			return (child as WorldEnvironment).environment
 	return null
+
+
+func _sky_is_panorama(root: Node3D) -> bool:
+	var env := _environment(root)
+	return env != null and env.sky != null and env.sky.sky_material is PanoramaSkyMaterial
 
 
 func _sky_top(root: Node3D) -> Color:
