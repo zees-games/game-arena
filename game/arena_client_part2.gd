@@ -415,9 +415,41 @@ func _grab_mouse() -> void:
 	if hud != null:
 		hud.notice("Click to play")
 
+## The art ids every spawn carries; the other models load after the cover lifts ([method _warm_rest_tick]).
+const SPAWN_ARTS: Array[StringName] = [&"pistol", &"knife"]
+
+var _rest_paths: Array[String] = []
+
+
+func _spawn_model_paths() -> Array[String]:
+	var arts: Array[AwWeaponVisual] = []
+	for id in SPAWN_ARTS:
+		var art := AwWeaponArtTable.get_art(id)
+		if art != null:
+			arts.append(art)
+	return AwWeaponArtTable.Listing.model_paths(arts, false)
+
+
+## Loads the models the cover did not wait for, one a frame, so the first draw of any gun is a cache hit.
+func _warm_rest_tick() -> void:
+	if _rest_paths.is_empty():
+		get_tree().process_frame.disconnect(_warm_rest_tick)
+		return
+	AwModelCache.scene(_rest_paths.pop_back())
+
+
+func _begin_warm_rest() -> void:
+	var first := _spawn_model_paths()
+	for path in AwWeaponArtTable.model_paths():
+		if not first.has(path):
+			_rest_paths.append(path)
+	if not _rest_paths.is_empty() and not get_tree().process_frame.is_connected(_warm_rest_tick):
+		get_tree().process_frame.connect(_warm_rest_tick)
+
+
 func _weapon_warm_items() -> Array:
 	var out: Array = []
-	for path in AwWeaponArtTable.model_paths():
+	for path in _spawn_model_paths():
 		var model := AwModelCache.instantiate(path)
 		if model == null:
 			continue
@@ -465,6 +497,7 @@ func _build_platform() -> void:
 	# Headless draws nothing: loading every weapon model to warm its materials is 38 MB for no frame.
 	if not DotPlatform.is_headless():
 		gate.warm_up(_weapon_warm_items())
+		gate.opened.connect(_begin_warm_rest, CONNECT_ONE_SHOT)
 	if ArenaFrameProbe.on() and DotWeb.available():
 		# Lets a page script split its own frame log at the cover (window.dotWeb.publishedAt.arena_gate_open, ms).
 		gate.opened.connect(func() -> void: DotWeb.publish("arena_gate_open", "1"))
