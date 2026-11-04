@@ -351,6 +351,9 @@ func _pull_exact(state: DotFpsState) -> void:
 	exact[12] = 1.0 if state.stamina_exhausted else 0.0
 	exact[13] = state.stamina_delay_left
 	net_exact = exact
+	# Both ends go on from the float32 copy, as a rewind does: from the float64 state the next
+	# server tick differed from a replay by an ulp, and every such snapshot replayed the whole lead.
+	_push_exact(state)
 
 
 ## Puts the exact copy over what [method DotFpsNetSync.push] restored from the quantised one.

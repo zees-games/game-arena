@@ -24,6 +24,8 @@ var crosshair: DotCrosshair = null
 var label: Label = null
 
 var _camera: Camera3D = null
+## A view model built in advance, so a kill does not pay for its 30-odd nodes on the frame it starts.
+var _spare: AwViewModel = null
 var _push := Vector3.ZERO
 var _fire := -1.0
 var _hits := -1.0
@@ -88,12 +90,16 @@ func _start(cam: Camera3D) -> void:
 	_camera = cam
 	_fire = -1.0
 	_hits = -1.0
-	hands = AwViewModel.new()
+	hands = _spare if _spare != null else _new_hands()
+	_spare = null
+	hands.process_mode = Node.PROCESS_MODE_INHERIT
+	hands.visible = true
 	hands.name = "KillerHands"
 	if feel_rules != null:
 		hands.feel_rules = feel_rules
 	hands.ads_rules = ads_rules
-	hands.show_arms = not _shares_arms()
+	if hands.get_parent() != null:
+		hands.get_parent().remove_child(hands)
 	cam.add_child(hands)
 	_mount_arms(cam)
 	flashes = AwShotFx.new()
@@ -115,11 +121,31 @@ func _start(cam: Camera3D) -> void:
 	label.offset_right = -40.0
 	label.add_theme_font_size_override("font_size", AMMO_FONT)
 	add_child(label)
+	# A frame or so on, not this one: the next kill finds it built.
+	get_tree().create_timer(0.5).timeout.connect(_prepare_spare)
+
+
+## An unbuilt view model with its arms setting made, which [method _start] would otherwise make.
+func _new_hands() -> AwViewModel:
+	var model := AwViewModel.new()
+	model.show_arms = not _shares_arms(model)
+	return model
+
+
+func _prepare_spare() -> void:
+	if _spare != null or not is_inside_tree():
+		return
+	_spare = _new_hands()
+	_spare.name = "SpareHands"
+	_spare.visible = false
+	_spare.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(_spare)
 
 
 ## Whether the shared arm rig draws the hands; the view model's own sleeves are then built off, not left drawn under the gun.
-func _shares_arms() -> bool:
-	return DotAddonApi.build_level("dot_player_char") >= ArenaViewArms.NEEDS_LEVEL and hands.has_signal(&"hands_reached")
+func _shares_arms(model: AwViewModel = null) -> bool:
+	var m := model if model != null else hands
+	return DotAddonApi.build_level("dot_player_char") >= ArenaViewArms.NEEDS_LEVEL and m.has_signal(&"hands_reached")
 
 
 func _mount_arms(cam: Camera3D) -> void:

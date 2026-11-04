@@ -628,8 +628,12 @@ func _present_health_tag(delta: float) -> void:
 	_health_tag.global_position = over + Vector3(0.0, 2.25, 0.0)
 	var eye := get_viewport().get_camera_3d()
 	if eye != null:
-		# The whole tag turns to the camera, so the fill stays on its background.
-		_health_tag.look_at(eye.global_position, Vector3.UP, true)
+		# The whole tag turns to the camera, so the fill stays on its background; with the
+		# camera straight above or below, UP is colinear and the engine warns every frame.
+		var to_eye := eye.global_position - _health_tag.global_position
+		var up := Vector3.UP if Vector2(to_eye.x, to_eye.z).length_squared() > 1e-4 else Vector3.FORWARD
+		if not to_eye.is_zero_approx():
+			_health_tag.look_at(eye.global_position, up, true)
 	var fraction := clampf(now / health.max_health, 0.0, 1.0)
 	_health_fill.scale = Vector3(maxf(fraction, 0.001), 1.0, 1.0)
 	_health_fill.position.x = -HEALTH_TAG_WIDTH * (1.0 - fraction) * 0.5
