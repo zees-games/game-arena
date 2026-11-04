@@ -29,7 +29,7 @@ func _run() -> void:
 
 	if resolved.is_empty() or not FileAccess.file_exists(json_path):
 		print("no maps/imported_dm link — nothing more to check (link arena-dm-maps)")
-		_report_sections(2, 2, 2, 17)
+		_report_sections(2, 2, 2, 22)
 		return
 
 	var listed: Array = JSON.parse_string(FileAccess.get_file_as_string(json_path)).get("maps", [])
@@ -76,7 +76,7 @@ func _run() -> void:
 		if ArenaImportedMaps.has(StringName(str(want.id))):
 			_check(names.has(wid) and names[wid] != "Combat surf map", "%s is in the picker, not labelled a surf map" % wid)
 	_check(last_dm < first_surf, "deathmatch and gun game maps come before the surf maps")
-	_report_sections(entered + 2, entered + 2, 4, 19 + 5 * found)
+	_report_sections(entered + 2, entered + 2, 4, 24 + 5 * found)
 
 
 ## Solo play with no server: the published maps, their labels and pickability.
@@ -134,6 +134,30 @@ func _test_solo() -> void:
 	_check(only.asked == PackedStringArray(["gamemann/crackhouse@9.9.9"]), "the pick asks for the mounted version (%s)" % ", ".join(only.asked))
 	_check(got.ok or not got.error.message.contains("could not fetch"), "and the fetch is not what fails")
 
+	print("-- solo: a pinned pack that 404s falls back to its latest; online (no allow_latest) keeps the exact version")
+	var lat := _Latest.new()
+	lat.have = ["1.0.9"]
+	lat.latest = "1.0.9"
+	var lcat := DotMapCatalogue.new()
+	var _l := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.4"]))
+	DotRegistry.register(DotMapLoader.CLOUD_SERVICE, lat)
+	var online := await ArenaMaps.mount_delivered(lcat.get_map(&"crackhouse"), DotMapLoader.new(), lcat)
+	_check(not online.ok and lat.asked == PackedStringArray(["gamemann/crackhouse@1.0.4"]), "online asks only the exact version (%s)" % ", ".join(lat.asked))
+	lcat = DotMapCatalogue.new()
+	var _l2 := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.4"]))
+	lat.asked = PackedStringArray()
+	var fell := await ArenaMaps.mount_delivered(lcat.get_map(&"crackhouse"), DotMapLoader.new(), lcat, true)
+	_check(lat.asked == PackedStringArray(["gamemann/crackhouse@1.0.4", "gamemann/crackhouse@1.0.9"]), "solo retries at latest (%s)" % ", ".join(lat.asked))
+	_check(fell.ok or not fell.error.message.contains("could not fetch"), "the latest fetch is not what fails")
+	var lm := lcat.get_map(&"crackhouse")
+	_check(lm != null and lm.effective_content_version() == "1.0.9" and lm.scene_path.contains("/1.0.9/"), "the map now points at the latest")
+	lat.have = []
+	lcat = DotMapCatalogue.new()
+	var _l3 := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.4"]))
+	var none := await ArenaMaps.mount_delivered(lcat.get_map(&"crackhouse"), DotMapLoader.new(), lcat, true)
+	DotRegistry.unregister(DotMapLoader.CLOUD_SERVICE)
+	_check(not none.ok and lcat.get_map(&"crackhouse") == null, "neither pinned nor latest published: dropped from the list")
+
 	var ffa: ArenaMode = ArenaModes.by_id(&"ffa")
 	var gungame: ArenaMode = ArenaModes.by_id(&"gungame")
 	var ffa_ids: Dictionary = {}
@@ -165,6 +189,22 @@ class _Missing404 extends RefCounted:
 	func ensure(_id: StringName, _version: String, _groups: Variant = null, _url: String = "") -> DotResult:
 		var e := DotError.from_http(404)
 		return DotResult.failure(e).wrap("Could not download the content manifest.")
+
+
+## A dot-cloud stand-in that has the versions in `have`, and names `latest` as the newest.
+class _Latest extends RefCounted:
+	var have: Array = []
+	var latest := ""
+	var asked := PackedStringArray()
+
+	func latest_version(_id: String) -> String:
+		return latest
+
+	func ensure(id: StringName, version: String, _groups: Variant = null, _url: String = "") -> DotResult:
+		asked.append("%s@%s" % [id, version])
+		if have.has(version):
+			return DotResult.success("res://dot_cloud/%s/%s" % [id, version])
+		return DotResult.failure(DotError.from_http(404))
 
 
 ## A dot-cloud stand-in that has only 9.9.9 (as if mounted) and answers 404 for any other version.
