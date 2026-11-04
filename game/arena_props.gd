@@ -89,6 +89,14 @@ var _collision: Node3D = null
 var _limits: DotPropLimits = null
 
 
+## A basis looking along [param direction] whose up is never colinear with it (Basis.looking_at errors otherwise); identity for a zero direction.
+static func _look_basis(direction: Vector3) -> Basis:
+	if not direction.is_finite() or direction.length_squared() < 0.000001:
+		return Basis.IDENTITY
+	var dir := direction.normalized()
+	return Basis.looking_at(dir, Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.999 else Vector3.FORWARD)
+
+
 ## Builds the spawner and puts the level into a physics space.
 func setup() -> DotResult:
 	if game == null or game.map == null:
@@ -380,7 +388,7 @@ func act(player_id: int, action: int, origin: Vector3, direction: Vector3) -> bo
 	# The player's view as a Basis, which `DotPhysGun` needs and the wire does not
 	# carry: it is derivable from the two angles it does carry, and a third
 	# representation of the same aim on the wire is a third thing that can disagree.
-	var view := Basis.looking_at(direction, Vector3.UP)
+	var view := _look_basis(direction)
 
 	match action:
 		ArenaEvents.PropAct.GRAB:
@@ -427,7 +435,7 @@ func _carry(delta: float) -> void:
 		gun.hold(
 			player.muzzle_position(),
 			aim,
-			Basis.looking_at(aim, Vector3.UP),
+			_look_basis(aim),
 			delta
 		)
 
