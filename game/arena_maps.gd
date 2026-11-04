@@ -557,7 +557,10 @@ static func mount_delivered(
 		if fetched.error != null and fetched.error.http_status == 404 and catalogue != null:
 			catalogue.remove(map.id)
 
-		return fetched.wrap("could not fetch the map %s" % String(map.id))
+		# The toast shows only the message, so the reason goes into it; the whole chain goes to the log.
+		DotLog.warn(CHANNEL, "a delivered map could not be fetched", {"map": String(map.id), "pack": key, "why": str(fetched.error)})
+		var why := fetched.error.message if fetched.error != null else ""
+		return fetched.wrap("could not fetch the map %s: %s" % [String(map.id), why])
 
 	var dir := mount_of(map)
 	var added := ArenaImportedMaps.add_mounted(map.id, dir)
