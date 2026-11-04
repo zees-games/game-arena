@@ -246,7 +246,7 @@ func _fetch_picked(id: StringName) -> DotResult:
 		gate.set_progress(float(p.get("fraction", 0.0)), "%s  %d%%" % [text, int(float(p.get("fraction", 0.0)) * 100.0)])
 	if cloud != null and cloud.has_signal(&"progress_changed"):
 		cloud.connect(&"progress_changed", on_progress)
-	var mounted := await ArenaMaps.mount_delivered(def, DotMapLoader.new(), _menu_catalogue)
+	var mounted := await ArenaMaps.mount_delivered(def, DotMapLoader.new(), _menu_catalogue, true)
 	if cloud != null and cloud.has_signal(&"progress_changed"):
 		cloud.disconnect(&"progress_changed", on_progress)
 	gate.set_progress(-1.0)

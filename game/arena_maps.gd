@@ -542,7 +542,7 @@ static func delivered_def(key: String) -> DotMapDef:
 ## `ArenaMap.by_id` builds the map from the mounted manifest. Shared by the map session (a server's change)
 ## and the solo picker. A pack whose manifest is not `"kind": "arena"` is refused and leaves [param catalogue].
 static func mount_delivered(
-	map: DotMapDef, loader: DotMapLoader, catalogue: DotMapCatalogue = null
+	map: DotMapDef, loader: DotMapLoader, catalogue: DotMapCatalogue = null, allow_latest := false
 ) -> DotResult:
 	var key := str(map.meta.get("key", "%s@%s" % [String(map.content_id), map.effective_content_version()]))
 
@@ -551,6 +551,10 @@ static func mount_delivered(
 		return DotResult.success(null)
 
 	var fetched: DotResult = await loader.ensure_content(map)
+
+	if not fetched.ok and allow_latest and fetched.error != null and fetched.error.http_status == 404:
+		fetched = await _fetch_latest(map, loader)
+		key = str(map.meta.get("key", key))
 
 	if not fetched.ok:
 		# Unpublished on this origin: drop it from the solo list so it is not offered again.
@@ -576,6 +580,65 @@ static func mount_delivered(
 
 	DotLog.info(CHANNEL, "a delivered map is mounted", {"map": String(map.id), "pack": key, "dir": dir})
 	return DotResult.success(null)
+
+
+## Solo only: the pinned version is not published, so retry at the pack's `latest.json` version and
+## re-point [param map] at it. A server's change never comes here: online both ends use the server's exact version.
+static func _fetch_latest(map: DotMapDef, loader: DotMapLoader) -> DotResult:
+	var pinned := map.effective_content_version()
+	var latest := await latest_version(String(map.content_id))
+
+	if latest == "" or latest == pinned:
+		return DotResult.failure(DotError.from_http(404)).wrap("%s@%s and its latest are not published" % [String(map.content_id), pinned])
+
+	var was_version := map.content_version
+	var was_scene := map.scene_path
+	map.content_version = latest
+	map.version = latest
+	map.scene_path = manifest_in_mount(map)
+	var fetched: DotResult = await loader.ensure_content(map)
+
+	if not fetched.ok:
+		map.content_version = was_version
+		map.version = was_version
+		map.scene_path = was_scene
+		return fetched
+
+	map.meta["key"] = "%s@%s" % [String(map.content_id), latest]
+	DotLog.info(CHANNEL, "pinned pack not published, using its latest", {"pack": String(map.content_id), "pinned": pinned, "latest": latest})
+	return fetched
+
+
+## The version `<content id>/latest.json` names on the cloud client's origin, or "" when unknown. A client that
+## has `latest_version(id)` answers it itself; otherwise the registered client's HTTP bases are asked.
+static func latest_version(content_id: String) -> String:
+	var cloud: Object = DotRegistry.get_service(DotMapLoader.CLOUD_SERVICE)
+
+	if cloud == null:
+		return ""
+
+	if cloud.has_method("latest_version"):
+		return str(await cloud.call("latest_version", content_id))
+
+	if not cloud.has_method("resolved_http_base_urls"):
+		return ""
+
+	var root := (Engine.get_main_loop() as SceneTree).root
+	var http := DotHttp.new()
+	root.add_child(http)
+
+	for base: String in cloud.call("resolved_http_base_urls"):
+		var got: DotResult = await http.get_json("%s/%s/latest.json" % [base.rstrip("/"), content_id])
+
+		if got.ok and got.value is Dictionary:
+			var version := str((got.value as Dictionary).get("version", "")).strip_edges()
+
+			if version != "" and not version.contains("/") and not version.contains(".."):
+				http.queue_free()
+				return version
+
+	http.queue_free()
+	return ""
 
 
 ## `res://dot_cloud/<content id>/<version>`, where [param def]'s pack mounts.
