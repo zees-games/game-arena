@@ -4,6 +4,7 @@ const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaMatchText := preload("arena_match_text.gd")
 const ArenaTeamMenu := preload("arena_team_menu.gd")
 const ArenaWeaponDropWiring := preload("arena_weapon_drop_wiring.gd")
+const ArenaTouch := preload("arena_touch.gd")
 
 ## Offline only: the team menu's rules run in this process (online the server's do).
 var _local_team_menu: ArenaTeamMenu = null
@@ -138,6 +139,7 @@ func _build_interface() -> void:
 	# name, so a client shell older than that still runs the game in dot-ui's dark default.
 	if game_menu.has_method(&"follow_hud"):
 		game_menu.call(&"follow_hud", hud, ArenaHud.accent_theme())
+	_touch = ArenaTouch.build(self, hud, _sampler, game_menu.menu_button)
 	# M: the maps and the modes (dot-menu's map menu).
 	if game_menu.has_method(&"use_maps"):
 		var maps: Variant = game_menu.call(&"use_maps", map_menu_rows, change_from_menu)
@@ -1459,7 +1461,7 @@ static func _strength(action: StringName) -> float:
 ## a set of booleans.[/b] `set_button` is the accessor; assigning `.attack` creates nothing and
 ## errors at runtime with "Invalid assignment of property or key 'attack'".
 func _read_fire(move: DotFpsCommand) -> void:
-	var firing := mouse_drives_view() and _held(ArenaBindings.FIRE)
+	var firing := mouse_drives_view() and (_held(ArenaBindings.FIRE) or _touch_held(&"fire"))
 
 	_fire.set_button(DotWeaponCommand.BUTTON_ATTACK, firing)
 	# The Aim key (right mouse) aims down the sights, by default; the Bash key (X) is the pack's
@@ -1478,7 +1480,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 		_sampler.look_scale = player.aim_zoom() if player != null else 1.0
 	# On the wire as well, for the server's No Scope medal; nothing simulated reads it.
 	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
-	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and _held(ArenaBindings.RELOAD))
+	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and (_held(ArenaBindings.RELOAD) or _touch_held(&"reload")))
 	_fire.set_button(DotWeaponCommand.BUTTON_FIRE_MODE, mouse_drives_view() and _held(ArenaBindings.FIRE_MODE))
 	_fire.set_button(DotWeaponCommand.BUTTON_DROP, mouse_drives_view() and _held(ArenaBindings.WEAPON_DROP))
 	_fire.set_button(DotWeaponCommand.BUTTON_USE, mouse_drives_view() and _held(ArenaBindings.USE))
@@ -1490,6 +1492,15 @@ func _read_fire(move: DotFpsCommand) -> void:
 	# is a REQUEST that is cleared once made rather than a mirror of the current slot.
 	_fire.slot = _wanted_slot
 	_wanted_slot = 0
+
+
+func _touch_held(id: StringName) -> bool:
+	return _touch != null and bool(_touch.call(&"is_held", id))
+
+
+## The touch NEXT button: the carried slot after the one in hand.
+func touch_next_weapon() -> void:
+	_wanted_slot = _cycled_slot(1)
 
 
 ## Remembers the slot before the one in hand, for Q.
@@ -1623,8 +1634,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if player == null:
 		return
 
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		if _sampler != null and _touch != null:
+			_sampler.handle_event(event)
+		return
+
 	if event is InputEventMouseMotion:
-		if mouse_drives_view():
+		if mouse_drives_view() and (_touch == null or event.device != InputEvent.DEVICE_ID_EMULATION):
 			if is_roaming():
 				# The free camera turns on the mouse, and the dead body's view stays put.
 				_roam_look += (event as InputEventMouseMotion).relative

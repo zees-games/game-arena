@@ -44,7 +44,8 @@ func _light() -> void:
 ## motor ignores the bit unless the server granted it). The role is taken off before the
 ## defaults are registered, so `dot_fps_noclip` is never created on V and V does one thing.
 static func make_sampler() -> DotFpsSampler:
-	var sampler := DotFpsSampler.new(ArenaPlayer.arena_tunables())
+	var tunables := ArenaPlayer.arena_tunables()
+	var sampler: DotFpsSampler = DotFpsTouchSampler.new(tunables) if DotPlatform.has_touch() else DotFpsSampler.new(tunables)
 	sampler.actions["noclip"] = &""
 	var _registered := DotFpsSampler.register_default_actions(sampler)
 	return sampler
