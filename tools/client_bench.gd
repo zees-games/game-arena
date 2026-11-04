@@ -46,7 +46,7 @@ var _map := "dm_box"
 var _mode := "ffa"
 var _play := false
 ## The server game's tick rate. 60 is dot-server's default `sv_tickrate`; 64 is ArenaGame's.
-var _tick := 60
+var _tick := ArenaContent.TICK_RATE
 
 var _server_pid := -1
 var _relay = null
