@@ -162,7 +162,7 @@ func _play(preset: String) -> void:
 		# Grenades the bot let go of: a throw is not a shot (a frag lobbed at where a target went
 		# behind cover is meant to be blind), so it is counted here and not judged by sight.
 		game.player_for(BOT).used.connect(func(outcome: DotWeaponOutcome) -> void:
-			if outcome != null and outcome.used and not outcome.spawns.is_empty() and game.player_for(BOT).arsenal.current_slot() == AwWeaponIds.SLOT_THROWN:
+			if outcome != null and outcome.used and not outcome.spawns.is_empty() and game.player_for(BOT).arsenal.current_slot() == AwWeaponIds.thrown_slot():
 				thrown[0] += 1
 		)
 

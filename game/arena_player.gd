@@ -603,7 +603,7 @@ func _build_arsenal() -> void:
 
 
 ## How many arsenal slots a player has: the pack's five.
-const MAX_SLOTS := AwWeaponIds.SLOT_THROWN
+const MAX_SLOTS := AwWeaponIds.SLOT_THROWN ## the highest slot either layout uses
 
 
 ## Puts a [AwWeaponRig] over [member arsenal], replacing any rig that was there. [b]The rig is
@@ -830,9 +830,9 @@ func give_loadout(entries: Array[Dictionary]) -> void:
 
 ## Which of two slots to spawn holding: the heaviest GUN, never the grenade.
 static func _better_hand(have: int, slot: int) -> int:
-	if slot >= AwWeaponIds.SLOT_THROWN:
+	if slot == AwWeaponIds.thrown_slot():
 		return have if have > 0 else slot
-	if have == 0 or have >= AwWeaponIds.SLOT_THROWN or slot > have:
+	if have == 0 or have == AwWeaponIds.thrown_slot() or slot > have:
 		return slot
 	return have
 
@@ -1346,7 +1346,7 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 	var kind := DotHumanoidFigure.Hold.NONE
 	if def != null:
 		kind = DotHumanoidFigure.Hold.MELEE if def.slot == AwWeaponIds.SLOT_MELEE else (
-			DotHumanoidFigure.Hold.NONE if def.slot == AwWeaponIds.SLOT_THROWN else DotHumanoidFigure.Hold.GUN)
+			DotHumanoidFigure.Hold.NONE if def.slot == AwWeaponIds.thrown_slot() else DotHumanoidFigure.Hold.GUN)
 	figure.set_hold(kind)
 
 	var seq := mirror_fire_seq if mirrored else (weapons.fire_seq % AwWeaponNet.FIRE_SEQ_WRAP if weapons != null else 0)

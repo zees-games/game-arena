@@ -164,7 +164,7 @@ func _run() -> void:
 
 
 func _select_sniper(shooter: ArenaPlayer) -> void:
-	var _ok := shooter.arsenal.select(AwWeaponIds.SLOT_HEAVY, _now())
+	var _ok := shooter.arsenal.select(AwWeaponIds.big_gun_slot(), _now())
 
 
 ## Fires once, then presses again [param press_at] ticks later (or holds from there) and counts the extra hits.
@@ -252,7 +252,7 @@ func _probe_client() -> void:
 		if why == &"ok":
 			sounds.append(id))
 	var _fill := me.arsenal.give(AwWeaponIds.SNIPER)
-	var _sel := me.arsenal.select(AwWeaponIds.SLOT_HEAVY, g.current_tick())
+	var _sel := me.arsenal.select(AwWeaponIds.big_gun_slot(), g.current_tick())
 	for scoped in [false, true]:
 		var hits: Array = []
 		var on_hit := func(a: int, v: int, _amt: float, _pt: Vector3, _h: bool, _l: bool) -> void:

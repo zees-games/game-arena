@@ -15,13 +15,26 @@ const SOURCE_PREFIX := "arenapack:"
 const OFF_ARG := "--arena-no-weapon-packs"
 
 ## Role -> the arsenal slot it fills (the pack's own `slot` decides, not its tags, which no two packs agree on).
-const ROLE_SLOT := {
-	&"melee": AwWeaponIds.SLOT_MELEE,
-	&"secondary": AwWeaponIds.SLOT_SIDEARM,
-	&"primary": AwWeaponIds.SLOT_PRIMARY,
-	&"heavy": AwWeaponIds.SLOT_HEAVY,
-	&"thrown": AwWeaponIds.SLOT_THROWN,
-}
+static func role_slot(role: StringName) -> int:
+	use_layout()
+	match role:
+		&"melee":
+			return AwWeaponIds.SLOT_MELEE
+		&"secondary":
+			return AwWeaponIds.SLOT_SIDEARM
+		&"primary":
+			return AwWeaponIds.SLOT_PRIMARY
+		&"heavy":
+			return AwWeaponIds.big_gun_slot()
+	return AwWeaponIds.thrown_slot()
+
+
+const ROLES: Array[StringName] = [&"melee", &"secondary", &"primary", &"heavy", &"thrown"]
+
+
+## Grenades on key 4 and heavies on 5; must run before any weapon table is built, on both ends.
+static func use_layout() -> void:
+	AwWeaponIds.use_thrown_before_heavy()
 
 ## Role -> the weapon that fills it when no pack does; its short name also picks a pack's `<prefix>_pistol` first.
 const ROLE_DEFAULT := {
@@ -72,6 +85,7 @@ static var generation := 0
 
 ## Registers the packs named in `weapons.packs` and settles every role. Safe to call again; both ends call it, so both hold one list.
 static func scan(from: String = "") -> void:
+	use_layout()
 	clear()
 	_scanned = true
 
@@ -230,7 +244,7 @@ static func _settle() -> void:
 
 	var forced: Dictionary = DotAddonConfig.get_value(config, "weapons.roles", {})
 
-	for role: StringName in ROLE_SLOT:
+	for role: StringName in ROLES:
 		var named := StringName(str(forced.get(String(role), "")))
 
 		if named != &"" and by_id.has(named):
@@ -247,7 +261,7 @@ static func _settle() -> void:
 static func _auto(role: StringName, by_id: Dictionary) -> StringName:
 	var named: StringName = ROLE_DEFAULT[role]
 
-	if pack_ids.has(named) and by_id.has(named) and (by_id[named] as DotWeaponDef).slot == int(ROLE_SLOT[role]):
+	if pack_ids.has(named) and by_id.has(named) and (by_id[named] as DotWeaponDef).slot == role_slot(role):
 		return named
 
-	return AwPackRoles.first_for_slot(pack_ids, by_id, int(ROLE_SLOT[role]), ROLE_DEFAULT[role])
+	return AwPackRoles.first_for_slot(pack_ids, by_id, role_slot(role), ROLE_DEFAULT[role])

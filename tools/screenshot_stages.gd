@@ -177,7 +177,7 @@ func _feel_shots_view(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, ar
 			"arm": func() -> void:
 				arm_hands.call()
 				var _g := _local.arsenal.give(AwWeaponIds.SNIPER)
-				hold.call(AwWeaponIds.SLOT_HEAVY),
+				hold.call(AwWeaponIds.big_gun_slot()),
 			"wait": 30,
 		},
 		{
@@ -188,7 +188,7 @@ func _feel_shots_view(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, ar
 				# The sniper itself: give_everything leaves the heavy slot holding the last
 				# heavy it gave, which is not the sniper.
 				var _g := _local.arsenal.give(AwWeaponIds.SNIPER)
-				hold.call(AwWeaponIds.SLOT_HEAVY)
+				hold.call(AwWeaponIds.big_gun_slot())
 				_local.aim_held = true
 				_hud.visible = true,
 			"wait": 30,
@@ -311,7 +311,7 @@ func _feel_shots_world(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, a
 func _stage_muzzle(id: StringName, arm_hands: Callable, hold: Callable) -> void:
 	_shots = []
 	var picks: Array = [[AwWeaponIds.PISTOL, AwWeaponIds.SLOT_SIDEARM], [AwWeaponIds.RIFLE, AwWeaponIds.SLOT_PRIMARY],
-			[AwWeaponIds.SHOTGUN, AwWeaponIds.SLOT_PRIMARY], [AwWeaponIds.SNIPER, AwWeaponIds.SLOT_HEAVY]]
+			[AwWeaponIds.SHOTGUN, AwWeaponIds.SLOT_PRIMARY], [AwWeaponIds.SNIPER, AwWeaponIds.big_gun_slot()]]
 	# `--weapons=smg:3,knife:1` (id:slot) replaces the default four with any weapon in any slot.
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--weapons="):

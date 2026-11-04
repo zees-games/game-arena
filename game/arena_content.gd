@@ -232,13 +232,17 @@ static func apply_carry(arsenal: DotWeaponArsenal, mask: int) -> int:
 ## document keyed on slot ids and a player's saved choice should survive this game
 ## changing its weapons. The heavies go in `primary` with the rifles: a launcher is
 ## something you carry INSTEAD of a rifle, and the budget is what makes that a choice.
-const LOADOUT_SLOT_FOR := {
-	AwWeaponIds.SLOT_MELEE: &"melee",
-	AwWeaponIds.SLOT_SIDEARM: &"secondary",
-	AwWeaponIds.SLOT_PRIMARY: &"primary",
-	AwWeaponIds.SLOT_HEAVY: &"primary",
-	AwWeaponIds.SLOT_THROWN: &"thrown",
-}
+static func loadout_slot_for(slot: int) -> StringName:
+	Roles.use_layout()
+	if slot == AwWeaponIds.SLOT_MELEE:
+		return &"melee"
+	if slot == AwWeaponIds.SLOT_SIDEARM:
+		return &"secondary"
+	if slot == AwWeaponIds.SLOT_PRIMARY or slot == AwWeaponIds.heavy_slot():
+		return &"primary"
+	if slot == AwWeaponIds.thrown_slot():
+		return &"thrown"
+	return &"primary"
 
 ## The one item a player has to have unlocked. Everything else is free.
 ##
@@ -254,18 +258,23 @@ const PAID_WEAPON := AwWeaponIds.LAUNCHER
 ## [b]Kept as it was before the menu reordered the slots[/b], because the order things are given
 ## in is the arsenal's own order, which every bot's weapon choice walks: giving the knife third
 ## moved `headless_bots`' measured reactions (hard slower than medium on the same seed).
-const GIVE_RANK := {
-	AwWeaponIds.SLOT_MELEE: 0, AwWeaponIds.SLOT_PRIMARY: 1, AwWeaponIds.SLOT_HEAVY: 1,
-	AwWeaponIds.SLOT_SIDEARM: 2, AwWeaponIds.SLOT_THROWN: 3,
-}
+static func give_rank(slot: int) -> int:
+	Roles.use_layout()
+	if slot == AwWeaponIds.SLOT_MELEE:
+		return 0
+	if slot == AwWeaponIds.SLOT_PRIMARY or slot == AwWeaponIds.heavy_slot():
+		return 1
+	if slot == AwWeaponIds.SLOT_SIDEARM:
+		return 2
+	return 3 if slot == AwWeaponIds.thrown_slot() else 4
 
 
-## [param entries] (`DotLoadoutManager.resolve`'s) in [constant GIVE_RANK] order, stably.
+## [param entries] (`DotLoadoutManager.resolve`'s) in [method give_rank] order, stably.
 static func in_give_order(entries: Array[Dictionary]) -> Array[Dictionary]:
 	var ranked: Array[Dictionary] = []
 	for rank in range(5):
 		for e in entries:
-			if int(GIVE_RANK.get(int(e.get("arsenal_slot", 0)), 4)) == rank:
+			if give_rank(int(e.get("arsenal_slot", 0))) == rank:
 				ranked.append(e)
 	return ranked
 
@@ -285,7 +294,7 @@ static func catalogue() -> DotItemCatalogue:
 		item.display_name = weapon.display_name
 		# One loadout slot per weapon, from the pack's arsenal slot. A knife in the
 		# primary slot would be a player who spawns with nothing to shoot.
-		item.slots = [LOADOUT_SLOT_FOR.get(weapon.slot, &"primary")]
+		item.slots = [loadout_slot_for(weapon.slot)]
 		item.tags = weapon.tags.duplicate()
 		# Free unless the weapon profile sets `params.loadout_cost`.
 		item.cost = int(weapon.params.get(&"loadout_cost", 0))
@@ -339,7 +348,7 @@ static func loadout_schema() -> DotLoadoutSchema:
 	var thrown := DotLoadoutSlot.make(&"thrown", true, Roles.resolve(&"thrown"))
 	thrown.display_name = "Grenades"
 	thrown.kinds = [DotItem.KIND_WEAPON]
-	thrown.arsenal_slot = AwWeaponIds.SLOT_THROWN
+	thrown.arsenal_slot = AwWeaponIds.thrown_slot()
 	thrown.order = 25
 
 	var gear := DotLoadoutSlot.make(&"gear")

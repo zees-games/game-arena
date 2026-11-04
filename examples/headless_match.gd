@@ -543,7 +543,7 @@ func _test_pack_weapons() -> void:
 	)
 
 	p.arsenal.give(AwWeaponIds.FRAG)
-	_switch_to(game, 900, AwWeaponIds.SLOT_THROWN)
+	_switch_to(game, 900, AwWeaponIds.thrown_slot())
 	_check(
 		p.arsenal.current_def().id == AwWeaponIds.FRAG,
 		"the 5 key's slot holds the frag", str(p.arsenal.current_def().id)
@@ -645,7 +645,7 @@ func _test_pack_weapons() -> void:
 	if not p.is_alive():
 		var _again := game.respawn_player(900)
 	p.arsenal.give(AwWeaponIds.BEAMER)
-	_switch_to(game, 900, AwWeaponIds.SLOT_HEAVY)
+	_switch_to(game, 900, AwWeaponIds.heavy_slot())
 	var cells := p.arsenal.ammo().count(AwWeaponIds.AMMO_CELL)
 	_check(
 		ArenaHud.rounds_in_hand(p) == cells and cells > 0,
