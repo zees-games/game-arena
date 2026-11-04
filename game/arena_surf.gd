@@ -156,6 +156,7 @@ func attach(p_map: Object, p_nav: DotBotNav, data: Dictionary) -> void:
 			{"map": str(map.get("id")), "cached": recorded, "bake": bake_id(nav)})
 		_link_teleports()
 		return
+	nav.begin_batch()
 	for row: Dictionary in data.get("edges", []):
 		var from := _vector(row.get("from", []), units)
 		var to := _vector(row.get("to", []), units)
@@ -176,6 +177,7 @@ func attach(p_map: Object, p_nav: DotBotNav, data: Dictionary) -> void:
 			continue
 		nav.add_ride(from, to, edge.id)
 		edge.linked = true
+	nav.end_batch()
 	_link_teleports()
 	DotLog.info(CHANNEL, "ride edges linked", {"map": str(map.get("id")), "edges": edges.size(), "teleports": teleports.size()})
 
@@ -280,6 +282,7 @@ const SUPPORT_ABOVE_FLOOR := 8.0
 ## a bot at the foot of a ramp walks into it and comes out at the top.
 func _link_teleports() -> void:
 	var pits: Array = map.get("pits")
+	nav.begin_batch()
 	for i in range(pits.size()):
 		var box: AABB = pits[i]["box"]
 		var dest: Vector3 = pits[i]["to"]
@@ -297,6 +300,7 @@ func _link_teleports() -> void:
 		teleports[id] = [near, landing]
 		# Nearly free: the distance a teleport covers is not walked.
 		nav.add_ride(near, landing, id, 0.01)
+	nav.end_batch()
 
 
 ## A route that may ride or teleport (see [method DotBotNav.route]).
