@@ -567,6 +567,7 @@ func _build_interface() -> void:
 	# name, so a client shell older than that still runs the game in dot-ui's dark default.
 	if game_menu.has_method(&"follow_hud"):
 		game_menu.call(&"follow_hud", hud, ArenaHud.accent_theme())
+	_touch = ArenaTouch.build(self, hud, _sampler, game_menu.menu_button)
 	# M: the maps and the modes (dot-menu's map menu).
 	if game_menu.has_method(&"use_maps"):
 		var maps: Variant = game_menu.call(&"use_maps", map_menu_rows, change_from_menu)

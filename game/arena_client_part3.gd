@@ -207,6 +207,15 @@ func is_roaming() -> bool:
 	return game != null and game.spectate != null and player != null \
 		and game.spectate.is_roaming(player.player_id)
 
+func _touch_held(id: StringName) -> bool:
+	return _touch != null and bool(_touch.call(&"is_held", id))
+
+
+## The touch NEXT button: the carried slot after the one in hand.
+func touch_next_weapon() -> void:
+	_wanted_slot = _cycled_slot(1)
+
+
 ## Remembers the slot before the one in hand, for Q.
 func _note_held_slot() -> void:
 	if player == null or player.arsenal == null:
@@ -230,7 +239,7 @@ func mouse_drives_view() -> bool:
 ## a set of booleans.[/b] `set_button` is the accessor; assigning `.attack` creates nothing and
 ## errors at runtime with "Invalid assignment of property or key 'attack'".
 func _read_fire(move: DotFpsCommand) -> void:
-	var firing := mouse_drives_view() and _held(ArenaBindings.FIRE)
+	var firing := mouse_drives_view() and (_held(ArenaBindings.FIRE) or _touch_held(&"fire"))
 
 	_fire.set_button(DotWeaponCommand.BUTTON_ATTACK, firing)
 	# The Aim key (right mouse) aims down the sights, by default; the Bash key (X) is the pack's
@@ -249,7 +258,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 		_sampler.look_scale = player.aim_zoom() if player != null else 1.0
 	# On the wire as well, for the server's No Scope medal; nothing simulated reads it.
 	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
-	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and _held(ArenaBindings.RELOAD))
+	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and (_held(ArenaBindings.RELOAD) or _touch_held(&"reload")))
 	_fire.set_button(DotWeaponCommand.BUTTON_FIRE_MODE, mouse_drives_view() and _held(ArenaBindings.FIRE_MODE))
 	_fire.set_button(DotWeaponCommand.BUTTON_DROP, mouse_drives_view() and _held(ArenaBindings.WEAPON_DROP))
 	_fire.set_button(DotWeaponCommand.BUTTON_USE, mouse_drives_view() and _held(ArenaBindings.USE))

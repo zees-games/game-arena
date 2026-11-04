@@ -4,6 +4,7 @@ const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaMatchText := preload("arena_match_text.gd")
 const ArenaTeamMenu := preload("arena_team_menu.gd")
 const ArenaWeaponDropWiring := preload("arena_weapon_drop_wiring.gd")
+const ArenaTouch := preload("arena_touch.gd")
 
 ## Offline only: the team menu's rules run in this process (online the server's do).
 var _local_team_menu: ArenaTeamMenu = null

@@ -143,6 +143,9 @@ var _fire := DotWeaponCommand.new()
 ## A weapon slot the player asked for this tick, or 0 for "no change". Cleared once
 ## sent — see [method _read_fire].
 var _wanted_slot: int = 0
+
+## The phone's on-screen buttons ([code]arena_touch.gd[/code]); null off touch.
+var _touch: RefCounted = null
 ## The light on the eye and the other players' beams (dot-flashlight); the server owns on/off.
 var flash: DotFlashlight = null
 var flash_crowd: DotFlashlightCrowd = null

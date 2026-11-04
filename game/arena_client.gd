@@ -197,8 +197,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if player == null:
 		return
 
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		if _sampler != null and _touch != null:
+			_sampler.handle_event(event)
+		return
+
 	if event is InputEventMouseMotion:
-		if mouse_drives_view():
+		if mouse_drives_view() and (_touch == null or event.device != InputEvent.DEVICE_ID_EMULATION):
 			if is_roaming():
 				# The free camera turns on the mouse, and the dead body's view stays put.
 				_roam_look += (event as InputEventMouseMotion).relative
