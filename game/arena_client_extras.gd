@@ -155,7 +155,9 @@ func receive_wire(payload: Dictionary) -> void:
 		chat_relay_changed.emit(bool(payload.get("relay", false)))
 		return
 
-	if chat != null:
+	# Only dot-chat's wire form (it always writes `m`): handed dot-server's simpler payload,
+	# `receive` refuses it with a WARN, once per server line.
+	if chat != null and payload.has("m"):
 		var taken := chat.receive(payload)
 
 		if taken.ok:
