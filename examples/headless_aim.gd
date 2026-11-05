@@ -270,7 +270,8 @@ func _probe_client() -> void:
 			Input.action_press(ArenaBindings.AIM)
 		for _i in 200:
 			await get_tree().process_frame
-			var a := angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, 1.62, 0.0))
+			# Chest, not head: a hip shot leaves the muzzle and crosses the crosshair at hip_zero, so it lands a hand below the muzzle line and a head-height aim missed the capsule top.
+			var a := angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, 1.2, 0.0))
 			sampler.look_at_angles(a.x, a.y)
 		var hud = client.get("hud")
 		_check(not scoped or me.aim_zoom() < 0.9, "client: the sights are up before the shot" if scoped else "client: hip fire")

@@ -644,8 +644,7 @@ const RIDE_MAP := &"surf_ski_2"
 ## Its starts, and how many must land.
 const RIDE_STARTS := 3
 const RIDE_LANDING := 2
-## The edge the recorded-ride check records: one whose run-off from the lip at rest lands (8>4,
-## five of six). Edges 0 and 1 miss from the lip; the first linked edge changes on every replan.
+## The edge the recorded-ride check records: one that lands from the lip at rest (edges 0 and 1 miss), never "the first linked", which moves on every replan.
 const RECORD_EDGE := 6
 ## How long a roaming bot is given to take a ride of its own accord, seconds.
 const ROAM_SECONDS := 90.0
