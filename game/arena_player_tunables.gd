@@ -20,8 +20,8 @@ static func make() -> DotFpsTunables:
 	tunables.auto_hop = true
 	tunables.coyote_time = 0.08
 	tunables.jump_buffer_time = 0.12
-	# Shift sprints 30% over the run (7.46 m/s); max_speed stays 5.74, which the surf routes are timed on.
-	tunables.sprint_speed_scale = 1.3
+	# Shift sprints 69% over the run (9.70 m/s; 30% faster than the first 7.46); max_speed stays 5.74, which the surf routes are timed on.
+	tunables.sprint_speed_scale = 1.69
 	tunables.crouch_speed_scale = 0.45
 	# Crouch at a run slides: a burst and a long, low-friction carry, then a crouch. The
 	# minimum is under the 5.74 m/s run so any real run slides and a crouch-walk never does.

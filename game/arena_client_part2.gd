@@ -303,6 +303,7 @@ func _build_killview() -> void:
 	killview.stage = killcam
 	KillPovView.mount(self, game, killview, "KillViewScreen")
 	killview.respawn_requested.connect(func() -> void:
+		_jump_guard = true
 		if bridge != null:
 			bridge.send_request(ArenaEvents.Ask.RESPAWN)
 		elif solo_killview != null:
