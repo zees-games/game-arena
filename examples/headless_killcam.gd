@@ -5,7 +5,7 @@ const KillPov := preload("../game/arena_kill_pov.gd")
 const Bodies := preload("../game/arena_killcam_bodies.gd")
 const KillPovView := preload("../game/arena_kill_pov_view.gd")
 
-const EXPECTED_CHECKS := 48
+const EXPECTED_CHECKS := 49
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -342,6 +342,7 @@ func _check_lens(gm: Object, me: Object, killer: Object) -> void:
 	var lens := 0.0
 	for i in 90:
 		cam.look_at_from_position(free, free + wall_dir)
+		cam.fov = 75.0
 		view.present({"camera": cam, "aux": scoped, "fov": 75.0, "behind": false})
 		await get_tree().physics_frame
 		lens = view.hands.scope_fraction() if view.hands != null else 0.0
@@ -349,6 +350,7 @@ func _check_lens(gm: Object, me: Object, killer: Object) -> void:
 		"a replayed scoped aim draws the scope overlay and hides the crosshair", str(lens))
 	scoped[KillPov.ADS] = 0.0
 	for i in 90:
+		cam.fov = 75.0
 		view.present({"camera": cam, "aux": scoped, "fov": 75.0, "behind": false})
 		await get_tree().physics_frame
 	_check(view.hands.scope_fraction() == 0.0 and view.crosshair.visible, "and the hip view brings the crosshair back")
