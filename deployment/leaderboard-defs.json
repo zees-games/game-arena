@@ -1,0 +1,66 @@
+{
+	"format": "dot-leaderboard-defs",
+	"version": 1,
+	"boards": [
+		{
+			"key": "arena.kills",
+			"scope": {},
+			"name": "Most kills",
+			"description": "",
+			"kind": "SCORE",
+			"decimals": 0,
+			"unit": "kills",
+			"visible": true
+		},
+		{
+			"key": "arena.streak",
+			"scope": {},
+			"name": "Best streak",
+			"description": "",
+			"kind": "SCORE",
+			"decimals": 0,
+			"unit": "kills",
+			"visible": true
+		},
+		{
+			"key": "arena.ratio",
+			"scope": {},
+			"name": "Kill/death",
+			"description": "",
+			"kind": "POINTS",
+			"decimals": 2,
+			"unit": "",
+			"visible": true
+		},
+		{
+			"key": "arena.wins",
+			"scope": {},
+			"name": "Rounds won",
+			"description": "",
+			"kind": "SCORE",
+			"decimals": 0,
+			"unit": "rounds",
+			"visible": true
+		},
+		{
+			"key": "arena.damage",
+			"scope": {},
+			"name": "Damage dealt",
+			"description": "",
+			"kind": "SCORE",
+			"decimals": 0,
+			"unit": "hp",
+			"visible": true
+		},
+		{
+			"key": "arena.deaths",
+			"scope": {},
+			"name": "Fewest deaths",
+			"description": "",
+			"kind": "PENALTY",
+			"decimals": 0,
+			"unit": "deaths",
+			"visible": true
+		}
+	]
+}

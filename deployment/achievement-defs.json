@@ -1,0 +1,390 @@
+{
+	"format": "dot-achievement-defs",
+	"version": 1,
+	"achievements": [
+		{
+			"key": "arena.first_blood",
+			"name": "First Blood",
+			"description": "Kill somebody.",
+			"points": 5,
+			"category": "combat",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.killer",
+			"tier": 1,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.kills",
+					"op": "at_least",
+					"value": 1.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.centurion",
+			"name": "Centurion",
+			"description": "A hundred kills.",
+			"points": 25,
+			"category": "combat",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.killer",
+			"tier": 2,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.kills",
+					"op": "at_least",
+					"value": 100.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.millennium",
+			"name": "Millennium",
+			"description": "A thousand kills.",
+			"points": 100,
+			"category": "combat",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.killer",
+			"tier": 3,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.kills",
+					"op": "at_least",
+					"value": 1000.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.marksman",
+			"name": "Marksman",
+			"description": "Twenty-five headshots.",
+			"points": 20,
+			"category": "skill",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.headhunter",
+			"tier": 1,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.headshots",
+					"op": "at_least",
+					"value": 25.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.headhunter",
+			"name": "Headhunter",
+			"description": "Two hundred and fifty headshots.",
+			"points": 60,
+			"category": "skill",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.headhunter",
+			"tier": 2,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.headshots",
+					"op": "at_least",
+					"value": 250.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.triple",
+			"name": "On a Roll",
+			"description": "Three kills without dying.",
+			"points": 10,
+			"category": "skill",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.streak",
+			"tier": 1,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.best_streak",
+					"op": "at_least",
+					"value": 3.0,
+					"merge": "highest"
+				}
+			]
+		},
+		{
+			"key": "arena.rampage",
+			"name": "Rampage",
+			"description": "Five kills without dying.",
+			"points": 20,
+			"category": "skill",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.streak",
+			"tier": 2,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.best_streak",
+					"op": "at_least",
+					"value": 5.0,
+					"merge": "highest"
+				}
+			]
+		},
+		{
+			"key": "arena.unstoppable",
+			"name": "Unstoppable",
+			"description": "Ten kills without dying.",
+			"points": 50,
+			"category": "skill",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.streak",
+			"tier": 3,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.best_streak",
+					"op": "at_least",
+					"value": 10.0,
+					"merge": "highest"
+				}
+			]
+		},
+		{
+			"key": "arena.big_round",
+			"name": "Carried It",
+			"description": "Fifteen kills in one round.",
+			"points": 40,
+			"category": "skill",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.best_round_kills",
+					"op": "at_least",
+					"value": 15.0,
+					"merge": "highest"
+				}
+			]
+		},
+		{
+			"key": "arena.heavy_hitter",
+			"name": "Heavy Hitter",
+			"description": "A hundred thousand points of damage.",
+			"points": 40,
+			"category": "combat",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.damage_dealt",
+					"op": "at_least",
+					"value": 100000.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.regular",
+			"name": "Regular",
+			"description": "Fifty rounds played.",
+			"points": 15,
+			"category": "match",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.rounds_played",
+					"op": "at_least",
+					"value": 50.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.winner",
+			"name": "Winner",
+			"description": "Win a match.",
+			"points": 15,
+			"category": "match",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.champion",
+			"tier": 1,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.matches_won",
+					"op": "at_least",
+					"value": 1.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.champion",
+			"name": "Champion",
+			"description": "Win twenty-five matches.",
+			"points": 60,
+			"category": "match",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "arena.champion",
+			"tier": 2,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.matches_won",
+					"op": "at_least",
+					"value": 25.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.veteran",
+			"name": "Veteran",
+			"description": "Ten hours in the arena.",
+			"points": 30,
+			"category": "match",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.playtime_sec",
+					"op": "at_least",
+					"value": 36000.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.sharpshooter",
+			"name": "Sharpshooter",
+			"description": "Five thousand shots landed over a hundred rounds.",
+			"points": 50,
+			"category": "skill",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.shots_hit",
+					"op": "at_least",
+					"value": 5000.0,
+					"merge": "sum"
+				},
+				{
+					"stat": "arena.rounds_played",
+					"op": "at_least",
+					"value": 100.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.exterminator",
+			"name": "Exterminator",
+			"description": "Two hundred monsters put down.",
+			"points": 30,
+			"category": "combat",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.npc_kills",
+					"op": "at_least",
+					"value": 200.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.decorator",
+			"name": "Interior Decorator",
+			"description": "Spawn a hundred props.",
+			"points": 10,
+			"category": "sandbox",
+			"icon": "",
+			"hidden": false,
+			"secret": false,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.props_spawned",
+					"op": "at_least",
+					"value": 100.0,
+					"merge": "sum"
+				}
+			]
+		},
+		{
+			"key": "arena.gravity",
+			"name": "Gravity Wins",
+			"description": "Twenty-five deaths nobody else is to blame for.",
+			"points": 5,
+			"category": "combat",
+			"icon": "",
+			"hidden": false,
+			"secret": true,
+			"series": "",
+			"tier": 0,
+			"requireAll": true,
+			"rules": [
+				{
+					"stat": "arena.suicides",
+					"op": "at_least",
+					"value": 25.0,
+					"merge": "sum"
+				}
+			]
+		}
+	]
+}
