@@ -5,7 +5,7 @@ const ArenaTouch := preload("../game/arena_touch.gd")
 ## The touch layout: the buttons fit a phone at three sizes without overlapping, and each DotTouchButtons is freed.
 ## Run: `godot --headless --path . res://examples/headless_touch.tscn`
 
-const CHECKS := 12
+const CHECKS := 14
 
 
 func _ready() -> void:
@@ -58,4 +58,14 @@ func _run() -> void:
 	_check(not off.visible, "no touch: the buttons are hidden")
 	off.free()
 	DotPlatform.touch_override = -1
+	var client_methods: Array = []
+	for m: Dictionary in load("res://game/arena_client.gd").get_script_method_list():
+		client_methods.append(m["name"])
+	_check("touch_next_weapon" in client_methods and "_touch_held" in client_methods, "the split client carries the touch wiring")
+	var drag := InputEventScreenDrag.new()
+	drag.relative = Vector2(NAN, 3.0)
+	var sampler := DotFpsTouchSampler.new(DotFpsTunables.new())
+	sampler.handle_event(drag)
+	var turned := sampler.sample(1.0 / 60.0)
+	_check(is_finite(turned.yaw) and is_finite(turned.pitch), "a NaN touch drag leaves the look finite")
 	_report(CHECKS)
