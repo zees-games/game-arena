@@ -30,6 +30,21 @@ func _test_wall_rules() -> void:
 	_check(t.wall_run_min_speed > t.max_speed,
 		"a run needs more than the plain run along the wall (%.1f over %.1f m/s)" % [t.wall_run_min_speed, t.max_speed],
 		"at or under it, every jump beside a wall would become a run")
+	var sprint := DotFpsCommand.BUTTON_SPRINT
+	_check(is_equal_approx(t.max_speed, 5.74) and is_equal_approx(t.speed_for(0), 5.74),
+		"the plain run stays 5.74 m/s, the pace the surf routes are timed on", "%.3f" % t.speed_for(0))
+	_check(is_equal_approx(t.speed_for(sprint), 5.74 * 1.3) and not t.dash_enabled,
+		"Shift sprints 30%% over the run by default (dash off)", "%.3f" % t.speed_for(sprint))
+	var motor := DotFpsMotor.new(t, DotFpsFlatBody.with_floor(0.0))
+	var runner := DotFpsState.new()
+	runner.mode = DotFpsState.Mode.GROUND
+	for _i in range(90):
+		var cmd := DotFpsCommand.new()
+		cmd.move = Vector2(0.0, 1.0)
+		cmd.set_button(sprint, true)
+		motor.simulate(runner, cmd, 1.0 / float(TICK_RATE))
+	_check(runner.horizontal_speed() > 5.74 * 1.25 and runner.horizontal_speed() < 5.74 * 1.35 + 0.1,
+		"a sprinting body settles near 7.46 m/s through the motor the client predicts with", "%.2f" % runner.horizontal_speed())
 
 	var unbacked := PackedStringArray()
 	var walls_cvars := 0

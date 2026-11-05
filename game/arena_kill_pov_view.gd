@@ -22,6 +22,8 @@ var arms: DotPlayerViewArms = null
 var _grip: DotViewGrip = null
 var crosshair: DotCrosshair = null
 var label: Label = null
+## The killer's scope, drawn as the live HUD draws the player's own: full screen over the replay while the aim is in.
+var scope: AwScopeOverlay = null
 
 var _camera: Camera3D = null
 var _push := Vector3.ZERO
@@ -100,6 +102,10 @@ func _start(cam: Camera3D) -> void:
 	flashes.name = "KillerShotFx"
 	flashes.catalogue = ArenaContent.weapon_catalogue()
 	cam.add_child(flashes)
+	scope = AwScopeOverlay.new()
+	scope.name = "KillerScope"
+	scope.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(scope)
 	crosshair = DotCrosshair.new()
 	crosshair.set_anchors_preset(Control.PRESET_FULL_RECT)
 	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -175,6 +181,14 @@ func _fired(id: StringName, recoil: Vector2, signed: bool, cam: Camera3D) -> voi
 
 
 func _hud(aux: PackedFloat32Array, fov: float) -> void:
+	var scoped := scope != null and hands != null and hands.scope_fraction() > 0.0
+	if scope != null:
+		if hands != null:
+			scope.follow(hands)
+		scope.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		scope.position = Vector2.ZERO
+		scope.size = get_viewport().get_visible_rect().size
+	crosshair.visible = not scoped
 	crosshair.fov_degrees = fov
 	crosshair.set_aim(aux[1])
 	crosshair.set_spread(aux[6])
@@ -193,10 +207,11 @@ func _end() -> void:
 	arms = null
 	_grip = null
 	_push = Vector3.ZERO
-	for n: Node in [crosshair, label, flashes]:
+	for n: Node in [crosshair, label, flashes, scope]:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
 	crosshair = null
+	scope = null
 	label = null
 	flashes = null
 	KillPov.mark_replay_camera(_camera, false)

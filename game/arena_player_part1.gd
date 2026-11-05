@@ -16,7 +16,7 @@ func _build_view() -> void:
 	add_child(view)
 
 ## Movement that feels like an arena shooter rather than a modern one. Fast, floaty, high air
-## control, and no sprint: the speed is the speed, and the way to go faster is to move well.
+## control, and a modest Shift sprint: the way to go faster is still to move well.
 static func arena_tunables() -> DotFpsTunables:
 	return ArenaPlayerTunables.make()
 

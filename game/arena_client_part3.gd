@@ -273,6 +273,13 @@ func _physics_step(delta: float) -> void:
 	move.set_button(
 		DotFpsCommand.BUTTON_USER_0, mouse_drives_view() and _held(launch_action())
 	)
+	if player != null and not player.is_alive():
+		_jump_guard = true
+	elif _jump_guard:
+		if _held(&"dot_fps_jump"):
+			move.set_button(DotFpsCommand.BUTTON_JUMP, false)
+		else:
+			_jump_guard = false
 	if is_roaming():
 		# The roaming spectator flies a camera and does not walk the dead player about.
 		move.move = Vector2.ZERO
