@@ -107,3 +107,5 @@ Pushes and boosters, water, ladders, conveyors, gravity and hurt volumes from ea
 - The water is the genre's (200 u/s, a 60 u/s idle sink, so a pit full of water is climbed out of by holding jump), with waist and float depths as the genre's proportions of the 1.8 m hull.
 
 Most of these maps' water is a few centimetres over a pit, and most hurt volumes sit over a teleport, so checks look for the deep pool and the pit-free volumes rather than the first one found.
+
+**`tools/solo_maps_probe.gd [substring]` checks every solo (delivered) map the way a player's first launch meets it**: fetch from the content origin into a scratch `XDG_DATA_HOME`, mount, build, and require spawns and meshes. Run it as `XDG_DATA_HOME=<scratch> heavy -- timeout N godot --headless --path . --script tools/solo_maps_probe.gd -- <substring>`; the full list wants `HEAVY_JOB_MAX_GB=5`. A pin the origin has not published loads only through the latest.json fallback (`mount_delivered` with `allow_latest`), so a branch without that fallback shows those maps as missing.
