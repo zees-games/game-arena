@@ -14,7 +14,7 @@ const ArenaModuleCvars := preload("../game/arena_module_cvars.gd")
 
 const TICK_RATE := 64
 const EXPECTED_SECTIONS := 4
-const EXPECTED_CHECKS := 36
+const EXPECTED_CHECKS := 37
 
 var _checks := 0
 var _failed := 0
@@ -207,7 +207,9 @@ func _test_wiring() -> void:
 	arena.sprint_defaults(ArenaPlayer.arena_tunables())
 	var arena_tun := ArenaPlayer.arena_tunables()
 	arena.track_tunables(arena_tun)
-	_check(arena.sprint != null and is_equal_approx(arena_tun.sprint_speed_scale, ArenaPlayer.arena_tunables().sprint_speed_scale) and arena_tun.sprint_can_shoot, "the arena loads the sprint rules without changing its speeds")
+	# Constants are origin/main's values (sprint 1.0 there; this branch adds the 1.3 sprint).
+	_check(arena.sprint != null and is_equal_approx(arena_tun.sprint_speed_scale, 1.3) and arena_tun.sprint_can_shoot, "the arena loads the sprint rules at a 1.3 sprint scale", str(arena_tun.sprint_speed_scale))
+	_check(is_equal_approx(arena_tun.max_speed, 5.74) and is_equal_approx(arena_tun.walk_speed_scale, 0.45) and is_equal_approx(arena_tun.crouch_speed_scale, 0.45), "and leaves the run, walk and crouch speeds as on main", "%s %s %s" % [arena_tun.max_speed, arena_tun.walk_speed_scale, arena_tun.crouch_speed_scale])
 	var arena_names: Array[String] = []
 	arena.bind_cvars(func(n: String, _d: String, _h: String, _f: int) -> Object:
 		arena_names.append(n)

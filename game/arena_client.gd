@@ -202,8 +202,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
-		if _sampler != null and _touch != null:
-			_sampler.handle_event(event)
+		if _sampler is DotFpsTouchSampler and _touch != null:
+			ArenaTouch.feed(_sampler as DotFpsTouchSampler, event)
 		return
 
 	if event is InputEventMouseMotion:

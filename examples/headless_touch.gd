@@ -5,7 +5,7 @@ const ArenaTouch := preload("../game/arena_touch.gd")
 ## The touch layout: the buttons fit a phone at three sizes without overlapping, and each DotTouchButtons is freed.
 ## Run: `godot --headless --path . res://examples/headless_touch.tscn`
 
-const CHECKS := 14
+const CHECKS := 15
 
 
 func _ready() -> void:
@@ -62,10 +62,25 @@ func _run() -> void:
 	for m: Dictionary in load("res://game/arena_client.gd").get_script_method_list():
 		client_methods.append(m["name"])
 	_check("touch_next_weapon" in client_methods and "_touch_held" in client_methods, "the split client carries the touch wiring")
-	var drag := InputEventScreenDrag.new()
-	drag.relative = Vector2(NAN, 3.0)
 	var sampler := DotFpsTouchSampler.new(DotFpsTunables.new())
-	sampler.handle_event(drag)
-	var turned := sampler.sample(1.0 / 60.0)
-	_check(is_finite(turned.yaw) and is_finite(turned.pitch), "a NaN touch drag leaves the look finite")
+	sampler.set_screen_width(1000.0)
+	var land := InputEventScreenTouch.new()
+	land.index = 3
+	land.pressed = true
+	land.position = Vector2(800, 200)
+	sampler.handle_event(land)
+	var good := InputEventScreenDrag.new()
+	good.index = 3
+	good.position = Vector2(820, 200)
+	good.relative = Vector2(20, 0)
+	ArenaTouch.feed(sampler, good)
+	var before := sampler.sample(1.0 / 60.0)
+	_check(before.yaw != 0.0, "a tracked look drag turns the view (the NaN check below is not vacuous)", str(before.yaw))
+	var bad := InputEventScreenDrag.new()
+	bad.index = 3
+	bad.position = Vector2(NAN, 200)
+	bad.relative = Vector2(NAN, 3.0)
+	ArenaTouch.feed(sampler, bad)
+	var after := sampler.sample(1.0 / 60.0)
+	_check(is_finite(after.yaw) and is_finite(after.pitch) and is_equal_approx(after.yaw, before.yaw) and is_equal_approx(after.pitch, before.pitch), "a NaN drag on the tracked look finger leaves the look finite and unchanged", "%s %s" % [after.yaw, after.pitch])
 	_report(CHECKS)

@@ -20,6 +20,16 @@ var _client: Node = null
 var _sampler: DotFpsTouchSampler = null
 
 
+## Hands a screen touch or drag to the sampler, dropping one with a non-finite position: the sampler
+## would add it to the look accumulator and the view would go NaN for good.
+static func feed(sampler: DotFpsTouchSampler, event: InputEvent) -> void:
+	if event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if not (is_finite(drag.position.x) and is_finite(drag.position.y) and is_finite(drag.relative.x) and is_finite(drag.relative.y)):
+			return
+	sampler.handle_event(event)
+
+
 ## Builds the buttons under [param host] (the HUD) when the device has touch; null otherwise.
 static func build(client: Node, host: Control, sampler: DotFpsSampler, menu_button: Button = null) -> RefCounted:
 	if not DotPlatform.has_touch() or not sampler is DotFpsTouchSampler:
