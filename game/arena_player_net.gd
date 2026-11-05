@@ -353,7 +353,9 @@ func _pull_exact(state: DotFpsState) -> void:
 	net_exact = exact
 	# Both ends go on from the float32 copy, as a rewind does: from the float64 state the next
 	# server tick differed from a replay by an ulp, and every such snapshot replayed the whole lead.
-	_push_exact(state)
+	# Only a player some client predicts: a bot's planned surf rides are open-loop and miss rounded.
+	if identity != null and (identity.is_predicted() or (identity.is_authoritative and identity.owner_peer_id != 0)):
+		_push_exact(state)
 
 
 ## Puts the exact copy over what [method DotFpsNetSync.push] restored from the quantised one.
