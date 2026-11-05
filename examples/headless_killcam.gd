@@ -5,7 +5,7 @@ const KillPov := preload("../game/arena_kill_pov.gd")
 const Bodies := preload("../game/arena_killcam_bodies.gd")
 const KillPovView := preload("../game/arena_kill_pov_view.gd")
 
-const EXPECTED_CHECKS := 45
+const EXPECTED_CHECKS := 48
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -100,13 +100,22 @@ func _run() -> void:
 	_check(_tags_visible(bots, me) == 0, "no health bar shows over anybody during the kill view")
 	await _check_killer_screen(kv, killer)
 	_check(kv.is_active(), "and is still playing a second on")
-	await _until(func() -> bool: return not kv.is_active(), 10.0)
-	_check(float(Time.get_ticks_msec() - t0) > 1500.0, "it ran its time, not skipped at once")
+	var cam: DotKillcam = kv.kv.killcam
+	_check(cam.skip_grace <= 0.3 and cam.skip_actions.has("ui_accept"), "the kill view's skip grace is short and Space skips", str(cam.skip_grace))
+	Input.action_press(&"dot_fps_jump")
+	cam._unhandled_input(_press(&"ui_accept"))
+	_check(not kv.is_active(), "the first Space press, a second and a bit in, skips the kill view")
+	_check(float(Time.get_ticks_msec() - t0) > 1000.0, "it ran its grace, not skipped at once")
 	var screen: Node = _client.get_node_or_null("KillViewScreen")
 	_check(screen != null and screen.hands == null, "the killer's viewmodel is gone when the replay ends")
 	_check(not KillPov.is_replay_camera(kv.camera), "and the camera is no longer flagged")
 	await _check_recoil(screen, killer)
 	_check(await _until(func() -> bool: return me.is_alive(), 15.0), "then the player respawns")
+	await _wait(0.3)
+	_check(bool(_client.get("_jump_guard")), "the Space that skipped it, still held, is not a jump after the respawn")
+	Input.action_release(&"dot_fps_jump")
+	await _wait(0.3)
+	_check(not bool(_client.get("_jump_guard")), "and the guard is gone once Space is let go")
 
 	await _test_final_killcam(gm, me, killer, bots)
 	_report(EXPECTED_CHECKS)
