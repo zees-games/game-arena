@@ -61,7 +61,8 @@ func _test_bot_stays_unrounded(bot_session: int) -> void:
 	_load_state(state)
 	behaviour.pull()
 	_check(behaviour.net_exact.size() == ArenaPlayerNet.EXACT_FLOATS, "the pull still fills the exact copy")
-	_check(state.position == _awkward(), "position is untouched by the pull", str(state.position))
+	_check(state.position.x == _awkward().x and state.position.y == _awkward().y and state.position.z == _awkward().z,
+		"position is untouched by the pull", str(state.position))
 	_check(state.stamina == 77.7 + 1e-9 and state.time_since_grounded == 0.123456789,
 		"and so are stamina and the jump timer")
 	_check(behaviour.net_exact[0] == _f32(_awkward().x), "while the exact copy is the float32 one")
