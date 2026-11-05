@@ -1,0 +1,15 @@
+{
+  "format": "tmc-game-listing",
+  "version": 1,
+  "listing": {
+    "name": "Arena",
+    "description": "A fast first-person shooter with seven modes: Free-For-All, Team Deathmatch, Siege, King of the Hill, Capture the Flag, Gun Game and Only Snipers. Every player chooses a loadout of melee weapon, sidearm, primary and grenade, and fights on dev-textured maps and surf maps built for combat.",
+    "tags": ["3D", "Multiplayer", "Teams"],
+    "platforms": ["PLATFORM_WEB"],
+    "graphicsType": "THREE_D",
+    "tmcKind": "GAME"
+  },
+  "pack": {
+    "id": "gamemann/game-arena"
+  }
+}
