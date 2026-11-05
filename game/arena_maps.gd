@@ -618,7 +618,8 @@ static func latest_version(content_id: String) -> String:
 		return ""
 
 	if cloud.has_method("latest_version"):
-		return str(await cloud.call("latest_version", content_id))
+		var own := str(await cloud.call("latest_version", content_id)).strip_edges()
+		return "" if own.contains("/") or own.contains("..") else own
 
 	if not cloud.has_method("resolved_http_base_urls"):
 		return ""

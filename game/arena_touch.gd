@@ -3,6 +3,8 @@ extends RefCounted
 ## The on-screen buttons of a phone: dot-ui's [DotTouchButtons] over the HUD, wired to the client's own
 ## command bits. The sampler's stick and look drag are dot-player-controller's; this is only the buttons.
 
+const SelfScript := preload("arena_touch.gd")
+
 ## Offsets are from the bottom-right corner (see [DotTouchButtons]). Every radius is at least 24 so a
 ## button is 48 px across, thumb size, and the cluster still sits above the ammunition plate.
 const LAYOUT: Array[Dictionary] = [
@@ -22,7 +24,7 @@ var _sampler: DotFpsTouchSampler = null
 static func build(client: Node, host: Control, sampler: DotFpsSampler, menu_button: Button = null) -> RefCounted:
 	if not DotPlatform.has_touch() or not sampler is DotFpsTouchSampler:
 		return null
-	var made: RefCounted = (load("res://game/arena_touch.gd") as GDScript).new()
+	var made: RefCounted = (SelfScript as GDScript).new()
 	made.call(&"_setup", client, host, sampler, menu_button)
 	return made
 
