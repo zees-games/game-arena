@@ -89,4 +89,6 @@ static func make_fall_rules() -> DotFallDamageRules:
 static func _make_killview_rules() -> DotKillViewRules:
 	var rules := DotKillViewRules.new()
 	rules.enabled = true
+	# The default 1 s swallowed the first Space of a quick player; this only outlasts a death-time key mash.
+	rules.skip_grace = 0.25
 	return rules

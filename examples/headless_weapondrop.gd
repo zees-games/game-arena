@@ -16,7 +16,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 38
+const EXPECTED_CHECKS := 39
 
 var _checks := 0
 var _failed := 0
@@ -209,6 +209,9 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 	var swapped = player.arsenal.current()
 	_check(not drops.has_drop(d2) and player.arsenal.carries(held_def) and not player.arsenal.carries(other), "a hold on a different weapon in the slot replaces it", str(swapped.id() if swapped != null else ""))
 	_check(drops.count() == 1, "while the old one lies on the floor", str(drops.count()))
+	var old_at: Vector3 = (drops.snapshot()[0]["at"] as Transform3D).origin
+	var mine_at: Vector3 = player.muzzle_position()
+	_check(Vector2(old_at.x - mine_at.x, old_at.z - mine_at.z).length() < 0.4, "and it dropped where the player stands, not where the taken gun lay", str(old_at, mine_at, aim_at))
 
 	# The world panel: shown for a drop the player looks at, hidden out of reach.
 	drops.clear()

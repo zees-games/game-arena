@@ -20,7 +20,8 @@ static func make() -> DotFpsTunables:
 	tunables.auto_hop = true
 	tunables.coyote_time = 0.08
 	tunables.jump_buffer_time = 0.12
-	tunables.sprint_speed_scale = 1.0
+	# Shift sprints 30% over the run (7.46 m/s); max_speed stays 5.74, which the surf routes are timed on.
+	tunables.sprint_speed_scale = 1.3
 	tunables.crouch_speed_scale = 0.45
 	# Crouch at a run slides: a burst and a long, low-friction carry, then a crouch. The
 	# minimum is under the 5.74 m/s run so any real run slides and a crouch-walk never does.
@@ -37,8 +38,7 @@ static func make() -> DotFpsTunables:
 	tunables.launch_button = DotFpsCommand.BUTTON_USER_0
 	tunables.launch_velocity = 15.5
 	tunables.launch_cooldown = 8.0
-	# Shift dashes: the sprint bit, which this game leaves free because it has no sprint
-	# (sprint_speed_scale is 1). A press throws you along the way you steer.
+	# Shift dashes when dash_enabled: the sprint bit, otherwise the sprint. A press throws you along the way you steer.
 	# Off by default: arena_dash 1 turns it on (a mode or an operator's choice).
 	tunables.dash_enabled = false
 	tunables.dash_button = DotFpsCommand.BUTTON_SPRINT
