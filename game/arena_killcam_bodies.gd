@@ -4,6 +4,7 @@ extends RefCounted
 
 const KillPov := preload("arena_kill_pov.gd")
 const ArenaPlayer := preload("arena_player.gd")
+const Finite := preload("arena_finite.gd")
 const SKIP_ACTIONS: PackedStringArray = ["dot_fps_jump", "arena_fire", "ui_cancel"]
 const SEQ_RANGE := 4096
 const SEQ_META := &"killcam_seen_seq"
@@ -58,8 +59,10 @@ static func _fall(p: Node, body: Node3D, ra: Array, rb: Array, alpha: float, yar
 		if old.visible:
 			old.visible = false
 			hidden.append(old)
-	body.global_position = (ra[0] as Vector3).lerp(rb[0], alpha)
-	body.global_basis = Basis(Vector3.UP, lerp_angle(deg_to_rad(ra[1]), deg_to_rad(rb[1]), alpha))
+	var t := clampf(Finite.num(alpha), 0.0, 1.0)
+	var from := Finite.vec3(ra[0], body.global_position)
+	body.global_position = from.lerp(Finite.vec3(rb[0], from), t)
+	body.global_basis = Basis(Vector3.UP, lerp_angle(deg_to_rad(Finite.num(ra[1])), deg_to_rad(Finite.num(rb[1])), t))
 	var was_shown := body.visible
 	body.visible = true
 	var made: Variant = p.call(&"fall_body", yard, DotPlayerDeath.new(), false)
@@ -105,20 +108,20 @@ static func state_of(p: Node) -> Array:
 	var st := controller.state
 	var eye_h := 1.6
 	if controller.motor != null:
-		eye_h = controller.motor.eye_position(st).y - st.position.y
-	var yaw := st.yaw
-	var pitch := st.pitch
+		eye_h = Finite.num(controller.motor.eye_position(st).y - st.position.y, eye_h)
+	var yaw := Finite.num(st.yaw)
+	var pitch := Finite.num(st.pitch)
 	var feet := (p as Node3D).global_position
 	var view: Node3D = p.get(&"view")
 	var body: Node3D = p.get(&"body_mesh")
 	if p.get(&"camera") != null and view != null:
 		var look: Variant = p.get(&"view_now")
 		if look is Vector2:
-			yaw = (look as Vector2).x
-			pitch = (look as Vector2).y
-		feet = view.global_position - Vector3(0.0, eye_h, 0.0)
+			yaw = Finite.num((look as Vector2).x, yaw)
+			pitch = Finite.num((look as Vector2).y, pitch)
+		feet = Finite.vec3(view.global_position - Vector3(0.0, eye_h, 0.0), feet)
 	elif body != null and bool(p.get(&"interpolate_body")):
-		feet = body.global_position
+		feet = Finite.vec3(body.global_position, feet)
 	return [feet, yaw, pitch, bool(p.call(&"is_alive")), eye_h] + Array(KillPov.aux_of(p))
 
 
@@ -158,8 +161,8 @@ static func place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: f
 	body.visible = shown
 	if not shown:
 		return
-	body.global_position = feet
-	body.global_basis = Basis(Vector3.UP, deg_to_rad(yaw))
+	body.global_position = Finite.vec3(feet, body.global_position)
+	body.global_basis = Basis(Vector3.UP, deg_to_rad(Finite.num(yaw)))
 	var figure: Node3D = p.get(&"figure")
 	if figure == null:
 		return
@@ -169,6 +172,6 @@ static func place_body(p: Node, feet: Vector3, yaw: float, shown: bool, pitch: f
 	# time, since a clip switched with none left to blend in draws the rest pose.
 	if not bool(touched[p][1]):
 		var stance := _stance_of(p)
-		figure.call(&"set_motion", {"on_floor": true, "alive": true, "aim": deg_to_rad(pitch),
+		figure.call(&"set_motion", {"on_floor": true, "alive": true, "aim": deg_to_rad(Finite.num(pitch)),
 			"crouched": stance.x > 0.5, "crouch": stance.x, "sliding": stance.y > 0.5})
-		figure.call(&"animate", speed, figure.call(&"frame_delta"))
+		figure.call(&"animate", Finite.num(speed), figure.call(&"frame_delta"))

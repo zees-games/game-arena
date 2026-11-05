@@ -3,6 +3,7 @@ extends CanvasLayer
 ## The killer's own screen over a replay camera: their viewmodel, crosshair and ammo, from the recorded aux.
 
 const KillPov := preload("arena_kill_pov.gd")
+const Finite := preload("arena_finite.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
 const AMMO_FONT := 22
@@ -41,7 +42,7 @@ func present(view: Dictionary) -> void:
 		_end()
 		return
 	var cam: Camera3D = view["camera"]
-	var aux: PackedFloat32Array = view["aux"]
+	var aux := KillPov.sanitized(view["aux"] as PackedFloat32Array)
 	if aux.size() < DotKillViewRing.AUX:
 		aux.resize(DotKillViewRing.AUX)
 	var behind: bool = view.get("behind", false)
@@ -71,6 +72,8 @@ func _clear_lens(cam: Camera3D) -> void:
 	var want := KillPov.clear_eye(cam.get_world_3d().direct_space_state, cam.global_position, -cam.global_basis.z, world_mask)
 	var step := want - cam.global_position
 	# Out of a solid at once, back toward the recorded eye gradually.
+	if not step.is_finite():
+		return
 	_push = step if step.length() >= _push.length() else _push.move_toward(step, EASE_SPEED * get_process_delta_time())
 	cam.global_position += _push
 
@@ -82,7 +85,7 @@ func _kick(cam: Camera3D) -> void:
 	if punch.is_finite():
 		cam.rotate_object_local(Vector3.RIGHT, deg_to_rad(punch.x))
 		cam.global_rotate(Vector3.UP, deg_to_rad(punch.y))
-	cam.fov *= hands.aim_fov_scale()
+	cam.fov *= Finite.num(hands.aim_fov_scale(), 1.0)
 
 
 func _start(cam: Camera3D) -> void:
@@ -158,7 +161,7 @@ func _move_hands(aux: PackedFloat32Array, cam: Camera3D) -> void:
 			var _drawn := hands.equip(art as AwWeaponVisual)
 	hands.aim(aux[1] > 0.5)
 	var flags := int(aux[10])
-	var look := cam.global_basis.get_euler()
+	var look := cam.global_basis.orthonormalized().get_euler() if cam.global_basis.is_finite() else Vector3.ZERO
 	hands.drive(Vector2(rad_to_deg(look.y), rad_to_deg(look.x)), aux[11], flags & KillPov.GROUNDED != 0 or aux[11] == 0.0, flags & KillPov.CROUCHED != 0)
 	if _fire >= 0.0 and aux[2] != _fire:
 		_fired(id, Vector2(aux[8], aux[9]), flags & KillPov.SIGNED != 0, cam)
@@ -173,8 +176,9 @@ func _fired(id: StringName, recoil: Vector2, signed: bool, cam: Camera3D) -> voi
 	var outcome := DotWeaponOutcome.new()
 	outcome.used = true
 	outcome.kind = DotWeaponOutcome.KIND_SHOT
-	outcome.recoil = recoil if recoil != Vector2.ZERO else Vector2(0.5, 0.1)
-	outcome.recoil_signed = signed and recoil != Vector2.ZERO
+	var real := recoil.is_finite() and recoil != Vector2.ZERO
+	outcome.recoil = recoil if real else Vector2(0.5, 0.1)
+	outcome.recoil_signed = signed and real
 	hands.on_used(outcome)
 	if flashes != null:
 		flashes.play_remote(AwWeaponNet.KIND_SHOT, hands.muzzle_transform(), -cam.global_basis.z, id)
@@ -189,7 +193,7 @@ func _hud(aux: PackedFloat32Array, fov: float) -> void:
 		scope.position = Vector2.ZERO
 		scope.size = get_viewport().get_visible_rect().size
 	crosshair.visible = not scoped
-	crosshair.fov_degrees = fov
+	crosshair.fov_degrees = Finite.num(fov, 75.0)
 	crosshair.set_aim(aux[1])
 	crosshair.set_spread(aux[6])
 	if _hits >= 0.0 and aux[7] != _hits:

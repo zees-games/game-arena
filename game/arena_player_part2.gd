@@ -1,6 +1,8 @@
 @tool
 extends "arena_player_part1.gd"
 
+const Finite := preload("arena_finite.gd")
+
 ## Breaks this player's body apart on a death: [param rules] decides how much. Client
 ## side, drawing only. [param direction] is the way the killing hit travelled; the seed
 ## is the victim and the tick, so every client breaks the same body the same way.
@@ -9,6 +11,7 @@ func break_body(
 ) -> DotPlayerBodyBreak:
 	if body_mesh == null or rules == null:
 		return null
+	direction = Finite.vec3(direction)
 
 	var before := DotPlayerBodyBreak.visible_meshes(body_mesh)
 	var made := DotPlayerBodyBreak.break_apart(
@@ -32,16 +35,18 @@ func break_body(
 func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath, gun_prop: bool = true) -> DotPlayerRagdoll:
 	if yard == null or body_mesh == null or not body_mesh.is_inside_tree():
 		return null
+	death = Finite.death(death)
+	var velocity := Finite.vec3(controller.state.velocity)
 	# Your own body in first person has no head; the one that falls has.
 	if figure != null:
 		figure.hide_head = false
 	# The gun leaves the body first: copied into the ragdoll it stays on end in the raised hand.
 	var gun_shown := held != null and held.visible
 	if gun_shown and gun_prop:
-		var _dropped := yard.drop_prop(held, controller.state.velocity)
+		var _dropped := yard.drop_prop(held, velocity)
 	if gun_shown:
 		held.visible = false
-	var made := yard.spawn(body_mesh, death, controller.state.velocity)
+	var made := yard.spawn(body_mesh, death, velocity)
 	_fell = made != null or not body_mesh.visible
 	if held != null and not _fell:
 		held.visible = gun_shown
