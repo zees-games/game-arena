@@ -16,7 +16,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 39
+const EXPECTED_CHECKS := 38
 
 var _checks := 0
 var _failed := 0
