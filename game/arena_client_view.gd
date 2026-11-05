@@ -1,5 +1,6 @@
 extends "arena_client_state.gd"
 
+const ArenaFinite := preload("arena_finite.gd")
 const KillPovView := preload("arena_kill_pov_view.gd")
 ## Helpers of [ArenaClient] that touch only its state, split out so the client file stays under the size gate.
 
@@ -514,6 +515,8 @@ func _on_kill(info: Dictionary) -> void:
 		if killer != null:
 			away = victim.global_position - killer.global_position
 			away.y = 0.0
+			if not away.is_finite():
+				away = Vector3.ZERO
 		var _broke := victim.break_body(
 			game.break_rules(),
 			away,
@@ -522,7 +525,7 @@ func _on_kill(info: Dictionary) -> void:
 			int(info["victim_id"]) * 7919 + int(info["killer_id"]),
 			bool(info.get("critical", false))
 		)
-		var death := DotPlayerDeath.from_dict(info)
+		var death := ArenaFinite.death(DotPlayerDeath.from_dict(info))
 		if death.direction == Vector3.ZERO and away != Vector3.ZERO:
 			# An older server sent no direction: away from the killer is the honest guess.
 			death.direction = away.normalized()

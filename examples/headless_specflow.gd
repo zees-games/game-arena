@@ -9,7 +9,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 ## Spectate then Play from the team menu, on a dedicated server with real sessions: `/teams spectate` and `/teams play` typed as a player, in a free-for-all.
 ## The world is asserted: the scoreboard row, the one player entity, the bot fill, who is alive.
 
-const PORT := 27085
+var PORT := ArenaTestPorts.free_port()
 const SERVER_DIR := "user://arena_specflow"
 const TICK_RATE := 64
 

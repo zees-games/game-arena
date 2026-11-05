@@ -4,8 +4,7 @@ examples/headless_lossy.gd::_physics_process::alloc_array	1
 examples/headless_lossy.gd::_physics_process::string_build	2
 examples/headless_lossy.gd::_sample_clock::string_build	1
 examples/headless_lossy.gd::_sample_render::string_build	2
-game/arena_client.gd::_fly_free_camera::string_build	1
-game/arena_client.gd::_local_commands::alloc_dict	1
+game/arena_client_part3.gd::_local_commands::alloc_dict	1
 game/arena_hud.gd::_button::string_build	2
 game/arena_hud.gd::_objective_line::string_build	5
 game/arena_hud.gd::points_text::string_build	1

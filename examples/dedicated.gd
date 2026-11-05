@@ -25,7 +25,7 @@ const ArenaVoteSource := preload("../game/arena_vote_source.gd")
 ## It does not connect a client: dot-platform runs that seam, and repeating it would test
 ## dot-server rather than this game.
 
-const PORT := 27078
+var PORT := ArenaTestPorts.free_port(2)
 const SERVER_DIR := "user://arena_dedicated"
 
 ## The app's URL segment on the website, which is this game's code name.

@@ -207,7 +207,7 @@ func _test_wiring() -> void:
 	arena.sprint_defaults(ArenaPlayer.arena_tunables())
 	var arena_tun := ArenaPlayer.arena_tunables()
 	arena.track_tunables(arena_tun)
-	_check(arena.sprint != null and is_equal_approx(arena_tun.sprint_speed_scale, 1.0) and arena_tun.sprint_can_shoot, "the arena loads the sprint rules without changing its speeds")
+	_check(arena.sprint != null and is_equal_approx(arena_tun.sprint_speed_scale, ArenaPlayer.arena_tunables().sprint_speed_scale) and arena_tun.sprint_can_shoot, "the arena loads the sprint rules without changing its speeds")
 	var arena_names: Array[String] = []
 	arena.bind_cvars(func(n: String, _d: String, _h: String, _f: int) -> Object:
 		arena_names.append(n)

@@ -132,6 +132,8 @@ var _profile_link: DotNetProfileLink = null
 var _profile_runtime: DotProfileRuntime = null
 var _workbench_open := false
 var _sampler: DotFpsSampler = null
+## Set while dead; once alive the jump bit stays off until the key is let go, so the Space that skipped the kill view is not a jump.
+var _jump_guard := false
 ## Refuses the sights for a moment after the local player is hit (sv_unscope_hit).
 var _aim_break := DotFpsAimBreak.new()
 var _hit_wobble_applied := Vector2.ZERO

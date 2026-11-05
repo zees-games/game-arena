@@ -31,7 +31,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 ## Whether the owning client PREDICTS a forced noclip rather than rubber-banding against it
 ## is `headless_net`'s, which is where a client exists.
 
-const PORT := 27082
+var PORT := ArenaTestPorts.free_port()
 const SERVER_DIR := "user://arena_admin"
 const TICK_RATE := 64
 

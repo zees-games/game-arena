@@ -52,7 +52,7 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 ## relay injected; and that every reliable event -- a numbered notice, a kill, a chat line
 ## either way, a join and a leave -- arrived exactly once and in order.
 
-const PORT := 27094
+var PORT := ArenaTestPorts.free_port()
 const DATA := "user://arena_lossy"
 ## `-- --tick-rate=30` (or ARENA_TICK_RATE) runs the same suite at another rate; tick-count thresholds scale with it.
 var TICK_RATE := _tick_rate_arg()

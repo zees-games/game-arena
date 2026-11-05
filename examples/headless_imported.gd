@@ -644,6 +644,8 @@ const RIDE_MAP := &"surf_ski_2"
 ## Its starts, and how many must land.
 const RIDE_STARTS := 3
 const RIDE_LANDING := 2
+## The edge the recorded-ride check records: one that lands from the lip at rest (edges 0 and 1 miss), never "the first linked", which moves on every replan.
+const RECORD_EDGE := 6
 ## How long a roaming bot is given to take a ride of its own accord, seconds.
 const ROAM_SECONDS := 90.0
 
@@ -737,9 +739,9 @@ func _test_recorded_rides() -> void:
 		await get_tree().process_frame
 		frames += 1
 	var surf: ArenaSurf = world.surf_for_map() if changed.ok else null
-	var planned: Array = surf.edges.filter(func(e: ArenaSurf.Edge) -> bool: return e.linked) if surf != null else []
+	var planned: Array = surf.edges.filter(func(e: ArenaSurf.Edge) -> bool: return e.linked and e.id == RECORD_EDGE) if surf != null else []
 	if planned.is_empty():
-		_check(false, "%s has a linked ride edge to record" % RIDE_MAP)
+		_check(false, "%s has linked ride edge %d to record" % [RIDE_MAP, RECORD_EDGE])
 		_done()
 		return
 	var edge: ArenaSurf.Edge = planned[0]

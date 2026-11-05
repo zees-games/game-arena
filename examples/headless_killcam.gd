@@ -3,9 +3,10 @@ extends DotGameCheckSuite
 const ArenaContent := preload("../game/arena_content.gd")
 const KillPov := preload("../game/arena_kill_pov.gd")
 const Bodies := preload("../game/arena_killcam_bodies.gd")
+const Finite := preload("../game/arena_finite.gd")
 const KillPovView := preload("../game/arena_kill_pov_view.gd")
 
-const EXPECTED_CHECKS := 43
+const EXPECTED_CHECKS := 64
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -100,14 +101,24 @@ func _run() -> void:
 	_check(_tags_visible(bots, me) == 0, "no health bar shows over anybody during the kill view")
 	await _check_killer_screen(kv, killer)
 	_check(kv.is_active(), "and is still playing a second on")
-	await _until(func() -> bool: return not kv.is_active(), 10.0)
-	_check(float(Time.get_ticks_msec() - t0) > 1500.0, "it ran its time, not skipped at once")
+	var cam: DotKillcam = kv.kv.killcam
+	_check(cam.skip_grace <= 0.3 and cam.skip_actions.has("ui_accept"), "the kill view's skip grace is short and Space skips", str(cam.skip_grace))
+	Input.action_press(&"dot_fps_jump")
+	cam._unhandled_input(_press(&"ui_accept"))
+	_check(not kv.is_active(), "the first Space press, a second and a bit in, skips the kill view")
+	_check(float(Time.get_ticks_msec() - t0) > 1000.0, "it ran its grace, not skipped at once")
 	var screen: Node = _client.get_node_or_null("KillViewScreen")
 	_check(screen != null and screen.hands == null, "the killer's viewmodel is gone when the replay ends")
 	_check(not KillPov.is_replay_camera(kv.camera), "and the camera is no longer flagged")
 	await _check_recoil(screen, killer)
 	_check(await _until(func() -> bool: return me.is_alive(), 15.0), "then the player respawns")
+	await _wait(0.3)
+	_check(bool(_client.get("_jump_guard")), "the Space that skipped it, still held, is not a jump after the respawn")
+	Input.action_release(&"dot_fps_jump")
+	await _wait(0.3)
+	_check(not bool(_client.get("_jump_guard")), "and the guard is gone once Space is let go")
 
+	await _check_nonfinite(gm, me, killer)
 	await _test_final_killcam(gm, me, killer, bots)
 	_report(EXPECTED_CHECKS)
 
@@ -327,7 +338,98 @@ func _check_lens(gm: Object, me: Object, killer: Object) -> void:
 		await get_tree().physics_frame
 		after = view.hands.wall_amount()
 	_check(after < peak * 0.5, "and lowers it again in the open", "%s of %s" % [after, peak])
+	var scoped := aux.duplicate()
+	scoped[KillPov.WEAPON] = float(int(String("sniper").hash() & 0xFFFFFF))
+	scoped[KillPov.ADS] = 1.0
+	var lens := 0.0
+	for i in 90:
+		cam.look_at_from_position(free, free + wall_dir)
+		cam.fov = 75.0
+		view.present({"camera": cam, "aux": scoped, "fov": 75.0, "behind": false})
+		await get_tree().physics_frame
+		lens = view.hands.scope_fraction() if view.hands != null else 0.0
+	_check(lens > 0.9 and view.scope != null and view.scope.visible and not view.crosshair.visible,
+		"a replayed scoped aim draws the scope overlay and hides the crosshair", str(lens))
+	scoped[KillPov.ADS] = 0.0
+	for i in 90:
+		cam.fov = 75.0
+		view.present({"camera": cam, "aux": scoped, "fov": 75.0, "behind": false})
+		await get_tree().physics_frame
+	_check(view.hands.scope_fraction() == 0.0 and view.crosshair.visible, "and the hip view brings the crosshair back")
 	view.present({})
 	_check(not KillPov.is_replay_camera(cam), "ending the replay unflags the camera")
 	cam.queue_free()
 	view.queue_free()
+
+
+## NaN, infinity and zero vectors from a peer, a bot or a recorded row never reach a camera, a body or a ragdoll.
+func _check_nonfinite(gm: Object, me: Object, killer: Object) -> void:
+	var bad := Vector3(NAN, INF, -INF)
+	_check(Finite.dir(Vector3.ZERO) == Vector3.ZERO and Finite.dir(bad) == Vector3.ZERO, "a zero or non-finite direction normalises to none")
+	_check(Finite.dir(Vector3(0.0, 0.0, 5.0)).is_equal_approx(Vector3.BACK), "and a real one to a unit vector")
+	_check(Finite.num(INF) == 0.0 and Finite.num(NAN, 2.0) == 2.0 and Finite.num(3.0) == 3.0, "num keeps finite values and replaces the rest")
+	var death := DotPlayerDeath.new()
+	death.direction = bad
+	death.damage = NAN
+	Finite.death(death)
+	_check(death.direction == Vector3.ZERO and death.damage == 0.0, "a death with a NaN direction and damage is made finite")
+	var cleaned := KillPov.sanitized(PackedFloat32Array([1.0, NAN, INF, -INF]))
+	_check(cleaned == PackedFloat32Array([1.0, 0.0, 0.0, 0.0]), "a recorded aux row loses its NaN and infinities")
+	var odd := PackedFloat32Array()
+	odd.resize(KillPov.SIZE)
+	odd.fill(NAN)
+	_check(KillPov.sanitized(odd).count(0.0) == KillPov.SIZE, "a row of NaN becomes all zeros")
+
+	var layers: Array[StringName] = [&"world", &"prop"]
+	var mask: int = gm.player_stack.physics.layout.mask_of(layers)
+	var space: PhysicsDirectSpaceState3D = me.get_world_3d().direct_space_state
+	var eye: Vector3 = me.global_position + Vector3.UP
+	var unit_ok := true
+	for fwd: Vector3 in [Vector3.ZERO, bad, Vector3(NAN, 0, 0), Vector3.UP]:
+		unit_ok = unit_ok and KillPov.clear_eye(space, eye, fwd, mask).is_finite()
+	_check(unit_ok, "the lens clearance with a zero, NaN or vertical forward stays finite")
+
+	var cam := Camera3D.new()
+	add_child(cam)
+	cam.look_at_from_position(eye, eye + Vector3.FORWARD)
+	var view := KillPovView.new()
+	view.world_mask = mask
+	view.feel_rules = gm.get(&"feel_rules") as AwViewFeel
+	view.ads_rules = gm.get(&"ads_rules") as AwAdsRules
+	add_child(view)
+	var aux := KillPov.aux_of(killer)
+	aux.fill(NAN)
+	for i in 8:
+		view.present({"camera": cam, "aux": aux, "fov": NAN, "behind": false})
+		await get_tree().physics_frame
+	_check(cam.global_position.is_finite() and cam.global_basis.is_finite() and is_finite(cam.fov), "a killer's screen fed an all-NaN row leaves the camera finite", str(cam.fov))
+	_check(view.hands != null and view.hands.view_punch().is_finite(), "and the view model finite")
+	aux.fill(INF)
+	view.present({"camera": cam, "aux": aux, "fov": INF, "behind": true})
+	_check(cam.global_position.is_finite() and is_finite(cam.fov), "an all-infinity row too")
+	view.present({})
+	cam.queue_free()
+	view.queue_free()
+
+	var touched := {}
+	Bodies.place_body(killer, bad, NAN, true, NAN, NAN, touched)
+	var body: Node3D = killer.get(&"body_mesh")
+	_check(body.global_position.is_finite() and body.global_basis.is_finite(), "a replayed body placed at a NaN spot, yaw and speed stays finite")
+	Bodies.restore_body(killer, touched[killer])
+	_check(body.global_position.is_finite(), "and restores")
+	var row := Bodies.state_of(killer)
+	_check((row[0] as Vector3).is_finite() and is_finite(row[1]) and is_finite(row[2]) and is_finite(row[4]), "a recorded state row is finite")
+
+	var yard: DotPlayerRagdolls = _client.get("ragdolls")
+	var state: Object = killer.controller.state
+	var old_v: Vector3 = state.velocity
+	state.velocity = bad
+	var ra: Array = [bad, NAN, 0.0, true, 1.6]
+	var rb: Array = [Vector3(NAN, 0, 0), INF, 0.0, false, 1.6]
+	Bodies._fall(killer, body, ra, rb, NAN, yard)
+	var made: Variant = killer.get_meta(Bodies.FALL_META) if killer.has_meta(Bodies.FALL_META) else null
+	_check(made == null or (is_instance_valid(made) and (made as Node3D).global_position.is_finite()), "a fall built from NaN rows, velocity and death direction leaves a finite ragdoll")
+	var fell: Variant = killer.fall_body(yard, death, true)
+	_check(fell == null or (fell as Node3D).global_position.is_finite(), "fall_body with a NaN death and velocity is finite")
+	state.velocity = old_v
+	Bodies._forget(killer)

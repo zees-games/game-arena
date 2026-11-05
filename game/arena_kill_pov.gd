@@ -3,6 +3,7 @@ extends RefCounted
 ## What a kill view records of the killer's screen beyond the camera: held weapon, ADS, shots, ammo, spread, hits.
 
 const Roles := preload("arena_weapon_roles.gd")
+const Finite := preload("arena_finite.gd")
 const CHANNEL := "arena.killpov"
 const HITS_META := &"kill_pov_hits"
 const RECOIL_META := &"kill_pov_recoil"
@@ -49,9 +50,12 @@ static func is_replay_camera(cam: Camera3D) -> bool:
 ## Where a replay eye may sit: [param eye] itself when a small sphere there is clear, else pulled back along
 ## [param forward] until it is, so the lens never ends inside a crate or against a wall the recording stood beside.
 static func clear_eye(space: PhysicsDirectSpaceState3D, eye: Vector3, forward: Vector3, mask: int) -> Vector3:
-	var back := eye - forward.normalized() * CLEAR_BACK
+	if not eye.is_finite():
+		return eye
+	var fwd := Finite.dir(forward, Vector3.FORWARD)
+	var back := eye - fwd * CLEAR_BACK
 	var along := DotCameraProbe.clear_length(space, back, eye, CLEAR_RADIUS, mask)
-	return back + forward.normalized() * along
+	return back + fwd * Finite.num(along, CLEAR_BACK)
 
 
 ## The twelve aux floats for [param p] (layout in [DotKillViewRing]): weapon, ads, fire count, reload, mag, reserve,
@@ -60,7 +64,15 @@ static func clear_eye(space: PhysicsDirectSpaceState3D, eye: Vector3, forward: V
 static func aux_of(p: Object, size: int = DotKillViewRing.AUX) -> PackedFloat32Array:
 	var full := _aux_full(p)
 	full.resize(size)
-	return full
+	return sanitized(full)
+
+
+## [param aux] with every NaN or infinite float zeroed: a recorded or relayed row may carry them.
+static func sanitized(aux: PackedFloat32Array) -> PackedFloat32Array:
+	for i in aux.size():
+		if not is_finite(aux[i]):
+			aux[i] = 0.0
+	return aux
 
 
 static func _aux_full(p: Object) -> PackedFloat32Array:
