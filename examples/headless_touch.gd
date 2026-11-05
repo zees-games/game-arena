@@ -5,7 +5,7 @@ const ArenaTouch := preload("../game/arena_touch.gd")
 ## The touch layout: the buttons fit a phone at three sizes without overlapping, and each DotTouchButtons is freed.
 ## Run: `godot --headless --path . res://examples/headless_touch.tscn`
 
-const CHECKS := 9
+const CHECKS := 12
 
 
 func _ready() -> void:
@@ -40,6 +40,18 @@ func _run() -> void:
 						clash = "%s and %s" % [ids[i], ids[j]]
 			_check(clash == "", "%s: no two buttons overlap at %dx%d" % [label, size.x, size.y], clash)
 			buttons.free()
+	# A phone: 844x390 stretched to a 720-unit canvas, 0.54 real px per unit, so a 72-unit button is 39 px.
+	var canvas := Vector2(1556, 720)
+	var fit := DotGameScreenFit.button_scale_for(ArenaTouch.LAYOUT, 390.0 / 720.0, DotGameScreenFit.target_px_for(400.0), canvas)
+	var fitted := DotTouchButtons.new()
+	fitted.size = canvas
+	fitted.set_buttons(ArenaTouch.LAYOUT)
+	fitted.button_scale = fit
+	add_child(fitted)
+	_check(fit > 1.0, "phone fit: the buttons grow past the design", str(fit))
+	_check(36.0 * 2.0 * fit * 390.0 / 720.0 >= 44.0 - 0.01, "phone fit: the smallest button is 44 real px across", str(fit))
+	_check(Rect2(Vector2.ZERO, canvas).encloses(fitted.footprint()), "phone fit: the grown cluster still fits the canvas", str(fitted.footprint()))
+	fitted.free()
 	DotPlatform.touch_override = 0
 	var off := DotTouchButtons.new()
 	add_child(off)
