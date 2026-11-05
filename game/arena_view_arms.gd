@@ -4,6 +4,7 @@ extends Node3D
 ## measured its grip. Absent below API 8: the view model draws its own hands then.
 
 const NEEDS_LEVEL := 8
+const HandPose := preload("arena_hand_pose.gd")
 ## Poses held with the firing hand alone.
 const ONE_HAND: Array[StringName] = [&"melee", &"thrown", &"fists"]
 ## Nearest a held grip comes to the eye (metres), so a pistol's hand does not fill the view.
@@ -21,6 +22,8 @@ static var forearm_scale_mult := 1.0
 static var scope_arms_hide_override := -1.0
 ## cl_fp_max_lean: cap on how far the arms lean to a hand target, for every weapon (-1: each weapon's own).
 static var max_lean_override := -1.0
+## Turns the hands onto the grip and closes the fingers (ArenaHandPose); off leaves the kit's open hands.
+static var hand_pose := true
 
 var arms: DotPlayerViewArms = null
 var body: Node3D = null
@@ -60,7 +63,20 @@ func _on_hands(anchor: Node3D, grip: Vector3, fore: Vector3, pose: StringName) -
 		arms.set_held(_grip)
 	_grip.grip = grip
 	if not one:
-		_grip.support = fore
+		_grip.support = fore + _support_lift(anchor)
+
+
+## A palm-up support hand rests its palm, not its wrist, on the fore-end: undoes the arms' downward palm offset and lifts
+## by the hand's thickness below its bones (`support_lift`, metres at life size).
+func _support_lift(anchor: Node3D) -> Vector3:
+	var model: AwViewModel = body.weapons.view_model() if body != null and body.weapons != null else null
+	if not hand_pose or model == null or not model.has_method(&"art_hand_grip"):
+		return Vector3.ZERO
+	var grip: Dictionary = model.call(&"art_hand_grip")
+	if not HandPose.palm_up(grip):
+		return Vector3.ZERO
+	var up := arms.global_transform.basis * Vector3(0.0, float(grip.get("support_lift", HandPose.SUPPORT_LIFT)) - arms.palm_offset.y, 0.0)
+	return anchor.global_transform.basis.inverse() * up
 
 
 ## Holding, follows the whole look like the drawn weapon, so pitch never takes the grip out of reach; empty-handed
@@ -87,6 +103,8 @@ func _process(delta: float) -> void:
 		arms.debug_pose = debug_pose
 	var v: Vector3 = body.controller.state.velocity
 	arms.tick(Vector2(v.x, v.z).length(), delta)
+	if hand_pose and holding() and model != null and model.has_method(&"art_hand_grip") and arms.arms() is DotHumanoidFigure:
+		HandPose.apply((arms.arms() as DotHumanoidFigure).skeleton(), model.call(&"art_hand_grip"), _grip.is_two_hand())
 
 
 func holding() -> bool:
