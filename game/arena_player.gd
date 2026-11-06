@@ -1902,6 +1902,8 @@ func _wear(avatar: DotAvatar) -> bool:
 	body_mesh.add_child(figure)
 	var height := controller.tunables.stand_height if controller != null and controller.tunables != null else 1.8
 	figure.build(ArenaAvatars.look_of(avatar, StringName("arena-player-%08d" % player_id)), height)
+	# own_body_back already trails the body as the view tips down; the figure own trail would double it.
+	figure.own_look_down_back = 0.0
 	if controller != null and controller.tunables != null:
 		# This game walks at about the stock run threshold: switch halfway between its walk and run.
 		var t := controller.tunables
