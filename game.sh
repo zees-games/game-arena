@@ -11,6 +11,7 @@
 #   ./game.sh server -- ARGS       ARGS go to dot-server-deploy's ./server (e.g. -- --port 7000)
 #   ./game.sh test                 parse every script, then run every test suite
 #   ./game.sh test NAME...         run only these suites (e.g. ./game.sh test headless_net)
+#   ./game.sh test NAME -- ARGS    pass ARGS to the suite (e.g. test headless_maps -- --map=ID)
 #   ./game.sh soak [MAP] [MIN]     bot soak on tools/soak.tscn (report in .godot/test-logs/soak-MAP.json)
 #   ./game.sh suites               list the test suites
 #   ./game.sh visual [--update] [MAP...]  compare map frames to tests/golden (tools/visual_check.sh)
@@ -116,7 +117,7 @@ run_suite() {
     [ "$scene" = headless_imported ] && [ "$limit" -lt 3000 ] && limit=3000
     # headless_bots plays 4 presets x 3 seeds x 600 s at 66 Hz and takes 20-30 minutes under load; it progresses, it does not hang.
     [ "$scene" = headless_bots ] && [ "$limit" -lt 2400 ] && limit=2400
-    timeout "$limit" "$GODOT" --headless --path . "res://examples/$scene.tscn" >"$log" 2>&1
+    timeout "$limit" "$GODOT" --headless --path . "res://examples/$scene.tscn" ${SUITE_ARGS[@]+-- "${SUITE_ARGS[@]}"} >"$log" 2>&1
     status=$?
     summary="$(grep -Eo '[0-9]+ (passed|checks), [0-9]+ failed' "$log" | tail -1)"
     # Section accounting: "N sections entered, M finished" from DotGameCheckSuite._report_sections.
@@ -208,6 +209,14 @@ parse_all() {
 }
 
 do_test() {
+    # Everything after a literal `--` goes to each suite as user args (e.g. `test headless_maps -- --map=ID`).
+    SUITE_ARGS=()
+    local names=() a
+    while [ $# -gt 0 ]; do
+        if [ "$1" = "--" ]; then shift; SUITE_ARGS=("$@"); break; fi
+        names+=("$1"); shift
+    done
+    set -- ${names[@]+"${names[@]}"}
     check_addons
     local fails=0 f out
     echo "importing"
