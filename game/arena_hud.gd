@@ -1355,6 +1355,25 @@ func present_blind(delta: float) -> void:
 		blind_overlay.size = inverse.basis_xform(get_viewport_rect().size)
 
 
+## Capture the flag: each team's captures and what became of its flag, and the clock when there is a limit.
+func _ctf_line(ctf: DotObjectiveCtf) -> String:
+	var state := ctf.hud_state()
+	var teams: Dictionary = state["teams"]
+	var ids: Array = teams.keys()
+	ids.sort()
+	var parts := PackedStringArray()
+	for id: int in ids:
+		var t: Dictionary = teams[id]
+		var what := String(t["state"]).substr(0, 4)
+		if t["state"] == "DROPPED":
+			what += " %d" % ceili(float(t["returns_in"]))
+		parts.append("T%d %d [%s]" % [id, t["captures"], what])
+	var left := float(state["time_left"])
+	if left >= 0.0:
+		parts.append("%d:%02d" % [int(left) / 60, int(left) % 60])
+	return "  ".join(parts)
+
+
 ## One line about the objectives, or nothing at all.
 ##
 ## Reads the mirroring manager on a client and the real one on a listen server, which
@@ -1369,6 +1388,9 @@ func _objective_line() -> String:
 
 	if not manager.has_objectives():
 		return ""
+
+	if game.objectives.ctf != null:
+		return _ctf_line(game.objectives.ctf)
 
 	var parts := PackedStringArray()
 

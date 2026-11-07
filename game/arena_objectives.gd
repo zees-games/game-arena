@@ -40,6 +40,12 @@ var game: ArenaGame = null
 
 var manager: DotObjectiveManager = null
 
+## The capture-the-flag mechanic when the layout is `ctf`; its manager is [member manager].
+var ctf: DotObjectiveCtf = null
+
+var _last_wire := ""
+var _wire_tick := -1000000
+
 ## Which layout is running. Empty when the mode has none.
 var layout: StringName = &""
 
@@ -55,6 +61,9 @@ func setup() -> DotResult:
 		return DotResult.fail(
 			DotError.CODE_STATE, "This mode has no objectives."
 		)
+
+	if layout == CTF:
+		return _setup_ctf()
 
 	var defs := build(layout, game.map, game.tick_rate)
 	if defs.is_empty():
@@ -94,6 +103,154 @@ func setup() -> DotResult:
 
 	DotLog.info(CHANNEL, "layout ready", {"layout": str(layout), "count": defs.size()})
 	return DotResult.success(null)
+
+
+func _setup_ctf() -> DotResult:
+	if manager != null and ctf == null:
+		remove_child(manager)
+		manager.queue_free()
+		manager = null
+	ctf = DotObjectiveCtf.new()
+	ctf.name = "Ctf"
+	ctf.rules = game.ctf_rules
+	ctf.authoritative = game.is_authority
+	ctf.tick_rate = game.tick_rate
+	ctf.presence = _presence()
+	add_child(ctf)
+
+	var res := ctf.setup(ctf_bases(), _score)
+	if not res.ok:
+		return res.wrap("arena ctf")
+
+	manager = ctf.manager
+	manager.objective_completed.connect(_on_completed)
+	manager.objective_event.connect(_on_event)
+	ctf.flag_event.connect(_announce_flag)
+	ctf.ended.connect(_on_ctf_ended)
+	if not game.player_killed.is_connected(_on_player_killed):
+		game.player_killed.connect(_on_player_killed)
+	if not game.map_changed.is_connected(_on_map_changed):
+		game.map_changed.connect(_on_map_changed)
+
+	DotLog.info(CHANNEL, "ctf ready", {"teams": ctf.flags().size()})
+	return DotResult.success(null)
+
+
+## Where each team's flag stands (team id -> position): a flag spawn the map or the workbench placed, else the middle of the team's own spawns, else a cluster of all spawns, else the ends of the map's longest axis.
+func ctf_bases() -> Dictionary:
+	var team_ids: Array[int] = []
+	for team in game.mode.teams():
+		team_ids.append(team.id)
+
+	var sites: Array[DotSpawnSite] = []
+	var stack = game.player_stack
+	if stack != null and stack.spawns != null:
+		var playing: Array[StringName] = stack.teams.teams.playing_ids() if stack.teams != null else []
+		for site in stack.spawns.sites():
+			var copy := DotSpawnSite.point(site.id, site.position, site.yaw, &"")
+			copy.enabled = site.enabled
+			copy.meta = site.meta
+			if DotSpawnFlags.is_flag(site):
+				copy.team = site.team
+			else:
+				var at := playing.find(site.team)
+				if at >= 0 and at < team_ids.size():
+					copy.team = StringName(str(team_ids[at]))
+			sites.append(copy)
+
+	var by_index := {}
+	for i in team_ids.size():
+		by_index[i + 1] = team_ids[i]
+
+	# Authored flag stands name a team by its place in the mode (1..N), the same numbers the workbench offers.
+	for site in sites:
+		if DotSpawnFlags.is_flag(site):
+			var wanted := DotSpawnFlags.team_id(site)
+			site.team = StringName(str(by_index.get(wanted, 0)))
+
+	var found := DotSpawnFlags.bases(sites, team_ids.max() if not team_ids.is_empty() else 2)
+	var out := {}
+	for id in team_ids:
+		if found.has(id):
+			out[id] = (found[id] as DotSpawnSite).position
+
+	if out.size() == team_ids.size():
+		return out
+
+	# No usable spawns at all: the old derived ends of the map, two teams only.
+	var reach := maxf(game.map.extent - 4.0, 4.0)
+	var floor_y := game.map.floor_y
+	for i in team_ids.size():
+		if not out.has(team_ids[i]):
+			var angle := TAU * float(i) / float(team_ids.size())
+			out[team_ids[i]] = Vector3(-cos(angle) * reach * 0.8, floor_y + 1.0, sin(angle) * reach * 0.8)
+	return out
+
+
+func _announce_flag(team: int, what: StringName, data: Dictionary) -> void:
+	if not game.is_authority:
+		return
+	var who := str(data.get("by", ""))
+	var text := ""
+	match what:
+		&"taken":
+			text = "Team %d's flag was taken" % team
+		&"dropped":
+			text = "Team %d's flag was dropped" % team
+		&"returned":
+			text = "Team %d's flag was returned" % team
+		&"captured":
+			text = "Team %d captured a flag" % int(data.get("team", 0))
+	if who != "" and what != &"captured":
+		var player := game.player_for(int(who)) if who.is_valid_int() else null
+		if player != null:
+			text += " by " + String(player.display_name)
+	if text != "":
+		game.ctf_announced.emit(text)
+
+
+func _on_ctf_ended(winner: int, reason: StringName) -> void:
+	DotLog.info(CHANNEL, "ctf ended", {"winner": winner, "reason": str(reason)})
+
+
+## The replicated state as JSON text when it changed (or every two seconds), else "". The bridge sends it.
+func ctf_wire_text(tick: int, force: bool = false) -> String:
+	if ctf == null or not game.is_authority:
+		return ""
+	if not force and tick - _wire_tick < maxi(game.tick_rate / 8, 1):
+		return ""
+	var text := JSON.stringify(ctf.to_json_wire())
+	if not force and text == _last_wire and tick - _wire_tick < game.tick_rate * 2:
+		return ""
+	_last_wire = text
+	_wire_tick = tick
+	return text
+
+
+## A client applies what the server sent.
+func apply_ctf_text(text: String) -> void:
+	if ctf == null or game.is_authority:
+		return
+	var parsed: Variant = JSON.parse_string(text)
+	if parsed is Dictionary:
+		ctf.apply_wire(parsed)
+
+
+## A client has no effects layer, so the slowdown it predicts with is applied here, from the same base the effects layer uses.
+func _apply_carrier_speed() -> void:
+	for id in game.player_ids():
+		var player := game.player_for(id)
+		if player == null or player.controller == null or player.controller.tunables == null:
+			continue
+		var tunables = player.controller.tunables
+		if not tunables.has_meta("arena_base_speed"):
+			tunables.set_meta("arena_base_speed", tunables.max_speed)
+		tunables.max_speed = float(tunables.get_meta("arena_base_speed")) * speed_scale(id)
+
+
+## Movement multiplier for a player: the carrier slowdown, else 1.
+func speed_scale(id: int) -> float:
+	return ctf.speed_scale(str(id)) if ctf != null else 1.0
 
 
 func _rules() -> DotObjectiveRules:
@@ -203,6 +360,12 @@ func tick(_delta: float) -> void:
 	if manager == null:
 		return
 
+	if ctf != null:
+		ctf.advance(game.current_tick(), game.match_node != null and game.match_node.is_live())
+		if not game.is_authority:
+			_apply_carrier_speed()
+		return
+
 	# Live exactly while the match is being played. A capture made during warmup is one
 	# nobody was allowed to make, and warmup is when everybody is standing on
 	# everything.
@@ -290,6 +453,9 @@ func _on_player_killed(entry: DotKillFeed.Entry) -> void:
 	if manager == null or manager.objectives == null:
 		return
 	var key := entry.victim_key
+	if ctf != null:
+		ctf.player_died(key)
+		return
 	for flag in manager.objectives.flags():
 		if flag.carrier != key:
 			continue
@@ -312,6 +478,17 @@ func _on_map_changed(new_map: ArenaMap) -> void:
 		return
 
 	layout = wanted
+	if layout == CTF:
+		_rebuild_ctf()
+		return
+	if ctf != null:
+		# Leaving capture the flag: its manager goes with it, and the plain path builds its own.
+		remove_child(ctf)
+		ctf.queue_free()
+		ctf = null
+		manager = null
+		var _again := setup()
+		return
 	var defs := build(layout, new_map, game.tick_rate)
 	var res := manager.setup(defs)
 	if not res.ok:
@@ -322,8 +499,23 @@ func _on_map_changed(new_map: ArenaMap) -> void:
 
 
 func on_round_reset() -> void:
-	if manager != null:
+	if ctf != null:
+		ctf.reset_match()
+	elif manager != null:
 		manager.reset_round()
+
+
+## Flags back on stands read afresh from the spawns, scores to nought.
+func _rebuild_ctf() -> void:
+	if ctf == null:
+		var res := _setup_ctf()
+		if not res.ok:
+			DotLog.warn(CHANNEL, "ctf would not build", {"why": res.error.message})
+		return
+	var res := ctf.setup(ctf_bases(), _score)
+	if not res.ok:
+		DotLog.warn(CHANNEL, "ctf would not rebuild", {"why": res.error.message})
+	_last_wire = ""
 
 
 func describe() -> Dictionary:

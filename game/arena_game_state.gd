@@ -308,6 +308,12 @@ var drop_rules := {
 	"packs": true, "pack_health": 50.0, "pack_ammo": 50.0, "pack_respawn": 20.0,
 }
 
+## The server owner's capture-the-flag rules (`arena_ctf_*`), read by the flag layer when it is built and each round.
+var ctf_rules := DotObjectiveCtfRules.new()
+
+## A line the server announces about the flag (taken, dropped, returned, captured).
+signal ctf_announced(text: String)
+
 ## The jail's gate and button, drawn. Null on a headless end and on a map without a jail.
 var jail_view: Node3D = null
 

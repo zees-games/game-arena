@@ -142,6 +142,10 @@ func _module_load() -> DotResult:
 
 	_add_movement_cvars()
 	_add_drop_cvars()
+	_add_ctf_cvars()
+	game.ctf_announced.connect(func(text: String) -> void:
+		if services != null:
+			services.announce(text))
 	_add_jail_cvars()
 	_add_spawn_cvars()
 	_add_team_spawn_split_cvar()

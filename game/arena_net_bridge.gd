@@ -524,6 +524,7 @@ func server_tick(tick: int) -> void:
 	_watch_panes()
 	_watch_map_io()
 	_watch_bullets()
+	_send_ctf(0, tick)
 
 	if net != null:
 		net.server_tick(tick)
@@ -1099,6 +1100,7 @@ func send_signon(peer_id: int) -> void:
 		)
 
 	_send_match_state(peer_id)
+	_send_ctf(peer_id, _tick, true)
 
 	# The map's packs that are out right now. A kill's drop lives seconds and a joiner never
 	# misses one; a pack lives the whole map, so a joiner would otherwise not see it until
@@ -1390,6 +1392,15 @@ func _drop_monster_mirror(net_id: int) -> void:
 ## How many monsters this end replicates or draws.
 func monster_count() -> int:
 	return _monster_nets.size() if net != null and net.is_server else _monster_mirrors.size()
+
+
+## Sends the flag state to [param peer_id] (0 for everyone) when it changed, or at once when [param force].
+func _send_ctf(peer_id: int, tick: int, force: bool = false) -> void:
+	if game == null or game.objectives == null or game.objectives.ctf == null:
+		return
+	var text: String = game.objectives.ctf_wire_text(tick, force or peer_id != 0)
+	if text != "":
+		send_event(peer_id, ArenaEvents.Kind.CTF, text.to_utf8_buffer())
 
 
 ## Tells every ready peer where the match is. Server side.
@@ -1689,6 +1700,9 @@ func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
 				told_state = JSON.parse_string(event.body.get_string_from_utf8())
 			if told_state is Dictionary and game != null and game.map_io != null:
 				game.map_io.receive(told_state)
+		ArenaEvents.Kind.CTF:
+			if game != null and game.objectives != null:
+				game.objectives.apply_ctf_text(event.body.get_string_from_utf8())
 		ArenaEvents.Kind.JAIL:
 			var told_jail := ArenaEvents.read_jail(reader)
 			if bool(told_jail["ok"]) and game != null:

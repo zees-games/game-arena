@@ -114,6 +114,10 @@ enum Kind {
 	##
 	## After PANE_BROKEN, for the reason VOTE gives.
 	PROP_BROKEN,
+	## The capture-the-flag state (flags, carriers, scores, clock) as UTF-8 JSON: when it changes, every two seconds, and at signon.
+	##
+	## After PROP_BROKEN, for the reason VOTE gives.
+	CTF,
 }
 
 enum Ask {
