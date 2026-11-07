@@ -408,6 +408,10 @@ func refresh_spawns() -> void:
 		site.team = _side_of_tags(point.tags)
 		spawns.add_site(site)
 
+	# A team mode spawns on the team's own spots only: a generated floor site belongs to no side, so it
+	# would put either team anywhere. (Free-for-all keeps them: a map with few spawns gets candidates.)
+	spawns.rules.generate = "off" if game.mode != null and game.mode.is_team_mode() else "when_few"
+
 	if game.map != null:
 		spawns.ensure_generated(String(game.map.id))
 		var applied := spawns.load_overrides(spawn_overrides, String(game.map.id))

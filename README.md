@@ -110,6 +110,9 @@ arena_wall_jump_push 7         // space leaves the wall: push m/s, arena_wall_ju
 arena_wall_run_body_roll 25    // degrees a drawn body rolls on the wall; arena_wall_run_body_yaw 12 turns it toward it
 arena_streak_rewards ""        // kill streak rewards as streak:reward pairs (heal, armour, haste, empowered)
 arena_spawn_mode avoid         // avoid, weighted, furthest or random
+arena_team_spawn_split 1       // a team mode on a map with no team spawns: cut its spawns into two halves, one per team (0: one shared pool)
+arena_loadout_roll_text 0      // print "Random loadout: ..." when a loadout rolls at spawn (default off)
+cl_respawn_jump_gate 1         // client: Space that skipped the kill view does not jump on the respawn until released
 arena_imported_rotation "all"   // combat surf maps in the rotation: all, none, or ids
 arena_surf 1                   // a combat surf map plays with the surf air control (1) or the arena's own (0)
 arena_surf_airaccelerate 150   // the air acceleration on a combat surf map

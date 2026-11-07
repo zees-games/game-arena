@@ -1021,6 +1021,12 @@ func _local_commands() -> DotConsoleLocal:
 			fx.config.penetration_decals = settings.get_bool(&"penetration_decals", true)
 			return DotResult.success(1 if fx.config.penetration_decals else 0)
 	)
+	local.add_var(&"cl_respawn_jump_gate", "1 swallows Space after a death until it is released, so the key that skips the kill view does not jump on the respawn; 0 lets it through.",
+		func() -> Variant: return 1 if settings.get_bool(&"respawn_jump_gate", true) else 0,
+		func(v: Variant) -> Variant:
+			var _set := settings.set_value(&"respawn_jump_gate", str(v).strip_edges() != "0")
+			return DotResult.success(1 if settings.get_bool(&"respawn_jump_gate", true) else 0)
+	)
 	local.add_var(&"cl_perf", "Seconds between frame reports in the log (arena.perf); 0 is off.",
 		func() -> Variant: return ArenaFrameProbe.interval,
 		func(v: Variant) -> Variant:
