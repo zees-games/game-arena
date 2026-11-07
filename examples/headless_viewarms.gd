@@ -36,6 +36,13 @@ func _run() -> void:
 		_check(false, "the offline client arms its player")
 		_report_sections(0, 0, 1)
 		return
+	# What a player sees starts when the loading cover lifts: under it the gate holds the player frozen and the
+	# first equip's arms are still settling, which is not drawn. The cover now also waits for the weapon models.
+	if not await _until(func() -> bool: return bool(_client.call(&"is_ready_to_show")), 60.0):
+		_check(false, "the loading cover lifts")
+		_report_sections(0, 0, 1)
+		return
+	_check_models_warmed()
 	var me = _client.get("player")
 	me.health.invulnerable = true
 	var ids: Array = AwWeaponCatalogue.table().keys()
@@ -44,6 +51,17 @@ func _run() -> void:
 	for id: StringName in ids:
 		await _weapon(me, id)
 	_report_sections(_entered, _finished, _sections)
+
+
+## The first equip of any gun after the cover lifts reads no model file: every model the art table names was loaded
+## under the cover (the prewarm in ArenaClient), so equipping is a cache hit, not a 50-110 ms load mid-fight.
+func _check_models_warmed() -> void:
+	var cached: Dictionary = AwModelCache._scenes
+	var cold: Array[String] = []
+	for art: Variant in AwWeaponArtTable.table().values():
+		if art is AwWeaponVisual and (art as AwWeaponVisual).has_model() and not cached.has((art as AwWeaponVisual).model_path):
+			cold.append((art as AwWeaponVisual).model_path)
+	_check(cold.is_empty(), "every weapon model is cached before the first equip", "not cached: %s" % [cold])
 
 
 func _weapon(me: Node, id: StringName) -> void:
