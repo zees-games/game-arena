@@ -3,6 +3,7 @@ extends Node
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 
 ## Server-side hit accuracy against a moving, animated target, by body region.
 ##
@@ -92,10 +93,13 @@ func _pose(target: ArenaPlayer) -> Dictionary:
 		if not out.is_empty():
 			_pose_source = "skeleton"
 			return out
-	var k: float = 1.0 - 0.25 * target.controller.state.crouch_fraction
+	# The zones are authored for a 1.8 m body and scaled with the configured one, then squeezed by the crouch.
+	var body: float = ArenaPlayerTunables.body_scale()
+	var squeeze: float = ArenaPlayerTunables.crouch_height_m() / maxf(ArenaPlayerTunables.stand_height_m(), 0.01)
+	var k: float = body * lerpf(1.0, squeeze, target.controller.state.crouch_fraction)
 	return {
 		"head": base + Vector3(0, 1.62 * k, 0), "chest": base + Vector3(0, 1.2 * k, 0),
-		"pelvis": base + Vector3(0, 0.9 * k, 0), "foot": base + Vector3(0, 0.1, 0),
+		"pelvis": base + Vector3(0, 0.9 * k, 0), "foot": base + Vector3(0, 0.1 * body, 0),
 	}
 
 
