@@ -247,7 +247,21 @@ func start_ride_recording(add_cvar: Callable = Callable(), config_file: String =
 	if not ready.ok:
 		return ready
 	surf_rides = rides
+	var _stats := start_demo_stats(config, store)
 	return DotResult.success(rides)
+
+## Records `place` and `engage` episodes into [param store] and lets the bots roam where people stand; a no-op on a shell without dot-bot's heatmap and aim statistics.
+func start_demo_stats(config: DotBotDemoConfig, store: DotBotDemoStore) -> DotResult:
+	if demo_stats != null:
+		return DotResult.success(demo_stats)
+	if not ResourceLoader.exists("res://addons/dot_bot/runtime/dot_bot_demo_heatmap.gd") or not ResourceLoader.exists("res://addons/dot_bot/runtime/dot_bot_aim_stats.gd"):
+		return DotResult.fail(DotError.CODE_UNSUPPORTED, "This shell has no heatmap or aim statistics.")
+	var stats: RefCounted = (load(ArenaPaths.rebase("res://game/arena_demo_stats.gd")) as GDScript).new()
+	var ready: DotResult = stats.call(&"setup", self, config, store, float(tick_rate))
+	if not ready.ok:
+		return ready
+	demo_stats = stats
+	return DotResult.success(stats)
 
 # --- Events ----------------------------------------------------------------
 
