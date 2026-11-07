@@ -3,9 +3,10 @@ extends DotGameCheckSuite
 const ArenaContent := preload("../game/arena_content.gd")
 const KillPov := preload("../game/arena_kill_pov.gd")
 const Bodies := preload("../game/arena_killcam_bodies.gd")
+const KillcamShots := preload("../game/arena_killcam_shots.gd")
 const KillPovView := preload("../game/arena_kill_pov_view.gd")
 
-const EXPECTED_CHECKS := 43
+const EXPECTED_CHECKS := 49
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -257,9 +258,46 @@ func _check_events(killer: Object, me: Object) -> void:
 	var live := yard.live().size() if yard != null else 0
 	Bodies.replay_events(bot, row.call(4.0, true), row.call(4.0, false), 1.0, true, yard)
 	_check(yard != null and yard.live().size() == live + 1 and bot.has_meta(Bodies.FALL_META), "the victim's row turning dead drops a ragdoll")
+	await _check_shots(bot, row, yard)
 	Bodies.restore_body(bot, [body.transform, shown])
 	await get_tree().process_frame
 	_check(not bot.has_meta(Bodies.FALL_META), "and the restore takes it away")
+
+
+## A shot is recorded when a body's fire count moves, kept within a cap, and the replay draws that recorded shot
+## (flash and tracer) once, from where the gun stood.
+func _check_shots(bot: Object, row: Callable, yard: DotPlayerRagdolls) -> void:
+	_check(_client.get("killcam_shots") != null, "the client records killcam shots beside the bodies")
+	var shots := KillcamShots.new()
+	shots.parent = _client
+	shots.state_fn = Bodies.state_of
+	var was: Array = [bot.mirrored, bot.mirror_fire_seq, bot.mirror_fire_kind]
+	bot.mirrored = true
+	bot.mirror_fire_kind = AwWeaponNet.KIND_SHOT
+	bot.mirror_fire_seq = 30
+	shots.record(10.0, [bot])
+	_check(shots.shots.is_empty(), "a body that has not fired since recording began records no shot")
+	bot.mirror_fire_seq = 31
+	shots.record(10.5, [bot])
+	_check(shots.shots.size() == 1 and (shots.shots[0]["dir"] as Vector3).is_normalized(), "a moved fire count records one shot with its muzzle and aim")
+	var shown: bool = bot.body_mesh.visible
+	bot.body_mesh.visible = true
+	Bodies.replay_events(bot, row.call(30.0, true), row.call(30.0, true), 0.0, false, yard, shots, 10.4)
+	Bodies.replay_events(bot, row.call(30.0, true), row.call(31.0, true), 1.0, false, yard, shots, 10.5)
+	var drawn: int = shots.fx.live_count() if shots.fx != null else 0
+	var tracers: int = shots.fx.tracer_count() if shots.fx != null else 0
+	_check(drawn > 0 and tracers > 0, "the replay draws the recorded shot's flash and tracer", "%d fx, %d tracers" % [drawn, tracers])
+	_check(shots.take(int(bot.player_id), 10.5).is_empty(), "and each recorded shot is replayed once")
+	for i in 400:
+		bot.mirror_fire_seq = 100 + i
+		shots.record(11.0 + i * 0.001, [bot])
+	_check(shots.shots.size() <= KillcamShots.MAX_SHOTS, "recorded shots are capped", str(shots.shots.size()))
+	bot.body_mesh.visible = shown
+	bot.mirrored = was[0]
+	bot.mirror_fire_seq = was[1]
+	bot.mirror_fire_kind = was[2]
+	if shots.fx != null:
+		shots.fx.queue_free()
 
 
 ## Health bars that draw on this frame over the bots and the local player.

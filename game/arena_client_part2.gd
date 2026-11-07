@@ -324,7 +324,9 @@ func _build_killview() -> void:
 
 func _build_killcam() -> void:
 	killcam = DotKillcamHost.new()
-	ArenaKillcamBodies.configure(killcam, func() -> Variant: return ragdolls)
+	killcam_shots = ArenaKillcamShots.new()
+	killcam_shots.parent = self
+	ArenaKillcamBodies.configure(killcam, func() -> Variant: return ragdolls, killcam_shots)
 	killcam.name = "FinalKillcam"
 	killcam.rules = game.killview_rules if game != null else null
 	killcam.players_fn = func() -> Array: return game.players() if game != null else []

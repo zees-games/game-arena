@@ -14,6 +14,7 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaHud := preload("arena_hud.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
 const ArenaKillcamBodies := preload("arena_killcam_bodies.gd")
+const ArenaKillcamShots := preload("arena_killcam_shots.gd")
 const ArenaConfig := preload("arena_config.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaMode := preload("arena_mode.gd")
@@ -92,6 +93,8 @@ var board: ArenaMenus.Board = null
 var _summary_board_open: bool = false
 ## The final killcam ([DotKillcamHost]): records every frame, plays before the summary.
 var killcam: DotKillcamHost = null
+## The shots that final killcam replays (flash, tracer, spark), recorded beside the bodies.
+var killcam_shots: ArenaKillcamShots = null
 
 ## The kill view: the killer's replayed eye, in place of the death camera ([DotKillViewClient]).
 var killview: DotKillViewClient = null

@@ -3,6 +3,7 @@ extends RefCounted
 ## ArenaPlayer hooks for dot-replay's [DotKillcamHost]: how a drawn body is read and posed.
 
 const KillPov := preload("arena_kill_pov.gd")
+const KillcamShots := preload("arena_killcam_shots.gd")
 const ArenaPlayer := preload("arena_player.gd")
 ## `cl_killcam_hz`: most recordings of every body's state a second while no replay plays (0: one every frame). The replay
 ## interpolates between rows, so 60 a second draws the same replay as 240; the recording was 0.03 ms a body a frame.
@@ -20,11 +21,13 @@ const ROW_FIRE_KIND := 8
 
 
 ## Gives [param host] arena's skip keys and body hooks. [param yard_fn] returns the client's DotPlayerRagdolls (or null).
-static func configure(host: DotKillcamHost, yard_fn: Callable = Callable()) -> void:
+static func configure(host: DotKillcamHost, yard_fn: Callable = Callable(), shots: KillcamShots = null) -> void:
 	host.log_channel = "arena.killcam"
 	host.skip_actions = SKIP_ACTIONS
 	host.skip_hint = "Jump or Fire to skip"
 	host.state_fn = state_of
+	if shots != null:
+		shots.state_fn = state_of
 	host.place_body_fn = place_body
 	host.restore_body_fn = restore_body
 	if DotAddonApi.build_level("dot_replay") >= 7:  # older hosts replay bodies by speed only
@@ -32,12 +35,14 @@ static func configure(host: DotKillcamHost, yard_fn: Callable = Callable()) -> v
 		host.set(&"apply_pose_fn", apply_pose)
 	if DotAddonApi.build_level("dot_replay") >= 8:
 		host.set(&"event_fn", func(p: Node, ra: Array, rb: Array, alpha: float, is_victim: bool) -> void:
-			replay_events(p, ra, rb, alpha, is_victim, yard_fn.call() if yard_fn.is_valid() else null))
+			var again: Array = host.get(&"_again")
+			var at: float = float((again[0] as Dictionary).get("time", -1.0)) if not again.is_empty() else -1.0
+			replay_events(p, ra, rb, alpha, is_victim, yard_fn.call() if yard_fn.is_valid() else null, shots, at))
 
 
 ## What a body did between two recorded rows: its muzzle flash and tracer for each new shot, and the death ragdoll
 ## the frame the victim's row turns dead.
-static func replay_events(p: Node, ra: Array, rb: Array, alpha: float, is_victim: bool, yard: Variant) -> void:
+static func replay_events(p: Node, ra: Array, rb: Array, alpha: float, is_victim: bool, yard: Variant, shots: KillcamShots = null, at: float = -1.0) -> void:
 	var row := rb if alpha >= 0.5 else ra
 	var body: Node3D = p.get(&"body_mesh")
 	var held: Node3D = p.get(&"held")
@@ -48,7 +53,15 @@ static func replay_events(p: Node, ra: Array, rb: Array, alpha: float, is_victim
 		var fresh := posmod(seq - seen, SEQ_RANGE)
 		if fresh > 0 and fresh < SEQ_RANGE / 2 and body != null and body.visible and held != null:
 			var kind := int(row[ROW_FIRE_KIND])
-			held.call(&"on_fired", ArenaPlayer.WATCHED_RECOIL.get(kind, Vector2(0.6, 0.1)), kind)
+			var recoil: Vector2 = ArenaPlayer.WATCHED_RECOIL.get(kind, Vector2(0.6, 0.1))
+			# The recorded shot (where the gun stood and pointed) draws the flash, tracer and spark; without one the
+			# held weapon draws its own from where it points now.
+			var shot := shots.take(int(p.get(&"player_id")), at) if shots != null and at >= 0.0 else {}
+			if shot.is_empty():
+				held.call(&"on_fired", recoil, kind)
+			else:
+				held.call(&"on_fired", recoil, kind, false)
+				shots.play(shot, p, kind)
 	var alive: bool = row[3]
 	var was: bool = p.get_meta(ALIVE_META, alive)
 	p.set_meta(ALIVE_META, alive)
