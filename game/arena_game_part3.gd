@@ -8,6 +8,7 @@ func _reconcile_world_layers() -> void:
 		# is drawn where it is computed. Until it did, a client had no spectate layer at
 		# all and a dead player's camera stayed on the body for the whole of every death.
 		_build_spectate()
+		_reconcile_client_objectives()
 		return
 
 	if not is_authority or mode == null:
@@ -87,6 +88,12 @@ func _classify_world_collision() -> void:
 ## Puts [member score_limit], [member time_limit_sec], [member warmup_sec] and [member min_players]
 ## on the match being played, from the next tick (dot-match reads its rules every tick). The
 ## authority's to call; a client is told the score limit and the clock by MATCH.
+## Capture the flag plays `arena_ctf_teams` sides, from the next map.
+func _apply_ctf_teams() -> void:
+	if mode != null and mode.objective_layout == &"ctf":
+		mode.team_count = ctf_rules.team_count
+
+
 func apply_match_limits() -> void:
 	if match_node == null or match_node.rules == null or mode == null:
 		return
@@ -103,6 +110,11 @@ func apply_match_limits() -> void:
 		match_node.rules.countdown_sec = from_mode.countdown_sec
 	_freeze_overridden = freeze_sec >= 0.0
 	_override_rules(match_node.rules)
+	# After the generic limits: capture the flag is limited by captures (`arena_ctf_capturelimit`), and by seconds only when `arena_ctf_timelimit` says so.
+	if mode.objective_layout == &"ctf":
+		match_node.rules.score_limit = ctf_rules.capture_limit
+		if ctf_rules.time_limit_sec > 0:
+			match_node.rules.time_limit_sec = float(ctf_rules.time_limit_sec)
 
 ## The movement overrides the current map asks for, after the server's rules.
 ##
@@ -223,6 +235,7 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 	if mode == null:
 		mode = ArenaModes.by_id_or_default(mode_id)
 
+	_apply_ctf_teams()
 	var mode_res := mode.validate()
 
 	if not mode_res.ok:
@@ -528,6 +541,7 @@ func change_map(new_map: ArenaMap, new_mode: ArenaMode = null) -> DotResult:
 
 	if new_mode != null:
 		mode = new_mode
+		_apply_ctf_teams()
 
 	# Before the combat manager and before any player is re-bodied: both bind to it.
 	_build_world_collision()

@@ -600,6 +600,28 @@ func _build_spectate() -> void:
 		spectate.queue_free()
 		spectate = null
 
+## A client mirrors the flag layer only: it draws the flags and applies the carrier's slowdown, and the server sends the state.
+func _reconcile_client_objectives() -> void:
+	if mode.objective_layout != &"ctf":
+		if objectives != null:
+			remove_child(objectives)
+			objectives.queue_free()
+			objectives = null
+		return
+	if objectives != null:
+		return
+	objectives = ArenaObjectives.new()
+	objectives.name = "Objectives"
+	objectives.game = self
+	add_child(objectives)
+	var res := objectives.setup()
+	if not res.ok:
+		DotLog.warn(CHANNEL, "the client flag layer is off", {"why": res.error.message})
+		remove_child(objectives)
+		objectives.queue_free()
+		objectives = null
+
+
 ## Build whatever is missing. Idempotent, because [method _reconcile_world_layers] calls it on every
 ## map change as well as at setup.
 func _build_world_layers() -> void:

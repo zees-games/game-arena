@@ -279,6 +279,8 @@ func _apply_movement() -> void:
 		if tunables == null:
 			continue
 		var scale := manager.move_speed_scale(id)
+		if game.objectives != null:
+			scale *= game.objectives.speed_scale(id)
 		# has_meta first: Object.get_meta's default parameter IS null, so passing null
 		# explicitly is indistinguishable from passing nothing — and the engine pushes
 		# "the object does not have any 'meta' values with the key" once per player per

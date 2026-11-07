@@ -463,8 +463,8 @@ func _test_capture_the_flag() -> void:
 		return
 
 	game.start(0)
-	var red_flag := game.objectives.manager.objective(&"red_flag") as DotObjectiveFlag
-	var blue_flag := game.objectives.manager.objective(&"blue_flag") as DotObjectiveFlag
+	var red_flag := game.objectives.manager.objective(&"flag_1") as DotObjectiveFlag
+	var blue_flag := game.objectives.manager.objective(&"flag_2") as DotObjectiveFlag
 	_check(red_flag != null and blue_flag != null, "there are two flags")
 	_check(
 		red_flag.home_team() != blue_flag.home_team(),
@@ -478,6 +478,7 @@ func _test_capture_the_flag() -> void:
 	# Whoever is NOT on red's side is the one who can take red's flag.
 	var thief := 910 if game.team_of(910) != red_flag.home_team() else 911
 	var defender := 911 if thief == 910 else 910
+	var thief_team := game.team_of(thief)
 
 	_stand(game, defender, Vector3(1000.0, 0.0, 0.0))
 	_stand(game, thief, red_flag.at)
@@ -490,7 +491,7 @@ func _test_capture_the_flag() -> void:
 	)
 
 	# The carrier's own flag is at home, so a capture is allowed.
-	var target := red_flag.capture_area().centre
+	var target := red_flag.capture_area_for(thief_team, game.objectives.ctf.flags()).centre
 	for t in range(20):
 		_stand(game, thief, target)
 		game.tick({})

@@ -129,6 +129,17 @@ const DROP_CVARS := {
 
 
 ## cvar -> the key in `ArenaPlayerStack.spawn_settings` it sets, and what it means.
+const CTF_CVARS := {
+	"arena_ctf_capturelimit": ["capture_limit", "Captures that win a capture-the-flag match (0 for none)"],
+	"arena_ctf_timelimit": ["time_limit_sec", "Seconds a capture-the-flag match lasts, most captures wins (0 for the mode's own)"],
+	"arena_ctf_return": ["return_sec", "Seconds a dropped flag waits before it goes home"],
+	"arena_ctf_drop": ["drop_sec", "Seconds after a drop before the dropper may take the flag again"],
+	"arena_ctf_carrier_speed": ["carrier_speed", "A flag carrier's speed as a fraction of normal"],
+	"arena_ctf_friendly_return": ["friendly_return", "The flag's own team returns a dropped flag by touching it (1) or only the timer does (0)"],
+	"arena_ctf_require_home": ["require_home", "A carrier scores only while their own flag is at home (1) or at any time (0)"],
+	"arena_ctf_teams": ["team_count", "Teams in capture the flag, 2 to 8 (from the next map)"],
+}
+
 const SPAWN_CVARS := {
 	"arena_spawn_mode": ["mode", "How a respawn picks its site: scatter (default: random across the whole map), avoid, weighted, furthest or random"],
 	"arena_spawn_min_enemy": ["min_enemy", "In avoid mode, the nearest an enemy may be to a site, in metres"],
@@ -231,6 +242,27 @@ func _add_spawn_cvars() -> void:
 
 				stack.refresh_spawn_rules()
 				log_info("spawn rule changed", {"rule": key, "value": new_value}))
+
+
+func _add_ctf_cvars() -> void:
+	for cvar in CTF_CVARS:
+		var key: String = CTF_CVARS[cvar][0]
+		var value: Variant = game.ctf_rules[key]
+		var text := ("1" if value else "0") if value is bool else str(value)
+		add_cvar(
+			cvar, text, CTF_CVARS[cvar][1], DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+		).with_min(0.0).changed.connect(
+			func(_old: String, new_value: String) -> void:
+				var was: Variant = game.ctf_rules[key]
+				game.ctf_rules[key] = (
+					new_value.to_float() != 0.0 if was is bool
+					else (new_value.to_int() if was is int else new_value.to_float())
+				)
+				game.ctf_rules.team_count = clampi(game.ctf_rules.team_count, 2, 8)
+				game.ctf_rules.carrier_speed = clampf(game.ctf_rules.carrier_speed, 0.1, 2.0)
+				game.apply_match_limits()
+				log_info("ctf rule changed", {"rule": key, "value": new_value})
+		)
 
 
 func _add_drop_cvars() -> void:

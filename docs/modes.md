@@ -33,9 +33,19 @@ A combat surf map swaps in the surf genre's air control ([imported maps](importe
 
 ## Objectives
 
-`koth` and `ctf` are scored on more than kills: a capture curve where the second player is worth half a player, a block that pauses rather than undoes, decay, and a hill clock that freezes rather than resets when the point changes hands. dot-objective has all of that and this game none.
+`koth` and `ctf` are scored on more than kills: a capture curve where the second player is worth half a player, a block that pauses rather than undoes, decay, and a hill clock that freezes rather than resets when the point changes hands. dot-objective has all of that.
 
 The layout comes from the map's own numbers: `ArenaObjectives.build` puts the flags at the ends of the longest axis and the hill at the centre, so a later map gets a working layout for free. That is also why `ArenaMode.objective_layout` is an id rather than a list of positions.
+
+### Capture the flag
+
+`ctf` is dot-objective's `DotObjectiveCtf` for any number of teams: one flag per team, a carrier takes an enemy flag and scores it at their own team's stand, by default only while their own flag is home. A carrier who dies, leaves or is killed drops it where they fell; the flag's team returns it by touching it (`arena_ctf_friendly_return`), otherwise it goes home after `arena_ctf_return` seconds; the dropper cannot re-take it for `arena_ctf_drop` seconds.
+
+Where the stands go, in order: a `flag` spawn placed for the team (dot-spawn kind `flag`, `team` 1..N; placed in the workbench's spawn editor with F for the flag tool, 1-8 for the team, G to turn a spawn into a stand), else the middle of the team's tagged spawns, else a cluster of all the spawns (opposite ends for two teams, farthest-point clusters for more, `DotSpawnFlags.bases`), else the ends of the map's longest axis. That is how a stock dm_ map with no flags still runs. A player never respawns on a flag stand.
+
+Cvars: `arena_ctf_capturelimit` (3, 0 for none; this is the match's score limit, `arena_scorelimit` does not apply), `arena_ctf_timelimit` (seconds, 0 keeps `arena_timelimit` or the mode's; dot-match gives it to the side with more captures), `arena_ctf_return`, `arena_ctf_drop`, `arena_ctf_carrier_speed` (0.9), `arena_ctf_friendly_return`, `arena_ctf_require_home`, `arena_ctf_teams` (2 to 8, from the next map). The server announces taken, dropped, returned and captured flags in chat, and sends the flag state to clients as the CTF event (changes, every two seconds, and at signon); a client builds only the mirror and applies the carrier's slowdown for its own prediction.
+
+Teams past two have no spawn tag of their own, so they spawn from the shared pool. Bots do not play the objective: they fight as in team deathmatch.
 
 ## Effects
 
