@@ -16,8 +16,12 @@ func _ready() -> void:
 	_run.call_deferred()
 
 
+## Simulated seconds: physics frames, not a wall timer. A timer fires on the wall clock, so a loaded runner
+## (the suites run on shared boxes) let the bots tick far fewer times than the "2 s" the checks below assume;
+## the engine drops the time past its step cap rather than catching up.
 func _wait(sec: float) -> void:
-	await get_tree().create_timer(sec).timeout
+	for i in maxi(1, ceili(sec * Engine.physics_ticks_per_second)):
+		await get_tree().physics_frame
 
 
 ## [count of visible, drawn meshes, union of their bounds] under a bot's body.

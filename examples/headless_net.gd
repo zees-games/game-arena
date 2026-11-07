@@ -1820,8 +1820,10 @@ func _test_voice_wire() -> void:
 	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, false)
 	if voice != null:
 		talk.call()
-		var deadline := Time.get_ticks_msec() + 1000
-		while heard_buffer.frames_written == 0 and Time.get_ticks_msec() < deadline:
+		# A frame budget, not a wall deadline: a loaded runner spent a 1 s deadline on a few frames.
+		var frames_left := 600
+		while heard_buffer.frames_written == 0 and frames_left > 0:
+			frames_left -= 1
 			await get_tree().process_frame
 	_check(heard_buffer.frames_written > 0, "and unmuted, the same frames play (%d)" % heard_buffer.frames_written)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))
