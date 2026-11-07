@@ -45,6 +45,7 @@ const ArenaPlayer := preload("arena_player.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaPaths := preload("arena_paths.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
+const ArenaBotBrain := preload("arena_bot_brain.gd")
 
 ## The behaviour of a weapon whose shot flies (a rocket, a bolt); every other one is led as
 ## hitscan. A path, because the pack names behaviours by path (see [DotWeaponDef]).
@@ -558,7 +559,7 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	ArenaFrameProbe.add(&"bot_refresh", t_refresh)
 
 	if mind.brain == null:
-		mind.brain = DotBotBrain.new(mind.seed if mind.seed != 0 else bot.player_id, DotBotSettings.of(game))
+		mind.brain = ArenaBotBrain.new(mind.seed if mind.seed != 0 else bot.player_id, DotBotSettings.of(game))
 		# The bot's trick gates follow the motor: 1.18 times the minimum, as the old 6.5 was of 5.5.
 		var body_tunables: Variant = bot.controller.get("tunables") if bot.controller != null else null
 		if body_tunables is DotFpsTunables:
