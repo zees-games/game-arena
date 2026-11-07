@@ -383,9 +383,10 @@ func _test_map_look() -> void:
 		"tone-mapped, with glow"
 	)
 	var top: Array = atrium.lighting["sky_top"]
-	var sky_material := env.sky.sky_material as ProceduralSkyMaterial if env != null and env.sky != null else null
+	var sky_material := env.sky.sky_material as ShaderMaterial if env != null and env.sky != null else null
+	var zenith = sky_material.get_shader_parameter("top_colour") if sky_material != null else null
 	_check(
-		sky_material != null and sky_material.sky_top_color.is_equal_approx(Color(top[0], top[1], top[2])),
+		zenith is Color and zenith.is_equal_approx(Color(top[0], top[1], top[2])),
 		"whose zenith is the map's own sky_top"
 	)
 	lit.free()
