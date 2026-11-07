@@ -29,6 +29,10 @@ func _section(title: String) -> void:
 	print(title)
 
 
+func _done() -> void:
+	_completed += 1
+
+
 ## Ticks per wall second the engine loop would run for frames of [param frame_sec] when one
 ## tick costs [param tick_cost_sec] and [param budget] picks the cap (null = a fixed 2).
 func _scale(frame_sec: float, tick_cost_sec: float, rate: float, budget: ArenaTickBudget) -> float:
