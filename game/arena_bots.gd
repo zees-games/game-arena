@@ -188,15 +188,12 @@ class World:
 	## GodotPhysics3D answers every query out of buffers the space shares, so rays go one at a time.
 	var _ray_lock := Mutex.new()
 	## Any player's arsenal, taken on the main thread (walking the roster is not for a worker).
-	var _par_arsenal: Object = null
+	var _par_arsenal: Array = [null]
 	## The trace's ray observer (dropped weapons nudged by a shot) is called on the main thread: a worker's wall
 	## rays are logged per job and replayed in job order by [method par_end].
 	var _par_observe: bool = false
 	var _par_job: Dictionary = {}
 	var _par_rays: Dictionary = {}
-
-	func _arsenal_for_drops() -> Object:
-		return _par_arsenal if par else _any_arsenal(game)
 
 	## Which job (brain) the calling thread works on, for the log of its wall rays.
 	func par_job(job: int) -> void:
@@ -214,7 +211,9 @@ class World:
 		for p in game.call("players"):
 			_hear_player(p)
 		walkable_fn = _walkable_near
-		DotBotArms.wire(self, func() -> Variant: return p_game.get("weapon_drops"), func() -> Object: return _arsenal_for_drops())
+		# The lambdas hold the box, not self: a lambda on self in a field of self is a reference cycle.
+		var box := _par_arsenal
+		DotBotArms.wire(self, func() -> Variant: return p_game.get("weapon_drops"), func() -> Object: return box[0] if box[0] != null else _any_arsenal(p_game))
 
 	## Rebuilds the contacts once a tick, however many bots ask.
 	func refresh(tick: int, rate: float) -> void:
@@ -303,7 +302,7 @@ class World:
 		_par_observe = _par_trace.ray_observer.is_valid()
 		_par_job.clear()
 		_par_rays.clear()
-		_par_arsenal = _any_arsenal(game)
+		_par_arsenal[0] = _any_arsenal(game)
 		_par_physics = false
 		_par_space = null
 		if trace is DotTracePhysics:
@@ -343,7 +342,7 @@ class World:
 				for r: Array in _par_rays[job]:
 					_par_trace.ray_observer.call(r[0], r[1], r[2])
 		_par_rays.clear()
-		_par_arsenal = null
+		_par_arsenal[0] = null
 		_par_space = null
 		_par_trace = null
 
