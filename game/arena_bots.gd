@@ -546,14 +546,14 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	move.sanitise()
 	fire.sanitise()
 	ArenaFrameProbe.add(&"bot_after", t_after)
-	var previous := mind.last_move
 	mind.far = think_every > 1 and _nobody_near(me, world)
 	# Only a think on the bot's own beat starts a coast, so the coast's steps count from it.
 	mind.coasting = mind.far and (tick + mind.seed) % think_every == 0 and _coastable(mind, intent, move, fire)
 	if mind.coasting:
 		# The brain turned for think_every ticks at once; spread over them, so no tick turns faster than bot_turn_rate.
 		mind.view_to = Vector2(move.yaw, move.pitch)
-		var from := Vector2(previous.yaw, previous.pitch) if previous != null else mind.view_to
+		# From the view the body has, which a respawn or a teleport may have turned since the last command.
+		var from := Vector2(me.view_yaw, me.view_pitch)
 		mind.view_from = from
 		move.yaw = from.x + _turn(from.x, mind.view_to.x) / float(think_every)
 		move.pitch = from.y + (mind.view_to.y - from.y) / float(think_every)
