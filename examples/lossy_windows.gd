@@ -29,12 +29,12 @@ func _command_a(tick: int) -> DotFpsCommand:
 func _wall_command(k: int) -> DotFpsCommand:
 	var move := DotFpsCommand.new()
 	move.yaw = -90.0
-	if k < 0 or k > 120:
+	if k < 0 or k > _t66(120):
 		return move
 	move.move = Vector2(0.0, 1.0)
-	if k == 12 or k == 50:
+	if k == _t66(12) or k == _t66(50):
 		move.buttons |= DotFpsCommand.BUTTON_JUMP
-	if k == 15 or (_wall_hold_sprint and k > 15 and k < 100):
+	if k == _t66(15) or (_wall_hold_sprint and k > _t66(15) and k < _t66(100)):
 		move.buttons |= DotFpsCommand.BUTTON_SPRINT
 	return move
 
@@ -105,6 +105,7 @@ func _begin_window() -> void:
 
 	_w = {
 		"started_ms": Time.get_ticks_msec(),
+		"started_frame": Engine.get_physics_frames(),
 		"clock_samples": [],
 		"render_errors": [],
 		"max_jump": 0.0,
@@ -144,7 +145,7 @@ func _play_window(window: Array) -> void:
 	_relay.set_impairment(false, loss, float(window[2]), float(window[3]))
 
 	# Two seconds to settle at the new rate before anything is measured.
-	await _until(func() -> bool: return false, 2.0)
+	await _wait_game(2.0)
 	_begin_window()
 
 	var notices_from := _sent_notices.size()
@@ -156,15 +157,21 @@ func _play_window(window: Array) -> void:
 	var got_kills_from := _got_kills.size()
 	var got_a_chat_from := _got_a_chat.size()
 
-	var started := Time.get_ticks_msec()
+	# The window is `seconds` of GAME time (physics frames), and the pacing of what the server sends is on that
+	# clock too: a runner that starves the process then still gets the window's full count of ticks and sends,
+	# rather than a wall-clock window holding a fraction of them.
+	var started_frame := Engine.get_physics_frames()
+	var started := 0
 	var next_notice := started
 	var next_chat := started + 150
 	var next_a_chat := started + 300
 	var next_slay := started + 500
 	var link_a: DotClientLink = _clients["A"]["link"]
 
-	while Time.get_ticks_msec() - started < int(seconds * 1000.0):
-		var now := Time.get_ticks_msec()
+	while true:
+		var now := (Engine.get_physics_frames() - started_frame) * 1000 / Engine.physics_ticks_per_second
+		if now >= int(seconds * 1000.0):
+			break
 		if now >= next_notice:
 			var text := "seq-%d" % _sent_notices.size()
 			_sent_notices.append(text)

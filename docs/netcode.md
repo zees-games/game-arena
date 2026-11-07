@@ -144,3 +144,12 @@ A browser build has one thread, so a long frame is also a late read of the socke
 - Under heavy loss a run occasionally stalls reliable traffic or freezes a remote player for about a second; queued as `lossy-stalls-1`, and `./game.sh test headless_lossy` is the tool to chase it.
 
 JAIL carries whether the jail is on, its open and cooldown ticks and the tick the gate last opened (plus one, so 0 is never); it is sent at signon and on every press or rule change. The map's packs that are out ride signon as one DROP each, and `mp_vm_*` reach clients as replicated cvars through `ArenaGame.follow_server_cvars`.
+
+
+## Tick rate
+
+The dedicated server's tick rate is one setting, dot-server's `sv_tickrate` (15 to 128 is the range the arena is tuned for; `ArenaServer.host_tick_rate()` warns outside it). `project.godot`'s 66 and `ArenaContent.TICK_RATE` are only the DEFAULT (solo, listen host, and what dot-server-deploy reads for a fresh server.yml); nothing else assumes 66. With dot-server's `sv_tickrate_tiers` (`players<=32:66,<=64:33,else:22`, default off) the slot count picks the rate at start and the players present at each game change. Clients adopt the rate from HELLO (`ArenaNetBridge._adopt_tick_rate`, which uses `DotNetClock.adopt_tick_rate` on API 7).
+
+The snapshot rate is separate: `sv_snapshot_rate` (0 = the default target, `NET_SNAPSHOT_RATE` 32) is the target and `ArenaGame.snapshot_rate_for(tick, target)` the whole-tick rate sent (66 -> 33, 33 -> 33, 22 -> 22). HELLO carries the rate actually sent, so a client never derives its own. It is read when the game is built.
+
+Tick-rate dependent today: counts of ticks written for 66 Hz (`ArenaProjectiles.THROWER_GRACE_TICKS` 8, `ArenaFlashlight.HOLD_TICKS` 3, `COLLISION_LAG_MAX_TICKS` 32), the wall-run time cap compare and the net-sync timer scale (exact on the wire up to 66 Hz, 1/64 s above), and anything in dot-player-controller that is per tick instead of per second (see the report on arena-128-scale-1). `examples/headless_tickrate.tscn` checks prediction and the wall-run cap at 22/33/66; `headless_net` and `headless_lossy` take `-- --tick-rate=N` or `ARENA_TICK_RATE=N`.

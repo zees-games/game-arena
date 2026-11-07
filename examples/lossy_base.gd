@@ -55,7 +55,9 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 var PORT := ArenaTestPorts.free_port()
 const DATA := "user://arena_lossy"
 ## `-- --tick-rate=30` (or ARENA_TICK_RATE) runs the same suite at another rate; tick-count thresholds scale with it.
-var TICK_RATE := _tick_rate_arg()
+@export var tick_rate_override := 0
+var TICK_RATE: int:
+	get: return clampi(tick_rate_override, 15, 128) if tick_rate_override > 0 else _tick_rate_arg()
 const DUMMY_ID := 9001
 
 ## The windows: name, loss each way, delay, jitter (so 30..80 ms), seconds.
@@ -151,6 +153,11 @@ static func _tick_rate_arg() -> int:
 ## A tick-count threshold written for 64 Hz, scaled to the rate this run uses.
 func _ticks(at_64: int) -> int:
 	return at_64 * TICK_RATE / 64
+
+
+## A tick count written for 66 Hz (a duration in seconds), scaled to this run's rate; identical at 66.
+func _t66(at_66: int) -> int:
+	return roundi(float(at_66) * float(TICK_RATE) / 66.0)
 
 
 func _section(title: String) -> void:

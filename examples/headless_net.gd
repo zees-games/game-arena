@@ -10,6 +10,7 @@ func _run() -> void:
 	OS.add_logger(errors)
 
 	print("game-arena — netcode over two clients")
+	print("  tick rate %d Hz, snapshot rate %d Hz" % [TICK_RATE, SNAPSHOT_RATE])
 
 	_build_server()
 	_build_client(2, 11)
@@ -371,6 +372,13 @@ func _test_client_death_camera() -> void:
 	var client_game: ArenaGame = client["game"]
 	var victim := 11
 	var killer := 12
+
+	# The map change before this restarted the match: its warmup is seconds, so at a low tick rate it ends (and
+	# respawns everybody) in the middle of the chain. Let the round go live first, at every rate.
+	var waited_live := 0
+	while not _server_game.match_node.is_live() and waited_live < 4000:
+		_pump(10)
+		waited_live += 10
 
 	# Nobody respawns inside the chain, so every check below measures the chain.
 	_server_game.match_node.rules.respawn_delay_sec = 60.0
@@ -977,6 +985,7 @@ func _test_wall_moves_predicted() -> void:
 
 	for route: Dictionary in _server_game.map.wall_routes:
 		var driver := WallRouteDriver.new(route, &"walls")
+		driver.tick_rate = TICK_RATE
 		server_player.controller.teleport(driver.start, driver.yaw, 0.0)
 		var _settle := _flight_window(peer, 40, 0)
 
@@ -1146,7 +1155,7 @@ func _test_weapons_over_the_wire() -> void:
 	shoot.fire.slot = 0
 
 	var t := int(_clients[2]["net"].clock.tick)
-	for i in range(TICK_RATE / 2):
+	for i in range(TICK_RATE):
 		t += 1
 		own._net_apply_input(idle, t)
 		own._net_simulate(t, 1.0 / float(TICK_RATE))
@@ -1811,8 +1820,10 @@ func _test_voice_wire() -> void:
 	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, false)
 	if voice != null:
 		talk.call()
-		var deadline := Time.get_ticks_msec() + 1000
-		while heard_buffer.frames_written == 0 and Time.get_ticks_msec() < deadline:
+		# A frame budget, not a wall deadline: a loaded runner spent a 1 s deadline on a few frames.
+		var frames_left := 600
+		while heard_buffer.frames_written == 0 and frames_left > 0:
+			frames_left -= 1
 			await get_tree().process_frame
 	_check(heard_buffer.frames_written > 0, "and unmuted, the same frames play (%d)" % heard_buffer.frames_written)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))

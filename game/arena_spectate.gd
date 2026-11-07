@@ -79,6 +79,14 @@ func setup() -> DotResult:
 	return DotResult.success(null)
 
 
+## The camera timers are seconds turned into ticks at setup; a client whose server runs another
+## rate adopts it after setup (HELLO), so the bridge calls this again or the death camera would
+## last the default rate's tick count at the new rate (1 s became 2 s at 33 Hz).
+func retime() -> void:
+	if manager != null:
+		manager.rules = _rules()
+
+
 func _rules() -> DotSpectatorRules:
 	# The game's own object, so the cvars the module binds (and a client follows) are the
 	# rules in use. [b]force_camera and allow_roaming are deliberately not set here[/b]: they

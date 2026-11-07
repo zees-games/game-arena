@@ -39,6 +39,8 @@ func _solid_walk_checks(c: Dictionary) -> void:
 	var stops_before := ArenaSolidBody.hull_stops
 	var moving_worst := 0.0
 	ArenaNetBridge.solid_trace = OS.get_environment("NC_SOLID_TRACE") == "1"
+	# A leg is seven ticks at 66 Hz; slower rates need more ticks to cover the same ground.
+	var leg_ticks := maxi(7, ceili(7.0 * 66.0 / float(TICK_RATE)))
 	for leg in range(14):
 		var strafe := DotFpsCommand.new()
 		strafe.move = Vector2(1.0 if leg % 2 == 0 else -1.0, 0.0)
@@ -47,7 +49,7 @@ func _solid_walk_checks(c: Dictionary) -> void:
 		var lean := DotFpsCommand.new()
 		lean.move = Vector2(0.0, 1.0)
 		lean.yaw = 0.0
-		var window := _flight_window(2, 7, 0, {2: lean, 3: strafe})
+		var window := _flight_window(2, leg_ticks, 0, {2: lean, 3: strafe})
 		moving_worst = maxf(moving_worst, float(window["worst_aligned"]))
 	ArenaNetBridge.solid_trace = false
 	var moving_stops := ArenaSolidBody.hull_stops - stops_before

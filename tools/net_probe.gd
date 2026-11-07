@@ -23,6 +23,15 @@ var _bots := 8
 var _seconds := 20.0
 var _budget := -1
 var _pps := -1
+## --aoi players,radius,far_distance,far_every,far_tiers: the relevance rings (arena_net_aoi.gd); unset is the shipped defaults.
+var _aoi: PackedStringArray = PackedStringArray()
+
+## --fake N: N extra synthetic peers (no observer entity, unreliable sends dropped, acks 2 snapshots late) on the server, to measure per-peer snapshot cost without N full clients.
+var _fake := 0
+var _workers := 0
+var _native := 1
+var _noshort := false
+var _fake_sent := [0, 0]
 var _server: DotServer = null
 var _game: ArenaGame = null
 
@@ -35,6 +44,11 @@ func _ready() -> void:
 			"--seconds": _seconds = float(args[i + 1])
 			"--budget": _budget = int(args[i + 1])
 			"--pps": _pps = int(args[i + 1])
+			"--workers": _workers = int(args[i + 1])
+			"--native": _native = int(args[i + 1])
+			"--noshort": _noshort = true
+			"--fake": _fake = int(args[i + 1])
+			"--aoi": _aoi = String(args[i + 1]).split(",")
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("net_probe")
 	_run.call_deferred()
@@ -60,6 +74,7 @@ func _run() -> void:
 	var config := DotServerConfig.new()
 	config.hostname = "net probe"
 	config.port = PORT
+	config.max_players = 256
 	config.bind_address = "127.0.0.1"
 	config.transport_mode = "dual"
 	config.rcon_password = ""
@@ -85,14 +100,24 @@ func _run() -> void:
 	var module = _server.modules.get_module("arena")
 	var quota: DotBotQuota = module.get("_bot_quota")
 	if quota != null and quota.mode_cvar != null:
-		quota.mode_cvar.force_set("off")
+		# "off" is wanted = 0: the quota removes every bot a second later (found by arena-128-scale-1).
+		quota.mode_cvar.force_set("fixed")
+		quota.quota_cvar.force_set(str(_bots))
+		quota.empty_cvar.force_set("1")
 	var net: DotNetManager = module.net
 	if _game.match_node.state == DotMatch.State.IDLE:
 		_game.start(0)
+	DotNetBehaviour.native_encode_shortcuts = not _noshort
+	net.config.snapshot_workers = _workers
+	net.config.native = _native != 0
 	if _budget >= 0:
 		net.config.per_client_budget = _budget
 	if _pps >= 0:
 		net.config.per_client_packet_rate = _pps
+	if _aoi.size() == 5 and module.get("net_aoi") != null:
+		var cv: Dictionary = module.net_aoi._cvars
+		for k in ["min_players", "radius", "far_distance", "far_every", "far_tiers"]:
+			(cv[k] as DotConVar).force_set(_aoi[["min_players", "radius", "far_distance", "far_every", "far_tiers"].find(k)])
 	for i in range(_bots):
 		module.bridge.add_bot("Probe%d" % i)
 
@@ -151,6 +176,33 @@ func _run() -> void:
 	print("client sees %d players, match state %d; server match state %d" % [seen, live_state, int(_game.match_node.state)])
 	net.stats.roll()
 	cnet.stats.roll()
+	module.call("_refresh_aoi")
+	if _fake > 0:
+		var schema := net.messages.schema_payload()
+		var orig_send: Callable = net.send_fn
+		var fakes := {}
+		for i in _fake:
+			var fid := 5000 + i
+			net.add_peer(fid)
+			var _r := net.receive(schema, fid)
+			fakes[fid] = true
+		net.send_fn = func(peer_id: int, payload: PackedByteArray, delivery: int) -> void:
+			if fakes.has(peer_id):
+				_fake_sent[0] += 1
+				_fake_sent[1] += payload.size()
+				return
+			orig_send.call(peer_id, payload, delivery)
+		var acks: Array = []
+		net.snapshot_sent.connect(func(tick: int, _n: int) -> void:
+			acks.append(tick)
+			if acks.size() > 2:
+				var acked: int = acks.pop_front()
+				for fid: int in fakes:
+					var _a := net.receive_ack(fid, acked))
+		await get_tree().create_timer(2.0).timeout
+	var perf0: Dictionary = net.perf_counters()
+	var sum_down := 0.0
+	var n_down := 0
 	var t := 0.0
 	var peak_rtt := 0.0
 	var peak_down := 0.0
@@ -172,6 +224,8 @@ func _run() -> void:
 			var rtt := cnet.stats.rtt_percentile(0.95)
 			peak_rtt = maxf(peak_rtt, rtt)
 			peak_down = maxf(peak_down, float(d.get("bytes_per_sec", 0)))
+			sum_down += float(d.get("bytes_per_sec", 0))
+			n_down += 1
 			print("t=%2d down=%6d B/s %3d pkt/s use=%s starved=%d | client rtt p50=%d p95=%d recv=%d B/s avg_pkt=%d" % [
 				int(t), int(d.get("bytes_per_sec", 0)), int(d.get("packets_per_sec", 0)),
 				str(d.get("utilisation", "?")), int(d.get("starved", 0)),
@@ -180,6 +234,20 @@ func _run() -> void:
 	print("SUMMARY bots=%d peak_down=%d B/s peak_rtt_p95=%d ms starved=%d fps=%.0f worst_frame=%.1f ms lost=%d" % [
 		_bots, int(peak_down), int(peak_rtt), int(net.budget.describe_peer(net.budget.peer_ids()[0]).get("starved", 0)),
 		frames / maxf(t, 0.001), worst_frame, cnet.stats.snapshots_lost])
+	var perf1: Dictionary = net.perf_counters()
+	var nticks := maxi(1, int(perf1[&"server_ticks"]) - int(perf0[&"server_ticks"]))
+	print("AOI active=%s players=%d mean_down=%d B/s send_ms_per_tick=%.3f sim_ms_per_tick=%.3f ticks=%d entities=%d" % [
+		str(module.net_aoi.active), _game.players().size(), int(sum_down / maxf(n_down, 1)),
+		(int(perf1[&"server_send_usec"]) - int(perf0[&"server_send_usec"])) / 1000.0 / nticks,
+		(int(perf1[&"server_sim_usec"]) - int(perf0[&"server_sim_usec"])) / 1000.0 / nticks,
+		nticks, net.registry.all().size()])
+	var snaps := maxi(1, int(perf1[&"snap_snapshots"]) - int(perf0[&"snap_snapshots"]))
+	var ph := ""
+	for k in ["prepare", "reads", "interest", "build", "thaw", "begin", "nint", "submit", "join", "apply"]:
+		ph += " %s=%.3f" % [k, (int(perf1[StringName("snap_%s_usec" % k)]) - int(perf0[StringName("snap_%s_usec" % k)])) / 1000.0 / snaps]
+	print("PHASES clients=%d native=%s workers=%d ms/snapshot:%s fake_bytes_per_snapshot=%d" % [
+		1 + _fake, net._native_note, net.config.snapshot_workers, ph,
+		int(_fake_sent[1] / maxf(float(snaps) * maxf(_fake, 1), 1.0))])
 	link.disconnect_from_server("done")
 	await get_tree().create_timer(0.3).timeout
 	DotPaths.remove_tree(DATA)

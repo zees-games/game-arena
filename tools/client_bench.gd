@@ -103,6 +103,7 @@ func _serve() -> void:
 	var config := DotServerConfig.new()
 	config.hostname = "client bench"
 	config.port = _port
+	config.max_players = 256
 	config.bind_address = "127.0.0.1"
 	config.transport_mode = "dual"
 	config.rcon_password = ""
@@ -135,7 +136,10 @@ func _serve() -> void:
 	var module := server.modules.get_module("arena") as ArenaModule
 	var quota: DotBotQuota = module.get("_bot_quota")
 	if quota != null and quota.mode_cvar != null:
-		quota.mode_cvar.force_set("off")
+		# "off" is wanted = 0: the quota removes every bot a second later (found by arena-128-scale-1).
+		quota.mode_cvar.force_set("fixed")
+		quota.quota_cvar.force_set(str(_bots))
+		quota.empty_cvar.force_set("1")
 	for i in _bots:
 		var _id: int = module.bridge.add_bot("Bot %d" % (i + 1))
 	print("client_bench server: ready on %d (enet %d) with %d bots" % [_port, config.effective_enet_port(), _bots])

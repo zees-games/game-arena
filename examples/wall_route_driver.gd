@@ -31,6 +31,10 @@ var variant: StringName = &"walls"
 var start: Vector3 = Vector3.ZERO
 var yaw: float = 0.0
 
+## The tick rate the route is driven at. The pacing below is written in 66 Hz ticks (durations
+## in seconds) and scaled by this.
+var tick_rate := 66
+
 var _ticks := 0
 var _jumped_at := -1
 var _last_wall_jump := -100
@@ -94,6 +98,11 @@ func _init(of_route: Dictionary, how: StringName = &"walls") -> void:
 		_strafe = signf(right.dot(to_near))
 
 
+## A count of 66 Hz ticks at this driver's rate, never below one.
+func _t(at_66: int) -> int:
+	return maxi(1, roundi(float(at_66) * float(tick_rate) / 66.0))
+
+
 ## The command for the tick about to run, from the player's state as it stands.
 func next(state: DotFpsState) -> DotFpsCommand:
 	var c := DotFpsCommand.new()
@@ -126,7 +135,7 @@ func _next_run(state: DotFpsState, c: DotFpsCommand) -> void:
 		if left < 0.5 and state.is_grounded():
 			c.buttons |= DotFpsCommand.BUTTON_JUMP
 			_jumped_at = _ticks
-	elif variant == &"jumpdash" and _ticks == _jumped_at + 3:
+	elif variant == &"jumpdash" and _ticks == _jumped_at + _t(3):
 		c.buttons |= DotFpsCommand.BUTTON_SPRINT
 
 
@@ -141,7 +150,7 @@ func _next_jump(state: DotFpsState, c: DotFpsCommand) -> void:
 	# A press every other tick once the rise is nearly spent and the last kick has carried
 	# the player across: a press, not a hold, is what a wall jump answers.
 	if (
-		_ticks > _jumped_at + 6 and _ticks - _last_wall_jump > 6
+		_ticks > _jumped_at + _t(6) and _ticks - _last_wall_jump > _t(6)
 		and not state.is_grounded() and _ticks % 2 == 0 and state.velocity.y < 2.0
 	):
 		c.buttons |= DotFpsCommand.BUTTON_JUMP
@@ -149,7 +158,7 @@ func _next_jump(state: DotFpsState, c: DotFpsCommand) -> void:
 
 ## Whether the jump has been made and the player is down again, wherever that is.
 func finished(state: DotFpsState) -> bool:
-	return _jumped_at >= 0 and _ticks > _jumped_at + 3 and state.is_grounded()
+	return _jumped_at >= 0 and _ticks > _jumped_at + _t(3) and state.is_grounded()
 
 
 ## Whether the player stands on the route's end.
