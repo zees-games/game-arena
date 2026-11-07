@@ -16,7 +16,25 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 38
+const EXPECTED_CHECKS := 41
+
+const WeaponDropWiring := preload("../game/arena_weapon_drop_wiring.gd")
+
+
+class _StubCrosshair extends RefCounted:
+	var hold_progress := 0.0
+
+
+class _StubHud extends RefCounted:
+	var keys := {}
+	var crosshair: _StubCrosshair
+
+
+class _StubClient extends Node:
+	var game
+	var player
+	var hud: _StubHud
+
 
 var _checks := 0
 var _failed := 0
@@ -225,6 +243,30 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 	view.show_prompt(away, 0.0)
 	_check(away.is_empty() and not view.visible, "and out of reach it hides")
 	view.queue_free()
+
+	# Holding E on a dropped weapon draws one progress ring (the crosshair's), not two.
+	var stub := _StubClient.new()
+	stub.game = game
+	stub.player = player
+	stub.hud = _StubHud.new()
+	stub.hud.crosshair = _StubCrosshair.new()
+	var held_for := rules.hold_time * 0.5
+	var cam := Camera3D.new()
+	add_child(cam)
+	cam.global_position = eye
+	cam.look_at(eye + player.aim_direction())
+	player.camera = cam
+	WeaponDropWiring.update_panel(stub, true, 0.0)
+	WeaponDropWiring.update_panel(stub, true, held_for)
+	var pv: DotWeaponPickupView = stub.get_meta(&"pickup_view")
+	var rings := int(pv._circle.visible) + int(stub.hud.crosshair.hold_progress > 0.0)
+	_check(stub.hud.crosshair.hold_progress > 0.0, "holding E fills the crosshair ring", str(stub.hud.crosshair.hold_progress))
+	_check(not pv._circle.visible, "and the world circle on the panel stays off", str(pv._circle.visible))
+	_check(rings == 1, "one progress ring while holding E", str(rings))
+	pv.queue_free()
+	stub.free()
+	player.camera = null
+	cam.queue_free()
 
 	# A splash is stopped by a wall: find a blocked and an open spot round one centre in the real level.
 	drops.clear()
