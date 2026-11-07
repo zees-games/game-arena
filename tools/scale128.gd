@@ -319,15 +319,24 @@ func _offline() -> void:
 	var render := 0.0
 	var draw := 0.0
 	var n := 0
+	var spikes := []
+	var nodes_last := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
 	while (Time.get_ticks_usec() - _t_start) / 1.0e6 < _seconds:
 		await get_tree().process_frame
 		var now := Time.get_ticks_usec()
+		var nodes_now := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+		spikes.append([snappedf((now - t_last) / 1000.0, 0.1), nodes_now - nodes_last, snappedf((now - _t_start) / 1.0e6, 0.01)])
+		nodes_last = nodes_now
 		frames.append(float(now - t_last))
 		t_last = now
 		proc += Performance.get_monitor(Performance.TIME_PROCESS)
 		draw += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 		n += 1
 	_recording = false
+	spikes.sort_custom(func(x, y): return x[0] > y[0])
+	var cold := {}
+	if _role == "offline" and "--cold" in OS.get_cmdline_user_args():
+		cold = await _cold(client, g)
 	var wall := (Time.get_ticks_usec() - _t_start) / 1.0e6
 	var game_ticks: int = g.current_tick() - tick0
 	_report({
@@ -335,6 +344,32 @@ func _offline() -> void:
 		"process_ms_mean": snappedf(proc / maxi(1, n) * 1000.0, 0.001), "draw_calls": snappedf(draw / maxi(1, n), 1.0),
 		"game_ticks": game_ticks, "sim_speed": snappedf(game_ticks / wall / _tick, 3),
 		"max_physics_steps_per_frame": Engine.max_physics_steps_per_frame, "census": census,
-		"players": g.players().size(),
+		"players": g.players().size(), "worst_frames_ms_nodes_t": spikes.slice(0, 6), "cold": cold,
 	})
 	get_tree().quit()
+
+
+## First use against the Nth: what adding bots costs (ms and nodes each, 1st..8th), then the
+## frames in which the first hurt, the first kill and the first shots land.
+func _cold(client: Node, g: Node) -> Dictionary:
+	var adds := []
+	for i in 8:
+		var nodes0 := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+		var t0 := Time.get_ticks_usec()
+		client.call("_add_offline_bot", "ColdBot%d" % i)
+		adds.append([snappedf((Time.get_ticks_usec() - t0) / 1000.0, 0.01), int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)) - nodes0])
+		await get_tree().process_frame
+	var frames := []
+	var nodes_last := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+	var t_last := Time.get_ticks_usec()
+	var t_end := t_last + 15000000
+	while Time.get_ticks_usec() < t_end:
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		var nodes_now := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+		frames.append([snappedf((now - t_last) / 1000.0, 0.1), nodes_now - nodes_last])
+		nodes_last = nodes_now
+		t_last = now
+	var spiky := frames.filter(func(f): return f[1] != 0 or f[0] > 40.0)
+	spiky.sort_custom(func(x, y): return x[0] > y[0])
+	return {"bot_adds_ms_nodes": adds, "spiky_frames_ms_nodes": spiky.slice(0, 12), "frames": frames.size()}

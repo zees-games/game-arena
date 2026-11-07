@@ -85,13 +85,25 @@ func present(delta: float) -> void:
 			body_mesh.global_position = drawn.position
 			var alpha := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
 			yaw = rad_to_deg(lerp_angle(deg_to_rad(_yaw_before_tick), deg_to_rad(drawn.yaw), alpha))
+		var t_pose := Time.get_ticks_usec()
 		_pose_body(drawn, yaw, delta)
+		ArenaFrameProbe.add(&"r_pose", t_pose)
+		var t_held := Time.get_ticks_usec()
 		_present_held()
+		ArenaFrameProbe.add(&"r_held", t_held)
+		var t_tag := Time.get_ticks_usec()
 		_present_health_tag(delta)
+		ArenaFrameProbe.add(&"r_tag", t_tag)
 
+	var t_anim := Time.get_ticks_usec()
 	_animate_figure(drawn, delta)
+	ArenaFrameProbe.add(&"r_anim", t_anim)
+	var t_beacon := Time.get_ticks_usec()
 	_present_beacon(delta, drawn.position)
+	ArenaFrameProbe.add(&"r_beacon", t_beacon)
+	var t_mend := Time.get_ticks_usec()
 	_mend_body()
+	ArenaFrameProbe.add(&"r_mend", t_mend)
 
 ## [method present] for a remote body, one frame in [constant LOD_EVERY] while it is behind or
 ## beside the viewer. Only the drawing is thinned: the tick and the hitboxes are untouched.
@@ -99,15 +111,29 @@ func present_lod(delta: float, eye: Vector3, forward: Vector3) -> void:
 	if camera == null and present_lod_enabled:
 		var to := global_position - eye
 		var d2 := to.length_squared()
+		var every := 1
 		if d2 > LOD_NEAR * LOD_NEAR and to.dot(forward) < LOD_CONE * sqrt(d2):
+			every = LOD_EVERY
+		elif d2 > LOD_FARTHEST * LOD_FARTHEST:
+			every = 4
+		elif d2 > LOD_FAR * LOD_FAR:
+			every = 2
+		_set_held_lod(every > 1)
+		if every > 1:
 			_lod_frames += 1
 			_lod_delta += delta
-			if _lod_frames < LOD_EVERY:
+			if _lod_frames < every:
 				return
 			delta = _lod_delta
 	_lod_frames = 0
 	_lod_delta = 0.0
 	present(delta)
+
+## A thinned body's gun stops running its own per-frame hand and recoil too (it catches up when drawn again).
+func _set_held_lod(thin: bool) -> void:
+	if held != null and thin != _held_thin:
+		_held_thin = thin
+		held.set_process(not thin)
 
 ## The wall-run lean as drawn this frame, in degrees (positive leans left). For a check
 ## and for the frame-sequence render.

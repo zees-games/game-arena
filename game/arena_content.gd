@@ -157,7 +157,7 @@ const WEAPON_INDEX_BITS := 6
 static func weapon_index(id: StringName) -> int:
 	if id == &"":
 		return 0
-	return Roles.wire_ids().find(id) + 1
+	return Roles.wire_index(id) + 1
 
 
 ## The weapon [param index] names, or `&""`.

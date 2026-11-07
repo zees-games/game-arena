@@ -87,6 +87,7 @@ func add_player(
 	player.solid_hulls_fn = solid_hulls_for
 	_players[id] = player
 	_roster_dirty = true
+	_ids_cache = []
 
 	var added := match_node.add_player(str(id), display_name, _tick, wanted_team)
 

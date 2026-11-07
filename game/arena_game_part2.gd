@@ -165,6 +165,7 @@ func tick(commands: Dictionary = {}) -> void:
 		_advance_toys(delta)
 		_shoot_toys(shots)
 
+	var t_shots := Time.get_ticks_usec()
 	if is_authority:
 		_unlag_record()
 		for shot in shots:
@@ -177,7 +178,9 @@ func tick(commands: Dictionary = {}) -> void:
 			_resolve_shot(shot, float(_tick) - lag if lag >= 0.0 else -1.0)
 		if bullet_bridge != null:
 			bullet_bridge.tick(float(_tick))
+	ArenaFrameProbe.add(&"tick_shots", t_shots)
 
+	var t_world := Time.get_ticks_usec()
 	if map_io != null:
 		map_io.tick()
 
@@ -212,17 +215,25 @@ func tick(commands: Dictionary = {}) -> void:
 	if spectate != null:
 		spectate.tick(delta)
 
+	ArenaFrameProbe.add(&"tick_world", t_world)
+
 	# Expires spawn protection, so a player whose protection ran out is killable this tick.
+	var t_stack := Time.get_ticks_usec()
 	if player_stack != null:
 		player_stack.tick(_tick)
+	ArenaFrameProbe.add(&"tick_stack", t_stack)
 
 	# After everybody moved: a point is taken where its taker ended the tick.
+	var t_drops := Time.get_ticks_usec()
 	if drops != null and is_authority:
 		drops.tick(_tick, _drop_sweepers())
+	ArenaFrameProbe.add(&"tick_drops", t_drops)
 
 	_sweep_jail_button()
 
+	var t_rest := Time.get_ticks_usec()
 	_tick_rest(delta)
+	ArenaFrameProbe.add(&"tick_rest", t_rest)
 
 func _loadout_key(id: int) -> String:
 	return loadout_identity.key_of(id)

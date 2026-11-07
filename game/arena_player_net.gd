@@ -312,7 +312,9 @@ func pull() -> void:
 
 	var def := player.arsenal.current_def() if player.arsenal != null else null
 	net_weapon = ArenaContent.weapon_index(def.id if def != null else &"")
-	net_carry = ArenaContent.carry_mask(player.arsenal)
+	# Owner-only, and a bot has no owner: 33 shelf scans a bot a tick for a mask nobody receives.
+	if not _server_owned():
+		net_carry = ArenaContent.carry_mask(player.arsenal)
 
 	net_blind = player.blinded
 	net_challenge = clampi(player.challenge + 1, 0, 127)
@@ -329,8 +331,19 @@ func pull() -> void:
 		identity.always_relevant = player.beacon
 
 
+## Whether this player belongs to the server itself (a bot): there is no client to send owner-only state to.
+func _server_owned() -> bool:
+	return identity != null and identity.is_authoritative and identity.owner_peer_id == 0
+
+
 ## Fills [member net_exact] from the simulation; every end, every tick it pulls.
 func _pull_exact(state: DotFpsState) -> void:
+	# The server's own (a bot's): the copy goes to its owner alone and nobody predicts it, so
+	# neither the 14 floats nor their encoding are worth a tick, 32 times a tick.
+	if _server_owned():
+		if net_exact.size() != 0:
+			net_exact = PackedFloat32Array()
+		return
 	var exact := PackedFloat32Array()
 	exact.resize(EXACT_FLOATS)
 	exact[0] = state.position.x
