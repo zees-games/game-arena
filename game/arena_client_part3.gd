@@ -147,7 +147,13 @@ func _killcam_frame() -> void:
 		return
 	killcam.hide_while_playing = [hud, view_model]
 	killcam.world_mask = _level_mask()
-	killcam.frame()
+	var t_cam := Time.get_ticks_usec()
+	# Recording is capped at cl_killcam_hz; a replay playing (or about to re-pose) is stepped every frame.
+	var record_gap := int(1.0e6 / ArenaKillcamBodies.record_hz) if ArenaKillcamBodies.record_hz > 0.0 else 0
+	if record_gap == 0 or killcam.is_playing() or not (killcam.get(&"_again") as Array).is_empty() or t_cam - _killcam_recorded >= record_gap:
+		_killcam_recorded = t_cam
+		killcam.frame()
+	ArenaFrameProbe.add(&"c_killcam", t_cam)
 	_restore_hud_if_orphaned()
 	var now := int(game.match_node.state) if game.match_node != null else -1
 	if _offline and now != _seen_match_state and now == DotMatch.State.MATCH_END:
@@ -496,7 +502,9 @@ func _drive_spectator_camera() -> void:
 func _present_frame_rest() -> void:
 	_watch_projectiles()
 
+	var t_spec := Time.get_ticks_usec()
 	_drive_spectator_camera()
+	ArenaFrameProbe.add(&"c_spectate", t_spec)
 	_killcam_frame()
 
 ## Hands the local player this frame's view, this frame's mouse motion folded in, so a frame on

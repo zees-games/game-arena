@@ -12,6 +12,7 @@ const ArenaHud := preload("arena_hud.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
 const ArenaPlayer := preload("arena_player.gd")
+const ArenaKillcamBodies := preload("arena_killcam_bodies.gd")
 
 ## Settings, audio, effects and a console, on the client.
 
@@ -1038,6 +1039,36 @@ func _local_commands() -> DotConsoleLocal:
 			ArenaFrameProbe.set_interval(text.to_float())
 			return DotResult.success(ArenaFrameProbe.interval)
 	)
+	local.add_var(&"cl_remote_lod", "1 draws remote players nobody can see (off screen, far away) less often; 0 presents every remote player every frame.",
+		func() -> Variant: return 1 if ArenaPlayer.present_lod_enabled else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.present_lod_enabled = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.present_lod_enabled else 0)
+	)
+	local.add_var(&"cl_remote_lod_frustum", "1 judges a remote player out of sight by the camera's real view frustum, 0 by a wide cone round the view axis.",
+		func() -> Variant: return 1 if ArenaPlayer.lod_frustum else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.lod_frustum = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.lod_frustum else 0)
+	)
+	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default).",
+		func() -> Variant: return ArenaPlayer.lod_off_every,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_remote_lod_every takes a whole number of frames")
+			ArenaPlayer.lod_off_every = clampi(text.to_int(), 1, 16)
+			return DotResult.success(ArenaPlayer.lod_off_every)
+	)
+	local.add_var(&"cl_killcam_hz", "Most times a second the kill-cam records every body while no replay plays (0: every frame; 60 is the default).",
+		func() -> Variant: return ArenaKillcamBodies.record_hz,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_float():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_killcam_hz takes a number")
+			ArenaKillcamBodies.record_hz = maxf(text.to_float(), 0.0)
+			return DotResult.success(ArenaKillcamBodies.record_hz)
+	)
 	local.add_var(&"cl_pose_debug", "1 draws the held weapon's grip sockets, the hand targets and the arm bones over the view.",
 		func() -> Variant: return 1 if ArenaViewArms.debug_pose else 0,
 		func(v: Variant) -> Variant:
@@ -1377,6 +1408,13 @@ func use_shot_rules(rules: DotShotRules) -> void:
 ## Without it each shooter's `AwShotFx` made its own audio manager, enclosure and shot player on its first shot:
 ## 40 ms a shooter, thirty-one times a match at 16 v 16. False for a class with no stock shot (the single sound plays).
 func remote_shot(id: StringName, kind: StringName, at: Vector3, _indoors: bool) -> bool:
+	var t_shot := Time.get_ticks_usec()
+	var done := _remote_shot(id, kind, at)
+	ArenaFrameProbe.add(&"fx_remote_shot", t_shot)
+	return done
+
+
+func _remote_shot(id: StringName, kind: StringName, at: Vector3) -> bool:
 	if shots == null or audio == null:
 		return false
 	var weapon_class := AwWeaponSound.class_for(id, kind)

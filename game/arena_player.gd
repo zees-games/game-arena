@@ -85,6 +85,9 @@ func present(delta: float) -> void:
 			body_mesh.global_position = drawn.position
 			var alpha := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
 			yaw = rad_to_deg(lerp_angle(deg_to_rad(_yaw_before_tick), deg_to_rad(drawn.yaw), alpha))
+		if present_ablate != 0:
+			_ablated_present(drawn, delta)
+			return
 		var t_pose := Time.get_ticks_usec()
 		_pose_body(drawn, yaw, delta)
 		ArenaFrameProbe.add(&"r_pose", t_pose)
@@ -105,15 +108,29 @@ func present(delta: float) -> void:
 	_mend_body()
 	ArenaFrameProbe.add(&"r_mend", t_mend)
 
+## Probe only: the remote half of [method present] with the parts [member present_ablate] names left out.
+func _ablated_present(drawn: DotFpsState, delta: float) -> void:
+	if held != null and (present_ablate & 4) != 0:
+		held.set_process(false)
+	if (present_ablate & 8) == 0:
+		_pose_body(drawn, drawn.yaw, delta)
+		_present_health_tag(delta)
+	if (present_ablate & 2) == 0:
+		_present_held()
+	if (present_ablate & 1) == 0:
+		_animate_figure(drawn, delta)
+
 ## [method present] for a remote body, one frame in [constant LOD_EVERY] while it is behind or
 ## beside the viewer. Only the drawing is thinned: the tick and the hitboxes are untouched.
-func present_lod(delta: float, eye: Vector3, forward: Vector3) -> void:
+func present_lod(delta: float, eye: Vector3, forward: Vector3, frustum: Array = []) -> void:
+	if camera == null and present_remote_paused:
+		return
 	if camera == null and present_lod_enabled:
 		var to := global_position - eye
 		var d2 := to.length_squared()
 		var every := 1
-		if d2 > LOD_NEAR * LOD_NEAR and to.dot(forward) < LOD_CONE * sqrt(d2):
-			every = LOD_EVERY
+		if d2 > LOD_NEAR * LOD_NEAR and _out_of_sight(to, d2, forward, frustum):
+			every = lod_off_every
 		elif d2 > LOD_FARTHEST * LOD_FARTHEST:
 			every = 4
 		elif d2 > LOD_FAR * LOD_FAR:
@@ -128,6 +145,18 @@ func present_lod(delta: float, eye: Vector3, forward: Vector3) -> void:
 	_lod_frames = 0
 	_lod_delta = 0.0
 	present(delta)
+
+## Whether this body, [param to] metres from the eye, cannot be on screen this frame: outside the camera's real frustum
+## (the six planes of `Camera3D.get_frustum`, a sphere of [constant LOD_RADIUS] round the chest) when given, else behind
+## or beside the view axis. A body that comes into view is presented in full that same frame, so only what nobody sees is thinned.
+func _out_of_sight(to: Vector3, d2: float, forward: Vector3, frustum: Array) -> bool:
+	if frustum.is_empty() or not lod_frustum:
+		return to.dot(forward) < LOD_CONE * sqrt(d2)
+	var centre := global_position + Vector3(0.0, 1.0, 0.0)
+	for plane: Plane in frustum:
+		if plane.distance_to(centre) > LOD_RADIUS:
+			return true
+	return false
 
 ## A thinned body's gun stops running its own per-frame hand and recoil too (it catches up when drawn again).
 func _set_held_lod(thin: bool) -> void:

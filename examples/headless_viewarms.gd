@@ -10,6 +10,8 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 const REACH_M := 0.03
 ## Pixels the hand target may sit from the drawn grip on screen.
 const PIXEL_PX := 2.0
+## Seconds the reload key is held for the arsenal to begin a reload (the reload itself then runs to its end).
+const RELOAD_BEGIN_S := 5.0
 const PHASES := ["hip", "aim", "look down", "look up", "run into the wall", "reload"]
 
 var _client: Node = null
@@ -18,11 +20,14 @@ var _finished := 0
 var _sections := 0
 ## The eye last frame: a respawn or round reset moves it metres, and the arms follow a frame later.
 var _last_eye := Vector3.ZERO
+var _scratch_dir := ""
 
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
-	var _scratch := ArenaPresentation.use_scratch_settings("headless_viewarms")
+	# One settings directory per process: user:// is shared by every run on this machine, and a second run wiping or
+	# rewriting a shared directory re-binds the keys mid-run (a held reload key then drops).
+	_scratch_dir = ArenaPresentation.use_scratch_settings("headless_viewarms_%d" % OS.get_process_id())
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("force_offline", true)
 	_client.set("mouse_capture_override", true)
@@ -50,7 +55,15 @@ func _run() -> void:
 	_sections = ids.size()
 	for id: StringName in ids:
 		await _weapon(me, id)
+	_drop_scratch()
 	_report_sections(_entered, _finished, _sections)
+
+
+func _drop_scratch() -> void:
+	var abs_dir := ProjectSettings.globalize_path(_scratch_dir)
+	for f in DirAccess.get_files_at(abs_dir):
+		var _gone := DirAccess.remove_absolute(abs_dir.path_join(f))
+	var _removed := DirAccess.remove_absolute(abs_dir)
 
 
 ## The first equip of any gun after the cover lifts reads no model file: every model the art table names was loaded
@@ -109,10 +122,14 @@ func _weapon(me: Node, id: StringName) -> void:
 				if not def.uses_magazine():
 					continue
 				me.arsenal.current().magazine = 1 if def.magazine > 1 else 0
+				# Hold the key until the arsenal takes it. The press is read on the next simulated tick and a reload is
+				# refused while a sprint, a draw or the previous phase's state is still settling, so a fixed wall-clock hold
+				# (0.2 s) released the key before a loaded machine had ticked once.
+				var began_ms := Time.get_ticks_msec()
 				Input.action_press(&"arena_reload")
-				await _seconds(0.2)
+				var began := await _until(func() -> bool: return me.arsenal.is_reloading(), RELOAD_BEGIN_S)
 				Input.action_release(&"arena_reload")
-				if not _check(me.arsenal.is_reloading(), "%s reloads" % id):
+				if not _check(began, "%s reloads" % id, "key held %d ms, switching %s, magazine %d" % [Time.get_ticks_msec() - began_ms, me.arsenal.is_switching(), me.arsenal.current().magazine]):
 					continue
 				while me.arsenal.is_reloading():
 					await _sample(worst, 0.0)
