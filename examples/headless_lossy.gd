@@ -1,7 +1,7 @@
 extends "lossy_windows.gd"
 
 
-const SECTIONS := 14
+const SECTIONS := 15
 
 
 func _ready() -> void:
@@ -21,6 +21,7 @@ func _run() -> void:
 				await _measured(_play_window.bind(window))
 			await _measured(_test_wall_moves)
 			await _measured(_test_wall_hops)
+			await _measured(_test_wall_pilot)
 			await _measured(_test_stamina_under_loss)
 			await _measured(_test_teleport_under_loss)
 			await _test_server_cvars_reach_the_client()
@@ -110,6 +111,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _physics_rest(server_tick: int) -> void:
+	if _hop_from >= 0:
+		var hop_buffer := _module().net.input_buffer_for(int((_clients["A"]["link"] as DotClientLink).multiplayer.get_unique_id()))
+		if hop_buffer != null and hop_buffer.starved_count != _hop_starved_seen:
+			_hop_starved_seen = hop_buffer.starved_count
+			_hop_starved.append(server_tick)
 	if not _w.is_empty():
 		_sample_clock(server_tick)
 		# What the server will find for A on the tick it runs next: there, a hole in what
@@ -630,7 +636,19 @@ func _teardown() -> void:
 ## hops into the east wall for six seconds, its prediction stays on the server's, and a rewind
 ## carries the timers.
 func _test_wall_hops() -> void:
-	_section("hopping pinned against a wall through 20% loss")
+	await _hop_section("hopping pinned against a wall through 20% loss", false, 6.0)
+
+
+## The same wall with the netchaos pilot's habits: the view swinging across the wall, strafes and held
+## jumps in uneven stretches. A jump against the outer wall mispredicted there (netchaos lossy100 and
+## awful400, corrections over a metre), so the prediction stays on the server's for a minute of it.
+func _test_wall_pilot() -> void:
+	await _hop_section("the pilot's hopping against a wall through 20% loss", true, 45.0)
+
+
+func _hop_section(title: String, pilot: bool, seconds: float) -> void:
+	_section(title)
+	_hop_pilot = pilot
 
 	var a: Dictionary = _clients["A"]
 	var net: DotNetManager = a["net"]
@@ -653,7 +671,7 @@ func _test_wall_hops() -> void:
 	_hop_from = net.clock.input_tick() + 4
 	var worst_before := float(net.predictor.get("_worst_error"))
 	net.predictor.set("_worst_error", 0.0)
-	await _wait_game(6.0)
+	await _wait_game(seconds)
 	var last := net.clock.input_tick()
 	_wall_idle = false
 	await _wait_game(0.5)
@@ -672,6 +690,11 @@ func _test_wall_hops() -> void:
 		if _predicted.has(tick) and track.has(tick):
 			var at: Vector3 = track[tick]
 			diffs.append((_predicted[tick] as Vector3).distance_to(at))
+			if pilot and (_predicted[tick] as Vector3).distance_to(at) > 0.02:
+				var cmd := _pilot_command(tick - _hop_from)
+				print("      off by %.3f at tick %d (k %d): predicted %s, server %s, jump %s; server starved at %s" % [
+					(_predicted[tick] as Vector3).distance_to(at), tick, tick - _hop_from, _predicted[tick], at,
+					cmd.buttons & DotFpsCommand.BUTTON_JUMP != 0, _hop_starved.filter(func(t: int) -> bool: return absi(t - tick) < 40)])
 			if at.x > 23.0:
 				pinned += 1
 			if low and at.y > 0.5:
@@ -689,13 +712,14 @@ func _test_wall_hops() -> void:
 	_check(diffs.size() > 4 * Engine.physics_ticks_per_second and d95 >= 0.0 and d95 <= 0.05 and dmax <= 0.5,
 		"A's prediction of it within 5 cm for 95% of its ticks, never half a metre off",
 		"%d ticks, p95 %.3f, max %.3f" % [diffs.size(), d95, dmax])
-	_check(replays >= 30 and corrections <= 1 and worst <= 0.25,
+	_check(replays >= 30 and corrections <= (4 if pilot else 1) and worst <= 0.25,
 		"and every replay from the middle of a hop lands where the server's A is",
 		"%d of %d replays corrected, the worst by %.3f m" % [corrections, replays, worst])
 
 	_check_exact_roundtrip(a, own)
 
 	_hop_from = -1
+	_hop_pilot = false
 	_done()
 
 
