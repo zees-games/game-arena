@@ -7,6 +7,8 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 const ArenaBotBrain := preload("../game/arena_bot_brain.gd")
+const ArenaBotThreads := preload("../game/arena_bot_threads.gd")
+const ArenaBots := preload("../game/arena_bots.gd")
 
 ## The 128-player scale harness (nightly arena-128-scale-1). Measures; asserts nothing; prints
 ## one `SCALE128 {json}` line. Driven by tools/scale128.sh, which runs it through `heavy`.
@@ -80,6 +82,9 @@ func _ready() -> void:
 			"--fastsense": ArenaBotBrain.fast_sense = args[i + 1] != "0"
 			"--hullgrid": ArenaHullGrid.enabled = args[i + 1] != "0"
 			"--hullverify": ArenaHullGrid.verify = args[i + 1] != "0"
+			"--threads": ArenaBotThreads.threads = int(args[i + 1])
+			"--thinkevery": ArenaBots.think_every = int(args[i + 1])
+			"--thinknear": ArenaBots.think_near = float(args[i + 1])
 			"--motorprof": _motorprof = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
@@ -146,6 +151,10 @@ func _report(extra: Dictionary) -> void:
 		"sections": _sections_ms(_count),
 		"verdict_holds": float(script.get("mean", 99999.0)) < 0.7 * budget_ms and float(script.get("p95", 99999.0)) < budget_ms and _count / wall / _tick > 0.97,
 	}
+	out["bot_threads"] = ArenaBotThreads.threads
+	out["think_every"] = ArenaBots.think_every
+	out["think_near"] = ArenaBots.think_near
+	out["par_ticks"] = ArenaBotThreads.par_ticks
 	out.merge(extra)
 	if ArenaHullGrid.verify:
 		out["hull_verified"] = ArenaHullGrid.verified

@@ -1,6 +1,8 @@
 extends "arena_client_view.gd"
 ## The solo client's offline bots, split out of [ArenaClient] so that file stays under the size gate.
 
+const ArenaBotThreads := preload("arena_bot_threads.gd")
+
 
 ## The offline bots: the brain a server's bots run (ArenaBots, dot-bot), with the same
 ## `bot_difficulty`. Offline only; a server's bots are the server's.
@@ -10,6 +12,8 @@ extends "arena_client_view.gd"
 ## died twelve times in ninety seconds to it. See ArenaBots.
 func _drive_bots() -> void:
 	var tick := game.current_tick()
+	var driven: Array = []
+	var minds: Array = []
 	for id in _bots:
 		var bot: ArenaPlayer = _bots[id]
 
@@ -24,9 +28,14 @@ func _drive_bots() -> void:
 			mind = ArenaBots.Mind.new()
 			mind.seed = int(id)
 			_bot_minds[id] = mind
-		var made := ArenaBots.think(game, bot, mind, tick, float(game.tick_rate))
-		bot.set_meta("bot_move", made[0])
-		bot.set_meta("bot_fire", made[1])
+		driven.append(bot)
+		minds.append(mind)
+	# bot_threads (the server's cvar, or ArenaBotThreads.threads set by a tool): brains decide on worker threads.
+	var threaded: Array = ArenaBotThreads.think_all(game, driven, minds, tick, float(game.tick_rate)) if ArenaBotThreads.active(driven.size()) else []
+	for i in driven.size():
+		var made: Array = threaded[i] if not threaded.is_empty() else ArenaBots.think(game, driven[i], minds[i], tick, float(game.tick_rate))
+		driven[i].set_meta("bot_move", made[0])
+		driven[i].set_meta("bot_fire", made[1])
 
 
 ## Adds or removes offline bots until there are [param count], named from dot-bot's pool.
