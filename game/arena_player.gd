@@ -44,7 +44,7 @@ func present(delta: float) -> void:
 			view.global_position = (
 				controller.motor.eye_position(drawn)
 				if controller.motor != null
-				else drawn.position + Vector3(0.0, 1.6, 0.0)
+				else drawn.position + Vector3(0.0, eye_height(), 0.0)
 			) - Vector3(0.0, _absorb_step(drawn_alpha, delta), 0.0)
 
 		var punch := _present_view_model(drawn)

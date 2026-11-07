@@ -97,7 +97,7 @@ func _advance_toys(delta: float) -> void:
 		var state := player.controller.state
 		var tunables := player.controller.tunables
 		var radius := tunables.radius if tunables != null else 0.35
-		var height := lerpf(tunables.stand_height, tunables.crouch_height, state.crouch_fraction) if tunables != null else 1.8
+		var height := lerpf(tunables.stand_height, tunables.crouch_height, state.crouch_fraction) if tunables != null else ArenaPlayer.stand_height()
 		var _pushed := toys.push_from(state.position, state.velocity, radius, height)
 	toys.advance(delta)
 

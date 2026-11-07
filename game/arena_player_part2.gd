@@ -181,7 +181,7 @@ func _wear(avatar: DotAvatar) -> bool:
 	figure = DotHumanoidFigure.new()
 	figure.name = "Person"
 	body_mesh.add_child(figure)
-	var height := controller.tunables.stand_height if controller != null and controller.tunables != null else 1.8
+	var height := controller.tunables.stand_height if controller != null and controller.tunables != null else ArenaPlayerTunables.stand_height_m()
 	figure.build(ArenaAvatars.look_of(avatar, StringName("arena-player-%08d" % player_id)), height)
 	if controller != null and controller.tunables != null:
 		# This game walks at about the stock run threshold: switch halfway between its walk and run.
@@ -241,8 +241,8 @@ func attach_body_mesh(colour: Color, avatar: DotAvatar = null) -> void:
 
 	var trunk := MeshInstance3D.new()
 	var capsule := CapsuleMesh.new()
-	capsule.radius = 0.4
-	capsule.height = 1.8
+	capsule.radius = ArenaPlayerTunables.radius_m()
+	capsule.height = ArenaPlayerTunables.stand_height_m()
 	trunk.mesh = capsule
 	trunk.material_override = material
 	trunk.position = Vector3(0.0, 0.9, 0.0)

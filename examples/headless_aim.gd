@@ -107,7 +107,7 @@ func _trial(dist: float, crouch: bool, follow_up: bool) -> Dictionary:
 	for _i in 4:
 		await _step(0, 0.0, 0.0)
 	var eye := shooter.muzzle_position()
-	var head := victim.global_position + Vector3(0.0, 1.62, 0.0)
+	var head := victim.global_position + Vector3(0.0, 1.62 * ArenaPlayer.stand_height() / 1.8, 0.0)
 	var a := angles_to(eye, head)
 	_hits.clear()
 	var aim := DotWeaponCommand.BUTTON_USER_0
@@ -213,7 +213,7 @@ func _wait_live(client: Node) -> bool:
 func _clear_spot(space: PhysicsDirectSpaceState3D, at: Vector3) -> Vector3:
 	for k in 16:
 		var dir := Vector3.RIGHT.rotated(Vector3.UP, TAU * float(k) / 16.0)
-		var q := PhysicsRayQueryParameters3D.create(at + dir * 6.0 + Vector3(0.0, 1.6, 0.0), at + Vector3(0.0, 1.6, 0.0), 1)
+		var q := PhysicsRayQueryParameters3D.create(at + dir * 6.0 + Vector3(0.0, 1.6, 0.0), at + Vector3(0.0, ArenaPlayer.eye_height(), 0.0), 1)
 		if space.intersect_ray(q).is_empty():
 			return at + dir * 6.0
 	return Vector3.INF
@@ -271,7 +271,7 @@ func _probe_client() -> void:
 		for _i in 200:
 			await get_tree().process_frame
 			# Chest, not head: a hip shot leaves the muzzle and crosses the crosshair at hip_zero, so it lands a hand below the muzzle line and a head-height aim missed the capsule top.
-			var a := angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, 1.2, 0.0))
+			var a := angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, 1.2 * ArenaPlayer.stand_height() / 1.8, 0.0))
 			sampler.look_at_angles(a.x, a.y)
 		var hud = client.get("hud")
 		_check(not scoped or me.aim_zoom() < 0.9, "client: the sights are up before the shot" if scoped else "client: hip fire")

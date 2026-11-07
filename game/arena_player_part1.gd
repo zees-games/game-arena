@@ -11,12 +11,23 @@ func _movement_body(of_map: ArenaMap) -> DotFpsBody:
 func _build_view() -> void:
 	view = Node3D.new()
 	view.name = "View"
-	# Eye height for a 1.8 m capsule, which is what the tunables below describe.
-	view.position = Vector3(0.0, 1.6, 0.0)
+	# The eye of the configured body (64 units by default), what the controller reports.
+	view.position = Vector3(0.0, ArenaPlayerTunables.eye_height_m(), 0.0)
 	add_child(view)
 
 ## Movement that feels like an arena shooter rather than a modern one. Fast, floaty, high air
 ## control, and no sprint: the speed is the speed, and the way to go faster is to move well.
+static func configure_body(height_units: float, crouch_units: float, radius_units: float, unit_metres: float) -> void:
+	ArenaPlayerTunables.configure_body(height_units, crouch_units, radius_units, unit_metres)
+
+## Standing height of the body, metres (72 units by default).
+static func stand_height() -> float:
+	return ArenaPlayerTunables.stand_height_m()
+
+## Standing eye height above the feet, metres (64 units by default).
+static func eye_height() -> float:
+	return ArenaPlayerTunables.eye_height_m()
+
 static func arena_tunables() -> DotFpsTunables:
 	return ArenaPlayerTunables.make()
 
@@ -181,10 +192,12 @@ func _build_arsenal() -> void:
 func _build_hitboxes() -> void:
 	var plan := DotPlayerHitboxes.new()
 	plan.name = "HitboxPlan"
+	# The zones were drawn for a 1.8 m body; they follow the configured height.
+	var k := ArenaPlayerTunables.body_scale()
 	plan.set_factory = func() -> Node3D:
 		var set_ := DotHitboxSet.new()
-		set_.bounds_offset = Vector3(0.0, 0.9, 0.0)
-		set_.bounds_radius = 1.6
+		set_.bounds_offset = Vector3(0.0, 0.9 * k, 0.0)
+		set_.bounds_radius = 1.6 * k
 		return set_
 	# Arena's five zones in absolute metres (not scaled from the height), so hit geometry and
 	# hitzone stats stay as they were; the other stock zones are dropped. Head outranks the
@@ -192,11 +205,11 @@ func _build_hitboxes() -> void:
 	plan.config = {
 		"disabled": ["arm_l", "arm_r", "hand_l", "hand_r", "leg_l", "leg_r", "foot_l", "foot_r"],
 		"zones": {
-			"head": {"position": [0.0, 1.62, 0.0], "radius": 0.15, "precedence": 10},
-			"neck": {"position": [0.0, 1.46, 0.0], "radius": 0.09, "precedence": 5},
-			"torso": {"position": [0.0, 0.98, 0.0], "radius": 0.30, "height": 1.05, "precedence": 0},
-			"legs": {"group": "leg", "shape": "capsule", "position": [0.0, 0.45, 0.0], "radius": 0.24, "height": 0.9, "precedence": 0},
-			"feet": {"group": "foot", "shape": "sphere", "position": [0.0, 0.12, 0.0], "radius": 0.14, "precedence": 5},
+			"head": {"position": [0.0, 1.62 * k, 0.0], "radius": 0.15 * k, "precedence": 10},
+			"neck": {"position": [0.0, 1.46 * k, 0.0], "radius": 0.09 * k, "precedence": 5},
+			"torso": {"position": [0.0, 0.98 * k, 0.0], "radius": 0.30 * k, "height": 1.05 * k, "precedence": 0},
+			"legs": {"group": "leg", "shape": "capsule", "position": [0.0, 0.45 * k, 0.0], "radius": 0.24 * k, "height": 0.9 * k, "precedence": 0},
+			"feet": {"group": "foot", "shape": "sphere", "position": [0.0, 0.12 * k, 0.0], "radius": 0.14 * k, "precedence": 5},
 		},
 	}
 	add_child(plan)
@@ -460,7 +473,7 @@ func muzzle_position() -> Vector3:
 	if view != null and view.is_inside_tree():
 		return view.global_position
 
-	return controller.state.position + Vector3(0.0, 1.6, 0.0)
+	return controller.state.position + Vector3(0.0, eye_height(), 0.0)
 
 # --- Registration ----------------------------------------------------------
 

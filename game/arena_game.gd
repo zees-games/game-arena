@@ -63,6 +63,7 @@ func add_player(
 		display_name
 	)
 	# Before it enters the tree, so the controller that readies (and logs) is the map's.
+	ArenaPlayer.configure_body(config.avatar_height_units, config.avatar_crouch_units, config.avatar_radius_units, config.avatar_unit_metres)
 	player.apply_map_movement(map_movement())
 	player.apply_vitals(config.player_health, config.player_armour, config.player_regen, config.fall_out_depth)
 	add_child(player)
@@ -158,7 +159,7 @@ func make_killview_server() -> DotKillViewServer:
 			if not p.is_alive() or p.controller == null or p.controller.state == null:
 				continue
 			var st: DotFpsState = p.controller.state
-			var eye: Vector3 = p.controller.motor.eye_position(st) if p.controller.motor != null else st.position + Vector3(0.0, 1.6, 0.0)
+			var eye: Vector3 = p.controller.motor.eye_position(st) if p.controller.motor != null else st.position + Vector3(0.0, ArenaPlayer.eye_height(), 0.0)
 			var basis := Basis.from_euler(Vector3(deg_to_rad(st.pitch), deg_to_rad(st.yaw), 0.0))
 			eyes.append({"id": p.player_id, "transform": Transform3D(basis, eye), "aux": KillPov.aux_of(p)})
 		return eyes
