@@ -7,6 +7,8 @@ extends RefCounted
 ## [method landing] and [method perturb]. Off unless the server turns `bot_record` on; bots are
 ## never recorded. Loaded by path, and only on a shell that has dot-bot's recorder.
 ## Reasoning: dot-bot docs/demonstration-recorder.md, "The first consumer: surf rides".
+##
+## It also has [method pilot_setup], so the harvest replays a ride as a bot rides it (quantised, tracking and vetoing) while `piloted` is on in [member ride_config]; `DOT_BOT_HARVEST_PILOTED=0` replays the commands open loop.
 
 const ArenaContent := preload("arena_content.gd")
 const ArenaBots := preload("arena_bots.gd")
@@ -82,6 +84,8 @@ var _job_key: String = ""
 var _job_loaded: Array = []
 var _busy: bool = false
 var _edge_keys: Dictionary = {}
+## Ride key -> the course of the first attached edge with that key, so the harvest judges and steers a recording on the course a bot rides it on.
+var _edge_courses: Dictionary = {}
 var _attached: bool = false
 
 
@@ -109,6 +113,11 @@ func setup(p_game: Object, p_config: DotBotDemoConfig, p_store: DotBotDemoStore,
 	store = p_store
 	tick_rate = p_tick_rate
 	ride_config = ride_config_for(demo)
+	var layered := DotBotRideConfig.new()
+	if layered.load_layered("").ok:
+		ride_config.piloted = layered.piloted
+		ride_config.pilot_tracking = layered.pilot_tracking
+		ride_config.pilot_horizon = layered.pilot_horizon
 	schema = ride_schema()
 	recorder = DotBotDemoRecorder.new(demo, store)
 	recorder.is_server = true
@@ -133,6 +142,7 @@ func set_map(p_map: Object, p_nav: DotBotNav) -> void:
 	_courses.clear()
 	_floors.clear()
 	_edge_keys.clear()
+	_edge_courses.clear()
 	_dirty.clear()
 	_attached = false
 	_sim = null
@@ -307,6 +317,21 @@ func replay_start(ep: DotBotDemoEpisode) -> Variant:
 	return decode_state(ep.start)
 
 
+## What only the arena knows about [param ep]'s edge, for the harvest's pilot: the reference yaw and score of the course a bot rides it on.
+func pilot_setup(pilot: DotBotSurfPilot, ep: DotBotDemoEpisode) -> void:
+	var course := course_for_key(ep.key)
+	if course == null:
+		return
+	pilot.reference_yaw = course.start_yaw
+	pilot.score = course.score
+
+
+## The reference yaw of ride [param key]'s course, NAN when it has none.
+func reference_yaw_for(key: String) -> float:
+	var course := course_for_key(key)
+	return course.start_yaw if course != null else NAN
+
+
 ## The command for one recorded [param action].
 func replay_command(sim: Variant, action: PackedFloat32Array, _state: Variant) -> DotFpsCommand:
 	return sim.command(action[ACTION_YAW], Vector2(action[ACTION_MOVE], action[ACTION_MOVE + 1]), action[ACTION_JUMP] > 0.5)
@@ -335,6 +360,8 @@ func perturb(state: Variant, stream: DotRandomStream, metres: float, speed: floa
 
 ## The course of ride key "from>to" (island indices), or null when the mesh has no such islands.
 func course_for_key(key: String) -> ArenaSurf.EdgeCourse:
+	if _edge_courses.has(key):
+		return _edge_courses[key]
 	if _courses.has(key):
 		return _courses[key]
 	var parts := key.split(">")
@@ -462,7 +489,7 @@ func _commit_job() -> void:
 		var good := job.verdicts.filter(func(v: Dictionary) -> bool: return v["ok"]).size()
 		recorder.note_verified(KIND, key, good)
 		harvested += good
-		var _loaded: DotResult = await book.load_edge(store, KIND, key, schema, tick_rate)
+		var _loaded: DotResult = await book.load_edge(store, KIND, key, schema, tick_rate, reference_yaw_for(key))
 	_busy = false
 
 
@@ -475,8 +502,10 @@ func attach_surf(surf: Object) -> void:
 			continue
 		var key := edge_key(edge)
 		_edge_keys[edge.id] = key
+		if not _edge_courses.has(key):
+			_edge_courses[key] = edge.course
 		book.add_seeded(key, SEED_SCORE, edge.cache)
-		var _loaded: DotResult = await book.load_edge(store, KIND, key, schema, tick_rate)
+		var _loaded: DotResult = await book.load_edge(store, KIND, key, schema, tick_rate, reference_yaw_for(key))
 
 
 ## The key recordings of [param edge] are filed under.

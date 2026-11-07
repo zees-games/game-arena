@@ -798,6 +798,8 @@ func _test_recorded_rides() -> void:
 	_check(state_back.equals(human.controller.state, 0.001) and state_back.mode == human.controller.state.mode,
 		"a motor state survives the store's JSON")
 
+	# The open-loop replay and the bot playing the raw commands; headless_ride_pilot covers the piloted harvest.
+	rides.ride_config.piloted = false
 	var harvest: DotBotRideHarvest = rides.harvest_on(human.controller)
 	var done: DotResult = await harvest.harvest(store, rides.recorder.map_id, rides.recorder.map_version, ArenaSurfRides.KIND, key)
 	var verified_total: int = harvest.verified + rides.harvested

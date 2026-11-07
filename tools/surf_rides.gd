@@ -29,7 +29,8 @@ const ArenaSurfRides := preload("../game/arena_surf_rides.gd")
 ## while it rides), and prints how many land and what steering a ride costs.
 ##
 ## [b]--demos[/b] lists what the recorder's store holds for the map, per edge. [b]--harvest[/b] replays
-## every stored ride on the real motor, keeps the ones that land, and ranks them with the planned ones.
+## every stored ride on the real motor (as the bot's pilot rides it: tracking and veto), keeps the ones that land, ranks them with the planned ones, and writes the planned
+## cache with the verified recordings added to `maps/surf/<id>.merged.surf.json` (`--out FILE` for another path), which is never loaded by itself: review it, then copy it over the cache.
 ##
 ## For a map that finds nothing: `--probe`, `--section`, `--hold`, `--search`, `--wander`, `--islands` and `--picture` (read the code for arguments).
 ## `--measure --think` drives the live rides through `ArenaBots.think`. Everything is seeded, so two runs print the same numbers.
@@ -148,7 +149,8 @@ func _run() -> void:
 			var out_at := args.find("--out")
 			_write(ProjectSettings.globalize_path(args[out_at + 1]) if out_at >= 0 else path, data)
 	if args.has("--demos") or args.has("--harvest"):
-		await demos(args.has("--harvest"))
+		var merged_at := args.find("--out")
+		await demos(args.has("--harvest"), ProjectSettings.globalize_path(args[merged_at + 1]) if merged_at >= 0 else path.replace(".surf.json", ".merged.surf.json"))
 	if args.has("--measure"):
 		await measure(_read(path), _opt(args, "--runs", 40), _opt(args, "--live", 20))
 	get_tree().quit(0)
@@ -687,7 +689,7 @@ func plan(index: int, edge: Dictionary, starts: int, repairs: int, rounds: int) 
 # --- Recorded rides ------------------------------------------------------------------
 
 ## Lists the recorded rides of the map per edge and, with [param verify], replays the unchecked ones.
-func demos(verify: bool) -> void:
+func demos(verify: bool, merged_path: String = "") -> void:
 	var cfg := DotBotDemoConfig.new()
 	var layered := cfg.load_layered("")
 	var made := DotBotDemoStore.from_config(cfg, null) if layered.ok else layered
@@ -710,6 +712,10 @@ func demos(verify: bool) -> void:
 		print("[surf] edge %s: %d verified recorded rides" % [key, counts.value[key]])
 	if counts.value.is_empty():
 		print("[surf] nothing recorded for %s@%s" % [rides.recorder.map_id, rides.recorder.map_version])
+	# Before the harvest, so a recording is judged and piloted on the course a bot rides its edge on.
+	var surf := ArenaSurf.load_for(game.map, nav)
+	if surf != null:
+		await rides.attach_surf(surf)
 	if verify:
 		var harvest := rides.harvest_on(bot.controller)
 		if harvest == null:
@@ -720,14 +726,39 @@ func demos(verify: bool) -> void:
 			print("[surf] edge %s: %s" % [key, "%d verified now" % done.value if done.ok else done.error.message])
 		for line in harvest.describe_lines():
 			print("[surf] %s" % line)
-	var surf := ArenaSurf.load_for(game.map, nav)
-	if surf != null:
-		await rides.attach_surf(surf)
-	else:
-		for key: String in counts.value:
-			var _loaded: DotResult = await rides.book.load_edge(store, ArenaSurfRides.KIND, key, rides.schema, float(TICK_RATE))
+		print("[surf] %d of the replays ridden by the pilot (piloted %s)" % [harvest.describe()["piloted_replays"], str(harvest.is_piloted())])
+	for key: String in counts.value:
+		var _loaded: DotResult = await rides.book.load_edge(store, ArenaSurfRides.KIND, key, rides.schema, float(TICK_RATE), rides.reference_yaw_for(key))
 	for line in rides.book.describe_lines():
 		print("[surf] %s" % line)
+	if verify and surf != null and merged_path != "":
+		_write_merged(rides, surf, merged_path)
+
+
+## The planned cache of the map with each edge's verified recordings added as rides of their own, in the cache's units.
+func _write_merged(rides: ArenaSurfRides, surf: ArenaSurf, path: String) -> void:
+	var data := _read(ProjectSettings.globalize_path(ArenaSurf.path_for(map_id)))
+	var edges: Array = data.get("edges", [])
+	var added := 0
+	for edge: ArenaSurf.Edge in surf.edges:
+		if edge.id >= edges.size():
+			continue
+		var row: Dictionary = edges[edge.id]
+		var entries: Array = row.get("entries", [])
+		var lengths: Array = row.get("lengths", [])
+		for ride: Dictionary in rides.book.ranked(rides.edge_key(edge)):
+			var cache: Variant = (ride["data"] as Dictionary).get("cache") if ride["data"] is Dictionary else null
+			if ride["source"] != DotBotRideBook.RECORDED or not (cache is PackedFloat32Array):
+				continue
+			var rows := DotBotSurfPilot.entries_to_rows(cache, ArenaSurf.UNITS)
+			entries.append_array(rows)
+			lengths.append(rows.size())
+			added += 1
+		row["entries"] = entries
+		row["lengths"] = lengths
+	print("[surf] %d recorded rides added to the planned cache" % added)
+	if added > 0:
+		_write(path, data)
 
 
 # --- Measuring -----------------------------------------------------------------------
