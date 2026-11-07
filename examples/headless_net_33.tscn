@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/headless_net.gd" id="1"]
+
+[node name="HeadlessNet33" type="Node"]
+script = ExtResource("1")
+tick_rate_override = 33

@@ -1083,7 +1083,8 @@ func send_signon(peer_id: int) -> void:
 		net.clock.tick,
 		game.map.display_name if game.map != null else "",
 		game.score_limit,
-		game.time_limit_sec
+		game.time_limit_sec,
+		net.config.snapshot_rate
 	))
 
 	# Straight after HELLO and before any JOIN: the players about to be described are
@@ -1598,7 +1599,7 @@ func _on_event(message: DotNetMessage) -> void:
 			if not bool(info["ok"]):
 				return
 			_hello = info
-			_adopt_tick_rate(int(info["tick_rate"]))
+			_adopt_tick_rate(int(info["tick_rate"]), int(info["snapshot_rate"]))
 			hello_received.emit(info)
 		ArenaEvents.Kind.JOIN:
 			apply_join(event.body)
@@ -1806,13 +1807,14 @@ func mark_ready(peer_id: int) -> void:
 ## All four copies move together, and the engine's is one of them: the fraction a
 ## renderer interpolates at is a fraction through a PHYSICS frame, which is a fraction
 ## through a tick only while the two rates agree.
-func _adopt_tick_rate(rate: int) -> void:
+func _adopt_tick_rate(rate: int, snapshot_rate: int = 0) -> void:
 	if rate <= 0 or game == null or net == null:
 		return
 
 	game.tick_rate = rate
 	net.config.tick_rate = rate
-	net.config.snapshot_rate = ArenaGame.snapshot_rate_for(rate)
+	# The server's own number when HELLO carried one (sv_snapshot_rate), else derived as before.
+	net.config.snapshot_rate = snapshot_rate if snapshot_rate > 0 and snapshot_rate <= rate else ArenaGame.snapshot_rate_for(rate)
 	# A copy taken at setup() that writing the config does not touch.
 	net.clock.tick_rate = rate
 	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap

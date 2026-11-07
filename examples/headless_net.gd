@@ -10,6 +10,7 @@ func _run() -> void:
 	OS.add_logger(errors)
 
 	print("game-arena — netcode over two clients")
+	print("  tick rate %d Hz, snapshot rate %d Hz" % [TICK_RATE, SNAPSHOT_RATE])
 
 	_build_server()
 	_build_client(2, 11)

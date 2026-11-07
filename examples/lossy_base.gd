@@ -55,7 +55,9 @@ const Relay := preload("res://addons/dot_net/testing/dot_net_udp_relay.gd")
 var PORT := ArenaTestPorts.free_port()
 const DATA := "user://arena_lossy"
 ## `-- --tick-rate=30` (or ARENA_TICK_RATE) runs the same suite at another rate; tick-count thresholds scale with it.
-var TICK_RATE := _tick_rate_arg()
+@export var tick_rate_override := 0
+var TICK_RATE: int:
+	get: return clampi(tick_rate_override, 15, 128) if tick_rate_override > 0 else _tick_rate_arg()
 const DUMMY_ID := 9001
 
 ## The windows: name, loss each way, delay, jitter (so 30..80 ms), seconds.
