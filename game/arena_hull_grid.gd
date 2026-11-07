@@ -72,14 +72,17 @@ func moved(id: int, p: ArenaPlayer) -> void:
 
 ## Roster indices, ascending, of every player filed within [param reach_sq] (squared metres) of [param at], and some farther: the caller's own distance test decides.
 func near(at: Vector3, reach_sq: float) -> Array:
-	var ring := ceili(sqrt(reach_sq) / CELL)
-	var cx := int(floorf(at.x / CELL)) + BIAS
-	var cz := int(floorf(at.z / CELL)) + BIAS
+	var reach := sqrt(reach_sq)
+	var x0 := int(floorf((at.x - reach) / CELL)) + BIAS
+	var x1 := int(floorf((at.x + reach) / CELL)) + BIAS
+	var z0 := int(floorf((at.z - reach) / CELL)) + BIAS
+	var z1 := int(floorf((at.z + reach) / CELL)) + BIAS
 	var out: Array = []
-	for dx in range(-ring, ring + 1):
-		for dz in range(-ring, ring + 1):
-			var cell: Variant = _cells.get((cx + dx) * 8192 + cz + dz)
+	for cx in range(x0, x1 + 1):
+		for cz in range(z0, z1 + 1):
+			var cell: Variant = _cells.get(cx * 8192 + cz)
 			if cell != null:
 				out.append_array(cell)
-	out.sort()
+	if out.size() > 1:
+		out.sort()
 	return out
