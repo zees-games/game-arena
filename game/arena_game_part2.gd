@@ -148,6 +148,7 @@ func tick(commands: Dictionary = {}) -> void:
 			if demo_stats != null:
 				demo_stats.call(&"after", id, player, move, fire, _tick)
 			shots.append_array(outcome.shots)
+			_note_protected_action(id, player, move, not outcome.shots.is_empty())
 
 			# Before the horde ticks, so the monsters hear it this tick.
 			if horde != null and (not outcome.shots.is_empty() or not outcome.spawns.is_empty()):
@@ -242,7 +243,8 @@ func apply_loadout(id: int, at_spawn := false) -> void:
 		if rolled != null and player != null:
 			player.give_loadout(ArenaContent.in_give_order(loadouts.resolve(rolled)))
 			arm_for_mode(player)
-			loadout_rolled.emit(id, loadout_command.spawn_text(rolled))
+			if loadout_roll_text:
+				loadout_rolled.emit(id, loadout_command.spawn_text(rolled))
 			return
 		if player == null:
 			return
@@ -286,6 +288,27 @@ func _apply_loadout_deferred(id: int) -> void:
 			player.give_default_loadout()
 
 	apply_loadout(id, true)
+
+## `spawn_protection_break` (config): a player still protected who shoots (bit 1) or moves or jumps (bit 2)
+## loses the protection now, in all three records. Zero, the default, never calls [method end_spawn_protection].
+func _note_protected_action(id: int, player: ArenaPlayer, move: DotFpsCommand, fired: bool) -> void:
+	var breaks := config.spawn_protection_break
+	if breaks == 0 or not player.health.is_protected(_tick):
+		return
+	var moved: bool = move.move != Vector2.ZERO or move.is_pressed(DotFpsCommand.BUTTON_JUMP)
+	if (fired and breaks & 1 != 0) or (moved and breaks & 2 != 0):
+		end_spawn_protection(id)
+
+## Ends spawn protection for [param id] now: the health window, the `PROTECTED` effect and dot-spawn's ledger.
+func end_spawn_protection(id: int) -> void:
+	var player := player_for(id)
+	if player == null:
+		return
+	player.health.invulnerable_until_tick = -1
+	if effects != null:
+		effects.remove(ArenaEffects.PROTECTED, id)
+	if player_stack != null and player_stack.spawns != null and player_stack.spawns.protection != null:
+		player_stack.spawns.protection.revoke(str(id), _tick)
 
 func _on_respawn_due(key: String, spawn: DotSpawnPoint, tick: int) -> void:
 	var id := int(key)

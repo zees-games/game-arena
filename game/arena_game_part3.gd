@@ -239,6 +239,9 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 	if map == null:
 		map = ArenaMap.dm_box()
 
+	if mode.is_team_mode() and team_spawn_split:
+		var _tagged := map.split_spawns_for_teams()
+
 	if mode.is_team_mode() and Array(map.spawn_tags).count("") == map.spawns.size():
 		# Not fatal: dot-match falls back to the shared pool and everyone still spawns.
 		DotLog.warn(

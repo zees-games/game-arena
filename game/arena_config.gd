@@ -106,6 +106,10 @@ func validate() -> DotResult:
 ## Seconds of protection after a spawn; -1 keeps each mode's own.
 @export_range(-1.0, 60.0, 0.5) var spawn_protection_sec: float = -1.0
 
+## What ends spawn protection early: 0 nothing (it runs its seconds out), 1 the first shot (default: a player
+## cannot clear a room while invulnerable), 2 the first move or jump, 3 either. Ends all three records at once.
+@export_range(0, 3, 1) var spawn_protection_break: int = 1
+
 ## Friendly fire: -1 keeps each mode's own, 0 off, 1 on.
 @export_range(-1, 1, 1) var friendly_fire: int = -1
 

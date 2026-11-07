@@ -266,8 +266,22 @@ func _read_fire(move: DotFpsCommand) -> void:
 	_fire.slot = _wanted_slot
 	_wanted_slot = 0
 
+const ArenaJumpGate := preload("arena_jump_gate.gd")
+
+var _jump_gate := ArenaJumpGate.new()
+
+## `cl_respawn_jump_gate` (default 1): see [ArenaJumpGate].
+func _gate_jump_after_death(move: DotFpsCommand) -> void:
+	var on := presentation == null or presentation.settings == null \
+		or presentation.settings.get_bool(&"respawn_jump_gate", true)
+	var away := player != null and (not player.is_alive() \
+		or (killcam != null and killcam.is_playing()) \
+		or (killview != null and killview.is_active()))
+	_jump_gate.filter(move, away, on and player != null)
+
 func _physics_step(delta: float) -> void:
 	var move := _sampler.sample(delta) if _sampler != null else DotFpsCommand.new()
+	_gate_jump_after_death(move)
 	if hud != null and presentation != null and presentation.bindings != null:
 		hud.launch_key_text = presentation.bindings.key_for(launch_action())
 

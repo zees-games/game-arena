@@ -85,6 +85,73 @@ func add_spawn(at: Transform3D, tag: StringName = &"") -> ArenaMap:
 	spawn_tags.append(String(tag))
 	return self
 
+## Tags this map's spawns for two sides when it has none of its own, and returns how many it tagged.
+##
+## [b]The fallback for a team mode on a map that does not say which spots are whose[/b] (every imported
+## BSP map: the converter writes no sides, and a mapper's `info_player_teamspawn` is not read). With no
+## `red` or no `blue` spawn, all spawns are cut into two halves by position: the two spawns
+## furthest apart are the sides' anchors (the first is the furthest from the centroid, the second the
+## furthest from the first), each spawn goes to the nearer anchor's side by its difference of distances,
+## and the list is split at the median. An odd count leaves the middle spawn untagged, a shared point
+## either side may use. The red half is the one holding the first anchor; both halves are the same size.
+##
+## A map that tags at least one spawn for each side keeps its own tags untouched (return 0), and so does
+## one with fewer than two spawns. Idempotent. Free-for-all never calls it and stays random.
+func split_spawns_for_teams() -> int:
+	var red := 0
+	var blue := 0
+	for tag in spawn_tags:
+		if tag == "red":
+			red += 1
+		elif tag == "blue":
+			blue += 1
+	if red > 0 and blue > 0:
+		return 0
+	if spawns.size() < 2:
+		return 0
+	var centroid := Vector3.ZERO
+	for at in spawns:
+		centroid += at.origin
+	centroid /= float(spawns.size())
+	var first := 0
+	for i in range(spawns.size()):
+		if spawns[i].origin.distance_squared_to(centroid) > spawns[first].origin.distance_squared_to(centroid) + 0.0001:
+			first = i
+	var second := 0 if first != 0 else 1
+	for i in range(spawns.size()):
+		if spawns[i].origin.distance_squared_to(spawns[first].origin) > spawns[second].origin.distance_squared_to(spawns[first].origin) + 0.0001:
+			second = i
+	var order: Array = []
+	for i in range(spawns.size()):
+		var lean := spawns[i].origin.distance_to(spawns[first].origin) - spawns[i].origin.distance_to(spawns[second].origin)
+		order.append([lean, i])
+	order.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1]))
+	while spawn_tags.size() < spawns.size():
+		spawn_tags.append("")
+	var half := spawns.size() / 2
+	var tagged := 0
+	for n in range(order.size()):
+		var index: int = order[n][1]
+		if n < half:
+			spawn_tags[index] = "red"
+		elif n >= order.size() - half:
+			spawn_tags[index] = "blue"
+		else:
+			continue
+		tagged += 1
+	return tagged
+
+## The spawn indices each team may use, `{1: red, 2: blue}`: its own tag plus the untagged (shared) ones.
+func team_spawn_sets() -> Dictionary:
+	var out := {1: [], 2: []}
+	for i in range(spawns.size()):
+		var tag := String(spawn_tag(i))
+		if tag != "blue":
+			out[1].append(i)
+		if tag != "red":
+			out[2].append(i)
+	return out
+
 ## The tag of spawn [param index], or empty.
 func spawn_tag(index: int) -> StringName:
 	if index < 0 or index >= spawn_tags.size():

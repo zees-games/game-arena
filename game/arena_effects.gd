@@ -341,6 +341,16 @@ func on_spawn(entity: int) -> void:
 		return
 	manager.on_death(entity)  # clears whatever survived the round
 	manager.stand_up(entity, true)
+
+	# The live rule, not the table's: the effect was defined once at setup with the duration then, so a
+	# `spawn_protection_sec` changed since (a config key, a mode, a test) left the effect at the old length,
+	# and 0 (no protection) fell back to two seconds here while the other two records gave none.
+	var ticks := _protection_ticks() if game.match_node != null else 2 * game.tick_rate
+	if game.match_node != null and ticks <= 0:
+		return
+	var def := manager.definition(PROTECTED)
+	if def != null:
+		def.duration_ticks = ticks
 	var res := manager.apply(PROTECTED, entity, entity)
 
 	# A respawn without its protection is a spawn camp the server promised to stop.

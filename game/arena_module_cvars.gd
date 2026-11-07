@@ -210,6 +210,25 @@ func _add_rate_cvar() -> void:
 			log_info("rate cap changed", {"bytes_per_sec": new_value.to_int()}))
 
 
+## `arena_loadout_roll_text`: see [member ArenaGame.loadout_roll_text]. Off by default.
+func _add_loadout_roll_text_cvar() -> void:
+	add_cvar("arena_loadout_roll_text", "1" if game.loadout_roll_text else "0",
+		"Print \"Random loadout: ...\" on screen when a random loadout is rolled at spawn (1), or roll silently (0, default)",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.loadout_roll_text = new_value.to_float() != 0.0)
+
+
+## `arena_team_spawn_split`: see [member ArenaGame.team_spawn_split]. Read when a map loads.
+func _add_team_spawn_split_cvar() -> void:
+	add_cvar("arena_team_spawn_split", "1" if game.team_spawn_split else "0",
+		"A team mode on a map with no team spawns splits its spawns into two halves, one per team (1), or both teams share one pool (0); read when a map loads",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.team_spawn_split = new_value.to_float() != 0.0
+			log_info("team spawn split changed", {"on": game.team_spawn_split}))
+
+
 func _add_spawn_cvars() -> void:
 	var stack: Object = game.get("player_stack")
 

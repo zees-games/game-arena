@@ -144,6 +144,8 @@ func _module_load() -> DotResult:
 	_add_drop_cvars()
 	_add_jail_cvars()
 	_add_spawn_cvars()
+	_add_team_spawn_split_cvar()
+	_add_loadout_roll_text_cvar()
 	_add_unlag_cvar()
 	_add_stats_report_cvar()
 	_add_rank_cvar()

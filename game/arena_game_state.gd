@@ -273,6 +273,10 @@ var streak_rewards: Dictionary = {3: "heal", 5: "haste", 7: "empowered"}
 ## A random-every-spawn loadout was handed to [param player_id]; [param text] names it. Authority side.
 signal loadout_rolled(player_id: int, text: String)
 
+## Whether a spawn roll of a random loadout prints "Random loadout: ..." on screen (`arena_loadout_roll_text`, off).
+## The roll is still made and given; only the text is left out.
+var loadout_roll_text: bool = false
+
 ## Somebody reached a streak with a reward. Server side; the module announces it.
 signal streak_reward(player_id: int, streak: int, reward: String)
 
@@ -411,6 +415,11 @@ var player_stack: ArenaPlayerStack = null
 var _players: Dictionary = {}
 var _round_frozen_ids: Dictionary = {}
 var _freeze_overridden := false
+
+## A team mode on a map that tags no spawn for both sides cuts the map's spawns into two halves by
+## position (`ArenaMap.split_spawns_for_teams`), so each team spawns in its own half. False keeps
+## the old fallback: both teams share one pool. `arena_team_spawn_split`; read when a map loads.
+var team_spawn_split: bool = true
 
 ## Lag compensation: how far back the server will rewind the other players for a shot,
 ## in milliseconds (`arena_max_unlag_ms`; 0 judges every shot against the present).
