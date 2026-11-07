@@ -1,8 +1,60 @@
 extends RefCounted
 ## The arena's movement tunables, held apart from the player so that file stays readable.
 
+## [b]The body is the classic shooter's, in the map's own units.[/b] A player is 72 units tall
+## (crouched 36) and 32 wide, the eye 64 units up; a unit is `avatar_unit_metres` (0.01905, the scale
+## every imported map is drawn at), so a person is 1.37 m beside a 2.13 m door, as in the original.
+## At 1.83 m (what 0.0254 m a unit would make) the same person stood 96 map units tall. The controller
+## puts the eye at the height less half the radius, which is 64 units for a 72 unit, 16 unit radius body.
+## [member DotHumanoidFigure] scales whatever body it is given to the standing height, so every avatar
+## follows. `ArenaGame` writes these from `ArenaConfig` through [method configure_body] (cvars `arena_avatar_*`).
+static var avatar_height_units: float = 72.0
+static var avatar_crouch_units: float = 36.0
+static var avatar_radius_units: float = 16.0
+static var avatar_unit_metres: float = 0.01905
+## The height arena's hit zones, view and fallbacks were drawn for, metres.
+const LEGACY_HEIGHT := 1.8
+
+
+static func configure_body(height_units: float, crouch_units: float, radius_units: float, unit_metres: float) -> void:
+	avatar_height_units = maxf(height_units, 8.0)
+	avatar_radius_units = clampf(radius_units, 2.0, avatar_height_units * 0.5)
+	# A crouch cannot be shorter than the capsule is wide, nor taller than standing.
+	avatar_crouch_units = clampf(crouch_units, avatar_radius_units * 2.0, avatar_height_units)
+	avatar_unit_metres = clampf(unit_metres, 0.005, 0.1)
+
+
+static func stand_height_m() -> float:
+	return avatar_height_units * avatar_unit_metres
+
+
+static func crouch_height_m() -> float:
+	return avatar_crouch_units * avatar_unit_metres
+
+
+static func radius_m() -> float:
+	return avatar_radius_units * avatar_unit_metres
+
+
+## Standing eye height above the feet, metres: what [DotFpsMotor] reports (height less half the radius).
+static func eye_height_m() -> float:
+	return stand_height_m() - radius_m() * 0.5
+
+
+## Hit zones, bounds and fallbacks drawn for 1.8 m, multiplied by this.
+static func body_scale() -> float:
+	return stand_height_m() / LEGACY_HEIGHT
+
+
+static func apply_body(tunables: DotFpsTunables) -> void:
+	tunables.stand_height = stand_height_m()
+	tunables.crouch_height = crouch_height_m()
+	tunables.radius = radius_m()
+
+
 static func make() -> DotFpsTunables:
 	var tunables := DotFpsTunables.with_profile("classic")
+	apply_body(tunables)
 	tunables.walk_speed_scale = 0.45
 	tunables.max_velocity = 400.0
 	tunables.max_wish_speed = 0.0

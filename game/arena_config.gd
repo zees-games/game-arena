@@ -71,6 +71,18 @@ func validate() -> DotResult:
 ## How far under an imported map's bounds a player is counted as out of it, metres.
 @export_range(1.0, 200.0, 1.0) var fall_out_depth: float = 10.0
 
+## Standing height of every avatar and its collision hull, in map units (the classic shooter's player is 72). The visible figure is scaled to it, so all avatars stand the same; the eye is 8 units (half the radius) under the top, 64.
+@export_range(16.0, 400.0, 1.0) var avatar_height_units: float = 72.0
+
+## Crouched height in map units (36 in the classic shooter).
+@export_range(8.0, 400.0, 1.0) var avatar_crouch_units: float = 36.0
+
+## Half the hull's width in map units (16, a 32 wide hull).
+@export_range(2.0, 100.0, 0.5) var avatar_radius_units: float = 16.0
+
+## Metres in a map unit. 0.01905 is the scale imported maps are drawn at, so a 72 unit player is 1.37 m beside a 2.13 m door; 0.0254 makes the player 1.83 m but 96 map units tall.
+@export_range(0.005, 0.1, 0.00005) var avatar_unit_metres: float = 0.01905
+
 @export_group("Stomp")
 ## Landing on a player's head hurts them.
 @export var stomp_enabled: bool = true
