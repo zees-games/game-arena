@@ -10,6 +10,14 @@
 # player_regen: 0.0
 # How far under an imported map's bounds a player is counted as out of it, metres. [1.0..200.0]
 # fall_out_depth: 10.0
+# Standing height of every avatar and its collision hull, in map units (the classic shooter's player is 72). ... [16.0..400.0]
+# avatar_height_units: 72.0
+# Crouched height in map units (36 in the classic shooter). [8.0..400.0]
+# avatar_crouch_units: 36.0
+# Half the hull's width in map units (16, a 32 wide hull). [2.0..100.0]
+# avatar_radius_units: 16.0
+# Metres in a map unit. 0.01905 is the scale imported maps are drawn at, so a 72 unit player is 1.37 m beside... [0.005..0.1]
+# avatar_unit_metres: 0.01905
 
 # --- Stomp
 # Landing on a player's head hurts them.

@@ -68,6 +68,16 @@ const EYE := 1.6
 const CHEST := 1.25
 
 
+## The chest a bot aims at on the avatar body in play: CHEST scaled from the 1.8 m body it was written for.
+static func chest_height() -> float:
+	return CHEST * ArenaPlayer.stand_height() / 1.8
+
+
+## The eye of the avatar body in play.
+static func eye_height() -> float:
+	return ArenaPlayer.eye_height()
+
+
 ## One bot's memory between ticks. Kept by the caller, one per bot.
 class Mind:
 	extends RefCounted
@@ -152,8 +162,8 @@ class World:
 		for p: ArenaPlayer in game.call("players"):
 			var c := DotBotContact.new()
 			c.id = p.player_id
-			c.eye_height = EYE
-			c.aim_height = CHEST
+			c.eye_height = ArenaPlayer.eye_height()
+			c.aim_height = CHEST * ArenaPlayer.stand_height() / 1.8
 			c.alive = p.is_alive()
 			c.team = p.team if teams else 0
 			if p.controller != null:

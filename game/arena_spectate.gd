@@ -117,7 +117,7 @@ func _pose_of(key: String) -> Transform3D:
 	var basis := Basis.from_euler(
 		Vector3(deg_to_rad(state.pitch), deg_to_rad(state.yaw), 0.0)
 	)
-	return Transform3D(basis, state.position + Vector3(0.0, 1.6, 0.0))
+	return Transform3D(basis, state.position + Vector3(0.0, ArenaPlayer.eye_height(), 0.0))
 
 
 func tick(_delta: float) -> void:
