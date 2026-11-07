@@ -16,6 +16,7 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 	var out: Array = []
 	if not body_rules.solid:
 		return out
+	var tp0 := Time.get_ticks_usec()
 	var me: ArenaPlayer = _players.get(id)
 	var me_at := me.controller.state.position if me != null and me.controller != null and me.controller.state != null else Vector3.INF
 	_ensure_roster()
@@ -24,8 +25,18 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 	# Position first: most of a crowd is out of reach, and the pair and alive tests cost more than the read.
 	var coarse := HULL_NEAR_SQ if remote else HULL_REACH_SQ
 	if near and _hull_grid.live:
-		for i: int in _hull_grid.near(me_at, coarse):
+		var tp1 := Time.get_ticks_usec()
+		var cand: Array = _hull_grid.near(me_at, coarse)
+		var tp2 := Time.get_ticks_usec()
+		for i: int in cand:
 			_add_hull(out, i, id, me_at, near, coarse, remote, tick)
+		var gp := ArenaHullGrid.gp
+		gp[0] += 1
+		gp[5] += tp1 - tp0
+		gp[1] += tp2 - tp1
+		gp[2] += Time.get_ticks_usec() - tp2
+		gp[3] += cand.size()
+		gp[4] += out.size()
 		if ArenaHullGrid.verify:
 			var full: Array = []
 			for i in range(_roster.size()):

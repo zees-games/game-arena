@@ -174,11 +174,18 @@ var _qprof := false
 func _query_phases(ticks: int) -> Dictionary:
 	var out := {}
 	var n := float(maxi(1, _bots * ticks))
-	var names := ["hull_sweep", "flat_sweep", "flat_rest", "flat_overlap", "hull_rest", "hull_overlap", "", "hit_allocs"]
+	var names := ["hull_sweep", "flat_sweep", "flat_rest", "flat_overlap", "hull_rest", "hull_overlap", "", "hit_allocs", "gather", "w_sync_inner", "w_hulllist", "w_boxes", "w_nearbuild", "w_nearsweep", "", ""]
 	for i in names.size():
 		if names[i] != "":
 			out[names[i] + "_n"] = snappedf(DotFpsBody.q_n[i] / n, 0.001)
 			out[names[i] + "_us"] = snappedf(DotFpsBody.q_us[i] / n, 0.01)
+	var gp := ArenaHullGrid.gp
+	out["g_calls"] = gp[0]
+	out["g_grid_us_per_call"] = snappedf(gp[1] / float(maxi(1, gp[0])), 0.01)
+	out["g_add_us_per_call"] = snappedf(gp[2] / float(maxi(1, gp[0])), 0.01)
+	out["g_cands_per_call"] = snappedf(gp[3] / float(maxi(1, gp[0])), 0.01)
+	out["g_hulls_per_call"] = snappedf(gp[4] / float(maxi(1, gp[0])), 0.01)
+	out["g_pre_us_per_call"] = snappedf(gp[5] / float(maxi(1, gp[0])), 0.01)
 	return out
 
 

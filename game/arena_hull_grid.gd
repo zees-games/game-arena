@@ -14,6 +14,7 @@ const BIAS := 4096
 static var enabled := true
 
 ## Test hook (scale128 --hullverify): every grid answer is also computed by the full scan and compared.
+static var gp := PackedInt64Array([0, 0, 0, 0, 0, 0])
 static var verify := false
 static var verified := 0
 static var mismatches := 0
