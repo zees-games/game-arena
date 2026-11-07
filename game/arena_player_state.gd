@@ -315,12 +315,27 @@ static var look_down_back_override: float = -1.0
 ## Whether [method present_lod] may thin out the bodies nobody is looking at.
 static var present_lod_enabled: bool = true
 
+## Probe only (`tools/client_cost.gd`): when true a remote body is not presented at all, to measure what presenting them costs.
+static var present_remote_paused: bool = false
+
+## Probe only: parts of a remote body's presentation switched off to find what each costs (bit 1 the figure's animation, 2 the held
+## gun's update, 4 the held gun's own per-frame process, 8 the pose/tag/beacon rest). 0 in the game.
+static var present_ablate: int = 0
+
+## `cl_remote_lod_frustum`: judge "out of sight" by the camera's real frustum instead of the cone below.
+static var lod_frustum: bool = true
+
+## `cl_remote_lod_every`: frames between presents of a body out of sight (1 turns the off-screen thinning off).
+static var lod_off_every: int = 4
+
 ## A remote body nearer than this (metres) is always drawn in full.
 const LOD_NEAR := 6.0
 ## A body further than this cosine off the view axis is out of sight (about 78 degrees).
 const LOD_CONE := 0.2
 ## Frames between presents of a body out of sight.
 const LOD_EVERY := 4
+## Metres round a body's chest that count as it for the frustum test (a body, its gun, the swing of an arm).
+const LOD_RADIUS := 1.6
 
 ## Past these distances (metres) a body is drawn every second / fourth frame even in plain view:
 ## at 45 m a player is a few dozen pixels and 5 fps of animation is not seen.

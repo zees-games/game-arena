@@ -33,11 +33,15 @@ func _present_frame(delta: float) -> void:
 		var forward := Vector3.FORWARD
 		if player != null and player.camera != null:
 			forward = -player.camera.global_transform.basis.z
+		var t_pres := Time.get_ticks_usec()
 		presentation.present(delta, eye, forward)
 		_apply_shake()
+		ArenaFrameProbe.add(&"c_presentation", t_pres)
 		if platform != null and platform.slide_sounds != null and presentation.steps != null:
 			presentation.steps.surf_rules = platform.slide_sounds.get(&"surf_rules")
+		var t_walk := Time.get_ticks_usec()
 		presentation.keep_walkers(game.players())
+		ArenaFrameProbe.add(&"c_walkers", t_walk)
 		var stack_now := game.player_stack
 		if stack_now != null and stack_now.physics != null and stack_now.physics.layout != null:
 			if _roof_layout != stack_now.physics.layout:
@@ -73,15 +77,20 @@ func _present_frame(delta: float) -> void:
 	# The camera the viewer sees through (a spectator's or the death view's too), so that no
 	# body is thinned out in front of it. None: everything is drawn in full.
 	var view_cam := get_viewport().get_camera_3d()
+	var frustum: Array = view_cam.get_frustum() if view_cam != null and ArenaPlayer.present_lod_enabled and ArenaPlayer.lod_frustum else []
 	for body in game.players():
 		if view_cam != null:
-			body.present_lod(delta, view_cam.global_position, -view_cam.global_transform.basis.z)
+			body.present_lod(delta, view_cam.global_position, -view_cam.global_transform.basis.z, frustum)
 		else:
 			body.present(delta)
 	ArenaFrameProbe.add(&"bodies", t)
 
+	var t_flash := Time.get_ticks_usec()
 	_present_flashlights()
+	ArenaFrameProbe.add(&"c_flashlights", t_flash)
+	var t_rest := Time.get_ticks_usec()
 	_present_frame_rest()
+	ArenaFrameProbe.add(&"c_rest", t_rest)
 
 func _process(delta: float) -> void:
 	var t := Time.get_ticks_usec()

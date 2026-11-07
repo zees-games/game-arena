@@ -4,6 +4,10 @@ extends RefCounted
 
 const KillPov := preload("arena_kill_pov.gd")
 const ArenaPlayer := preload("arena_player.gd")
+## `cl_killcam_hz`: most recordings of every body's state a second while no replay plays (0: one every frame). The replay
+## interpolates between rows, so 60 a second draws the same replay as 240; the recording was 0.03 ms a body a frame.
+static var record_hz: float = 60.0
+
 const SKIP_ACTIONS: PackedStringArray = ["dot_fps_jump", "arena_fire", "ui_cancel"]
 const SEQ_RANGE := 4096
 const SEQ_META := &"killcam_seen_seq"

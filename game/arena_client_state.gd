@@ -101,6 +101,8 @@ var solo_killview: DotKillViewServer = null
 var winner_reveal: DotWinnerReveal = null
 var _reveal_hid: Dictionary = {}
 var _seen_match_state: int = -1
+## When the kill-cam last recorded the bodies (microseconds), for the `cl_killcam_hz` cap.
+var _killcam_recorded: int = 0
 ## Applies dot-menu's stock settings this game does not apply itself: the window, V-Sync,
 ## the frame cap and render scale.
 var applier: DotMenuApplier = null
