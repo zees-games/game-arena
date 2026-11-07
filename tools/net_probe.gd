@@ -23,6 +23,8 @@ var _bots := 8
 var _seconds := 20.0
 var _budget := -1
 var _pps := -1
+## --aoi players,radius,far_distance,far_every,far_tiers: the relevance rings (arena_net_aoi.gd); unset is the shipped defaults.
+var _aoi: PackedStringArray = PackedStringArray()
 var _server: DotServer = null
 var _game: ArenaGame = null
 
@@ -35,6 +37,7 @@ func _ready() -> void:
 			"--seconds": _seconds = float(args[i + 1])
 			"--budget": _budget = int(args[i + 1])
 			"--pps": _pps = int(args[i + 1])
+			"--aoi": _aoi = String(args[i + 1]).split(",")
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("net_probe")
 	_run.call_deferred()
@@ -97,6 +100,10 @@ func _run() -> void:
 		net.config.per_client_budget = _budget
 	if _pps >= 0:
 		net.config.per_client_packet_rate = _pps
+	if _aoi.size() == 5 and module.get("net_aoi") != null:
+		var cv: Dictionary = module.net_aoi._cvars
+		for k in ["min_players", "radius", "far_distance", "far_every", "far_tiers"]:
+			(cv[k] as DotConVar).force_set(_aoi[["min_players", "radius", "far_distance", "far_every", "far_tiers"].find(k)])
 	for i in range(_bots):
 		module.bridge.add_bot("Probe%d" % i)
 
@@ -155,6 +162,10 @@ func _run() -> void:
 	print("client sees %d players, match state %d; server match state %d" % [seen, live_state, int(_game.match_node.state)])
 	net.stats.roll()
 	cnet.stats.roll()
+	module.call("_refresh_aoi")
+	var perf0: Dictionary = net.perf_counters()
+	var sum_down := 0.0
+	var n_down := 0
 	var t := 0.0
 	var peak_rtt := 0.0
 	var peak_down := 0.0
@@ -176,6 +187,8 @@ func _run() -> void:
 			var rtt := cnet.stats.rtt_percentile(0.95)
 			peak_rtt = maxf(peak_rtt, rtt)
 			peak_down = maxf(peak_down, float(d.get("bytes_per_sec", 0)))
+			sum_down += float(d.get("bytes_per_sec", 0))
+			n_down += 1
 			print("t=%2d down=%6d B/s %3d pkt/s use=%s starved=%d | client rtt p50=%d p95=%d recv=%d B/s avg_pkt=%d" % [
 				int(t), int(d.get("bytes_per_sec", 0)), int(d.get("packets_per_sec", 0)),
 				str(d.get("utilisation", "?")), int(d.get("starved", 0)),
@@ -184,6 +197,13 @@ func _run() -> void:
 	print("SUMMARY bots=%d peak_down=%d B/s peak_rtt_p95=%d ms starved=%d fps=%.0f worst_frame=%.1f ms lost=%d" % [
 		_bots, int(peak_down), int(peak_rtt), int(net.budget.describe_peer(net.budget.peer_ids()[0]).get("starved", 0)),
 		frames / maxf(t, 0.001), worst_frame, cnet.stats.snapshots_lost])
+	var perf1: Dictionary = net.perf_counters()
+	var nticks := maxi(1, int(perf1[&"server_ticks"]) - int(perf0[&"server_ticks"]))
+	print("AOI active=%s players=%d mean_down=%d B/s send_ms_per_tick=%.3f sim_ms_per_tick=%.3f ticks=%d entities=%d" % [
+		str(module.net_aoi.active), _game.players().size(), int(sum_down / maxf(n_down, 1)),
+		(int(perf1[&"server_send_usec"]) - int(perf0[&"server_send_usec"])) / 1000.0 / nticks,
+		(int(perf1[&"server_sim_usec"]) - int(perf0[&"server_sim_usec"])) / 1000.0 / nticks,
+		nticks, net.registry.all().size()])
 	link.disconnect_from_server("done")
 	await get_tree().create_timer(0.3).timeout
 	DotPaths.remove_tree(DATA)
