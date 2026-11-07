@@ -86,6 +86,11 @@ class Mind:
 	var last_fire: DotWeaponCommand = null
 	## Whether nobody was within [member think_near] metres at the last think.
 	var far: bool = false
+	## The view the last think moved from and to, which the coast ticks walk along.
+	var view_from: Vector2 = Vector2.ZERO
+	var view_to: Vector2 = Vector2.ZERO
+	## Whether the last think left the bot free to coast.
+	var coasting: bool = false
 
 
 ## Ticks between rebuilds of a contact's loadout (see [method World._loadout_of]).
@@ -503,7 +508,7 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 		return [move, fire]
 
 	if think_every > 1 and _coasts(mind, tick):
-		return [mind.last_move.duplicate_command(), mind.last_fire.duplicate_command()]
+		return _coast(mind, tick)
 
 	var world := world_for(game)
 	var t_refresh := Time.get_ticks_usec()
@@ -541,10 +546,43 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	move.sanitise()
 	fire.sanitise()
 	ArenaFrameProbe.add(&"bot_after", t_after)
+	var previous := mind.last_move
+	mind.far = think_every > 1 and _nobody_near(me, world)
+	# Only a think on the bot's own beat starts a coast, so the coast's steps count from it.
+	mind.coasting = mind.far and (tick + mind.seed) % think_every == 0 and _coastable(mind, intent, move, fire)
+	if mind.coasting:
+		# The brain turned for think_every ticks at once; spread over them, so no tick turns faster than bot_turn_rate.
+		mind.view_to = Vector2(move.yaw, move.pitch)
+		var from := Vector2(previous.yaw, previous.pitch) if previous != null else mind.view_to
+		mind.view_from = from
+		move.yaw = from.x + _turn(from.x, mind.view_to.x) / float(think_every)
+		move.pitch = from.y + (mind.view_to.y - from.y) / float(think_every)
 	mind.last_move = move.duplicate_command()
 	mind.last_fire = fire.duplicate_command()
-	mind.far = _nobody_near(me, world)
 	return [move, fire]
+
+
+## Degrees from [param a] to [param b] the short way round.
+static func _turn(a: float, b: float) -> float:
+	return fposmod(b - a + 180.0, 360.0) - 180.0
+
+
+## The commands of a tick the brain sits out: the last ones, with the view carried on towards where the last think turned it.
+static func _coast(mind: Mind, tick: int) -> Array:
+	var step := (tick + mind.seed) % think_every
+	var move := mind.last_move.duplicate_command()
+	var fraction := float(step + 1) / float(think_every)
+	move.yaw = mind.view_from.x + _turn(mind.view_from.x, mind.view_to.x) * fraction
+	move.pitch = mind.view_from.y + (mind.view_to.y - mind.view_from.y) * fraction
+	mind.last_move.yaw = move.yaw
+	mind.last_move.pitch = move.pitch
+	return [move, mind.last_fire.duplicate_command()]
+
+
+## Whether a bot that just thought may sit out the next ticks: nothing in hand but a walk.
+static func _coastable(mind: Mind, intent: DotBotIntent, move: DotFpsCommand, fire: DotWeaponCommand) -> bool:
+	return mind.ride == null and mind.throw_stage == 0 and intent.target_id < 0 and intent.state != &"dead" \
+		and move.buttons == 0 and fire.buttons == 0
 
 
 ## Whether this tick repeats the last commands rather than think. See [member think_every].
@@ -553,10 +591,7 @@ static func _coasts(mind: Mind, tick: int) -> bool:
 		return false
 	if (tick + mind.seed) % think_every == 0:
 		return false
-	var last: DotBotIntent = mind.brain.last
-	if last == null or last.target_id >= 0 or last.state == &"dead":
-		return false
-	return mind.last_move.buttons == 0 and mind.last_fire.buttons == 0
+	return mind.coasting
 
 
 ## Whether no live enemy of [param me] is within [member think_near] metres.
