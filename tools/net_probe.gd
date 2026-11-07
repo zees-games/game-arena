@@ -25,6 +25,13 @@ var _budget := -1
 var _pps := -1
 ## --aoi players,radius,far_distance,far_every,far_tiers: the relevance rings (arena_net_aoi.gd); unset is the shipped defaults.
 var _aoi: PackedStringArray = PackedStringArray()
+
+## --fake N: N extra synthetic peers (no observer entity, unreliable sends dropped, acks 2 snapshots late) on the server, to measure per-peer snapshot cost without N full clients.
+var _fake := 0
+var _workers := 0
+var _native := 1
+var _noshort := false
+var _fake_sent := [0, 0]
 var _server: DotServer = null
 var _game: ArenaGame = null
 
@@ -37,6 +44,10 @@ func _ready() -> void:
 			"--seconds": _seconds = float(args[i + 1])
 			"--budget": _budget = int(args[i + 1])
 			"--pps": _pps = int(args[i + 1])
+			"--workers": _workers = int(args[i + 1])
+			"--native": _native = int(args[i + 1])
+			"--noshort": _noshort = true
+			"--fake": _fake = int(args[i + 1])
 			"--aoi": _aoi = String(args[i + 1]).split(",")
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("net_probe")
@@ -96,6 +107,9 @@ func _run() -> void:
 	var net: DotNetManager = module.net
 	if _game.match_node.state == DotMatch.State.IDLE:
 		_game.start(0)
+	DotNetBehaviour.native_encode_shortcuts = not _noshort
+	net.config.snapshot_workers = _workers
+	net.config.native = _native != 0
 	if _budget >= 0:
 		net.config.per_client_budget = _budget
 	if _pps >= 0:
@@ -163,6 +177,29 @@ func _run() -> void:
 	net.stats.roll()
 	cnet.stats.roll()
 	module.call("_refresh_aoi")
+	if _fake > 0:
+		var schema := net.messages.schema_payload()
+		var orig_send: Callable = net.send_fn
+		var fakes := {}
+		for i in _fake:
+			var fid := 5000 + i
+			net.add_peer(fid)
+			var _r := net.receive(schema, fid)
+			fakes[fid] = true
+		net.send_fn = func(peer_id: int, payload: PackedByteArray, delivery: int) -> void:
+			if fakes.has(peer_id):
+				_fake_sent[0] += 1
+				_fake_sent[1] += payload.size()
+				return
+			orig_send.call(peer_id, payload, delivery)
+		var acks: Array = []
+		net.snapshot_sent.connect(func(tick: int, _n: int) -> void:
+			acks.append(tick)
+			if acks.size() > 2:
+				var acked: int = acks.pop_front()
+				for fid: int in fakes:
+					var _a := net.receive_ack(fid, acked))
+		await get_tree().create_timer(2.0).timeout
 	var perf0: Dictionary = net.perf_counters()
 	var sum_down := 0.0
 	var n_down := 0
@@ -204,6 +241,13 @@ func _run() -> void:
 		(int(perf1[&"server_send_usec"]) - int(perf0[&"server_send_usec"])) / 1000.0 / nticks,
 		(int(perf1[&"server_sim_usec"]) - int(perf0[&"server_sim_usec"])) / 1000.0 / nticks,
 		nticks, net.registry.all().size()])
+	var snaps := maxi(1, int(perf1[&"snap_snapshots"]) - int(perf0[&"snap_snapshots"]))
+	var ph := ""
+	for k in ["prepare", "reads", "interest", "build", "thaw", "begin", "nint", "submit", "join", "apply"]:
+		ph += " %s=%.3f" % [k, (int(perf1[StringName("snap_%s_usec" % k)]) - int(perf0[StringName("snap_%s_usec" % k)])) / 1000.0 / snaps]
+	print("PHASES clients=%d native=%s workers=%d ms/snapshot:%s fake_bytes_per_snapshot=%d" % [
+		1 + _fake, net._native_note, net.config.snapshot_workers, ph,
+		int(_fake_sent[1] / maxf(float(snaps) * maxf(_fake, 1), 1.0))])
 	link.disconnect_from_server("done")
 	await get_tree().create_timer(0.3).timeout
 	DotPaths.remove_tree(DATA)
