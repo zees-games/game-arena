@@ -126,6 +126,10 @@ func tick(commands: Dictionary = {}) -> void:
 
 	_pre_vy.clear()
 	var t_sim := Time.get_ticks_usec()
+	_ensure_roster()
+	var use_grid := ArenaHullGrid.enabled and body_rules.solid and _roster.size() >= ArenaHullGrid.MIN_PLAYERS
+	if use_grid:
+		_hull_grid.begin(_roster, _roster_ids)
 	for id in player_ids():
 		var player: ArenaPlayer = _players[id]
 
@@ -145,6 +149,8 @@ func tick(commands: Dictionary = {}) -> void:
 			var outcome := player.simulate_tick(_tick, delta, move, fire)
 			if surf_rides != null:
 				surf_rides.call(&"after", id, player, move, _tick)
+			if use_grid:
+				_hull_grid.moved(id, player)
 			if demo_stats != null:
 				demo_stats.call(&"after", id, player, move, fire, _tick)
 			shots.append_array(outcome.shots)
@@ -157,6 +163,7 @@ func tick(commands: Dictionary = {}) -> void:
 			if projectiles != null:
 				projectiles.accept(outcome)
 
+	_hull_grid.live = false
 	ArenaFrameProbe.add(&"tick_players", t_sim)
 
 	# The toys after everybody moved: a walk into a ball sends it on. Then every shot that

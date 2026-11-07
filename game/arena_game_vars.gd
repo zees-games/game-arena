@@ -3,6 +3,7 @@ extends "arena_game_state.gd"
 
 const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
+const ArenaHullGrid := preload("arena_hull_grid.gd")
 const HULL_NEAR_SQ := 144.0
 
 ## Beyond this a hull cannot touch one tick's sweep (top speed times a tick, plus both radii, with room to spare).
@@ -58,6 +59,21 @@ var shown_mode: ArenaMode = null
 var _roster: Array[ArenaPlayer] = []
 var _roster_ids := PackedInt64Array()
 var _roster_dirty := true
+## Where the players stand, for [method solid_hulls_for] while the players' loop runs ([ArenaHullGrid]).
+var _hull_grid := ArenaHullGrid.new()
+
+
+## Rebuilds [member _roster] (the players in join order, and their ids) after a join or a leave.
+func _ensure_roster() -> void:
+	if not _roster_dirty:
+		return
+	_roster.clear()
+	_roster_ids.resize(0)
+	for key: Variant in _players.keys():
+		_roster.append(_players[key])
+		_roster_ids.append(int(key))
+	_roster_dirty = false
+	_hull_grid.live = false
 ## The sorted ids of [member _players], rebuilt when somebody joins or leaves ([method player_ids]); empty means stale.
 var _ids_cache: Array[int] = []
 

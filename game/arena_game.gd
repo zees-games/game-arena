@@ -6,47 +6,56 @@ extends "arena_game_part3.gd"
 ## player moved earlier in this tick is met where it moved to (the same on every machine:
 ## players tick in one order).
 func solid_hulls_for(id: int, tick: int = -1) -> Array:
+	var t_h := Time.get_ticks_usec()
+	var got := _solid_hulls_for(id, tick)
+	ArenaFrameProbe.add(&"p_hulls", t_h)
+	return got
+
+
+func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 	var out: Array = []
 	if not body_rules.solid:
 		return out
 	var me: ArenaPlayer = _players.get(id)
 	var me_at := me.controller.state.position if me != null and me.controller != null and me.controller.state != null else Vector3.INF
-	if _roster_dirty:
-		_roster.clear()
-		_roster_ids.resize(0)
-		for key: Variant in _players.keys():
-			_roster.append(_players[key])
-			_roster_ids.append(int(key))
-		_roster_dirty = false
-	var remote := remote_feet_fn.is_valid() and tick >= 0
+	_ensure_roster()
+	var remote: bool = remote_feet_fn.is_valid() and tick >= 0 and (not ArenaHullGrid.enabled or not remote_lags_fn.is_valid() or remote_lags_fn.call(id))
 	var near := me_at != Vector3.INF
 	# Position first: most of a crowd is out of reach, and the pair and alive tests cost more than the read.
 	var coarse := HULL_NEAR_SQ if remote else HULL_REACH_SQ
+	if near and _hull_grid.live:
+		for i: int in _hull_grid.near(me_at, coarse):
+			_add_hull(out, i, id, me_at, near, coarse, remote, tick)
+		return out
 	for i in range(_roster.size()):
-		var other_id := _roster_ids[i]
-		if other_id == id:
-			continue
-		var other := _roster[i]
-		if other == null:
-			continue
-		var ctl := other.controller
-		if ctl == null or ctl.state == null:
-			continue
-		var feet := ctl.state.position
-		if near and feet.distance_squared_to(me_at) > coarse:
-			continue
-		if not body_rules.blocks(id, other_id) or not other.is_alive():
-			continue
-		if remote:
-			var at: Variant = remote_feet_fn.call(other_id, id, tick)
-			if at is Vector3:
-				feet = at
-			if near and feet.distance_squared_to(me_at) > HULL_REACH_SQ:
-				continue
-		var tunables := ctl.tunables
-		out.append(ArenaSolidBody.hull_at(feet, tunables.stand_height, tunables.radius))
+		_add_hull(out, i, id, me_at, near, coarse, remote, tick)
 	return out
 
+
+## Appends roster player [param i]'s hull to [param out] when it is one [param id] stops at.
+func _add_hull(out: Array, i: int, id: int, me_at: Vector3, near: bool, coarse: float, remote: bool, tick: int) -> void:
+	var other_id := _roster_ids[i]
+	if other_id == id:
+		return
+	var other := _roster[i]
+	if other == null:
+		return
+	var ctl := other.controller
+	if ctl == null or ctl.state == null:
+		return
+	var feet := ctl.state.position
+	if near and feet.distance_squared_to(me_at) > coarse:
+		return
+	if not body_rules.blocks(id, other_id) or not other.is_alive():
+		return
+	if remote:
+		var at: Variant = remote_feet_fn.call(other_id, id, tick)
+		if at is Vector3:
+			feet = at
+		if near and feet.distance_squared_to(me_at) > HULL_REACH_SQ:
+			return
+	var tunables := ctl.tunables
+	out.append(ArenaSolidBody.hull_at(feet, tunables.stand_height, tunables.radius))
 ## Adds a player, builds their body, and puts them in the match.
 func add_player(
 	id: int, display_name: String, wanted_team: int = 0

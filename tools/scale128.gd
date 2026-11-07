@@ -5,6 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
+const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 const ArenaBotBrain := preload("../game/arena_bot_brain.gd")
 
 ## The 128-player scale harness (nightly arena-128-scale-1). Measures; asserts nothing; prints
@@ -77,6 +78,8 @@ func _ready() -> void:
 			"--map": _map = args[i + 1]
 			"--mode": _mode = args[i + 1]
 			"--fastsense": ArenaBotBrain.fast_sense = args[i + 1] != "0"
+			"--hullgrid": ArenaHullGrid.enabled = args[i + 1] != "0"
+			"--motorprof": _motorprof = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
 	for is_start in [true, false]:
@@ -143,10 +146,32 @@ func _report(extra: Dictionary) -> void:
 		"verdict_holds": float(script.get("mean", 99999.0)) < 0.7 * budget_ms and float(script.get("p95", 99999.0)) < budget_ms and _count / wall / _tick > 0.97,
 	}
 	out.merge(extra)
+	out["motor_us_per_bot_tick"] = _motor_phases(_count)
 	print("SCALE128 ", JSON.stringify(out))
 
 
+var _motorprof := false
+
+
+func _motor_phases(ticks: int) -> Dictionary:
+	var out := {}
+	if not _motorprof:
+		return out
+	var n := maxi(1, _bots * ticks)
+	for i in DotFpsMotor.PHASES.size():
+		if DotFpsMotor.PHASES[i] != "":
+			out["m_" + DotFpsMotor.PHASES[i]] = snappedf(DotFpsMotor.phase_us[i] / float(n), 0.01)
+	var cn := ["pre", "consume", "motor", "publish", "report", "signals+stats", "post", "other"]
+	for i in cn.size():
+		out["c_" + cn[i]] = snappedf(DotFpsController.phase_us[i] / float(n), 0.01)
+	return out
+
+
 func _begin_record() -> void:
+	if _motorprof:
+		DotFpsMotor.profile = true
+		DotFpsMotor.phase_us.fill(0)
+		DotFpsController.phase_us.fill(0)
 	ArenaFrameProbe.set_interval(1.0e9)
 	ArenaFrameProbe._sections.clear()
 	_script_us.clear()

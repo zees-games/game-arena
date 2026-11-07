@@ -560,6 +560,9 @@ var body_rules: DotPlayerBodyRules = DotPlayerBodyRules.new()
 ## ends (`ArenaNetBridge.remote_feet`). Null, or unset, is where the other stands now.
 var remote_feet_fn: Callable = Callable()
 
+## `(mover_id) -> bool`: whether [member remote_feet_fn] could answer other than now for that mover (`ArenaNetBridge.remote_lags`). Unset: assume it could.
+var remote_lags_fn: Callable = Callable()
+
 ## Which pairs of players stop at each other (dot-team's `DotTeamBlockRules`: `mp_teamblock`,
 ## `mp_enemyblock`, `!block` / `!noblock`); null until [method make_noblock] or a client's
 ## `add_noblock` sets it. Feeds [member body_rules] `pair_fn`; the same answer on every machine,

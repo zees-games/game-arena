@@ -179,6 +179,7 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 	net.messages.on(ArenaRequest.NAME, _on_request)
 
 	game.remote_feet_fn = remote_feet
+	game.remote_lags_fn = remote_lags
 	# Server toys leave the registry before their nodes go; a client's mirrors stay registered.
 	if net.is_server:
 		game.toys_clearing.connect(_release_toys)
@@ -365,6 +366,13 @@ func _build_identity(player: ArenaPlayer, peer_id: int) -> DotNetIdentity:
 
 	_behaviours[player.player_id] = behaviour
 	return identity
+
+
+## Whether [method remote_feet] can answer anything but now for [param mover_id]'s movement: it has sent a view lag and compensation is on (or the trace is, which prints each answer).
+## A bot, or a person with no lag, is moved against the others where they stand.
+func remote_lags(mover_id: int) -> bool:
+	var mover: ArenaPlayerNet = _behaviours.get(mover_id)
+	return mover != null and game != null and (solid_trace or game.collision_lag(mover.last_view_lag) >= 0.0)
 
 
 ## Where [param other_id] stands for [param mover_id]'s movement on [param tick]: where the
