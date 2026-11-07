@@ -102,7 +102,7 @@ const LOADOUT_EVERY := 4
 ## the ticks, and repeats its last commands in between. 1 turns it off. Far from a fight a
 ## bot's brain only picks a waypoint and walks it; the sight, aim and fight code that costs
 ## most is for the nearby enemy, which gets every tick.
-static var think_every: int = 2
+static var think_every: int = 1
 static var think_near: float = 30.0
 
 ## Further than this in one tick is a teleport, metres (a fall at the 3500 u/s limit is under 1).
