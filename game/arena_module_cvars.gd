@@ -4,6 +4,7 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaNetAoi := preload("arena_net_aoi.gd")
 const ArenaBots := preload("arena_bots.gd")
+const ArenaBotBrain := preload("arena_bot_brain.gd")
 
 ## Base of [ArenaModule]: the operator-facing cvars that map onto a rule table, so the module itself
 ## holds the lifecycle. Split out for the size gate; the state they read lives here too.
@@ -206,6 +207,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaBots.think_near = maxf(0.0, new_value.to_float()))
+	add_cvar("bot_fast_sense", "1" if ArenaBotBrain.fast_sense else "0",
+		"1: bots scan candidates by squared distance and cone cosine (same result, cheaper); 0: dot-bot's stock scan",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBotBrain.fast_sense = new_value.to_float() >= 0.5)
 
 
 ## `sv_grenade_*` (arena_weapons' [AwGrenadeRules]) and `sv_grenade_utility`: 0 keeps flash, smoke and incendiary out of

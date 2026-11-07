@@ -5,6 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
+const ArenaBotBrain := preload("../game/arena_bot_brain.gd")
 
 ## The 128-player scale harness (nightly arena-128-scale-1). Measures; asserts nothing; prints
 ## one `SCALE128 {json}` line. Driven by tools/scale128.sh, which runs it through `heavy`.
@@ -75,6 +76,7 @@ func _ready() -> void:
 			"--port": _port = int(args[i + 1])
 			"--map": _map = args[i + 1]
 			"--mode": _mode = args[i + 1]
+			"--fastsense": ArenaBotBrain.fast_sense = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
 	for is_start in [true, false]:
