@@ -93,7 +93,8 @@ static func update_panel(client, pressed: bool, delta: float) -> void:
 	view.name_of = func(id: StringName) -> String:
 		var def: Variant = player.arsenal.catalogue.get_def(id)
 		return def.name_or_id() if def != null else String(id)
-	view.show_prompt(info, fill)
+	# One ring: the crosshair's. The panel's own world circle stays off (fill 0), or two rings fill at once.
+	view.show_prompt(info, 0.0)
 	if client.hud != null and client.hud.crosshair != null:
 		client.hud.crosshair.hold_progress = fill
 
