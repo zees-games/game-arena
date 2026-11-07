@@ -355,6 +355,9 @@ func fit_hitboxes_to_stance() -> void:
 		return
 	var t := controller.tunables
 	var k := lerpf(1.0, t.crouch_height / maxf(t.stand_height, 0.01), clampf(controller.state.crouch_fraction, 0.0, 1.0))
+	if ArenaHullGrid.enabled and k == _fit_k:
+		return
+	_fit_k = k
 	for box in hitboxes.hitboxes():
 		if not box.has_meta(&"stand_y"):
 			box.set_meta(&"stand_y", box.position.y)

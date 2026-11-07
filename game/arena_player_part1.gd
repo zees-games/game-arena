@@ -227,6 +227,7 @@ func _build_hitboxes() -> void:
 	plan.free()
 	add_child(hitboxes)
 	hitboxes.refresh()
+	_fit_k = -1.0
 
 ## Builds the whole player. Call before adding to the tree.
 func setup(p_mode: Mode, map: ArenaMap, id: int, name_text: String = "") -> void:

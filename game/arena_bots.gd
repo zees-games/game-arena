@@ -46,6 +46,7 @@ const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaPaths := preload("arena_paths.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaBotBrain := preload("arena_bot_brain.gd")
+const ArenaHullGrid := preload("arena_hull_grid.gd")
 
 ## The behaviour of a weapon whose shot flies (a rocket, a bolt); every other one is led as
 ## hitscan. A path, because the pack names behaviours by path (see [DotWeaponDef]).
@@ -166,6 +167,11 @@ class World:
 	var join_edges := true
 	## The body tunables of this tick, looked up once for all contacts (the lookup walks every player).
 	var _tunables: DotFpsTunables = null
+	## The live contacts filed by cell of [member ArenaBots.think_near] metres (key -> contacts), for [method ArenaBots._nobody_near]; empty cell size: not built.
+	var near_cells: Dictionary = {}
+	var near_cell: float = 0.0
+	## [member ArenaBots.think_near], set by the thinking bot before [method refresh].
+	var near_reach: float = 0.0
 
 	func _init(p_game: Object) -> void:
 		game = p_game
@@ -210,6 +216,21 @@ class World:
 			_contacts.append(c)
 			_by_id[c.id] = c
 			_players[c.id] = p
+		near_cells.clear()
+		near_cell = 0.0
+		if ArenaHullGrid.enabled and near_reach > 0.0 and _contacts.size() > 16:
+			near_cell = near_reach
+			for c: DotBotContact in _contacts:
+				if c.alive:
+					var k := near_key(c.position.x, c.position.z, near_cell)
+					var cell: Variant = near_cells.get(k)
+					if cell == null:
+						near_cells[k] = [c]
+					else:
+						(cell as Array).append(c)
+
+	static func near_key(x: float, z: float, cell: float) -> int:
+		return (int(floorf(x / cell)) + 4096) * 8192 + int(floorf(z / cell)) + 4096
 
 	## What the player carries, rated, rebuilt one tick in [constant LOADOUT_EVERY] (offset by id)
 	## and repeated between: it is 33 slot reads and ratings per player per tick for what only a
@@ -555,6 +576,7 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 
 	var world := world_for(game)
 	var t_refresh := Time.get_ticks_usec()
+	world.near_reach = think_near
 	world.refresh(tick, tick_rate)
 	ArenaFrameProbe.add(&"bot_refresh", t_refresh)
 
@@ -649,6 +671,18 @@ static func _coasts(mind: Mind, tick: int) -> bool:
 ## Whether no live enemy of [param me] is within [member think_near] metres.
 static func _nobody_near(me: DotBotContact, world: World) -> bool:
 	var near_sq := think_near * think_near
+	if world.near_cell > 0.0 and world.near_cell == think_near:
+		var cx := int(floorf(me.position.x / think_near)) + 4096
+		var cz := int(floorf(me.position.z / think_near)) + 4096
+		for dx in range(-1, 2):
+			for dz in range(-1, 2):
+				var cell: Variant = world.near_cells.get((cx + dx) * 8192 + cz + dz)
+				if cell == null:
+					continue
+				for item: DotBotContact in cell:
+					if item.id != me.id and me.is_enemy(item) and item.position.distance_squared_to(me.position) < near_sq:
+						return false
+		return true
 	for item: DotBotContact in world.contacts():
 		if item.alive and item.id != me.id and me.is_enemy(item) and item.position.distance_squared_to(me.position) < near_sq:
 			return false

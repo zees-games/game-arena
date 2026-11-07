@@ -3,6 +3,7 @@ extends Node3D
 
 const Roles := preload("arena_weapon_roles.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
+const ArenaHullGrid := preload("arena_hull_grid.gd")
 const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaPlayerTunables := preload("arena_player_tunables.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
@@ -242,6 +243,8 @@ var swim := DotFpsSwimMode.new()
 var ladder := ArenaLadderMode.new()
 
 var _map: ArenaMap = null
+## The crouch scale the hitboxes were last fitted to (-1: refit); the fit is a pure function of it.
+var _fit_k := -1.0
 var _combat: DotCombatManager = null
 var _hand: Node3D = null
 var _seen_fire_seq: int = 0
