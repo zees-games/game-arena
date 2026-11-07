@@ -139,6 +139,8 @@ enum Ask {
 	## corrected on the next snapshot, every snapshot. The body carries what the
 	## player did and where they were aiming; the server decides whether it happened.
 	PROP_TOOL,
+	## My field of view setting (horizontal degrees at 4:3, one byte), so the kill view I am the killer in draws through the same lens.
+	FOV,
 }
 
 ## What a [constant Ask.PROP_TOOL] asks for.
@@ -264,6 +266,18 @@ static func write_prop_act(act: int, yaw: float, pitch: float) -> PackedByteArra
 	writer.write_angle(yaw, 12)
 	writer.write_angle(pitch, 12)
 	return writer.to_bytes()
+
+
+static func write_fov(degrees: float) -> PackedByteArray:
+	var writer := _w()
+	writer.write_uint(int(clampf(roundf(degrees), 0.0, 255.0)), 8)
+	return writer.to_bytes()
+
+
+## The degrees a [constant Ask.FOV] body names, or 0 when it is short.
+static func read_fov(reader: DotNetReader) -> float:
+	var degrees := reader.read_uint(8)
+	return float(degrees) if reader.ok() else 0.0
 
 
 static func read_prop_act(reader: DotNetReader) -> Dictionary:

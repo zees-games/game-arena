@@ -1,5 +1,6 @@
 extends "arena_net_weapon_drops.gd"
 
+const KillPov := preload("arena_kill_pov.gd")
 const ArenaLinkRtt := preload("arena_link_rtt.gd")
 const ArenaEvent := preload("arena_event.gd")
 const ArenaNetCommand := preload("arena_net_command.gd")
@@ -1747,6 +1748,10 @@ func _on_request(message: DotNetMessage) -> void:
 			# exception is a victim watching their kill view, who may skip it.
 			if killview != null:
 				killview.skip(session_for_peer(peer_id), game.current_tick())
+		ArenaEvents.Ask.FOV:
+			var who: Object = game.player_for(session_for_peer(peer_id)) if game != null else null
+			if who != null:
+				KillPov.note_field_of_view(who, ArenaEvents.read_fov(request.reader()))
 		ArenaEvents.Ask.PROP_TOOL:
 			_on_prop_act(peer_id, ArenaEvents.read_prop_act(request.reader()))
 		_:
