@@ -373,6 +373,13 @@ func _test_client_death_camera() -> void:
 	var victim := 11
 	var killer := 12
 
+	# The map change before this restarted the match: its warmup is seconds, so at a low tick rate it ends (and
+	# respawns everybody) in the middle of the chain. Let the round go live first, at every rate.
+	var waited_live := 0
+	while not _server_game.match_node.is_live() and waited_live < 4000:
+		_pump(10)
+		waited_live += 10
+
 	# Nobody respawns inside the chain, so every check below measures the chain.
 	_server_game.match_node.rules.respawn_delay_sec = 60.0
 
@@ -978,6 +985,7 @@ func _test_wall_moves_predicted() -> void:
 
 	for route: Dictionary in _server_game.map.wall_routes:
 		var driver := WallRouteDriver.new(route, &"walls")
+		driver.tick_rate = TICK_RATE
 		server_player.controller.teleport(driver.start, driver.yaw, 0.0)
 		var _settle := _flight_window(peer, 40, 0)
 

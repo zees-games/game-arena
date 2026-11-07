@@ -1817,6 +1817,8 @@ func _adopt_tick_rate(rate: int, snapshot_rate: int = 0) -> void:
 	net.config.snapshot_rate = snapshot_rate if snapshot_rate > 0 and snapshot_rate <= rate else ArenaGame.snapshot_rate_for(rate)
 	# A copy taken at setup() that writing the config does not touch.
 	net.clock.tick_rate = rate
+	if game.spectate != null:
+		game.spectate.retime()
 	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap
 	# to a quarter second of ticks (8 steps are 62.5 ms at 128 Hz, so a client under 16 fps ran
 	# fewer ticks than the server). A shell built before it gets the same rule here, as

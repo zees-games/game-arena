@@ -155,6 +155,11 @@ func _ticks(at_64: int) -> int:
 	return at_64 * TICK_RATE / 64
 
 
+## A tick count written for 66 Hz (a duration in seconds), scaled to this run's rate; identical at 66.
+func _t66(at_66: int) -> int:
+	return roundi(float(at_66) * float(TICK_RATE) / 66.0)
+
+
 func _section(title: String) -> void:
 	_entered += 1
 	print("")
