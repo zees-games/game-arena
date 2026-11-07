@@ -196,6 +196,7 @@ func _build_hitboxes() -> void:
 	plan.name = "HitboxPlan"
 	# The zones were drawn for a 1.8 m body; they follow the configured height.
 	var k := ArenaPlayerTunables.body_scale()
+	plan.height = ArenaPlayerTunables.stand_height_m()
 	plan.set_factory = func() -> Node3D:
 		var set_ := DotHitboxSet.new()
 		set_.bounds_offset = Vector3(0.0, 0.9 * k, 0.0)
