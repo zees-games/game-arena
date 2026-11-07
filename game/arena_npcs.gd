@@ -189,6 +189,14 @@ static func _stalker() -> DotNpcDef:
 ## no ramp to mark, so the grid the builder lays down over the floor with the solids
 ## punched out of it is exactly the walkable set.
 ##
+## [b]Built on the calling thread, on purpose.[/b] The built-in maps take 2 to 9 ms
+## (dm_pit 113 points, dm_box 436, dm_atrium 680; measured 2026-11-06), under a frame, so the
+## resumable build ([method DotNpcNavBuilder.begin] / [method DotNpcNavBuilder.step], worker
+## tasks) that zombie-zone uses for a minute-long graph (`zz_nav_threads`, `zz_nav_budget_ms`)
+## would only add a window in which the horde has no ground. Imported maps route through
+## dot-bot's own background bake (`ArenaBots.World._nav_for_map`). Revisit if a map's extent
+## grows past about 100 m.
+##
 ## [b]The digest is not decoration.[/b] [method DotNpcNavData.matches] is how a runtime
 ## tells "this graph was built for this map" from "this graph was built for a map with
 ## the same name", and the second one is a graph whose NPCs walk through the walls
