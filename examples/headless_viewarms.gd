@@ -27,7 +27,7 @@ func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
 	# One settings directory per process: user:// is shared by every run on this machine, and a second run wiping or
 	# rewriting a shared directory re-binds the keys mid-run (a held reload key then drops).
-	_scratch_dir = ArenaPresentation.use_scratch_settings("headless_viewarms_%d" % OS.get_process_id())
+	_scratch_dir = ArenaPresentation.use_scratch_settings("headless_viewarms")
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("force_offline", true)
 	_client.set("mouse_capture_override", true)
