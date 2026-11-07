@@ -91,6 +91,8 @@ class Mind:
 	var view_to: Vector2 = Vector2.ZERO
 	## Whether the last think left the bot free to coast.
 	var coasting: bool = false
+	## The tick of the last think, so a think that follows a coast knows its brain turned for several ticks at once.
+	var last_think_tick: int = -1
 
 
 ## Ticks between rebuilds of a contact's loadout (see [method World._loadout_of]).
@@ -102,7 +104,11 @@ const LOADOUT_EVERY := 4
 ## the ticks, and repeats its last commands in between. 1 turns it off. Far from a fight a
 ## bot's brain only picks a waypoint and walks it; the sight, aim and fight code that costs
 ## most is for the nearby enemy, which gets every tick.
-static var think_every: int = 1
+static var think_every: int = 0
+## Players above which `think_every` 0 (auto) staggers by two: up to a 16-player match every bot thinks every tick.
+const AUTO_STAGGER_ABOVE := 16
+## The stagger in force this tick (1 = none): `think_every`, or what auto picks for the player count.
+static var _every: int = 1
 static var think_near: float = 30.0
 
 ## Further than this in one tick is a teleport, metres (a fall at the 3500 u/s limit is under 1).
@@ -507,7 +513,8 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	if game == null or bot == null:
 		return [move, fire]
 
-	if think_every > 1 and _coasts(mind, tick):
+	_every = think_every if think_every > 0 else (2 if game.player_ids().size() > AUTO_STAGGER_ABOVE else 1)
+	if _every > 1 and _coasts(mind, tick):
 		return _coast(mind, tick)
 
 	var world := world_for(game)
@@ -546,17 +553,26 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	move.sanitise()
 	fire.sanitise()
 	ArenaFrameProbe.add(&"bot_after", t_after)
-	mind.far = think_every > 1 and _nobody_near(me, world)
+	mind.far = _every > 1 and _nobody_near(me, world)
 	# Only a think on the bot's own beat starts a coast, so the coast's steps count from it.
-	mind.coasting = mind.far and (tick + mind.seed) % think_every == 0 and _coastable(mind, intent, move, fire)
+	mind.coasting = mind.far and (tick + mind.seed) % _every == 0 and _coastable(mind, intent, move, fire)
 	if mind.coasting:
-		# The brain turned for think_every ticks at once; spread over them, so no tick turns faster than bot_turn_rate.
+		# The brain turned for _every ticks at once; spread over them, so no tick turns faster than bot_turn_rate.
 		mind.view_to = Vector2(move.yaw, move.pitch)
 		# From the view the body has, which a respawn or a teleport may have turned since the last command.
 		var from := Vector2(me.view_yaw, me.view_pitch)
 		mind.view_from = from
-		move.yaw = from.x + _turn(from.x, mind.view_to.x) / float(think_every)
-		move.pitch = from.y + (mind.view_to.y - from.y) / float(think_every)
+		move.yaw = from.x + _turn(from.x, mind.view_to.x) / float(_every)
+		move.pitch = from.y + (mind.view_to.y - from.y) / float(_every)
+	elif _every > 1 and mind.throw_stage == 0 and mind.last_think_tick >= 0 and tick - mind.last_think_tick > 1:
+		# A think after coasted ticks: the brain's turn limit is bot_turn_rate times the time since its last
+		# think, so it turned for the whole gap at once (twice bot_turn_rate in one tick, the headless_bots
+		# turn-rate failure). Held to one tick's turn from the body's view; the aim closes over the next ticks.
+		var rate := mind.brain.settings.profile.turn_rate / tick_rate
+		var body := Vector2(me.view_yaw, me.view_pitch)
+		move.yaw = body.x + clampf(_turn(body.x, move.yaw), -rate, rate)
+		move.pitch = body.y + clampf(move.pitch - body.y, -rate, rate)
+	mind.last_think_tick = tick
 	mind.last_move = move.duplicate_command()
 	mind.last_fire = fire.duplicate_command()
 	return [move, fire]
@@ -569,9 +585,9 @@ static func _turn(a: float, b: float) -> float:
 
 ## The commands of a tick the brain sits out: the last ones, with the view carried on towards where the last think turned it.
 static func _coast(mind: Mind, tick: int) -> Array:
-	var step := (tick + mind.seed) % think_every
+	var step := (tick + mind.seed) % _every
 	var move := mind.last_move.duplicate_command()
-	var fraction := float(step + 1) / float(think_every)
+	var fraction := float(step + 1) / float(_every)
 	move.yaw = mind.view_from.x + _turn(mind.view_from.x, mind.view_to.x) * fraction
 	move.pitch = mind.view_from.y + (mind.view_to.y - mind.view_from.y) * fraction
 	mind.last_move.yaw = move.yaw
@@ -589,7 +605,7 @@ static func _coastable(mind: Mind, intent: DotBotIntent, move: DotFpsCommand, fi
 static func _coasts(mind: Mind, tick: int) -> bool:
 	if not mind.far or mind.last_move == null or mind.brain == null or mind.ride != null or mind.throw_stage != 0:
 		return false
-	if (tick + mind.seed) % think_every == 0:
+	if (tick + mind.seed) % _every == 0:
 		return false
 	return mind.coasting
 

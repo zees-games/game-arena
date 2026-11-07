@@ -330,6 +330,9 @@ var _lod_frames: int = 0
 var _lod_delta: float = 0.0
 
 var _figure_fire_seq: int = 0
+## The weapon the figure's hold was last set for, and that hold (-1 until set).
+var _figure_hold_id: StringName = &""
+var _figure_hold_kind: int = -1
 
 ## How a stair tread's rise reaches the eye: the time constant of an exponential, seconds.
 ## The step is the simulation's at once; only the view eases.

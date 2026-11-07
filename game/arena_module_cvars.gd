@@ -182,10 +182,10 @@ func _add_fire_buffer_cvar() -> void:
 ## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]).
 func _add_bot_think_cvars() -> void:
 	add_cvar("bot_think_every", str(ArenaBots.think_every),
-		"A bot far from every enemy runs its brain one tick in this many (1 = every tick)",
-		DotConVar.FLAG_ARCHIVE).with_min(1.0).changed.connect(
+		"A bot far from every enemy runs its brain one tick in this many (1 = every tick, 0 = 2 above 16 players)",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
-			ArenaBots.think_every = maxi(1, int(new_value.to_float())))
+			ArenaBots.think_every = maxi(0, int(new_value.to_float())))
 	add_cvar("bot_think_near", str(ArenaBots.think_near),
 		"Metres: a bot with an enemy closer than this thinks every tick",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(

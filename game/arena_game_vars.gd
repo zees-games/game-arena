@@ -58,6 +58,8 @@ var shown_mode: ArenaMode = null
 var _roster: Array[ArenaPlayer] = []
 var _roster_ids := PackedInt64Array()
 var _roster_dirty := true
+## The sorted ids of [member _players], rebuilt when somebody joins or leaves ([method player_ids]); empty means stale.
+var _ids_cache: Array[int] = []
 
 # --- Toys --------------------------------------------------------------------
 

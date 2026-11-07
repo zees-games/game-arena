@@ -445,12 +445,18 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 	motion["aim"] = deg_to_rad(drawn.pitch)
 	figure.set_motion(motion)
 
-	var id := mirror_weapon if mirrored else (arsenal.current_def().id if arsenal != null and arsenal.current_def() != null else &"")
-	var def := weapon_catalogue().get_def(id) if id != &"" else null
-	var kind := DotHumanoidFigure.Hold.NONE
-	if def != null:
-		kind = DotHumanoidFigure.Hold.MELEE if def.slot == AwWeaponIds.SLOT_MELEE else (
-			DotHumanoidFigure.Hold.NONE if def.slot == AwWeaponIds.thrown_slot() else DotHumanoidFigure.Hold.GUN)
+	var held_def: DotWeaponDef = arsenal.current_def() if arsenal != null else null
+	var id := mirror_weapon if mirrored else (held_def.id if held_def != null else &"")
+	# The hold follows the weapon: looked up (catalogue, slot tests) and set only when the weapon changes.
+	if id != _figure_hold_id or _figure_hold_kind < 0:
+		var def := weapon_catalogue().get_def(id) if id != &"" else null
+		var picked := DotHumanoidFigure.Hold.NONE
+		if def != null:
+			picked = DotHumanoidFigure.Hold.MELEE if def.slot == AwWeaponIds.SLOT_MELEE else (
+				DotHumanoidFigure.Hold.NONE if def.slot == AwWeaponIds.thrown_slot() else DotHumanoidFigure.Hold.GUN)
+		_figure_hold_id = id
+		_figure_hold_kind = picked
+	var kind: int = _figure_hold_kind
 	figure.set_hold(kind)
 
 	var seq := mirror_fire_seq if mirrored else (weapons.fire_seq % AwWeaponNet.FIRE_SEQ_WRAP if weapons != null else 0)
