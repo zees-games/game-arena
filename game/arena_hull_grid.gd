@@ -13,6 +13,11 @@ const BIAS := 4096
 ## Cvar `arena_hull_grid`: 0 scans the whole roster.
 static var enabled := true
 
+## Test hook (scale128 --hullverify): every grid answer is also computed by the full scan and compared.
+static var verify := false
+static var verified := 0
+static var mismatches := 0
+
 ## Below this many players a scan is cheaper than the lookups.
 const MIN_PLAYERS := 12
 

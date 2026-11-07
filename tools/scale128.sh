@@ -15,12 +15,12 @@ MODE=${1:-server}; NS=${2:-"16 32 64 128"}; HZ=${3:-"66"}; SECS=${4:-30}
 OUT=${OUT:-scale128-$(date +%Y%m%d).jsonl}
 WT=$PWD
 # timing runs stay on dev02 (hv local = heavy local lane, never offloaded)
-run() { env GPU_OFFLOAD=0 heavy -- timeout 1500 godot --headless --path . "$@" 2>&1; }
+run() { env GPU_OFFLOAD=0 /home/gamedev/bin/hv "$WT" local timeout 1500 godot --headless --path . "$@" 2>&1; }
 case $MODE in
   server|offline)
     for hz in $HZ; do for n in $NS; do
       echo "== $MODE n=$n hz=$hz" >&2
-      run res://tools/scale128.tscn -- --role "$MODE" --bots "$n" --tick "$hz" --seconds "$SECS" ${FAST:+--fastsense $FAST} ${MPROF:+--motorprof 1} ${HGRID:+--hullgrid $HGRID} | grep '^SCALE128 ' | sed 's/^SCALE128 //' | tee -a "$OUT"
+      run res://tools/scale128.tscn -- --role "$MODE" --bots "$n" --tick "$hz" --seconds "$SECS" ${FAST:+--fastsense $FAST} ${MPROF:+--motorprof 1} ${HGRID:+--hullgrid $HGRID} ${HVERIFY:+--hullverify 1} | grep '^SCALE128 ' | sed 's/^SCALE128 //' | tee -a "$OUT"
     done; done;;
   net)
     for n in $NS; do echo "== net n=$n" >&2; run res://tools/net_probe.tscn -- --bots "$n" --seconds 20 | tail -4 | sed "s/^/n=$n /" | tee -a "$OUT.net"; done;;

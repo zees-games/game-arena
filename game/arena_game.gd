@@ -26,6 +26,13 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 	if near and _hull_grid.live:
 		for i: int in _hull_grid.near(me_at, coarse):
 			_add_hull(out, i, id, me_at, near, coarse, remote, tick)
+		if ArenaHullGrid.verify:
+			var full: Array = []
+			for i in range(_roster.size()):
+				_add_hull(full, i, id, me_at, near, coarse, remote, tick)
+			ArenaHullGrid.verified += 1
+			if str(full) != str(out):
+				ArenaHullGrid.mismatches += 1
 		return out
 	for i in range(_roster.size()):
 		_add_hull(out, i, id, me_at, near, coarse, remote, tick)

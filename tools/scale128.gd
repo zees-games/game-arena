@@ -79,6 +79,7 @@ func _ready() -> void:
 			"--mode": _mode = args[i + 1]
 			"--fastsense": ArenaBotBrain.fast_sense = args[i + 1] != "0"
 			"--hullgrid": ArenaHullGrid.enabled = args[i + 1] != "0"
+			"--hullverify": ArenaHullGrid.verify = args[i + 1] != "0"
 			"--motorprof": _motorprof = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
@@ -146,6 +147,9 @@ func _report(extra: Dictionary) -> void:
 		"verdict_holds": float(script.get("mean", 99999.0)) < 0.7 * budget_ms and float(script.get("p95", 99999.0)) < budget_ms and _count / wall / _tick > 0.97,
 	}
 	out.merge(extra)
+	if ArenaHullGrid.verify:
+		out["hull_verified"] = ArenaHullGrid.verified
+		out["hull_mismatches"] = ArenaHullGrid.mismatches
 	out["motor_us_per_bot_tick"] = _motor_phases(_count)
 	print("SCALE128 ", JSON.stringify(out))
 
