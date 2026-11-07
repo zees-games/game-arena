@@ -1155,7 +1155,7 @@ func _test_weapons_over_the_wire() -> void:
 	shoot.fire.slot = 0
 
 	var t := int(_clients[2]["net"].clock.tick)
-	for i in range(TICK_RATE / 2):
+	for i in range(TICK_RATE):
 		t += 1
 		own._net_apply_input(idle, t)
 		own._net_simulate(t, 1.0 / float(TICK_RATE))
