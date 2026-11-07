@@ -209,6 +209,9 @@ var browser: ArenaBrowser = null
 ## keyboard rather than to the match.
 var presentation: ArenaPresentation = null
 
+## Weapon model files still to read into AwModelCache under the gate (_prewarm_models); next < 0 until started.
+var _model_paths: Array = []
+var _model_paths_next := -1
 ## State of the load-gate warm-up, see [method _prewarm_tick]; empty when idle.
 var _warm := {}
 

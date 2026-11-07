@@ -431,6 +431,31 @@ func _prewarm_weapons(body: ArenaPlayer) -> void:
 	# engine error, while a connection to a method dies with the object.
 	get_tree().process_frame.connect(_prewarm_tick)
 
+## Reads every weapon's model file once, a few ms a frame under the loading cover (also headless: it is
+## only file reads), so the first equip of each - a bot picking one up, a pickup, a drop - does not pay
+## 90-110 ms for the load in the middle of a fight. Hitch capture: AwModelCache.warm was never called.
+func _prewarm_models() -> void:
+	if _model_paths_next >= 0 or gate == null or gate.is_open():
+		return
+	_model_paths = []
+	for art: Variant in AwWeaponArtTable.table().values():
+		if art is AwWeaponVisual and (art as AwWeaponVisual).has_model():
+			_model_paths.append((art as AwWeaponVisual).model_path)
+	_model_paths_next = 0
+	gate.hold(&"weapon_models", "Preparing weapon models")
+	get_tree().process_frame.connect(_prewarm_models_tick)
+
+func _prewarm_models_tick() -> void:
+	var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate != null and gate.has_method(&"slice_msec") else 8)
+	while _model_paths_next < _model_paths.size() and Time.get_ticks_msec() < until:
+		AwModelCache.warm([_model_paths[_model_paths_next]])
+		_model_paths_next += 1
+	if _model_paths_next >= _model_paths.size():
+		if get_tree().process_frame.is_connected(_prewarm_models_tick):
+			get_tree().process_frame.disconnect(_prewarm_models_tick)
+		if gate != null:
+			gate.release(&"weapon_models")
+
 ## The hands under the camera, and the player's rig rebuilt to draw them.
 func _arm(body: ArenaPlayer) -> void:
 	if body == null or body.camera == null or view_model != null:
@@ -445,6 +470,7 @@ func _arm(body: ArenaPlayer) -> void:
 	view_arms = ArenaViewArms.mount(self, view_model, body, ArenaAvatars.look_of(body.avatar, StringName("arena-player-%08d" % body.player_id)))
 	body.arm_first_person(view_model, _offline)
 	_prewarm_weapons.call_deferred(body)
+	_prewarm_models.call_deferred()
 
 ## One tick of weapon use, predicted. An outcome rather than a shot, because a use is
 ## not always one: a rocket produces a spawn and no shot at all, and a burst produces
