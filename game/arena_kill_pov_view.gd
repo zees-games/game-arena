@@ -133,6 +133,13 @@ func _new_hands() -> AwViewModel:
 	return model
 
 
+func _exit_tree() -> void:
+	# The spare rig waits outside the tree, so nothing frees it with the view.
+	if _spare_arms != null and is_instance_valid(_spare_arms):
+		_spare_arms.free()
+	_spare_arms = null
+
+
 ## The killer's arm rig, built; [method _mount_arms] puts it under the replay camera.
 func _new_arms() -> DotPlayerViewArms:
 	var rig := DotPlayerViewArms.new()
