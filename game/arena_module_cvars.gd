@@ -224,6 +224,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaHullGrid.enabled = new_value.to_float() >= 0.5)
+	add_cvar("arena_hull_fast", "1" if ArenaHullGrid.fast else "0",
+		"1: the hull gather tests the grid's candidates in one hoisted loop (same hulls); 0: one call per candidate",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaHullGrid.fast = new_value.to_float() >= 0.5)
 
 
 ## `sv_grenade_*` (arena_weapons' [AwGrenadeRules]) and `sv_grenade_utility`: 0 keeps flash, smoke and incendiary out of

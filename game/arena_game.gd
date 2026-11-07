@@ -16,7 +16,6 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 	var out: Array = []
 	if not body_rules.solid:
 		return out
-	var tp0 := Time.get_ticks_usec()
 	var me: ArenaPlayer = _players.get(id)
 	var me_at := me.controller.state.position if me != null and me.controller != null and me.controller.state != null else Vector3.INF
 	_ensure_roster()
@@ -25,18 +24,12 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 	# Position first: most of a crowd is out of reach, and the pair and alive tests cost more than the read.
 	var coarse := HULL_NEAR_SQ if remote else HULL_REACH_SQ
 	if near and _hull_grid.live:
-		var tp1 := Time.get_ticks_usec()
 		var cand: Array = _hull_grid.near(me_at, coarse)
-		var tp2 := Time.get_ticks_usec()
-		for i: int in cand:
-			_add_hull(out, i, id, me_at, near, coarse, remote, tick)
-		var gp := ArenaHullGrid.gp
-		gp[0] += 1
-		gp[5] += tp1 - tp0
-		gp[1] += tp2 - tp1
-		gp[2] += Time.get_ticks_usec() - tp2
-		gp[3] += cand.size()
-		gp[4] += out.size()
+		if ArenaHullGrid.fast and not remote:
+			_add_hulls_local(out, cand, id, me_at, coarse)
+		else:
+			for i: int in cand:
+				_add_hull(out, i, id, me_at, near, coarse, remote, tick)
 		if ArenaHullGrid.verify:
 			var full: Array = []
 			for i in range(_roster.size()):
@@ -48,6 +41,34 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 	for i in range(_roster.size()):
 		_add_hull(out, i, id, me_at, near, coarse, remote, tick)
 	return out
+
+
+## [method _add_hull] over [param cand] for a mover whose neighbours are where they stand now (no lag compensation): the same tests, with the loop invariants (ids, roster, the pair callable) hoisted out of the per-candidate call. Cvar `arena_hull_fast`.
+func _add_hulls_local(out: Array, cand: Array, id: int, me_at: Vector3, coarse: float) -> void:
+	var ids := _roster_ids
+	var roster := _roster
+	var pair := body_rules.pair_fn
+	var paired := pair.is_valid()
+	for i: int in cand:
+		var other_id := ids[i]
+		if other_id == id:
+			continue
+		var other := roster[i]
+		if other == null:
+			continue
+		var ctl := other.controller
+		if ctl == null or ctl.state == null:
+			continue
+		var feet := ctl.state.position
+		if feet.distance_squared_to(me_at) > coarse:
+			continue
+		if paired and not bool(pair.call(id, other_id)):
+			continue
+		if not other.is_alive():
+			continue
+		var tunables := ctl.tunables
+		var radius: float = tunables.radius
+		out.append(AABB(feet - Vector3(radius, 0.0, radius), Vector3(radius * 2.0, tunables.stand_height, radius * 2.0)))
 
 
 ## Appends roster player [param i]'s hull to [param out] when it is one [param id] stops at.

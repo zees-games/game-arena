@@ -14,7 +14,8 @@ const BIAS := 4096
 static var enabled := true
 
 ## Test hook (scale128 --hullverify): every grid answer is also computed by the full scan and compared.
-static var gp := PackedInt64Array([0, 0, 0, 0, 0, 0])
+## Cvar `arena_hull_fast`: 0 runs the per-candidate [method ArenaGame._add_hull] for the grid's candidates.
+static var fast := true
 static var verify := false
 static var verified := 0
 static var mismatches := 0
