@@ -80,6 +80,8 @@ func _build_controller() -> void:
 	swim.float_depth = tunables.stand_height * 56.0 / 72.0
 	swim.exit_speed = 300.0 * GENRE_UNIT
 	swim.exit_reach = 24.0 * GENRE_UNIT
+	# A narrower body reaches less far to a ladder fixed on a wall: keep the grab distance the 0.4064 m hull had.
+	ladder.reach = 0.05 + maxf(0.0, 0.4064 - tunables.radius)
 	controller.extra_modes = [swim, ladder]
 	_use_map_volumes()
 	add_child(controller)

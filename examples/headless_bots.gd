@@ -191,7 +191,7 @@ func _play(preset: String) -> void:
 					shots += 1
 					var target := game.player_for(brain.last.target_id) if brain.last.target_id >= 0 else null
 					# Sight as the brain judges it (its eye to the target's chest or head) or from the muzzle: a corner can block one and not the other.
-					var chest := target.global_position + Vector3.UP * ArenaBots.CHEST if target != null else Vector3.ZERO
+					var chest := target.global_position + Vector3.UP * ArenaBots.chest_height() if target != null else Vector3.ZERO
 					var seen := _sighted(trace, bot, target)
 					# The brain reuses a sight answer for DotBotBrain.SIGHT_REUSE, so a shot within it of the target leaving sight is still sighted.
 					var stale_ticks := int(ceil(DotBotBrain.SIGHT_REUSE * TICK_RATE)) + 1
@@ -284,9 +284,9 @@ func _sighted(trace: DotTrace, bot: Node3D, target: Node3D) -> bool:
 	if target == null:
 		return false
 	# Sight as the brain judges it (its eye to the target's chest or head) or from the muzzle: a corner can block one and not the other.
-	var chest := target.global_position + Vector3.UP * ArenaBots.CHEST
-	var eye := bot.global_position + Vector3.UP * ArenaBots.EYE
-	return trace.line_of_sight(bot.muzzle_position(), chest) or trace.line_of_sight(bot.muzzle_position(), target.muzzle_position()) or trace.line_of_sight(eye, chest) or trace.line_of_sight(eye, target.global_position + Vector3.UP * ArenaBots.EYE)
+	var chest := target.global_position + Vector3.UP * ArenaBots.chest_height()
+	var eye := bot.global_position + Vector3.UP * ArenaBots.eye_height()
+	return trace.line_of_sight(bot.muzzle_position(), chest) or trace.line_of_sight(bot.muzzle_position(), target.muzzle_position()) or trace.line_of_sight(eye, chest) or trace.line_of_sight(eye, target.global_position + Vector3.UP * ArenaBots.eye_height())
 
 
 func _mean(values: Array[float]) -> float:
