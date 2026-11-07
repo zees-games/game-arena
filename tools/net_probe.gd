@@ -60,6 +60,7 @@ func _run() -> void:
 	var config := DotServerConfig.new()
 	config.hostname = "net probe"
 	config.port = PORT
+	config.max_players = 256
 	config.bind_address = "127.0.0.1"
 	config.transport_mode = "dual"
 	config.rcon_password = ""
@@ -85,7 +86,10 @@ func _run() -> void:
 	var module = _server.modules.get_module("arena")
 	var quota: DotBotQuota = module.get("_bot_quota")
 	if quota != null and quota.mode_cvar != null:
-		quota.mode_cvar.force_set("off")
+		# "off" is wanted = 0: the quota removes every bot a second later (found by arena-128-scale-1).
+		quota.mode_cvar.force_set("fixed")
+		quota.quota_cvar.force_set(str(_bots))
+		quota.empty_cvar.force_set("1")
 	var net: DotNetManager = module.net
 	if _game.match_node.state == DotMatch.State.IDLE:
 		_game.start(0)
