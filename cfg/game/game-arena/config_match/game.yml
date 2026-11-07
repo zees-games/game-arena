@@ -6,8 +6,7 @@
 # respawn_delay_sec: -1.0
 # Seconds of protection after a spawn; -1 keeps each mode's own. [-1.0..60.0]
 # spawn_protection_sec: -1.0
-# What ends spawn protection early: 0 nothing (it runs its seconds out), 1 the first shot (default: a player
-# cannot clear a room while invulnerable), 2 the first move or jump, 3 either. Ends all three records at once. [0..3]
+# What ends spawn protection early: 0 nothing (it runs its seconds out), 1 the first shot (default: a player ... [0..3]
 # spawn_protection_break: 1
 # Friendly fire: -1 keeps each mode's own, 0 off, 1 on. [-1..1]
 # friendly_fire: -1
