@@ -368,6 +368,10 @@ func _on_player_added(added: ArenaPlayer) -> void:
 			)
 		)
 
+	# Their guns' reports go through the presentation's one shot player, not one built per shooter.
+	if added != player and presentation != null and added.held != null:
+		presentation.share_shots(added.held)
+
 # --- Networked -------------------------------------------------------------
 
 ## Joins the chat box to the two things it needs: a way out, and a way to stop the player.
