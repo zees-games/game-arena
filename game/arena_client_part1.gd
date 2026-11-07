@@ -489,7 +489,7 @@ func _arm(body: ArenaPlayer) -> void:
 	view_arms = ArenaViewArms.mount(self, view_model, body, ArenaAvatars.look_of(body.avatar, StringName("arena-player-%08d" % body.player_id)))
 	body.arm_first_person(view_model, _offline)
 	_prewarm_weapons.call_deferred(body)
-	_prewarm_models.call_deferred()
+	# _prewarm_models.call_deferred()  # DISABLED by merge: warming AwModelCache breaks headless_viewarms "grenade_launcher hip" (hands 0.8 m off grips); follow-up
 
 ## One tick of weapon use, predicted. An outcome rather than a shot, because a use is
 ## not always one: a rocket produces a spawn and no shot at all, and a burst produces
