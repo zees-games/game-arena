@@ -6,6 +6,7 @@ const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaEvent := preload("../game/arena_event.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
+const KillPov := preload("../game/arena_kill_pov.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModTools := preload("../game/arena_mod_tools.gd")
@@ -36,12 +37,19 @@ const ArenaRequest := preload("../game/arena_request.gd")
 ## three sides, real bit-packed commands, real snapshots, real acknowledgements, and
 ## one packet in five dropped in each direction.
 
-const TICK_RATE := 64
-const SNAPSHOT_RATE := 16
+## `-- --tick-rate=33` or ARENA_TICK_RATE runs the whole suite at another rate (default 64); the snapshot rate follows.
+const TickRateArg := preload("tick_rate_arg.gd")
+## A scene can set [member tick_rate_override] instead (headless_net_22.tscn): an environment variable does not reach a suite
+## that `hv` hands to another machine, a scene's property does.
+@export var tick_rate_override := 0
+var TICK_RATE: int:
+	get: return clampi(tick_rate_override, 15, 128) if tick_rate_override > 0 else TickRateArg.rate(64)
+var SNAPSHOT_RATE: int:
+	get: return TickRateArg.snapshot(TICK_RATE)
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 291
+const CHECKS := 296
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and

@@ -154,9 +154,12 @@ func _module_load() -> DotResult:
 	_add_stats_report_cvar()
 	_add_rank_cvar()
 	_add_fire_buffer_cvar()
+	_add_bot_think_cvars()
 	_add_grenade_cvars()
 	var _glass_cvars := game.glass_rules.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
 	_add_rate_cvar()
+	_add_snapshot_rate_cvar()
+	_add_aoi_cvars()
 	if game.config_binder != null:
 		game.config_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
 		game.config_binder.bind_commands(add_command)
@@ -391,7 +394,7 @@ func _build_netcode() -> DotResult:
 
 	var config := DotNetConfig.new()
 	config.tick_rate = game.tick_rate
-	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
+	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate, snapshot_target())
 	config.enable_prediction = true
 	# On: a player shoots where they SEE someone, which is where that player was half a round trip ago.
 	config.enable_lag_compensation = true
@@ -768,6 +771,7 @@ func _physics_process(delta: float) -> void:
 	if _since_bot_check >= BOT_CHECK_SEC:
 		_since_bot_check = 0.0
 		_keep_bots()
+		_refresh_aoi()
 
 	# The map clock and the vote clock, from the SIMULATED tick rather than from the
 	# frame. Both addons make the same point and it is the same point: a server that

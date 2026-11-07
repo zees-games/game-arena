@@ -55,6 +55,12 @@ const SERVICE := &"arena_game"
 ## bits a position axis at 1 cm, for every map.
 const NET_WORLD_EXTENT := 512.0
 
+## The range of tick rates the arena is tuned and tested for (`sv_tickrate`, `arena_tick_rate`).
+## Tick counts in the code (THROWER_GRACE_TICKS, flashlight HOLD_TICKS, COLLISION_LAG_MAX_TICKS) are written for
+## 66 Hz: see docs/netcode.md "Tick rate".
+const MIN_TICK_RATE := 15
+const MAX_TICK_RATE := 128
+
 ## Snapshots a second aimed at; the rate sent is [method snapshot_rate_for] the tick rate.
 const NET_SNAPSHOT_RATE := 32
 

@@ -1,5 +1,6 @@
 extends "arena_net_weapon_drops.gd"
 
+const KillPov := preload("arena_kill_pov.gd")
 const ArenaLinkRtt := preload("arena_link_rtt.gd")
 const ArenaEvent := preload("arena_event.gd")
 const ArenaNetCommand := preload("arena_net_command.gd")
@@ -526,11 +527,15 @@ func server_tick(tick: int) -> void:
 	_watch_bullets()
 	_send_ctf(0, tick)
 
+	var t_net := Time.get_ticks_usec()
 	if net != null:
 		net.server_tick(tick)
+	ArenaFrameProbe.add(&"srv_net", t_net)
 
 	ensure_game_ticked(tick)
+	var t_hits := Time.get_ticks_usec()
 	_flush_hits()
+	ArenaFrameProbe.add(&"srv_hits", t_hits)
 
 
 ## Runs the whole game for a tick, at most once.
@@ -542,7 +547,12 @@ func ensure_game_ticked(tick: int) -> void:
 		return
 
 	_game_ticked_for = tick
-	game.tick(_commands())
+	var t_cmd := Time.get_ticks_usec()
+	var cmds := _commands()
+	ArenaFrameProbe.add(&"srv_bots", t_cmd)
+	var t_game := Time.get_ticks_usec()
+	game.tick(cmds)
+	ArenaFrameProbe.add(&"srv_game", t_game)
 	_tick_killview()
 
 	# The toys where the physics left them, before the snapshot: a toy's own `_net_simulate`
@@ -1083,7 +1093,8 @@ func send_signon(peer_id: int) -> void:
 		net.clock.tick,
 		game.map.display_name if game.map != null else "",
 		game.score_limit,
-		game.time_limit_sec
+		game.time_limit_sec,
+		net.config.snapshot_rate
 	))
 
 	# Straight after HELLO and before any JOIN: the players about to be described are
@@ -1598,7 +1609,7 @@ func _on_event(message: DotNetMessage) -> void:
 			if not bool(info["ok"]):
 				return
 			_hello = info
-			_adopt_tick_rate(int(info["tick_rate"]))
+			_adopt_tick_rate(int(info["tick_rate"]), int(info["snapshot_rate"]))
 			hello_received.emit(info)
 		ArenaEvents.Kind.JOIN:
 			apply_join(event.body)
@@ -1737,6 +1748,10 @@ func _on_request(message: DotNetMessage) -> void:
 			# exception is a victim watching their kill view, who may skip it.
 			if killview != null:
 				killview.skip(session_for_peer(peer_id), game.current_tick())
+		ArenaEvents.Ask.FOV:
+			var who: Object = game.player_for(session_for_peer(peer_id)) if game != null else null
+			if who != null:
+				KillPov.note_field_of_view(who, ArenaEvents.read_fov(request.reader()))
 		ArenaEvents.Ask.PROP_TOOL:
 			_on_prop_act(peer_id, ArenaEvents.read_prop_act(request.reader()))
 		_:
@@ -1806,15 +1821,18 @@ func mark_ready(peer_id: int) -> void:
 ## All four copies move together, and the engine's is one of them: the fraction a
 ## renderer interpolates at is a fraction through a PHYSICS frame, which is a fraction
 ## through a tick only while the two rates agree.
-func _adopt_tick_rate(rate: int) -> void:
+func _adopt_tick_rate(rate: int, snapshot_rate: int = 0) -> void:
 	if rate <= 0 or game == null or net == null:
 		return
 
 	game.tick_rate = rate
 	net.config.tick_rate = rate
-	net.config.snapshot_rate = ArenaGame.snapshot_rate_for(rate)
+	# The server's own number when HELLO carried one (sv_snapshot_rate), else derived as before.
+	net.config.snapshot_rate = snapshot_rate if snapshot_rate > 0 and snapshot_rate <= rate else ArenaGame.snapshot_rate_for(rate)
 	# A copy taken at setup() that writing the config does not touch.
 	net.clock.tick_rate = rate
+	if game.spectate != null:
+		game.spectate.retime()
 	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap
 	# to a quarter second of ticks (8 steps are 62.5 ms at 128 Hz, so a client under 16 fps ran
 	# fewer ticks than the server). A shell built before it gets the same rule here, as

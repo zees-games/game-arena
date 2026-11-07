@@ -77,7 +77,11 @@ func _ready() -> void:
 ## runs one tick per physics frame, so a declared 64 on a 60 Hz host put every client's
 ## clock 4 ticks a second ahead of the snapshots.
 static func host_tick_rate() -> int:
-	return maxi(1, Engine.physics_ticks_per_second)
+	var rate := maxi(1, Engine.physics_ticks_per_second)
+	if rate < ArenaGame.MIN_TICK_RATE or rate > ArenaGame.MAX_TICK_RATE:
+		DotLog.warn(CHANNEL, "sv_tickrate is outside the range the arena is tuned for", {
+			"rate": rate, "min": ArenaGame.MIN_TICK_RATE, "max": ArenaGame.MAX_TICK_RATE})
+	return rate
 
 
 ## The id after `--map`, or "".

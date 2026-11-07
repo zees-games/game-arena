@@ -2,6 +2,9 @@ extends DotModule
 
 const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
+const ArenaNetAoi := preload("arena_net_aoi.gd")
+const ArenaBots := preload("arena_bots.gd")
+const ArenaBotBrain := preload("arena_bot_brain.gd")
 
 ## Base of [ArenaModule]: the operator-facing cvars that map onto a rule table, so the module itself
 ## holds the lifecycle. Split out for the size gate; the state they read lives here too.
@@ -10,6 +13,9 @@ var game: ArenaGame = null
 ## dedicated server are different deployments of the same game and only one replicates.
 var net: DotNetManager = null
 var _cv_maxrate: DotConVar = null
+var _cv_snapshot_rate: DotConVar = null
+## Relevance rings for a big room (sv_net_aoi_players and friends); see arena_net_aoi.gd.
+var net_aoi: ArenaNetAoi = null
 ## The team menu server and its team layout cvars (arena_team_menu.gd).
 var team_menu: RefCounted = null
 
@@ -189,6 +195,25 @@ func _add_fire_buffer_cvar() -> void:
 			log_info("fire buffer changed", {"seconds": game.fire_buffer_seconds}))
 
 
+## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]).
+func _add_bot_think_cvars() -> void:
+	add_cvar("bot_think_every", str(ArenaBots.think_every),
+		"A bot far from every enemy runs its brain one tick in this many (1 = every tick, 0 = 2 above 16 players)",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.think_every = maxi(0, int(new_value.to_float())))
+	add_cvar("bot_think_near", str(ArenaBots.think_near),
+		"Metres: a bot with an enemy closer than this thinks every tick",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.think_near = maxf(0.0, new_value.to_float()))
+	add_cvar("bot_fast_sense", "1" if ArenaBotBrain.fast_sense else "0",
+		"1: bots scan candidates by squared distance and cone cosine (same result, cheaper); 0: dot-bot's stock scan",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBotBrain.fast_sense = new_value.to_float() >= 0.5)
+
+
 ## `sv_grenade_*` (arena_weapons' [AwGrenadeRules]) and `sv_grenade_utility`: 0 keeps flash, smoke and incendiary out of
 ## the loadout menu (the default), 1 entitles everyone to them.
 func _add_grenade_cvars() -> void:
@@ -238,6 +263,21 @@ func _add_team_spawn_split_cvar() -> void:
 		func(_old: String, new_value: String) -> void:
 			game.team_spawn_split = new_value.to_float() != 0.0
 			log_info("team spawn split changed", {"on": game.team_spawn_split}))
+
+
+## `sv_snapshot_rate`: snapshots a second to aim at, 0 for the derived default ([constant ArenaGame.NET_SNAPSHOT_RATE]).
+## Independent of the tick rate: the rate sent is the nearest whole-tick divisor ([method ArenaGame.snapshot_rate_for]),
+## HELLO carries it to each client, so it applies to the map being built and to clients that join after.
+func _add_snapshot_rate_cvar() -> void:
+	_cv_snapshot_rate = add_cvar("sv_snapshot_rate", "0",
+		"Snapshots a second to aim at; 0 is the default (32). Applies when the game is built; clients learn it at join.",
+		DotConVar.FLAG_ARCHIVE).with_range(0.0, 128.0)
+
+
+## The target `sv_snapshot_rate` names, or the game's default when it is 0 or unset.
+func snapshot_target() -> int:
+	var asked := _cv_snapshot_rate.get_int() if _cv_snapshot_rate != null else 0
+	return asked if asked > 0 else ArenaGame.NET_SNAPSHOT_RATE
 
 
 func _add_spawn_cvars() -> void:
@@ -337,3 +377,16 @@ func _add_critical_cvar(cvar: String, help: String) -> void:
 				rules.critical_chance = clampf(new_value.to_float(), 0.0, 1.0)
 			log_info("critical rule changed", {"cvar": cvar, "value": new_value})
 	)
+
+
+## `sv_net_*`: relevance rings, on only above `sv_net_aoi_players` players (default 32, so a 16v16 is untouched).
+func _add_aoi_cvars() -> void:
+	net_aoi = ArenaNetAoi.new()
+	net_aoi.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
+
+
+## Once a second from the module: turns the rings on or off for the current player count.
+func _refresh_aoi() -> void:
+	if net_aoi != null and net != null and game != null and net.interest != null:
+		if net_aoi.refresh(net.interest, game.players().size()):
+			log_info("net relevance rings", {"on": net_aoi.active, "players": game.players().size()})

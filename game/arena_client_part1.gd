@@ -345,6 +345,9 @@ func _guard_camera(p: ArenaPlayer) -> void:
 
 ## One frame of the warm-up: weapon views, then the flash scenes, then one draw of every flash and
 ## the explosion in front of the camera (the first shot cost 375-420 ms, the first explosion 95).
+## How many throwaway people the warm-up builds, so their art and materials are loaded before the first bot.
+const PREWARM_FIGURES := 4
+
 func _prewarm_tick() -> void:
 	var body: Variant = _warm.get("body")
 	if not is_instance_valid(body) or body.camera == null:
@@ -390,6 +393,22 @@ func _prewarm_tick() -> void:
 			_warm.drop_next = ArenaWeaponDropWiring.prewarm_step(game, ids, int(_warm.get("drop_next", 0)), Time.get_ticks_msec() + slice)
 			if _warm.drop_next >= ids.size():
 				_warm.phase = 3
+		3:
+			# What the first bot, the first hit and the first kill would otherwise load mid-match:
+			# a few people's figures (rig, art, materials), the health bar's mesh and the hit sounds.
+			ArenaPlayer.warm_health_tag()
+			var slice_end := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
+			while int(_warm.get("figures", 0)) < PREWARM_FIGURES and Time.get_ticks_msec() < slice_end:
+				var key := StringName("prewarm-%d" % int(_warm.get("figures", 0)))
+				var host := Node3D.new()
+				add_child(host)
+				var person := DotHumanoidFigure.new()
+				host.add_child(person)
+				person.build(ArenaAvatars.look_of(ArenaAvatars.stock_avatar(key), key), 1.8)
+				host.queue_free()
+				_warm.figures = int(_warm.get("figures", 0)) + 1
+			if int(_warm.get("figures", 0)) >= PREWARM_FIGURES:
+				_warm.phase = 4
 		_:
 			_warm.frames += 1
 			if _warm.frames >= 3 and DotWeaponMuzzle.warm_done():
@@ -470,7 +489,7 @@ func _arm(body: ArenaPlayer) -> void:
 	view_arms = ArenaViewArms.mount(self, view_model, body, ArenaAvatars.look_of(body.avatar, StringName("arena-player-%08d" % body.player_id)))
 	body.arm_first_person(view_model, _offline)
 	_prewarm_weapons.call_deferred(body)
-	_prewarm_models.call_deferred()
+	# _prewarm_models.call_deferred()  # DISABLED by merge: warming AwModelCache breaks headless_viewarms "grenade_launcher hip" (hands 0.8 m off grips); follow-up
 
 ## One tick of weapon use, predicted. An outcome rather than a shot, because a use is
 ## not always one: a rocket produces a spawn and no shot at all, and a burst produces

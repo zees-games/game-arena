@@ -123,5 +123,5 @@ When a player dies, their screen plays the last seconds of the killer's view (do
 - The victim's queued respawn is held for the length of the clip (at most `mp_killview` seconds, an estimate in game ticks) so the replay is not cut off by the respawn.
 - Client (dot-replay's `DotKillViewClient`, the final killcam as its `stage`): the replay camera and the killer's crosshair follow `kv.view`, the HUD and view model are hidden, the previous camera returns when it finishes. The final-killcam of a match end takes precedence.
 - Space (the skip action) sends `Ask.RESPAWN`; the server respawns a held victim at once (`ArenaGame.respawn_player`) and ignores it otherwise.
-- Not recorded: the killer's real FOV (a constant 83.6 is used). Solo/offline play has no bridge, so no kill view.
+- The killer's field of view: a client sends its `field_of_view` setting (`Ask.FOV`, at READY and on change); the server records it as the clip's lens (`KillPov.fov_of`), 83.6 for bots and for a client that never said. The aim zoom is applied by the replay. Solo play runs the same kill view in-process (`solo_killview`).
 - Look at it: `tools/screenshot.sh dm_atrium --glance --killcam` renders a frame during a synthetic replay. `headless_net` (section `killview_reaches_the_victim`) and `headless_presentation` cover the rest.

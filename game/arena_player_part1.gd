@@ -588,20 +588,41 @@ func spawn(at: Transform3D, tick: int, protection_ticks: int = 0) -> void:
 
 	spawned.emit(at)
 
+## The health bar's two quads share their meshes and materials among every player: they are the
+## same for all, and 31 bots' worth of QuadMesh + StandardMaterial3D was made on the first hits.
+## Kept in the root window's metadata, not a static var: a static would still hold them at exit
+## and the suites' leak check would count them.
+static func _tag_assets() -> Dictionary:
+	var root: Window = (Engine.get_main_loop() as SceneTree).root
+	if not root.has_meta(&"arena_tag_assets"):
+		root.set_meta(&"arena_tag_assets", {})
+	return root.get_meta(&"arena_tag_assets")
+
 static func _tag_quad(colour: Color, forward: float) -> MeshInstance3D:
-	var quad := QuadMesh.new()
-	quad.size = Vector2(HEALTH_TAG_WIDTH, 0.09)
-	var material := StandardMaterial3D.new()
-	material.albedo_color = colour
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var key := colour.to_html()
+	var assets := _tag_assets()
+	var shared: Dictionary = assets.get(key, {})
+	if shared.is_empty():
+		var quad := QuadMesh.new()
+		quad.size = Vector2(HEALTH_TAG_WIDTH, 0.09)
+		var material := StandardMaterial3D.new()
+		material.albedo_color = colour
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		shared = {"mesh": quad, "material": material}
+		assets[key] = shared
 	var mesh := MeshInstance3D.new()
-	mesh.mesh = quad
-	mesh.material_override = material
+	mesh.mesh = shared["mesh"]
+	mesh.material_override = shared["material"]
 	mesh.position.z = forward
 	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mesh
+
+## Makes the health bar's shared mesh and materials, for the loading screen's warm-up.
+static func warm_health_tag() -> void:
+	_tag_quad(Color(0.05, 0.05, 0.05, 0.75), 0.0).free()
+	_tag_quad(Color(0.9, 0.15, 0.12), 0.001).free()
 
 ## Takes the player out of play without removing them.
 ## The bar over a remote player's head: shown for [constant HEALTH_TAG_SEC] after their

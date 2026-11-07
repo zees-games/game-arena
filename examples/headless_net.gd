@@ -10,6 +10,7 @@ func _run() -> void:
 	OS.add_logger(errors)
 
 	print("game-arena — netcode over two clients")
+	print("  tick rate %d Hz, snapshot rate %d Hz" % [TICK_RATE, SNAPSHOT_RATE])
 
 	_build_server()
 	_build_client(2, 11)
@@ -372,6 +373,13 @@ func _test_client_death_camera() -> void:
 	var victim := 11
 	var killer := 12
 
+	# The map change before this restarted the match: its warmup is seconds, so at a low tick rate it ends (and
+	# respawns everybody) in the middle of the chain. Let the round go live first, at every rate.
+	var waited_live := 0
+	while not _server_game.match_node.is_live() and waited_live < 4000:
+		_pump(10)
+		waited_live += 10
+
 	# Nobody respawns inside the chain, so every check below measures the chain.
 	_server_game.match_node.rules.respawn_delay_sec = 60.0
 
@@ -609,6 +617,23 @@ func _test_killview_reaches_the_victim() -> void:
 	_pump(TICK_RATE * 2)
 	_check(_server_bridge.killview != null and _server_bridge.killview.ring.sample_count(bot) > 10,
 		"every tick records the bot's eye", str(_server_bridge.killview.ring.sample_count(bot) if _server_bridge.killview != null else -1))
+
+	# The killer's own field of view: a client's setting reaches the server, a bot is drawn with the default.
+	var fov_writer := DotNetWriter.new()
+	var _fov_wrote := _server_net.messages.encode(ArenaRequest.new(ArenaEvents.Ask.FOV, ArenaEvents.write_fov(110.0)), fov_writer)
+	var _fov_asked := _server_bridge.receive_request(2, fov_writer.to_bytes())
+	var want_fov := KillPov.degrees_to_vertical(110.0)
+	_check(is_equal_approx(KillPov.fov_of(target), want_fov) and absf(want_fov - 83.6) > 5.0,
+		"a client's field of view setting is what its kill view is drawn with", "%.2f vs %.2f" % [KillPov.fov_of(target), want_fov])
+	_check(is_equal_approx(KillPov.degrees_to_vertical(100.0), 83.6) or absf(KillPov.degrees_to_vertical(100.0) - 83.6) < 0.1, "100 at 4:3 is the 83.6 the addon assumed")
+	var recorded_fov := 0.0
+	for e: Dictionary in _server_bridge.killview.eyes_fn.call():
+		if int(e["id"]) == victim:
+			recorded_fov = float(e["fov"])
+	_check(is_equal_approx(recorded_fov, want_fov), "and the server records that lens in the clip", str(recorded_fov))
+	KillPov.note_field_of_view(target, 9000.0)
+	_check(is_equal_approx(KillPov.fov_of(target), want_fov), "a nonsense setting changes nothing")
+	_check(is_equal_approx(KillPov.fov_of(_server_game.player_for(bot)), KillPov.DEFAULT_FOV), "a bot has no screen: the default")
 
 	var usual_delay := _server_game.match_node.rules.respawn_delay_sec
 	_server_game.match_node.rules.respawn_delay_sec = 2.0
@@ -977,6 +1002,7 @@ func _test_wall_moves_predicted() -> void:
 
 	for route: Dictionary in _server_game.map.wall_routes:
 		var driver := WallRouteDriver.new(route, &"walls")
+		driver.tick_rate = TICK_RATE
 		server_player.controller.teleport(driver.start, driver.yaw, 0.0)
 		var _settle := _flight_window(peer, 40, 0)
 
@@ -1146,7 +1172,7 @@ func _test_weapons_over_the_wire() -> void:
 	shoot.fire.slot = 0
 
 	var t := int(_clients[2]["net"].clock.tick)
-	for i in range(TICK_RATE / 2):
+	for i in range(TICK_RATE):
 		t += 1
 		own._net_apply_input(idle, t)
 		own._net_simulate(t, 1.0 / float(TICK_RATE))
@@ -1811,8 +1837,10 @@ func _test_voice_wire() -> void:
 	self_mute.set_muted({"key": "loud-key", "name": "Loud"}, false)
 	if voice != null:
 		talk.call()
-		var deadline := Time.get_ticks_msec() + 1000
-		while heard_buffer.frames_written == 0 and Time.get_ticks_msec() < deadline:
+		# A frame budget, not a wall deadline: a loaded runner spent a 1 s deadline on a few frames.
+		var frames_left := 600
+		while heard_buffer.frames_written == 0 and frames_left > 0:
+			frames_left -= 1
 			await get_tree().process_frame
 	_check(heard_buffer.frames_written > 0, "and unmuted, the same frames play (%d)" % heard_buffer.frames_written)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(self_mute.path))

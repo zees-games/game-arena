@@ -31,6 +31,13 @@ const GROUNDED := 1
 const CROUCHED := 2
 const SIGNED := 4
 
+const FOV_META := &"kill_pov_fov"
+## What a killer whose setting never reached the server is drawn with: the addon's default, 100 at 4:3 as a vertical lens.
+const DEFAULT_FOV := 83.6
+## The horizontal-at-4:3 settings a client may name (the settings slider's range, with room).
+const FOV_MIN := 40.0
+const FOV_MAX := 160.0
+
 static var _ids: Dictionary = {}
 static var _ids_generation := -1
 
@@ -123,6 +130,31 @@ static func watch_hits(game: Node) -> void:
 	if not game.has_meta(HITS_META):
 		game.set_meta(HITS_META, true)
 		game.connect(&"hit_confirmed", func(a: int, v: int, n: float, at: Vector3, h: bool, l: bool) -> void: count_hit(a, v, n, at, h, l, game))
+
+
+## Keeps the field of view [param degrees] (horizontal at 4:3, as the setting is) a client reported for [param p].
+static func note_field_of_view(p: Object, degrees: float) -> void:
+	if p != null and degrees >= FOV_MIN and degrees <= FOV_MAX:
+		p.set_meta(FOV_META, degrees_to_vertical(degrees))
+
+
+## The vertical field of view a horizontal one at 4:3 makes, as the camera is set.
+static func degrees_to_vertical(horizontal_at_4_3: float) -> float:
+	return rad_to_deg(2.0 * atan(tan(deg_to_rad(clampf(horizontal_at_4_3, FOV_MIN, FOV_MAX) * 0.5)) * 0.75))
+
+
+## The killer's own lens, unzoomed (the replay applies the aim zoom itself): what its client reported, the local
+## player's camera setting where this end draws it, else the default.
+static func fov_of(p: Object) -> float:
+	if p == null:
+		return DEFAULT_FOV
+	if p.has_meta(FOV_META):
+		return float(p.get_meta(FOV_META))
+	if p.get(&"camera") != null:
+		var base: Variant = p.get(&"_base_fov")
+		if base is float and base > 0.0:
+			return base
+	return DEFAULT_FOV
 
 
 ## The weapon id an aux hash names, or empty.

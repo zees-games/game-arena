@@ -288,11 +288,23 @@ func _build_netcode() -> DotResult:
 		bridge.rtt_source = func() -> float: return ArenaNetBridge.link_rtt_ms(link)
 	# READY only once the scene exists, or what the server sent in between hits a missing node.
 	if link != null and link.has_method("is_playing") and bool(link.call("is_playing")):
-		_say_ready()
+		_announce()
 	elif link != null and link.has_signal("spawned"):
-		link.connect("spawned", _say_ready, CONNECT_ONE_SHOT)
+		link.connect("spawned", _announce, CONNECT_ONE_SHOT)
 
 	return net.start()
+
+
+## READY, and the field of view setting the kill view of a victim of mine draws through.
+func _announce() -> void:
+	_say_ready()
+	send_field_of_view()
+
+
+## Tells the server the field of view setting.
+func send_field_of_view() -> void:
+	if bridge != null and not _offline:
+		bridge.send_request(ArenaEvents.Ask.FOV, ArenaEvents.write_fov(_field_of_view()))
 
 func _build_killview() -> void:
 	killview = DotKillViewClient.new()
@@ -402,6 +414,8 @@ func _build_presentation() -> void:
 		# correctly and consumed by nothing" this family keeps finding.
 		if key == &"field_of_view" and player != null:
 			player.attach_camera(_field_of_view())
+		if key == &"field_of_view":
+			send_field_of_view()
 	)
 
 # --- The mouse -------------------------------------------------------------
