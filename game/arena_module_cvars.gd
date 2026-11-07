@@ -2,6 +2,7 @@ extends DotModule
 
 const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
+const ArenaNetAoi := preload("arena_net_aoi.gd")
 
 ## Base of [ArenaModule]: the operator-facing cvars that map onto a rule table, so the module itself
 ## holds the lifecycle. Split out for the size gate; the state they read lives here too.
@@ -11,6 +12,8 @@ var game: ArenaGame = null
 var net: DotNetManager = null
 var _cv_maxrate: DotConVar = null
 var _cv_snapshot_rate: DotConVar = null
+## Relevance rings for a big room (sv_net_aoi_players and friends); see arena_net_aoi.gd.
+var net_aoi: ArenaNetAoi = null
 ## The team menu server and its team layout cvars (arena_team_menu.gd).
 var team_menu: RefCounted = null
 
@@ -353,3 +356,16 @@ func _add_critical_cvar(cvar: String, help: String) -> void:
 				rules.critical_chance = clampf(new_value.to_float(), 0.0, 1.0)
 			log_info("critical rule changed", {"cvar": cvar, "value": new_value})
 	)
+
+
+## `sv_net_*`: relevance rings, on only above `sv_net_aoi_players` players (default 32, so a 16v16 is untouched).
+func _add_aoi_cvars() -> void:
+	net_aoi = ArenaNetAoi.new()
+	net_aoi.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
+
+
+## Once a second from the module: turns the rings on or off for the current player count.
+func _refresh_aoi() -> void:
+	if net_aoi != null and net != null and game != null and net.interest != null:
+		if net_aoi.refresh(net.interest, game.players().size()):
+			log_info("net relevance rings", {"on": net_aoi.active, "players": game.players().size()})

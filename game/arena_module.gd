@@ -158,6 +158,7 @@ func _module_load() -> DotResult:
 	var _glass_cvars := game.glass_rules.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
 	_add_rate_cvar()
 	_add_snapshot_rate_cvar()
+	_add_aoi_cvars()
 	if game.config_binder != null:
 		game.config_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
 		game.config_binder.bind_commands(add_command)
@@ -769,6 +770,7 @@ func _physics_process(delta: float) -> void:
 	if _since_bot_check >= BOT_CHECK_SEC:
 		_since_bot_check = 0.0
 		_keep_bots()
+		_refresh_aoi()
 
 	# The map clock and the vote clock, from the SIMULATED tick rather than from the
 	# frame. Both addons make the same point and it is the same point: a server that
