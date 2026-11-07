@@ -227,6 +227,7 @@ class World:
 				return true
 		return false
 
+	## Spawns and landings, repeated where people stand once the game has recorded enough of it.
 	func waypoints() -> PackedVector3Array:
 		var out := PackedVector3Array()
 		var map: Variant = game.get("map")
@@ -242,7 +243,8 @@ class World:
 			out.append(spawn.origin)
 		if surf != null:
 			out.append_array(surf.call(&"landing_points"))
-		return out
+		var stats: Variant = game.get("demo_stats")
+		return (stats as Object).call(&"weight_waypoints", out) if stats is Object else out
 
 	## A route that may ride a ramp or walk through a teleport: the mesh's own answer once the
 	## map's ride edges are linked into it, the walked corners otherwise.

@@ -21,6 +21,9 @@ func _exit_tree() -> void:
 	if surf_rides != null:
 		surf_rides.call(&"release")
 		surf_rides = null
+	if demo_stats != null:
+		demo_stats.call(&"release")
+		demo_stats = null
 	if _registered_name != &"":
 		DotRegistry.unregister_instance(_registered_name, self)
 		_registered_name = &""
@@ -621,6 +624,8 @@ func _tick_rest(delta: float) -> void:
 
 	if surf_rides != null:
 		surf_rides.call(&"process", delta)
+	if demo_stats != null:
+		demo_stats.call(&"process", delta)
 
 ## Who can pick up a drop this tick, keyed by player id.
 func _drop_sweepers() -> Dictionary:

@@ -145,6 +145,8 @@ func tick(commands: Dictionary = {}) -> void:
 			var outcome := player.simulate_tick(_tick, delta, move, fire)
 			if surf_rides != null:
 				surf_rides.call(&"after", id, player, move, _tick)
+			if demo_stats != null:
+				demo_stats.call(&"after", id, player, move, fire, _tick)
 			shots.append_array(outcome.shots)
 
 			# Before the horde ticks, so the monsters hear it this tick.

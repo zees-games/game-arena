@@ -350,6 +350,9 @@ var npc_skill: DotNpcAiSkill = DotNpcAiSkill.new()
 ## Records and harvests players' surf rides once [method start_ride_recording] has run.
 var surf_rides: RefCounted = null
 
+## Records where players stand and how they aim, and weights the bots' roaming by it; set by [method start_demo_stats].
+var demo_stats: RefCounted = null
+
 ## Whether the monsters' learned map traffic is kept on disk across restarts.
 ##
 ## [b]Off unless a server turns it on[/b] — [ArenaModule] does, which only a real server
