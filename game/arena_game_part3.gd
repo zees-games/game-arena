@@ -657,6 +657,7 @@ func remove_player(id: int) -> void:
 
 	_players.erase(id)
 	_roster_dirty = true
+	_ids_cache = []
 	remove_child(player)
 	player.queue_free()
 

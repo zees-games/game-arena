@@ -6,6 +6,7 @@ const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaEvent := preload("../game/arena_event.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
+const KillPov := preload("../game/arena_kill_pov.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModTools := preload("../game/arena_mod_tools.gd")
@@ -48,7 +49,7 @@ var SNAPSHOT_RATE: int:
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 291
+const CHECKS := 296
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and

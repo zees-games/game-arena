@@ -87,6 +87,7 @@ func add_player(
 	player.solid_hulls_fn = solid_hulls_for
 	_players[id] = player
 	_roster_dirty = true
+	_ids_cache = []
 
 	var added := match_node.add_player(str(id), display_name, _tick, wanted_team)
 
@@ -161,7 +162,7 @@ func make_killview_server() -> DotKillViewServer:
 			var st: DotFpsState = p.controller.state
 			var eye: Vector3 = p.controller.motor.eye_position(st) if p.controller.motor != null else st.position + Vector3(0.0, ArenaPlayer.eye_height(), 0.0)
 			var basis := Basis.from_euler(Vector3(deg_to_rad(st.pitch), deg_to_rad(st.yaw), 0.0))
-			eyes.append({"id": p.player_id, "transform": Transform3D(basis, eye), "aux": KillPov.aux_of(p)})
+			eyes.append({"id": p.player_id, "transform": Transform3D(basis, eye), "fov": KillPov.fov_of(p), "aux": KillPov.aux_of(p)})
 		return eyes
 	server.use_respawn_queue(func() -> Variant: return match_node.respawns if match_node != null else null,
 		func(id: Variant) -> DotResult: return respawn_player(int(id)))

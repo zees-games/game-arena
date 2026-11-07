@@ -450,28 +450,35 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 		return
 
 	var v := drawn.velocity
-	figure.set_motion({
-		"on_floor": drawn.mode == DotFpsState.Mode.GROUND,
-		"vertical": v.y,
-		"crouched": drawn.crouch_fraction > 0.5,
-		"sliding": _drawn_sliding(drawn),
-		"swimming": drawn.mode == swim.mode_id,
-		"climbing": drawn.mode == ladder.mode_id,
-		"alive": is_alive(),
-		"wall_running": drawn.is_wall_running(),
-		"velocity": v,
-		"wall": Plane(drawn.wall_normal, drawn.position - drawn.wall_normal * (controller.tunables.radius if controller != null else 0.35)) if drawn.wall_normal != Vector3.ZERO else Plane(),
-		# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
-		# reads where this player is aiming.
-		"aim": deg_to_rad(drawn.pitch),
-	})
+	# One dictionary per player, rewritten in place: a fresh one per body per frame was 32 dictionaries a frame.
+	var motion := _figure_motion
+	motion["on_floor"] = drawn.mode == DotFpsState.Mode.GROUND
+	motion["vertical"] = v.y
+	motion["crouched"] = drawn.crouch_fraction > 0.5
+	motion["sliding"] = _drawn_sliding(drawn)
+	motion["swimming"] = drawn.mode == swim.mode_id
+	motion["climbing"] = drawn.mode == ladder.mode_id
+	motion["alive"] = is_alive()
+	motion["wall_running"] = drawn.is_wall_running()
+	motion["velocity"] = v
+	motion["wall"] = Plane(drawn.wall_normal, drawn.position - drawn.wall_normal * (controller.tunables.radius if controller != null else 0.35)) if drawn.wall_normal != Vector3.ZERO else Plane()
+	# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
+	# reads where this player is aiming.
+	motion["aim"] = deg_to_rad(drawn.pitch)
+	figure.set_motion(motion)
 
-	var id := mirror_weapon if mirrored else (arsenal.current_def().id if arsenal != null and arsenal.current_def() != null else &"")
-	var def := weapon_catalogue().get_def(id) if id != &"" else null
-	var kind := DotHumanoidFigure.Hold.NONE
-	if def != null:
-		kind = DotHumanoidFigure.Hold.MELEE if def.slot == AwWeaponIds.SLOT_MELEE else (
-			DotHumanoidFigure.Hold.NONE if def.slot == AwWeaponIds.thrown_slot() else DotHumanoidFigure.Hold.GUN)
+	var held_def: DotWeaponDef = arsenal.current_def() if arsenal != null else null
+	var id := mirror_weapon if mirrored else (held_def.id if held_def != null else &"")
+	# The hold follows the weapon: looked up (catalogue, slot tests) and set only when the weapon changes.
+	if id != _figure_hold_id or _figure_hold_kind < 0:
+		var def := weapon_catalogue().get_def(id) if id != &"" else null
+		var picked := DotHumanoidFigure.Hold.NONE
+		if def != null:
+			picked = DotHumanoidFigure.Hold.MELEE if def.slot == AwWeaponIds.SLOT_MELEE else (
+				DotHumanoidFigure.Hold.NONE if def.slot == AwWeaponIds.thrown_slot() else DotHumanoidFigure.Hold.GUN)
+		_figure_hold_id = id
+		_figure_hold_kind = picked
+	var kind: int = _figure_hold_kind
 	figure.set_hold(kind)
 
 	var seq := mirror_fire_seq if mirrored else (weapons.fire_seq % AwWeaponNet.FIRE_SEQ_WRAP if weapons != null else 0)

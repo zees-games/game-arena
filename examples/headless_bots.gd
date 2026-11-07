@@ -89,6 +89,11 @@ func _ready() -> void:
 func _run() -> void:
 	print("game-arena headless bots")
 
+	# The think-rate stagger on, and every bot counted as far (think_near 0), so the coast and the think after it
+	# are in every check below: the turn-rate contract has to hold with them.
+	ArenaBots.think_every = 2
+	ArenaBots.think_near = 0.0
+
 	for preset in DotBotProfile.PRESETS:
 		await _play(preset)
 

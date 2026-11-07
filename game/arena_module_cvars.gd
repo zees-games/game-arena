@@ -3,6 +3,7 @@ extends DotModule
 const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaNetAoi := preload("arena_net_aoi.gd")
+const ArenaBots := preload("arena_bots.gd")
 
 ## Base of [ArenaModule]: the operator-facing cvars that map onto a rule table, so the module itself
 ## holds the lifecycle. Split out for the size gate; the state they read lives here too.
@@ -191,6 +192,20 @@ func _add_fire_buffer_cvar() -> void:
 		func(_old: String, new_value: String) -> void:
 			game.fire_buffer_seconds = new_value.to_float()
 			log_info("fire buffer changed", {"seconds": game.fire_buffer_seconds}))
+
+
+## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]).
+func _add_bot_think_cvars() -> void:
+	add_cvar("bot_think_every", str(ArenaBots.think_every),
+		"A bot far from every enemy runs its brain one tick in this many (1 = every tick, 0 = 2 above 16 players)",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.think_every = maxi(0, int(new_value.to_float())))
+	add_cvar("bot_think_near", str(ArenaBots.think_near),
+		"Metres: a bot with an enemy closer than this thinks every tick",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.think_near = maxf(0.0, new_value.to_float()))
 
 
 ## `sv_grenade_*` (arena_weapons' [AwGrenadeRules]) and `sv_grenade_utility`: 0 keeps flash, smoke and incendiary out of

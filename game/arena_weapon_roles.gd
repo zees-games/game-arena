@@ -193,6 +193,8 @@ static func clear() -> void:
 
 	packs = PackedStringArray()
 	pack_ids.clear()
+	_wire_cache = []
+	_wire_cache_size = -1
 	_by_role.clear()
 	config = DEFAULTS.duplicate(true)
 	_scanned = false
@@ -207,13 +209,33 @@ static func resolve(role: StringName) -> StringName:
 ## Every id that has a wire number: the append-only [method AwWeaponIds.all] (the own pack reuses them), then the packs' new ones.
 static func wire_ids() -> Array[StringName]:
 	ensure()
+	# Built once per pack set: every player's pull asked for it (a 27-id array, a copy and a scan) each tick.
+	# The list only changes when the pack ids do, and a caller only reads it.
+	if _wire_cache_size == pack_ids.size() and not _wire_cache.is_empty():
+		return _wire_cache
 	var out := AwWeaponIds.all().duplicate()
 
 	for id in pack_ids:
 		if not out.has(id):
 			out.append(id)
 
+	_wire_cache = out
+	_wire_cache_size = pack_ids.size()
+	_wire_index.clear()
+	for i in out.size():
+		_wire_index[out[i]] = i
 	return out
+
+
+## [param id]'s place in [method wire_ids], or -1.
+static func wire_index(id: StringName) -> int:
+	var _ids := wire_ids()
+	return _wire_index.get(id, -1)
+
+
+static var _wire_cache: Array[StringName] = []
+static var _wire_cache_size: int = -1
+static var _wire_index: Dictionary = {}
 
 
 ## Today's id for a weapon id a client remembered: the pack's `aw_` ids and the retired melee weapons.

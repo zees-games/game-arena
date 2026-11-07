@@ -503,10 +503,15 @@ func _resolve_shot(shot: DotShot, view_tick: float) -> void:
 	var _resolved := bullet_bridge.resolve_shot(shot, def.tuning as DotWeaponBallistics if def != null else null, view_tick)
 
 func player_ids() -> Array[int]:
+	# Asked for by a dozen steps of every tick, and the roster changes a few times a match: sorted once per change.
+	# Callers only read it, and a change replaces the array rather than editing it, so a loop over it is safe.
+	if _ids_cache.size() == _players.size():
+		return _ids_cache
 	var out: Array[int] = []
 	for key in _players.keys():
 		out.append(int(key))
 	out.sort()
+	_ids_cache = out
 	return out
 
 ## Whoever stands in the jail's button presses it. Authority side, after everybody has moved.
