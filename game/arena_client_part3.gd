@@ -152,6 +152,8 @@ func _killcam_frame() -> void:
 	var record_gap := int(1.0e6 / ArenaKillcamBodies.record_hz) if ArenaKillcamBodies.record_hz > 0.0 else 0
 	if record_gap == 0 or killcam.is_playing() or not (killcam.get(&"_again") as Array).is_empty() or t_cam - _killcam_recorded >= record_gap:
 		_killcam_recorded = t_cam
+		if killcam_shots != null and not killcam.is_playing():
+			killcam_shots.record(float(killcam.now_fn.call()), game.players())
 		killcam.frame()
 	ArenaFrameProbe.add(&"c_killcam", t_cam)
 	_restore_hud_if_orphaned()
