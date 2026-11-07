@@ -134,7 +134,7 @@ func _run() -> void:
 		var flags := _game.objectives.manager.objectives.flags()
 		var ok := flags.size() == 2
 		for flag in flags:
-			var want: Vector3 = _game.map.flag_homes["red" if String(flag.def.id).begins_with("red") else "blue"] + Vector3.UP
+			var want: Vector3 = _game.map.flag_homes["red" if String(flag.def.id).ends_with("1") else "blue"] + Vector3.UP
 			ok = ok and flag.at.distance_to(want) < 0.5
 		_check(ok, "two flags, each at its authored home")
 

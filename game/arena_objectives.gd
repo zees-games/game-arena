@@ -174,6 +174,12 @@ func ctf_bases() -> Dictionary:
 		if found.has(id):
 			out[id] = (found[id] as DotSpawnSite).position
 
+	# A map that placed its flags (imported `flag_spawns`) keeps them where it put them: first team red, second blue.
+	var homes: Dictionary = game.map.flag_homes
+	if team_ids.size() == 2 and homes.has("red") and homes.has("blue"):
+		out[team_ids[0]] = (homes["red"] as Vector3) + Vector3.UP
+		out[team_ids[1]] = (homes["blue"] as Vector3) + Vector3.UP
+
 	if out.size() == team_ids.size():
 		return out
 
