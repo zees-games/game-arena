@@ -59,6 +59,10 @@ static func input(game, id: int, player, pair: Array) -> void:
 	if game.weapon_drops == null:
 		return
 	var def := class_def_of(game, id)
+	# Nobody touched a key this tick or last, and nothing here acts without one (the auto pickup needs a drop and its rule on): the use key's hold has nothing to cancel and the prompt query is skipped. This was ~60 us per player per tick at 64 players.
+	if not held and not was and not use_now and not used \
+			and (game.weapon_drops.count() == 0 or not game.weapon_drops.rules.resolve(def).auto_pickup):
+		return
 	var velocity: Vector3 = player.controller.state.velocity
 	if held and not was:
 		var _id: int = game.weapon_drops.throw(player.arsenal, player.muzzle_position(), player.aim_direction(), id, def, velocity)
