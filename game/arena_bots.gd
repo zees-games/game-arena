@@ -81,7 +81,24 @@ class Mind:
 	var ride: Variant = null
 	## Where the bot was last tick, to see a teleport.
 	var last_position: Vector3 = Vector3.INF
+	## The commands of the last tick the brain thought, repeated on the ticks it coasts (see [constant THINK_EVERY]).
+	var last_move: DotFpsCommand = null
+	var last_fire: DotWeaponCommand = null
+	## Whether nobody was within [member think_near] metres at the last think.
+	var far: bool = false
 
+
+## Ticks between rebuilds of a contact's loadout (see [method World._loadout_of]).
+const LOADOUT_EVERY := 4
+
+## Think-rate staggering (cvar `bot_think_every`, `bot_think_near`). A bot with no enemy within
+## [member think_near] metres, no target, no ride, no throw, a plain walk and nothing pressed
+## runs its brain one tick in [member think_every], offset by its id so the thinkers spread over
+## the ticks, and repeats its last commands in between. 1 turns it off. Far from a fight a
+## bot's brain only picks a waypoint and walks it; the sight, aim and fight code that costs
+## most is for the nearby enemy, which gets every tick.
+static var think_every: int = 2
+static var think_near: float = 30.0
 
 ## Further than this in one tick is a teleport, metres (a fall at the 3500 u/s limit is under 1).
 const TELEPORT_JUMP := 4.0
@@ -98,6 +115,7 @@ class World:
 	var game: Object = null
 	var tick_rate: float = float(ArenaContent.TICK_RATE)
 	var brains: Dictionary = {}
+	var _loadouts: Dictionary = {}
 	var _tick: int = -1
 	var _contacts: Array = []
 	var _by_id: Dictionary = {}
@@ -162,10 +180,21 @@ class World:
 				c.position = p.global_position
 			if p.health != null and p.health.max_health > 0.0:
 				c.health = p.health.health / p.health.max_health
-			c.loadout = DotBotArms.loadout_of(p.arsenal)
+			c.loadout = _loadout_of(p, tick)
 			_contacts.append(c)
 			_by_id[c.id] = c
 			_players[c.id] = p
+
+	## What the player carries, rated, rebuilt one tick in [constant LOADOUT_EVERY] (offset by id)
+	## and repeated between: it is 33 slot reads and ratings per player per tick for what only a
+	## pickup, a shot or a reload changes, and a bot picks a weapon over tens of ticks.
+	func _loadout_of(p: ArenaPlayer, tick: int) -> Dictionary:
+		var held: Variant = _loadouts.get(p.player_id)
+		if held is Array and (tick + p.player_id) % LOADOUT_EVERY != 0 and tick >= (held as Array)[0] and tick - (held as Array)[0] < LOADOUT_EVERY:
+			return (held as Array)[1]
+		var made := DotBotArms.loadout_of(p.arsenal)
+		_loadouts[p.player_id] = [tick, made]
+		return made
 
 	## Arsenal of any player: its catalogue knows every weapon lying about.
 	static func _any_arsenal(g: Object) -> Object:
@@ -185,6 +214,12 @@ class World:
 
 	## The nearest map surface along a direction, for the walls a bot could run beside.
 	func wall_ahead(from: Vector3, dir: Vector3, reach: float) -> Dictionary:
+		var t_wall := Time.get_ticks_usec()
+		var found := _wall_ahead(from, dir, reach)
+		ArenaFrameProbe.add(&"bot_wall_ray", t_wall)
+		return found
+
+	func _wall_ahead(from: Vector3, dir: Vector3, reach: float) -> Dictionary:
 		var combat: Variant = game.get("combat")
 		var trace: Variant = (combat as Object).get("trace") if combat is Object else null
 		if not trace is DotTrace:
@@ -204,6 +239,12 @@ class World:
 		return _contacts
 
 	func line_of_sight(from: Vector3, to: Vector3) -> bool:
+		var t_los := Time.get_ticks_usec()
+		var seen := _line_of_sight(from, to)
+		ArenaFrameProbe.add(&"bot_los", t_los)
+		return seen
+
+	func _line_of_sight(from: Vector3, to: Vector3) -> bool:
 		var combat: Variant = game.get("combat")
 		var trace: Variant = (combat as Object).get("trace") if combat is Object else null
 		var rules: Variant = game.get("glass_rules")
@@ -321,6 +362,12 @@ class World:
 	## built-in map, over the mesh baked from the brushes on an imported one; empty (walk
 	## straight) off either, with no way, or while an imported map's mesh is still baking.
 	func route(from: Vector3, to: Vector3) -> PackedVector3Array:
+		var t_route := Time.get_ticks_usec()
+		var corners := _route(from, to)
+		ArenaFrameProbe.add(&"bot_route", t_route)
+		return corners
+
+	func _route(from: Vector3, to: Vector3) -> PackedVector3Array:
 		var nav := _nav_for_map()
 		if nav != null:
 			return nav.path(from, to)
@@ -455,6 +502,9 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	if game == null or bot == null:
 		return [move, fire]
 
+	if think_every > 1 and _coasts(mind, tick):
+		return [mind.last_move.duplicate_command(), mind.last_fire.duplicate_command()]
+
 	var world := world_for(game)
 	var t_refresh := Time.get_ticks_usec()
 	world.refresh(tick, tick_rate)
@@ -479,6 +529,7 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	var t_brain := Time.get_ticks_usec()
 	var intent := mind.brain.think(me, world, world.now())
 	ArenaFrameProbe.add(&"bot_brain", t_brain)
+	var t_after := Time.get_ticks_usec()
 	var surf := world.surf_for_map()
 	if surf != null:
 		surf.call(&"steer", bot, mind, intent, tick, tick_rate)
@@ -489,7 +540,32 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)
 	move.sanitise()
 	fire.sanitise()
+	ArenaFrameProbe.add(&"bot_after", t_after)
+	mind.last_move = move.duplicate_command()
+	mind.last_fire = fire.duplicate_command()
+	mind.far = _nobody_near(me, world)
 	return [move, fire]
+
+
+## Whether this tick repeats the last commands rather than think. See [member think_every].
+static func _coasts(mind: Mind, tick: int) -> bool:
+	if not mind.far or mind.last_move == null or mind.brain == null or mind.ride != null or mind.throw_stage != 0:
+		return false
+	if (tick + mind.seed) % think_every == 0:
+		return false
+	var last: DotBotIntent = mind.brain.last
+	if last == null or last.target_id >= 0 or last.state == &"dead":
+		return false
+	return mind.last_move.buttons == 0 and mind.last_fire.buttons == 0
+
+
+## Whether no live enemy of [param me] is within [member think_near] metres.
+static func _nobody_near(me: DotBotContact, world: World) -> bool:
+	var near_sq := think_near * think_near
+	for item: DotBotContact in world.contacts():
+		if item.alive and item.id != me.id and me.is_enemy(item) and item.position.distance_squared_to(me.position) < near_sq:
+			return false
+	return true
 
 
 ## Turns the brain's [member DotBotIntent.throw] into the presses a person makes: draw the
@@ -561,3 +637,4 @@ static func forget(game: Object, id: int) -> void:
 		var held: Variant = game.get_meta(WORLD_META)
 		if held is World:
 			(held as World).brains.erase(id)
+			(held as World)._loadouts.erase(id)

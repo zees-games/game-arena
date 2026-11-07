@@ -319,6 +319,13 @@ const LOD_CONE := 0.2
 ## Frames between presents of a body out of sight.
 const LOD_EVERY := 4
 
+## Past these distances (metres) a body is drawn every second / fourth frame even in plain view:
+## at 45 m a player is a few dozen pixels and 5 fps of animation is not seen.
+const LOD_FAR := 45.0
+const LOD_FARTHEST := 90.0
+
+var _figure_motion: Dictionary = {}
+var _held_thin: bool = false
 var _lod_frames: int = 0
 var _lod_delta: float = 0.0
 

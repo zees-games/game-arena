@@ -428,21 +428,22 @@ func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 		return
 
 	var v := drawn.velocity
-	figure.set_motion({
-		"on_floor": drawn.mode == DotFpsState.Mode.GROUND,
-		"vertical": v.y,
-		"crouched": drawn.crouch_fraction > 0.5,
-		"sliding": _drawn_sliding(drawn),
-		"swimming": drawn.mode == swim.mode_id,
-		"climbing": drawn.mode == ladder.mode_id,
-		"alive": is_alive(),
-		"wall_running": drawn.is_wall_running(),
-		"velocity": v,
-		"wall": Plane(drawn.wall_normal, drawn.position - drawn.wall_normal * (controller.tunables.radius if controller != null else 0.35)) if drawn.wall_normal != Vector3.ZERO else Plane(),
-		# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
-		# reads where this player is aiming.
-		"aim": deg_to_rad(drawn.pitch),
-	})
+	# One dictionary per player, rewritten in place: a fresh one per body per frame was 32 dictionaries a frame.
+	var motion := _figure_motion
+	motion["on_floor"] = drawn.mode == DotFpsState.Mode.GROUND
+	motion["vertical"] = v.y
+	motion["crouched"] = drawn.crouch_fraction > 0.5
+	motion["sliding"] = _drawn_sliding(drawn)
+	motion["swimming"] = drawn.mode == swim.mode_id
+	motion["climbing"] = drawn.mode == ladder.mode_id
+	motion["alive"] = is_alive()
+	motion["wall_running"] = drawn.is_wall_running()
+	motion["velocity"] = v
+	motion["wall"] = Plane(drawn.wall_normal, drawn.position - drawn.wall_normal * (controller.tunables.radius if controller != null else 0.35)) if drawn.wall_normal != Vector3.ZERO else Plane()
+	# The view's pitch: the upper body, the arms and the gun follow it, so anybody watching
+	# reads where this player is aiming.
+	motion["aim"] = deg_to_rad(drawn.pitch)
+	figure.set_motion(motion)
 
 	var id := mirror_weapon if mirrored else (arsenal.current_def().id if arsenal != null and arsenal.current_def() != null else &"")
 	var def := weapon_catalogue().get_def(id) if id != &"" else null
