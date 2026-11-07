@@ -220,7 +220,6 @@ func _serve() -> void:
 	made = module.bridge.bot_ids().size()
 	var add_ms := (Time.get_ticks_usec() - t_add) / 1000.0
 	game = module.game
-	var add_ms := (Time.get_ticks_usec() - t_add) / 1000.0
 	await get_tree().create_timer(_settle).timeout
 	var net: DotNetManager = module.net
 	var before: Dictionary = net.perf_counters()
