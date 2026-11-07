@@ -37,7 +37,7 @@ func _run() -> void:
 	_split_is_documented()
 	_protection()
 	_jump_gate()
-	_report_sections(ids.size() + 4, ids.size() + 4, ids.size() + 4, ids.size() * 2 + 20)
+	_report_sections(ids.size() + 4, ids.size() + 4, ids.size() + 4, ids.size() * 2 + 19)
 
 
 func _game(map: ArenaMap, mode: ArenaMode, split := true) -> ArenaGame:
@@ -148,6 +148,7 @@ func _split_is_documented() -> void:
 func _protection() -> void:
 	var game := _game(ArenaMap.dm_atrium(), ArenaMode.team_deathmatch())
 	game.match_node.rules.spawn_protection_sec = 1.0
+	game.player_stack.refresh_spawn_rules()
 	for b in 4:
 		var _a := game.add_player(b + 1, "P%d" % b, 1 + (b % 2))
 	game.start(0)
