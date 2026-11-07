@@ -75,6 +75,8 @@ The look is a sunny afternoon over saturated pastel prototype blocks: a mid cool
 
 - **A contact shade where boxes meet** (`ArenaMap._add_contact_shade`, dot-lighting's `DotContactShade`, API 4): `to_scene` hands the floor and every box to it and adds its one unshaded band mesh, so a crate, a column, a wall and every stair tread meets what it stands on with a soft shade, which SSAO gives on Forward+ and Compatibility cannot. Loaded by path behind `DotAddonApi.build_level("dot_lighting")`, so a shell older than the helper draws the map without it. A built-in map's box list is all axis-aligned, so every crease is exact.
 
+- **A sky with clouds** (`maps/arena_sky.gdshader`, 2026-11-07): `ArenaMapLighting._cloud_sky` swaps the rig's gradient sky for a sky shader on the same horizon and zenith colours (so the horizon still meets the fog), with a sun glow and a layer of cumulus that thins out toward the horizon. Static, so the radiance map is still built once.
+
 No SDFGI, no volumetric fog, no baked light: the fog is depth fog at 0.12, for the far side of dm_atrium's yard. An imported map is lit from its own manifest instead ([imported-maps](imported-maps.md#lit-from-the-manifest)).
 
 ### Baked light

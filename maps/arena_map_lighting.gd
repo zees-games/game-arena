@@ -24,6 +24,7 @@ const ArenaBspMap := preload("arena_bsp_map.gd")
 const ArenaPaths := preload("../game/arena_paths.gd")
 
 const CHANNEL := "arena.lighting"
+const SKY_SHADER := preload("arena_sky.gdshader")
 
 ## The fixed light for a map that is not there (a null map, or an imported one whose
 ## manifest cannot be read): a sun and a flat grey-blue, what every imported map had before
@@ -54,7 +55,35 @@ static func build(map: Object) -> Node3D:
 		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 		sun.directional_shadow_max_distance = maxf(float(map.extent) * 3.0, 60.0)
 
+	if sun != null:
+		_cloud_sky(root, sun)
+
 	return root
+
+
+## The rig's gradient sky replaced by `arena_sky.gdshader`: the same colours (so the horizon
+## still meets the fog) with clouds and a sun glow.
+static func _cloud_sky(root: Node3D, sun: DirectionalLight3D) -> void:
+	for child in root.get_children():
+		var world := child as WorldEnvironment
+
+		if world == null or world.environment == null or world.environment.sky == null:
+			continue
+
+		var old := world.environment.sky.sky_material as ProceduralSkyMaterial
+
+		if old == null:
+			return
+
+		var mat := ShaderMaterial.new()
+		mat.shader = SKY_SHADER
+		mat.set_shader_parameter("top_colour", old.sky_top_color)
+		mat.set_shader_parameter("horizon_colour", old.sky_horizon_color)
+		mat.set_shader_parameter("sun_colour", sun.light_color)
+		# A light shines along its -Z, so the sun is toward +Z.
+		mat.set_shader_parameter("sun_dir", sun.transform.basis.z)
+		world.environment.sky.sky_material = mat
+		return
 
 
 ## What this machine draws of a map's lighting: dot-lighting's `painted()`.
