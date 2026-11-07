@@ -86,6 +86,7 @@ func _ready() -> void:
 			"--thinkevery": ArenaBots.think_every = int(args[i + 1])
 			"--thinknear": ArenaBots.think_near = float(args[i + 1])
 			"--motorprof": _motorprof = args[i + 1] != "0"
+			"--qprof": _qprof = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
 	for is_start in [true, false]:
@@ -160,10 +161,72 @@ func _report(extra: Dictionary) -> void:
 		out["hull_verified"] = ArenaHullGrid.verified
 		out["hull_mismatches"] = ArenaHullGrid.mismatches
 	out["motor_us_per_bot_tick"] = _motor_phases(_count)
+	if _qprof:
+		out["queries_per_bot_tick"] = _query_phases(_count)
+		out["micro_us"] = _micro()
 	print("SCALE128 ", JSON.stringify(out))
 
 
 var _motorprof := false
+var _qprof := false
+
+
+func _query_phases(ticks: int) -> Dictionary:
+	var out := {}
+	var n := float(maxi(1, _bots * ticks))
+	var names := ["hull_sweep", "flat_sweep", "flat_rest", "flat_overlap", "hull_rest", "hull_overlap", "", "hit_allocs"]
+	for i in names.size():
+		if names[i] != "":
+			out[names[i] + "_n"] = snappedf(DotFpsBody.q_n[i] / n, 0.001)
+			out[names[i] + "_us"] = snappedf(DotFpsBody.q_us[i] / n, 0.01)
+	return out
+
+
+## In-process GDScript cost of the primitives (per op, microseconds), to split the motor into
+## arithmetic, calls, allocation and timer overhead.
+func _micro() -> Dictionary:
+	var out := {}
+	var N := 200000
+	var t := Time.get_ticks_usec()
+	for i in N:
+		pass
+	var base := float(Time.get_ticks_usec() - t) / N
+	out["empty_loop"] = snappedf(base, 0.0001)
+	t = Time.get_ticks_usec()
+	for i in N:
+		var a := Time.get_ticks_usec()
+		var b := Time.get_ticks_usec()
+	out["timer_pair"] = snappedf((float(Time.get_ticks_usec() - t) / N) - base, 0.0001)
+	t = Time.get_ticks_usec()
+	for i in N:
+		var h := DotFpsBody.Hit.new()
+	out["hit_new"] = snappedf((float(Time.get_ticks_usec() - t) / N) - base, 0.0001)
+	var v := Vector3(1, 2, 3)
+	var w := Vector3(0.5, 0.25, 0.125)
+	var f := 0.0
+	t = Time.get_ticks_usec()
+	for i in N:
+		var u := v * 0.3 + w
+	out["vec3_mul_add"] = snappedf((float(Time.get_ticks_usec() - t) / N) - base, 0.0001)
+	t = Time.get_ticks_usec()
+	for i in N:
+		f = v.dot(w) + v.length()
+	out["vec3_dot_len"] = snappedf((float(Time.get_ticks_usec() - t) / N) - base, 0.0001)
+	t = Time.get_ticks_usec()
+	for i in N:
+		f = _noop(f)
+	out["call_noop"] = snappedf((float(Time.get_ticks_usec() - t) / N) - base, 0.0001)
+	var box := AABB(Vector3.ZERO, Vector3.ONE)
+	var b2 := AABB(Vector3(0.5, 0.5, 0.5), Vector3.ONE)
+	t = Time.get_ticks_usec()
+	for i in N:
+		var x := box.intersects(b2)
+	out["aabb_intersects"] = snappedf((float(Time.get_ticks_usec() - t) / N) - base, 0.0001)
+	return out
+
+
+func _noop(x: float) -> float:
+	return x
 
 
 func _motor_phases(ticks: int) -> Dictionary:
@@ -181,6 +244,10 @@ func _motor_phases(ticks: int) -> Dictionary:
 
 
 func _begin_record() -> void:
+	if _qprof:
+		DotFpsBody.qprof = true
+		DotFpsBody.q_us.fill(0)
+		DotFpsBody.q_n.fill(0)
 	if _motorprof:
 		DotFpsMotor.profile = true
 		DotFpsMotor.phase_us.fill(0)
