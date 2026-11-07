@@ -10,6 +10,7 @@ const ArenaPlayerNet := preload("arena_player_net.gd")
 const ArenaNpcNet := preload("arena_npc_net.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaBots := preload("arena_bots.gd")
+const ArenaBotThreads := preload("arena_bot_threads.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaRequest := preload("arena_request.gd")
 
@@ -575,11 +576,21 @@ func _commands() -> Dictionary:
 
 	# A bot's commands are made here, in the slot a client's input lands in, so the game
 	# ticks it exactly as it ticks a person. It sees the present, so no view lag.
+	var driven: Array = []
+	var players: Array = []
+	var minds: Array = []
 	for session_id in _bot_minds:
 		var behaviour: ArenaPlayerNet = _behaviours.get(session_id)
 		if behaviour == null or behaviour.player == null:
 			continue
-		var made := ArenaBots.think(game, behaviour.player, _bot_minds[session_id], _tick, float(game.tick_rate))
+		driven.append(behaviour)
+		players.append(behaviour.player)
+		minds.append(_bot_minds[session_id])
+	# bot_threads: every brain decides at once on worker threads; 0 thinks one bot after another.
+	var made_all: Array = ArenaBotThreads.think_all(game, players, minds, _tick, float(game.tick_rate)) if ArenaBotThreads.active(players.size()) else []
+	for i in driven.size():
+		var behaviour: ArenaPlayerNet = driven[i]
+		var made: Array = made_all[i] if not made_all.is_empty() else ArenaBots.think(game, players[i], minds[i], _tick, float(game.tick_rate))
 		behaviour.last_move = made[0]
 		behaviour.last_fire = made[1]
 		behaviour.last_view_lag = -1.0

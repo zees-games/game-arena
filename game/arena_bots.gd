@@ -109,6 +109,10 @@ class Mind:
 	var coasting: bool = false
 	## The tick of the last think, so a think that follows a coast knows its brain turned for several ticks at once.
 	var last_think_tick: int = -1
+	## Between [method think_begin] and [method think_finish] (see ArenaBotThreads): the body's contact, the world and what the brain decided.
+	var t_me: DotBotContact = null
+	var t_world: Object = null
+	var t_intent: DotBotIntent = null
 
 
 ## Ticks between rebuilds of a contact's loadout (see [method World._loadout_of]).
@@ -173,6 +177,34 @@ class World:
 	## [member ArenaBots.think_near], set by the thinking bot before [method refresh].
 	var near_reach: float = 0.0
 
+	## Parallel think (cvar `bot_threads`, ArenaBotThreads): while true, brains on worker threads ask this world, whose
+	## sight and wall rays then use queries of their own on [member _par_space] and whose other answers take [member _par_lock].
+	var par: bool = false
+	var _par_space: PhysicsDirectSpaceState3D = null
+	var _par_trace: DotTrace = null
+	var _par_physics: bool = false
+	var _par_glass: bool = false
+	var _par_lock := Mutex.new()
+	## GodotPhysics3D answers every query out of buffers the space shares, so rays go one at a time.
+	var _ray_lock := Mutex.new()
+	## Any player's arsenal, taken on the main thread (walking the roster is not for a worker).
+	var _par_arsenal: Object = null
+	## The trace's ray observer (dropped weapons nudged by a shot) is called on the main thread: a worker's wall
+	## rays are logged per job and replayed in job order by [method par_end].
+	var _par_observe: bool = false
+	var _par_job: Dictionary = {}
+	var _par_rays: Dictionary = {}
+
+	func _arsenal_for_drops() -> Object:
+		return _par_arsenal if par else _any_arsenal(game)
+
+	## Which job (brain) the calling thread works on, for the log of its wall rays.
+	func par_job(job: int) -> void:
+		if _par_observe:
+			_par_lock.lock()
+			_par_job[OS.get_thread_caller_id()] = job
+			_par_lock.unlock()
+
 	func _init(p_game: Object) -> void:
 		game = p_game
 		if game.has_signal(&"hit_confirmed"):
@@ -182,7 +214,7 @@ class World:
 		for p in game.call("players"):
 			_hear_player(p)
 		walkable_fn = _walkable_near
-		DotBotArms.wire(self, func() -> Variant: return p_game.get("weapon_drops"), func() -> Object: return _any_arsenal(p_game))
+		DotBotArms.wire(self, func() -> Variant: return p_game.get("weapon_drops"), func() -> Object: return _arsenal_for_drops())
 
 	## Rebuilds the contacts once a tick, however many bots ask.
 	func refresh(tick: int, rate: float) -> void:
@@ -260,7 +292,121 @@ class World:
 		c.air_jump_ready = tunables.launch_enabled and state.launch_cooldown_left <= 0.0
 
 	## The nearest map surface along a direction, for the walls a bot could run beside.
+	## Gets the world ready for brains on other threads; false when the game's trace is one this cannot ask from them.
+	## Starts what a worker would otherwise start (the imported map's mesh bake) on the calling thread first.
+	func par_begin() -> bool:
+		var combat: Variant = game.get("combat")
+		var trace: Variant = (combat as Object).get("trace") if combat is Object else null
+		if not trace is DotTrace:
+			return false
+		_par_trace = trace as DotTrace
+		_par_observe = _par_trace.ray_observer.is_valid()
+		_par_job.clear()
+		_par_rays.clear()
+		_par_arsenal = _any_arsenal(game)
+		_par_physics = false
+		_par_space = null
+		if trace is DotTracePhysics:
+			var bound: Variant = (trace as Object).get("_world")
+			if not bound is World3D:
+				return false
+			_par_space = (bound as World3D).direct_space_state
+			if _par_space == null:
+				return false
+			_par_physics = true
+		elif not trace is DotTraceFlat:
+			return false
+		# The jail glass rule applies on a map with a collision root, as _line_of_sight has it.
+		_par_glass = false
+		var rules: Variant = game.get("glass_rules")
+		if rules is DotMapGlassSight and (rules as DotMapGlassSight).block_sight:
+			var map: Variant = game.get("map")
+			var root: Variant = (map as Object).get("collision_root") if map is Object else null
+			if root is Node3D and (root as Node3D).is_inside_tree():
+				if _par_space == null:
+					return false
+				_par_glass = true
+		var _nav_warm := _nav_for_map()
+		var _surf_warm := surf_for_map()
+		# The brain prunes both each think; once here, theirs find nothing to remove.
+		prune_sight_blockers(now())
+		var _heard := sounds_after(1 << 60, now())
+		par = true
+		return true
+
+	func par_end() -> void:
+		par = false
+		if _par_observe:
+			var jobs := _par_rays.keys()
+			jobs.sort()
+			for job: int in jobs:
+				for r: Array in _par_rays[job]:
+					_par_trace.ray_observer.call(r[0], r[1], r[2])
+		_par_rays.clear()
+		_par_arsenal = null
+		_par_space = null
+		_par_trace = null
+
+	func _glass_of_trace() -> DotMapGlassSight:
+		var g: Variant = _par_trace.get("glass")
+		return g as DotMapGlassSight if g is DotMapGlassSight and (g as DotMapGlassSight).glass_mask != 0 else null
+
+	func _ray_par(from: Vector3, to: Vector3, mask: int) -> Dictionary:
+		var q := PhysicsRayQueryParameters3D.new()
+		q.from = from
+		q.to = to
+		q.collision_mask = mask
+		q.exclude = _par_trace.exclude_rids
+		q.collide_with_areas = false
+		q.collide_with_bodies = true
+		q.hit_from_inside = false
+		_ray_lock.lock()
+		var result := _par_space.intersect_ray(q)
+		_ray_lock.unlock()
+		return result
+
+	func _los_par(from: Vector3, to: Vector3) -> bool:
+		var rules: Variant = game.get("glass_rules")
+		if _par_glass:
+			_ray_lock.lock()
+			var shut := (rules as DotMapGlassSight).blocks(_par_space, from, to)
+			_ray_lock.unlock()
+			if shut:
+				return false
+		if not _par_physics:
+			return _par_trace.line_of_sight(from, to)
+		var distance := from.distance_to(to)
+		if distance <= 0.0001:
+			return true
+		var glass := _glass_of_trace()
+		var base: int = _par_trace.collision_mask
+		return _ray_par(from, from + (to - from) / distance * distance, (base & ~glass.glass_mask) if glass != null else base).is_empty()
+
+	func _wall_par(from: Vector3, dir: Vector3, reach: float) -> Dictionary:
+		var found := {}
+		if not _par_physics:
+			# DotTrace.ray with no hitboxes is this world ray (the observer is called below, on the main thread).
+			var flat: DotHitbox.Hit = _par_trace.call(&"_world_ray", from, dir, reach)
+			if flat.ok():
+				found = {"normal": flat.normal, "distance": flat.distance}
+		else:
+			var glass := _glass_of_trace()
+			var base: int = _par_trace.collision_mask
+			var result := _ray_par(from, from + dir * reach, glass.shot_mask(from, base) if glass != null else base)
+			if not result.is_empty():
+				found = {"normal": result["normal"], "distance": from.distance_to(result["position"])}
+		if _par_observe:
+			_par_lock.lock()
+			var job: int = _par_job.get(OS.get_thread_caller_id(), -1)
+			if not _par_rays.has(job):
+				_par_rays[job] = []
+			(_par_rays[job] as Array).append([from, dir, float(found["distance"]) if not found.is_empty() else reach])
+			_par_lock.unlock()
+		return found
+
 	func wall_ahead(from: Vector3, dir: Vector3, reach: float) -> Dictionary:
+		if par:
+			return _wall_par(from, dir, reach)
 		var t_wall := Time.get_ticks_usec()
 		var found := _wall_ahead(from, dir, reach)
 		ArenaFrameProbe.add(&"bot_wall_ray", t_wall)
@@ -286,6 +432,8 @@ class World:
 		return _contacts
 
 	func line_of_sight(from: Vector3, to: Vector3) -> bool:
+		if par:
+			return _los_par(from, to)
 		var t_los := Time.get_ticks_usec()
 		var seen := _line_of_sight(from, to)
 		ArenaFrameProbe.add(&"bot_los", t_los)
@@ -317,6 +465,14 @@ class World:
 
 	## Spawns and landings, repeated where people stand once the game has recorded enough of it.
 	func waypoints() -> PackedVector3Array:
+		if par:
+			_par_lock.lock()
+			var held := _waypoints()
+			_par_lock.unlock()
+			return held
+		return _waypoints()
+
+	func _waypoints() -> PackedVector3Array:
 		var out := PackedVector3Array()
 		var map: Variant = game.get("map")
 		var spawns: Array = (map as Object).get("spawns") if map is Object else []
@@ -337,6 +493,14 @@ class World:
 	## A route that may ride a ramp or walk through a teleport: the mesh's own answer once the
 	## map's ride edges are linked into it, the walked corners otherwise.
 	func route_detail(from: Vector3, to: Vector3) -> Dictionary:
+		if par:
+			_par_lock.lock()
+			var held := _route_detail(from, to)
+			_par_lock.unlock()
+			return held
+		return _route_detail(from, to)
+
+	func _route_detail(from: Vector3, to: Vector3) -> Dictionary:
 		var surf := surf_for_map()
 		if surf != null:
 			return surf.call(&"route_detail", from, to)
@@ -430,6 +594,11 @@ class World:
 	## built-in map, over the mesh baked from the brushes on an imported one; empty (walk
 	## straight) off either, with no way, or while an imported map's mesh is still baking.
 	func route(from: Vector3, to: Vector3) -> PackedVector3Array:
+		if par:
+			_par_lock.lock()
+			var held := _route(from, to)
+			_par_lock.unlock()
+			return held
 		var t_route := Time.get_ticks_usec()
 		var corners := _route(from, to)
 		ArenaFrameProbe.add(&"bot_route", t_route)
@@ -488,6 +657,30 @@ class World:
 		var nav := _nav_for_map()
 		return nav.closest(at) if nav != null and nav.is_ready() else Vector3.INF
 
+	func walkable_near(at: Vector3) -> Vector3:
+		if par:
+			_par_lock.lock()
+			var held := super(at)
+			_par_lock.unlock()
+			return held
+		return super(at)
+
+	func drops() -> Array:
+		if par:
+			_par_lock.lock()
+			var held := super()
+			_par_lock.unlock()
+			return held
+		return super()
+
+	func ladder(ride_id: int) -> Dictionary:
+		if par:
+			_par_lock.lock()
+			var held := super(ride_id)
+			_par_lock.unlock()
+			return held
+		return super(ride_id)
+
 	## Whether an imported map's mesh is still baking; false on a built-in map or once landed.
 	func is_route_pending() -> bool:
 		return _nav != null and _nav_map == game.get("map") and _nav.is_baking()
@@ -520,6 +713,14 @@ class World:
 
 	## How fast the held weapon's shot flies, m/s; 0 for hitscan, a swing or a throw.
 	func projectile_speed(shooter: DotBotContact) -> float:
+		if par:
+			_par_lock.lock()
+			var held := _projectile_speed(shooter)
+			_par_lock.unlock()
+			return held
+		return _projectile_speed(shooter)
+
+	func _projectile_speed(shooter: DotBotContact) -> float:
 		var p: ArenaPlayer = _players.get(shooter.id) if shooter != null else null
 		var def: DotWeaponDef = p.arsenal.current_def() if p != null and p.arsenal != null else null
 		if def == null or not def.behaviour_path.ends_with(PROJECTILE_BEHAVIOUR) or not (def.tuning is DotWeaponBallistics):
@@ -564,11 +765,20 @@ static func world_for(game: Object) -> World:
 
 ## [move, fire] for [param bot] this tick.
 static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_rate: float) -> Array:
-	var move := DotFpsCommand.new()
-	var fire := DotWeaponCommand.new()
+	var early := think_begin(game, bot, mind, tick, tick_rate)
+	if not early.is_empty():
+		return early
+	var t_brain := Time.get_ticks_usec()
+	mind.t_intent = mind.brain.think(mind.t_me, mind.t_world, mind.t_world.now())
+	ArenaFrameProbe.add(&"bot_brain", t_brain)
+	return think_finish(game, bot, mind, tick, tick_rate)
 
+
+## The part of [method think] before the brain runs, on the main thread: the commands of a tick the bot coasts (or
+## of no game), else an empty array with [member Mind.t_me] and [member Mind.t_world] set for the brain.
+static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_rate: float) -> Array:
 	if game == null or bot == null:
-		return [move, fire]
+		return [DotFpsCommand.new(), DotWeaponCommand.new()]
 
 	_every = think_every if think_every > 0 else (2 if game.player_ids().size() > AUTO_STAGGER_ABOVE else 1)
 	if _every > 1 and _coasts(mind, tick):
@@ -596,9 +806,21 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	if mind.ride == null and mind.last_position != Vector3.INF and me.position.distance_to(mind.last_position) > TELEPORT_JUMP:
 		mind.brain.ride_ended(true)
 	mind.last_position = me.position
-	var t_brain := Time.get_ticks_usec()
-	var intent := mind.brain.think(me, world, world.now())
-	ArenaFrameProbe.add(&"bot_brain", t_brain)
+	mind.t_me = me
+	mind.t_world = world
+	return []
+
+
+## The part of [method think] after the brain ran, on the main thread: the bot's commands from [member Mind.t_intent].
+static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_rate: float) -> Array:
+	var move := DotFpsCommand.new()
+	var fire := DotWeaponCommand.new()
+	var world: World = mind.t_world
+	var me: DotBotContact = mind.t_me
+	var intent: DotBotIntent = mind.t_intent
+	mind.t_me = null
+	mind.t_world = null
+	mind.t_intent = null
 	var t_after := Time.get_ticks_usec()
 	var surf := world.surf_for_map()
 	if surf != null:
