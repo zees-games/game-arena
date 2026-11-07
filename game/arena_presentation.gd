@@ -738,7 +738,9 @@ func _build_audio() -> DotResult:
 	shots.manager = audio
 	shots.enclosure = shot_enclosure
 	add_child(shots)
-	for weapon_class in SHOT_CLASS.values():
+	# Every stock class, not only the local weapons': other players' guns play through this one player
+	# (`remote_shot`), so none of them builds a manager, a player and thirteen registrations (40 ms) on its first shot.
+	for weapon_class in AwShotLayers.STOCK_CLASSES:
 		var _registered := shots.register(DotAudioShotStock.shot(weapon_class))
 	ambient = DotAmbienceDirector.new()
 	ambient.name = "Ambient"
@@ -1369,6 +1371,33 @@ func use_shot_rules(rules: DotShotRules) -> void:
 		shots.rules = rules
 	if shot_enclosure != null:
 		shot_enclosure.rules = rules
+
+
+## The report of somebody else's gun (`AwShotFx.shot_sound`) through this presentation's one layered player.
+## Without it each shooter's `AwShotFx` made its own audio manager, enclosure and shot player on its first shot:
+## 40 ms a shooter, thirty-one times a match at 16 v 16. False for a class with no stock shot (the single sound plays).
+func remote_shot(id: StringName, kind: StringName, at: Vector3, _indoors: bool) -> bool:
+	if shots == null or audio == null:
+		return false
+	var weapon_class := AwWeaponSound.class_for(id, kind)
+	var stock_class := AwShotLayers.shot_class(weapon_class)
+	if stock_class == &"":
+		return false
+	var res := shots.fire(DotAudioShotStock.id_of(stock_class), at, weapon_class == AwWeaponSound.SUPPRESSED)
+	return res.ok and int(res.value_or(0)) > 0
+
+
+## Hands a world model's shot effects (made on its hand's first shot) this presentation's player for the report.
+func share_shots(hand: Node) -> void:
+	if hand == null or hand.child_entered_tree.is_connected(_share_shots_with):
+		return
+	hand.child_entered_tree.connect(_share_shots_with)
+
+
+func _share_shots_with(child: Node) -> void:
+	if child is AwShotFx:
+		(child as AwShotFx).shot_sound = remote_shot
+		(child as AwShotFx).layered_shots = false
 
 
 ## The roof probe the weapon's shot sounds read (`AwShotFx.roof`): roofed means a room tail follows a shot.

@@ -26,6 +26,7 @@ var label: Label = null
 var _camera: Camera3D = null
 ## A view model built in advance, so a kill does not pay for its 30-odd nodes on the frame it starts.
 var _spare: AwViewModel = null
+var _spare_arms: DotPlayerViewArms = null
 var _push := Vector3.ZERO
 var _fire := -1.0
 var _hits := -1.0
@@ -132,14 +133,33 @@ func _new_hands() -> AwViewModel:
 	return model
 
 
+func _exit_tree() -> void:
+	# The spare rig waits outside the tree, so nothing frees it with the view.
+	if _spare_arms != null and is_instance_valid(_spare_arms):
+		_spare_arms.free()
+	_spare_arms = null
+
+
+## The killer's arm rig, built; [method _mount_arms] puts it under the replay camera.
+func _new_arms() -> DotPlayerViewArms:
+	var rig := DotPlayerViewArms.new()
+	add_child(rig)
+	rig.build(DotHumanoidLook.stock(1), 1.8)
+	remove_child(rig)
+	return rig
+
+
 func _prepare_spare() -> void:
-	if _spare != null or not is_inside_tree():
+	if not is_inside_tree():
 		return
-	_spare = _new_hands()
-	_spare.name = "SpareHands"
-	_spare.visible = false
-	_spare.process_mode = Node.PROCESS_MODE_DISABLED
-	add_child(_spare)
+	if _spare == null:
+		_spare = _new_hands()
+		_spare.name = "SpareHands"
+		_spare.visible = false
+		_spare.process_mode = Node.PROCESS_MODE_DISABLED
+		add_child(_spare)
+	if _spare_arms == null and _shares_arms(_spare):
+		_spare_arms = _new_arms()
 
 
 ## Whether the shared arm rig draws the hands; the view model's own sleeves are then built off, not left drawn under the gun.
@@ -151,10 +171,13 @@ func _shares_arms(model: AwViewModel = null) -> bool:
 func _mount_arms(cam: Camera3D) -> void:
 	if not _shares_arms():
 		return
-	arms = DotPlayerViewArms.new()
+	arms = _spare_arms if _spare_arms != null else _new_arms()
+	_spare_arms = null
 	arms.name = "KillerArms"
+	arms.visible = true
+	if arms.get_parent() != null:
+		arms.get_parent().remove_child(arms)
 	cam.add_child(arms)
-	arms.build(DotHumanoidLook.stock(1), 1.8)
 	hands.hands_reached.connect(_on_hands)
 
 
@@ -241,3 +264,5 @@ static func mount(parent: Node, game: Object, target: Object, label: String) -> 
 		view.world_mask = stack.physics.layout.mask_of(layers)
 	parent.add_child(view)
 	target.set(&"present_fn", view.present)
+	# The first kill view found its 30-odd view-model nodes unbuilt (KillerHands, 125 ms); build the spare now, off the kill's frame.
+	view._prepare_spare.call_deferred()
