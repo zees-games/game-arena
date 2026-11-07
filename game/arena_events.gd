@@ -192,7 +192,8 @@ static func write_hello(
 	server_tick: int,
 	map_name: String,
 	score_limit: int,
-	time_limit_sec: float
+	time_limit_sec: float,
+	snapshot_rate: int = 0
 ) -> PackedByteArray:
 	var writer := _w()
 	writer.write_uint(tick_rate, 8)
@@ -202,6 +203,8 @@ static func write_hello(
 	writer.write_string(map_name, MAP_BYTES)
 	writer.write_uint(score_limit, 16)
 	writer.write_float32(time_limit_sec)
+	# The server's snapshot rate (sv_snapshot_rate), 0 for "derive it from the tick rate".
+	writer.write_uint(clampi(snapshot_rate, 0, 255), 8)
 	return writer.to_bytes()
 
 
@@ -214,6 +217,7 @@ static func read_hello(reader: DotNetReader) -> Dictionary:
 		"map_name": reader.read_string(MAP_BYTES),
 		"score_limit": reader.read_uint(16),
 		"time_limit_sec": reader.read_float32(),
+		"snapshot_rate": reader.read_uint(8),
 	}
 	out["ok"] = reader.ok()
 	return out

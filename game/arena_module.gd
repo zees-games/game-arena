@@ -151,6 +151,7 @@ func _module_load() -> DotResult:
 	_add_grenade_cvars()
 	var _glass_cvars := game.glass_rules.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
 	_add_rate_cvar()
+	_add_snapshot_rate_cvar()
 	if game.config_binder != null:
 		game.config_binder.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
 		game.config_binder.bind_commands(add_command)
@@ -385,7 +386,7 @@ func _build_netcode() -> DotResult:
 
 	var config := DotNetConfig.new()
 	config.tick_rate = game.tick_rate
-	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
+	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate, snapshot_target())
 	config.enable_prediction = true
 	# On: a player shoots where they SEE someone, which is where that player was half a round trip ago.
 	config.enable_lag_compensation = true

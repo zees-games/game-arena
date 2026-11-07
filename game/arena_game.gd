@@ -11,10 +11,24 @@ const HULL_REACH_SQ := 16.0
 
 ## The deathmatch itself: a match, a combat manager, a map, and some players.
 
-## The snapshot rate at [param rate] ticks a second: the nearest to [constant NET_SNAPSHOT_RATE]
-## that is a whole number of ticks apart (64 and 128 give 32, 60 gives 30).
-static func snapshot_rate_for(rate: int) -> int:
-	return rate / maxi(1, roundi(float(rate) / float(NET_SNAPSHOT_RATE)))
+## The snapshot rate at [param rate] ticks a second: the rate nearest [param target] (default
+## [constant NET_SNAPSHOT_RATE], or `sv_snapshot_rate` on a server) that is an EXACT divisor of the tick rate,
+## so a snapshot lands on every n-th tick (64 and 128 give 32, 60 gives 30, 66 gives 33, 33 gives 33, 22 gives 22).
+## A target above the tick rate is the tick rate. A rate that does not divide the tick rate (16 at 33 Hz) made the
+## client's death-camera chain stall in `headless_net`, so it is never returned.
+static func snapshot_rate_for(rate: int, target: int = NET_SNAPSHOT_RATE) -> int:
+	var want := target if target > 0 else NET_SNAPSHOT_RATE
+	var total := maxi(rate, 1)
+	var best := total
+	for every in range(2, total + 1):
+		if total % every != 0:
+			continue
+		var candidate := total / every
+		var gap := absi(candidate - want)
+		var best_gap := absi(best - want)
+		if gap < best_gap or (gap == best_gap and candidate > best):
+			best = candidate
+	return best
 
 ## The sprint rules start from this game's own tunables, so loading them (for `sv_sprint_shoot` and `sv_sprint_barrel`) leaves the speeds as they were.
 static func _make_combat_feel() -> DotGameCombatFeel:

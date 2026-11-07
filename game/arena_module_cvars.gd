@@ -10,6 +10,7 @@ var game: ArenaGame = null
 ## dedicated server are different deployments of the same game and only one replicates.
 var net: DotNetManager = null
 var _cv_maxrate: DotConVar = null
+var _cv_snapshot_rate: DotConVar = null
 ## The team menu server and its team layout cvars (arena_team_menu.gd).
 var team_menu: RefCounted = null
 
@@ -208,6 +209,21 @@ func _add_rate_cvar() -> void:
 			if net != null and net.config != null:
 				net.config.per_client_budget = new_value.to_int()
 			log_info("rate cap changed", {"bytes_per_sec": new_value.to_int()}))
+
+
+## `sv_snapshot_rate`: snapshots a second to aim at, 0 for the derived default ([constant ArenaGame.NET_SNAPSHOT_RATE]).
+## Independent of the tick rate: the rate sent is the nearest whole-tick divisor ([method ArenaGame.snapshot_rate_for]),
+## HELLO carries it to each client, so it applies to the map being built and to clients that join after.
+func _add_snapshot_rate_cvar() -> void:
+	_cv_snapshot_rate = add_cvar("sv_snapshot_rate", "0",
+		"Snapshots a second to aim at; 0 is the default (32). Applies when the game is built; clients learn it at join.",
+		DotConVar.FLAG_ARCHIVE).with_range(0.0, 128.0)
+
+
+## The target `sv_snapshot_rate` names, or the game's default when it is 0 or unset.
+func snapshot_target() -> int:
+	var asked := _cv_snapshot_rate.get_int() if _cv_snapshot_rate != null else 0
+	return asked if asked > 0 else ArenaGame.NET_SNAPSHOT_RATE
 
 
 func _add_spawn_cvars() -> void:
