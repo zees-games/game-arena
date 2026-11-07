@@ -6,7 +6,7 @@ extends "lossy_base.gd"
 func _command_a(tick: int) -> DotFpsCommand:
 	if _wall_idle:
 		if _hop_from >= 0:
-			return _hop_command(tick - _hop_from)
+			return _pilot_command(tick - _hop_from) if _hop_pilot else _hop_command(tick - _hop_from)
 		return _wall_command(tick - _wall_from if _wall_from >= 0 else -1)
 	var move := DotFpsCommand.new()
 	var strafe := 1.0 if (tick / 24) % 2 == 0 else -1.0
@@ -58,6 +58,30 @@ func _hop_command(k: int) -> DotFpsCommand:
 		if k < at + hold + rest:
 			return move
 		at += hold + rest
+		i += 1
+	return move
+
+
+## The netchaos pilot's habits, read off the tick: forward held, the view swinging 30 degrees either side of the wall,
+## and every 0.3 to 1.2 s a new pick of strafe left, strafe right, jump held or nothing.
+func _pilot_command(k: int) -> DotFpsCommand:
+	var move := DotFpsCommand.new()
+	move.yaw = -90.0
+	if k < 0:
+		return move
+	move.yaw = -90.0 + 30.0 * sin(float(k) / float(Engine.physics_ticks_per_second) * 0.7)
+	move.move = Vector2(0.0, 1.0)
+	var at := 0
+	var i := 0
+	while true:
+		var span := int(float(Engine.physics_ticks_per_second) * (0.3 + float((i * 7919) % 900) / 1000.0))
+		if k < at + span:
+			match (((i * 31 + 7) * 2654435761) >> 8) % 4:
+				0: move.move.x = -1.0
+				1: move.move.x = 1.0
+				2: move.buttons |= DotFpsCommand.BUTTON_JUMP
+			return move
+		at += span
 		i += 1
 	return move
 

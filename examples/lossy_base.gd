@@ -80,7 +80,7 @@ const RELIABLE_SECONDS := 35.0
 ## Checks per window, and outside them.
 const MEASURE_ATTEMPTS := 6
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 57
+const OTHER_CHECKS := 63
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -131,6 +131,10 @@ var _w_seen_up: Dictionary = {}
 var _wall_from := -1
 var _wall_idle := false
 var _hop_from := -1
+## The hop section drives the netchaos pilot's habits (view swinging, strafe and jump held in uneven stretches) instead of the plain hops.
+var _hop_pilot := false
+var _hop_starved: Array[int] = []
+var _hop_starved_seen := 0
 
 ## A's input tick its sprint pattern starts on (-1 off), and whether the wall script holds sprint.
 var _stam_from := -1
