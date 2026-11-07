@@ -29,12 +29,12 @@ func _command_a(tick: int) -> DotFpsCommand:
 func _wall_command(k: int) -> DotFpsCommand:
 	var move := DotFpsCommand.new()
 	move.yaw = -90.0
-	if k < 0 or k > 120:
+	if k < 0 or k > _t66(120):
 		return move
 	move.move = Vector2(0.0, 1.0)
-	if k == 12 or k == 50:
+	if k == _t66(12) or k == _t66(50):
 		move.buttons |= DotFpsCommand.BUTTON_JUMP
-	if k == 15 or (_wall_hold_sprint and k > 15 and k < 100):
+	if k == _t66(15) or (_wall_hold_sprint and k > _t66(15) and k < _t66(100)):
 		move.buttons |= DotFpsCommand.BUTTON_SPRINT
 	return move
 
