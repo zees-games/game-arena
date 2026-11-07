@@ -590,11 +590,18 @@ func spawn(at: Transform3D, tick: int, protection_ticks: int = 0) -> void:
 
 ## The health bar's two quads share their meshes and materials among every player: they are the
 ## same for all, and 31 bots' worth of QuadMesh + StandardMaterial3D was made on the first hits.
-static var _tag_assets: Dictionary = {}
+## Kept in the root window's metadata, not a static var: a static would still hold them at exit
+## and the suites' leak check would count them.
+static func _tag_assets() -> Dictionary:
+	var root: Window = (Engine.get_main_loop() as SceneTree).root
+	if not root.has_meta(&"arena_tag_assets"):
+		root.set_meta(&"arena_tag_assets", {})
+	return root.get_meta(&"arena_tag_assets")
 
 static func _tag_quad(colour: Color, forward: float) -> MeshInstance3D:
 	var key := colour.to_html()
-	var shared: Dictionary = _tag_assets.get(key, {})
+	var assets := _tag_assets()
+	var shared: Dictionary = assets.get(key, {})
 	if shared.is_empty():
 		var quad := QuadMesh.new()
 		quad.size = Vector2(HEALTH_TAG_WIDTH, 0.09)
@@ -604,7 +611,7 @@ static func _tag_quad(colour: Color, forward: float) -> MeshInstance3D:
 		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		material.cull_mode = BaseMaterial3D.CULL_DISABLED
 		shared = {"mesh": quad, "material": material}
-		_tag_assets[key] = shared
+		assets[key] = shared
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = shared["mesh"]
 	mesh.material_override = shared["material"]
