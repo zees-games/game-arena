@@ -40,6 +40,9 @@ var stats: DotBotAimStats = null
 var place_span: float = 30.0
 var places: int = 0
 var engagements: int = 0
+## Seconds between reloads of the heatmap and aim statistics while recording, so what players do tonight shapes the bots within the hour.
+var refresh_interval: float = 600.0
+var refreshes: int = 0
 
 var _engaged: Dictionary = {}
 var _place_started: Dictionary = {}
@@ -47,6 +50,8 @@ var _fight_until: Dictionary = {}
 var _map: Object = null
 var _roam_cache: Array = [0, PackedVector3Array()]
 var _hooked: bool = false
+var _since_refresh: float = 0.0
+var _refreshing: bool = false
 
 
 static func place_schema() -> DotBotDemoSchema:
@@ -109,6 +114,10 @@ func is_on() -> bool:
 func process(delta: float) -> void:
 	if recorder != null:
 		recorder.process(delta)
+		if recorder.is_on():
+			_since_refresh += delta
+			if _since_refresh >= refresh_interval:
+				_refresh_soon()
 
 
 ## After [param player] simulated a tick with [param move] and [param fire].
@@ -141,11 +150,36 @@ func weight_waypoints(points: PackedVector3Array) -> PackedVector3Array:
 func refresh() -> DotResult:
 	if store == null or recorder == null:
 		return DotResult.fail(DotError.CODE_STATE, "Not set up.")
-	_fresh_folds()
-	var folded: DotResult = await heatmap.fold_store(store, recorder.map_id, recorder.map_version, ["all", "t1", "t2"])
+	var fresh_heat := _new_heatmap()
+	var fresh_stats := _new_stats()
+	var folded: DotResult = await fresh_heat.fold_store(store, recorder.map_id, recorder.map_version, ["all", "t1", "t2"])
 	if not folded.ok:
 		return folded
-	return await stats.fold_store(store, recorder.map_id, recorder.map_version, ["all"])
+	folded = await fresh_stats.fold_store(store, recorder.map_id, recorder.map_version, ["all"])
+	if not folded.ok:
+		return folded
+	# Swapped in whole, so waypoints never read a half-folded heatmap.
+	heatmap = fresh_heat
+	stats = fresh_stats
+	_roam_cache = [0, PackedVector3Array()]
+	refreshes += 1
+	return folded
+
+
+## The suggested presets for one map version in [param p_store], as lines for a person to review; changes nothing.
+static func preset_lines(p_store: DotBotDemoStore, p_map_id: String, p_version: String, min_count: int = 0) -> PackedStringArray:
+	var counts: DotResult = p_store.counts(p_map_id, p_version, DotBotAimStats.KIND)
+	if not counts.ok:
+		return PackedStringArray([str(counts.message)])
+	var aim := _new_stats()
+	aim.map_id = p_map_id
+	aim.map_version = p_version
+	if min_count > 0:
+		aim.min_count = min_count
+	var folded: DotResult = await aim.fold_store(p_store, p_map_id, p_version, (counts.value as Dictionary).keys())
+	if not folded.ok:
+		return PackedStringArray([str(folded.message)])
+	return aim.describe_lines() + aim.suggest_lines()
 
 
 func describe_lines() -> PackedStringArray:
@@ -158,11 +192,31 @@ func describe_lines() -> PackedStringArray:
 
 
 func _fresh_folds() -> void:
-	heatmap = DotBotDemoHeatmap.new()
-	heatmap.fight_index = 3
-	stats = DotBotAimStats.new()
-	stats.track_index = 2
+	heatmap = _new_heatmap()
+	stats = _new_stats()
 	_roam_cache = [0, PackedVector3Array()]
+
+
+static func _new_heatmap() -> DotBotDemoHeatmap:
+	var h := DotBotDemoHeatmap.new()
+	h.fight_index = 3
+	return h
+
+
+static func _new_stats() -> DotBotAimStats:
+	var a := DotBotAimStats.new()
+	a.track_index = 2
+	return a
+
+
+## Reloads in the background; one at a time, and a request made meanwhile is dropped.
+func _refresh_soon() -> void:
+	_since_refresh = 0.0
+	if _refreshing:
+		return
+	_refreshing = true
+	var _r: Variant = await refresh()
+	_refreshing = false
 
 
 func _team_mode() -> bool:
@@ -183,6 +237,7 @@ func _sync_map() -> void:
 	_place_started.clear()
 	var version := str(current.call(&"effective_content_version")) if current.has_method(&"effective_content_version") else "0"
 	recorder.set_map(str(current.get("id")), version)
+	_refresh_soon()
 
 
 func _place(id: int, player: Object, state: DotFpsState, fighting: bool, tick: int) -> void:

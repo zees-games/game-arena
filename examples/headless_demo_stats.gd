@@ -3,6 +3,7 @@ extends Node
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
+const ArenaDemoStatsScript := preload("../game/arena_demo_stats.gd")
 
 ## Place and engage recordings and heatmap-weighted roaming: off by default, a bot is never recorded, a player standing and aiming at another becomes a `place` and an `engage` episode, and the bots' waypoints repeat where people stand.
 ##
@@ -11,7 +12,7 @@ const ArenaBots := preload("../game/arena_bots.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 19
+const EXPECTED_CHECKS := 29
 
 var _checks := 0
 var _failed := 0
@@ -143,6 +144,15 @@ func _run() -> void:
 	_check(fired_at > 0, "the shot is in the episode, after the player had the enemy in view", str(fired_at))
 	_check(first_error > 0.05 and first_error < 5.0, "the view error off the target is measured in degrees", str(first_error))
 
+	_check(stats.refreshes >= 1, "loading the map reloaded the folds on its own", str(stats.refreshes))
+	var before_periodic: int = stats.refreshes
+	stats.refresh_interval = 0.05
+	stats.process(0.1)
+	for _i in 3:
+		await get_tree().physics_frame
+	_check(stats.refreshes > before_periodic, "the slow timer reloads them again", "%d -> %d" % [before_periodic, stats.refreshes])
+	stats.refresh_interval = 600.0
+
 	var folded: DotResult = await stats.refresh()
 	_check(folded.ok and stats.stats.episode_count("all") + stats.stats.dropped >= 1, "the aim statistics fold the engagement", str(folded.error))
 	_check(stats.heatmap.episode_count() >= 2, "the heatmap folds the place episodes", str(stats.heatmap.episode_count()))
@@ -174,6 +184,51 @@ func _run() -> void:
 		if p == busy:
 			at_busy += 1
 	_check(weighted.size() > plain.size() and at_busy > 1 and weighted.count(empty) == 1, "roaming repeats the busy point and leaves the empty one once", "%d busy of %d" % [at_busy, weighted.size()])
+
+	# Engage detection against synthetic placements of the enemy: the cone (45 degrees), the range (60 m) and the grace out of view (0.5 s).
+	var spot := Transform3D(Basis(), Vector3(-30.0, 0.05, -20.0))
+	victim.spawn(spot, _game.current_tick())
+	for _i in 40:
+		await _step(0, 0.0, 0.0)
+	_check(not stats._engaged.has(1), "an enemy 90 degrees off the view is not an engagement")
+	victim.spawn(Transform3D(Basis(), Vector3(-10.0, 0.05, -90.0)), _game.current_tick())
+	for _i in 40:
+		await _step(0, 0.0, 0.0)
+	_check(not stats._engaged.has(1), "an enemy 70 m away is out of range")
+	victim.spawn(Transform3D(Basis(), Vector3(-20.0, 0.05, -37.0)), _game.current_tick())
+	for _i in 10:
+		await _step(0, 0.0, 0.0)
+	_check(stats._engaged.has(1), "an enemy 30 degrees off the view and in range starts one")
+	for _i in 20:
+		await _step(0, 90.0, 0.0)
+	for _i in 5:
+		await _step(0, 0.0, 0.0)
+	_check(stats._engaged.has(1), "a glance away shorter than the grace keeps it")
+	for _i in 45:
+		await _step(0, 90.0, 0.0)
+	_check(not stats._engaged.has(1), "looking away for longer than the grace ends it")
+	await stats.recorder.flush_all()
+	_check(_episodes(store, "engage").size() == 1, "an engagement that never reached a hit stores nothing", str(_episodes(store, "engage").size()))
+
+	# The suggestion tool's lines over a store: too few episodes say so, enough print a table.
+	var tool_store := DotBotDemoStoreMemory.new()
+	var few := await ArenaDemoStatsScript.preset_lines(tool_store, "lane", "1")
+	_check(not few.is_empty() and few[few.size() - 1].contains("not enough"), "no recordings print a message", str(few))
+	for i in 40:
+		var ep := DotBotDemoEpisode.new()
+		ep.map_id = "lane"
+		ep.map_version = "1"
+		ep.kind = "engage"
+		ep.key = "all"
+		ep.rate = 10.0
+		ep.frame_size = 3
+		ep.day = Time.get_date_string_from_system(true)
+		for f in 20:
+			ep.ticks.append_array(PackedFloat32Array([4.0 + i * 0.1, 1.0 if f >= 2 + i % 8 else 0.0, 3.0]))
+		var _kept := ep.ticks.size()
+		var _added := await tool_store.append([ep])
+	var many := await ArenaDemoStatsScript.preset_lines(tool_store, "lane", "1", 10)
+	_check(many.size() > 3 and "\n".join(many).contains("aim_error") and "\n".join(many).contains("hard"), "enough recordings print every preset", "\n".join(many))
 
 	var off_game: PackedStringArray = stats.describe_lines()
 	_check(off_game.size() >= 2, "it describes itself")
