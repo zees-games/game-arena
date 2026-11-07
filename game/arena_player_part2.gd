@@ -345,6 +345,25 @@ func _flashlight_hands(pressed: bool, delta: float) -> void:
 ## Advances the player one tick. [b]The order is not arbitrary.[/b] Movement runs first so the shot
 ## leaves from where the player ends the tick rather than where they started it — half a tick of
 ## movement at arena speeds is fifteen centimetres, which at range is a miss.
+## Squeezes the hit zones down with the body. The zones are authored for a standing player; a crouched one is drawn
+## about a quarter lower, so without this the head zone floated above the crouched head and a shot at the drawn head
+## landed on the chest. Heights (and capsule lengths) scale, widths do not, and the feet stay on the ground.
+func fit_hitboxes_to_stance() -> void:
+	if hitboxes == null or controller == null or controller.tunables == null:
+		return
+	var t := controller.tunables
+	var k := lerpf(1.0, t.crouch_height / maxf(t.stand_height, 0.01), clampf(controller.state.crouch_fraction, 0.0, 1.0))
+	for box in hitboxes.hitboxes():
+		if not box.has_meta(&"stand_y"):
+			box.set_meta(&"stand_y", box.position.y)
+			box.set_meta(&"stand_h", box.height)
+		var y: float = box.get_meta(&"stand_y")
+		var h: float = box.get_meta(&"stand_h")
+		box.position.y = y * k
+		if box.shape == DotHitbox.Shape.CAPSULE:
+			box.height = maxf(h * k, box.radius * 2.0 + 0.02)
+
+
 func simulate_tick(
 	tick: int,
 	delta: float,
@@ -369,6 +388,7 @@ func simulate_tick(
 	var t_ctl := Time.get_ticks_usec()
 	controller.simulate_tick(tick, delta)
 	ArenaFrameProbe.add(&"p_controller", t_ctl)
+	fit_hitboxes_to_stance()
 	var t_mech := Time.get_ticks_usec()
 	_run_map_mechanics(start, delta)
 	_follow_map_volumes()
