@@ -251,9 +251,11 @@ func _probe_client() -> void:
 	audio.played.connect(func(id: StringName, _h: int, why: StringName) -> void:
 		if why == &"ok":
 			sounds.append(id))
-	var _fill := me.arsenal.give(AwWeaponIds.SNIPER)
-	var _sel := me.arsenal.select(AwWeaponIds.big_gun_slot(), g.current_tick())
 	for scoped in [false, true]:
+		# The hip shot uses a rifle: the sniper's 8 degree hip cone (a missed shot at 6 m, now that the body is
+		# the 72 unit one and a third smaller in area) tests the weapon's inaccuracy, not that the shot registers.
+		var _fill := me.arsenal.give(AwWeaponIds.SNIPER if scoped else AwWeaponIds.RIFLE)
+		var _sel := me.arsenal.select(AwWeaponIds.big_gun_slot() if scoped else AwWeaponIds.SLOT_PRIMARY, g.current_tick())
 		var hits: Array = []
 		var on_hit := func(a: int, v: int, _amt: float, _pt: Vector3, _h: bool, _l: bool) -> void:
 			hits.append([a, v])
