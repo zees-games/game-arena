@@ -16,6 +16,10 @@ static func build(game) -> void:
 	layer.look_of = look
 	game.weapon_drops = layer
 	game.add_child(layer)
+	# A client parks its bodies under the loading cover; a server that draws nothing has no cover, and
+	# its first throw of each weapon built and measured the model inside a tick (75 ms for a rifle).
+	if not layer.draws and layer.is_authority:
+		warm_server(layer)
 
 
 ## Weapons worth parking a drop body for: every one with art, the same set the first-person warm-up walks.
@@ -30,6 +34,20 @@ static func prewarm_step(game, ids: Array, from: int, until_msec: int) -> int:
 		game.weapon_drops.prewarm(ids[next], 1)
 		next += 1
 	return next
+
+
+## Parks a body per weapon on a layer that draws nothing, a few ms a frame, so the first throw of each only takes one. Ends when the layer leaves the tree.
+static func warm_server(layer: DotWeaponDrops, slice_msec: int = 4) -> void:
+	var ids := prewarm_ids()
+	var next := 0
+	while next < ids.size():
+		await layer.get_tree().process_frame
+		if not is_instance_valid(layer) or not layer.is_inside_tree():
+			return
+		var until := Time.get_ticks_msec() + slice_msec
+		while next < ids.size() and Time.get_ticks_msec() < until:
+			layer.prewarm(ids[next], 1)
+			next += 1
 
 
 static func teardown(game) -> void:
