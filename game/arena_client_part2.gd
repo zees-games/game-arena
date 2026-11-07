@@ -514,7 +514,8 @@ func _build_platform() -> void:
 	gate.hold(&"map", "Loading the map")
 	# Headless draws nothing: loading every weapon model to warm its materials is 38 MB for no frame.
 	if not DotPlatform.is_headless():
-		gate.warm_up(_weapon_warm_items())
+		_warm_hand(_weapon_warm_items())
+		gate.ready_to_show.connect(_cover_flush)
 		gate.opened.connect(_begin_warm_rest, CONNECT_ONE_SHOT)
 	if ArenaFrameProbe.on() and DotWeb.available():
 		# Lets a page script split its own frame log at the cover (window.dotWeb.publishedAt.arena_gate_open, ms).

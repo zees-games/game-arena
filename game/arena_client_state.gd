@@ -215,6 +215,9 @@ var _model_paths_next := -1
 ## State of the load-gate warm-up, see [method _prewarm_tick]; empty when idle.
 var _warm := {}
 
+## Materials waiting for [ArenaCoverWarm] (cl_cover_warm); handed to the gate's own warm-up if it never runs.
+var _cover_items: Array = []
+
 ## Whether this client believes it is holding a prop.
 ##
 ## [b]A belief, not a fact, and the distinction is the whole reason props are not

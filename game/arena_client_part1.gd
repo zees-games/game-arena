@@ -366,8 +366,9 @@ func _prewarm_tick() -> void:
 				if is_instance_valid(_warm.spare):
 					(_warm.spare as Node).queue_free()
 				_warm.erase("spare")
-				gate.warm_up(AwViewModel.prepared_materials())
-				gate.warm_up(AwShotFx.warm())
+				_warm_hand(AwViewModel.prepared_materials())
+				_warm_hand(AwShotFx.warm())
+				_cover_warm_start(body.camera)
 				_warm.phase = 1
 		1:
 			if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
@@ -425,10 +426,41 @@ func _prewarm_end() -> void:
 	if gate != null:
 		gate.release(&"weapons")
 
+## Hands materials to be drawn once under the cover: to the gate's own warm-up, or (cl_cover_warm, on in a
+## browser) to [ArenaCoverWarm], which draws them a few a round so a cold GPU shader cache is many short
+## frames and not one of seconds.
+func _warm_hand(items: Array) -> void:
+	if ArenaCoverWarm.enabled():
+		_cover_items.append_array(items)
+	else:
+		gate.warm_up(items)
+
+
+## Starts [ArenaCoverWarm] on what [method _warm_hand] collected.
+func _cover_warm_start(camera: Camera3D) -> void:
+	if _cover_items.is_empty() or camera == null:
+		_cover_flush()
+		return
+	var node := ArenaCoverWarm.new()
+	node.name = "CoverWarm"
+	node.batch = ArenaCoverWarm.batch_setting()
+	add_child(node)
+	node.run(gate, camera, _cover_items)
+	_cover_items = []
+
+
+## Gives what was collected to the gate's own warm-up: the sliced one will not run (no camera, the gate already open).
+func _cover_flush() -> void:
+	if gate != null and not _cover_items.is_empty():
+		gate.warm_up(_cover_items)
+	_cover_items = []
+
+
 ## Builds every weapon's first-person view once on a spare view model, under the loading cover.
 func _prewarm_weapons(body: ArenaPlayer) -> void:
 	# Headless draws nothing, so the spare views only add nodes, memory and frames (perf smoke).
 	if DotPlatform.is_headless() or gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
+		_cover_flush()
 		return
 	var spare := AwViewModel.new()
 	spare.name = "WeaponPrewarm"
