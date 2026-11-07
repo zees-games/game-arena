@@ -525,11 +525,15 @@ func server_tick(tick: int) -> void:
 	_watch_map_io()
 	_watch_bullets()
 
+	var t_net := Time.get_ticks_usec()
 	if net != null:
 		net.server_tick(tick)
+	ArenaFrameProbe.add(&"srv_net", t_net)
 
 	ensure_game_ticked(tick)
+	var t_hits := Time.get_ticks_usec()
 	_flush_hits()
+	ArenaFrameProbe.add(&"srv_hits", t_hits)
 
 
 ## Runs the whole game for a tick, at most once.
@@ -541,7 +545,12 @@ func ensure_game_ticked(tick: int) -> void:
 		return
 
 	_game_ticked_for = tick
-	game.tick(_commands())
+	var t_cmd := Time.get_ticks_usec()
+	var cmds := _commands()
+	ArenaFrameProbe.add(&"srv_bots", t_cmd)
+	var t_game := Time.get_ticks_usec()
+	game.tick(cmds)
+	ArenaFrameProbe.add(&"srv_game", t_game)
 	_tick_killview()
 
 	# The toys where the physics left them, before the snapshot: a toy's own `_net_simulate`
