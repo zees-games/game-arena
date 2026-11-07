@@ -44,6 +44,8 @@ On the client:
 - `ArenaMapSession` refuses on `_mode_after(map)`: the map's own mode if its def names one, otherwise the one already playing.
 - `ArenaMapDirector.restrict_rotation` narrows `DotMapRotation.order` to what the current mode can host before every ask, because the mode changes under a running server. It never empties the order: a mode no map can host is a configuration mistake, and "the map did not change" says so.
 
+A map can also list the modes it hosts. An imported map's manifest `modes` (written from `zones/<id>.json` by the importer, see arena-dm-maps) is carried as `DotMapDef.meta["modes"]` and `supports_mode` answers from it first: `["ffa", "gungame", "tdm", "ctf"]` offers exactly those, a team mode still needing tagged spawns. Spawns tagged `red` and `blue` come from the manifest's per-spawn `team`. `flag_spawns` in the manifest set `ArenaMap.flag_homes`, which `ArenaObjectives.build` uses for the `ctf` layout instead of the ends of the longest axis. **CTF-capable maps** are the ones that list `ctf`: two bases at least about 60 m apart, each with its own spawn block. The stock `dm_` maps are too small; `cp-orange-x3` qualifies.
+
 ## Every map is surveyed
 
 `ArenaMapSurvey` (`maps/arena_map_survey.gd`) runs over the box list and is asserted per map in `headless_match`'s *every map: slots and reach*:

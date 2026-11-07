@@ -352,6 +352,7 @@ static func _imported_def_for(id: StringName, map: ArenaMap) -> DotMapDef:
 		"builder": "ArenaMap.by_id",
 		"spawns": map.spawns.size(),
 		"teams": _has_team_spawns(map),
+		"modes": Array(map.modes),
 		"imported": true,
 		"manifest": map.manifest_path,
 		"movement": String(map.movement_profile),
@@ -776,6 +777,19 @@ static func supports_mode(def: DotMapDef, mode: ArenaMode) -> bool:
 
 	if is_workshop(def) and not build_workshop(def).ok:
 		return false
+
+	# A map that lists its modes (maps/<id>.json `modes`, from zones/<id>.json) is asked first:
+	# the list is the map author's word on size and layout, which spawns cannot tell.
+	var listed: Array = def.meta.get("modes", [])
+
+	if not listed.is_empty():
+		if not listed.has(String(mode.id)):
+			return false
+
+		if mode.is_team_mode() and not bool(def.meta.get("teams", false)):
+			return false
+
+		return true
 
 	# An imported map has no box list, and the monsters' navigation, the objectives'
 	# layout and the scattered props are all built out of one. Offered such a mode it

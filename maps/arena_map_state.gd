@@ -141,6 +141,13 @@ const DAYLIGHT := {
 ## The manifest this map was built from; empty for a built-in map.
 var manifest_path: String = ""
 
+## Where each side's flag sits on a map that places them (an imported map's `flag_spawns`), by spawn
+## tag, in metres. Empty means [method ArenaObjectives.build] puts them at the ends of the longest axis.
+var flag_homes: Dictionary = {}
+
+## The mode ids the map says it can host (an imported map's `modes`); empty leaves it to the spawns.
+var modes: PackedStringArray = PackedStringArray()
+
 ## The manifest's `kind` (`arena` for the maps this game plays).
 var source_kind: String = ""
 
