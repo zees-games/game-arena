@@ -563,9 +563,10 @@ func _start_solo_workbench() -> void:
 	_workbench = wb
 
 func _start_offline() -> void:
-	# Nothing to catch up with offline: a slow frame owed several steps makes the next
-	# frame slower still. Two steps, then the owed time is dropped.
-	Engine.max_physics_steps_per_frame = 2
+	# Offline catches up with wall-clock time only as far as a tick is cheap enough to
+	# (`_physics_process` adjusts this from the measured cost, ArenaTickBudget); a flat
+	# cap of 2 ran the whole simulation at half speed whenever a frame took over 30 ms.
+	Engine.max_physics_steps_per_frame = ArenaTickBudget.MAX_STEPS
 	game.start(0)
 	_start_solo_workbench()
 
