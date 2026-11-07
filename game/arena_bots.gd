@@ -59,6 +59,10 @@ const THROW_GIVE_UP_SEC := 2.5
 ## Where the world is kept on the game.
 const WORLD_META := &"arena_bot_world"
 
+## A drop up to this many metres gets a reverse climb edge on a team map, and the ids those take.
+const LEDGE_CLIMB_MAX := 2.2
+const LEDGE_CLIMB_ID := 5000000
+
 ## Height of the eye and of a target's chest above its feet, metres.
 const EYE := 1.6
 const CHEST := 1.25
@@ -293,6 +297,7 @@ class World:
 		if join_edges and DotAddonApi.build_level("dot_bot") >= 12:
 			_edges = DotBotLinks.new()
 			_edges.join(nav)
+			_climb_back_ledges(nav)
 		if DotAddonApi.build_level("dot_bot") >= 13:
 			extra_waypoints = nav.spread_points(ROAM_PLACES, DotRandomStream.new(7919, &"roam"))
 		var mechanics: Variant = (game.get("map") as Object).get("mechanics")
@@ -302,6 +307,26 @@ class World:
 		if links != null:
 			_ladders = links
 			ladder_fn = links.ladder_of
+
+	## A team map's spawn rooms are walled in, with a ramp that tops out on a ledge over the open floor: bots leave by the drop but, with no way back up, never reach the enemy spawn. Each short drop gets a reverse climb edge, only on a map whose spawns carry a side.
+	func _climb_back_ledges(nav: DotBotNav) -> void:
+		var map: Variant = game.get("map")
+		if not (map is Object) or not (map as Object).has_method(&"spawn_tag"):
+			return
+		var tagged := false
+		for index in (map as Object).get("spawns").size():
+			if (map as Object).call(&"spawn_tag", index) != &"":
+				tagged = true
+				break
+		if not tagged:
+			return
+		nav.begin_batch()
+		for ride: Dictionary in nav.rides():
+			var drop: float = (ride["from"] as Vector3).y - (ride["to"] as Vector3).y
+			if int(ride["id"]) >= LEDGE_CLIMB_ID or drop < 1.0 or drop > LEDGE_CLIMB_MAX:
+				continue
+			nav.add_ride(ride["to"], ride["from"], LEDGE_CLIMB_ID + int(ride["id"]), 3.0)
+		nav.end_batch()
 
 	## Starts the mesh bake and, once it has landed, loads the ride edges; true when both are done. Called every frame while loading, it keeps that work out of the first bot tick.
 	func warm() -> bool:

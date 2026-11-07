@@ -106,27 +106,17 @@ func _run() -> void:
 			a = _game.map.spawns[index].origin
 		elif _game.map.spawn_tag(index) == &"blue":
 			b = _game.map.spawns[index].origin
-	var route := world.route(a, b)
 	var frames := 0
-	while world.is_route_pending() and frames < 2400:
+	while not world.warm() and frames < 6000:
 		await get_tree().process_frame
 		frames += 1
-	route = world.route(a, b)
-	# A route is a stretch toward the goal (the far half of a map ends nearer than it starts, as on
-	# the surf maps), so the bases are joined if repeated legs from where each ends arrive.
-	var at := a
-	var legs := 0
-	var total := 0.0
-	while legs < 12 and at.distance_to(b) > 1.5:
-		var way := world.route(at, b)
-		if way.size() < 2 or way[way.size() - 1].distance_to(b) >= at.distance_to(b) - 0.5:
-			break
-		total += at.distance_to(way[way.size() - 1])
-		at = way[way.size() - 1]
-		legs += 1
-	var gap := at.distance_to(b)
-	# Known gap: the baked mesh does not yet join the two bases (the walk stops at a wall corner 24 m out), so this asserts progress only.
-	_check(legs >= 1 and gap < a.distance_to(b), "routes from the red spawn head toward the blue one, %.0f m apart (%d legs, %.0f m walked, ends %.1f m short)" % [a.distance_to(b), legs, total, gap])
+	# A route is a stretch toward the goal, so two points are joined if repeated legs from where each ends arrive.
+	var flag_red: Vector3 = _game.map.flag_homes["red"]
+	var flag_blue: Vector3 = _game.map.flag_homes["blue"]
+	for pair in [["red spawn to the blue spawn", a, b], ["blue spawn to the red spawn", b, a], ["red spawn to the blue flag", a, flag_blue],
+			["blue spawn to the red flag", b, flag_red]]:
+		var gap := _walk_gap(world, pair[1], pair[2])
+		_check(gap < 2.0, "%s: routes arrive (ends %.1f m short)" % [pair[0], gap])
 	var reached := 0
 	var all_spawns: Array[Transform3D] = _game.map.spawns
 	for spawn in all_spawns:
@@ -149,6 +139,19 @@ func _run() -> void:
 		_check(ok, "two flags, each at its authored home")
 
 	_report_sections(6, 6, 6, -1)
+
+
+## How far short of [param to] repeated route legs from [param from] end.
+func _walk_gap(world: Object, from: Vector3, to: Vector3) -> float:
+	var at := from
+	for leg in 16:
+		if at.distance_to(to) <= 1.5:
+			break
+		var way: PackedVector3Array = world.route_detail(at, to)["points"]
+		if way.size() < 2 or way[way.size() - 1].distance_to(to) >= at.distance_to(to) - 0.5:
+			break
+		at = way[way.size() - 1]
+	return at.distance_to(to)
 
 
 func _new_game(mode: ArenaMode) -> ArenaGame:
