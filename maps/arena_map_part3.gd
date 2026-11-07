@@ -34,8 +34,15 @@ static func imported(map_id: StringName) -> ArenaMap:
 		maxf(absf(map.bounds.position.z), absf(map.bounds.end.z))
 	)
 
+	var tags := ArenaBspMap.spawn_tags_of(manifest)
+	var at_index := 0
+
 	for at in ArenaBspMap.spawns_of(manifest):
-		var _m := map.add_spawn(at)
+		var _m := map.add_spawn(at, StringName(tags[at_index] if at_index < tags.size() else ""))
+		at_index += 1
+
+	map.flag_homes = ArenaBspMap.flag_homes_of(manifest)
+	map.modes = PackedStringArray(manifest.get("modes", []))
 
 	map.pits = ArenaBspMap.pits_of(manifest)
 	map.jail = ArenaJail.detect(map.pits)

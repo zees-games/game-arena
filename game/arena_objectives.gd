@@ -328,6 +328,11 @@ static func build(
 			var red_home := Vector3(-reach * 0.8, floor_y + 1.0, 0.0)
 			var blue_home := Vector3(reach * 0.8, floor_y + 1.0, 0.0)
 
+			# A map that placed its flags (imported `flag_spawns`) keeps them where it put them.
+			if map.flag_homes.has("red") and map.flag_homes.has("blue"):
+				red_home = (map.flag_homes["red"] as Vector3) + Vector3.UP
+				blue_home = (map.flag_homes["blue"] as Vector3) + Vector3.UP
+
 			var red := DotObjectiveDef.flag(
 				&"red_flag", DotObjectiveArea.sphere(red_home, 2.0), RED
 			)

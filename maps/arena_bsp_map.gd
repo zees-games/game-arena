@@ -274,6 +274,32 @@ static func spawns_of(manifest: Dictionary) -> Array[Transform3D]:
 	return out
 
 
+## The side each spawn belongs to, parallel to [method spawns_of]: the tag the importer wrote
+## (`red`, `blue`) or empty for a spawn either side may use.
+static func spawn_tags_of(manifest: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	var listed: Array = manifest.get("spawns", [])
+
+	if listed.is_empty() and manifest.has("spawn"):
+		listed = [manifest["spawn"]]
+
+	for entry: Variant in listed:
+		out.append(str((entry as Dictionary).get("team", "")))
+
+	return out
+
+
+## Where each side's flag sits, by tag, in metres.
+static func flag_homes_of(manifest: Dictionary) -> Dictionary:
+	var out := {}
+
+	for entry: Variant in manifest.get("flag_spawns", []):
+		var spot := entry as Dictionary
+		out[str(spot.get("team", ""))] = to_metres(spot.get("origin", [0, 0, 0]))
+
+	return out
+
+
 ## Every volume that sends a player somewhere: `{box: AABB, to: Vector3, yaw: float}`.
 ##
 ## These are the map's `trigger_teleport`s, which on a combat surf map are the pits under
