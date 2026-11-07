@@ -1,5 +1,6 @@
 extends Node
 
+const ArenaTickBudget := preload("arena_tick_budget.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
 const ArenaBindings := preload("arena_bindings.gd")
@@ -123,6 +124,8 @@ var extras: ArenaClientExtras = null
 @export_range(0, 1, 1, "or_greater") var offline_bots: int = 3
 
 var _offline := true
+## Null leaves the engine cap where a tool set it (tools/timescale_probe.gd --legacy).
+var _tick_budget: ArenaTickBudget = ArenaTickBudget.new()
 var _solo_binder: DotGameConfigBinder = null
 var _workbench: Node = null
 ## Asks a server whether this player may edit it (sv_workbench_remote); null offline.

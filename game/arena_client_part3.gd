@@ -334,6 +334,9 @@ func _physics_process(delta: float) -> void:
 	var t := Time.get_ticks_usec()
 	_physics_step(delta)
 	ArenaFrameProbe.add(&"physics", t)
+	if _offline and _tick_budget != null:
+		# Catch up with wall-clock time as far as ticks are cheap enough to (ArenaTickBudget).
+		Engine.max_physics_steps_per_frame = _tick_budget.steps_for((Time.get_ticks_usec() - t) / 1000000.0)
 
 ## A connected client's respawn faces the way its spawn faces. [b]Only the client can turn the
 ## view[/b]: the server teleports the player facing the spawn, then applies the next command, whose
