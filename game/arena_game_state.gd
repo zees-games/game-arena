@@ -433,6 +433,15 @@ var _freeze_overridden := false
 ## the old fallback: both teams share one pool. `arena_team_spawn_split`; read when a map loads.
 var team_spawn_split: bool = true
 
+## Bot think LOD: with at least this many players in the room (bots included), a bot with no target or a far one
+## thinks only every [member bot_lod_stride]-th tick (staggered by id) and repeats its last command in
+## between; a bot in a close fight always thinks. 0 is off. `arena_bot_lod_players`.
+var bot_lod_players: int = 48
+## Ticks between the thinks of an idle bot while the LOD is on (1 is off). `arena_bot_lod_stride`.
+var bot_lod_stride: int = 2
+## A bot whose target is nearer than this many metres always thinks (0: any target does). `arena_bot_lod_near`.
+var bot_lod_near: float = 25.0
+
 ## Lag compensation: how far back the server will rewind the other players for a shot,
 ## in milliseconds (`arena_max_unlag_ms`; 0 judges every shot against the present).
 ##

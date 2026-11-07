@@ -95,6 +95,9 @@ class Mind:
 	var ride: Variant = null
 	## Where the bot was last tick, to see a teleport.
 	var last_position: Vector3 = Vector3.INF
+	## The commands of the last real think, repeated on the ticks the bot LOD skips.
+	var last_move: DotFpsCommand = null
+	var last_fire: DotWeaponCommand = null
 
 
 ## Further than this in one tick is a teleport, metres (a fall at the 3500 u/s limit is under 1).
@@ -490,6 +493,14 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	if game == null or bot == null:
 		return [move, fire]
 
+	if _lod_skips(game, bot, mind, tick):
+		ArenaFrameProbe.count(&"bot_lod_skip")
+		var held_fire := DotWeaponCommand.new()
+		held_fire.buttons = mind.last_fire.buttons
+		held_fire.yaw = mind.last_fire.yaw
+		held_fire.pitch = mind.last_fire.pitch
+		return [mind.last_move.duplicate_command(), held_fire]
+
 	var world := world_for(game)
 	var t_refresh := Time.get_ticks_usec()
 	world.refresh(tick, tick_rate)
@@ -524,7 +535,32 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)
 	move.sanitise()
 	fire.sanitise()
+	mind.last_move = move.duplicate_command()
+	mind.last_fire = fire
 	return [move, fire]
+
+
+## Whether the bot LOD repeats [param mind]'s last commands this tick instead of thinking: the room
+## is big ([member ArenaGame.bot_lod_players]), the bot is alive, has no target or one past
+## [member ArenaGame.bot_lod_near], and is not mid-ride or mid-throw. Staggered by id so the thinks spread over the ticks.
+static func _lod_skips(game: Object, bot: ArenaPlayer, mind: Mind, tick: int) -> bool:
+	if mind.last_move == null or mind.brain == null or mind.ride != null or mind.throw_stage != 0:
+		return false
+	var stride: int = int(game.get("bot_lod_stride"))
+	var floor_players: int = int(game.get("bot_lod_players"))
+	if stride <= 1 or floor_players <= 0 or (game.call("players") as Array).size() < floor_players:
+		return false
+	var last: DotBotIntent = mind.brain.last
+	if last == null or last.state == &"dead" or not bot.is_alive():
+		return false
+	if last.target_id >= 0:
+		# A fight closer than bot_lod_near is full rate; a target out past it is a long shot at a
+		# slow-changing angle, so the aim can be a tick stale.
+		var foe := game.call("player_for", last.target_id) as ArenaPlayer
+		var near := float(game.get("bot_lod_near"))
+		if foe == null or near <= 0.0 or foe.global_position.distance_squared_to(bot.global_position) <= near * near:
+			return false
+	return (tick + bot.player_id) % stride != 0
 
 
 ## Turns the brain's [member DotBotIntent.throw] into the presses a person makes: draw the

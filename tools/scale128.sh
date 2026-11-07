@@ -20,7 +20,7 @@ case $MODE in
   server|offline)
     for hz in $HZ; do for n in $NS; do
       echo "== $MODE n=$n hz=$hz" >&2
-      run res://tools/scale128.tscn -- --role "$MODE" --bots "$n" --tick "$hz" --seconds "$SECS" | grep '^SCALE128 ' | sed 's/^SCALE128 //' | tee -a "$OUT"
+      run res://tools/scale128.tscn -- --role "$MODE" --bots "$n" --tick "$hz" --seconds "$SECS" ${LOD:+--lod $LOD} ${LODNEAR:+--lodnear $LODNEAR} | grep '^SCALE128 ' | sed 's/^SCALE128 //' | tee -a "$OUT"
     done; done;;
   net)
     for n in $NS; do echo "== net n=$n" >&2; run res://tools/net_probe.tscn -- --bots "$n" --seconds 20 | tail -4 | sed "s/^/n=$n /" | tee -a "$OUT.net"; done;;

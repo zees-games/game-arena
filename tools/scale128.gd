@@ -32,6 +32,9 @@ var _settle := 4.0
 var _port := 27230
 var _map := "dm_box"
 var _mode := "ffa"
+## Bot think LOD floor override (arena_bot_lod_players); -1 keeps the game default, 0 turns the LOD off.
+var _lod: int = -1
+var _lod_near: float = -1.0
 
 var _t_start := 0
 var _script_us := PackedFloat64Array()
@@ -75,6 +78,8 @@ func _ready() -> void:
 			"--port": _port = int(args[i + 1])
 			"--map": _map = args[i + 1]
 			"--mode": _mode = args[i + 1]
+			"--lod": _lod = int(args[i + 1])
+			"--lodnear": _lod_near = float(args[i + 1])
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
 	for is_start in [true, false]:
@@ -167,6 +172,10 @@ func _serve() -> void:
 	game.time_limit_sec = 0.0
 	game.warmup_sec = 0.0
 	game.headless = true
+	if _lod >= 0:
+		game.bot_lod_players = _lod
+	if _lod_near >= 0.0:
+		game.bot_lod_near = _lod_near
 	game.mode_id = StringName(_mode)
 	game.register_service = true
 	add_child(game)

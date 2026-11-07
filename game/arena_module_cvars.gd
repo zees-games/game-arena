@@ -234,6 +234,29 @@ func _add_loadout_roll_text_cvar() -> void:
 			game.loadout_roll_text = new_value.to_float() != 0.0)
 
 
+## `arena_bot_lod_players` / `arena_bot_lod_stride`: see [member ArenaGame.bot_lod_players].
+func _add_bot_lod_cvars() -> void:
+	add_cvar("arena_bot_lod_players", str(game.bot_lod_players),
+		"With at least this many players (bots included), a bot with no target thinks only every arena_bot_lod_stride-th tick (0 is off)",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.bot_lod_players = maxi(new_value.to_int(), 0))
+	add_cvar("arena_bot_lod_stride", str(game.bot_lod_stride),
+		"Ticks between the thinks of an idle bot while the bot LOD is on (1 is off)",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(1.0).with_max(16.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.bot_lod_stride = clampi(new_value.to_int(), 1, 16))
+
+
+## `arena_bot_lod_near`: see [member ArenaGame.bot_lod_near].
+func _add_bot_lod_near_cvar() -> void:
+	add_cvar("arena_bot_lod_near", str(game.bot_lod_near),
+		"With the bot LOD on, a bot fighting a target nearer than this many metres still thinks every tick (0: any target)",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			game.bot_lod_near = maxf(new_value.to_float(), 0.0))
+
+
 ## `arena_team_spawn_split`: see [member ArenaGame.team_spawn_split]. Read when a map loads.
 func _add_team_spawn_split_cvar() -> void:
 	add_cvar("arena_team_spawn_split", "1" if game.team_spawn_split else "0",
