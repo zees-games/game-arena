@@ -132,7 +132,7 @@ static func _build_imported(root: Node3D, map: Object) -> void:
 	var document := imported_document(lighting)
 	var _sun := DotLightRig.apply(root, DotLightDocument.from_dictionary(document), imported_profile())
 	_apply_named_sky(root, str(lighting.get("sky_name", "")))
-
+	_apply_air(root, map)
 
 	if is_black_sky(lighting):
 		_darken(root)
@@ -306,6 +306,79 @@ static func _apply_packed_sky(root: Node3D, lighting: Dictionary, dir: String) -
 
 		env.sky.sky_material = mat
 		env.background_mode = Environment.BG_SKY
+
+
+# --- Per-map air ------------------------------------------------------------
+
+## What a map's compiled lighting block cannot say, one entry per map: the importer reads no
+## fog or sea from a BSP, so the two maps whose original looks need them are patched here.
+## `fog` is an overcast haze (`colour`, exponential `density`, how far it reaches into the
+## panorama as `sky_affect`, and a `sky_energy` that dims the panorama); `sea` is a sheet of
+## the water shader `depth` metres under the lowest brush, in `tint`. Stand-ins only:
+## nothing here is a source texture.
+const MAP_AIR := {
+	# The original is overcast and raining: a grey, close horizon and a dull sky.
+	&"surf_japan_ptad": {
+		"fog": {"colour": Color(0.50, 0.54, 0.58), "density": 0.0015, "sky_affect": 0.5, "sky_energy": 0.62},
+	},
+	# The original floats over an open sea; the compiled map has no water under it.
+	&"surf_skyworld": {
+		"sea": {"depth": 14.0, "size": 6000.0, "tint": Color(0.06, 0.20, 0.30, 1.0)},
+	},
+}
+
+
+static func _apply_air(root: Node3D, map: Object) -> void:
+	var air: Dictionary = MAP_AIR.get(StringName(map.id), {})
+
+	if air.is_empty():
+		return
+
+	if air.has("fog"):
+		_apply_fog(root, air["fog"])
+
+	if air.has("sea"):
+		_apply_sea(root, map, air["sea"])
+
+
+static func _apply_fog(root: Node3D, fog: Dictionary) -> void:
+	for child in root.get_children():
+		var world := child as WorldEnvironment
+
+		if world == null or world.environment == null:
+			continue
+
+		var env := world.environment
+		env.fog_enabled = true
+		env.fog_light_color = fog["colour"]
+		env.fog_density = float(fog["density"])
+		env.fog_sky_affect = float(fog["sky_affect"])
+		env.background_energy_multiplier = float(fog["sky_energy"])
+
+
+## A wide water sheet under the map, the same shader the pools use.
+static func _apply_sea(root: Node3D, map: Object, sea: Dictionary) -> void:
+	var image := Image.create(1, 1, false, Image.FORMAT_RGB8)
+	image.fill(Color.WHITE)
+	var mat := ShaderMaterial.new()
+	mat.shader = load(ArenaPaths.rebase("res://maps/arena_bsp_water.gdshader"))
+	mat.set_shader_parameter("lightmap_tex", ImageTexture.create_from_image(image))
+	mat.set_shader_parameter("tint", sea["tint"])
+	mat.set_shader_parameter("light_boost", 0.7)
+	mat.set_shader_parameter("ambient", 0.15)
+	mat.set_shader_parameter("alpha_down", 0.92)
+	mat.set_shader_parameter("alpha_grazing", 0.97)
+
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(float(sea["size"]), float(sea["size"]))
+	plane.material = mat
+	var sheet := MeshInstance3D.new()
+	sheet.name = "Sea"
+	sheet.mesh = plane
+	sheet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var bounds: AABB = map.bounds
+	sheet.position = Vector3(bounds.get_center().x, bounds.position.y - float(sea["depth"]), bounds.get_center().z)
+	root.add_child(sheet)
 
 
 static func _fixed(root: Node3D) -> void:
