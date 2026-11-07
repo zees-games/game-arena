@@ -317,6 +317,10 @@ func _sky_is_panorama(root: Node3D) -> bool:
 
 func _sky_top(root: Node3D) -> Color:
 	var env := _environment(root)
+	if env != null and env.sky != null and env.sky.sky_material is ShaderMaterial:
+		# The cloud sky (arena_sky.gdshader) keeps the rig's zenith colour as a parameter.
+		var zenith = (env.sky.sky_material as ShaderMaterial).get_shader_parameter("top_colour")
+		return zenith if zenith is Color else Color(0, 0, 0, 0)
 	if env == null or env.sky == null or not (env.sky.sky_material is ProceduralSkyMaterial):
 		return Color(0, 0, 0, 0)
 	return (env.sky.sky_material as ProceduralSkyMaterial).sky_top_color

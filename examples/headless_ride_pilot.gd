@@ -233,6 +233,12 @@ func _finish() -> void:
 		remove_child(_game)
 		_game.free()
 		_game = null
+	# Drop what the ride held on the game's nav so nothing outlives the scene.
+	if _rides != null:
+		_rides.call(&"release")
+	_rides = null
+	_surf = null
+	_edge = null
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
