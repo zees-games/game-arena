@@ -1,5 +1,6 @@
-class_name ArenaTestToys
 extends RefCounted
+
+const ArenaMap := preload("../maps/arena_map.gd")
 
 ## Test-only loose physics props. The built-in maps place none (owner 2026-11-08: toys stay in
 ## playground, prop hunt, murder mystery and hide n seek); the toy wire path and the
@@ -29,6 +30,6 @@ const BY_MAP := {
 }
 
 
-static func apply(map: ArenaMap) -> ArenaMap:
+static func give(map: ArenaMap) -> ArenaMap:
 	map.toys = (BY_MAP.get(map.id, []) as Array).duplicate(true)
 	return map

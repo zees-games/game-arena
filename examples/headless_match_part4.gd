@@ -1,5 +1,7 @@
 extends "headless_match_part3.gd"
 
+const ArenaTestToys := preload("arena_test_toys.gd")
+
 ## dot-props' toys on the built-in maps, on a headless authority: every map's built, clear of its
 ## boxes and spawns; a walk into a ball sends it on; a shot pushes it and is still the combat's.
 func _test_toys() -> void:
@@ -9,7 +11,7 @@ func _test_toys() -> void:
 	# dm_box last, and kept: each game's level and toys share this one physics space, so the
 	# others are freed before the next is built.
 	for id: StringName in [&"dm_atrium", &"dm_pit", &"dm_box"]:
-		var map: ArenaMap = ArenaTestToys.apply(ArenaMap.by_id(id))
+		var map: ArenaMap = ArenaTestToys.give(ArenaMap.by_id(id))
 		var g := ArenaGame.new()
 		g.name = "ToyGame_%s" % id
 		g.tick_rate = TICK_RATE

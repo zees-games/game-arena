@@ -1,5 +1,7 @@
 extends DotGameCheckSuite
 
+const ArenaTestToys := preload("arena_test_toys.gd")
+
 const ArenaClientExtras := preload("../game/arena_client_extras.gd")
 const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaAwards := preload("../game/arena_awards.gd")
@@ -150,7 +152,7 @@ func _make_game(authority: bool) -> ArenaGame:
 	game.register_service = false
 	add_child(game)
 
-	var ready := game.setup(ArenaTestToys.apply(ArenaMap.dm_box()))
+	var ready := game.setup(ArenaTestToys.give(ArenaMap.dm_box()))
 	_check(ready.ok, "%s game sets up" % ("server" if authority else "client"), str(ready.error))
 
 	game.match_node.rules.warmup_sec = 0.0
