@@ -33,3 +33,7 @@ const BY_MAP := {
 static func give(map: ArenaMap) -> ArenaMap:
 	map.toys = (BY_MAP.get(map.id, []) as Array).duplicate(true)
 	return map
+
+## Makes every later [method ArenaMap.by_id] (a map change) carry the same placements.
+static func install() -> void:
+	ArenaMap.test_toys = BY_MAP.duplicate(true)

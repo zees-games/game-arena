@@ -152,6 +152,7 @@ func _make_game(authority: bool) -> ArenaGame:
 	game.register_service = false
 	add_child(game)
 
+	ArenaTestToys.install()
 	var ready := game.setup(ArenaTestToys.give(ArenaMap.dm_box()))
 	_check(ready.ok, "%s game sets up" % ("server" if authority else "client"), str(ready.error))
 

@@ -57,6 +57,17 @@ static func imported(map_id: StringName) -> ArenaMap:
 ## running.[/b] `ids()` is the cheap half — a menu, a `arena_maps` listing and a
 ## validity check all want the names and none of them want the geometry.
 static func by_id(id: StringName) -> ArenaMap:
+	var found: ArenaMap = _by_id_bare(id)
+	# Tests only: a map set up by id (a map change) gets the placements a test registered,
+	# since no deathmatch map carries toys of its own.
+	if found != null and test_toys.has(id):
+		found.toys = (test_toys[id] as Array).duplicate(true)
+	return found
+
+## Toys by map id that [method by_id] adds. Empty always, outside a test (see ArenaTestToys).
+static var test_toys: Dictionary = {}
+
+static func _by_id_bare(id: StringName) -> ArenaMap:
 	match id:
 		&"dm_box":
 			return dm_box()
