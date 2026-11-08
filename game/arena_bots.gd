@@ -72,7 +72,7 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	_tier_on = tiers.applies(players)
 	var world := world_for(game)
 	if (_every > 1 or _tier_on) and _coasts(mind, tick, world, bot.player_id):
-		return _coast(mind, tick)
+		return _recoil_comp(bot, _coast(mind, tick), tick, tick_rate)
 
 	var t_refresh := Time.get_ticks_usec()
 	world.near_reach = think_near
@@ -158,7 +158,45 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 		# A tiered coast repeats only held buttons: a jump or a weapon switch is pressed on the think tick, then let go.
 		mind.last_move.buttons &= _COAST_MOVE if intent.state != &"dead" else 0
 		mind.last_fire.buttons &= _COAST_FIRE if intent.state != &"dead" else 0
-	return [move, fire]
+	return _recoil_comp(bot, [move, fire], tick, tick_rate)
+
+
+## The commands with the aim turned against the recoil the next shot will carry. The weapon offsets each bullet by
+## the kick left from the shots before it (dot-weapon's recoil rules); a player pulls the view back against it, but
+## a bot's view is its command, so held on a target the bullets walked off it: most of a held burst missed a
+## target dead on the crosshair (headless_bot_hitreg). Only the trigger-down tick is turned, and the stored
+## last commands the coast repeats are not, so the correction never compounds.
+static func _recoil_comp(bot: ArenaPlayer, cmds: Array, tick: int, tick_rate: float) -> Array:
+	var fire: DotWeaponCommand = cmds[1]
+	if bot == null or bot.arsenal == null or not fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK):
+		return cmds
+	var offset := next_recoil_offset(bot, tick, tick_rate)
+	if offset == Vector2.ZERO:
+		return cmds
+	var move: DotFpsCommand = cmds[0]
+	move.pitch -= offset.x
+	move.yaw -= offset.y
+	return cmds
+
+
+## Degrees (pitch up, yaw left) the next bullet of [param bot]'s weapon is turned off its aim by recoil, as
+## [method DotWeaponRecoilRules.apply] will work it out at [param tick]; zero with recoil patterns off.
+static func next_recoil_offset(bot: ArenaPlayer, tick: int, tick_rate: float) -> Vector2:
+	var rr := DotWeaponRecoilRules.of(bot.arsenal)
+	var slot: DotWeaponSlot = bot.arsenal.current()
+	if rr == null or slot == null or slot.behaviour == null or slot.behaviour.def == null:
+		return Vector2.ZERO
+	var b := slot.behaviour.def.tuning as DotWeaponBallistics
+	if b == null:
+		return Vector2.ZERO
+	var state: Dictionary = slot.behaviour.state
+	var elapsed := maxf(float(tick - int(state.get(&"recoil_tick", -1000000))) / maxf(tick_rate, 1.0), 0.0)
+	var n := int(state.get(&"recoil_n", 0)) if elapsed <= rr.reset else 0
+	var residual := Vector2(float(state.get(&"recoil_ax", 0.0)), float(state.get(&"recoil_ay", 0.0))) * exp(-b.recoil_recovery * rr.recovery * elapsed)
+	var grow := 1.0 + minf(b.recoil_build * rr.build * float(n), b.recoil_build_max * rr.build)
+	var kick := Vector2(b.recoil_pitch * rr.vertical * grow, b.recoil_yaw * rr.horizontal * grow * DotWeaponRecoilRules.drift(DotWeaponRecoilRules.seed_for(b, slot.behaviour.def.id), n))
+	var share := b.recoil_camera if b.recoil_camera >= 0.0 else rr.punch
+	return (residual + kick) * (1.0 - share) + residual * share * rr.follow
 
 
 ## Degrees from [param a] to [param b] the short way round.
