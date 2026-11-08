@@ -223,7 +223,7 @@ func _add_fire_buffer_cvar() -> void:
 			log_info("fire buffer changed", {"seconds": game.fire_buffer_seconds}))
 
 
-## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]); `bot_native`: dot-sim's sight scan; `motor_native`: dot-sim's movement collision queries.
+## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]); `bot_native`: dot-sim's sight scan; `motor_native`: dot-sim's movement collision queries and collide-and-slide.
 func _add_bot_think_cvars() -> void:
 	add_cvar("bot_think_every", str(ArenaBots.think_every),
 		"A bot far from every enemy runs its brain one tick in this many (1 = every tick, 0 = 2 above 16 players)",
