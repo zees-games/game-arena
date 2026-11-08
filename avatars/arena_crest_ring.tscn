@@ -7,6 +7,8 @@ shader = ExtResource("1_shader")
 
 [sub_resource type="TorusMesh" id="Mesh_1"]
 inner_radius = 0.18
+rings = 32
+ring_segments = 10
 outer_radius = 0.24
 material = SubResource("ShaderMaterial_1")
 

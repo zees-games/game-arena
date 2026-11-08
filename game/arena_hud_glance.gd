@@ -242,7 +242,7 @@ class KillFeed extends Control:
 		queue_redraw()
 
 	func advance(delta: float) -> void:
-		if lifetime_sec <= 0.0:
+		if lifetime_sec <= 0.0 or entries.is_empty():
 			return
 		for i in range(entries.size() - 1, -1, -1):
 			entries[i]["age"] = float(entries[i]["age"]) + delta
@@ -444,6 +444,9 @@ class AbilityBar extends Control:
 	var buttons: Array[Dictionary] = []
 
 	func show_buttons(p_buttons: Array[Dictionary]) -> void:
+		# Called every frame with a fresh array: redraw only when a button's state differs.
+		if p_buttons == buttons:
+			return
 		buttons = p_buttons
 		queue_redraw()
 
