@@ -1,6 +1,6 @@
 extends SceneTree
 
-## Renders the solo client with the lazy workbench opened (F9): screenshots/workbench/open.png.
+## Renders the solo client with the lazy workbench opened (the toggle_action key): screenshots/workbench/open.png.
 ## Run under xvfb: xvfb-run -a godot --path . --resolution 1280x720 --script tools/render_workbench.gd
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
@@ -24,12 +24,16 @@ func _run(client: Node) -> void:
 	if wb == null:
 		quit(1)
 		return
+	var action: StringName = wb.get("toggle_action")
 	var key := InputEventKey.new()
-	key.keycode = wb.get("toggle_key")
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventKey:
+			key.keycode = ev.keycode
+			key.physical_keycode = ev.physical_keycode
 	key.pressed = true
-	wb.call("_unhandled_key_input", key)
+	Input.parse_input_event(key)
 	await create_timer(1.0, true, false, true).timeout
-	print("open after F9: %s" % wb.call("is_open"))
+	print("open after toggle: %s" % wb.call("is_open"))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://screenshots/workbench"))
 	root.get_texture().get_image().save_png(ProjectSettings.globalize_path(OUT))
 	quit(0 if wb.call("is_open") else 1)
