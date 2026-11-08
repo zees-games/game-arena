@@ -10,7 +10,7 @@ const ArenaTickBudget := preload("../game/arena_tick_budget.gd")
 ## Run: [code]godot --headless --path . res://examples/headless_tickbudget.tscn[/code]
 
 const SECTIONS := 4
-const CHECKS := 13
+const CHECKS := 15
 
 var _entered := 0
 var _completed := 0
@@ -80,6 +80,12 @@ func _run() -> void:
 	_check(slow > 0.3 and slow < 1.0, "the simulation slows by the shortfall, no further", "%.2f" % slow)
 	_check(slow >= _scale(0.060, 0.020, 66.0, null) - 0.001, "and never worse than the flat cap", "")
 	_check(ArenaTickBudget.MAX_STEPS * ArenaTickBudget.PHYSICS_BUDGET_SEC > 0.0, "constants are sane")
+	var lb := ArenaTickBudget.new()
+	lb.steps_for(0.004)
+	_check(is_equal_approx(lb.load_scale(1.0 / 66.0), 1.0), "a tick that fits its period leaves the bots' think periods alone")
+	var hb := ArenaTickBudget.new()
+	hb.steps_for(0.0227)
+	_check(hb.load_scale(1.0 / 66.0) > 1.5 and hb.load_scale(1.0 / 66.0) <= ArenaTickBudget.MAX_LOAD_SCALE, "a tick over its period stretches them, capped")
 	_done()
 
 	# The loop above is a model of the engine. This one is the engine: a frame of 45 ms

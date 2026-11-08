@@ -43,6 +43,7 @@ func _ready() -> void:
 			"--tier-above": preload("../game/arena_bots.gd").tiers.above = int(args[i + 1])
 			"--tier-near": preload("../game/arena_bots.gd").tiers.near_every = int(args[i + 1])
 			"--tier-far": preload("../game/arena_bots.gd").tiers.far_every = int(args[i + 1])
+			"--tier-engaged": preload("../game/arena_bots.gd").tiers.engaged_far_every = int(args[i + 1])
 			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
 			"--native": DotBotWorld.native_enabled = int(args[i + 1]) != 0
 			"--motor-native": DotFpsPhysicsBody.native_enabled = int(args[i + 1]) != 0
