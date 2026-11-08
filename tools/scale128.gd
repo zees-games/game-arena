@@ -88,6 +88,7 @@ func _ready() -> void:
 			"--thinkevery": ArenaBots.think_every = int(args[i + 1])
 			"--thinknear": ArenaBots.think_near = float(args[i + 1])
 			"--motorprof": _motorprof = args[i + 1] != "0"
+			"--native": DotBotWorld.native_enabled = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
 	for is_start in [true, false]:
@@ -157,6 +158,7 @@ func _report(extra: Dictionary) -> void:
 	out["think_every"] = ArenaBots.think_every
 	out["think_near"] = ArenaBots.think_near
 	out["par_ticks"] = ArenaBotThreads.par_ticks
+	out["native_scan"] = DotBotWorld.native_available()
 	out.merge(extra)
 	if ArenaHullGrid.verify:
 		out["hull_verified"] = ArenaHullGrid.verified

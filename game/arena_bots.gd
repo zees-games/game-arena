@@ -221,6 +221,7 @@ class World:
 		if tick == _tick:
 			return
 		_tick = tick
+		contacts_version = tick
 		_contacts.clear()
 		_by_id.clear()
 		_players.clear()

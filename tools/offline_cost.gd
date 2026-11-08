@@ -7,7 +7,7 @@ const ClientBench := preload("client_bench.gd")
 
 ## Solo (offline) client with N bots on `--map`, frame and physics cost per frame:
 ## `godot --path . res://tools/offline_cost.tscn -- --map blackhawkdown --bots 10 --seconds 25`.
-## Prints fps, frame p50/p95/max, the engine's physics and process monitors and physics steps per frame.
+## Prints fps, frame p50/p95/max, the engine's physics and process monitors and physics steps per frame. `--native 0` keeps the bots' sight scan in script when dot-sim is installed.
 
 var _bots := 10
 ## `--physoff 1`: switch the engine's 3D physics step off after warm-up. What the "physics" phase still costs is script (game tick plus every _physics_process); the drop is the engine's own share.
@@ -38,6 +38,7 @@ func _ready() -> void:
 			"--near": preload("../game/arena_bots.gd").think_near = float(args[i + 1])
 			"--every": preload("../game/arena_bots.gd").think_every = int(args[i + 1])
 			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
+			"--native": DotBotWorld.native_enabled = int(args[i + 1]) != 0
 	var _scratch := ArenaPresentation.use_scratch_settings("offline_cost")
 	_run.call_deferred()
 
@@ -91,6 +92,7 @@ func _run() -> void:
 	for f in _frames:
 		if f > 33.0:
 			hitches += 1
+	print("OFFLINE_COST native sight scan: %s" % DotBotWorld.native_available())
 	print("OFFLINE_COST fps %.1f | frame mean %.2f p50 %.2f p95 %.2f p99 %.2f max %.2f ms | >33ms %d | physics %.2f ms/frame process %.2f ms/frame | steps %.2f/frame (%d Hz, max %d) | %d bots" % [
 		1000.0 / mean, mean, sorted[n / 2], sorted[int(n * 0.95)], sorted[int(n * 0.99)], sorted[n - 1], hitches,
 		_phys / _n, _proc / _n, float(Engine.get_physics_frames() - _steps0) / _n,
