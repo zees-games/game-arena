@@ -60,7 +60,6 @@ metadata:
 # (--no-suggested, --suggested=none, --no-suggested-dm; docs/maps.md).
 suggested:
   - dm=gamemann/aim-forts
-  - dm=gamemann/blackhawkdown
   - dm=gamemann/crackhouse
   - dm=gamemann/dm-hot-cn-v1
   - dm=gamemann/dm-industrial-gamma
@@ -75,7 +74,6 @@ suggested:
   - dm=gamemann/gg-punishment
   - dm=gamemann/gg-simpsons-x
   - dm=gamemann/gg-woods
-  - dm=gamemann/welcometomexicov6
   - surf=gamemann/arena-surf-dm-maps-surf_10x_final
   - surf=gamemann/arena-surf-dm-maps-surf_10x_reloaded_fixed
   - surf=gamemann/arena-surf-dm-maps-surf_110b_austinpowers

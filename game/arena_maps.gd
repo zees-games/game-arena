@@ -394,24 +394,25 @@ static func server_map_keys(server: Object) -> PackedStringArray:
 
 
 ## The deathmatch and gun game packs a game with no server (solo, offline) lists, as keys.
+# Pinned to the newest version each pack has on the production CDN (1.0.3; crackhouse 1.0.4). A pinned version a CDN lacks
+# is retried at its latest.json in solo (dev has 1.0.4 and no 1.0.3). blackhawkdown and welcometomexicov6 are left out: prod only
+# has their 1.0.1, which is hollow, until a full version is published.
 const STANDALONE_KEYS: PackedStringArray = [
-	"gamemann/aim-forts@1.0.4",
-	"gamemann/blackhawkdown@1.0.2",
+	"gamemann/aim-forts@1.0.3",
 	"gamemann/crackhouse@1.0.4",
-	"gamemann/welcometomexicov6@1.0.2",
-	"gamemann/dm-hot-cn-v1@1.0.4",
-	"gamemann/dm-industrial-gamma@1.0.4",
-	"gamemann/dm-morpheus@1.0.4",
-	"gamemann/dm-overwatch@1.0.4",
-	"gamemann/dm-scarletdevilmansion@1.0.4",
-	"gamemann/gg-canyon@1.0.4",
-	"gamemann/gg-fy-snow@1.0.4",
-	"gamemann/gg-garage@1.0.4",
-	"gamemann/gg-krusty-krab@1.0.4",
-	"gamemann/gg-lego-arena@1.0.4",
-	"gamemann/gg-punishment@1.0.4",
-	"gamemann/gg-simpsons-x@1.0.4",
-	"gamemann/gg-woods@1.0.4",
+	"gamemann/dm-hot-cn-v1@1.0.3",
+	"gamemann/dm-industrial-gamma@1.0.3",
+	"gamemann/dm-morpheus@1.0.3",
+	"gamemann/dm-overwatch@1.0.3",
+	"gamemann/dm-scarletdevilmansion@1.0.3",
+	"gamemann/gg-canyon@1.0.3",
+	"gamemann/gg-fy-snow@1.0.3",
+	"gamemann/gg-garage@1.0.3",
+	"gamemann/gg-krusty-krab@1.0.3",
+	"gamemann/gg-lego-arena@1.0.3",
+	"gamemann/gg-punishment@1.0.3",
+	"gamemann/gg-simpsons-x@1.0.3",
+	"gamemann/gg-woods@1.0.3",
 	# The combat surf packs are published as <repo>-<map> (see PACK_PREFIX), at the repo's 1.2.0.
 	"gamemann/arena-surf-dm-maps-surf_10x_final@1.2.0",
 	"gamemann/arena-surf-dm-maps-surf_10x_reloaded_fixed@1.2.0",
