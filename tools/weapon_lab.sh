@@ -16,6 +16,7 @@ xvfb-run -a -s "-screen 0 960x540x24" timeout 3300 godot --path . --resolution 9
 for d in "$out"/*/_frames/*/; do
   [[ -d $d ]] || continue
   clip=$(basename "$d"); w=$(dirname "$(dirname "$d")")
+  [[ $clip == tp_orbit ]] && continue
   ls "$d"/f_*.jpg >/dev/null 2>&1 || continue
   ffmpeg -y -loglevel error -framerate 30 -i "$d/f_%03d.jpg" -c:v libx264 -pix_fmt yuv420p -crf 20 -preset veryfast "$w/$clip.mp4" || echo "WEAPON_LAB ffmpeg failed: $w/$clip"
 done

@@ -23,6 +23,7 @@ var _manifest: Dictionary = {}
 var _frames_saved := 0
 var _fp_ready := false
 var _lab_cam: Camera3D = null
+var _sv: SubViewport = null
 var _stage_node: Node3D = null
 
 
@@ -120,11 +121,27 @@ func _build_lab() -> void:
 	_stage_node = Node3D.new()
 	_stage_node.position = STAGE + Vector3(0, 1.2, 0)
 	root.add_child(_stage_node)
+	# The model viewer renders into its own viewport (sharing the world), so the player's camera stays the main view.
+	_sv = SubViewport.new()
+	_sv.size = Vector2i(960, 540)
+	_sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(_sv)
 	_lab_cam = Camera3D.new()
 	_lab_cam.fov = 30.0
 	_lab_cam.environment = env
 	_lab_cam.far = 60.0
-	root.add_child(_lab_cam)
+	_sv.add_child(_lab_cam)
+	_hide_ui()
+
+
+## Every screen-space layer of the client (HUD, killcam, menus, crosshair) off, so only the world is in shot.
+func _hide_ui() -> void:
+	root.canvas_cull_mask = 0
+	for node in client.find_children("*", "CanvasLayer", true, false):
+		(node as CanvasLayer).visible = false
+	var hud := client.get_node_or_null("Hud")
+	if hud != null:
+		hud.set("visible", false)
 
 
 func _make_room(at: Vector3) -> void:
@@ -162,6 +179,7 @@ func _make_room(at: Vector3) -> void:
 func _first_person(id: StringName, def: DotWeaponDef, wdir: String, anims: PackedStringArray) -> void:
 	var me = client.get("player")
 	(me.camera as Camera3D).current = true
+	_hide_ui()
 	for _w in 200:
 		if not me.arsenal.is_reloading():
 			break
@@ -171,7 +189,16 @@ func _first_person(id: StringName, def: DotWeaponDef, wdir: String, anims: Packe
 	var given: DotResult = me.arsenal.give(id)
 	if not given.ok:
 		print("WEAPON_LAB %s: give failed: %s" % [id, given.message])
-	var other_slot := &"melee" if def.slot != &"melee" else &"sidearm"
+	# The weapon swapped to for draw/holster: the first catalogue weapon (by id) in a different slot, so it is the same every run.
+	var other_slot := -1
+	var table := AwWeaponCatalogue.table()
+	var keys: Array = table.keys()
+	keys.sort()
+	for k: StringName in keys:
+		if (table[k] as DotWeaponDef).slot != def.slot:
+			me.arsenal.give(k)
+			other_slot = (table[k] as DotWeaponDef).slot
+			break
 	for a in anims:
 		var key := "fp_" + a
 		var res := {"status": "ok"}
@@ -266,15 +293,12 @@ func _refill(me: Node, def: DotWeaponDef) -> void:
 		slot.magazine = def.magazine
 
 
-func _equip_slot_now(me: Node, slot_name: StringName) -> void:
-	var idx := ["melee", "sidearm", "primary", "heavy", "throwable"].find(str(slot_name))
-	me.arsenal.equip(slot_name)
-	if idx < 0:
-		return
+func _equip_slot_now(me: Node, slot: int) -> void:
+	me.arsenal.equip(slot)
 
 
-func _equip_slot(me: Node, slot_name: StringName) -> void:
-	me.arsenal.equip(slot_name)
+func _equip_slot(me: Node, slot: int) -> void:
+	me.arsenal.equip(slot)
 	await _wait(1.2)
 
 
@@ -328,10 +352,10 @@ func _clip(wdir: String, key: String, frames: int, on_frame: Callable, res: Dict
 	res["fps"] = fps
 
 
-func _save_frame(d: String, i: int) -> void:
+func _save_frame(d: String, i: int, vp: Viewport = null) -> void:
 	await process_frame
 	await RenderingServer.frame_post_draw
-	var image := root.get_viewport().get_texture().get_image()
+	var image := (vp if vp != null else root.get_viewport()).get_texture().get_image()
 	var _e := image.save_jpg("%s/f_%03d.jpg" % [d, i], 0.92)
 	_frames_saved += 1
 
@@ -385,6 +409,8 @@ func _model_viewer(id: StringName, wdir: String) -> void:
 		if mag_node != null:
 			mag_node.transform = art.magazine_transform()
 			model.add_child(mag_node)
+	elif art.magazine_part != &"":
+		mag_node = model.find_child(str(art.magazine_part), true, false) as Node3D
 	await process_frame
 	var box := _bounds(model)
 	var centre := box.get_center()
@@ -403,7 +429,7 @@ func _model_viewer(id: StringName, wdir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(d)
 	for k in 8:
 		_place_cam(_stage_node.global_position, dist, k * 45.0, 12.0)
-		await _save_frame(d, k)
+		await _save_frame(d, k, _sv)
 		var _c := DirAccess.copy_absolute("%s/f_%03d.jpg" % [d, k], "%s/tp_orbit_%03d.jpg" % [wdir, k * 45])
 	_strip(wdir + "/tp_orbit_strip.png", d, 8)
 	tp["orbit_yaws"] = [0, 45, 90, 135, 180, 225, 270, 315]
@@ -415,7 +441,7 @@ func _model_viewer(id: StringName, wdir: String) -> void:
 	DirAccess.make_dir_recursive_absolute(td)
 	for k in turn_frames:
 		_place_cam(_stage_node.global_position, dist, 360.0 * float(k) / float(turn_frames), 12.0)
-		await _save_frame(td, k)
+		await _save_frame(td, k, _sv)
 	tp["turntable"] = {"frames": turn_frames, "fps": fps}
 
 	# Close-ups: top, underside, muzzle, rear, and the magazine (its own centre) from two sides.
@@ -425,7 +451,7 @@ func _model_viewer(id: StringName, wdir: String) -> void:
 	for cname in closeups:
 		var p: Array = closeups[cname]
 		_place_cam(_stage_node.global_position, dist * float(p[2]), float(p[0]), float(p[1]))
-		await _save_frame(wdir + "/_frames", 0)
+		await _save_frame(wdir + "/_frames", 0, _sv)
 		var _m := DirAccess.rename_absolute(wdir + "/_frames/f_000.jpg", "%s/tp_closeup_%s.jpg" % [wdir, cname])
 		made.append(cname)
 	if mag_node != null:
@@ -433,7 +459,7 @@ func _model_viewer(id: StringName, wdir: String) -> void:
 		var mdist := maxf(mbox.size.length(), 0.03) * 1.6 / tan(deg_to_rad(fov * 0.5)) * 0.5
 		for yaw in [90.0, 270.0, 0.0]:
 			_place_cam(mbox.get_center(), mdist, yaw, 8.0)
-			await _save_frame(wdir + "/_frames", 0)
+			await _save_frame(wdir + "/_frames", 0, _sv)
 			var _m2 := DirAccess.rename_absolute(wdir + "/_frames/f_000.jpg", "%s/tp_closeup_mag_%d.jpg" % [wdir, int(yaw)])
 			made.append("mag_%d" % int(yaw))
 	tp["closeups"] = made
@@ -446,7 +472,6 @@ func _place_cam(target: Vector3, dist: float, yaw_deg: float, pitch_deg: float) 
 	var dir := Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
 	_lab_cam.global_position = target + dir * dist
 	_lab_cam.look_at(target, Vector3.UP if absf(pitch_deg) < 85.0 else Vector3.FORWARD)
-	_lab_cam.current = true
 
 
 func _bounds(node: Node3D) -> AABB:
