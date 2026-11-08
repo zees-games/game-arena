@@ -21,7 +21,7 @@ case $MODE in
   server|offline)
     for hz in $HZ; do for n in $NS; do
       echo "== $MODE n=$n hz=$hz" >&2
-      run res://tools/scale128.tscn -- --role "$MODE" --bots "$n" --tick "$hz" --seconds "$SECS" ${FAST:+--fastsense $FAST} ${MPROF:+--motorprof 1} ${HGRID:+--hullgrid $HGRID} ${HFAST:+--hullfast $HFAST} ${WCOARSE:+--worldcoarse $WCOARSE} ${HVERIFY:+--hullverify 1} ${THREADS:+--threads $THREADS} ${TEVERY:+--thinkevery $TEVERY} ${TNEAR:+--thinknear $TNEAR} | grep '^SCALE128 ' | sed 's/^SCALE128 //' | tee -a "$OUT"
+      run res://tools/scale128.tscn -- --role "$MODE" --bots "$n" --tick "$hz" --seconds "$SECS" ${FAST:+--fastsense $FAST} ${MPROF:+--motorprof 1} ${HGRID:+--hullgrid $HGRID} ${HFAST:+--hullfast $HFAST} ${WCOARSE:+--worldcoarse $WCOARSE} ${HVERIFY:+--hullverify 1} ${THREADS:+--threads $THREADS} ${TEVERY:+--thinkevery $TEVERY} ${TNEAR:+--thinknear $TNEAR} ${TABOVE:+--tierabove $TABOVE} | grep '^SCALE128 ' | sed 's/^SCALE128 //' | tee -a "$OUT"
     done; done;;
   net)
     for n in $NS; do echo "== net n=$n" >&2; run res://tools/net_probe.tscn -- --bots "$n" --seconds 20 | tail -4 | sed "s/^/n=$n /" | tee -a "$OUT.net"; done;;

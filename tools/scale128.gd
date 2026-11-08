@@ -87,6 +87,7 @@ func _ready() -> void:
 			"--threads": ArenaBotThreads.threads = int(args[i + 1])
 			"--thinkevery": ArenaBots.think_every = int(args[i + 1])
 			"--thinknear": ArenaBots.think_near = float(args[i + 1])
+			"--tierabove": ArenaBots.tiers.above = int(args[i + 1])
 			"--motorprof": _motorprof = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
@@ -157,6 +158,10 @@ func _report(extra: Dictionary) -> void:
 	out["think_every"] = ArenaBots.think_every
 	out["think_near"] = ArenaBots.think_near
 	out["par_ticks"] = ArenaBotThreads.par_ticks
+	out["tiers"] = ArenaBots.tiers.describe()
+	# What the bots did while recorded, so a think-rate change shows its cost in play (shots per hit, kills).
+	out["combat"] = {"shots": _shots, "hits": _hits, "headshots": _heads, "kills": _kills,
+		"hit_rate": snappedf(float(_hits) / maxi(1, _shots), 0.001)}
 	out.merge(extra)
 	if ArenaHullGrid.verify:
 		out["hull_verified"] = ArenaHullGrid.verified
@@ -166,6 +171,22 @@ func _report(extra: Dictionary) -> void:
 
 
 var _motorprof := false
+var _shots := 0
+var _hits := 0
+var _heads := 0
+var _kills := 0
+
+
+func _tally_on(g: Object) -> void:
+	g.connect(&"hit_confirmed", func(_a: int, _v: int, _amount: float, _p: Vector3, head: bool, lethal: bool) -> void:
+		if _recording:
+			_hits += 1
+			_heads += int(head)
+			_kills += int(lethal))
+	for p in g.call("players"):
+		p.connect(&"used", func(outcome: DotWeaponOutcome) -> void:
+			if _recording and outcome != null and outcome.used:
+				_shots += outcome.shots.size())
 
 
 func _motor_phases(ticks: int) -> Dictionary:
@@ -266,6 +287,7 @@ func _serve() -> void:
 	var net: DotNetManager = module.net
 	var before: Dictionary = net.perf_counters()
 	_begin_record()
+	_tally_on(game)
 	await get_tree().create_timer(_seconds).timeout
 	_recording = false
 	var after: Dictionary = net.perf_counters()
@@ -356,6 +378,7 @@ func _offline() -> void:
 	var tick0: int = g.current_tick()
 	var frames := PackedFloat64Array()
 	_begin_record()
+	_tally_on(g)
 	var t_last := Time.get_ticks_usec()
 	var proc := 0.0
 	var render := 0.0

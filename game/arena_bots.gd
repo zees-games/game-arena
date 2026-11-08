@@ -107,6 +107,8 @@ class Mind:
 	var view_to: Vector2 = Vector2.ZERO
 	## Whether the last think left the bot free to coast.
 	var coasting: bool = false
+	## Ticks from the last think to the next (1 = every tick): `_every` far from enemies, or to its tier's next beat.
+	var every: int = 1
 	## The tick of the last think, so a think that follows a coast knows its brain turned for several ticks at once.
 	var last_think_tick: int = -1
 	## Between [method think_begin] and [method think_finish] (see ArenaBotThreads): the body's contact, the world and what the brain decided.
@@ -130,6 +132,15 @@ const AUTO_STAGGER_ABOVE := 16
 ## The stagger in force this tick (1 = none): `think_every`, or what auto picks for the player count.
 static var _every: int = 1
 static var think_near: float = 30.0
+
+## Think-rate tiers (cvars `bot_tier_*`): above [member DotBotThinkTier.above] players a bot that fights a person,
+## was hurt by one, is near or in view of one, or is among the nearest to one thinks every tick; the rest every 2-4
+## ticks and coast between, fighting included. Server-side commands only: the motor and prediction are untouched.
+static var tiers := DotBotThinkTier.new()
+## Whether tiers decide this tick (else the `bot_think_every` stagger does).
+static var _tier_on: bool = false
+const _COAST_FIRE := DotWeaponCommand.BUTTON_ATTACK | DotWeaponCommand.BUTTON_AIM
+const _COAST_MOVE := DotFpsCommand.BUTTON_CROUCH | DotFpsCommand.BUTTON_WALK | DotFpsCommand.BUTTON_SPRINT
 
 ## Further than this in one tick is a teleport, metres (a fall at the 3500 u/s limit is under 1).
 const TELEPORT_JUMP := 4.0
@@ -176,6 +187,10 @@ class World:
 	var near_cell: float = 0.0
 	## [member ArenaBots.think_near], set by the thinking bot before [method refresh].
 	var near_reach: float = 0.0
+	## Bots a person hurt since their last think: they think next tick whatever their tier.
+	var woken: Dictionary = {}
+	## [member ArenaBots.tiers], set by the thinking bot before [method refresh].
+	var tiers: DotBotThinkTier = null
 
 	## Parallel think (cvar `bot_threads`, ArenaBotThreads): while true, brains on worker threads ask this world, whose
 	## sight and wall rays then use queries of their own on [member _par_space] and whose other answers take [member _par_lock].
@@ -247,6 +262,10 @@ class World:
 			_contacts.append(c)
 			_by_id[c.id] = c
 			_players[c.id] = p
+		if tiers != null and tiers.applies(_contacts.size()):
+			_tier_begin()
+		elif tiers != null:
+			tiers.begin(_contacts.size(), PackedVector3Array(), PackedVector3Array(), PackedInt32Array(), PackedVector3Array())
 		near_cells.clear()
 		near_cell = 0.0
 		if ArenaHullGrid.enabled and near_reach > 0.0 and _contacts.size() > 16:
@@ -259,6 +278,22 @@ class World:
 						near_cells[k] = [c]
 					else:
 						(cell as Array).append(c)
+
+	## Hands the tiers the live people's eyes and views and the bots' positions (a person is a contact with no brain).
+	func _tier_begin() -> void:
+		var eyes := PackedVector3Array()
+		var looks := PackedVector3Array()
+		var ids := PackedInt32Array()
+		var at := PackedVector3Array()
+		for c: DotBotContact in _contacts:
+			if brains.has(c.id):
+				if c.alive:
+					ids.append(c.id)
+					at.append(c.position)
+			elif c.alive:
+				eyes.append(c.eye())
+				looks.append(DotBotIntent.direction(c.view_yaw, c.view_pitch))
+		tiers.begin(_contacts.size(), eyes, looks, ids, at)
 
 	static func near_key(x: float, z: float, cell: float) -> int:
 		return (int(floorf(x / cell)) + 4096) * 8192 + int(floorf(z / cell)) + 4096
@@ -747,6 +782,8 @@ class World:
 		var brain: DotBotBrain = brains.get(victim)
 		if brain == null:
 			return
+		if not brains.has(attacker):
+			woken[victim] = true
 		var from := contact(attacker)
 		brain.hurt(from.eye() if from != null else Vector3.INF, now())
 
@@ -779,13 +816,16 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	if game == null or bot == null:
 		return [DotFpsCommand.new(), DotWeaponCommand.new()]
 
-	_every = think_every if think_every > 0 else (2 if game.player_ids().size() > AUTO_STAGGER_ABOVE else 1)
-	if _every > 1 and _coasts(mind, tick):
+	var players: int = game.player_ids().size()
+	_every = think_every if think_every > 0 else (2 if players > AUTO_STAGGER_ABOVE else 1)
+	_tier_on = tiers.applies(players)
+	var world := world_for(game)
+	if (_every > 1 or _tier_on) and _coasts(mind, tick, world, bot.player_id):
 		return _coast(mind, tick)
 
-	var world := world_for(game)
 	var t_refresh := Time.get_ticks_usec()
 	world.near_reach = think_near
+	world.tiers = tiers
 	world.refresh(tick, tick_rate)
 	ArenaFrameProbe.add(&"bot_refresh", t_refresh)
 
@@ -832,18 +872,27 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 	move.sanitise()
 	fire.sanitise()
 	ArenaFrameProbe.add(&"bot_after", t_after)
-	mind.far = _every > 1 and _nobody_near(me, world)
-	# Only a think on the bot's own beat starts a coast, so the coast's steps count from it.
-	mind.coasting = mind.far and (tick + mind.seed) % _every == 0 and _coastable(mind, intent, move, fire)
+	world.woken.erase(bot.player_id)
+	if _tier_on and tiers.is_on():
+		mind.far = false
+		var engaged := intent.target_id >= 0 and not world.brains.has(intent.target_id)
+		# every here is the coast's length: to the bot's next beat at its tier's period.
+		mind.every = DotBotThinkTier.until_beat(tick, mind.seed, tiers.period(bot.player_id, me.position, engaged))
+		mind.coasting = mind.every > 1 and _tier_coastable(mind, intent)
+	else:
+		mind.far = _every > 1 and _nobody_near(me, world)
+		mind.every = _every if mind.far else 1
+		# Only a think on the bot's own beat starts a coast, so the coast's steps count from it.
+		mind.coasting = mind.far and (tick + mind.seed) % _every == 0 and _coastable(mind, intent, move, fire)
 	if mind.coasting:
-		# The brain turned for _every ticks at once; spread over them, so no tick turns faster than bot_turn_rate.
+		# The brain turned for `every` ticks at once; spread over them, so no tick turns faster than bot_turn_rate.
 		mind.view_to = Vector2(move.yaw, move.pitch)
 		# From the view the body has, which a respawn or a teleport may have turned since the last command.
 		var from := Vector2(me.view_yaw, me.view_pitch)
 		mind.view_from = from
-		move.yaw = from.x + _turn(from.x, mind.view_to.x) / float(_every)
-		move.pitch = from.y + (mind.view_to.y - from.y) / float(_every)
-	elif _every > 1 and mind.throw_stage == 0 and mind.last_think_tick >= 0 and tick - mind.last_think_tick > 1:
+		move.yaw = from.x + _turn(from.x, mind.view_to.x) / float(mind.every)
+		move.pitch = from.y + (mind.view_to.y - from.y) / float(mind.every)
+	elif (_every > 1 or _tier_on) and mind.throw_stage == 0 and mind.last_think_tick >= 0 and tick - mind.last_think_tick > 1:
 		# A think after coasted ticks: the brain's turn limit is bot_turn_rate times the time since its last
 		# think, so it turned for the whole gap at once (twice bot_turn_rate in one tick, the headless_bots
 		# turn-rate failure). Held to one tick's turn from the body's view; the aim closes over the next ticks.
@@ -854,6 +903,10 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 	mind.last_think_tick = tick
 	mind.last_move = move.duplicate_command()
 	mind.last_fire = fire.duplicate_command()
+	if mind.coasting and _tier_on:
+		# A tiered coast repeats only held buttons: a jump or a weapon switch is pressed on the think tick, then let go.
+		mind.last_move.buttons &= _COAST_MOVE if intent.state != &"dead" else 0
+		mind.last_fire.buttons &= _COAST_FIRE if intent.state != &"dead" else 0
 	return [move, fire]
 
 
@@ -864,9 +917,9 @@ static func _turn(a: float, b: float) -> float:
 
 ## The commands of a tick the brain sits out: the last ones, with the view carried on towards where the last think turned it.
 static func _coast(mind: Mind, tick: int) -> Array:
-	var step := (tick + mind.seed) % _every
+	var step := tick - mind.last_think_tick
 	var move := mind.last_move.duplicate_command()
-	var fraction := float(step + 1) / float(_every)
+	var fraction := float(step + 1) / float(mind.every)
 	move.yaw = mind.view_from.x + _turn(mind.view_from.x, mind.view_to.x) * fraction
 	move.pitch = mind.view_from.y + (mind.view_to.y - mind.view_from.y) * fraction
 	mind.last_move.yaw = move.yaw
@@ -880,13 +933,19 @@ static func _coastable(mind: Mind, intent: DotBotIntent, move: DotFpsCommand, fi
 		and move.buttons == 0 and fire.buttons == 0
 
 
-## Whether this tick repeats the last commands rather than think. See [member think_every].
-static func _coasts(mind: Mind, tick: int) -> bool:
-	if not mind.far or mind.last_move == null or mind.brain == null or mind.ride != null or mind.throw_stage != 0:
+## Whether a tiered bot that just thought may sit out the next ticks: no ride or throw. Its edge buttons are not
+## repeated (see [method think_finish]), so a fight or a jump may coast; a dead bot coasts with nothing pressed.
+static func _tier_coastable(mind: Mind, _intent: DotBotIntent) -> bool:
+	return mind.ride == null and mind.throw_stage == 0
+
+
+## Whether this tick repeats the last commands rather than think. See [member think_every] and [member tiers].
+static func _coasts(mind: Mind, tick: int, world: World, id: int) -> bool:
+	if not mind.coasting or mind.every <= 1 or mind.last_move == null or mind.brain == null or mind.ride != null or mind.throw_stage != 0:
 		return false
-	if (tick + mind.seed) % _every == 0:
+	if mind.last_think_tick < 0 or tick <= mind.last_think_tick or tick - mind.last_think_tick >= mind.every:
 		return false
-	return mind.coasting
+	return not world.woken.has(id)
 
 
 ## Whether no live enemy of [param me] is within [member think_near] metres.
@@ -980,3 +1039,4 @@ static func forget(game: Object, id: int) -> void:
 		if held is World:
 			(held as World).brains.erase(id)
 			(held as World)._loadouts.erase(id)
+			(held as World).woken.erase(id)
