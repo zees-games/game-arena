@@ -183,15 +183,21 @@ func random_spawn_loadout(on: bool) -> Variant:
 	return await game.loadout_command.call(&"set_random_spawn", ArenaGame.storage_key(player.player_id), on)
 
 
-## A card's picture (the HUD's rendered weapon silhouettes) and numbers (arena-weapons' cards).
-func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
-	var id := StringName(str(choice.get("id", "")))
-	var out: Dictionary = {}
+## The card pictures' cache, made on first use. The load cover has it render every weapon through one viewport
+## ([method AwWeaponPreview.warm]), so pressing B finds them all drawn instead of making 27 render targets.
+func weapon_previews() -> AwWeaponPreview:
 	if _previews == null:
 		_previews = AwWeaponPreview.new()
 		_previews.name = "WeaponPreviews"
 		add_child(_previews)
-	var icon: Texture2D = _previews.texture(id) if _previews != null else null
+	return _previews
+
+
+## A card's picture (the HUD's rendered weapon silhouettes) and numbers (arena-weapons' cards).
+func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
+	var id := StringName(str(choice.get("id", "")))
+	var out: Dictionary = {}
+	var icon: Texture2D = weapon_previews().texture(id)
 	if icon == null:
 		icon = ArenaWeaponIcons.shared.menu_texture(id)
 	if icon == null:

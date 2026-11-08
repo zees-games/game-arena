@@ -422,7 +422,7 @@ func _prewarm_tick() -> void:
 				ArenaLoadTimeline.mark("prewarm 3 done: figures, own work %d ms" % (int(_warm_work_usec.get(3, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 		_:
 			_warm.frames += 1
-			if _warm.frames >= 3 and DotWeaponMuzzle.warm_done():
+			if _warm.frames >= 3 and DotWeaponMuzzle.warm_done() and not (_previews != null and _previews.is_warming()):
 				_prewarm_end()
 	# CPU time this phase spent in its own ticks (a slow frame with little of it is the renderer).
 	_warm_work_usec[phase_now] = int(_warm_work_usec.get(phase_now, 0)) + Time.get_ticks_usec() - tick_start
@@ -435,6 +435,11 @@ func _prewarm_end() -> void:
 	if is_instance_valid(_warm.get("rig")):
 		(_warm.rig as Node).queue_free()
 	_warm = {}
+	# Draw the (hidden) loadout screen on the solo offer, so the first B finds the cards made; a dot-menu without it just draws on B.
+	if loadout_menu != null and loadout_menu.has_method(&"prepare"):
+		var began := Time.get_ticks_usec()
+		var _drawn: Variant = loadout_menu.call(&"prepare")
+		ArenaLoadTimeline.mark("prewarm: loadout screen drawn hidden, %d ms" % ((Time.get_ticks_usec() - began) / 1000))
 	ArenaLoadTimeline.mark("prewarm end")
 	if gate != null:
 		gate.release(&"weapons")
@@ -459,6 +464,10 @@ func _prewarm_weapons(body: ArenaPlayer) -> void:
 	spare.visible = false
 	body.camera.add_child(spare)
 	gate.hold(&"weapons", "Preparing weapons")
+	# The loadout menu's weapon pictures, one a frame beside the view models below (they wait on the renderer, this on a frame each), so B finds them drawn.
+	if loadout_menu != null:
+		weapon_previews().warmed.connect(func() -> void: ArenaLoadTimeline.mark("prewarm: %d weapon pictures, own work %d ms" % [weapon_previews().cached_count(), int(weapon_previews().warm_msec())]), CONNECT_ONE_SHOT)
+		weapon_previews().warm()
 	_warm = {"body": body, "spare": spare, "arts": AwWeaponArtTable.table().values(), "next": 0, "phase": 0, "frames": 0, "rig": null}
 	# A tick on process_frame, not an await: a coroutine resumed after this client was freed is an
 	# engine error, while a connection to a method dies with the object.
