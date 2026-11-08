@@ -70,9 +70,26 @@ func _deliver_packs(mount: String, other: String) -> void:
 	_write(mount.path_join("%s.json" % DELIVERED_ID),
 		text.replace("\"id\": \"%s\"" % MAP, "\"id\": \"%s\"" % DELIVERED_ID))
 	DirAccess.copy_absolute(source.get_basename() + ".bin", mount.path_join("%s.bin" % DELIVERED_ID))
+	# The textures the manifest declares: a pack without them is hollow and refused (ArenaMaps.missing_declared_files).
+	var tex_dir := mount.path_join("textures")
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(tex_dir))
+	for name in _declared_textures(text):
+		DirAccess.copy_absolute(source.get_base_dir().path_join("textures").path_join(name), tex_dir.path_join(name))
 	_write(other.path_join("%s.json" % DELIVERED_NOT_ARENA),
 		text.replace("\"id\": \"%s\"" % MAP, "\"id\": \"%s\"" % DELIVERED_NOT_ARENA)
 			.replace("\"kind\": \"arena\"", "\"kind\": \"course\""))
+
+
+func _declared_textures(manifest_text: String) -> Array:
+	var out: Array = []
+	var parsed: Variant = JSON.parse_string(manifest_text)
+	if parsed is Dictionary:
+		for surface: Variant in (parsed as Dictionary).get("surfaces", []):
+			for field in ["texture", "texture2"]:
+				var n := str((surface as Dictionary).get(field, ""))
+				if n != "" and n != "<null>" and not out.has(n):
+					out.append(n)
+	return out
 
 
 func _test_server_named() -> void:
