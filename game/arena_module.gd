@@ -14,6 +14,8 @@ const SPEED_CVARS: PackedStringArray = ["arena_speed_scale", "arena_run_speed", 
 const ArenaMapConfig := preload("arena_map_config.gd")
 const ArenaIdentity := preload("arena_identity.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
+const DotGameRelevance := preload("res://addons/dot_game/net/dot_game_relevance.gd")
 const ArenaMaps := preload("arena_maps.gd")
 const ArenaMapDirector := preload("arena_map_director.gd")
 const ArenaModTools := preload("arena_mod_tools.gd")
@@ -414,6 +416,10 @@ func _build_netcode() -> DotResult:
 
 	if not started.ok:
 		return started
+
+	# net_skip_idle and net_visibility, the switches dot-game's own games get from DotGameNetcode (dot-game 52; by name, so an older host still parses this).
+	if DotAddonApi.build_level("dot_game") >= 52:
+		DotGameRelevance.call(&"bind_toggles", console, net)
 
 	bridge = ArenaNetBridge.new()
 	bridge.name = "Bridge"
@@ -1404,8 +1410,23 @@ func _on_map_changed(map: DotMapDef) -> void:
 		services.announce("Now playing %s." % map.name_or_id())
 
 	_report_map(String(map.id))
+	_attach_visibility(map)
 
 	log_info("map changed", {"map": String(map.id)})
+
+
+## The converted world's PVS as the snapshot visibility (cvar net_visibility); a built-in map clears it.
+func _attach_visibility(map: DotMapDef) -> void:
+	if net == null or DotAddonApi.build_level("dot_game") < 52:
+		return
+	var mesh: Object = null
+	var arena_map := map as ArenaMap
+	if arena_map != null and arena_map.is_imported():
+		var prefix := ArenaBspMap.world_prefix(String(map.id), arena_map.manifest_path.get_base_dir())
+		var got: DotResult = DotMapBspMesh.load_prefix(prefix) if not prefix.is_empty() else null
+		mesh = got.value if got != null and got.ok else null
+	var on: bool = DotGameNetcode.call(&"attach_visibility", net, mesh)
+	log_info("snapshot visibility", {"map": String(map.id), "in_force": on})
 
 
 ## Tells dot-server which map this is, so A2S and DQP print it in their map field (and
