@@ -83,7 +83,7 @@ func _weapon(me: Node, id: StringName) -> void:
 	print(id)
 	var def: DotWeaponDef = AwWeaponCatalogue.table()[id]
 	var _given = me.arsenal.give(id)
-	me.arsenal.equip(def.slot)
+	me.arsenal.equip(me.arsenal.catalogue.get_def(id).slot)  # the game's slot (the railgun is pinned to primary)
 	var held := await _until(func() -> bool: return me.arsenal.current() != null and me.arsenal.current().def.id == id and _holding(), 3.0)
 	if not _check(held, "%s is in the hands" % id):
 		_finished += 1
