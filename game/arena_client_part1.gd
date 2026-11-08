@@ -364,8 +364,21 @@ func _prewarm_tick() -> void:
 			while _warm.next < arts.size() and Time.get_ticks_msec() < until:
 				if not is_instance_valid(_warm.spare):
 					break
-				(_warm.spare as AwViewModel).prewarm(arts[_warm.next] as AwWeaponVisual)
-				_warm.next += 1
+				var spare := _warm.spare as AwViewModel
+				# One weapon's equip split into stages (a cold sight fit, cuts and red dot are 220-440 ms in one go), one stage a pass of this loop.
+				if not spare.has_method(&"prewarm_begin"):
+					spare.prewarm(arts[_warm.next] as AwWeaponVisual)
+					_warm.next += 1
+				elif bool(_warm.get("stepping", false)):
+					if not spare.prewarm_step():
+						_warm.stepping = false
+						_warm.next += 1
+				else:
+					_warm.stepping = spare.prewarm_begin(arts[_warm.next] as AwWeaponVisual)
+					if not _warm.stepping:
+						_warm.next += 1
+				if bool(_warm.get("stepping", false)):
+					break  # a stage per frame: the next frame continues this weapon
 			if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
 				if is_instance_valid(_warm.spare):
 					(_warm.spare as Node).queue_free()
