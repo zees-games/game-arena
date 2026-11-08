@@ -2,6 +2,7 @@ extends Node
 
 const ArenaGame := preload("arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaFlagView := preload("arena_flag_view.gd")
 
 ## What the round is about, when the mode says it is about something.
 ##
@@ -42,6 +43,9 @@ var manager: DotObjectiveManager = null
 
 ## The capture-the-flag mechanic when the layout is `ctf`; its manager is [member manager].
 var ctf: DotObjectiveCtf = null
+
+## The drawn flags when the game draws at all (never headless); null otherwise.
+var flag_view: ArenaFlagView = null
 
 var _last_wire := ""
 var _wire_tick := -1000000
@@ -123,6 +127,7 @@ func _setup_ctf() -> DotResult:
 		return res.wrap("arena ctf")
 
 	manager = ctf.manager
+	_build_flag_view()
 	manager.objective_completed.connect(_on_completed)
 	manager.objective_event.connect(_on_event)
 	ctf.flag_event.connect(_announce_flag)
@@ -134,6 +139,17 @@ func _setup_ctf() -> DotResult:
 
 	DotLog.info(CHANNEL, "ctf ready", {"teams": ctf.flags().size()})
 	return DotResult.success(null)
+
+
+## The flags are drawn wherever the game draws (a client, a listen server, a solo game); a dedicated or headless server has no eyes for them.
+func _build_flag_view() -> void:
+	if flag_view != null or ctf == null or game.headless:
+		return
+	flag_view = ArenaFlagView.new()
+	flag_view.name = "FlagView"
+	flag_view.game = game
+	flag_view.ctf = ctf
+	add_child(flag_view)
 
 
 ## Where each team's flag stands (team id -> position): a flag spawn the map or the workbench placed, else the middle of the team's own spawns, else a cluster of all spawns, else the ends of the map's longest axis.
@@ -498,6 +514,10 @@ func _on_map_changed(new_map: ArenaMap) -> void:
 		ctf.queue_free()
 		ctf = null
 		manager = null
+		if flag_view != null:
+			remove_child(flag_view)
+			flag_view.queue_free()
+			flag_view = null
 		var _again := setup()
 		return
 	var defs := build(layout, new_map, game.tick_rate)

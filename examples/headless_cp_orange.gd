@@ -1,6 +1,7 @@
 extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
+const ArenaFlagView := preload("../game/arena_flag_view.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
@@ -137,6 +138,16 @@ func _run() -> void:
 			var want: Vector3 = _game.map.flag_homes["red" if String(flag.def.id).ends_with("1") else "blue"] + Vector3.UP
 			ok = ok and flag.at.distance_to(want) < 0.5
 		_check(ok, "two flags, each at its authored home")
+		var fv := ArenaFlagView.new()
+		fv.game = _game
+		fv.ctf = _game.objectives.ctf
+		add_child(fv)
+		fv.refresh()
+		var homes_ok := fv.drawn_count() == 2
+		for flag in flags:
+			homes_ok = homes_ok and fv.view_position(flag.home_team()).distance_to(flag.at) < 0.5
+		_check(homes_ok, "and the flag view draws both, one per side, at those homes")
+		fv.queue_free()
 
 	_report_sections(6, 6, 6, -1)
 

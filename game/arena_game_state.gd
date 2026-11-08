@@ -248,11 +248,7 @@ var drops: ArenaDrops = null
 ## Weapons lying in the world (thrown with the drop key, or left by the dead): dot-weapon's layer
 ## under [member weapon_drop_rules], whose cvars are the server owner's and outlive a map change.
 var weapon_drops: DotWeaponDrops = null
-var weapon_drop_rules: DotWeaponDropRules = _hold_to_replace()
-static func _hold_to_replace() -> DotWeaponDropRules:
-	var rules := DotWeaponDropRules.new()
-	rules.swap_hold = true
-	return rules
+var weapon_drop_rules: DotWeaponDropRules = DotWeaponDropRules.new()
 
 
 ## The converted map's doors, lifts and buttons, or null for a map without any (it then costs nothing per tick).
