@@ -151,6 +151,8 @@ func set_movement_rules(rules: Dictionary) -> void:
 		var index := int(rules["mode_index"])
 		if index >= 0 and index < all.size() and (shown_mode == null or shown_mode.id != all[index].id):
 			shown_mode = all[index]
+			if map != null:
+				_reconcile_client_objectives()
 			mode_shown.emit(shown_mode)
 
 	if is_authority and rules.has("killcam"):

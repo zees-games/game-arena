@@ -1,6 +1,8 @@
 @tool
 extends "arena_hud_base.gd"
 
+const ArenaFlagView := preload("arena_flag_view.gd")
+
 
 func build(p_game: ArenaGame) -> void:
 	game = p_game
@@ -111,6 +113,11 @@ func build(p_game: ArenaGame) -> void:
 	objective_label = _make_label(
 		"Objective", Control.PRESET_CENTER_TOP, Vector2(0.0, 154.0)
 	)
+	carry_label = _make_label("CarryFlag", Control.PRESET_CENTER_TOP, Vector2(0.0, 184.0))
+	carry_label.add_theme_font_size_override(&"font_size", 30)
+	carry_label.add_theme_color_override(&"font_color", Color(1.0, 0.9, 0.35))
+	carry_label.visible = false
+
 	# No match, nothing to score: a render tool or a suite building the HUD alone.
 	strip.visible = game != null
 	portraits.visible = game != null
@@ -302,6 +309,10 @@ func _present(delta: float) -> void:
 
 	if objective_label != null:
 		objective_label.text = _objective_line()
+	if carry_label != null:
+		var carrying := carrying_flag_text()
+		carry_label.text = carrying
+		carry_label.visible = carrying != ""
 
 
 ## The clock, the two scores, the target and the mode, into the strip. Public so a render
@@ -685,6 +696,18 @@ func _ctf_line(ctf: DotObjectiveCtf) -> String:
 	if left >= 0.0:
 		parts.append("%d:%02d" % [int(left) / 60, int(left) % 60])
 	return "  ".join(parts)
+
+
+## What the followed player carries, as a line for the screen: "YOU HAVE THE RED FLAG - TAKE IT TO YOUR BASE", or "" when they carry nothing.
+func carrying_flag_text() -> String:
+	if game == null or game.objectives == null or game.objectives.ctf == null or not _live():
+		return ""
+	var ctf: DotObjectiveCtf = game.objectives.ctf
+	var me := str(player.player_id)
+	for flag in ctf.flags():
+		if flag.state == DotObjectiveFlag.State.CARRIED and flag.carrier == me:
+			return "YOU HAVE THE %s FLAG - TAKE IT TO YOUR BASE" % ArenaFlagView.name_of(flag.home_team())
+	return ""
 
 
 ## One line about the objectives, or nothing at all.

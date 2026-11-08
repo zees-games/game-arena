@@ -104,11 +104,12 @@ var _bake_ids: Array = []
 
 ## Bakes the recipes named by [param ids] (consumed from the end) into [param bank] until
 ## [param budget_msec] is spent; one recipe is never split, so the call overruns by at most one.
+## Stock voices (dot_audio stock/voices, self-synthesised) replace the sine-sweep stand-ins for shot, hit, hurt, die, impact, boom.
 static func bake_into(bank: Dictionary, catalogue: DotAudioCatalogue, recipes: Dictionary, ids: Array, budget_msec: int) -> void:
 	var until := Time.get_ticks_msec() + budget_msec
 	while not ids.is_empty() and Time.get_ticks_msec() < until:
 		var id: Variant = ids.pop_back()
-		bank.merge(DotAudioSynth.bank(catalogue, {id: recipes[id]}))
+		bank.merge(DotAudioSynth.bank(catalogue, {id: recipes[id]}, true))
 
 
 ## Calls [method bake_into] on the sink's bank until the frame's budget is spent, then lets the gate
@@ -610,6 +611,25 @@ func on_stomp(at: Vector3, sound: StringName, effect: StringName) -> void:
 ## A utility grenade's effect: a cloud or a fire, or a blind for the followed player (through dot-fx, so the flash settings cap it).
 func on_grenade_fx(info: Dictionary, own_id: int) -> void:
 	var _shown := AwGrenadeFx.show(fx, get_tree(), info, own_id)
+
+
+## A flag changed hands: a different cue for what I did (took, dropped), what happened to my team's flag, and the rest.
+func on_flag_event(what: StringName, flag_team: int, by_me: bool, my_team: int) -> void:
+	if audio == null:
+		return
+	var mine := flag_team == my_team
+	var id := &""
+	match what:
+		&"taken":
+			id = &"flag_taken_by_me" if by_me else (&"flag_lost" if mine else &"flag_taken")
+		&"dropped":
+			id = &"flag_lost_back" if by_me else &"flag_dropped"
+		&"returned":
+			id = &"flag_returned"
+		&"captured":
+			id = &"flag_captured"
+	if id != &"":
+		var _v := audio.play(id)
 
 
 func on_hurt(_amount: float) -> void:
