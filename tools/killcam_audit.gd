@@ -109,7 +109,7 @@ func _run() -> void:
 		attacker = 0
 		type = ArenaContent.DAMAGE_FALL
 	elif _scenario == "killer_left":
-		gm.remove_player(killer.player_id)
+		_client.call("_remove_offline_bot", killer.player_id)
 	for i in 60:
 		_hit(gm, attacker, me, type)
 		if not me.is_alive():
