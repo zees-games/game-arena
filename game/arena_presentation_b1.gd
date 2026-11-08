@@ -437,6 +437,18 @@ func _add_arm_vars(local: DotConsoleLocal):
 			ArenaViewArms.scope_arms_hide_override = clampf(str(v).to_float(), -1.0, 1.0)
 			return DotResult.success(ArenaViewArms.scope_arms_hide_override)
 	)
+	local.add_var(&"cl_scope_pip", "1: an unaimed scoped weapon's scope shows a small live picture through it (0: opaque, costs nothing). Takes effect on the next weapon swap.",
+		func() -> Variant: return 1 if AwScopePip.enabled else 0,
+		func(v: Variant) -> Variant:
+			AwScopePip.enabled = str(v).to_int() != 0
+			return DotResult.success(1 if AwScopePip.enabled else 0)
+	)
+	local.add_var(&"cl_scope_pip_rate", "Redraws per second of the scope picture (1 to 60; 15 by default).",
+		func() -> Variant: return AwScopePip.rate_hz,
+		func(v: Variant) -> Variant:
+			AwScopePip.rate_hz = clampf(str(v).to_float(), 1.0, 60.0)
+			return DotResult.success(AwScopePip.rate_hz)
+	)
 	local.add_var(&"cl_fp_max_lean", "Most the first-person arms lean toward a hand out of reach (-1: each weapon's own, 0.4 by default; 0 is no lean).",
 		func() -> Variant: return ArenaViewArms.max_lean_override,
 		func(v: Variant) -> Variant:
