@@ -182,21 +182,96 @@ static func is_workshop(def: DotMapDef) -> bool:
 	return def != null and def.entry_key != ""
 
 
-## The map a subscribed pack's [param def] describes: its `scene` is a map document
-## (`maps/arena_map_doc.gd`) whose id is the entry's id. A fresh [ArenaMap] each call, like
-## [method ArenaMap.by_id]. A refusal is logged once per entry, then silent, because the
-## menu asks on every open.
+## The map a subscribed pack's [param def] describes. Its `scene` is one of two documents:
+## a box-list map document (`maps/arena_map_doc.gd`), or an imported map's manifest (what
+## arena-dm-maps and arena-surf-dm-maps publish: `"kind": "arena"`, with its mesh `.bin` beside
+## it), which is mounted through [method ArenaImportedMaps.add_mounted] like a delivered map.
+## A fresh [ArenaMap] each call, like [method ArenaMap.by_id]. A refusal is logged once per
+## entry, then silent, because the menu asks on every open.
+##
+## [b]The entry's id and the document's id may differ in `-` against `_`[/b] (`dm_morpheus`
+## against `dm-morpheus`: the pack writer made one and the importer the other). Either is
+## accepted. A box list keeps the entry's id; an imported map is canonically its document's
+## id, because its files, its converted world and its lightmap are all found by that name, so
+## the map built answers to [method workshop_map_id], not always to `def.id`.
 static func build_workshop(def: DotMapDef) -> DotResult:
 	if not is_workshop(def):
 		return DotResult.fail(DotError.CODE_INVALID, "not a Workshop map", String(def.id) if def != null else "")
-	var text := FileAccess.get_file_as_string(def.scene_path) if FileAccess.file_exists(def.scene_path) else ""
-	var built := ArenaMapDoc.build(text, def.id)
+	var built: DotResult
+	var imported_id := _imported_doc_id(def.scene_path)
+	if imported_id != "":
+		built = _build_workshop_imported(def, imported_id)
+	else:
+		var text := FileAccess.get_file_as_string(def.scene_path) if FileAccess.file_exists(def.scene_path) else ""
+		built = ArenaMapDoc.build(text, def.id)
 	if not built.ok and not _refused_keys.has(def.entry_key):
 		_refused_keys[def.entry_key] = true
 		DotLog.warn(CHANNEL, "a Workshop map was refused", {
 			"entry": def.entry_key, "why": built.error.message,
 		})
 	return built
+
+
+## The id [param def]'s map is played under: the document's own for an imported map (see
+## [method build_workshop]), else the entry's.
+static func workshop_map_id(def: DotMapDef) -> StringName:
+	if not is_workshop(def):
+		return def.id if def != null else &""
+	var imported_id := _imported_doc_id(def.scene_path)
+	return StringName(imported_id) if imported_id != "" else def.id
+
+
+## Whether two map ids are the same map written `-` or `_`.
+static func same_map_id(a: String, b: String) -> bool:
+	return a == b or a.replace("_", "-") == b.replace("_", "-")
+
+
+## scene path -> [modified time, the imported document's id or ""], so the menu's repeated asks
+## do not parse a manifest of up to a megabyte each time.
+static var _doc_ids: Dictionary = {}
+
+
+## The id of the imported-map manifest at [param path], or "" when it is not one (missing, not
+## JSON, a box-list document, or not `"kind": "arena"`).
+static func _imported_doc_id(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var stamp := FileAccess.get_modified_time(path)
+	var held: Variant = _doc_ids.get(path)
+	if held is Array and int((held as Array)[0]) == stamp:
+		return str((held as Array)[1])
+	var id := ""
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(path)) == OK and json.data is Dictionary:
+		var doc: Dictionary = json.data
+		if str(doc.get("kind", "")) == ArenaImportedMaps.KIND and not doc.has("boxes"):
+			id = str(doc.get("id", ""))
+	_doc_ids[path] = [stamp, id]
+	return id
+
+
+static func _build_workshop_imported(def: DotMapDef, doc_id: String) -> DotResult:
+	if not same_map_id(doc_id, String(def.id)):
+		return DotResult.fail(DotError.CODE_INVALID, "the document's id is not the entry's id",
+			"%s vs %s" % [doc_id, def.id])
+	var dir := def.scene_path.get_base_dir()
+	# add_mounted finds the manifest as <id>.json, so the file must be named for the document.
+	if def.scene_path.get_file() != "%s.json" % doc_id:
+		return DotResult.fail(DotError.CODE_INVALID, "the manifest is not named for its map", def.scene_path)
+	var key := StringName(doc_id)
+	# A copy mounted already (a server-named version, or this call's last) stays: a second
+	# registration would only re-parse the manifest, or move a mount a delivered map owns.
+	if not ArenaImportedMaps.is_mounted(key):
+		var added := ArenaImportedMaps.add_mounted(key, dir)
+		if not added.ok:
+			return added
+	var map := ArenaMap.imported(key)
+	if map == null:
+		return DotResult.fail(DotError.CODE_INVALID, "the manifest cannot be built into a map", def.scene_path)
+	if map.spawns.is_empty():
+		return DotResult.fail(DotError.CODE_INVALID, "the map has no spawn", def.scene_path)
+	map.display_name = def.display_name if def.display_name != "" else doc_id
+	return DotResult.success(map)
 
 
 ## The rows of the solo map menu (M), in the ballot's ids so a server's list reads the same:
@@ -218,7 +293,7 @@ static func menu_rows(
 		elif is_workshop(def):
 			detail = "Workshop map"
 		var row := {"id": "map:%s" % def.id, "name": def.label(), "mode": "Map",
-			"detail": detail, "current": def.id == here}
+			"detail": detail, "current": def.id == here or (is_workshop(def) and workshop_map_id(def) == here)}
 		# Fifty surf maps would otherwise push the deathmatch ones onto page 3.
 		if detail == "Combat surf map":
 			surf.append(row)

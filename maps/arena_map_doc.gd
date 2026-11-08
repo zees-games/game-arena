@@ -33,7 +33,8 @@ static func build(text: String, entry_id: StringName) -> DotResult:
 	if not (parsed is Dictionary):
 		return DotResult.fail(DotError.CODE_INVALID, "the map document is empty or not a JSON object", String(entry_id))
 	var doc: Dictionary = parsed
-	if str(doc.get("id", "")) != String(entry_id):
+	# `-` against `_` is the same name (the pack writer and the importer differ), the entry's wins.
+	if str(doc.get("id", "")).replace("_", "-") != String(entry_id).replace("_", "-"):
 		return DotResult.fail(DotError.CODE_INVALID, "the document's id is not the entry's id",
 			"%s vs %s" % [str(doc.get("id", "")), entry_id])
 	var extent := _number(doc.get("extent", 24.0))
