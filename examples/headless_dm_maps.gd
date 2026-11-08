@@ -182,7 +182,7 @@ func _test_solo() -> void:
 
 
 ## A fake CDN: 404 for crackhouse, an opaque failure (browser "Failed to fetch", status 0) for aim-forts,
-## a 500 for gg-woods, a hollow pack (resolves, manifest and mesh, but not the lightmap it declares) for
+## a 500 for gg-garage, a hollow pack (resolves, manifest and mesh, but not the lightmap it declares) for
 ## dm-hollowtest. Any failure drops the map from the list and is never asked for twice; the rest stay.
 func _test_dead_maps() -> void:
 	print("-- any fetch failure (opaque, 5xx, hollow pack) drops the map and is not retried")
@@ -197,7 +197,7 @@ func _test_dead_maps() -> void:
 	DotRegistry.register(DotMapLoader.CLOUD_SERVICE, cdn)
 	var before := cat.maps.size()
 
-	for id in [&"crackhouse", &"aim-forts", &"gg-woods", &"dm-hollowtest"]:
+	for id in [&"crackhouse", &"aim-forts", &"gg-garage", &"dm-hollowtest"]:
 		var def := cat.get_map(id)
 		_check(def != null, "%s is listed before the pick" % id)
 		var r := await ArenaMaps.mount_delivered(def, DotMapLoader.new(), cat, true)
@@ -209,9 +209,9 @@ func _test_dead_maps() -> void:
 	var asked := cdn.asked.size()
 	var again := DotMapCatalogue.new()
 	var _b := ArenaMaps.adopt_delivered(again, keys)
-	_check(again.get_map(&"aim-forts") == null and again.get_map(&"crackhouse") == null and again.get_map(&"surf_adverse") != null,
+	_check(again.get_map(&"aim-forts") == null and again.get_map(&"crackhouse") == null and again.get_map(&"surf_10x_final") != null,
 		"a re-adopted list does not bring the dead keys back")
-	var ghost := ArenaMaps.delivered_def("gamemann/aim-forts@1.0.4")
+	var ghost := ArenaMaps.delivered_def("gamemann/aim-forts@1.0.3")
 	var retry := await ArenaMaps.mount_delivered(ghost, DotMapLoader.new(), again)
 	_check(not retry.ok and retry.error.message.contains("not retried") and cdn.asked.size() == asked,
 		"a dead key is refused without asking the CDN again")
@@ -293,6 +293,6 @@ class _FakeCdn extends RefCounted:
 				return DotResult.failure(DotError.from_http(404)).wrap("Could not download the content manifest.")
 			"aim-forts":
 				return DotResult.fail(DotError.CODE_IO, "Failed to fetch")
-			"gg-woods":
+			"gg-garage":
 				return DotResult.failure(DotError.from_http(500)).wrap("Could not download the content manifest.")
 		return DotResult.success("res://dot_cloud/%s/%s" % [id, version])
