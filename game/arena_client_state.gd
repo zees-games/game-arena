@@ -100,7 +100,7 @@ var killcam_shots: ArenaKillcamShots = null
 var killview: DotKillViewClient = null
 
 ## Solo only: the server half of the kill view, run in this process (a connected game has the bridge's).
-var solo_killview: DotKillViewServer = null
+var solo_killview: DotKillViewSolo = null
 var winner_reveal: DotWinnerReveal = null
 var _reveal_hid: Dictionary = {}
 var _seen_match_state: int = -1
