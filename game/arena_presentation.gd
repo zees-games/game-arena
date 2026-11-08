@@ -143,6 +143,8 @@ func setup() -> DotResult:
 	var drawn := _build_fx()
 	if not drawn.ok:
 		return drawn
+	# cl_fx_pool_idle: one shot fx pool per player, so trim each one's idle meshes.
+	_addon_static(DotFxMeshPool, &"max_idle", 0, fx_pool_idle)
 	_build_chat()
 	net_stat = DotMenuNetStat.follow(self, settings)
 
@@ -1023,6 +1025,22 @@ func _apply_chat_visibility() -> void:
 
 
 ## This game's own commands; the kit has `help`, `clear`, `settings` and every setting.
+## Idle meshes each shot fx pool keeps (`cl_fx_pool_idle`; -1 keeps all), pushed at [method setup].
+static var fx_pool_idle := 8
+
+
+## Reads, or with [param value] writes, a static of an addon class that an older checkout of
+## the addon may not have yet: [param fallback] when it is missing, and the write is skipped.
+static func _addon_static(script: Script, name: StringName, fallback: Variant, value: Variant = null) -> Variant:
+	var have: Variant = script.get(name)
+	if have == null:
+		return fallback
+	if value != null:
+		script.set(name, value)
+		return script.get(name)
+	return have
+
+
 func _local_commands() -> DotConsoleLocal:
 	var local := DotConsoleLocal.new()
 
@@ -1057,6 +1075,51 @@ func _local_commands() -> DotConsoleLocal:
 				return DotResult.fail(DotError.CODE_INVALID, "cl_perf takes a number of seconds")
 			ArenaFrameProbe.set_interval(text.to_float())
 			return DotResult.success(ArenaFrameProbe.interval)
+	)
+	local.add_var(&"cl_held_equips", "Most remote bodies that build a newly held gun in one frame; the rest wait a frame (0: no limit; 2 is the default).",
+		func() -> Variant: return ArenaPlayer.held_equips_per_frame,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_held_equips takes a whole number")
+			ArenaPlayer.held_equips_per_frame = clampi(text.to_int(), 0, 64)
+			return DotResult.success(ArenaPlayer.held_equips_per_frame)
+	)
+	local.add_var(&"cl_portrait_builds", "Most scoreboard portraits rendered in one frame (0: no limit; 1 is the default).",
+		func() -> Variant: return ArenaHud.ArenaHudGlance.PortraitCache.builds_per_frame,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_portrait_builds takes a whole number")
+			ArenaHud.ArenaHudGlance.PortraitCache.builds_per_frame = clampi(text.to_int(), 0, 64)
+			return DotResult.success(ArenaHud.ArenaHudGlance.PortraitCache.builds_per_frame)
+	)
+	local.add_var(&"cl_portrait_keep", "Portraits kept for players who drop out of the ranked row, so rank changes do not re-render them (24 is the default).",
+		func() -> Variant: return ArenaHud.ArenaHudGlance.PortraitCache.keep_extra,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_portrait_keep takes a whole number")
+			ArenaHud.ArenaHudGlance.PortraitCache.keep_extra = clampi(text.to_int(), 0, 128)
+			return DotResult.success(ArenaHud.ArenaHudGlance.PortraitCache.keep_extra)
+	)
+	local.add_var(&"cl_fx_pool_idle", "Most idle meshes each player's shot effects keep for reuse; a release past it frees the mesh (-1: keep all; 8 is the default).",
+		func() -> Variant: return _addon_static(DotFxMeshPool, &"max_idle", -1),
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_fx_pool_idle takes a whole number")
+			fx_pool_idle = clampi(text.to_int(), -1, 256)
+			return DotResult.success(_addon_static(DotFxMeshPool, &"max_idle", -1, fx_pool_idle))
+	)
+	local.add_var(&"cl_def_cache", "1 keeps one weapon catalogue for watched hands' lookups; 0 builds it again on each (a reload start, a fitted code).",
+		func() -> Variant: return 1 if _addon_static(AwWeaponCatalogue, &"def_cache", false) else 0,
+		func(v: Variant) -> Variant:
+			return DotResult.success(1 if _addon_static(AwWeaponCatalogue, &"def_cache", false, str(v).strip_edges() != "0") else 0))
+	local.add_var(&"cl_glove_cache", "1 remembers each gun texture's colour for the first-person glove contrast; 0 reads it back on every equip.",
+		func() -> Variant: return 1 if _addon_static(AwViewArms, &"albedo_cache", false) else 0,
+		func(v: Variant) -> Variant:
+			return DotResult.success(1 if _addon_static(AwViewArms, &"albedo_cache", false, str(v).strip_edges() != "0") else 0)
 	)
 	local.add_var(&"cl_remote_lod", "1 draws remote players nobody can see (off screen, far away) less often; 0 presents every remote player every frame.",
 		func() -> Variant: return 1 if ArenaPlayer.present_lod_enabled else 0,

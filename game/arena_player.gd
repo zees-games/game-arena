@@ -92,7 +92,7 @@ func present(delta: float) -> void:
 		_pose_body(drawn, yaw, delta)
 		ArenaFrameProbe.add(&"r_pose", t_pose)
 		var t_held := Time.get_ticks_usec()
-		_present_held()
+		_present_held(true)
 		ArenaFrameProbe.add(&"r_held", t_held)
 		var t_tag := Time.get_ticks_usec()
 		_present_health_tag(delta)
