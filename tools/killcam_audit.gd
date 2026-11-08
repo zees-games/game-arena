@@ -139,7 +139,7 @@ func _run() -> void:
 		if playing and first_play < 0.0:
 			first_play = t
 			_shot("b_first")
-			print("CAM ", kv.camera.global_position, " killer ", killer.player_id, " me ", me.player_id)
+			print("CAM ", kv.camera.global_position, " killer ", attacker, " me ", me.player_id)
 			var near := _near_bodies(kv.camera, 1.2)
 			_check(near.is_empty(), "no body fills the lens in the first frame %s" % str(near))
 		if playing and prog >= 0.5 and not shots.has("mid"):
