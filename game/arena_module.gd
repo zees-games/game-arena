@@ -802,6 +802,23 @@ func _physics_process(delta: float) -> void:
 	if _tick % maxi(game.tick_rate, 1) == 0:
 		bridge.announce_match_state()
 
+	_follow_npc_lod(game.horde.spawner if game != null and game.horde != null else null, delta)
+
+
+## The NPC level of detail and sense workers follow the `npc_lod*` cvars (dot-game's DotGameNpcLod; all off by default). This module is a DotModule, so it holds the attachment itself.
+var _npc_lod: DotGameNpcLod = null
+
+
+func _follow_npc_lod(spawner: Object, delta: float) -> void:
+	if spawner == null or console == null:
+		return
+	if _npc_lod == null or _npc_lod.spawner != spawner:
+		if _npc_lod != null:
+			_npc_lod.release()
+		_npc_lod = DotGameNpcLod.attach(self, console, spawner, server.config if server != null else null)
+	if _npc_lod != null:
+		_npc_lod.follow(delta)
+
 
 ## So `changegame`, a vote and the server browser have something to name.
 ##
