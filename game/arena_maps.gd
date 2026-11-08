@@ -370,6 +370,11 @@ const MOUNT_ROOT := "res://dot_cloud/"
 ## not offer them again (and does not warn again).
 static var _refused_keys: Dictionary = {}
 
+## Pack key -> why it failed: a delivered map whose fetch or mount failed this session, for ANY reason
+## (404, a browser's opaque "Failed to fetch" with status 0, another HTTP error, a pack missing files it
+## declares). It leaves the solo list and is not asked for again, so a dead key is one line, not a loop.
+static var _dead_keys: Dictionary = {}
+
 
 ## The pack keys (`<owner>/<map id>@<version>`) the server names for the running game:
 ## [code]server.games.current_maps()[/code], which dot-server-deploy's `cfg/content.yml`
@@ -524,6 +529,14 @@ static func mount_delivered(
 			and ArenaImportedMaps.manifest_path(map.id) == manifest_in_mount(map):
 		return DotResult.success(null)
 
+	var first_key := key
+
+	if _dead_keys.has(key):
+		if catalogue != null:
+			catalogue.remove(map.id)
+
+		return DotResult.fail(DotError.CODE_STATE, "could not load the map %s: %s (not retried this session)" % [String(map.id), _dead_keys[key]])
+
 	var fetched: DotResult = await loader.ensure_content(map)
 
 	if not fetched.ok and allow_latest and fetched.error != null and fetched.error.http_status == 404:
@@ -531,17 +544,36 @@ static func mount_delivered(
 		key = str(map.meta.get("key", key))
 
 	if not fetched.ok:
-		# Unpublished on this origin: drop it from the solo list so it is not offered again.
-		if fetched.error != null and fetched.error.http_status == 404 and catalogue != null:
+		# Any failure, not only a 404: a browser reports a CORS-less 404 as status 0 ("Failed to fetch"),
+		# and a dead key left listed fails every time it is picked.
+		var status := fetched.error.http_status if fetched.error != null else 0
+		var why := fetched.error.message if fetched.error != null else ""
+
+		if status == 0:
+			why = "%s (no usable answer from the server: offline, blocked, or not published)" % why
+
+		mark_dead(first_key, why)
+		mark_dead(key, why)
+
+		if catalogue != null:
 			catalogue.remove(map.id)
 
 		# The toast shows only the message, so the reason goes into it; the whole chain goes to the log.
 		DotLog.warn(CHANNEL, "a delivered map could not be fetched", {"map": String(map.id), "pack": key, "why": str(fetched.error)})
-		var why := fetched.error.message if fetched.error != null else ""
 		return fetched.wrap("could not fetch the map %s: %s" % [String(map.id), why])
 
 	var dir := mount_of(map)
 	var added := ArenaImportedMaps.add_mounted(map.id, dir)
+
+	if added.ok:
+		var missing := missing_declared_files(dir, ArenaImportedMaps.manifest(map.id))
+
+		if not missing.is_empty():
+			ArenaImportedMaps.remove_mounted(map.id)
+			added = DotResult.fail(
+				DotError.CODE_IO, "The delivered map is incomplete.",
+				"%d declared file(s) missing, e.g. %s" % [missing.size(), missing[0]]
+			)
 
 	if not added.ok:
 		if added.error.code == DotError.CODE_INVALID:
@@ -549,11 +581,71 @@ static func mount_delivered(
 
 			if catalogue != null:
 				catalogue.remove(map.id)
+		elif not (fetched.value is bool and not fetched.value):
+			# Fetched, but no map document, no mesh, or fewer files than its manifest declares (a hollow pack).
+			mark_dead(first_key, added.error.detail)
+			mark_dead(key, added.error.detail)
+
+			if catalogue != null:
+				catalogue.remove(map.id)
+
+		if added.error.code != DotError.CODE_INVALID:
+			return added.wrap("could not load the map %s: %s" % [String(map.id), added.error.message.trim_suffix(".")])
 
 		return added.wrap("%s is not a map this game can build" % key)
 
 	DotLog.info(CHANNEL, "a delivered map is mounted", {"map": String(map.id), "pack": key, "dir": dir})
 	return DotResult.success(null)
+
+
+## Marks a pack key unusable for the rest of the session.
+static func mark_dead(key: String, why: String) -> void:
+	_dead_keys[key] = why
+
+
+static func is_dead(key: String) -> bool:
+	return _dead_keys.has(key)
+
+
+static func clear_dead() -> void:
+	_dead_keys.clear()
+
+
+## Files the map manifest in [param dir] declares (its lightmap, its surface textures) that the mount lacks:
+## a hollow pack resolves and mounts but has no content. Empty when complete.
+static func missing_declared_files(dir: String, manifest: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+
+	# A pack that carries its converted world under `worlds/` keeps its textures and lightmaps there.
+	if DirAccess.open(dir.path_join("worlds")) != null:
+		return out
+
+	var lm: Variant = manifest.get("lightmap", null)
+
+	if lm is Dictionary:
+		var file := str((lm as Dictionary).get("file", ""))
+
+		if not file.is_empty() and not FileAccess.file_exists(dir.path_join(file)):
+			out.append(file)
+
+	var seen := {}
+
+	for surface: Variant in manifest.get("surfaces", []):
+		if not surface is Dictionary:
+			continue
+
+		for field in ["texture", "texture2"]:
+			var tex_name := str((surface as Dictionary).get(field, ""))
+
+			if tex_name.is_empty() or tex_name == "<null>" or seen.has(tex_name):
+				continue
+
+			seen[tex_name] = true
+
+			if not FileAccess.file_exists(dir.path_join("textures").path_join(tex_name)):
+				out.append("textures/" + tex_name)
+
+	return out
 
 
 ## Solo only: the pinned version is not published, so retry at the pack's `latest.json` version and
@@ -673,7 +765,7 @@ static func adopt_delivered(
 			})
 			continue
 
-		if _refused_keys.has(key):
+		if _refused_keys.has(key) or _dead_keys.has(key):
 			continue
 
 		var on_disk := ArenaImportedMaps.kind_at(def.scene_path)

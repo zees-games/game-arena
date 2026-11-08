@@ -29,7 +29,7 @@ func _run() -> void:
 
 	if resolved.is_empty() or not FileAccess.file_exists(json_path):
 		print("no maps/imported_dm link — nothing more to check (link arena-dm-maps)")
-		_report_sections(2, 2, 2, 22)
+		_report_sections(2, 2, 2, 38)
 		return
 
 	var listed: Array = JSON.parse_string(FileAccess.get_file_as_string(json_path)).get("maps", [])
@@ -76,7 +76,7 @@ func _run() -> void:
 		if ArenaImportedMaps.has(StringName(str(want.id))):
 			_check(names.has(wid) and names[wid] != "Combat surf map", "%s is in the picker, not labelled a surf map" % wid)
 	_check(last_dm < first_surf, "deathmatch and gun game maps come before the surf maps")
-	_report_sections(entered + 2, entered + 2, 4, 24 + 5 * found)
+	_report_sections(entered + 2, entered + 2, 4, 40 + 5 * found)
 
 
 ## Solo play with no server: the published maps, their labels and pickability.
@@ -119,6 +119,9 @@ func _test_solo() -> void:
 	_check(missing.ok or missing.error.detail.contains("not published"), "the cause says it is not published (%s)" % missing.error.detail)
 	_check(solo.get_map(&"crackhouse") == null, "an unpublished map leaves the solo list")
 
+	await _test_dead_maps()
+	ArenaMaps.clear_dead()
+
 	print("-- a pack already mounted at another version (the Workshop's) is named and fetched at that version")
 	var index := DotContentIndex.new()
 	var _p := index.add_pack({"content_id": "gamemann/crackhouse", "version": "9.9.9", "provides": {}, "session": "solo"})
@@ -135,6 +138,7 @@ func _test_solo() -> void:
 	_check(got.ok or not got.error.message.contains("could not fetch"), "and the fetch is not what fails")
 
 	print("-- solo: a pinned pack that 404s falls back to its latest; online (no allow_latest) keeps the exact version")
+	ArenaMaps.clear_dead()
 	var lat := _Latest.new()
 	lat.have = ["1.0.9"]
 	lat.latest = "1.0.9"
@@ -143,15 +147,17 @@ func _test_solo() -> void:
 	DotRegistry.register(DotMapLoader.CLOUD_SERVICE, lat)
 	var online := await ArenaMaps.mount_delivered(lcat.get_map(&"crackhouse"), DotMapLoader.new(), lcat)
 	_check(not online.ok and lat.asked == PackedStringArray(["gamemann/crackhouse@1.0.4"]), "online asks only the exact version (%s)" % ", ".join(lat.asked))
+	ArenaMaps.clear_dead()
 	lcat = DotMapCatalogue.new()
 	var _l2 := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.4"]))
 	lat.asked = PackedStringArray()
-	var fell := await ArenaMaps.mount_delivered(lcat.get_map(&"crackhouse"), DotMapLoader.new(), lcat, true)
+	var lm := lcat.get_map(&"crackhouse")
+	var fell := await ArenaMaps.mount_delivered(lm, DotMapLoader.new(), lcat, true)
 	_check(lat.asked == PackedStringArray(["gamemann/crackhouse@1.0.4", "gamemann/crackhouse@1.0.9"]), "solo retries at latest (%s)" % ", ".join(lat.asked))
 	_check(fell.ok or not fell.error.message.contains("could not fetch"), "the latest fetch is not what fails")
-	var lm := lcat.get_map(&"crackhouse")
 	_check(lm != null and lm.effective_content_version() == "1.0.9" and lm.scene_path.contains("/1.0.9/"), "the map now points at the latest")
 	lat.have = []
+	ArenaMaps.clear_dead()
 	lcat = DotMapCatalogue.new()
 	var _l3 := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.4"]))
 	var none := await ArenaMaps.mount_delivered(lcat.get_map(&"crackhouse"), DotMapLoader.new(), lcat, true)
@@ -173,6 +179,61 @@ func _test_solo() -> void:
 		both = both and ArenaMaps.supports_mode(def, ffa) and ArenaMaps.supports_mode(def, gungame) \
 			and ffa_ids.has(id) and gg_ids.has(id)
 	_check(both, "every suggested map is playable and listed in both deathmatch and gun game, whatever its label")
+
+
+## A fake CDN: 404 for crackhouse, an opaque failure (browser "Failed to fetch", status 0) for aim-forts,
+## a 500 for gg-woods, a hollow pack (resolves, manifest and mesh, but not the lightmap it declares) for
+## dm-hollowtest. Any failure drops the map from the list and is never asked for twice; the rest stay.
+func _test_dead_maps() -> void:
+	print("-- any fetch failure (opaque, 5xx, hollow pack) drops the map and is not retried")
+	ArenaMaps.clear_dead()
+	var hollow_dir := "res://dot_cloud/gamemann/dm-hollowtest/0.0.1"
+	_write_hollow_pack(hollow_dir)
+	var cat := DotMapCatalogue.new()
+	var keys := ArenaMaps.standalone_keys(cat)
+	keys.append("gamemann/dm-hollowtest@0.0.1")
+	var _a := ArenaMaps.adopt_delivered(cat, keys)
+	var cdn := _FakeCdn.new()
+	DotRegistry.register(DotMapLoader.CLOUD_SERVICE, cdn)
+	var before := cat.maps.size()
+
+	for id in [&"crackhouse", &"aim-forts", &"gg-woods", &"dm-hollowtest"]:
+		var def := cat.get_map(id)
+		_check(def != null, "%s is listed before the pick" % id)
+		var r := await ArenaMaps.mount_delivered(def, DotMapLoader.new(), cat, true)
+		_check(not r.ok and r.error.message.contains("could not "), "%s fails with a one-line message (%s)" % [id, r.error.message if not r.ok else "ok"])
+		_check(cat.get_map(id) == null, "%s leaves the list after its failure" % id)
+
+	_check(cat.maps.size() == before - 4, "only the four dead maps left the list (%d of %d)" % [cat.maps.size(), before])
+	_check(not ArenaImportedMaps.is_mounted(&"dm-hollowtest"), "the hollow pack is not left mounted")
+	var asked := cdn.asked.size()
+	var again := DotMapCatalogue.new()
+	var _b := ArenaMaps.adopt_delivered(again, keys)
+	_check(again.get_map(&"aim-forts") == null and again.get_map(&"crackhouse") == null and again.get_map(&"surf_adverse") != null,
+		"a re-adopted list does not bring the dead keys back")
+	var ghost := ArenaMaps.delivered_def("gamemann/aim-forts@1.0.4")
+	var retry := await ArenaMaps.mount_delivered(ghost, DotMapLoader.new(), again)
+	_check(not retry.ok and retry.error.message.contains("not retried") and cdn.asked.size() == asked,
+		"a dead key is refused without asking the CDN again")
+	DotRegistry.unregister(DotMapLoader.CLOUD_SERVICE)
+	_remove_dir(hollow_dir)
+	ArenaMaps.clear_dead()
+
+
+func _write_hollow_pack(dir: String) -> void:
+	var _m := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	var doc := FileAccess.open(dir.path_join("dm-hollowtest.json"), FileAccess.WRITE)
+	doc.store_string(JSON.stringify({"id": "dm-hollowtest", "kind": "arena", "lightmap": {"file": "dm-hollowtest_lightmap.png"}, "surfaces": []}))
+	doc.close()
+	var mesh := FileAccess.open(dir.path_join("dm-hollowtest.bin"), FileAccess.WRITE)
+	mesh.store_8(0)
+	mesh.close()
+
+
+func _remove_dir(dir: String) -> void:
+	for file in DirAccess.get_files_at(dir):
+		var _r := DirAccess.remove_absolute(ProjectSettings.globalize_path(dir.path_join(file)))
+	var _d := DirAccess.remove_absolute(ProjectSettings.globalize_path(dir))
 
 
 func _resolve(link: String) -> String:
@@ -216,3 +277,22 @@ class _OnlyVersion extends RefCounted:
 		if version == "9.9.9":
 			return DotResult.success("res://dot_cloud/%s/%s" % [id, version])
 		return DotResult.failure(DotError.from_http(404))
+
+
+## Per-key origin: 404 / opaque (status 0) / 500 / hollow (success, pack written by the test).
+class _FakeCdn extends RefCounted:
+	var asked := PackedStringArray()
+
+	func latest_version(_id: String) -> String:
+		return ""
+
+	func ensure(id: StringName, version: String, _groups: Variant = null, _url: String = "") -> DotResult:
+		asked.append("%s@%s" % [id, version])
+		match String(id).get_file():
+			"crackhouse":
+				return DotResult.failure(DotError.from_http(404)).wrap("Could not download the content manifest.")
+			"aim-forts":
+				return DotResult.fail(DotError.CODE_IO, "Failed to fetch")
+			"gg-woods":
+				return DotResult.failure(DotError.from_http(500)).wrap("Could not download the content manifest.")
+		return DotResult.success("res://dot_cloud/%s/%s" % [id, version])
