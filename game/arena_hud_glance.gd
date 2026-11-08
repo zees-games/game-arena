@@ -528,8 +528,18 @@ class PortraitCache extends Node:
 	const ArenaAvatars := preload("arena_avatars.gd")
 	const SIDE := 96
 
-	## player id -> [SubViewport, digest]
+	## `cl_portrait_builds`: most portraits rendered in one frame (0: no limit). Each is a
+	## viewport with its own world, light and figure; a full row at once was one long frame.
+	## A portrait over the limit shows the old face (or initials) until a later pass.
+	static var builds_per_frame: int = 1
+	## `cl_portrait_keep`: portraits kept for players out of the row, so rank churn in a
+	## 16v16 does not rebuild the same faces every few seconds (0: only the shown ones).
+	static var keep_extra: int = 24
+
+	## player id -> [SubViewport, digest, last frame shown]
 	var _made: Dictionary = {}
+	var _build_frame := -1
+	var _builds := 0
 
 	## The portrait for [param id] wearing [param avatar], or null with no display.
 	func portrait(id: int, avatar: DotAvatar) -> Texture2D:
@@ -537,22 +547,37 @@ class PortraitCache extends Node:
 			return null
 		var digest := avatar.digest()
 		var have: Array = _made.get(id, [])
-		if not have.is_empty() and str(have[1]) == digest and is_instance_valid(have[0]):
-			return (have[0] as SubViewport).get_texture()
-		if not have.is_empty() and is_instance_valid(have[0]):
-			(have[0] as Node).queue_free()
+		var frame := Engine.get_process_frames()
+		var old: SubViewport = have[0] as SubViewport if not have.is_empty() and is_instance_valid(have[0]) else null
+		if old != null and str(have[1]) == digest:
+			have[2] = frame
+			return old.get_texture()
+		if frame != _build_frame:
+			_build_frame = frame
+			_builds = 0
+		if builds_per_frame > 0 and _builds >= builds_per_frame:
+			return old.get_texture() if old != null else null
+		_builds += 1
+		if old != null:
+			old.queue_free()
 		var view := _render(avatar, id)
-		_made[id] = [view, digest]
+		_made[id] = [view, digest, frame]
 		return view.get_texture()
 
-	## Forgets players who are gone.
+	## Forgets players out of the row beyond the [member keep_extra] most recently shown.
 	func keep_only(ids: Array) -> void:
+		var out: Array = []
 		for id in _made.keys():
 			if not ids.has(id):
-				var have: Array = _made[id]
-				if is_instance_valid(have[0]):
-					(have[0] as Node).queue_free()
-				_made.erase(id)
+				out.append(id)
+		if out.size() <= keep_extra:
+			return
+		out.sort_custom(func(a: Variant, b: Variant) -> bool: return int(_made[a][2]) < int(_made[b][2]))
+		for id in out.slice(0, out.size() - keep_extra):
+			var have: Array = _made[id]
+			if is_instance_valid(have[0]):
+				(have[0] as Node).queue_free()
+			_made.erase(id)
 
 	func _render(avatar: DotAvatar, id: int) -> SubViewport:
 		var view := SubViewport.new()

@@ -116,7 +116,8 @@ func _present_held_sprite(id: StringName) -> void:
 	_held_sprite.show_weapon(id)
 	_held_sprite.visible = _held_sprite.visible and is_alive()
 
-func _present_held() -> void:
+## [param remote]: a body this client only draws, whose gun build may wait for [method held_equip_allowed].
+func _present_held(remote: bool = false) -> void:
 	if held == null:
 		return
 
@@ -135,21 +136,28 @@ func _present_held() -> void:
 		reloading = arsenal.is_reloading()
 
 	held.visible = is_alive() and not ArenaWeaponIcons.shared.sprites
+	var t_sprite := Time.get_ticks_usec()
 	_present_held_sprite(id)
+	ArenaFrameProbe.add(&"r_held_sprite", t_sprite)
 
-	if id != held.equipped():
+	# A remote body over this frame's budget keeps its old gun and tries again next frame.
+	if id != held.equipped() and (not remote or id == &"" or held_equip_allowed()):
+		var t_equip := Time.get_ticks_usec()
 		var art: Variant = AwWeaponArtTable.table().get(id)
 		if art is AwWeaponVisual:
 			var _drawn := held.equip(art as AwWeaponVisual)
 		else:
 			held.clear()
+		ArenaFrameProbe.add(&"r_held_equip", t_equip)
 
+	var t_hooks := Time.get_ticks_usec()
 	held.on_switching(switching)
 	if held.has_method(&"on_reloading"):
 		held.call(&"on_reloading", reloading and is_alive())
 
 	if held.has_method(&"on_charge"):
 		held.call(&"on_charge", mirror_charge if mirrored else 0.0)
+	ArenaFrameProbe.add(&"r_held_hooks", t_hooks)
 
 	var fired := AwWeaponNet.uses_between(_seen_fire_seq, seq)
 	_seen_fire_seq = seq
@@ -157,7 +165,9 @@ func _present_held() -> void:
 	# One kick however many uses the snapshot covered, the way `AwWeaponNet.apply` does:
 	# a burst's worth of recoil in one frame reads as the gun jumping.
 	if fired > 0 and is_alive():
+		var t_fired := Time.get_ticks_usec()
 		held.on_fired(WATCHED_RECOIL.get(kind, Vector2(0.6, 0.1)), kind)
+		ArenaFrameProbe.add(&"r_held_fired", t_fired)
 
 ## Hangs a [AwWorldModel] on [method attachment]'s hand. Client side, with the body.
 func _hold_weapon() -> void:
