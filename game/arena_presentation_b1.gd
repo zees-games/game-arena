@@ -612,6 +612,25 @@ func on_grenade_fx(info: Dictionary, own_id: int) -> void:
 	var _shown := AwGrenadeFx.show(fx, get_tree(), info, own_id)
 
 
+## A flag changed hands: a different cue for what I did (took, dropped), what happened to my team's flag, and the rest.
+func on_flag_event(what: StringName, flag_team: int, by_me: bool, my_team: int) -> void:
+	if audio == null:
+		return
+	var mine := flag_team == my_team
+	var id := &""
+	match what:
+		&"taken":
+			id = &"flag_taken_by_me" if by_me else (&"flag_lost" if mine else &"flag_taken")
+		&"dropped":
+			id = &"flag_lost_back" if by_me else &"flag_dropped"
+		&"returned":
+			id = &"flag_returned"
+		&"captured":
+			id = &"flag_captured"
+	if id != &"":
+		var _v := audio.play(id)
+
+
 func on_hurt(_amount: float) -> void:
 	audio.play(&"hurt")
 	fx.flash(&"hurt_flash")

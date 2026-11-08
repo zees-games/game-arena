@@ -29,6 +29,17 @@ const STOMP_SOUND := &"stomp"
 const STOMP_PITCH := 1.9
 
 
+## Capture the flag's cues: what the flag view saw (see on_flag_event).
+const FLAG_VOICES := {
+	&"flag_taken_by_me": [DotAudioSynth.Voice.PICKUP, 0.7],
+	&"flag_taken": [DotAudioSynth.Voice.PICKUP, 1.0],
+	&"flag_lost": [DotAudioSynth.Voice.DENY, 0.6],
+	&"flag_lost_back": [DotAudioSynth.Voice.DENY, 0.9],
+	&"flag_dropped": [DotAudioSynth.Voice.BLIP, 0.8],
+	&"flag_returned": [DotAudioSynth.Voice.PICKUP, 1.3],
+	&"flag_captured": [DotAudioSynth.Voice.SPAWN, 1.5],
+}
+
 const MEDAL_VOICES := {
 	&"medal_first_blood": [DotAudioSynth.Voice.SPAWN, 0.8],
 	&"medal_headshot": [DotAudioSynth.Voice.PICKUP, 1.25],
@@ -449,6 +460,17 @@ static func sound_catalogue() -> DotAudioCatalogue:
 		medal.pitch_max = float(MEDAL_VOICES[id][1])
 		c.add(medal)
 
+	for id in FLAG_VOICES:
+		var cue := DotAudioDef.new()
+		cue.id = id
+		cue.path = "%s/%s.ogg" % [SOUND_DIR, String(id)]
+		cue.bus = &"UI"
+		cue.max_concurrent = 2
+		cue.priority = 93
+		cue.pitch_min = float(FLAG_VOICES[id][1])
+		cue.pitch_max = float(FLAG_VOICES[id][1])
+		c.add(cue)
+
 	var stomp := DotAudioDef.new()
 	stomp.id = STOMP_SOUND
 	stomp.path = "%s/%s.ogg" % [SOUND_DIR, String(STOMP_SOUND)]
@@ -584,6 +606,8 @@ static func sound_recipes() -> Dictionary:
 	out[STOMP_SOUND] = DotAudioSynth.Voice.SPAWN
 	for id in MEDAL_VOICES:
 		out[id] = MEDAL_VOICES[id][0]
+	for id in FLAG_VOICES:
+		out[id] = FLAG_VOICES[id][0]
 	return out
 
 
