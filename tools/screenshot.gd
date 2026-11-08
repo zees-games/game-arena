@@ -40,7 +40,7 @@ func _initialize() -> void:
 	# The map's toys, as a client draws them: frozen where the map puts them. Built in the
 	# first frame, because the box builds in the tree and nothing here is in it yet.
 	if not map.toys.is_empty():
-		_toy_box = DotPropToyBox.new()
+		_toy_box = DotPropBodyBox.new()
 		_toy_box.name = "Toys"
 		_toy_box.authoritative = false
 		root.add_child(_toy_box)
