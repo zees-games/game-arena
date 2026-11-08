@@ -82,6 +82,7 @@ func _run() -> void:
 				DotFpsMotor.profile = true
 				DotFpsController.phase_us.fill(0)
 				DotFpsMotor.phase_us.fill(0)
+				DotFpsPhysicsBody.native_slides = 0
 			ArenaFrameProbe._reset()
 			preload("../game/arena_bots.gd").tiers.counts.clear()
 			_tally_on(_client.game)
@@ -133,6 +134,7 @@ func _run() -> void:
 			if DotFpsMotor.PHASES[i] != "":
 				parts.append("%s %.1f" % [DotFpsMotor.PHASES[i], float(DotFpsMotor.phase_us[i]) / maxf(measured, 1.0)])
 		print("  motor phases us/tick: %s" % ", ".join(parts))
+		print("  native slides %.2f per player tick" % (float(DotFpsPhysicsBody.native_slides) / maxf(measured, 1.0)))
 	print("  physics3d active %d islands %d pairs %d" % [Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS), Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT), Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)])
 	get_tree().quit(0)
 
