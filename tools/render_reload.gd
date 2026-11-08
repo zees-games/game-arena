@@ -85,7 +85,7 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 		if not given.ok:
 			print("%s: give failed: %s" % [id, given.message])
 		me.arsenal.equip(def.slot)
-		await _wait(1.4)
+		await _wait(2.5)
 		var slot: DotWeaponSlot = me.arsenal.current()
 		if slot == null or slot.def.id != id:
 			print("%s: not in hand, skipped" % id)
