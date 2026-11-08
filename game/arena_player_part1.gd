@@ -591,45 +591,12 @@ func spawn(at: Transform3D, tick: int, protection_ticks: int = 0) -> void:
 
 	spawned.emit(at)
 
-## The health bar's two quads share their meshes and materials among every player: they are the
-## same for all, and 31 bots' worth of QuadMesh + StandardMaterial3D was made on the first hits.
-## Kept in the root window's metadata, not a static var: a static would still hold them at exit
-## and the suites' leak check would count them.
-static func _tag_assets() -> Dictionary:
-	var root: Window = (Engine.get_main_loop() as SceneTree).root
-	if not root.has_meta(&"arena_tag_assets"):
-		root.set_meta(&"arena_tag_assets", {})
-	return root.get_meta(&"arena_tag_assets")
-
-static func _tag_quad(colour: Color, forward: float) -> MeshInstance3D:
-	var key := colour.to_html()
-	var assets := _tag_assets()
-	var shared: Dictionary = assets.get(key, {})
-	if shared.is_empty():
-		var quad := QuadMesh.new()
-		quad.size = Vector2(HEALTH_TAG_WIDTH, 0.09)
-		var material := StandardMaterial3D.new()
-		material.albedo_color = colour
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		material.cull_mode = BaseMaterial3D.CULL_DISABLED
-		shared = {"mesh": quad, "material": material}
-		assets[key] = shared
-	var mesh := MeshInstance3D.new()
-	mesh.mesh = shared["mesh"]
-	mesh.material_override = shared["material"]
-	mesh.position.z = forward
-	mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mesh
-
-## Makes the health bar's shared mesh and materials, for the loading screen's warm-up.
+## Builds a tag and frees it, so the loading screen's warm-up compiles the bar's shader before the first hit.
 static func warm_health_tag() -> void:
-	_tag_quad(Color(0.05, 0.05, 0.05, 0.75), 0.0).free()
-	_tag_quad(Color(0.9, 0.15, 0.12), 0.001).free()
+	ArenaNameTag.new().free()
 
-## Takes the player out of play without removing them.
-## The bar over a remote player's head: shown for [constant HEALTH_TAG_SEC] after their
-## health drops, facing the camera, red over dark.
+## The tag over a remote player's head: their name and a health bar, each drawn when the player's setting and
+## the server's rule both allow it (see [code]arena_name_tag_rules.gd[/code]), facing the camera.
 func _present_health_tag(delta: float) -> void:
 	if health == null:
 		return
@@ -640,40 +607,54 @@ func _present_health_tag(delta: float) -> void:
 	_last_health = now
 	_hurt_age += delta
 
-	var show := is_alive() and _hurt_age < HEALTH_TAG_SEC and health.max_health > 0.0
-	# A replay camera shows a past moment: the live world's bars would hang over it, and a body
+	var camera_now := get_viewport().get_camera_3d()
+	var show := is_alive() and health.max_health > 0.0
+	# A replay camera shows a past moment: the live world's tags would hang over it, and a body
 	# the replay hides (the killer's own, at the lens) has no head to float over.
-	show = show and not ArenaKillPov.is_replay_camera(get_viewport().get_camera_3d())
+	show = show and not ArenaKillPov.is_replay_camera(camera_now)
 	show = show and (body_mesh == null or body_mesh.is_visible_in_tree())
-	if not show:
+	var bar := false
+	var named := false
+	var friend := TagRules.is_teammate(player_id, team)
+	if show:
+		var hurt := _hurt_age < HEALTH_TAG_SEC
+		var hovered := TagRules.needs_hover(TagRules.client_bars, TagRules.server_bars) \
+			or TagRules.needs_hover(TagRules.client_names, TagRules.server_names)
+		hovered = hovered and _under_cursor(camera_now)
+		bar = TagRules.shows(TagRules.client_bars, TagRules.server_bars, friend, hovered, hurt)
+		named = TagRules.shows(TagRules.client_names, TagRules.server_names, friend, hovered, false)
+	if not (bar or named):
 		if _health_tag != null:
 			_health_tag.visible = false
 		return
 
 	if _health_tag == null:
-		_health_tag = Node3D.new()
-		_health_tag.name = "HealthTag"
+		_health_tag = ArenaNameTag.new()
 		add_child(_health_tag)
-		var back := _tag_quad(Color(0.05, 0.05, 0.05, 0.75), 0.0)
-		_health_tag.add_child(back)
-		_health_fill = _tag_quad(Color(0.9, 0.15, 0.12), 0.001)
-		# Two transparent quads 1 mm apart sort by centre, and the fill drew under the backing:
-		# a full bar read as a dark, nearly empty one. Priority sorts it last, always.
-		(_health_fill.material_override as StandardMaterial3D).render_priority = 1
-		_health_tag.add_child(_health_fill)
 
-	_health_tag.visible = true
 	# Over the body as drawn, which an offline bot's is between ticks (`interpolate_body`).
 	var over := body_mesh.global_position if body_mesh != null else global_position
 	_health_tag.global_position = over + Vector3(0.0, 2.25, 0.0)
-	var eye := get_viewport().get_camera_3d()
-	if eye != null:
+	if camera_now != null:
 		# The whole tag turns to the camera, so the fill stays on its background; with the
 		# camera straight above or below, UP is colinear and the engine warns every frame.
-		var to_eye := eye.global_position - _health_tag.global_position
+		var to_eye := camera_now.global_position - _health_tag.global_position
 		var up := Vector3.UP if Vector2(to_eye.x, to_eye.z).length_squared() > 1e-4 else Vector3.FORWARD
 		if not to_eye.is_zero_approx():
-			_health_tag.look_at(eye.global_position, up, true)
-	var fraction := clampf(now / health.max_health, 0.0, 1.0)
-	_health_fill.scale = Vector3(maxf(fraction, 0.001), 1.0, 1.0)
-	_health_fill.position.x = -HEALTH_TAG_WIDTH * (1.0 - fraction) * 0.5
+			_health_tag.look_at(camera_now.global_position, up, true)
+	_health_tag.update(now / health.max_health, bar, named, display_name, friend, delta)
+
+
+## Whether the camera's crosshair is on this body and nothing solid is in between.
+func _under_cursor(camera_now: Camera3D) -> bool:
+	if camera_now == null:
+		return false
+	var eye := camera_now.global_position
+	var forward := -camera_now.global_basis.z
+	var feet := body_mesh.global_position if body_mesh != null else global_position
+	if not TagRules.ray_hits_body(eye, forward, feet, stand_height()):
+		return false
+	if TagRules.occluder_mask == 0 or not is_inside_tree():
+		return true
+	var query := PhysicsRayQueryParameters3D.create(eye, feet + Vector3(0.0, stand_height() * 0.6, 0.0), TagRules.occluder_mask)
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()

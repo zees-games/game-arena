@@ -1902,7 +1902,7 @@ func _test_event_wire() -> void:
 	_check(bool(older["ok"]) and not bool(older["critical"]), "and an older server's kill reads as no critical")
 
 	var rules := ArenaEvents.read_rules(DotNetReader.new(ArenaEvents.write_rules(
-		{"slide_boost": 2.5, "fp_body": 1.0, "break_mode": 2.0}
+		{"slide_boost": 2.5, "fp_body": 1.0, "break_mode": 2.0, "nametags": 6.0, "hpbars": 10.0}
 	)))
 	# A drop and its take, through a client's real event handler: the point a server says
 	# player 11 took is on that client's tally, which is what its HUD reads.
@@ -1923,7 +1923,8 @@ func _test_event_wire() -> void:
 
 	_check(
 		bool(rules["ok"]) and is_equal_approx(float(rules["rules"]["slide_boost"]), 2.5)
-			and float(rules["rules"]["fp_body"]) == 1.0 and float(rules["rules"]["break_mode"]) == 2.0,
+			and float(rules["rules"]["fp_body"]) == 1.0 and float(rules["rules"]["break_mode"]) == 2.0
+			and float(rules["rules"]["nametags"]) == 6.0 and float(rules["rules"]["hpbars"]) == 10.0,
 		"RULES round-trips movement and presentation rules alike", str(rules["rules"])
 	)
 

@@ -279,6 +279,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 	_wanted_slot = 0
 
 const ArenaJumpGate := preload("arena_jump_gate.gd")
+const TagRules := preload("arena_name_tag_rules.gd")
 
 var _jump_gate := ArenaJumpGate.new()
 
@@ -544,6 +545,20 @@ func _fold_alpha() -> void:
 	if _offline or net == null or net.clock == null or not net.clock.has_method(&"render_alpha"):
 		return
 	player.drawn_alpha = float(net.clock.call(&"render_alpha"))
+
+## Tells the name tags and health bars what this player picked, what the server allows and who is looking.
+func sync_name_tags(world_mask: int) -> void:
+	var settings: Object = presentation.settings if presentation != null else null
+	if settings != null:
+		TagRules.client_names = maxi(TagRules.parse(settings.get_string(&"name_tags", "team")), 0)
+		TagRules.client_bars = maxi(TagRules.parse(settings.get_string(&"health_bars", "smart")), 0)
+	TagRules.server_names = int(game.rule("nametags"))
+	TagRules.server_bars = int(game.rule("hpbars"))
+	TagRules.viewer_id = player.player_id if player != null else -1
+	var sided := game.mode != null and game.mode.is_team_mode() and not game.teams().is_empty()
+	TagRules.viewer_team = game.team_of(TagRules.viewer_id) if sided and player != null else -1
+	TagRules.occluder_mask = world_mask
+
 
 ## How much of their own body the local player sees in first person (DotPlayerViewRules.BODY_*):
 ## the `first_person_body` setting, or the server's when it is "auto"; arena's `fp_body` rule keeps at least the legs.

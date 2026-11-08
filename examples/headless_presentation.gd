@@ -2328,6 +2328,7 @@ func _test_criticals_and_the_body() -> void:
 		"and a respawn puts the body back together")
 
 	_check_health_tag(player)
+	_check_tag_rules(player)
 
 	var hud := ArenaHud.new()
 	hud.config = DotUiConfig.new()
@@ -2444,16 +2445,84 @@ func _check_health_tag(player: ArenaPlayer) -> void:
 	player.present(0.016)
 	player.health.health = player.health.max_health * 0.4
 	player.present(0.016)
-	_check(player._health_tag != null and player._health_tag.visible
-		and is_equal_approx(player._health_fill.scale.x, 0.4),
-		"a hurt player shows a bar over their head, filled to what is left")
-	var fill_on := player._health_fill.material_override as BaseMaterial3D
-	var back_on := player._health_tag.get_child(0).material_override as BaseMaterial3D
-	_check(fill_on != null and back_on != null and fill_on.render_priority > back_on.render_priority,
-		"and the fill draws over its backing, not under it")
+	var tag := player._health_tag
+	_check(tag != null and tag.visible and tag.get_node("Bar").visible,
+		"a hurt player shows a bar over their head")
+	for _i in 120:
+		player.present(0.016)
+	_check(tag != null and absf(tag.shown_fraction - 0.4) < 0.01 and absf(tag.trail_fraction - 0.4) < 0.01,
+		"filled to what is left, the trail caught up")
 	player.present(ArenaPlayer.HEALTH_TAG_SEC + 0.1)
 	_check(not player._health_tag.visible, "and it goes after a few seconds")
 	player.health.health = player.health.max_health
+
+
+## When tags draw: the player's pick, the server's ceiling, team, cursor and a recent hit.
+func _check_tag_rules(player: ArenaPlayer) -> void:
+	var Rules := preload("res://game/arena_name_tag_rules.gd")
+	_check(Rules.parse("team") == Rules.TEAM and Rules.parse("team,hover") == (Rules.TEAM | Rules.HOVER)
+		and Rules.parse("smart") == (Rules.TEAM | Rules.HOVER | Rules.HURT) and Rules.parse("off") == 0
+		and Rules.parse("bogus") == -1 and Rules.parse("team,bogus") == -1,
+		"tag settings parse as presets and lists, and refuse what they do not know")
+	_check(Rules.parse(Rules.describe(Rules.TEAM | Rules.HURT)) == (Rules.TEAM | Rules.HURT)
+		and Rules.describe(0) == "off" and Rules.describe(Rules.ALL | Rules.TEAM) == "always",
+		"and a mask reads back as the cvar writes it")
+	_check(Rules.shows(Rules.ALL, Rules.ALL, false, false, false)
+		and not Rules.shows(Rules.ALL, Rules.TEAM, false, false, false)
+		and Rules.shows(Rules.ALL, Rules.TEAM, true, false, false)
+		and not Rules.shows(Rules.TEAM, Rules.ALL, false, false, false)
+		and not Rules.shows(Rules.ALL, 0, true, true, true)
+		and Rules.shows(Rules.HOVER, Rules.TEAM | Rules.HOVER, false, true, false),
+		"the server's value is a ceiling the player's choice can narrow and never widen")
+	_check(Rules.needs_hover(Rules.HOVER, Rules.ALL) and not Rules.needs_hover(Rules.ALL, Rules.HOVER | Rules.ALL)
+		and not Rules.needs_hover(Rules.TEAM, Rules.ALL),
+		"the cursor test is only run when a setting asks for it")
+	var feet := Vector3(0.0, 0.0, -10.0)
+	_check(Rules.ray_hits_body(Vector3(0.0, 1.0, 0.0), Vector3(0.0, 0.0, -1.0), feet, 1.8)
+		and Rules.ray_hits_body(Vector3(0.0, 1.7, 0.0), Vector3(0.0, -0.17, -1.0).normalized(), feet, 1.8)
+		and not Rules.ray_hits_body(Vector3(2.0, 1.0, 0.0), Vector3(0.0, 0.0, -1.0), feet, 1.8)
+		and not Rules.ray_hits_body(Vector3(0.0, 1.0, 0.0), Vector3(0.0, 0.0, 1.0), feet, 1.8)
+		and not Rules.ray_hits_body(Vector3(0.0, 4.0, 0.0), Vector3(0.0, 0.0, -1.0), feet, 1.8),
+		"the cursor is on a body when the view ray passes through it, in front, not beside or over it")
+
+	# A player on the viewer's team, with names on for team-mates: name and bar both show.
+	var saved := [Rules.client_names, Rules.client_bars, Rules.server_names, Rules.server_bars, Rules.viewer_id, Rules.viewer_team]
+	Rules.client_names = Rules.TEAM
+	Rules.client_bars = Rules.TEAM | Rules.HURT
+	Rules.server_names = Rules.ALL
+	Rules.server_bars = Rules.ALL
+	Rules.viewer_id = player.player_id + 1000
+	player.team = 1
+	Rules.viewer_team = 1
+	player.health.health = player.health.max_health
+	player.present(0.016)
+	var tag := player._health_tag
+	_check(player.team >= 0 and tag != null and tag.visible and tag.get_node("Name").visible
+		and tag.get_node("Name").text == player.display_name,
+		"a team-mate wears their name and a bar at full health")
+	Rules.server_names = 0
+	player.present(0.016)
+	_check(tag.visible and not tag.get_node("Name").visible and tag.get_node("Bar").visible,
+		"the server turning names off hides the name and leaves the bar")
+	Rules.server_bars = 0
+	player.present(0.016)
+	_check(not tag.visible, "and both off hides the tag")
+	Rules.server_names = Rules.ALL
+	Rules.server_bars = Rules.ALL
+	Rules.viewer_team = -1
+	player.present(0.016)
+	_check(not tag.visible, "a stranger, unhurt and not under the cursor, gets no tag")
+	player.health.health = player.health.max_health * 0.5
+	player.present(0.016)
+	_check(tag.visible, "until they are hurt")
+	player.health.health = player.health.max_health
+	Rules.client_names = saved[0]
+	Rules.client_bars = saved[1]
+	Rules.server_names = saved[2]
+	Rules.server_bars = saved[3]
+	Rules.viewer_id = saved[4]
+	Rules.viewer_team = saved[5]
+	player.present(ArenaPlayer.HEALTH_TAG_SEC + 0.1)
 
 
 ## A client turns the server's HIT and AWARD into the hit marker, a damage number, the medals and

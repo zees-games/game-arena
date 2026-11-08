@@ -141,6 +141,7 @@ func _module_load() -> DotResult:
 		game.loadout_command.call(&"bind", self)
 
 	_add_movement_cvars()
+	_add_tag_cvars()
 	_add_drop_cvars()
 	_add_ctf_cvars()
 	game.ctf_announced.connect(func(text: String) -> void:

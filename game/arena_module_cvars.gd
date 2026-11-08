@@ -7,6 +7,7 @@ const ArenaBots := preload("arena_bots.gd")
 const ArenaBotBrain := preload("arena_bot_brain.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
+const TagRules := preload("arena_name_tag_rules.gd")
 
 ## Base of [ArenaModule]: the operator-facing cvars that map onto a rule table, so the module itself
 ## holds the lifecycle. Split out for the size gate; the state they read lives here too.
@@ -111,6 +112,31 @@ func _add_movement_cvars() -> void:
 			func(_old: String, new_value: String) -> void:
 				game.set_movement_rules({key: new_value.to_float()})
 				log_info("movement rule changed", {"rule": key, "value": new_value})
+		)
+
+
+## cvar -> the rule key whose value is a TagRules mask, and what it means.
+const TAG_CVARS := {
+	"mp_nametags": ["nametags", "Who gets a name tag over their head for players: always, team, hover (cursor on the body), hurt, off, or a list like team,hover. A player's own choice can only narrow it"],
+	"mp_hpbars": ["hpbars", "Who gets a health bar over their head: always, team, hover, hurt, smart, off, or a list like team,hover. A player's own choice can only narrow it"],
+}
+
+
+func _add_tag_cvars() -> void:
+	for cvar in TAG_CVARS:
+		var key: String = TAG_CVARS[cvar][0]
+		var start := int(ArenaGame.SHOW_DEFAULTS[key])
+		add_cvar(
+			cvar, TagRules.describe(start), TAG_CVARS[cvar][1],
+			DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY | DotConVar.FLAG_REPLICATED
+		).changed.connect(
+			func(old: String, new_value: String) -> void:
+				var mask := TagRules.parse(new_value)
+				if mask < 0:
+					log_info("tag rule refused", {"rule": key, "value": new_value, "kept": old})
+					return
+				game.set_movement_rules({key: float(mask)})
+				log_info("tag rule changed", {"rule": key, "value": TagRules.describe(mask)})
 		)
 
 

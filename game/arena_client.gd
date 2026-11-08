@@ -47,6 +47,8 @@ func _present_frame(delta: float) -> void:
 			if _roof_layout != stack_now.physics.layout:
 				_roof_layout = stack_now.physics.layout
 				_roof_mask = _roof_layout.mask_of([&"world"])
+				_tag_mask = _roof_layout.mask_of([&"world", &"prop"])
+			sync_name_tags(_tag_mask)
 			presentation.follow_roof(delta, eye, get_viewport().world_3d.direct_space_state, _roof_mask)
 			var shot_rig: Object = player.weapons if player != null else null
 			if shot_rig != null and is_instance_valid(shot_rig) and shot_rig.has_method(&"shot_fx"):

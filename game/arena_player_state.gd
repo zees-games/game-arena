@@ -9,6 +9,8 @@ const ArenaPlayerTunables := preload("arena_player_tunables.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaKillPov := preload("arena_kill_pov.gd")
+const ArenaNameTag := preload("arena_name_tag.gd")
+const TagRules := preload("arena_name_tag_rules.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaLadderMode := preload("../maps/arena_ladder_mode.gd")
 const ArenaMapMechanics := preload("../maps/arena_map_mechanics.gd")
@@ -144,11 +146,9 @@ var aiming: bool = false
 ## A bar over somebody else's head for a few seconds after they are hurt, the way the
 ## genre shows that a shot landed. Client side; built on first need.
 var _health_tag: Node3D = null
-var _health_fill: MeshInstance3D = null
 var _last_health: float = -1.0
 var _hurt_age: float = 999.0
 const HEALTH_TAG_SEC := 3.0
-const HEALTH_TAG_WIDTH := 0.9
 
 ## The meshes a body break hid, so a respawn can draw them again. Client side.
 var _broken: Array[MeshInstance3D] = []
