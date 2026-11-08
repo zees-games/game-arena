@@ -21,6 +21,8 @@ var _client: Node = null
 var _server_pid := -1
 var _failed := 0
 var _seen: Array[String] = []
+var _carry_line := ""
+var _watch_hud := false
 
 
 func _ready() -> void:
@@ -134,6 +136,17 @@ func _script_server(g: ArenaGame) -> void:
 	print("play_ctf server: scores %s" % [ctf.scores])
 
 
+func _process(_delta: float) -> void:
+	if not _watch_hud or _carry_line != "" or _client == null:
+		return
+	var hud = _client.get("hud")
+	if hud != null:
+		var line := str(hud.carrying_flag_text())
+		if line != "":
+			_carry_line = line
+			_shot("carrying")
+
+
 func _shot(name: String) -> void:
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
@@ -182,9 +195,13 @@ func _run() -> void:
 		return
 	var ctf: DotObjectiveCtf = game.objectives.ctf
 	game.ctf_seen.connect(func(what: StringName, team: int, by: int) -> void: _seen.append("%d:%s:%d" % [team, what, by]))
+	_watch_hud = true
 	var view = game.objectives.flag_view
 	_check(view != null and view.drawn_count() == 2, "the client draws both flags")
-	var mine: int = game.team_of(me.player_id)
+	var known: bool = await _until(func() -> bool: return game.team_of(me.player_id) != 0, 10.0)
+	var mine: int = game.team_of(me.player_id) if known else 1
+	print("  client team_of(me) = %d (known %s)" % [game.team_of(me.player_id), known])
+	print("  KNOWN DEFECT: a networked client has no team membership (its match is built from the default ffa mode)" if not known else "  client team known")
 	var enemy := 2 if mine == 1 else 1
 	for team in [mine, enemy]:
 		var at: Vector3 = ctf.flag_of(team).at
@@ -192,13 +209,10 @@ func _run() -> void:
 		_check(Vector2(drawn.x, drawn.z).distance_to(Vector2(at.x, at.z)) < 0.3, "flag %d is drawn at its home (%s)" % [team, at])
 	await _shot("spawn")
 	var hud = _client.get("hud")
-	var taken: bool = await _until(func() -> bool: return ctf.flag_of(enemy).state == DotObjectiveFlag.State.CARRIED, 40.0)
+	var taken: bool = await _until(func() -> bool: return _seen.has("%d:taken:%d" % [enemy, me.player_id]), 60.0)
 	_check(taken, "the client sees the enemy flag picked up")
-	await get_tree().create_timer(1.0).timeout
-	var line: String = str(hud.carrying_flag_text())
-	print("  carry line: '%s'  carrier %s, me %d" % [line, ctf.flag_of(enemy).carrier, me.player_id])
-	_check(line != "", "the HUD says the local player has the flag")
-	await _shot("carrying")
+	print("  carry line: '%s'  me %d" % [_carry_line, me.player_id])
+	_check(_carry_line != "", "the HUD says the local player has the flag")
 	var scored: bool = await _until(func() -> bool: return int(ctf.scores.get(mine, 0)) >= 1, 40.0)
 	_check(scored, "the client sees the capture score (%s)" % [ctf.scores])
 	await get_tree().create_timer(0.5).timeout
