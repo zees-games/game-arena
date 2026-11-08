@@ -33,6 +33,11 @@ func _ready() -> void:
 
 	# Connected here, before anything can create a player, rather than inside `_watch`.
 	game.player_added.connect(_on_player_added)
+	# The flag's sounds: from what the flag view draws, so a dedicated server's client hears them too.
+	game.ctf_seen.connect(func(what: StringName, team: int, by: int) -> void:
+		if presentation != null:
+			presentation.on_flag_event(what, team, player != null and by == player.player_id, game.team_of(player.player_id) if player != null else 0)
+	)
 	# The mode's banner, the moment a client learns it: "Gun Game: every kill gives you a
 	# different gun", the way the genre says it when you spawn into one.
 	game.mode_shown.connect(func(shown: ArenaMode) -> void:
