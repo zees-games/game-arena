@@ -2,7 +2,7 @@ extends SceneTree
 
 ## The kill view across its edge cases, offline, with frames at the first drawn frame, mid, last and after the hand-over
 ## to the respawn. Run: tools/killcam_audit.sh <outdir> <scenario>
-## Scenarios: bot (a bot shoots the player), world (no attacker), fall (fall damage), killer_dead (the killer dies
+## Scenarios: crowd (31 free bots kill the player; each frame of the replay's start is checked), bot (a bot shoots the player), world (no attacker), fall (fall damage), killer_dead (the killer dies
 ## while the replay plays), killer_left (the killer leaves before the clip arrives), round (the match ends mid-view).
 ## Prints one "T" line per 0.1 s and "RESULT" lines; exit 1 on a failed check.
 
@@ -24,8 +24,13 @@ func _initialize() -> void:
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	_client.set("force_offline", true)
 	_client.set("mouse_capture_override", true)
+	if _scenario == "crowd":
+		_client.set("offline_bots", 31)
 	root.add_child(_client)
-	_run.call_deferred()
+	if _scenario == "crowd":
+		_run_crowd.call_deferred()
+	else:
+		_run.call_deferred()
 
 
 func _wait(sec: float) -> void:
@@ -34,6 +39,8 @@ func _wait(sec: float) -> void:
 
 func _shot(name: String) -> void:
 	var image := root.get_texture().get_image()
+	if image == null:
+		return
 	var _e := image.save_png("%s/%s_%s.png" % [_out, _scenario, name])
 	print("saved ", name)
 
@@ -176,5 +183,106 @@ func _run() -> void:
 	_check(respawn > 0.0, "the player respawned")
 	_check(_client.get("hud").visible, "the HUD is back")
 	_check(not (kv.camera != null and kv.camera.current) or not kv.is_active(), "the replay camera is not left current")
+	print("FAILS ", _fails)
+	quit(1 if _fails > 0 else 0)
+
+
+## Every visible body near the replay lens this frame, with what it is: the killer, the victim, or a bystander.
+func _lens_report(kv: Node, tag: String) -> Array:
+	var cam: Camera3D = kv.camera
+	var out := []
+	for p: Object in _client.get("game").call(&"players"):
+		var body: Node3D = p.get(&"body_mesh")
+		if body == null or not body.is_visible_in_tree():
+			continue
+		# From the lens to the body's upright capsule (0.35 m round its axis): under 0.35 the lens is inside it.
+		var feet := body.global_position
+		var on_axis := Geometry3D.get_closest_point_to_segment(cam.global_position, feet + Vector3.UP * 0.35, feet + Vector3.UP * 1.45)
+		var d := cam.global_position.distance_to(on_axis)
+		var drawn := _drawn(body)
+		# See-through well away from the lens: faded for a camera that is not the one on screen.
+		if drawn.y > 0.3 and d >= 1.2:
+			print("GHOST %s id=%d d=%.2f see-through=%.2f" % [tag, p.player_id, d, drawn.y])
+			_ghosts += 1
+		if d < 0.45 and drawn.x > 0.0:
+			var role := "killer" if p.player_id == int(kv.get(&"_killer")) else ("victim" if p.player_id == int(kv.get(&"_victim")) else "other")
+			print("LENS %s id=%d %s d=%.2f alive=%s" % [tag, p.player_id, role, d, p.is_alive()])
+			out.append(p.player_id)
+	return out
+
+
+var _ghosts := 0
+
+
+## (meshes drawn solid, most see-through of the drawn ones): the camera fade hides or thins a body's meshes, not the body.
+func _drawn(body: Node) -> Vector2:
+	var solid := 0.0
+	var thin := 0.0
+	var stack: Array[Node] = [body]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is GeometryInstance3D and (n as GeometryInstance3D).is_visible_in_tree():
+			if (n as GeometryInstance3D).transparency < 0.5:
+				solid += 1.0
+		for c in n.get_children():
+			stack.append(c)
+	# How far the camera fade has thinned it (muzzle flashes and tracers on the gun are see-through on purpose).
+	var me: Object = _client.get("player")
+	var fade: Node = me.camera.get_node_or_null(^"Fade") if me != null and me.camera != null else null
+	if fade != null:
+		var entry: Dictionary = (fade.get(&"_fading") as Dictionary).get(body.get_instance_id(), {})
+		if not entry.is_empty() and float(entry["amount"]) > 0.05 and float(entry["amount"]) < 0.99:
+			thin = float(entry["amount"])
+	return Vector2(solid, thin)
+
+
+## 31 bots left to play; the player stands until one kills it. The replay's first 40 frames are each checked
+## for a body at the lens, and the posing is reported (the kill found on the stage's clock, bodies posed).
+func _run_crowd() -> void:
+	var gm: Object = _client.get("game")
+	while gm == null or gm.match_node == null:
+		await _wait(0.1)
+		gm = _client.get("game")
+	gm.match_node.rules.warmup_sec = 0.0
+	gm.match_node.rules.countdown_sec = 0.0
+	gm.match_node.rules.min_players = 1
+	gm.match_node.rules.score_limit = 0
+	var kv: Node = _client.get("killview")
+	var deaths := 0
+	var bad := 0
+	var start := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - start < 150000 and deaths < 3:
+		await process_frame
+		if kv == null or not kv.is_active():
+			continue
+		var kc: DotKillcam = kv.kv.killcam if kv.kv != null else null
+		if kc == null or kc.state != DotKillcam.State.PLAYING:
+			continue
+		deaths += 1
+		print("KV death=%d killer=%s victim=%s kill_at=%s stage_kills=%d" % [deaths, kv.get(&"_killer"), kv.get(&"_victim"), kv.get(&"_kill_at"), kv.stage.buffer.events_between(-INF, INF, &"kill").size()])
+		for f in 40:
+			var near := _lens_report(kv, "d%d f%02d" % [deaths, f])
+			var posed: Dictionary = kv.get(&"_posed")
+			if f < 3 or not near.is_empty():
+				print("FRAME d%d f%02d posed=%s cam=%s prog=%.3f" % [deaths, f, posed.keys(), kv.camera.global_position, kc.progress()])
+			if not near.is_empty():
+				bad += 1
+				if bad <= 6:
+					_shot("d%d_f%02d_lens" % [deaths, f])
+			if f in [0, 2, 6, 12, 24]:
+				_shot("d%d_f%02d" % [deaths, f])
+			await process_frame
+			if not kv.is_active():
+				break
+		var f2 := 40
+		while kv.is_active():
+			if kc.state == DotKillcam.State.PLAYING:
+				if not _lens_report(kv, "d%d f%03d" % [deaths, f2]).is_empty():
+					bad += 1
+			f2 += 1
+			await process_frame
+	_check(deaths > 0, "the player was killed by a bot (%d)" % deaths)
+	_check(bad == 0, "no body at the lens in the replays' first frames (%d frames had one)" % bad)
+	_check(_ghosts == 0, "no see-through body in the replays (%d seen)" % _ghosts)
 	print("FAILS ", _fails)
 	quit(1 if _fails > 0 else 0)

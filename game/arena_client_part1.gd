@@ -310,9 +310,36 @@ func _other_figures() -> Array:
 		return out
 	for id in game.player_ids():
 		var other := game.player_for(id)
-		if other != null and other != player and other.body_mesh != null:
+		# During a replay our own body is posed like everybody else's, and can stand at its lens.
+		if other != null and (other != player or _replay_lens() != null) and other.body_mesh != null:
 			out.append(other.body_mesh)
 	return out
+
+## The camera a kill view or final killcam is drawing through, or null when neither plays.
+func _replay_lens() -> Camera3D:
+	if killview != null and killview.is_active() and killview.camera != null and killview.camera.current:
+		return killview.camera
+	if killcam != null and killcam.is_playing() and killcam.camera != null and killcam.camera.current:
+		return killcam.camera
+	return null
+
+## The camera fade follows the camera on screen. It hangs off the player's camera, which a dead
+## player's death camera keeps moving while a replay plays: left to itself it faded whoever the
+## replay had posed near that unseen camera (a figure gone see-through mid-replay) and nothing at
+## the replay's own lens (a torso filling the screen). Called after the replay has posed the bodies.
+func _fade_for_replay(delta: float) -> void:
+	var fade := player.camera.get_node_or_null(^"Fade") as DotCameraFade if player != null and player.camera != null else null
+	if fade == null:
+		return
+	var lens := _replay_lens()
+	if lens == null:
+		if not fade.is_processing():
+			fade.set_process(true)
+		return
+	fade.set_process(false)
+	# Focus on the lens itself: the near test only, so a body inside the lens is hidden outright, and
+	# at once: the replay steps at the killer's speed, and an eased fade left a torso solid for a frame.
+	var _n := fade.update(lens.global_position, lens.global_position, maxf(delta, 1.0))
 
 func _set_third_person(on: bool) -> void:
 	if player == null:

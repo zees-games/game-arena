@@ -68,6 +68,9 @@ func _remove_offline_bot(id: int) -> void:
 	_bots.erase(id)
 	_bot_minds.erase(id)
 	ArenaBots.forget(game, id)
+	# As the server does for a leaver: its recorded eye goes, so no kill view plays from a gone bot.
+	if solo_killview != null:
+		solo_killview.forget(id)
 	game.remove_player(id)
 
 

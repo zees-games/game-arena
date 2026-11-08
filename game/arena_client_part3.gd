@@ -153,6 +153,7 @@ func _killcam_frame() -> void:
 		if killcam_shots != null and not killcam.is_playing():
 			killcam_shots.record(float(killcam.now_fn.call()), game.players())
 		killcam.frame()
+	_fade_for_replay(get_process_delta_time())
 	ArenaFrameProbe.add(&"c_killcam", t_cam)
 	_restore_hud_if_orphaned()
 	var now := int(game.match_node.state) if game.match_node != null else -1
