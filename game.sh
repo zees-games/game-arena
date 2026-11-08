@@ -17,7 +17,7 @@
 #   ./game.sh visual [--update] [MAP...]  compare map frames to tests/golden (tools/visual_check.sh)
 #   ./game.sh perf [--update] [--post]  frame-time budget on the GPU box vs tests/perf_budget.json
 #   ./game.sh netchaos [ARGS]      real server and clients under tc netem loss, jitter, blackout
-#   ./game.sh shot [ARGS]        save a screenshot to screenshots/ (tools/shot.sh or tools/screenshot.sh)
+#   ./game.sh shot [ARGS]          save a screenshot to screenshots/ (tools/shot.sh or tools/screenshot.sh)
 #
 # Options (before the command):
 #   --godot PATH     the Godot 4.7 binary to use (default: $GODOT, then godot on PATH)
@@ -28,7 +28,10 @@
 # $DOT_SERVER_DEPLOY). dot-bootstrap puts it there. Both rebuild this game's pack first, so
 # what you play is what is on disk now.
 #
-# The same script is in every game repository; only the settings below differ.
+# The same script is in every game repository; only the settings below differ. It is
+# GENERATED from dot-game-template/tools/game.sh.in and this repository's game.conf by
+# dot-game-template/tools/gen-game-sh.py: edit those, never this file (the generator's
+# --check mode fails when they disagree).
 
 # --- This game ------------------------------------------------------------------
 # PACK is the game's id in dot-server-deploy (empty if it has no server), EXTRA_PACKS
@@ -50,12 +53,15 @@ cd "$ROOT" || exit 1
 GODOT="${GODOT:-godot}"
 TIMEOUT=900
 PARSE=1
+# A suite that legitimately needs at least this long, as name=seconds; a larger
+# --timeout still wins.
+MIN_TIMEOUTS="headless_imported=3000 headless_bots=2400"
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 CR=$'\r\033[K'
 [ -t 1 ] || { RED=""; GRN=""; YLW=""; OFF=""; CR=""; }
 
 die() { printf '%s%s%s\n' "$RED" "$1" "$OFF" >&2; exit "${2:-1}"; }
-usage() { sed -n '3,26p' "$ROOT/$(basename "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,/^#   --no-parse/p' "$ROOT/$(basename "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -83,6 +89,14 @@ check_addons() {
     done < <(awk '/^# bootstrap-optional/{o=1; next} !o && /^\/addons\/[^\/]+\/?$/{sub("^/addons/",""); sub("/$",""); print} {o=0}' .gitignore 2>/dev/null)
     [ -z "$missing" ] || die "Missing addons:$missing
 Run dot-bootstrap first: https://github.com/modcommunity/dot-bootstrap" 2
+    # Content links (maps, world): without them the suites run on an empty level set. A git
+    # worktree gets them from tools/link_worktree.sh.
+    local path src gone=""
+    while IFS=$'\t' read -r path src; do
+        [ -n "$path" ] && [ ! -e "${path#/}" ] && gone="$gone ${path#/} (from $src)"
+    done < <(awk '/^# bootstrap-link: /{src=$3; next} src!="" && /^\//{print $0 "\t" src} {src=""}' .gitignore 2>/dev/null)
+    [ -z "$gone" ] || die "Content not linked:$gone
+Run dot-bootstrap, or in a git worktree: tools/link_worktree.sh <main checkout>" 2
 }
 
 deploy_dir() {
@@ -112,11 +126,10 @@ run_suite() {
     mkdir -p .godot/test-logs
     log=".godot/test-logs/$scene.log"
     [ -t 1 ] && printf '  ..   %s' "$scene"
-    # headless_imported walks 56 imported maps and takes about 25 minutes; the default would kill it mid-run.
-    local limit="$TIMEOUT"
-    [ "$scene" = headless_imported ] && [ "$limit" -lt 3000 ] && limit=3000
-    # headless_bots plays 4 presets x 3 seeds x 600 s at 66 Hz and takes 20-30 minutes under load; it progresses, it does not hang.
-    [ "$scene" = headless_bots ] && [ "$limit" -lt 2400 ] && limit=2400
+    local limit="$TIMEOUT" mkv
+    for mkv in $MIN_TIMEOUTS; do
+        [ "${mkv%%=*}" = "$scene" ] && [ "$limit" -lt "${mkv#*=}" ] && limit="${mkv#*=}"
+    done
     timeout "$limit" "$GODOT" --headless --path . "res://examples/$scene.tscn" ${SUITE_ARGS[@]+-- "${SUITE_ARGS[@]}"} >"$log" 2>&1
     status=$?
     summary="$(grep -Eo '[0-9]+ (passed|checks), [0-9]+ failed' "$log" | tail -1)"
@@ -229,7 +242,6 @@ do_test() {
         [ "$fails" -eq 0 ] && printf '  %sok%s   every script parses\n' "$GRN" "$OFF"
     fi
 
-
     echo "running the suites"
     local scene
     for scene in ${*:-$SUITES}; do
@@ -277,11 +289,23 @@ case "$cmd" in
         [ -n "${1:-}" ] && { soak_args+=(--minutes "$1"); shift; }
         mkdir -p .godot/test-logs
         timeout "$TIMEOUT" "$GODOT" --headless --path . res://tools/soak.tscn -- "${soak_args[@]}" "$@" \
-            2>&1 | tee .godot/test-logs/soak.log | grep -E '^SOAK|^soak|SCRIPT ERROR|Parse Error|ERROR|FAIL'
+            2>&1 | tee .godot/test-logs/soak.log | grep -E '^SOAK|^soak|^TRACE|SCRIPT ERROR|Parse Error|ERROR|FAIL'
         exit "${PIPESTATUS[0]}"
+        ;;
+    netchaos)
+        [ -x tools/netchaos.sh ] || die "$GAME_NAME has no netchaos rig." 2
+        exec tools/netchaos.sh "$@"
         ;;
     suites)
         printf '%s\n' $SUITES
+        ;;
+    perf)
+        [ -x tools/perf_budget.sh ] || die "$GAME_NAME has no perf budget." 2
+        exec tools/perf_budget.sh "$@"
+        ;;
+    visual)
+        [ -x tools/visual_check.sh ] || die "$GAME_NAME has no visual check." 2
+        exec tools/visual_check.sh "$@"
         ;;
     shot)
         for tool in tools/shot.sh tools/screenshot.sh; do
@@ -294,18 +318,6 @@ case "$cmd" in
             exec "$tool" "$@"
         done
         die "$GAME_NAME has no screenshot tool." 2
-        ;;
-    perf)
-        [ -x tools/perf_budget.sh ] || die "$GAME_NAME has no perf budget." 2
-        exec tools/perf_budget.sh "$@"
-        ;;
-    netchaos)
-        [ -x tools/netchaos.sh ] || die "$GAME_NAME has no netchaos rig." 2
-        exec tools/netchaos.sh "$@"
-        ;;
-    visual)
-        [ -x tools/visual_check.sh ] || die "$GAME_NAME has no visual check." 2
-        exec tools/visual_check.sh "$@"
         ;;
     *)
         usage
