@@ -9,7 +9,7 @@ out=screenshots/reload
 rm -rf "$out"; mkdir -p "$out"
 rc=0
 xvfb-run -a -s "-screen 0 1920x1080x24" timeout 900 godot --path . --resolution 1920x1080 \
-  --script tools/render_reload.gd -- "$@" 2>&1 | grep -E 'arm sets|reload |render_reload|skipped|SCRIPT ERROR|parts shown|style|no sequence|  grip |hand gaps|ended first|holds done|not in hand|give failed' | tee "$out/report.txt" || rc=$?
+  --script tools/render_reload.gd -- "$@" 2>&1 | grep -E 'arm sets|magazine|reload |render_reload|skipped|SCRIPT ERROR|parts shown|style|no sequence|  grip |hand gaps|ended first|holds done|not in hand|give failed' | tee "$out/report.txt" || rc=$?
 python3 -I - "$out" <<'PY' || true
 import glob, os, sys
 try:
@@ -28,4 +28,4 @@ for i in ids:
     sheet.save(os.path.join(out, f"{i}_sheet.png"))
 print(f"wrote {len(ids)} sheets in {out}/")
 PY
-grep -q "0 weapons failed" "$out/report.txt"
+grep -q "render_reload: 0 weapons failed the one-magazine check" "$out/report.txt"

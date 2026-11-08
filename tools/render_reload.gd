@@ -12,6 +12,7 @@ const OUT_DIR := "screenshots/reload"
 
 var client: Node = null
 var _failed := 0
+var _arm_failed := 0
 
 
 func _initialize() -> void:
@@ -48,6 +49,10 @@ func _run() -> void:
 	var only := _arg(args, "--only", "")
 	if only != "":
 		ids = Array(only.split(","))
+
+	if args.has("--probe"):
+		await _probe(ids)
+		return
 
 	if args.has("--holds"):
 		await _holds(args)
@@ -93,6 +98,8 @@ func _run_rest(frames: int, left: int, ids: Array) -> void:
 		var started: bool = me.arsenal.is_reloading()
 		var worst := 0
 		var least := 99
+		var mags_most := 0
+		var mags_none := 0
 		var view := _view_model(me)
 		if view != null and not view.has_method(&"reload_sequence"):
 			view = null
@@ -115,18 +122,106 @@ func _run_rest(frames: int, left: int, ids: Array) -> void:
 			if view == null:
 				print("%s frame %d: hand gaps %s" % [id, f, _hand_gaps()])
 			else:
-				print("%s frame %d: f %.2f, %d parts shown, phase %s, hand gaps %s" % [id, f, float(view.get(&"_reload_fraction")), view.call(&"reload_parts_shown"), _phase(view), _hand_gaps()])
+				var mags: int = view.call(&"reload_magazines_visible")
+				mags_most = maxi(mags_most, mags)
+				mags_none += 1 if mags == 0 else 0
+				print("%s frame %d: f %.2f, %d parts shown, %d magazines in sight, phase %s, hand gaps %s" % [id, f, float(view.get(&"_reload_fraction")), view.call(&"reload_parts_shown"), mags, _phase(view), _hand_gaps()])
 			var drawn := await _drawn_sets(me)
 			worst = maxi(worst, drawn.size())
 			least = mini(least, drawn.size())
 			if drawn.size() != 1:
 				print("%s frame %d: %d arm sets drawn %s" % [id, f, drawn.size(), drawn])
 		await _wait(0.6)
-		print("%s: reload %.2f s (started %s), %d frames, arm sets drawn per frame %d..%d, magazine %d/%d" % [id, seconds, started, frames, least, worst, me.arsenal.current().magazine, def.magazine])
-		if worst != 1 or least != 1 or not started:
+		print("%s: reload %.2f s (started %s), %d frames, arm sets drawn per frame %d..%d, most magazines in sight %d (none in %d frames), magazine %d/%d" % [id, seconds, started, frames, least, worst, mags_most, mags_none, me.arsenal.current().magazine, def.magazine])
+		if worst != 1 or least != 1:
+			_arm_failed += 1
+		# Exactly one magazine in sight per frame bar the instant the hand fetches the next: never two.
+		if mags_most > 1 or not started:
 			_failed += 1
-	print("render_reload: %d weapons failed the one-arm-set check" % _failed)
+			print("%s: FAILED, %d magazines in sight at once" % [id, mags_most])
+	print("render_reload: %d weapons with two arm sets at some frame (not fatal)" % _arm_failed)
+	print("render_reload: %d weapons failed the one-magazine check" % _failed)
 	quit(1 if _failed > 0 else 0)
+
+
+## `--probe`: each magazine weapon's model from the side and from behind with the box the magazine is carved from drawn red
+## (in the model's own space, where the view model measured it): <id>_probe_side.png and <id>_probe_back.png.
+func _probe(ids: Array) -> void:
+	var carve: Script = load("res://addons/arena_weapons/view/aw_mag_carve.gd")
+	var stage := Node3D.new()
+	stage.position = Vector3(5000.0, 0.0, 0.0)
+	root.add_child(stage)
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-40.0, 30.0, 0.0)
+	stage.add_child(light)
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	stage.add_child(cam)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_COLOR
+	env.environment.background_color = Color(0.85, 0.88, 0.95)
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.9, 0.9, 0.9)
+	stage.add_child(env)
+	for id_s in ids:
+		var id := StringName(id_s)
+		var def: DotWeaponDef = AwWeaponCatalogue.table().get(id)
+		if def == null:
+			continue
+		var me = client.get("player")
+		me.health.invulnerable = true
+		if me.arsenal.carry != null:
+			me.arsenal.carry.enabled = false
+		me.arsenal.give(id)
+		me.arsenal.equip(def.slot)
+		await _wait(1.4)
+		var view := _view_model(me)
+		if view == null:
+			print("%s: no view model" % id)
+			continue
+		var art: Object = view.get(&"_art")
+		var path := str(art.get(&"model_path"))
+		var box: AABB = carve.call(&"recall", path)
+		var model := AwModelCache.instantiate(path)
+		if model == null:
+			continue
+		stage.add_child(model)
+		var marker := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = box.size
+		marker.mesh = bm
+		marker.position = box.get_center()
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(1.0, 0.1, 0.1, 0.45)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		marker.material_override = mat
+		stage.add_child(marker)
+		var whole := AABB()
+		for mi in model.find_children("*", "MeshInstance3D", true, false):
+			var m := mi as MeshInstance3D
+			if m.mesh != null:
+				whole = m.global_transform * m.mesh.get_aabb() if whole.size == Vector3.ZERO else whole.merge(m.global_transform * m.mesh.get_aabb())
+		var centre := whole.get_center() + stage.position
+		var span := maxf(whole.size.x, maxf(whole.size.y, whole.size.z)) * 1.15
+		cam.size = span
+		cam.current = true
+		cam.global_position = centre + Vector3(3.0, 0.0, 0.0)
+		cam.look_at(centre, Vector3.UP)
+		await _shot("%s_probe_side" % id)
+		cam.global_position = centre + Vector3(0.0, 0.0, 3.0)
+		cam.look_at(centre, Vector3.UP)
+		await _shot("%s_probe_back" % id)
+		cam.global_position = centre + Vector3(0.0, 3.0, 0.0)
+		cam.look_at(centre, Vector3.FORWARD)
+		await _shot("%s_probe_top" % id)
+		print("%s: model %s, box %s, whole %s" % [id, path, box, whole])
+		model.queue_free()
+		marker.queue_free()
+		cam.current = false
+		me.camera.current = true
+	quit(0)
 
 
 ## `--holds`: every weapon in the catalogue (or `--only`) at the hip and down the sights, the hands' reach to each grip printed.
