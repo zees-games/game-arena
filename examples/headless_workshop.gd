@@ -1,6 +1,7 @@
 extends DotGameCheckSuite
 
 const ArenaMode := preload("../game/arena_mode.gd")
+const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
@@ -18,13 +19,19 @@ const ArenaVoteSource := preload("../game/arena_vote_source.gd")
 ## menu and on the ballot), an online session lists none of it, and a map kind the game does
 ## not accept is left out. The game's own ids winning is the fourth.
 
-const SECTIONS := 6
+const SECTIONS := 7
 const MAP := &"fixture_hill"
 const OTHER_KIND := &"fixture_run"
 const BAD_DOC := &"fixture_bad"
 const BAD_ID := &"fixture_wrong_id"
 const NO_SPAWN := &"fixture_no_spawn"
 const DIR := "user://workshop_fixture/"
+## An imported-map document as arena-dm-maps publishes one: the entry id has an underscore and
+## the document (and its files) a dash.
+const IMPORTED_ENTRY := &"fixture_morpheus"
+const IMPORTED_DOC := &"fixture-morpheus"
+const IMPORTED_OTHER := &"fixture_elsewhere"
+const IMPORTED_BARE := &"fixture_bare"
 
 var _entered := 0
 var _completed := 0
@@ -44,6 +51,7 @@ func _run() -> void:
 	_test_ids()
 	_test_play()
 	_test_bad()
+	_test_imported()
 
 	_report_sections(_entered, _completed, SECTIONS)
 
@@ -64,6 +72,7 @@ func _write_fixtures() -> void:
 	bare["id"] = String(NO_SPAWN)
 	bare["spawns"] = []
 	_write("nospawn.json", JSON.stringify(bare))
+	_write_imported()
 
 
 func _write(file: String, text: String) -> void:
@@ -87,6 +96,9 @@ func _index(session: StringName) -> DotContentIndex:
 			{"kind": "map", "id": String(BAD_DOC), "name": "Broken", "scene": "bad.json", "map_kind": "arena"},
 			{"kind": "map", "id": String(BAD_ID), "name": "Wrong Id", "scene": "wrong.json", "map_kind": "arena"},
 			{"kind": "map", "id": String(NO_SPAWN), "name": "No Spawn", "scene": "nospawn.json", "map_kind": "arena"},
+			{"kind": "map", "id": String(IMPORTED_ENTRY), "name": "Fixture Morpheus", "scene": "imported/fixture-morpheus.json", "map_kind": "arena"},
+			{"kind": "map", "id": String(IMPORTED_OTHER), "name": "Elsewhere", "scene": "imported/fixture-morpheus.json", "map_kind": "arena"},
+			{"kind": "map", "id": String(IMPORTED_BARE), "name": "Bare", "scene": "imported/fixture-bare.json", "map_kind": "arena"},
 		]},
 	})
 	_check(added.ok, "the fixture pack registers for %s" % session)
@@ -236,4 +248,61 @@ func _test_bad() -> void:
 		"and off the menu")
 	var gone := ArenaMaps.build_workshop(null)
 	_check(not gone.ok, "a null def is a refusal, not a crash")
+	_completed += 1
+
+
+## The shape of dm-morpheus.json (arena-dm-maps), shrunk: kind, bounds, `spawns` as {origin,yaw},
+## the mesh named in `bin`. The mesh file is a stand-in, so nothing here may read it.
+func _write_imported() -> void:
+	DirAccess.make_dir_recursive_absolute(DIR + "imported/")
+	var doc := {"id": String(IMPORTED_DOC), "kind": "arena", "units": "source", "tier": 1,
+		"bounds": {"min": [-1000.0, -10.0, -600.0], "max": [1000.0, 400.0, 600.0]},
+		"bin": {"file": "fixture-morpheus.bin", "bytes": 4, "compression": "gzip"},
+		"spawn": {"origin": [-832.0, 48.0, -152.0], "yaw": 183.0},
+		"spawns": [{"origin": [-832.0, 48.0, -152.0], "yaw": 183.0}, {"origin": [-787.2, 33.0, 347.1], "yaw": -90.0}],
+		"author": "fixture", "movement": "walk"}
+	_write("imported/fixture-morpheus.json", JSON.stringify(doc))
+	_write("imported/fixture-morpheus.bin", "mesh")
+	var bare := doc.duplicate(true)
+	bare["id"] = "fixture-bare"
+	bare["spawns"] = []
+	bare.erase("spawn")
+	_write("imported/fixture-bare.json", JSON.stringify(bare))
+	_write("imported/fixture-bare.bin", "mesh")
+
+
+func _test_imported() -> void:
+	_entered += 1
+	print("")
+	print("an imported map pack (dash document id, underscore entry id)")
+	var catalogue := ArenaMaps.catalogue(_index(DotContentIndex.SESSION_SOLO))
+	var def := catalogue.get_map(IMPORTED_ENTRY)
+	_check(def != null, "the entry is in the catalogue though its id differs from the document's")
+	_check(catalogue.get_map(IMPORTED_OTHER) == null, "one whose document names another map is refused")
+	_check(catalogue.get_map(IMPORTED_BARE) == null, "and one with no spawn")
+	if def == null:
+		return
+	_check(ArenaMaps.workshop_map_id(def) == IMPORTED_DOC, "it is played under the document's id", str(ArenaMaps.workshop_map_id(def)))
+	var built := ArenaMaps.build_workshop(def)
+	_check(built.ok, "the manifest builds a map", str(built.error) if not built.ok else "")
+	if not built.ok:
+		return
+	var map: ArenaMap = built.value
+	_check(map.id == IMPORTED_DOC and map.is_imported(), "an imported map under the canonical id")
+	_check(map.spawns.size() == 2, "with both spawns of the manifest", str(map.spawns.size()))
+	_check(map.display_name == "Fixture Morpheus", "named by the entry", map.display_name)
+	_check(ArenaImportedMaps.is_mounted(IMPORTED_DOC), "mounted through ArenaImportedMaps")
+	var again := ArenaMaps.build_workshop(def)
+	_check(again.ok and again.value != map, "built again is a fresh map")
+	var rows := ArenaMaps.menu_rows(catalogue, &"dm_box", null, ArenaModes.all())
+	_check(_names(rows).has("Fixture Morpheus [Fixture Pack]"), "listed on the solo map menu")
+	var here := ArenaMaps.menu_rows(catalogue, IMPORTED_DOC, null, ArenaModes.all())
+	var current := here.filter(func(r: Dictionary) -> bool: return r.get("current", false) and r.get("mode") == "Map")
+	_check(current.size() == 1 and str(current[0]["name"]) == "Fixture Morpheus [Fixture Pack]",
+		"marked current while playing under the document's id")
+	var ffa := ArenaModes.by_id(&"ffa")
+	_check(ArenaMaps.supports_mode(def, ffa), "hosts free-for-all")
+	var viewed := ArenaMaps.same_map_id("dm_morpheus", "dm-morpheus") and not ArenaMaps.same_map_id("dm_morpheus", "dm-pit")
+	_check(viewed, "ids differing only in - against _ are the same map")
+	ArenaImportedMaps.remove_mounted(IMPORTED_DOC)
 	_completed += 1
