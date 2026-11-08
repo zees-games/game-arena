@@ -326,6 +326,26 @@ static var present_remote_paused: bool = false
 ## gun's update, 4 the held gun's own per-frame process, 8 the pose/tag/beacon rest). 0 in the game.
 static var present_ablate: int = 0
 
+## `cl_held_equips`: most remote bodies that build a new held gun in one frame (0: no limit). A
+## respawn wave changes a dozen bodies' guns at once, and each build instances a model, so the
+## rest wait a frame or two holding the old one instead of one frame taking all of them.
+static var held_equips_per_frame: int = 2
+static var _held_equip_frame: int = -1
+static var _held_equips_used: int = 0
+
+## Whether one more remote body may build its held gun this frame, and counts it.
+static func held_equip_allowed() -> bool:
+	if held_equips_per_frame <= 0:
+		return true
+	var frame := Engine.get_process_frames()
+	if frame != _held_equip_frame:
+		_held_equip_frame = frame
+		_held_equips_used = 0
+	if _held_equips_used >= held_equips_per_frame:
+		return false
+	_held_equips_used += 1
+	return true
+
 ## `cl_remote_lod_frustum`: judge "out of sight" by the camera's real frustum instead of the cone below.
 static var lod_frustum: bool = true
 
