@@ -223,7 +223,7 @@ func _add_fire_buffer_cvar() -> void:
 			log_info("fire buffer changed", {"seconds": game.fire_buffer_seconds}))
 
 
-## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]).
+## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]); `bot_native`: dot-sim's sight scan.
 func _add_bot_think_cvars() -> void:
 	add_cvar("bot_think_every", str(ArenaBots.think_every),
 		"A bot far from every enemy runs its brain one tick in this many (1 = every tick, 0 = 2 above 16 players)",
@@ -252,6 +252,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(64.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaBotThreads.threads = maxi(0, int(new_value.to_float())))
+	add_cvar("bot_native", "1" if DotBotWorld.native_enabled else "0",
+		"1: the bots' sight scan runs in dot-sim when its library is installed (same result, cheaper); 0: in script. Without the library it is script either way",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			DotBotWorld.native_enabled = new_value.to_float() >= 0.5)
 	add_cvar("arena_hull_grid", "1" if ArenaHullGrid.enabled else "0",
 		"1: players' standing hulls are found through a grid filed once per tick (same hulls, cheaper above 12 players); 0: scan the whole roster per bot",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(

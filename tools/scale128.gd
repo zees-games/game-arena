@@ -89,6 +89,7 @@ func _ready() -> void:
 			"--thinknear": ArenaBots.think_near = float(args[i + 1])
 			"--tierabove": ArenaBots.tiers.above = int(args[i + 1])
 			"--motorprof": _motorprof = args[i + 1] != "0"
+			"--native": DotBotWorld.native_enabled = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
 	for is_start in [true, false]:
@@ -162,6 +163,7 @@ func _report(extra: Dictionary) -> void:
 	# What the bots did while recorded, so a think-rate change shows its cost in play (shots per hit, kills).
 	out["combat"] = {"shots": _shots, "hits": _hits, "headshots": _heads, "kills": _kills,
 		"hit_rate": snappedf(float(_hits) / maxi(1, _shots), 0.001)}
+	out["native_scan"] = DotBotWorld.native_available()
 	out.merge(extra)
 	if ArenaHullGrid.verify:
 		out["hull_verified"] = ArenaHullGrid.verified
