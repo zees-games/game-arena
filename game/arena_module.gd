@@ -317,6 +317,8 @@ func _module_load() -> DotResult:
 
 	if game.map != null:
 		_report_map(String(game.map.id))
+		# The boot map never fires map_changed, so its PVS is attached here.
+		_attach_visibility(game.map)
 
 	log_info("arena loaded", {"map": game.map.display_name})
 	return DotResult.success(null)
@@ -419,7 +421,7 @@ func _build_netcode() -> DotResult:
 
 	# net_skip_idle and net_visibility, the switches dot-game's own games get from DotGameNetcode (dot-game 52; by name, so an older host still parses this).
 	if DotAddonApi.build_level("dot_game") >= 52:
-		DotGameRelevance.call(&"bind_toggles", console, net)
+		(DotGameRelevance as GDScript).call(&"bind_toggles", console, net)
 
 	bridge = ArenaNetBridge.new()
 	bridge.name = "Bridge"
@@ -1433,16 +1435,16 @@ func _on_map_changed(map: DotMapDef) -> void:
 
 
 ## The converted world's PVS as the snapshot visibility (cvar net_visibility); a built-in map clears it.
-func _attach_visibility(map: DotMapDef) -> void:
-	if net == null or DotAddonApi.build_level("dot_game") < 52:
+## [param map] is untyped: ArenaMap is not a DotMapDef subclass (as in arena_map_io).
+func _attach_visibility(map) -> void:
+	if net == null or map == null or DotAddonApi.build_level("dot_game") < 52:
 		return
 	var mesh: Object = null
-	var arena_map := map as ArenaMap
-	if arena_map != null and arena_map.is_imported():
-		var prefix := ArenaBspMap.world_prefix(String(map.id), arena_map.manifest_path.get_base_dir())
+	if map.has_method(&"is_imported") and map.is_imported():
+		var prefix := ArenaBspMap.world_prefix(String(map.id), String(map.manifest_path).get_base_dir())
 		var got: DotResult = DotMapBspMesh.load_prefix(prefix) if not prefix.is_empty() else null
 		mesh = got.value if got != null and got.ok else null
-	var on: bool = DotGameNetcode.call(&"attach_visibility", net, mesh)
+	var on: bool = (DotGameNetcode as GDScript).call(&"attach_visibility", net, mesh)
 	log_info("snapshot visibility", {"map": String(map.id), "in_force": on})
 
 
