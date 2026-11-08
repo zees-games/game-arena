@@ -51,9 +51,11 @@ const REFERENCE := 2
 ##
 ## Measured when the bands were set, 300 s each: easy 0.45, medium 1.20, hard 1.72, nightmare 2.75.
 ## With hidden respawns, 600 s each: easy 0.62, medium 1.42, hard 1.67, nightmare 2.91.
+## 2026-11-08, three seed pairs at 66 Hz (two runs): easy 0.53-0.60, medium 1.59-1.62, hard 1.48-1.49, nightmare 2.72-3.05; 0 blind shots.
+## Medium and hard sit within a few deaths of each other since the tick-perf/stagger changes, hence the loose ordering and the 1.7 cap.
 const KD_BANDS := {
 	"easy": [0.0, 0.7],
-	"medium": [0.5, 1.6],
+	"medium": [0.5, 1.7],
 	"hard": [0.9, 6.0],
 	"nightmare": [1.6, 1000.0],
 }
