@@ -22,16 +22,26 @@ gpu=${GPU_SH:-/home/gamedev/godot/dot-bootstrap/tools/gpu.sh}
 export GODOT_ROOT=${GODOT_ROOT:-/home/gamedev/wt/.lab-root}
 out=${LAB_OUT:-/home/gamedev/weapon-lab/out}/$run
 mkdir -p "$GODOT_ROOT" "$out"
+# One shard, retried on the other box when the first has no free shot slot (gpu.sh then falls back to llvmpipe, which crashes
+# the arena client: that run is thrown away, never kept).
+run_shard() {
+  local i=$1 attempt box sdir=$out/shard-$1
+  for attempt in 0 1 2 3 4 5; do
+    box=${boxes[(i + attempt) % ${#boxes[@]}]}
+    rm -rf "$sdir"; mkdir -p "$sdir"
+    echo "shard $i/$shards -> $box (attempt $attempt, log $out/shard-$i.log)"
+    GPU_SHOT_BOXES=$box "$gpu" shot --pull "$sdir" "wl-$i" tools/weapon_lab.sh --out "$sdir" --shard "$i/$shards" "${pass[@]}" >"$out/shard-$i.log" 2>&1 || true
+    if grep -q "weapons done" "$sdir/report.txt" 2>/dev/null && ! grep -q "rendering here on the CPU" "$out/shard-$i.log"; then return 0; fi
+    sleep 30
+  done
+  return 1
+}
 pids=()
 for ((i = 0; i < shards; i++)); do
+  [[ -n ${LAB_ONLY_SHARDS:-} && " $LAB_ONLY_SHARDS " != *" $i "* ]] && continue
   ln -sfn "$repo" "$GODOT_ROOT/wl-$i"
-  box=${boxes[i % ${#boxes[@]}]}
-  sdir=$out/shard-$i
-  mkdir -p "$sdir"
-  GPU_SHOT_BOXES=$box "$gpu" shot --pull "$sdir" "wl-$i" tools/weapon_lab.sh --out "$sdir" --shard "$i/$shards" "${pass[@]}" \
-    >"$out/shard-$i.log" 2>&1 &
+  run_shard "$i" &
   pids+=($!)
-  echo "shard $i/$shards -> $box (pid ${pids[-1]}, log $out/shard-$i.log)"
 done
 fail=0
 for p in "${pids[@]}"; do wait "$p" || fail=$((fail + 1)); done
@@ -39,6 +49,7 @@ echo "$fail of $shards shards returned non-zero"
 for ((i = 0; i < shards; i++)); do
   for d in "$out/shard-$i"/*/; do [[ -d $d ]] && mv "$d" "$out/"; done
   cat "$out/shard-$i/report.txt" 2>/dev/null >>"$out/report.txt" || true
+  rm -rf "$out/shard-$i"
 done
 python3 "$repo/tools/weapon_lab_index.py" "$out" "$run"
 if [[ ${LAB_PUBLISH:-1} == 1 ]]; then
