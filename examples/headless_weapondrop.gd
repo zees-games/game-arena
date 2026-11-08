@@ -6,6 +6,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaWeaponDropWiring := preload("../game/arena_weapon_drop_wiring.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
+const ArenaRoles := preload("../game/arena_weapon_roles.gd")
 
 ## Dropped weapons through the whole game: the drop key throws the gun in hand, the thrower's empty
 ## slot takes it back once the delay is up, a rule turns the key off, a kill leaves the dead player's
@@ -16,7 +17,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 45
+const EXPECTED_CHECKS := 50
 
 const WeaponDropWiring := preload("../game/arena_weapon_drop_wiring.gd")
 
@@ -234,6 +235,8 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 		if def.id == AwWeaponIds.CHARGE_RIFLE:
 			_check(def.slot == AwWeaponIds.SLOT_PRIMARY, "and the weapon list agrees")
 	_check(ArenaContent.loadout_slot_for(rail.slot) == &"primary", "and its loadout slot is primary")
+	for role in [&"melee", &"secondary", &"primary", &"heavy", &"thrown"]:
+		_check(role == &"primary" or ArenaRoles.resolve(role) != AwWeaponIds.CHARGE_RIFLE, "the %s role never resolves to the railgun" % role)
 
 	# The world panel: shown for a drop the player looks at, hidden out of reach.
 	drops.clear()

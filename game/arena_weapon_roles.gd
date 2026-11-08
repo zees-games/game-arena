@@ -262,6 +262,9 @@ static func _settle() -> void:
 	var by_id := {}
 
 	for def in AwWeaponCatalogue.weapons(AwWeaponDamage.table()):
+		# The railgun (charge rifle) is primary-only, as in `ArenaContent.weapons`: never a heavy-slot pick, auto or forced.
+		if def.id == AwWeaponIds.CHARGE_RIFLE:
+			def.slot = AwWeaponIds.SLOT_PRIMARY
 		by_id[def.id] = def
 
 	var forced: Dictionary = DotAddonConfig.get_value(config, "weapons.roles", {})
@@ -269,7 +272,7 @@ static func _settle() -> void:
 	for role: StringName in ROLES:
 		var named := StringName(str(forced.get(String(role), "")))
 
-		if named != &"" and by_id.has(named):
+		if named != &"" and by_id.has(named) and not (named == AwWeaponIds.CHARGE_RIFLE and role != &"primary"):
 			_by_role[role] = named
 			continue
 
