@@ -1,0 +1,778 @@
+extends Node
+
+const ArenaRecoilView := preload("arena_recoil_view.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
+
+
+const ArenaBlood := preload("arena_blood.gd")
+
+
+const ArenaAwards := preload("arena_awards.gd")
+
+
+const ArenaHud := preload("arena_hud.gd")
+
+
+const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
+const ArenaViewArms := preload("arena_view_arms.gd")
+const ArenaPlayer := preload("arena_player.gd")
+const ArenaKillcamBodies := preload("arena_killcam_bodies.gd")
+
+## Settings, audio, effects and a console, on the client.
+
+
+const CHANNEL := "arena.presentation"
+
+
+## The ping an administrator's beacon makes. See [method sound_catalogue].
+const BEACON_SOUND := &"beacon"
+
+
+## A rocket or a grenade going off: one id for the sound and the effect.
+const EXPLOSION := &"explosion"
+
+
+## A hit that killed: the hit marker's heavier sound.
+const KILL_CONFIRMED := &"kill_confirmed"
+
+
+## The local player's own wall moves: a scuff as a wall run starts, a kick as they jump off
+## a wall. Flat and their own, like the hurt sound: somebody else's run is not news.
+const WALL_RUN_SOUND := &"wall_run"
+const WALL_JUMP_SOUND := &"wall_jump"
+
+
+## Seconds between one kill's medal sounds; the HUD's `MedalRow.STAGGER_SEC`.
+const MEDAL_STAGGER_SEC := 0.14
+
+
+## How far an explosion shakes the camera, and how hard at its centre.
+const EXPLOSION_SHAKE_RANGE := 18.0
+const EXPLOSION_SHAKE := 0.6
+
+
+## Where a muzzle flash is drawn, from the eye, in the aim's frame: forward, down, right.
+const MUZZLE_OFFSET := Vector3(0.12, -0.14, -0.55)
+
+
+var settings: DotSettingsManager = null
+
+
+var audio: DotAudioManager = null
+
+
+## Everybody's footsteps by surface and a bed per map: dot-audio's stock (Kenney's footsteps
+## and generated beds, CC0; the addon's stock/CREDITS.md).
+var steps: DotAudioFootsteps = null
+var ambience: DotAudioAmbience = null
+
+
+## Quiet moods under the map (dot-audio's stock set); the bed above plays only when none loaded.
+var ambient: DotAmbienceDirector = null
+var fx: DotFxManager = null
+## Blood behind a body the local player hit; drawn only while `gore` is on.
+var blood: ArenaBlood = null
+
+
+## The player's console, built by [method build_console] once the client has a menu.
+var console: DotConsoleController = null
+var console_panel: DotConsolePanel = null
+
+
+## The in-game chat box. See [method _build_chat].
+var chat_window: DotChatWindow = null
+
+
+## The client, for the commands that ask it questions.
+var client: Node = null
+
+
+var _chat_layer: CanvasLayer = null
+
+
+## Whether the server said something else is carrying chat. See [method set_chat_relayed].
+var _chat_relayed: bool = false
+
+
+## Longest a frame spends baking sounds with the cover down, in milliseconds; the gate widens it under the cover.
+const BAKE_BUDGET_MSEC := 6
+
+
+var _bake_recipes: Dictionary = {}
+var _bake_ids: Array = []
+
+
+## Bakes the recipes named by [param ids] (consumed from the end) into [param bank] until
+## [param budget_msec] is spent; one recipe is never split, so the call overruns by at most one.
+static func bake_into(bank: Dictionary, catalogue: DotAudioCatalogue, recipes: Dictionary, ids: Array, budget_msec: int) -> void:
+	var until := Time.get_ticks_msec() + budget_msec
+	while not ids.is_empty() and Time.get_ticks_msec() < until:
+		var id: Variant = ids.pop_back()
+		bank.merge(DotAudioSynth.bank(catalogue, {id: recipes[id]}))
+
+
+## Calls [method bake_into] on the sink's bank until the frame's budget is spent, then lets the gate
+## open once none are left. A recipe is one stream (or one per variant), so a frame overruns
+## by at most one of them.
+func _bake_slice() -> void:
+	var sink := audio.sink as DotAudioSinkGodot if audio != null else null
+	if sink == null:
+		_bake_ids.clear()
+		_bake_hold(false)
+		return
+	var gate: Object = client.get(&"gate") if client != null else null
+	var budget := int(gate.call(&"slice_msec", BAKE_BUDGET_MSEC)) if gate != null and gate.has_method(&"slice_msec") else BAKE_BUDGET_MSEC
+	bake_into(sink.bank, audio.catalogue, _bake_recipes, _bake_ids, budget)
+	if _bake_ids.is_empty():
+		_bake_hold(false)
+
+
+## The load gate stays closed while sounds bake, so the cover only drops once they are all there.
+func _bake_hold(on: bool) -> void:
+	var gate: Object = client.get(&"gate") if client != null else null
+	if gate == null:
+		return
+	if on:
+		gate.call(&"hold", &"sounds", "Preparing sounds")
+	else:
+		gate.call(&"release", &"sounds")
+
+
+## The box a player types in, and the three settings that decide it. A HUD widget, not a
+## [DotScreenStack] screen: it is eight lines in a corner that leave the game visible.
+func _build_chat() -> void:
+	_chat_layer = CanvasLayer.new()
+	_chat_layer.name = "ChatLayer"
+	_chat_layer.layer = 100
+	add_child(_chat_layer)
+
+	# [b]Scaled with the HUD.[/b] Below 1280x720 `ArenaHud.fit_scale` shrinks the killstreak meter
+	# and the key hints, and an unscaled box beside them reached both at 854x480.
+	_chat_screen = Control.new()
+	_chat_screen.name = "ChatScreen"
+	_chat_screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chat_layer.add_child(_chat_screen)
+	chat_window = make_chat_window()
+	_chat_screen.add_child(chat_window)
+	_fit_chat()
+
+
+## The box as this game configures it; [method _build_chat] and the screenshot tool's
+## `--glance --chat` both draw this one.
+static func make_chat_window() -> DotChatWindow:
+	var chat_window := DotChatWindow.new()
+	chat_window.name = "ChatWindow"
+	chat_window.open_action = &"arena_chat"
+	chat_window.team_action = &"arena_chat_team"
+	# [b]An outline, because the floors are pale.[/b] Light-blue names and white text over light
+	# grey tiles were a log the players asked, in that log, to be able to read.
+	chat_window.outline_size = 5
+	# Flush with the left edge the health and armour bars use, and lifted clear of them. `ArenaHud`
+	# puts health at 96 pixels off the bottom and armour at 56; a box at the default inset draws its
+	# log straight through both, which is the kind of thing only a rendered frame says.
+	chat_window.margin_left = 24.0
+	chat_window.margin_bottom = 110.0
+	# Narrower than the default 460: the slide prompt ("Cancel slide  C") is drawn from
+	# x 381 at 1280x720, inside a full log's rows, and a long line ran under it.
+	chat_window.width = 340.0
+	chat_window.channels = [
+		{"id": &"all", "label": "Say", "colour": Color(0.88, 0.90, 0.94)},
+		{"id": &"team", "label": "Say (TEAM)", "colour": Color(0.55, 0.85, 0.60), "team": true},
+	]
+	return chat_window
+
+
+## Lays [param screen], the chat box's parent, out on a frame [param frame] pixels: scaled
+## by the HUD's own [method ArenaHud.fit_scale], so the box shrinks exactly as the HUD does.
+static func fit_chat_screen(screen: Control, frame: Vector2) -> void:
+	var fit := ArenaHud.fit_scale(frame)
+	screen.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	screen.scale = Vector2(fit, fit)
+	screen.position = Vector2.ZERO
+	screen.size = frame / fit
+
+
+## The chat box's parent; see [method _build_chat].
+var _chat_screen: Control = null
+
+
+## The frame the chat box was last fitted to.
+var _chat_frame := Vector2.ZERO
+
+
+func _fit_chat() -> void:
+	if _chat_screen == null:
+		return
+	var frame := _chat_screen.get_viewport_rect().size if _chat_screen.is_inside_tree() else ArenaHud.DESIGN_FRAME
+	if frame == _chat_frame:
+		return
+	_chat_frame = frame
+	fit_chat_screen(_chat_screen, frame)
+
+
+func _process(_delta: float) -> void:
+	if not _bake_ids.is_empty():
+		_bake_slice()
+	# Polled rather than on `size_changed`: this node can be set up before it is in a tree,
+	# and one Vector2 compare a frame is cheaper than tracking when it enters one.
+	_fit_chat()
+
+
+## Puts one binding from the settings document onto its action. Empty is left alone rather than
+## applied: a settings file somebody cleared the field in would otherwise unbind chat with no way to
+## get it back from inside the game.
+func _bind_chat(action: StringName, text: String) -> void:
+	if action == &"" or text.strip_edges() == "":
+		return
+
+	var bound := DotInputBinding.apply(action, text)
+
+	if bound == "":
+		DotLog.warn(CHANNEL, "a chat key was not understood", {
+			"action": String(action), "binding": text
+		})
+
+
+## The server said whether anything else is carrying this conversation. Called by [ArenaClient] when
+## the state payload arrives, and again if a relay comes up or goes down mid-match.
+func set_chat_relayed(relayed: bool) -> void:
+	if _chat_relayed == relayed:
+		return
+
+	_chat_relayed = relayed
+	_apply_chat_visibility()
+
+
+## Resolves the three-way setting against what the server said. `auto` draws the box unless this
+## server already puts these lines where the player can see them (a web client whose page holds the
+## relay's room). In every case the log keeps drawing what other people said.
+func _apply_chat_visibility() -> void:
+	if chat_window == null or settings == null:
+		return
+
+	match StringName(str(settings.get_value(&"chat_window"))):
+		&"on":
+			chat_window.enabled = true
+		&"off":
+			chat_window.enabled = false
+		_:
+			chat_window.enabled = not _chat_relayed
+
+
+## This game's own commands; the kit has `help`, `clear`, `settings` and every setting.
+## Idle meshes each shot fx pool keeps (`cl_fx_pool_idle`; -1 keeps all), pushed at [method setup].
+static var fx_pool_idle := 8
+
+
+## Reads, or with [param value] writes, a static of an addon class that an older checkout of
+## the addon may not have yet: [param fallback] when it is missing, and the write is skipped.
+static func _addon_static(script: Script, name: StringName, fallback: Variant, value: Variant = null) -> Variant:
+	var have: Variant = script.get(name)
+	if have == null:
+		return fallback
+	if value != null:
+		script.set(name, value)
+		return script.get(name)
+	return have
+
+
+func _local_commands() -> DotConsoleLocal:
+	var local := DotConsoleLocal.new()
+
+	local.add_command(&"quit", "Leave the match", func(_a: PackedStringArray) -> Variant:
+		get_tree().quit()
+		return null
+	)
+	local.add_command(&"audio", "Show the audio system", func(_a: PackedStringArray) -> Variant:
+		return audio.describe_lines()
+	)
+	local.add_command(&"fx", "Show the effects system", func(_a: PackedStringArray) -> Variant:
+		return fx.describe_lines()
+	)
+	local.add_var(&"cl_penetration_decals", "1 marks both faces of a wall a shot passed through and each ricochet, 0 draws none.",
+		func() -> Variant: return 1 if fx.config.penetration_decals else 0,
+		func(v: Variant) -> Variant:
+			var _set := settings.set_value(&"penetration_decals", str(v).strip_edges() != "0")
+			fx.config.penetration_decals = settings.get_bool(&"penetration_decals", true)
+			return DotResult.success(1 if fx.config.penetration_decals else 0)
+	)
+	local.add_var(&"cl_respawn_jump_gate", "1 swallows Space after a death until it is released, so the key that skips the kill view does not jump on the respawn; 0 lets it through.",
+		func() -> Variant: return 1 if settings.get_bool(&"respawn_jump_gate", true) else 0,
+		func(v: Variant) -> Variant:
+			var _set := settings.set_value(&"respawn_jump_gate", str(v).strip_edges() != "0")
+			return DotResult.success(1 if settings.get_bool(&"respawn_jump_gate", true) else 0)
+	)
+	local.add_var(&"cl_perf", "Seconds between frame reports in the log (arena.perf); 0 is off.",
+		func() -> Variant: return ArenaFrameProbe.interval,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_float():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_perf takes a number of seconds")
+			ArenaFrameProbe.set_interval(text.to_float())
+			return DotResult.success(ArenaFrameProbe.interval)
+	)
+	local.add_var(&"cl_held_equips", "Most remote bodies that build a newly held gun in one frame; the rest wait a frame (0: no limit; 2 is the default).",
+		func() -> Variant: return ArenaPlayer.held_equips_per_frame,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_held_equips takes a whole number")
+			ArenaPlayer.held_equips_per_frame = clampi(text.to_int(), 0, 64)
+			return DotResult.success(ArenaPlayer.held_equips_per_frame)
+	)
+	local.add_var(&"cl_portrait_builds", "Most scoreboard portraits rendered in one frame (0: no limit; 1 is the default).",
+		func() -> Variant: return ArenaHud.ArenaHudGlance.PortraitCache.builds_per_frame,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_portrait_builds takes a whole number")
+			ArenaHud.ArenaHudGlance.PortraitCache.builds_per_frame = clampi(text.to_int(), 0, 64)
+			return DotResult.success(ArenaHud.ArenaHudGlance.PortraitCache.builds_per_frame)
+	)
+	local.add_var(&"cl_portrait_keep", "Portraits kept for players who drop out of the ranked row, so rank changes do not re-render them (24 is the default).",
+		func() -> Variant: return ArenaHud.ArenaHudGlance.PortraitCache.keep_extra,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_portrait_keep takes a whole number")
+			ArenaHud.ArenaHudGlance.PortraitCache.keep_extra = clampi(text.to_int(), 0, 128)
+			return DotResult.success(ArenaHud.ArenaHudGlance.PortraitCache.keep_extra)
+	)
+	local.add_var(&"cl_fx_pool_idle", "Most idle meshes each player's shot effects keep for reuse; a release past it frees the mesh (-1: keep all; 8 is the default).",
+		func() -> Variant: return _addon_static(DotFxMeshPool, &"max_idle", -1),
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_fx_pool_idle takes a whole number")
+			fx_pool_idle = clampi(text.to_int(), -1, 256)
+			return DotResult.success(_addon_static(DotFxMeshPool, &"max_idle", -1, fx_pool_idle))
+	)
+	local.add_var(&"cl_def_cache", "1 keeps one weapon catalogue for watched hands' lookups; 0 builds it again on each (a reload start, a fitted code).",
+		func() -> Variant: return 1 if _addon_static(AwWeaponCatalogue, &"def_cache", false) else 0,
+		func(v: Variant) -> Variant:
+			return DotResult.success(1 if _addon_static(AwWeaponCatalogue, &"def_cache", false, str(v).strip_edges() != "0") else 0))
+	local.add_var(&"cl_glove_cache", "1 remembers each gun texture's colour for the first-person glove contrast; 0 reads it back on every equip.",
+		func() -> Variant: return 1 if _addon_static(AwViewArms, &"albedo_cache", false) else 0,
+		func(v: Variant) -> Variant:
+			return DotResult.success(1 if _addon_static(AwViewArms, &"albedo_cache", false, str(v).strip_edges() != "0") else 0)
+	)
+	local.add_var(&"cl_remote_lod", "1 draws remote players nobody can see (off screen, far away) less often; 0 presents every remote player every frame.",
+		func() -> Variant: return 1 if ArenaPlayer.present_lod_enabled else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.present_lod_enabled = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.present_lod_enabled else 0)
+	)
+	local.add_var(&"cl_remote_lod_frustum", "1 judges a remote player out of sight by the camera's real view frustum, 0 by a wide cone round the view axis.",
+		func() -> Variant: return 1 if ArenaPlayer.lod_frustum else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.lod_frustum = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.lod_frustum else 0)
+	)
+	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default).",
+		func() -> Variant: return ArenaPlayer.lod_off_every,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_remote_lod_every takes a whole number of frames")
+			ArenaPlayer.lod_off_every = clampi(text.to_int(), 1, 16)
+			return DotResult.success(ArenaPlayer.lod_off_every)
+	)
+	local.add_var(&"cl_killcam_hz", "Most times a second the kill-cam records every body while no replay plays (0: every frame; 60 is the default).",
+		func() -> Variant: return ArenaKillcamBodies.record_hz,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_float():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_killcam_hz takes a number")
+			ArenaKillcamBodies.record_hz = maxf(text.to_float(), 0.0)
+			return DotResult.success(ArenaKillcamBodies.record_hz)
+	)
+	local.add_var(&"cl_pose_debug", "1 draws the held weapon's grip sockets, the hand targets and the arm bones over the view.",
+		func() -> Variant: return 1 if ArenaViewArms.debug_pose else 0,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.debug_pose = str(v).strip_edges() == "1"
+			return DotResult.success(1 if ArenaViewArms.debug_pose else 0)
+	)
+	_add_arm_vars(local)
+	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
+	local.add_var(&"cl_recoil_view", "How far each shot's recoil turns your view: 0 keeps the crosshair still (bullets still climb), 1 as tuned, up to 5.",
+		func() -> Variant: return ArenaRecoilView.scale,
+		func(v: Variant) -> Variant:
+			ArenaRecoilView.scale = clampf(float(str(v).strip_edges()), 0.0, 5.0)
+			return DotResult.success(ArenaRecoilView.scale)
+	)
+	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",
+		func() -> Variant: return 1 if ArenaWeaponIcons.shared.sprites else 0,
+		func(v: Variant) -> Variant:
+			ArenaWeaponIcons.shared.sprites = str(v).strip_edges() == "1"
+			return DotResult.success(1 if ArenaWeaponIcons.shared.sprites else 0)
+	)
+	local.add_command(&"where", "Where this client thinks it is", func(_a: PackedStringArray) -> Variant:
+		# The one thing no assertion and no screenshot can give you, and the reason ArenaClient
+		# already logs a position once a second: when a browser client draws sky in every direction.
+		if client == null or not client.has_method("describe_position"):
+			return "no client"
+		return client.call("describe_position")
+	)
+
+	return local
+
+
+## The first-person arm tuning variables.
+func _add_arm_vars(local: DotConsoleLocal):
+	local.add_var(&"cl_fp_hand_scale", "Multiplier on the first-person hand size of every weapon (1: as the weapon's profile says).",
+		func() -> Variant: return ArenaViewArms.hand_scale_mult,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.hand_scale_mult = clampf(str(v).to_float(), 0.1, 3.0)
+			return DotResult.success(ArenaViewArms.hand_scale_mult)
+	)
+	local.add_var(&"cl_fp_forearm_scale", "Multiplier on the first-person forearm size of every weapon (1: as the weapon's profile says).",
+		func() -> Variant: return ArenaViewArms.forearm_scale_mult,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.forearm_scale_mult = clampf(str(v).to_float(), 0.2, 3.0)
+			return DotResult.success(ArenaViewArms.forearm_scale_mult)
+	)
+	local.add_var(&"cl_fp_scope_arms_hide", "Aim fraction (0 to 1) at which a scoped weapon's first-person arms hide (-1: each weapon's own, 0.6 by default).",
+		func() -> Variant: return ArenaViewArms.scope_arms_hide_override,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.scope_arms_hide_override = clampf(str(v).to_float(), -1.0, 1.0)
+			return DotResult.success(ArenaViewArms.scope_arms_hide_override)
+	)
+	local.add_var(&"cl_fp_max_lean", "Most the first-person arms lean toward a hand out of reach (-1: each weapon's own, 0.4 by default; 0 is no lean).",
+		func() -> Variant: return ArenaViewArms.max_lean_override,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.max_lean_override = clampf(str(v).to_float(), -1.0, 3.0)
+			return DotResult.success(ArenaViewArms.max_lean_override)
+	)
+	local.add_var(&"cl_fp_look_down_back", "Metres your own body trails back as the view tips fully down (-1: the player's own setting, 0.45 by default).",
+		func() -> Variant: return ArenaPlayer.look_down_back_override,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.look_down_back_override = clampf(str(v).to_float(), -1.0, 2.0)
+			return DotResult.success(ArenaPlayer.look_down_back_override)
+	)
+
+
+## Once a frame, with where the camera is and which way it is looking.
+func present(delta: float, eye: Vector3, forward: Vector3) -> void:
+	audio.listener_position = eye
+	fx.viewer_position = eye
+	fx.viewer_forward = forward
+	fx.advance(delta)
+	blood.advance(delta)
+
+
+## The camera offset to add this frame, which the rig applies and this does not. dot-spectate's
+## rule: it computes a transform and touches no camera. One implementation then serves the play rig,
+## a spectator's, and a headless suite with no camera at all.
+func camera_shake() -> Vector3:
+	return fx.shake.offset()
+
+
+func camera_roll() -> float:
+	return fx.shake.roll()
+
+
+## Whether something on screen owns the keyboard right now. Movement must not read while somebody
+## types (the chat box is the same bug as a console, for everybody).
+func swallows_input() -> bool:
+	if console != null and console.is_open():
+		return true
+	if console_panel != null and console_panel.has_keyboard_focus():
+		return true
+
+	return chat_window != null and chat_window.is_open()
+
+
+## A transform at [param at] whose -Z points along [param direction]. What every effect scene here
+## is built against: a muzzle flash sprays along -Z, a spark flies back up +Z toward whoever fired,
+## and the bullet hole's decal projects along -Z.
+static func facing(at: Vector3, direction: Vector3) -> Transform3D:
+	var forward := direction.normalized() if direction.length_squared() > 0.0 else Vector3.FORWARD
+	# Straight up or down has no yaw to keep; any other up vector will do. 4.7's
+	# `looking_at` copes with a parallel one too, with an engine WARNING per shot.
+	var up := Vector3.RIGHT if absf(forward.dot(Vector3.UP)) > 0.99 else Vector3.UP
+	return Transform3D(Basis.looking_at(forward, up), at)
+
+
+## One tick of the local player's weapon use: a flash per shot, a spark and a hole per impact, and
+## the hit marker. [b]The flash is pushed out in front of the eye.[/b] A shot starts at the view,
+## and a flash drawn there is drawn around the camera.
+func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
+	if outcome == null or not outcome.used:
+		return
+
+	for shot in outcome.shots:
+		if not weapon_draws:
+			var aim := facing(shot.origin, shot.direction)
+			var muzzle := aim.translated_local(MUZZLE_OFFSET)
+			# The weapon's id rather than a slot number. A slot is where a player put
+			# something; an id is what it is, and a sound catalogue keyed on a slot would
+			# play the rifle whenever anybody put a shotgun in slot one.
+			var weapon_id: StringName = shot.weapon_id if shot.weapon_id != &"" else &"rifle"
+			on_fired(weapon_id, muzzle, true)
+
+		# Impacts are a list because a shotgun is one shot with several of them, and a
+		# single impact sound for eight pellets is a shotgun that sounds like a rifle. Each
+		# faces along the aim, not along its own pellet: close enough for a decal, and the
+		# pellet directions are not kept per impact.
+		#
+		# [b]With the weapon drawing its own shot, only the hole is this layer's.[/b]
+		# arena-weapons' `AwShotFx` puts the flash at the real muzzle, a tracer, a spark
+		# and a report per weapon; drawing this layer's as well was two flashes, two sparks
+		# and a stand-in rifle report under the real one.
+		for at in shot.impacts:
+			if weapon_draws:
+				fx.spawn_decal(&"bullet_hole", facing(at, shot.direction))
+			else:
+				on_impact(facing(at, shot.direction), false)
+
+		fx.spawn_penetration_decals(shot.penetrations)
+		fx.spawn_ricochet_decals(shot.ricochets)
+
+		# No hit marker here. `shot.damages` is this client's PREDICTION of what its shot
+		# did, and the server may refuse it (a lag-compensated miss, a protected spawn);
+		# the marker and its sound wait for the server's HIT ([method on_hit_confirmed]).
+
+
+func on_fired(weapon_id: StringName, muzzle: Transform3D, mine: bool) -> void:
+	var layered := shots != null and SHOT_CLASS.has(weapon_id) and shots.fire(StringName("shot_%s" % SHOT_CLASS[weapon_id]), muzzle.origin).ok
+	if not layered:
+		audio.play_at(StringName("fire_%s" % weapon_id), muzzle.origin)
+	fx.spawn(&"muzzle_flash", muzzle)
+	if mine:
+		# Only your own weapon kicks the camera. Somebody else's rifle going off beside
+		# you is a sound and a flash; shaking for it would make a crowded room unplayable.
+		fx.shake.add(0.08)
+
+
+## A rocket or a grenade went off at [param at]; [param eye] is where this client's
+## camera is, for how hard it shakes. Everybody's, the local player's own included.
+func on_explosion(at: Vector3, eye: Vector3) -> void:
+	audio.play_at(EXPLOSION, at)
+	fx.spawn(EXPLOSION, Transform3D(Basis.IDENTITY, at))
+
+	var near := 1.0 - clampf(eye.distance_to(at) / EXPLOSION_SHAKE_RANGE, 0.0, 1.0)
+	if near > 0.0:
+		fx.shake.add(EXPLOSION_SHAKE * near * near)
+
+
+func on_impact(at: Transform3D, on_player: bool) -> void:
+	# Checked decal first: a miss's endpoint is open air, and a spark there floats too.
+	if not on_player and fx.spawn_decal(&"bullet_hole", at) == null:
+		return
+	audio.play_at(&"impact", at.origin)
+	fx.spawn(&"impact_spark", at)
+
+
+## A map-vote cue from the server. Empty is silence, and an id this catalogue does not
+## have is dot-audio's silent refusal rather than an error: a server configured with a
+## sound set this client was not built with should cost a noise, not a log line per second.
+func on_vote_cue(id: StringName) -> int:
+	if id == &"" or audio == null:
+		return 0
+
+	return audio.play(id)
+
+
+## The server confirmed a hit: the tick, or the heavier kill sound when it was lethal.
+func on_hit_confirmed(lethal: bool = false) -> void:
+	if audio == null:
+		return
+	var _v := audio.play(KILL_CONFIRMED if lethal else &"hit_marker")
+
+
+## The server confirmed a hit on [param victim]: blood on the surface behind it, seen from [param eye].
+func on_body_hit(victim: int, point: Vector3, eye: Vector3) -> void:
+	var _splat := blood.on_body_hit(victim, point, eye)
+
+
+## A kill's medals, each its own sound, staggered as the HUD staggers their popups.
+func on_medals(medals: Array) -> void:
+	if audio == null:
+		return
+	for i in range(medals.size()):
+		var id := ArenaAwards.medal_sound(int(medals[i]))
+		if i == 0 or not is_inside_tree():
+			var _v := audio.play(id)
+		else:
+			get_tree().create_timer(MEDAL_STAGGER_SEC * float(i)).timeout.connect(
+				func() -> void: if audio != null: audio.play(id)
+			)
+
+
+## A head stomp at [param at]: the configured sound and effect, heard and seen by everybody.
+func on_stomp(at: Vector3, sound: StringName, effect: StringName) -> void:
+	if audio != null and sound != &"":
+		var _v := audio.play_at(sound, at)
+	if fx != null and effect != &"":
+		fx.spawn(effect, Transform3D(Basis.IDENTITY, at))
+
+
+## A utility grenade's effect: a cloud or a fire, or a blind for the followed player (through dot-fx, so the flash settings cap it).
+func on_grenade_fx(info: Dictionary, own_id: int) -> void:
+	var _shown := AwGrenadeFx.show(fx, get_tree(), info, own_id)
+
+
+func on_hurt(_amount: float) -> void:
+	audio.play(&"hurt")
+	fx.flash(&"hurt_flash")
+	fx.spawn(&"hurt_shake", Transform3D.IDENTITY)
+
+
+const DEATH_BURST_AHEAD := 1.5
+
+
+func on_died(where: Transform3D) -> void:
+	audio.play(&"died")
+	# Read at the moment of the death, so the setting needs no apply step. Only the blood is
+	# gated: bullet holes are not gore.
+	if settings.get_bool(&"gore", true):
+		# The origin is the dying player's own feet under their own camera: the drops would hang in the lens as red balls.
+		var ahead := Vector3(fx.viewer_forward.x, 0.0, fx.viewer_forward.z)
+		if ahead.length_squared() > 0.0001:
+			where.origin += ahead.normalized() * DEATH_BURST_AHEAD
+		fx.spawn(&"death_burst", where)
+	fx.spawn(&"death_shake", Transform3D.IDENTITY)
+
+
+func on_spawned() -> void:
+	audio.play(&"spawned")
+	# Everything from the previous life goes. A decal ring that survives a death is one
+	# that survives a map change, which is a hole in a wall that no longer exists.
+	fx.shake.reset()
+
+
+## A beacon's ripple went out from [param at]. `ArenaPlayer.beacon_pulsed`, on every
+## client, for every beaconed player — the beaconed one included, who hears their own.
+func on_beacon(at: Vector3) -> int:
+	if audio == null:
+		return 0
+
+	return audio.play_at(BEACON_SOUND, at)
+
+
+func on_pickup(at: Vector3) -> void:
+	audio.play_at(&"pickup", at)
+
+
+## The local player started or ended a wall run (`DotFpsController.wall_run_changed`,
+## never emitted during a replay). Only the start makes a noise; returns the voice, 0 for
+## none.
+func on_wall_run(running: bool) -> int:
+	if audio == null or not running:
+		return 0
+	return audio.play(WALL_RUN_SOUND)
+
+
+## The local player jumped off a wall (`DotFpsController.wall_jumped`).
+func on_wall_jumped() -> int:
+	if audio == null:
+		return 0
+	return audio.play(WALL_JUMP_SOUND)
+
+
+## A map changed. Everything drawn for the old one is meaningless now.
+func on_map_changed(map_id: StringName = &"") -> void:
+	fx.clear()
+	blood.clear()
+	if ambient != null and ambient.has_moods():
+		ambient.on_map(map_id)
+	elif ambience != null:
+		ambience.set_map_bed(bed_for(map_id))
+
+
+## Moods by map name prefix (see [method bed_for]); anything else is a hall of machinery.
+const AMBIENT_PREFIXES := {
+	"surf_": &"snow_wind", "kz_": &"cave_tunnel", "climb_": &"cave_tunnel", "xc_": &"cave_tunnel",
+	"bhop_": &"outdoor_night", "bunnyhop": &"outdoor_night",
+}
+
+
+## A map's bed, from its name: the built-in arenas are halls of machinery, a surf map is ramps
+## in the air (wind), a climb map is rock (a cave), a hop map is outdoors. By prefix, because
+## imported maps arrive by the hundred and nobody will list them.
+static func bed_for(map_id: StringName) -> StringName:
+	var id := String(map_id).to_lower()
+	if id.begins_with("surf_"):
+		return &"amb_wind"
+	if id.begins_with("kz_") or id.begins_with("climb_") or id.begins_with("xc_"):
+		return &"amb_cave"
+	if id.begins_with("bhop_") or id.begins_with("bunnyhop"):
+		return &"amb_outdoor"
+	return &"amb_industrial"
+
+
+## Everybody on the map steps, once a frame: players and bots, each grounded by a ray (a
+## mirrored player's controller is never ticked here, so its own answer is stale).
+func keep_walkers(bodies: Array) -> void:
+	if steps != null:
+		steps.keep(bodies)
+
+
+## Which stock shot (dot-audio `DotAudioShotStock`) each weapon plays; a weapon not listed keeps its single `fire_*` sound.
+const SHOT_CLASS := {&"rifle": &"rifle", &"shotgun": &"shotgun", &"rail": &"sniper"}
+
+
+## The layered shot player and the enclosure probe it reads (dot-audio); `use_shot_rules` hands both the server's cvars.
+var shots: DotShotPlayer = null
+var shot_enclosure: DotAudioEnclosure = null
+
+
+func use_shot_rules(rules: DotShotRules) -> void:
+	if shots != null:
+		shots.rules = rules
+	if shot_enclosure != null:
+		shot_enclosure.rules = rules
+
+
+## The report of somebody else's gun (`AwShotFx.shot_sound`) through this presentation's one layered player.
+## Without it each shooter's `AwShotFx` made its own audio manager, enclosure and shot player on its first shot:
+## 40 ms a shooter, thirty-one times a match at 16 v 16. False for a class with no stock shot (the single sound plays).
+func remote_shot(id: StringName, kind: StringName, at: Vector3, _indoors: bool) -> bool:
+	var t_shot := Time.get_ticks_usec()
+	var done := _remote_shot(id, kind, at)
+	ArenaFrameProbe.add(&"fx_remote_shot", t_shot)
+	return done
+
+
+func _remote_shot(id: StringName, kind: StringName, at: Vector3) -> bool:
+	if shots == null or audio == null:
+		return false
+	var weapon_class := AwWeaponSound.class_for(id, kind)
+	var stock_class := AwShotLayers.shot_class(weapon_class)
+	if stock_class == &"":
+		return false
+	var res := shots.fire(DotAudioShotStock.id_of(stock_class), at, weapon_class == AwWeaponSound.SUPPRESSED)
+	return res.ok and int(res.value_or(0)) > 0
+
+
+## Hands a world model's shot effects (made on its hand's first shot) this presentation's player for the report.
+func share_shots(hand: Node) -> void:
+	if hand == null or hand.child_entered_tree.is_connected(_share_shots_with):
+		return
+	hand.child_entered_tree.connect(_share_shots_with)
+
+
+func _share_shots_with(child: Node) -> void:
+	if child is AwShotFx:
+		(child as AwShotFx).shot_sound = remote_shot
+		(child as AwShotFx).layered_shots = false
+
+
+## The roof probe the weapon's shot sounds read (`AwShotFx.roof`): roofed means a room tail follows a shot.
+var shot_roof := DotAmbienceRoof.new()
+
+
+func describe_lines() -> PackedStringArray:
+	var out := PackedStringArray()
+	out.append("the arena's presentation layer")
+	out.append_array(settings.describe_lines())
+	out.append_array(audio.describe_lines())
+	if ambient != null:
+		out.append("ambience: %s" % str(ambient.describe()))
+	out.append_array(fx.describe_lines())
+	out.append_array(console.describe_lines())
+
+	if chat_window != null:
+		out.append("chat box: %s" % str(chat_window.describe()))
+
+	return out
