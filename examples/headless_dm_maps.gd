@@ -106,7 +106,7 @@ func _test_solo() -> void:
 	var pick := await ArenaMaps.mount_delivered(solo.get_map(&"crackhouse"), DotMapLoader.new(), solo)
 	_check(not pick.ok, "picking an unfetched pack with no cloud client fails")
 	_check(solo.get_map(&"gg-garage") != null, "the failed pick leaves the catalogue usable")
-	var surf := solo.get_map(&"surf_adverse")
+	var surf := solo.get_map(&"surf_thriller")
 	_check(surf != null and ArenaMaps.is_delivered(surf), "a surf map (prefixed pack file, bare id) counts as delivered")
 
 	print("-- a pack the origin does not have (HTTP 404) says so and leaves the solo list")
