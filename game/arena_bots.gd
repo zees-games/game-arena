@@ -72,7 +72,7 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	_tier_on = tiers.applies(players)
 	var world := world_for(game)
 	if (_every > 1 or _tier_on) and _coasts(mind, tick, world, bot.player_id):
-		return _recoil_comp(bot, _coast(mind, tick), tick, tick_rate)
+		return _recoil_comp(bot, mind, _coast(mind, tick), tick, tick_rate)
 
 	var t_refresh := Time.get_ticks_usec()
 	world.near_reach = think_near
@@ -90,6 +90,11 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	world.brains[bot.player_id] = mind.brain
 
 	var me := world.contact(bot.player_id)
+	# The body's view carries last tick's recoil correction; the brain steers from the view it meant, or it would walk
+	# the correction back out (smoothing and the turn limit) and the bullets drift off again.
+	if mind.recoil_comp != Vector2.ZERO and bot.controller != null:
+		me.view_yaw = bot.controller.state.yaw + mind.recoil_comp.x
+		me.view_pitch = bot.controller.state.pitch + mind.recoil_comp.y
 	# A teleport carries the bot further in a tick than anything walks or flies, and its route was
 	# laid from where it stood: walked on, the old corners lead it off the pad it landed on. The
 	# brain is told as it is when a ride ends, and plans from here (a ride the pilot has is not cut).
@@ -158,7 +163,11 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 		# A tiered coast repeats only held buttons: a jump or a weapon switch is pressed on the think tick, then let go.
 		mind.last_move.buttons &= _COAST_MOVE if intent.state != &"dead" else 0
 		mind.last_fire.buttons &= _COAST_FIRE if intent.state != &"dead" else 0
-	return _recoil_comp(bot, [move, fire], tick, tick_rate)
+	return _recoil_comp(bot, mind, [move, fire], tick, tick_rate)
+
+
+## Off only for tests that measure the bots without the correction (headless_bot_hitreg).
+static var recoil_compensation := true
 
 
 ## The commands with the aim turned against the recoil the next shot will carry. The weapon offsets each bullet by
@@ -166,7 +175,10 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 ## a bot's view is its command, so held on a target the bullets walked off it: most of a held burst missed a
 ## target dead on the crosshair (headless_bot_hitreg). Only the trigger-down tick is turned, and the stored
 ## last commands the coast repeats are not, so the correction never compounds.
-static func _recoil_comp(bot: ArenaPlayer, cmds: Array, tick: int, tick_rate: float) -> Array:
+static func _recoil_comp(bot: ArenaPlayer, mind: Mind, cmds: Array, tick: int, tick_rate: float) -> Array:
+	mind.recoil_comp = Vector2.ZERO
+	if not recoil_compensation:
+		return cmds
 	var fire: DotWeaponCommand = cmds[1]
 	if bot == null or bot.arsenal == null or not fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK):
 		return cmds
@@ -176,6 +188,7 @@ static func _recoil_comp(bot: ArenaPlayer, cmds: Array, tick: int, tick_rate: fl
 	var move: DotFpsCommand = cmds[0]
 	move.pitch -= offset.x
 	move.yaw -= offset.y
+	mind.recoil_comp = Vector2(offset.y, offset.x)
 	return cmds
 
 

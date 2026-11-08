@@ -74,6 +74,8 @@ class Mind:
 	## The view the last think moved from and to, which the coast ticks walk along.
 	var view_from: Vector2 = Vector2.ZERO
 	var view_to: Vector2 = Vector2.ZERO
+	## The (yaw, pitch) degrees the last command was turned against recoil by; the brain steers from the view without it.
+	var recoil_comp: Vector2 = Vector2.ZERO
 	## Whether the last think left the bot free to coast.
 	var coasting: bool = false
 	## Ticks from the last think to the next (1 = every tick): `_every` far from enemies, or to its tier's next beat.
