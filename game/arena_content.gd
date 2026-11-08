@@ -125,7 +125,22 @@ const DEFAULT_SLOT := AwWeaponIds.SLOT_PRIMARY
 ## The pack's weapons, against this game's damage types.
 static func weapons() -> Array[DotWeaponDef]:
 	Roles.ensure()
-	return AwWeaponCatalogue.weapons(damage_table())
+	var out := AwWeaponCatalogue.weapons(damage_table())
+	for def in out:
+		if PRIMARY_ONLY.has(def.id):
+			def.slot = AwWeaponIds.SLOT_PRIMARY
+	return out
+
+
+## Guns that may only ever sit in the primary slot, whatever slot the pack file asks for.
+## The railgun (charge rifle) used to land in the heavy slot 5; every path (give, pickup,
+## loadout, catalogue, table) goes through [method weapons], so pinning it here covers all.
+const PRIMARY_ONLY: Array[StringName] = [AwWeaponIds.CHARGE_RIFLE]
+
+
+## True when [param id] must live in the primary slot only.
+static func is_primary_only(id: StringName) -> bool:
+	return PRIMARY_ONLY.has(id)
 
 
 ## The whole weapon table, validated as one document.
@@ -134,13 +149,19 @@ static func weapons() -> Array[DotWeaponDef]:
 ## moment anybody is watching.
 static func weapon_catalogue() -> DotWeaponCatalogue:
 	Roles.ensure()
-	return AwWeaponCatalogue.catalogue(damage_table())
+	var out := DotWeaponCatalogue.new()
+	for def in weapons():
+		out.add(def)
+	return out
 
 
 ## Weapons by id, for a module that has an item id and needs the weapon.
 static func weapon_table() -> Dictionary:
 	Roles.ensure()
-	return AwWeaponCatalogue.table(damage_table())
+	var out: Dictionary = {}
+	for def in weapons():
+		out[def.id] = def
+	return out
 
 
 # --- On the wire -------------------------------------------------------------

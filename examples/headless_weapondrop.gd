@@ -16,7 +16,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 41
+const EXPECTED_CHECKS := 45
 
 const WeaponDropWiring := preload("../game/arena_weapon_drop_wiring.gd")
 
@@ -218,15 +218,22 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 	var d2 := drops.spawn(snap["state"], aim_at, Vector3.ZERO, 22)
 	var pr := drops.prompt_for(player.arsenal, player.muzzle_position(), player.aim_direction(), game.weapon_drop_class_of(21), game.team_of(21) if not game.teams().is_empty() else 0)
 	_check(pr.get("mode", "") == "swap", "a different weapon in the slot is offered as a swap", str(pr))
-	# The arena sets swap_hold: a tap on a different weapon takes nothing, a hold replaces it.
+	# A new gun is one plain press: a tap on a different weapon replaces the held one at once.
+	_check(not bool(pr.get("hold", false)), "a swap prompt asks for no hold", str(pr))
 	await _step(game, 21, true, 2, DotWeaponCommand.BUTTON_USE)
 	await _step(game, 21, false, 2, DotWeaponCommand.BUTTON_USE)
-	_check(drops.has_drop(d2) and player.arsenal.carries(other), "a tap on a different weapon in the slot leaves both where they are")
-	await _step(game, 21, true, int(ceil(drops.rules.hold_time * TICK_RATE)) + 4, DotWeaponCommand.BUTTON_USE)
-	await _step(game, 21, false, 2, DotWeaponCommand.BUTTON_USE)
 	var swapped = player.arsenal.current()
-	_check(not drops.has_drop(d2) and player.arsenal.carries(held_def) and not player.arsenal.carries(other), "a hold on a different weapon in the slot replaces it", str(swapped.id() if swapped != null else ""))
+	_check(not drops.has_drop(d2) and player.arsenal.carries(held_def) and not player.arsenal.carries(other), "a tap on a different weapon in the slot replaces it", str(swapped.id() if swapped != null else ""))
 	_check(drops.count() == 1, "while the old one lies on the floor", str(drops.count()))
+
+	# The railgun is primary-only: no catalogue path may put it anywhere else.
+	var rail: DotWeaponDef = ArenaContent.weapon_table().get(AwWeaponIds.CHARGE_RIFLE)
+	_check(rail != null and rail.slot == AwWeaponIds.SLOT_PRIMARY, "the railgun is defined in the primary slot", str(rail.slot if rail != null else -1))
+	_check(ArenaContent.weapon_catalogue().get_def(AwWeaponIds.CHARGE_RIFLE).slot == AwWeaponIds.SLOT_PRIMARY, "and the validated catalogue agrees")
+	for def in ArenaContent.weapons():
+		if def.id == AwWeaponIds.CHARGE_RIFLE:
+			_check(def.slot == AwWeaponIds.SLOT_PRIMARY, "and the weapon list agrees")
+	_check(ArenaContent.loadout_slot_for(rail.slot) == &"primary", "and its loadout slot is primary")
 
 	# The world panel: shown for a drop the player looks at, hidden out of reach.
 	drops.clear()
