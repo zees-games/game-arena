@@ -15,6 +15,7 @@ const ArenaKillcamBodies := preload("../game/arena_killcam_bodies.gd")
 ## Variants (each measured for `--seconds`, after a warm-up, on the same match):
 ##   before   the game as it was before arena-client-perf-1 (cone LOD, kill-cam recording every frame)
 ##   default  the game as shipped (LOD on, every cvar at its default)
+##   nogate   default without the game-time animation gate and the fast kill-cam pose record (render step 6 before/after)
 ##   off8     default with `cl_remote_lod_every 8`
 ##   full     present_lod off: every remote player presented every frame (the pre-LOD cost; the upper bound)
 ##   no_anim / no_held / no_held_proc / no_rest / bare   `full` with the figure animation / the held gun's update / the held
@@ -39,6 +40,10 @@ func _ready() -> void:
 			"--bots": _bots = int(args[i + 1])
 			"--seconds": _seconds = float(args[i + 1])
 			"--variants": _variants = args[i + 1].split(",")
+			"--phys-hz":
+				# Fewer, cheaper sim ticks per frame so the frame is mostly presentation (a GPU machine's 150+ fps).
+				Engine.physics_ticks_per_second = maxi(1, int(args[i + 1]))
+				Engine.max_physics_steps_per_frame = 1
 			"--rounds": _rounds = maxi(1, int(args[i + 1]))
 	var _scratch := ArenaPresentation.use_scratch_settings("client_cost")
 	_run.call_deferred()
@@ -87,11 +92,14 @@ func _apply(variant: String) -> void:
 	ArenaPlayer.lod_frustum = variant != "before"
 	ArenaPlayer.lod_off_every = 8 if variant == "off8" else 4
 	ArenaKillcamBodies.record_hz = 0.0 if variant == "before" else 60.0
-	ArenaPlayer.present_lod_enabled = variant in ["default", "before", "off8"]
+	# "nogate" is "default" without the game-time gate on the animation and thinning and with the figure's own pose record.
+	ArenaPlayer.anim_gate_enabled = variant not in ["nogate", "before"]
+	ArenaKillcamBodies.fast_pose = variant not in ["nogate", "before"]
+	ArenaPlayer.present_lod_enabled = variant in ["default", "before", "off8", "nogate"]
 	ArenaPlayer.present_remote_paused = variant == "still"
 	# "full" with one part of the remote presentation left out: the cost of that part alone.
 	ArenaPlayer.present_ablate = {"no_anim": 1, "no_held": 2, "no_held_proc": 6, "no_rest": 8, "bare": 15}.get(variant, 0)
-	if variant in ["default", "before", "off8", "full"]:
+	if variant in ["default", "before", "off8", "full", "nogate"]:
 		for p: ArenaPlayer in _client.game.players():
 			if p.held != null:
 				p.held.set_process(true)

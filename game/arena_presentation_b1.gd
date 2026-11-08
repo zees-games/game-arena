@@ -368,6 +368,12 @@ func _local_commands() -> DotConsoleLocal:
 			ArenaPlayer.lod_frustum = str(v).strip_edges() != "0"
 			return DotResult.success(1 if ArenaPlayer.lod_frustum else 0)
 	)
+	local.add_var(&"cl_remote_anim_gate", "1 also thins remote bodies by game time (clip at most 60 Hz past 15 m, off-sight at most 30 Hz); matters above ~100 fps.",
+		func() -> Variant: return 1 if ArenaPlayer.anim_gate_enabled else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.anim_gate_enabled = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.anim_gate_enabled else 0)
+	)
 	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default).",
 		func() -> Variant: return ArenaPlayer.lod_off_every,
 		func(v: Variant) -> Variant:

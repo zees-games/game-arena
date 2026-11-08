@@ -8,6 +8,8 @@ const ArenaPlayer := preload("arena_player.gd")
 ## `cl_killcam_hz`: most recordings of every body's state a second while no replay plays (0: one every frame). The replay
 ## interpolates between rows, so 60 a second draws the same replay as 240; the recording was 0.03 ms a body a frame.
 static var record_hz: float = 60.0
+## The pose record written by [method _record_fast] rather than the figure's own (identical layout).
+static var fast_pose: bool = true
 
 const SKIP_ACTIONS: PackedStringArray = ["dot_fps_jump", "arena_fire", "ui_cancel"]
 const SEQ_RANGE := 4096
@@ -105,7 +107,50 @@ static func pose_of(p: Node) -> PackedFloat32Array:
 	var figure: Object = p.get(&"figure")
 	if body == null or not body.visible or figure == null or not figure.has_method(&"pose_record"):
 		return PackedFloat32Array()
+	if fast_pose:
+		var sk: Skeleton3D = figure.get(&"_skeleton")
+		var model: Node3D = figure.get(&"_model")
+		if sk != null and model != null:
+			return _record_fast(figure, sk, model)
 	return figure.call(&"pose_record")
+
+
+## `DotHumanoidPoseRecord.record` with one allocation and indexed writes in place of an `append_array([...])` per bone, and the
+## root bones found once per figure; the same layout, so `pose_apply` reads it unchanged.
+static func _record_fast(figure: Object, sk: Skeleton3D, model: Node3D) -> PackedFloat32Array:
+	var n := sk.get_bone_count()
+	var roots: PackedInt32Array
+	if figure.has_meta(&"kc_roots") and int(figure.get_meta(&"kc_roots_n", -1)) == n:
+		roots = figure.get_meta(&"kc_roots")
+	else:
+		for i in n:
+			var parent := sk.get_bone_parent(i)
+			if parent < 0 or sk.get_bone_parent(parent) < 0:
+				roots.append(i)
+		figure.set_meta(&"kc_roots", roots)
+		figure.set_meta(&"kc_roots_n", n)
+	var out := PackedFloat32Array()
+	out.resize(13 + n * 4 + roots.size() * 3)
+	var t := model.transform
+	out[0] = n
+	var bx := t.basis.x
+	var by := t.basis.y
+	var bz := t.basis.z
+	var o := t.origin
+	out[1] = bx.x; out[2] = bx.y; out[3] = bx.z
+	out[4] = by.x; out[5] = by.y; out[6] = by.z
+	out[7] = bz.x; out[8] = bz.y; out[9] = bz.z
+	out[10] = o.x; out[11] = o.y; out[12] = o.z
+	var k := 13
+	for i in n:
+		var q := sk.get_bone_pose_rotation(i)
+		out[k] = q.x; out[k + 1] = q.y; out[k + 2] = q.z; out[k + 3] = q.w
+		k += 4
+	for i in roots:
+		var v := sk.get_bone_pose_position(i)
+		out[k] = v.x; out[k + 1] = v.y; out[k + 2] = v.z
+		k += 3
+	return out
 
 
 static func apply_pose(p: Node, a: PackedFloat32Array, b: PackedFloat32Array, alpha: float) -> void:

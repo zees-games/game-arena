@@ -99,7 +99,18 @@ func present(delta: float) -> void:
 		ArenaFrameProbe.add(&"r_tag", t_tag)
 
 	var t_anim := Time.get_ticks_usec()
-	_animate_figure(drawn, delta)
+	if camera == null and anim_gate_enabled and _anim_min_dt > 0.0:
+		# A remote body in plain view past ANIM_GATE_NEAR: the clip advances at most every _anim_min_dt of game time,
+		# the skipped time carried. At 150+ fps nobody sees a 60 Hz walk cycle at 15 m.
+		_anim_owed += delta
+		if _anim_owed >= _anim_min_dt:
+			_animate_figure(drawn, _anim_owed)
+			_anim_owed = 0.0
+			anim_stamp += 1
+	else:
+		_animate_figure(drawn, delta + _anim_owed)
+		_anim_owed = 0.0
+		anim_stamp += 1
 	ArenaFrameProbe.add(&"r_anim", t_anim)
 	var t_beacon := Time.get_ticks_usec()
 	_present_beacon(delta, drawn.position)
@@ -129,17 +140,25 @@ func present_lod(delta: float, eye: Vector3, forward: Vector3, frustum: Array = 
 		var to := global_position - eye
 		var d2 := to.length_squared()
 		var every := 1
+		var min_dt := 0.0
+		_anim_min_dt = 0.0
 		if d2 > LOD_NEAR * LOD_NEAR and _out_of_sight(to, d2, forward, frustum):
 			every = lod_off_every
+			min_dt = LOD_OFF_DT
 		elif d2 > LOD_FARTHEST * LOD_FARTHEST:
 			every = 4
+			min_dt = LOD_FARTHEST_DT
 		elif d2 > LOD_FAR * LOD_FAR:
 			every = 2
+			min_dt = LOD_FAR_DT
+		elif d2 > ANIM_GATE_NEAR * ANIM_GATE_NEAR:
+			_anim_min_dt = ANIM_GATE_DT
 		_set_held_lod(every > 1)
 		if every > 1:
 			_lod_frames += 1
 			_lod_delta += delta
-			if _lod_frames < every:
+			# A frame count alone is 300 presents a second at 1200 fps; the minimum game time keeps the thinning a rate.
+			if _lod_frames < every or (anim_gate_enabled and _lod_delta < min_dt):
 				return
 			delta = _lod_delta
 	_lod_frames = 0

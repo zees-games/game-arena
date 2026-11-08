@@ -366,7 +366,22 @@ const LOD_RADIUS := 1.6
 const LOD_FAR := 45.0
 const LOD_FARTHEST := 90.0
 
+## `cl_remote_anim_gate`: thin remote bodies by game time as well as by frame count. A body in view past
+## [constant ANIM_GATE_NEAR] steps its clip at most every [constant ANIM_GATE_DT]; a thinned one waits its minimum time.
+## At 20 to 60 fps this changes nothing, since a frame is already longer than every interval below.
+static var anim_gate_enabled: bool = true
+const ANIM_GATE_NEAR := 15.0
+const ANIM_GATE_DT := 1.0 / 60.0
+## Minimum game seconds between presents of a thinned body: out of sight, past LOD_FAR, past LOD_FARTHEST.
+const LOD_OFF_DT := 1.0 / 30.0
+const LOD_FAR_DT := 1.0 / 45.0
+const LOD_FARTHEST_DT := 1.0 / 30.0
+
 var _figure_motion: Dictionary = {}
+var _anim_min_dt: float = 0.0
+var _anim_owed: float = 0.0
+## Counts each time the clip was really stepped; the kill-cam reuses a body's last pose record while it is unchanged.
+var anim_stamp: int = 0
 var _held_thin: bool = false
 var _lod_frames: int = 0
 var _lod_delta: float = 0.0
