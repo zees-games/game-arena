@@ -318,9 +318,12 @@ func _build_killview() -> void:
 		if bridge != null:
 			bridge.send_request(ArenaEvents.Ask.RESPAWN)
 		elif solo_killview != null:
-			var _skipped := solo_killview.skip(player.player_id if player != null else 0, game.current_tick()))
+			var _skipped := solo_killview.skip())
 	if _offline and game.killview_rules.enabled:
-		solo_killview = game.make_killview_server()
+		solo_killview = DotKillViewSolo.new(game.make_killview_server())
+		solo_killview.local_id_fn = func() -> Variant: return player.player_id if player != null else null
+		solo_killview.tick_fn = game.current_tick
+		solo_killview.deliver_fn = _on_killview
 
 func _build_killcam() -> void:
 	killcam = DotKillcamHost.new()
