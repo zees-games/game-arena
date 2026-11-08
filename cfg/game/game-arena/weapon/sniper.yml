@@ -1,0 +1,11 @@
+# Arena: sniper recoil. Only the keys changed from the arena-weapons pack; delete a key to fall back to it.
+# pitch/yaw: degrees per shot (yaw alternates and drifts); build: extra kick per shot of a burst, capped at build_max;
+# recovery: how fast the kick settles per second; aim: multiplier while aiming down sights (-1 = sv_recoil_mult_aim).
+extra:
+  tuning:
+    recoil_pitch: 4.0
+    recoil_yaw: 0.2
+    recoil_build: 0.0
+    recoil_build_max: 0.0
+    recoil_recovery: 2.5
+    recoil_aim: 0.35

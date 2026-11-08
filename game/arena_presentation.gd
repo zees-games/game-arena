@@ -1,6 +1,7 @@
 extends Node
 
 const ArenaPaths := preload("arena_paths.gd")
+const ArenaRecoilView := preload("arena_recoil_view.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaVote := preload("arena_vote.gd")
 const ArenaBlood := preload("arena_blood.gd")
@@ -1093,6 +1094,12 @@ func _local_commands() -> DotConsoleLocal:
 	)
 	_add_arm_vars(local)
 	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
+	local.add_var(&"cl_recoil_view", "How far each shot's recoil turns your view: 0 keeps the crosshair still (bullets still climb), 1 as tuned, up to 5.",
+		func() -> Variant: return ArenaRecoilView.scale,
+		func(v: Variant) -> Variant:
+			ArenaRecoilView.scale = clampf(float(str(v).strip_edges()), 0.0, 5.0)
+			return DotResult.success(ArenaRecoilView.scale)
+	)
 	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",
 		func() -> Variant: return 1 if ArenaWeaponIcons.shared.sprites else 0,
 		func(v: Variant) -> Variant:

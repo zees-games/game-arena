@@ -15,6 +15,7 @@ const ArenaMapMechanics := preload("../maps/arena_map_mechanics.gd")
 const ArenaSolidBody := preload("arena_solid_body.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 const ArenaSpriteWeapon := preload("arena_sprite_weapon.gd")
+const ArenaRecoilView := preload("arena_recoil_view.gd")
 
 ## One player: movement, weapons, health and hitboxes, assembled. [b]This is the piece every one of
 ## the addons says belongs in the game.[/b] dot-player-controller does not know about dot-combat;
@@ -93,6 +94,9 @@ var view: Node3D = null
 
 ## The local player's camera. Null on a server, on a remote player, and headless.
 var camera: Camera3D = null
+
+## The view kick of the local player's shots, added to the camera only (see [ArenaRecoilView]).
+var recoil_view := ArenaRecoilView.new()
 
 ## The view to draw this frame, (yaw, pitch) in degrees, or null for the simulated state's. Set
 ## every frame by the client from `DotFpsSampler.look_now()`. A frame with no tick in it would not

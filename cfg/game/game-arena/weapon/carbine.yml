@@ -1,0 +1,10 @@
+# Arena: carbine recoil. Only the keys changed from the arena-weapons pack; delete a key to fall back to it.
+# pitch/yaw: degrees per shot (yaw alternates and drifts); build: extra kick per shot of a burst, capped at build_max;
+# recovery: how fast the kick settles per second; aim: multiplier while aiming down sights (-1 = sv_recoil_mult_aim).
+extra:
+  tuning:
+    recoil_pitch: 0.62
+    recoil_yaw: 0.3
+    recoil_build: 0.05
+    recoil_build_max: 0.7
+    recoil_recovery: 3.2

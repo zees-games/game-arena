@@ -47,7 +47,7 @@ func present(delta: float) -> void:
 				else drawn.position + Vector3(0.0, eye_height(), 0.0)
 			) - Vector3(0.0, _absorb_step(drawn_alpha, delta), 0.0)
 
-		var punch := _present_view_model(drawn)
+		var punch := _present_view_model(drawn) + recoil_view.step(delta, is_alive())
 
 		# The landing dip, the roll and the widening, once a frame from the drawn state.
 		var dip := 0.0

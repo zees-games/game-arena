@@ -131,6 +131,8 @@ static func _catalogue() -> DotWeaponCatalogue:
 	return _shared_catalogue
 
 func _on_used(outcome: DotWeaponOutcome) -> void:
+	if camera != null:
+		recoil_view.kick(outcome)
 	used.emit(outcome)
 
 ## Puts a [AwWeaponRig] over [member arsenal], replacing any rig that was there. [b]The rig is

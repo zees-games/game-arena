@@ -3,6 +3,9 @@ extends RefCounted
 const Roles := preload("arena_weapon_roles.gd")
 const Grenades := preload("arena_grenades.gd")
 
+## The game tier of the profile set: cfg/game/<this>/weapon/<id>.yml.
+const GAME_ID := "game-arena"
+
 ## Every weapon, item, damage type and ruleset the game ships, built in code.
 ##
 ## [b]In code rather than as `.tres` files, deliberately, and only for this
@@ -125,6 +128,7 @@ const DEFAULT_SLOT := AwWeaponIds.SLOT_PRIMARY
 ## The pack's weapons, against this game's damage types.
 static func weapons() -> Array[DotWeaponDef]:
 	Roles.ensure()
+	AwWeaponPack.game = GAME_ID
 	return AwWeaponCatalogue.weapons(damage_table())
 
 

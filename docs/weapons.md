@@ -33,3 +33,13 @@
 
 
 The loadout menu's pictures are the models rendered at 512x256 with MSAA (arena-weapons' `AwWeaponPreview`, cached per weapon), not the sprite sheet upscaled; a weapon without a model keeps the sprite.
+
+## Recoil
+
+Every firearm kicks, and the numbers live in the Dot profile, not in code.
+
+- **Where.** `cfg/game/game-arena/weapon/<id>.yml` (the game tier; `ArenaContent.weapons()` sets `AwWeaponPack.game`). Only the changed keys are listed, under `extra: tuning:`: `recoil_pitch` and `recoil_yaw` (degrees per shot; yaw alternates and drifts by a per-weapon seed, `recoil_seed`), `recoil_build` / `recoil_build_max` (the extra kick along a burst), `recoil_recovery` (how fast it settles, per second), `recoil_aim` (ADS multiplier, -1 uses `sv_recoil_mult_aim`), `recoil_crouch`, `recoil_move`, `recoil_camera`. Grenades, the knife and the beamer do not kick. An operator overrides a weapon in `cfg/server/...`.
+- **Server cvars** (replicated, `sv_recoil_*`): `enabled`, `scale` (0 disables), `vertical`, `horizontal`, `recovery`, `build`, `punch`, `follow`, `reset`, `mult_aim`, `mult_crouch`, `mult_move`, `mult_air`.
+- **Client cvar** `cl_recoil_view` (0..5, default 1): how far the drawn camera follows the kick. 0 keeps the crosshair still; the bullets still climb.
+- **Prediction.** The bullet's offset is a pure function of the weapon's burst state, so the server and a predicting client compute the same shot. The camera half (`ArenaRecoilView`) is fed by the rig's `used` signal, which is silent while a correction replays, decays at the same recovery rate and is added only where the camera is written, never to the command angles. `cl_recoil_view` therefore changes no simulated state.
+- **Test.** `examples/headless_recoil.tscn`.
