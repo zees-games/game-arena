@@ -58,10 +58,14 @@ func _run() -> void:
 		await _holds(args)
 		return
 
-	await _run_rest(frames, left, ids)
+	await _run_rest(frames, left, ids, args.has("--tp"))
 
 
-func _run_rest(frames: int, left: int, ids: Array) -> void:
+func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
+	var tag := "tp_" if tp else ""
+	if tp:
+		client.call(&"_set_third_person", true)
+		await _wait(0.5)
 	for id_s in ids:
 		var id := StringName(id_s)
 		var def: DotWeaponDef = AwWeaponCatalogue.table().get(id)
@@ -110,6 +114,19 @@ func _run_rest(frames: int, left: int, ids: Array) -> void:
 			await process_frame
 		if view != null:
 			print("%s: %s" % [id, view.call(&"reload_sequence").describe() if view.call(&"reload_sequence") != null else "no sequence"])
+		if tp:
+			# The watcher's model of the gun: frames on the clock, the magazines under the held model counted.
+			var held: Node = me.get("held")
+			for f in frames:
+				await _wait(seconds / float(frames))
+				await _shot("%s%s_%02d" % [tag, id, f])
+				var seen := 0
+				if held != null:
+					for m in held.find_children("Magazine*", "MeshInstance3D", true, false):
+						seen += 1 if (m as Node3D).is_visible_in_tree() else 0
+				print("%s tp frame %d: %d carved magazines shown, held %s" % [id, f, seen, held != null])
+			await _wait(0.8)
+			continue
 		for f in frames:
 			# Frames are spread over the reload itself: the tree is paused while the arm sets are counted.
 			var due := (float(f) + 0.5) / float(frames)
@@ -150,7 +167,13 @@ func _probe(ids: Array) -> void:
 	var carve: Script = load("res://addons/arena_weapons/view/aw_mag_carve.gd")
 	var stage := Node3D.new()
 	stage.position = Vector3(5000.0, 0.0, 0.0)
-	root.add_child(stage)
+	# Its own world in its own viewport: the client's camera keeps taking the main window back.
+	var sv := SubViewport.new()
+	sv.size = Vector2i(960, 540)
+	sv.own_world_3d = true
+	sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(sv)
+	sv.add_child(stage)
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-40.0, 30.0, 0.0)
 	stage.add_child(light)
@@ -186,6 +209,11 @@ func _probe(ids: Array) -> void:
 		var model := AwModelCache.instantiate(path)
 		if model == null:
 			continue
+		var seat := Transform3D.IDENTITY
+		var wn: Variant = view.get(&"_weapon")
+		if wn is Node3D:
+			seat = (wn as Node3D).transform
+		model.transform = seat
 		stage.add_child(model)
 		var marker := MeshInstance3D.new()
 		var bm := BoxMesh.new()
@@ -203,21 +231,39 @@ func _probe(ids: Array) -> void:
 			var m := mi as MeshInstance3D
 			if m.mesh != null:
 				whole = m.global_transform * m.mesh.get_aabb() if whole.size == Vector3.ZERO else whole.merge(m.global_transform * m.mesh.get_aabb())
-		var centre := whole.get_center() + stage.position
+		var centre := whole.get_center()
 		var span := maxf(whole.size.x, maxf(whole.size.y, whole.size.z)) * 1.15
 		cam.size = span
 		cam.current = true
 		cam.global_position = centre + Vector3(3.0, 0.0, 0.0)
 		cam.look_at(centre, Vector3.UP)
-		await _shot("%s_probe_side" % id)
+		await _shot_vp(sv, "%s_probe_side" % id)
 		cam.global_position = centre + Vector3(0.0, 0.0, 3.0)
 		cam.look_at(centre, Vector3.UP)
-		await _shot("%s_probe_back" % id)
+		await _shot_vp(sv, "%s_probe_back" % id)
 		cam.global_position = centre + Vector3(0.0, 3.0, 0.0)
 		cam.look_at(centre, Vector3.FORWARD)
-		await _shot("%s_probe_top" % id)
+		await _shot_vp(sv, "%s_probe_top" % id)
 		print("%s: model %s, box %s, whole %s" % [id, path, box, whole])
+		# The split itself: a fresh copy carved by the real code, the magazine drawn lower so the cut edges show.
+		marker.visible = false
 		model.queue_free()
+		var split := AwModelCache.instantiate(path)
+		split.transform = seat
+		stage.add_child(split)
+		var mag: Node3D = carve.call(&"carve", split, stage, Transform3D.IDENTITY, box, "probe|%s|%s" % [path, box])
+		if mag == null:
+			print("%s: carve found nothing in the box" % id)
+		else:
+			var mb := (mag as MeshInstance3D).mesh.get_aabb()
+			print("%s: magazine %d surfaces, aabb %s" % [id, (mag as MeshInstance3D).mesh.get_surface_count(), mb])
+			mag.position += Vector3(0.0, -mb.size.y * 0.9, 0.0)
+		for vw in ["side", "back"]:
+			cam.global_position = centre + (Vector3(3.0, 0.0, 0.0) if vw == "side" else Vector3(0.0, 0.0, 3.0))
+			cam.look_at(centre, Vector3.UP)
+			cam.size = span * 1.1
+			await _shot_vp(sv, "%s_split_%s" % [id, vw])
+		split.queue_free()
 		marker.queue_free()
 		cam.current = false
 		me.camera.current = true
@@ -351,6 +397,13 @@ func _shot(file: String) -> Image:
 	var image: Image = await _render()
 	var _saved := image.save_png("%s/%s.png" % [OUT_DIR, file])
 	return image
+
+
+func _shot_vp(sv: SubViewport, file: String) -> void:
+	await process_frame
+	await process_frame
+	await RenderingServer.frame_post_draw
+	var _saved := sv.get_texture().get_image().save_png("%s/%s.png" % [OUT_DIR, file])
 
 
 func _render() -> Image:
