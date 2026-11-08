@@ -90,6 +90,10 @@ func _ready() -> void:
 			"--tierabove": ArenaBots.tiers.above = int(args[i + 1])
 			"--motorprof": _motorprof = args[i + 1] != "0"
 			"--native": DotBotWorld.native_enabled = args[i + 1] != "0"
+			"--skipidle": _skip_idle = int(args[i + 1])
+			"--visibility": _visibility = int(args[i + 1])
+			"--simcodec": _sim_codec = int(args[i + 1])
+			"--tiers": _tiers = int(args[i + 1])
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
 	for is_start in [true, false]:
@@ -138,6 +142,35 @@ func _sections_ms(ticks: int) -> Dictionary:
 	return out
 
 
+## Applies --skipidle/--visibility/--simcodec/--tiers before any bot exists (sim_codec is read when a behaviour is created).
+func _apply_switches(net: DotNetManager) -> void:
+	if _skip_idle >= 0:
+		net.config.skip_idle_snapshots = _skip_idle == 1
+	if _sim_codec >= 0:
+		net.config.sim_codec = _sim_codec == 1
+	if _visibility >= 0 and net.interest is DotNetInterestDistance:
+		(net.interest as DotNetInterestDistance).visibility_enabled = _visibility == 1
+	if _tiers == 0:
+		ArenaBots.tiers.above = -1
+		ArenaBots.think_every = 1
+
+
+func _switch_state(net: DotNetManager) -> Dictionary:
+	var d := net.interest as DotNetInterestDistance
+	return {
+		"skip_idle_snapshots": net.config.skip_idle_snapshots, "sim_codec": net.config.sim_codec,
+		"visibility_enabled": d.visibility_enabled if d != null else null,
+		"visibility_ready": (d.visibility != null and d.visibility.is_ready()) if d != null else null,
+		"interest": net.interest.get_class() if net.interest != null else "", "tier_above": ArenaBots.tiers.above,
+		"native_enabled": DotBotWorld.native_enabled, "map": _map, "load1": _load1(),
+	}
+
+
+func _load1() -> String:
+	var f := FileAccess.open("/proc/loadavg", FileAccess.READ)
+	return f.get_as_text().strip_edges() if f != null else ""
+
+
 func _report(extra: Dictionary) -> void:
 	var wall := (Time.get_ticks_usec() - _t_start) / 1.0e6
 	var budget_ms := 1000.0 / _tick
@@ -173,6 +206,11 @@ func _report(extra: Dictionary) -> void:
 
 
 var _motorprof := false
+## Perf switches for the on/off bench (tools/scale128_x3.sh): -1 keeps the game's default, 0 off, 1 on.
+var _skip_idle := -1
+var _visibility := -1
+var _sim_codec := -1
+var _tiers := -1
 var _shots := 0
 var _hits := 0
 var _heads := 0
@@ -272,6 +310,7 @@ func _serve() -> void:
 		get_tree().quit(1)
 		return
 	var module := server.modules.get_module("arena") as ArenaModule
+	_apply_switches(module.net)
 	var quota: DotBotQuota = module.get("_bot_quota")
 	# The server's own quota manages the bots (fixed N): an "off" quota removes every bot a second later.
 	if quota != null and quota.mode_cvar != null:
@@ -303,6 +342,7 @@ func _serve() -> void:
 		"net_send_ms_per_tick": snappedf((int(after[&"server_send_usec"]) - int(before[&"server_send_usec"])) / 1000.0 / nt, 0.001),
 		"net_ticks": nt, "snapshot_every_ticks": net.config.ticks_per_snapshot(),
 		"snapshot_hz": net.config.snapshot_rate, "entities": net.registry.all().size(),
+		"switches": _switch_state(net),
 	})
 	get_tree().quit()
 
