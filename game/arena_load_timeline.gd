@@ -1,4 +1,3 @@
-class_name ArenaLoadTimeline
 extends Node
 
 ## Where the time to a playable frame goes, stamped in engine milliseconds (Time.get_ticks_msec, from the

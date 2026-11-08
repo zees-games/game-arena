@@ -9,6 +9,7 @@ const ArenaContent := preload("../game/arena_content.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaTestPorts := preload("test_ports.gd")
 
 ## dot-net's lossy UDP relay, by path: a test tool that ships inside the addon so a game
 ## that links dot_net can reach it, and has no class_name for the same reason.

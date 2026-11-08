@@ -1,5 +1,7 @@
 extends "arena_client_vars.gd"
 
+const ArenaLoadTimeline := preload("arena_load_timeline.gd")
+
 ## Whether E is the prop tool's key here: only in a mode where players use props. Anywhere
 ## else E is the launch, which is what most of the arena's modes want it for.
 func props_on_e() -> bool:

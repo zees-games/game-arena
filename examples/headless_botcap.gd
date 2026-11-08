@@ -5,6 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaTestPorts := preload("test_ports.gd")
 
 ## `bot_quota N` with `sv_maxplayers 0` (unlimited) spawns exactly N bots, for N past every number a cap might hide at (16, 32, 64, 255, 256). No silent clamp.
 ## Run: [code]godot --headless --path . res://examples/headless_botcap.tscn[/code]
