@@ -279,9 +279,13 @@ func _test_lighting() -> void:
 	var packed := _lit(&"surf_buck_wild")
 	var packed_env := _environment(packed)
 	var packed_sky := packed_env.sky.sky_material as ShaderMaterial if packed_env != null and packed_env.sky != null else null
+	# The published packs carry no sky face files (stripped of source textures), so the faces cannot
+	# load and the map keeps the fallback sky: a gradient/cloud or the family panorama, never a hole.
+	var faces_drawn := packed_sky != null and packed_sky.get_shader_parameter("face_up") is Texture2D
 	_check(
-		packed_sky != null and packed_sky.get_shader_parameter("face_up") is Texture2D,
-		"a map that packed its six sky faces draws them"
+		faces_drawn or (packed_env != null and packed_env.background_mode == Environment.BG_SKY
+			and packed_env.sky != null and (_sky_top(packed).a > 0.0 or _sky_is_panorama(packed))),
+		"a map whose packed sky faces are gone (stripped pack) keeps the fallback sky instead of a hole"
 	)
 
 	var builtin := ArenaMapLighting.build(ArenaMap.by_id(&"dm_box"))
