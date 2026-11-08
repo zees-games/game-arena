@@ -27,7 +27,7 @@ var _local: ArenaPlayer = null
 var _hud: ArenaHud = null
 
 var _action_figure: DotHumanoidFigure = null
-var _toy_box: DotPropToyBox = null
+var _toy_box: DotPropBodyBox = null
 var _toy_placements: Array = []
 
 

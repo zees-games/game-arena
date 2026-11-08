@@ -375,15 +375,15 @@ var persist_npc_heat: bool = false
 ## Physics props. Null unless the mode asks for them and this instance is the authority.
 var props: ArenaProps = null
 
-## The map's toys (dot-props' [DotPropToyBox]): loose ones only here, beach balls, footballs,
+## The map's toys (dot-props' [DotPropBodyBox]): loose ones only here, beach balls, footballs,
 ## barrels and tyres, which a person walks through and pushes and a shot sends rolling but which
 ## stop no shot and hold nobody up, so they are never cover, a ledge or a launch in a
 ## deathmatch. Built from [member ArenaMap.toys] on both ends in the same order, simulated by
 ## the authority, posed from snapshots on a client (`arena_toy_net.gd`). Null before a map.
-var toys: DotPropToyBox = null
+var toys: DotPropBodyBox = null
 
 ## dot-props' `sv_toys*`, bound by the module REPLICATED and followed by a client.
-var toy_rules: DotPropToyRules = DotPropToyRules.new()
+var toy_rules: DotPropBodyRules = DotPropBodyRules.new()
 
 ## The map's toys are about to go (a map change), on both ends: what the bridge releases their
 ## entities on. And built, which is what a client's bridge pairs them on.

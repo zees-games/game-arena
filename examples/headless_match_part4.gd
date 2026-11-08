@@ -112,10 +112,10 @@ func _test_toys() -> void:
 	_check(ball.body.global_position.distance_to(ball.rest.origin) < 0.05 and barrel.body.global_position.distance_to(barrel.rest.origin) < 0.05,
 		"a round going live puts every toy home")
 
-	var _off := game.toy_rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "0")
+	var _off := game.toy_rules.set_cvar(DotPropBodyRules.CVAR_ENABLED, "0")
 	_check(not ball.visible and game.toys.shot_along(o0 + Vector3(0, 0.4, 6), Vector3(0, 0, -1), 20.0, 20.0, 1) == -1,
 		"sv_toys 0 takes them away")
-	var _on := game.toy_rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "1")
+	var _on := game.toy_rules.set_cvar(DotPropBodyRules.CVAR_ENABLED, "1")
 	game.get_parent().remove_child(game)
 	game.queue_free()
 	for view: Node in _toy_views:

@@ -203,7 +203,7 @@ func _build_toys() -> void:
 		if player_stack != null:
 			var _n := player_stack.classify_tree(_toy_level, &"world")
 
-	toys = DotPropToyBox.new()
+	toys = DotPropBodyBox.new()
 	toys.name = "Toys"
 	toys.authoritative = is_authority
 	toys.draw = not headless
