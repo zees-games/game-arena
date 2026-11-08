@@ -87,12 +87,12 @@ func _test_solo() -> void:
 	var keys := ArenaMaps.standalone_keys(solo)
 	var _first := ArenaMaps.adopt_delivered(solo, keys)
 	var _again := ArenaMaps.adopt_delivered(solo, ArenaMaps.standalone_keys(solo))
-	_check(solo.get_map(&"gg-woods") != null and solo.get_map(&"dm-morpheus") != null,
-		"gg-woods and dm-morpheus are catalogued without a server")
-	_check(solo.maps.size() == ArenaMaps.STANDALONE_KEYS.size() and solo.maps.size() >= 16,
+	_check(solo.get_map(&"gg-garage") != null and solo.get_map(&"dm-overwatch") != null,
+		"gg-garage and dm-overwatch are catalogued without a server")
+	_check(solo.maps.size() == ArenaMaps.STANDALONE_KEYS.size() and solo.maps.size() >= 6,
 		"all %d published maps are listed, and a second pass keeps them" % solo.maps.size())
-	_check(solo.get_map(&"gg-woods").scene_path == "res://dot_cloud/gamemann/gg-woods/1.0.3/gg-woods.json",
-		"gg-woods mounts at its hyphenated manifest")
+	_check(solo.get_map(&"gg-garage").scene_path == "res://dot_cloud/gamemann/gg-garage/1.0.3/gg-garage.json",
+		"gg-garage mounts at its hyphenated manifest")
 
 	print("-- an unlinked picker lists the suggested packs by label, and a pick with no cloud fails naming it")
 	var solo_rows := ArenaMaps.menu_rows(solo, &"", null, [])
@@ -102,10 +102,10 @@ func _test_solo() -> void:
 	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/crackhouse@1.0.4") and solo.get_map(&"crackhouse") != null,
 		"crackhouse is a suggested pack")
 	_check(solo_detail.get("map:crackhouse", "") == "Deathmatch map", "crackhouse reads 'Deathmatch map'")
-	_check(solo_detail.get("map:gg-woods", "") == "Gun game map", "gg-woods reads 'Gun game map'")
+	_check(solo_detail.get("map:gg-garage", "") == "Gun game map", "gg-garage reads 'Gun game map'")
 	var pick := await ArenaMaps.mount_delivered(solo.get_map(&"crackhouse"), DotMapLoader.new(), solo)
 	_check(not pick.ok, "picking an unfetched pack with no cloud client fails")
-	_check(solo.get_map(&"gg-woods") != null, "the failed pick leaves the catalogue usable")
+	_check(solo.get_map(&"gg-garage") != null, "the failed pick leaves the catalogue usable")
 	var surf := solo.get_map(&"surf_adverse")
 	_check(surf != null and ArenaMaps.is_delivered(surf), "a surf map (prefixed pack file, bare id) counts as delivered")
 

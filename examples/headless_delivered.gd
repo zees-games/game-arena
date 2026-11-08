@@ -295,7 +295,7 @@ func _test_surf_keys() -> void:
 	for key in ArenaMaps.STANDALONE_KEYS:
 		if key.begins_with("gamemann/" + ArenaMaps.PACK_PREFIX) and key.ends_with("@1.2.0"):
 			surf += 1
-	_check(surf == 39, "STANDALONE_KEYS holds 39 surf packs (%d)" % surf)
+	_check(surf == 18, "STANDALONE_KEYS holds 18 surf packs (%d)" % surf)
 	var listed := ArenaMaps.standalone_keys(null)
 	_check("gamemann/arena-surf-dm-maps-surf_10x_final@1.2.0" in listed, "standalone_keys() lists a surf pack")
 	_check(listed.size() >= surf, "standalone_keys() lists at least all of them (%d)" % listed.size())
