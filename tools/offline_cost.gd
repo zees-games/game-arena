@@ -81,6 +81,7 @@ func _run() -> void:
 			if _motor_us:
 				DotFpsMotor.profile = true
 				DotFpsController.phase_us.fill(0)
+				DotFpsMotor.phase_us.fill(0)
 			ArenaFrameProbe._reset()
 			preload("../game/arena_bots.gd").tiers.counts.clear()
 			_tally_on(_client.game)
@@ -127,6 +128,11 @@ func _run() -> void:
 		var measured := _ticks - _mt0
 		print("OFFLINE_COST motor %.1f us/tick per player (%d player ticks; controller simulate_tick %.1f us)" % [
 			float(DotFpsController.phase_us[2]) / maxf(measured, 1.0), measured, float(_sum(DotFpsController.phase_us)) / maxf(measured, 1.0)])
+		var parts := PackedStringArray()
+		for i in DotFpsMotor.PHASES.size():
+			if DotFpsMotor.PHASES[i] != "":
+				parts.append("%s %.1f" % [DotFpsMotor.PHASES[i], float(DotFpsMotor.phase_us[i]) / maxf(measured, 1.0)])
+		print("  motor phases us/tick: %s" % ", ".join(parts))
 	print("  physics3d active %d islands %d pairs %d" % [Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS), Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT), Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)])
 	get_tree().quit(0)
 
