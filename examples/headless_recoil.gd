@@ -207,10 +207,10 @@ func _test_cvar() -> void:
 	var half := v.step(0.0).x
 	ArenaRecoilView.scale = 1.0
 	var full := v.step(0.0).x
-	_check(is_equal_approx(half * 2.0, full) and full > 1.9, "0.5 halves it", "%.2f %.2f" % [half, full])
+	_check(is_equal_approx(half * 2.0, full) and full > 1.9 * (1.0 - ArenaRecoilView.POSE_SHARE), "0.5 halves it", "%.2f %.2f" % [half, full])
 	ArenaRecoilView.scale = 99.0
 	_check(v.step(0.0).x <= full * 5.01, "and it is capped at 5")
-	_check(is_equal_approx(v.offset().x, full), "the underlying kick (what the bullet follows) is not scaled")
+	_check(is_equal_approx(v.offset().x * (1.0 - ArenaRecoilView.POSE_SHARE), full), "the underlying kick (what the bullet follows) is not scaled")
 	ArenaRecoilView.scale = 1.0
 	var rules := DotWeaponRecoilRules.new()
 	_check(rules.get_script().resource_path.ends_with("dot_weapon_recoil_rules.gd") and _feel.recoil != null and _feel.recoil.enabled, "the server's sv_recoil_* rules are on for the arena")

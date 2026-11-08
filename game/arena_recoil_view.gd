@@ -12,6 +12,11 @@ extends RefCounted
 ## cl_recoil_view: multiplies the drawn kick. 0 keeps the crosshair still (the bullets still climb), 1 is the profile's.
 static var scale: float = 1.0
 
+## The part of the climb the camera takes from this node: the weapon pose's own spring (AwWeaponPose view_camera_share,
+## 0.3) already turns the camera by that share of every shot, so adding the rest keeps the view's total at the
+## bullet's climb instead of doubling it.
+const POSE_SHARE := 0.3
+
 ## Most pitch the burst may pile up, in degrees.
 var max_pitch: float = 30.0
 
@@ -37,7 +42,7 @@ func step(delta: float, alive: bool = true) -> Vector2:
 		clear()
 		return Vector2.ZERO
 	_recoil.advance(delta)
-	var shown := _recoil.offset() * clampf(scale, 0.0, 5.0)
+	var shown := _recoil.offset() * clampf(scale, 0.0, 5.0) * (1.0 - POSE_SHARE)
 	return shown if shown.is_finite() else Vector2.ZERO
 
 
