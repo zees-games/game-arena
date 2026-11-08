@@ -10,7 +10,7 @@ const ArenaContent := preload("../game/arena_content.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaLoadoutIdentity := preload("../game/arena_loadout_identity.gd")
 const ROOT := "user://arena_loadout_persist"
-const CHECKS := 21
+const CHECKS := 26
 
 
 class FakeIdentity:
@@ -62,6 +62,8 @@ func _run() -> void:
 		var saved: DotResult = await first.save_as(key, first.schema.default_loadout(), label)
 		_check(saved.ok, "saves %s" % label, str(saved.error))
 	var _picked: DotResult = await first.select(key, 1)
+	var flag: DotResult = await first.set_random_spawn(key, true)
+	_check(flag.ok and first.random_spawn_for(key), "the Every spawn tick is accepted", str(flag.error))
 	var seat_saved: DotResult = await first.save_as(who.key_of(9), first.schema.default_loadout(), "Seat")
 	_check(seat_saved.ok and DirAccess.get_files_at(ROOT).size() == 1, "a seat key stays in memory (only the stable key has a file)", str(DirAccess.get_files_at(ROOT)))
 	first.queue_free()
@@ -78,6 +80,16 @@ func _run() -> void:
 		names.append(entry["name"])
 	_check(key2 == key and names == ["Rusher", "Sniper", "Medic"], "a restart and a new session id get the same loadouts", str(names))
 	_check(again.selected_index(key2) == 1, "and the same selection", str(again.selected_index(key2)))
+	_check(again.random_spawn_for(key2), "the Every spawn tick survives the restart, with the saved loadouts")
+	_check(again.selected_index(key2) == 1 and again.saved_list(key2).size() == 3, "and ticking it did not touch the loadouts")
+	var on_disk := FileAccess.get_file_as_string("%s/%s.json" % [ROOT, key2])
+	_check(on_disk.contains("random_spawn"), "the flag is in the stored file (the same user:// / IndexedDB path the loadouts use)")
+	var off: DotResult = await again.set_random_spawn(key2, false)
+	var third := _make(ROOT)
+	var _l3: DotResult = await third.load_for(key2)
+	_check(off.ok and not third.random_spawn_for(key2), "and unticking it survives the next restart too")
+	third.queue_free()
+	remove_child(third)
 	_check(rejoin.id_of(key2) == 31, "the key maps to the new player id")
 	rejoin.release(31)
 	_check(rejoin.key_of(31) == ArenaGame.storage_key(31), "a released player falls back to the seat key")
