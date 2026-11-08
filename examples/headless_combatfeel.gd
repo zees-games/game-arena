@@ -14,7 +14,7 @@ const ArenaModuleCvars := preload("../game/arena_module_cvars.gd")
 
 const TICK_RATE := 64
 const EXPECTED_SECTIONS := 4
-const EXPECTED_CHECKS := 36
+const EXPECTED_CHECKS := 38
 
 var _checks := 0
 var _failed := 0
@@ -207,7 +207,7 @@ func _test_wiring() -> void:
 	arena.sprint_defaults(ArenaPlayer.arena_tunables())
 	var arena_tun := ArenaPlayer.arena_tunables()
 	arena.track_tunables(arena_tun)
-	_check(arena.sprint != null and is_equal_approx(arena_tun.sprint_speed_scale, 1.0) and arena_tun.sprint_can_shoot, "the arena loads the sprint rules without changing its speeds")
+	_check(arena.sprint != null and is_equal_approx(arena_tun.sprint_speed_scale, 1.25) and arena_tun.sprint_can_shoot, "the arena loads the sprint rules without changing its speeds")
 	var arena_names: Array[String] = []
 	arena.bind_cvars(func(n: String, _d: String, _h: String, _f: int) -> Object:
 		arena_names.append(n)
@@ -226,8 +226,28 @@ func _test_wiring() -> void:
 	var run_before := speeds.speed_for(0)
 	speeds.speed_scale = 0.5
 	_check(is_equal_approx(speeds.speed_for(0), run_before * 0.5) and is_equal_approx(speeds.speed_for(DotFpsCommand.BUTTON_CROUCH), speeds.max_speed * speeds.crouch_speed_scale * 0.5), "speed_scale scales run and crouch alike")
+	var fresh_speeds := ArenaPlayer.arena_tunables()
+	_check(is_equal_approx(fresh_speeds.speed_for(DotFpsCommand.BUTTON_SPRINT) / fresh_speeds.speed_for(0), fresh_speeds.sprint_speed_scale) and fresh_speeds.sprint_speed_scale > 1.2, "a held sprint is the configured ratio over a run", str(fresh_speeds.sprint_speed_scale))
+	var run_speed := _ground_speed(fresh_speeds, 0)
+	var sprint_speed := _ground_speed(fresh_speeds, DotFpsCommand.BUTTON_SPRINT)
+	_check(sprint_speed > run_speed * (1.0 + (fresh_speeds.sprint_speed_scale - 1.0) * 0.9) and run_speed > 5.0, "the motor moves a sprinting player faster than a running one (the client predicts the same motor)", "%.2f vs %.2f" % [sprint_speed, run_speed])
 	var speed_ok := true
 	for cvar in ["arena_speed_scale", "arena_run_speed", "arena_walk_scale", "arena_sprint_scale", "arena_crouch_scale"]:
 		speed_ok = speed_ok and ArenaModuleCvars.MOVEMENT_CVARS.has(cvar) and ArenaPlayer.MOVEMENT_RULES.has(ArenaModuleCvars.MOVEMENT_CVARS[cvar][0])
 	_check(speed_ok, "every speed cvar is a replicated movement rule, so prediction agrees")
 	_finished += 1
+
+
+## Steady forward ground speed of the motor over a flat floor with [param buttons] held.
+func _ground_speed(t: DotFpsTunables, buttons: int) -> float:
+	var motor := DotFpsMotor.new(t, DotFpsFlatBody.with_floor(0.0))
+	var s := DotFpsState.new()
+	var tick := 1.0 / float(TICK_RATE)
+	for _i in 4:
+		motor.simulate(s, DotFpsCommand.new(), tick)
+	var c := DotFpsCommand.new()
+	c.move = Vector2(0.0, 1.0)
+	c.buttons = buttons
+	for _i in 160:
+		motor.simulate(s, c, tick)
+	return Vector2(s.velocity.x, s.velocity.z).length()

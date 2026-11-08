@@ -15,6 +15,9 @@ static var avatar_unit_metres: float = 0.01905
 ## The height arena's hit zones, view and fallbacks were drawn for, metres.
 const LEGACY_HEIGHT := 1.8
 
+## Sprint speed as a fraction of the run (`arena_sprint_scale`).
+const SPRINT_SCALE := 1.25
+
 
 static func configure_body(height_units: float, crouch_units: float, radius_units: float, unit_metres: float) -> void:
 	avatar_height_units = maxf(height_units, 8.0)
@@ -72,7 +75,9 @@ static func make() -> DotFpsTunables:
 	tunables.auto_hop = true
 	tunables.coyote_time = 0.08
 	tunables.jump_buffer_time = 0.12
-	tunables.sprint_speed_scale = 1.0
+	# Shift sprints: a quarter over the run, unlimited (no stamina) and fireable. It was 1.0 until 2026-11-08, so Shift did nothing
+	# and the owner reported sprint as broken. With arena_dash 1 the same bit also dashes.
+	tunables.sprint_speed_scale = SPRINT_SCALE
 	tunables.crouch_speed_scale = 0.45
 	# Crouch at a run slides: a burst and a long, low-friction carry, then a crouch. The
 	# minimum is under the 5.74 m/s run so any real run slides and a crouch-walk never does.
@@ -89,8 +94,7 @@ static func make() -> DotFpsTunables:
 	tunables.launch_button = DotFpsCommand.BUTTON_USER_0
 	tunables.launch_velocity = 15.5
 	tunables.launch_cooldown = 8.0
-	# Shift dashes: the sprint bit, which this game leaves free because it has no sprint
-	# (sprint_speed_scale is 1). A press throws you along the way you steer.
+	# Shift dashes when this is on (it shares the sprint bit). A press throws you along the way you steer.
 	# Off by default: arena_dash 1 turns it on (a mode or an operator's choice).
 	tunables.dash_enabled = false
 	tunables.dash_button = DotFpsCommand.BUTTON_SPRINT
