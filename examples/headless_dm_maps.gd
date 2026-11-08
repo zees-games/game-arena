@@ -91,7 +91,7 @@ func _test_solo() -> void:
 		"gg-garage and dm-overwatch are catalogued without a server")
 	_check(solo.maps.size() == ArenaMaps.STANDALONE_KEYS.size() and solo.maps.size() >= 6,
 		"all %d published maps are listed, and a second pass keeps them" % solo.maps.size())
-	_check(solo.get_map(&"gg-garage").scene_path == "res://dot_cloud/gamemann/gg-garage/1.0.3/gg-garage.json",
+	_check(solo.get_map(&"gg-garage").scene_path == "res://dot_cloud/gamemann/gg-garage/1.0.5/gg-garage.json",
 		"gg-garage mounts at its hyphenated manifest")
 
 	print("-- an unlinked picker lists the suggested packs by label, and a pick with no cloud fails naming it")
@@ -99,7 +99,7 @@ func _test_solo() -> void:
 	var solo_detail: Dictionary = {}
 	for each: Dictionary in solo_rows:
 		solo_detail[str(each["id"])] = str(each["detail"])
-	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/crackhouse@1.0.4") and solo.get_map(&"crackhouse") != null,
+	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/crackhouse@1.0.5") and solo.get_map(&"crackhouse") != null,
 		"crackhouse is a suggested pack")
 	_check(solo_detail.get("map:crackhouse", "") == "Deathmatch map", "crackhouse reads 'Deathmatch map'")
 	_check(solo_detail.get("map:gg-garage", "") == "Gun game map", "gg-garage reads 'Gun game map'")
@@ -126,7 +126,7 @@ func _test_solo() -> void:
 	var index := DotContentIndex.new()
 	var _p := index.add_pack({"content_id": "gamemann/crackhouse", "version": "9.9.9", "provides": {}, "session": "solo"})
 	var swapped := ArenaMaps.standalone_keys(DotMapCatalogue.new(), index)
-	_check(swapped.has("gamemann/crackhouse@9.9.9") and not swapped.has("gamemann/crackhouse@1.0.4"),
+	_check(swapped.has("gamemann/crackhouse@9.9.9") and not swapped.has("gamemann/crackhouse@1.0.5"),
 		"the mounted version replaces the pinned one")
 	var mounted_cat := DotMapCatalogue.new()
 	var _m := ArenaMaps.adopt_delivered(mounted_cat, swapped)
@@ -143,23 +143,23 @@ func _test_solo() -> void:
 	lat.have = ["1.0.9"]
 	lat.latest = "1.0.9"
 	var lcat := DotMapCatalogue.new()
-	var _l := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.4"]))
+	var _l := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.5"]))
 	DotRegistry.register(DotMapLoader.CLOUD_SERVICE, lat)
 	var online := await ArenaMaps.mount_delivered(lcat.get_map(&"crackhouse"), DotMapLoader.new(), lcat)
-	_check(not online.ok and lat.asked == PackedStringArray(["gamemann/crackhouse@1.0.4"]), "online asks only the exact version (%s)" % ", ".join(lat.asked))
+	_check(not online.ok and lat.asked == PackedStringArray(["gamemann/crackhouse@1.0.5"]), "online asks only the exact version (%s)" % ", ".join(lat.asked))
 	ArenaMaps.clear_dead()
 	lcat = DotMapCatalogue.new()
-	var _l2 := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.4"]))
+	var _l2 := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.5"]))
 	lat.asked = PackedStringArray()
 	var lm := lcat.get_map(&"crackhouse")
 	var fell := await ArenaMaps.mount_delivered(lm, DotMapLoader.new(), lcat, true)
-	_check(lat.asked == PackedStringArray(["gamemann/crackhouse@1.0.4", "gamemann/crackhouse@1.0.9"]), "solo retries at latest (%s)" % ", ".join(lat.asked))
+	_check(lat.asked == PackedStringArray(["gamemann/crackhouse@1.0.5", "gamemann/crackhouse@1.0.9"]), "solo retries at latest (%s)" % ", ".join(lat.asked))
 	_check(fell.ok or not fell.error.message.contains("could not fetch"), "the latest fetch is not what fails")
 	_check(lm != null and lm.effective_content_version() == "1.0.9" and lm.scene_path.contains("/1.0.9/"), "the map now points at the latest")
 	lat.have = []
 	ArenaMaps.clear_dead()
 	lcat = DotMapCatalogue.new()
-	var _l3 := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.4"]))
+	var _l3 := ArenaMaps.adopt_delivered(lcat, PackedStringArray(["gamemann/crackhouse@1.0.5"]))
 	var none := await ArenaMaps.mount_delivered(lcat.get_map(&"crackhouse"), DotMapLoader.new(), lcat, true)
 	DotRegistry.unregister(DotMapLoader.CLOUD_SERVICE)
 	_check(not none.ok and lcat.get_map(&"crackhouse") == null, "neither pinned nor latest published: dropped from the list")
@@ -211,7 +211,7 @@ func _test_dead_maps() -> void:
 	var _b := ArenaMaps.adopt_delivered(again, keys)
 	_check(again.get_map(&"aim-forts") == null and again.get_map(&"crackhouse") == null and again.get_map(&"surf_10x_final") != null,
 		"a re-adopted list does not bring the dead keys back")
-	var ghost := ArenaMaps.delivered_def("gamemann/aim-forts@1.0.3")
+	var ghost := ArenaMaps.delivered_def("gamemann/aim-forts@1.0.5")
 	var retry := await ArenaMaps.mount_delivered(ghost, DotMapLoader.new(), again)
 	_check(not retry.ok and retry.error.message.contains("not retried") and cdn.asked.size() == asked,
 		"a dead key is refused without asking the CDN again")

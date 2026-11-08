@@ -288,16 +288,16 @@ func _test_leaves() -> void:
 
 func _test_surf_keys() -> void:
 	_section("the published surf packs are in the solo list, under their manifest ids")
-	var def := ArenaMaps.delivered_def("gamemann/arena-surf-dm-maps-surf_10x_final@1.2.0")
+	var def := ArenaMaps.delivered_def("gamemann/arena-surf-dm-maps-surf_10x_final@1.2.3")
 	_check(def != null and String(def.id) == "surf_10x_final", "the pack prefix is stripped from the map id (%s)" % (String(def.id) if def != null else "null"))
 	_check(ArenaMaps.is_delivered(def), "a prefixed surf pack counts as delivered (is_delivered)")
 	var surf := 0
 	for key in ArenaMaps.STANDALONE_KEYS:
-		if key.begins_with("gamemann/" + ArenaMaps.PACK_PREFIX) and key.ends_with("@1.2.0"):
+		if key.begins_with("gamemann/" + ArenaMaps.PACK_PREFIX) and key.ends_with("@1.2.3"):
 			surf += 1
 	_check(surf == 39, "STANDALONE_KEYS holds 39 surf packs (%d)" % surf)
 	var listed := ArenaMaps.standalone_keys(null)
-	_check("gamemann/arena-surf-dm-maps-surf_10x_final@1.2.0" in listed, "standalone_keys() lists a surf pack")
+	_check("gamemann/arena-surf-dm-maps-surf_10x_final@1.2.3" in listed, "standalone_keys() lists a surf pack")
 	_check(listed.size() >= surf, "standalone_keys() lists at least all of them (%d)" % listed.size())
 	_done()
 
