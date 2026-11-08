@@ -10,6 +10,8 @@ const ClientBench := preload("client_bench.gd")
 ## Prints fps, frame p50/p95/max, the engine's physics and process monitors and physics steps per frame.
 
 var _bots := 10
+## `--physoff 1`: switch the engine's 3D physics step off after warm-up. What the "physics" phase still costs is script (game tick plus every _physics_process); the drop is the engine's own share.
+var _physoff := false
 var _reuse := true
 var _solid := true
 var _seconds := 25.0
@@ -32,6 +34,9 @@ func _ready() -> void:
 			"--reuse": _reuse = int(args[i + 1]) != 0
 			"--solid": _solid = int(args[i + 1]) != 0
 			"--prof": DotFpsPhysicsBody.profile = int(args[i + 1]) != 0
+			"--physoff": _physoff = int(args[i + 1]) != 0
+			"--near": preload("../game/arena_bots.gd").think_near = float(args[i + 1])
+			"--every": preload("../game/arena_bots.gd").think_every = int(args[i + 1])
 			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
 	var _scratch := ArenaPresentation.use_scratch_settings("offline_cost")
 	_run.call_deferred()
