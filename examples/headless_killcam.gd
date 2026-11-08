@@ -6,7 +6,7 @@ const Bodies := preload("../game/arena_killcam_bodies.gd")
 const KillcamShots := preload("../game/arena_killcam_shots.gd")
 const KillPovView := preload("../game/arena_kill_pov_view.gd")
 
-const EXPECTED_CHECKS := 49
+const EXPECTED_CHECKS := 51
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -96,7 +96,12 @@ func _run() -> void:
 	_check(kv != null and await _until(func() -> bool: return kv.is_active(), 3.0),
 		"the killer's view plays after the death, offline")
 	var t0 := Time.get_ticks_msec()
-	await _wait(1.2)
+	# The clip is complete when it arrives: the first replay frame is drawn at once, never after a wait
+	# that leaves the live death scene under the banner.
+	await _wait(0.15)
+	_check(kv.kv.killcam.state == DotKillcam.State.PLAYING, "the replay is drawing within 0.2 s of the death view starting, not waiting under the banner")
+	_check(kv.camera.current, "the replay camera is the current one by then")
+	await _wait(1.05)
 	_check(KillPov.is_replay_camera(kv.camera), "the kill view's camera is flagged as a replay")
 	_check(_tags_visible(bots, me) == 0, "no health bar shows over anybody during the kill view")
 	await _check_killer_screen(kv, killer)
@@ -162,7 +167,7 @@ func _check_recoil(screen: Node, killer: Object) -> void:
 	_check(aux.size() == DotKillViewRing.AUX and KillPov.SIZE == DotKillViewRing.AUX, "the aux layout is the twelve floats the ring records")
 	_check(KillPov.aux_of(killer, 8).size() == 8 and KillPov.aux_of(null, 20).size() == 20, "a ring of another size gets that many slots, never an out-of-range write")
 	var floor_json: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://requires.floor.json"))
-	_check(int(floor_json["addons"]["dot_replay"]) >= 8, "the pack requires the dot-replay that records twelve aux floats and the event hook")
+	_check(int(floor_json["addons"]["dot_replay"]) >= 9, "the pack requires the dot-replay that records twelve aux floats and the event hook")
 	aux[KillPov.KICK_PITCH] = 2.0
 	aux[KillPov.FLAGS] = KillPov.GROUNDED
 	var climb := 0.0
