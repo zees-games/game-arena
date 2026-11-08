@@ -141,9 +141,18 @@ func _setup_ctf() -> DotResult:
 	return DotResult.success(null)
 
 
+## True when this process has a screen. `game.headless` must not be asked: it is the collision backend and is true on every client, which hid the flags (2026-11-08).
+static func draws_flags(platform_headless: bool) -> bool:
+	return not platform_headless
+
+
+## Forces the flag view on, for a check that runs without a screen.
+var draw_flags := false
+
+
 ## The flags are drawn wherever the game draws (a client, a listen server, a solo game); a dedicated or headless server has no eyes for them.
 func _build_flag_view() -> void:
-	if flag_view != null or ctf == null or game.headless:
+	if flag_view != null or ctf == null or not (draw_flags or draws_flags(DotPlatform.is_headless())):
 		return
 	flag_view = ArenaFlagView.new()
 	flag_view.name = "FlagView"

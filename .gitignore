@@ -81,6 +81,8 @@ Thumbs.db
 # arena-weapons: the game's whole weapon set (definitions and models), required.
 /addons/arena_weapons
 /addons/dot_game
+# dot-sim: optional native library (bot senses, snapshot codec); without its built library the GDScript twins run.
+/addons/dot_sim
 /addons/dot_workbench
 /lightbake_work/
 

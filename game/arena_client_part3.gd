@@ -122,14 +122,8 @@ func toggle_view() -> void:
 
 ## Solo: the bridge's per-tick record and delivery, in this process. Only the local player's clip is played.
 func _tick_solo_killview() -> void:
-	if solo_killview == null or not game.killview_rules.enabled:
-		return
-	var tick := game.current_tick()
-	var now := float(tick) / float(game.tick_rate)
-	solo_killview.record(now)
-	for ready: Dictionary in solo_killview.collect(now, tick):
-		if player != null and int(ready["victim"]) == player.player_id:
-			_on_killview(ready["clip"], ready["info"])
+	if solo_killview != null:
+		solo_killview.tick(game.current_tick())
 
 ## The kill view, the final killcam and the winner reveal each hide the HUD and put back what they found. When two overlap, the later one found it already hidden and restores it hidden, for the rest of the session; this is the one owner that says no screen is up, so the HUD returns.
 func _restore_hud_if_orphaned() -> void:
