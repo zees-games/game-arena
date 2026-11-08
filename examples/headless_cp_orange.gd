@@ -48,6 +48,34 @@ func _run() -> void:
 		"a flag home per side, more than 60 m apart")
 	_check(map.modes.has("ctf") and map.modes.has("tdm"), "the map lists ctf and tdm")
 
+	print("-- the flags sit on the circular capture plates just outside each spawn, both sides identical")
+	# The plates are the map's cap_point_base props under control points 1 (red) and 5 (blue), at the manifest's
+	# `control_points` origins; the flags are authored on them, well past each side's spawn block.
+	var centre := {"red": Vector3.ZERO, "blue": Vector3.ZERO}
+	var count := {"red": 0, "blue": 0}
+	for index in map.spawns.size():
+		var tag := String(map.spawn_tag(index))
+		if centre.has(tag):
+			centre[tag] += map.spawns[index].origin
+			count[tag] += 1
+	for tag in centre:
+		centre[tag] /= maxf(float(count[tag]), 1.0)
+	var fr: Vector3 = map.flag_homes["red"]
+	var fb: Vector3 = map.flag_homes["blue"]
+	var own_red := Vector2(fr.x - centre["red"].x, fr.z - centre["red"].z).length()
+	var own_blue := Vector2(fb.x - centre["blue"].x, fb.z - centre["blue"].z).length()
+	_check(own_red > 10.0 and own_red < 40.0 and own_blue > 10.0 and own_blue < 40.0,
+		"each flag is just outside its own spawn block (%.1f m, %.1f m)" % [own_red, own_blue])
+	_check(absf(own_red - own_blue) < 1.0, "the two flags are the same distance from their spawns")
+	var mid := (fr + fb) * 0.5
+	var spun := Vector2(2.0 * mid.x - centre["red"].x, 2.0 * mid.z - centre["red"].z)
+	_check(spun.distance_to(Vector2(centre["blue"].x, centre["blue"].z)) < 1.5 and absf(fr.y - fb.y) < 0.3,
+		"the red side turned half a turn about the plates' midpoint is the blue side")
+	var plate_red := Vector3(1164.64, -2052.75, -6222.64) * 0.01905
+	var plate_blue := Vector3(-2623.36, -2052.75, -888.64) * 0.01905
+	_check(Vector2(fr.x - plate_red.x, fr.z - plate_red.z).length() < 0.5 and Vector2(fb.x - plate_blue.x, fb.z - plate_blue.z).length() < 0.5,
+		"each flag stands on its capture plate (within 0.5 m of the plate centre)")
+
 	print("-- spawns stand on a floor")
 	var space := get_viewport().world_3d.direct_space_state
 	_game = _new_game(ArenaMode.team_deathmatch(5))
