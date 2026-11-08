@@ -88,6 +88,7 @@ func _ready() -> void:
 			"--thinkevery": ArenaBots.think_every = int(args[i + 1])
 			"--thinknear": ArenaBots.think_near = float(args[i + 1])
 			"--motorprof": _motorprof = args[i + 1] != "0"
+			"--qprof": _qprof = int(args[i + 1])
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("scale128_" + _role)
 	for is_start in [true, false]:
@@ -162,6 +163,7 @@ func _report(extra: Dictionary) -> void:
 		out["hull_verified"] = ArenaHullGrid.verified
 		out["hull_mismatches"] = ArenaHullGrid.mismatches
 	out["motor_us_per_bot_tick"] = _motor_phases(_count)
+	out["qprof"] = _qprof_report(_count)
 	print("SCALE128 ", JSON.stringify(out))
 
 
@@ -182,7 +184,44 @@ func _motor_phases(ticks: int) -> Dictionary:
 	return out
 
 
+var _qprof := 0
+
+
+func _qprof_report(ticks: int) -> Dictionary:
+	if _qprof == 0:
+		return {}
+	var n := float(maxi(1, _bots * ticks))
+	var pr := DotFpsPhysicsBody.prof
+	var ip := DotFpsHullBody.inner_prof
+	var out := {
+		"per_bot_tick": {
+			"cast_n": snappedf(pr[0] / n, 0.001), "cast_us": snappedf(pr[1] / n, 0.01),
+			"rest_n": snappedf(pr[2] / n, 0.001), "rest_us": snappedf(pr[3] / n, 0.01),
+			"overlap_n": snappedf(pr[4] / n, 0.001), "overlap_us": snappedf(pr[5] / n, 0.01),
+			"ray_n": snappedf(pr[6] / n, 0.001), "ray_us": snappedf(pr[7] / n, 0.01),
+			"engine_us": snappedf((pr[1] + pr[3] + pr[5] + pr[7]) / n, 0.01),
+			"body_sweep_n": snappedf(ip[0] / n, 0.001), "body_sweep_us": snappedf(ip[1] / n, 0.01),
+			"body_overlap_n": snappedf(ip[2] / n, 0.001), "body_overlap_us": snappedf(ip[3] / n, 0.01),
+			"body_rest_n": snappedf(ip[4] / n, 0.001), "body_rest_us": snappedf(ip[5] / n, 0.01),
+			"body_us": snappedf((ip[1] + ip[3] + ip[5]) / n, 0.01),
+		},
+	}
+	if _qprof >= 2:
+		var c := {}
+		for k: String in DotFpsPhysicsBody.callers:
+			var row: PackedInt64Array = DotFpsPhysicsBody.callers[k]
+			c[k] = [snappedf(row[0] / n, 0.0001), snappedf(row[1] / n, 0.001)]
+		out["callers_n_us_per_bot_tick"] = c
+	return out
+
+
 func _begin_record() -> void:
+	if _qprof > 0:
+		DotFpsPhysicsBody.profile = true
+		DotFpsPhysicsBody.profile_callers = _qprof >= 2
+		DotFpsPhysicsBody.prof.fill(0)
+		DotFpsPhysicsBody.callers.clear()
+		DotFpsHullBody.inner_prof.fill(0)
 	if _motorprof:
 		DotFpsMotor.profile = true
 		DotFpsMotor.phase_us.fill(0)
