@@ -2,6 +2,7 @@ extends Node
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaContent := preload("../game/arena_content.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
