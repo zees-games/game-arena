@@ -37,6 +37,9 @@ func _ready() -> void:
 			"--physoff": _physoff = int(args[i + 1]) != 0
 			"--near": preload("../game/arena_bots.gd").think_near = float(args[i + 1])
 			"--every": preload("../game/arena_bots.gd").think_every = int(args[i + 1])
+			"--tier-above": preload("../game/arena_bots.gd").tiers.above = int(args[i + 1])
+			"--tier-near": preload("../game/arena_bots.gd").tiers.near_every = int(args[i + 1])
+			"--tier-far": preload("../game/arena_bots.gd").tiers.far_every = int(args[i + 1])
 			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
 	var _scratch := ArenaPresentation.use_scratch_settings("offline_cost")
 	_run.call_deferred()
@@ -69,6 +72,8 @@ func _run() -> void:
 			_steps0 = Engine.get_physics_frames()
 			_q0 = _queries(self)
 			ArenaFrameProbe._reset()
+			preload("../game/arena_bots.gd").tiers.counts.clear()
+			_tally_on(_client.game)
 			_last = now
 			t0 = now
 			continue
@@ -98,6 +103,8 @@ func _run() -> void:
 	for key: StringName in ArenaFrameProbe._sections:
 		var row: PackedInt64Array = ArenaFrameProbe._sections[key]
 		print("  section %-14s %.3f ms/frame | %.3f ms/call x%d | max %.2f ms" % [key, float(row[0]) / _n / 1000.0, float(row[0]) / maxi(row[1], 1) / 1000.0, row[1], row[2] / 1000.0])
+	print("  combat shots %d hits %d headshots %d kills %d hit_rate %.3f" % [_shots, _hits, _heads, _kills, float(_hits) / maxi(1, _shots)])
+	print("  bot tiers: %s" % JSON.stringify(preload("../game/arena_bots.gd").tiers.describe()))
 	print("  controller queries per physics step: %.1f" % (float(_queries(self) - _q0) / maxf(float(Engine.get_physics_frames() - _steps0), 1.0)))
 	var pr := DotFpsPhysicsBody.prof
 	print("  engine queries/frame: cast %.1f (%.2f ms) rest %.1f (%.2f ms) overlap %.1f (%.2f ms) ray %.1f (%.2f ms)" % [pr[0] / float(_n), pr[1] / 1000.0 / _n, pr[2] / float(_n), pr[3] / 1000.0 / _n, pr[4] / float(_n), pr[5] / 1000.0 / _n, pr[6] / float(_n), pr[7] / 1000.0 / _n])
@@ -133,3 +140,21 @@ func _queries(node: Node) -> int:
 	for c in node.get_children():
 		total += _queries(c)
 	return total
+
+
+var _shots := 0
+var _hits := 0
+var _heads := 0
+var _kills := 0
+
+
+## Shots, hits and kills while measuring: the accuracy a tier change must leave alone.
+func _tally_on(g: Object) -> void:
+	g.connect(&"hit_confirmed", func(_a: int, _v: int, _amount: float, _p: Vector3, head: bool, lethal: bool) -> void:
+		_hits += 1
+		_heads += int(head)
+		_kills += int(lethal))
+	for p in g.call("players"):
+		p.connect(&"used", func(outcome: DotWeaponOutcome) -> void:
+			if outcome != null and outcome.used:
+				_shots += outcome.shots.size())

@@ -209,6 +209,13 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaBots.think_near = maxf(0.0, new_value.to_float()))
+	_add_bot_tier_cvar("bot_tier_above", "tiers.above", "Players above which bot think-rate tiers apply (-1: never); see bot_tier_*", -1.0)
+	_add_bot_tier_cvar("bot_tier_every_near", "tiers.near_every", "Ticks between thinks of a bot no person fights, sees or is near, within bot_tier_range of one", 1.0)
+	_add_bot_tier_cvar("bot_tier_every_far", "tiers.far_every", "Ticks between thinks of such a bot beyond bot_tier_range of every person", 1.0)
+	_add_bot_tier_cvar("bot_tier_range", "tiers.far_range", "Metres: the near/far line of bot_tier_every_near and bot_tier_every_far", 0.0)
+	_add_bot_tier_cvar("bot_tier_close", "tiers.close_range", "Metres: a bot this close to a person thinks every tick whatever the person faces", 0.0)
+	_add_bot_tier_cvar("bot_tier_nearest", "tiers.nearest", "This many bots nearest each person think every tick", 0.0)
+	_add_bot_tier_cvar("bot_tier_view", "tiers.view_range", "Metres: a bot inside a person's view cone within this thinks every tick", 0.0)
 	add_cvar("bot_fast_sense", "1" if ArenaBotBrain.fast_sense else "0",
 		"1: bots scan candidates by squared distance and cone cosine (same result, cheaper); 0: dot-bot's stock scan",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
@@ -407,3 +414,12 @@ func _refresh_aoi() -> void:
 	if net_aoi != null and net != null and game != null and net.interest != null:
 		if net_aoi.refresh(net.interest, game.players().size()):
 			log_info("net relevance rings", {"on": net_aoi.active, "players": game.players().size()})
+
+
+## A `bot_tier_*` cvar onto a field of [member ArenaBots.tiers] ([param field] is `tiers.<name>`).
+func _add_bot_tier_cvar(cvar: String, field: String, help: String, min_value: float) -> void:
+	var tiers := ArenaBots.tiers
+	var name := StringName(field.trim_prefix("tiers."))
+	add_cvar(cvar, str(tiers.get(name)), help, DotConVar.FLAG_ARCHIVE).with_min(min_value).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			tiers.set(name, int(new_value.to_float()) if typeof(tiers.get(name)) == TYPE_INT else new_value.to_float()))
