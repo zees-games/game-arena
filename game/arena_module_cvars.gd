@@ -262,6 +262,7 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			DotFpsPhysicsBody.native_enabled = new_value.to_float() >= 0.5)
+	_print_dot_sim_status()
 	add_cvar("arena_hull_grid", "1" if ArenaHullGrid.enabled else "0",
 		"1: players' standing hulls are found through a grid filed once per tick (same hulls, cheaper above 12 players); 0: scan the whole roster per bot",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
@@ -450,6 +451,38 @@ func _refresh_aoi() -> void:
 	if net_aoi != null and net != null and game != null and net.interest != null:
 		if net_aoi.refresh(net.interest, game.players().size()):
 			log_info("net relevance rings", {"on": net_aoi.active, "players": game.players().size()})
+
+
+static var _dot_sim_status_printed: bool = false
+
+
+## One line per process saying whether dot-sim's library loaded and what runs in it, so a
+## player or a log can tell native from the GDScript twins (bootstrap fetches the library;
+## the web never has it).
+func _print_dot_sim_status() -> void:
+	if _dot_sim_status_printed:
+		return
+	_dot_sim_status_printed = true
+	print(dot_sim_status())
+
+
+## [code]dot-sim: native motor=on bots=on snapshot=on[/code], or that the library is not loaded.
+static func dot_sim_status() -> String:
+	var classes := {"motor": &"DotSimFpsBody", "bots": &"DotSimBotSenses", "snapshot": &"DotSimSnapshotCodec"}
+	var parts: PackedStringArray = []
+	var any := false
+	for module: String in classes:
+		var loaded := ClassDB.class_exists(classes[module])
+		any = any or loaded
+		var used := loaded
+		if module == "motor":
+			used = loaded and DotFpsPhysicsBody.native_enabled
+		elif module == "bots":
+			used = loaded and DotBotWorld.native_enabled
+		parts.append("%s=%s" % [module, ("on" if used else "off (cvar)") if loaded else "missing"])
+	if not any:
+		return "dot-sim: native library not loaded, the GDScript twins run (bootstrap fetches it; web never has it)"
+	return "dot-sim: native " + " ".join(parts)
 
 
 ## A `bot_tier_*` cvar onto a field of [member ArenaBots.tiers] ([param field] is `tiers.<name>`).
