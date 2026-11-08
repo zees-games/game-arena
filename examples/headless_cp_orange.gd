@@ -2,6 +2,7 @@ extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaFlagView := preload("../game/arena_flag_view.gd")
+const ArenaObjectives := preload("../game/arena_objectives.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
@@ -176,6 +177,15 @@ func _run() -> void:
 			homes_ok = homes_ok and fv.view_position(flag.home_team()).distance_to(flag.at) < 0.5
 		_check(homes_ok, "and the flag view draws both, one per side, at those homes")
 		fv.queue_free()
+		# The real client path: game.headless is true there (collision backend) and a screen decides drawing.
+		var objs: ArenaObjectives = _game.objectives
+		_check(_game.headless and objs.flag_view == null, "a headless server builds no flag view")
+		_check(ArenaObjectives.draws_flags(false) and not ArenaObjectives.draws_flags(true), "a process with a screen draws flags whatever game.headless says")
+		objs.draw_flags = true
+		objs._build_flag_view()
+		await get_tree().process_frame
+		var built: bool = objs.flag_view != null and objs.flag_view.drawn_count() == 2 and objs.flag_view.is_inside_tree()
+		_check(built, "a client game (game.headless true) with a screen builds the flag view, two flags drawn")
 
 	_report_sections(6, 6, 6, -1)
 
