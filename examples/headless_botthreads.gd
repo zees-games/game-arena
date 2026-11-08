@@ -38,6 +38,8 @@ func _ready() -> void:
 
 func _run() -> void:
 	print("game-arena: bot_threads plays the same match")
+	# 24 bots and no person would coast on think tiers, leaving fewer thinkers a tick than the pool starts for.
+	ArenaBots.tiers.above = -1
 	_section("the same match at every thread count")
 	var digests: Array[PackedStringArray] = []
 	var kills: Array[int] = []
