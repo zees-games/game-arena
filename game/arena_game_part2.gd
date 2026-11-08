@@ -643,7 +643,10 @@ func _build_spectate() -> void:
 
 ## A client mirrors the flag layer only: it draws the flags and applies the carrier's slowdown, and the server sends the state.
 func _reconcile_client_objectives() -> void:
-	if mode.objective_layout != &"ctf":
+	# The mode the server says (RULES mode_index), not the client's own `mode`, which is never
+	# replaced and read free-for-all on every dedicated server: no flag layer, no flags drawn.
+	var played: ArenaMode = shown_mode if shown_mode != null else mode
+	if played == null or played.objective_layout != &"ctf":
 		if objectives != null:
 			remove_child(objectives)
 			objectives.queue_free()

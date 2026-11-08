@@ -3,7 +3,7 @@ extends "headless_match_part2.gd"
 ## Capture the flag end to end: scripted bots carry flags on a real game, two and three teams, drop and return, both limits, the fallback bases, authored flag stands and the replicated state.
 
 const SECTIONS_CTF := 7
-const CHECKS_CTF := 55
+const CHECKS_CTF := 58
 
 
 func _ready() -> void:
@@ -264,6 +264,22 @@ func _test_replication() -> void:
 	_check(server.objectives.ctf.scores[1] == 1, "and the server ignores a state sent to it")
 	_check(server.objectives.ctf_wire_text(server.current_tick()) == "", "an unchanged state is not sent again at once")
 	_check(ArenaEvents.Kind.keys().has("CTF"), "the CTF event kind exists")
+	# A real dedicated-server client never has the mode set locally: its own `mode` is the default (free-for-all)
+	# and the server's arrives as RULES mode_index. The flag layer has to follow that.
+	var real := ArenaGame.new()
+	real.name = "CtfRealClient"
+	real.tick_rate = TICK_RATE
+	real.headless = true
+	real.register_service = false
+	real.is_authority = false
+	add_child(real)
+	var real_ready := real.setup(ArenaMap.dm_atrium())
+	_check(real_ready.ok and real.objectives == null, "a client left on the default mode has no flag layer")
+	real.set_movement_rules({"mode_index": ArenaModes.ids().find(&"ctf")})
+	_check(real.objectives != null and real.objectives.ctf != null, "and builds it the moment the server says capture the flag")
+	real.objectives.apply_ctf_text(text)
+	_check(real.objectives.ctf.flag_of(2).state == DotObjectiveFlag.State.CARRIED, "and then mirrors the server's flags")
+	await _free(real)
 	await _free(client)
 	await _free(server)
 	_done()
