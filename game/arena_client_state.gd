@@ -220,6 +220,9 @@ var _model_paths_next := -1
 ## State of the load-gate warm-up, see [method _prewarm_tick]; empty when idle.
 var _warm := {}
 
+## Microseconds of CPU each [method _prewarm_tick] phase spent in its own ticks (load timeline only).
+var _warm_work_usec := {}
+
 ## Whether this client believes it is holding a prop.
 ##
 ## [b]A belief, not a fact, and the distinction is the whole reason props are not

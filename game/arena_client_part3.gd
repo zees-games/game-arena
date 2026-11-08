@@ -12,6 +12,10 @@ func _ready() -> void:
 	# Closed before anything else is built, so no frame shows a half-made world.
 	_build_platform()
 	_offline = platform.offline
+	var timeline := ArenaLoadTimeline.new()
+	timeline.name = "LoadTimeline"
+	timeline.gate = gate
+	add_child(timeline)
 
 	game = ArenaGame.new()
 	game.name = "Game"

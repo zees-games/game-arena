@@ -86,7 +86,9 @@ func _enter_level(release: bool) -> void:
 	_level_busy = true
 	var slice := DotFrameSlice.new()
 	await game.build_map_io_async(slice)
+	ArenaLoadTimeline.mark("map_io_built")
 	var made: Node3D = await game.map.to_scene_async(slice)
+	ArenaLoadTimeline.mark("map_scene_built")
 	if _level != null and is_instance_valid(_level):
 		remove_child(_level)
 		# free(), not queue_free(): a deferred free leaves two levels drawn for a frame.
@@ -353,7 +355,9 @@ func _prewarm_tick() -> void:
 	if not is_instance_valid(body) or body.camera == null:
 		_prewarm_end()
 		return
-	match int(_warm.phase):
+	var tick_start := Time.get_ticks_usec()
+	var phase_now := int(_warm.phase)
+	match phase_now:
 		0:
 			var arts: Array = _warm.arts
 			var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
@@ -369,6 +373,7 @@ func _prewarm_tick() -> void:
 				gate.warm_up(AwViewModel.prepared_materials())
 				gate.warm_up(AwShotFx.warm())
 				_warm.phase = 1
+				ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000])
 		1:
 			if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
 				var rig: Node3D = DotMuzzleFlash.prewarm(body.camera)
@@ -388,6 +393,7 @@ func _prewarm_tick() -> void:
 					var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
 					presentation.fx.warm([ArenaPresentation.EXPLOSION, &"impact_spark"], at)
 				_warm.phase = 2
+				ArenaLoadTimeline.mark("prewarm 1 done: flash scenes, muzzle pools, explosion, own work %d ms" % (int(_warm_work_usec.get(1, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 		2:
 			# Drop bodies for the first throw (a death drops one), a slice a frame like the views.
 			var ids: Array = _warm.get("drop_ids", ArenaWeaponDropWiring.prewarm_ids())
@@ -396,6 +402,7 @@ func _prewarm_tick() -> void:
 			_warm.drop_next = ArenaWeaponDropWiring.prewarm_step(game, ids, int(_warm.get("drop_next", 0)), Time.get_ticks_msec() + slice)
 			if _warm.drop_next >= ids.size():
 				_warm.phase = 3
+				ArenaLoadTimeline.mark("prewarm 2 done: weapon drop bodies, own work %d ms" % (int(_warm_work_usec.get(2, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 		3:
 			# What the first bot, the first hit and the first kill would otherwise load mid-match:
 			# a few people's figures (rig, art, materials), the health bar's mesh and the hit sounds.
@@ -412,10 +419,13 @@ func _prewarm_tick() -> void:
 				_warm.figures = int(_warm.get("figures", 0)) + 1
 			if int(_warm.get("figures", 0)) >= PREWARM_FIGURES:
 				_warm.phase = 4
+				ArenaLoadTimeline.mark("prewarm 3 done: figures, own work %d ms" % (int(_warm_work_usec.get(3, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 		_:
 			_warm.frames += 1
 			if _warm.frames >= 3 and DotWeaponMuzzle.warm_done():
 				_prewarm_end()
+	# CPU time this phase spent in its own ticks (a slow frame with little of it is the renderer).
+	_warm_work_usec[phase_now] = int(_warm_work_usec.get(phase_now, 0)) + Time.get_ticks_usec() - tick_start
 
 func _prewarm_end() -> void:
 	if get_tree().process_frame.is_connected(_prewarm_tick):
@@ -425,6 +435,7 @@ func _prewarm_end() -> void:
 	if is_instance_valid(_warm.get("rig")):
 		(_warm.rig as Node).queue_free()
 	_warm = {}
+	ArenaLoadTimeline.mark("prewarm end")
 	if gate != null:
 		gate.release(&"weapons")
 
@@ -464,6 +475,7 @@ func _prewarm_models() -> void:
 		if art is AwWeaponVisual and (art as AwWeaponVisual).has_model():
 			_model_paths.append((art as AwWeaponVisual).model_path)
 	_model_paths_next = 0
+	ArenaLoadTimeline.mark("model reads start: %d files" % _model_paths.size())
 	gate.hold(&"weapon_models", "Preparing weapon models")
 	get_tree().process_frame.connect(_prewarm_models_tick)
 
