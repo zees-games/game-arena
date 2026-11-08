@@ -100,6 +100,9 @@ var _portraits_in: float = 0.0
 ## One line, not a widget per objective: a hill and a flag want different pictures.
 var objective_label: Label = null
 
+## "YOU HAVE THE RED FLAG", big, while the followed player carries one. Hidden otherwise.
+var carry_label: Label = null
+
 
 ## An administrator's `blind`, over the world and under the rest of the HUD.
 ##

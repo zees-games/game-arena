@@ -316,6 +316,9 @@ var ctf_rules := DotObjectiveCtfRules.new()
 ## A line the server announces about the flag (taken, dropped, returned, captured).
 signal ctf_announced(text: String)
 
+## A flag changed hands on this end's screen (what: taken, dropped, returned, captured; team is the flag's team; by is the id of the player who carried it, 0 when nobody). Raised by the flag view from what it draws, so it fires on a client and offline too, not only where the server announces.
+signal ctf_seen(what: StringName, team: int, by: int)
+
 ## The jail's gate and button, drawn. Null on a headless end and on a map without a jail.
 var jail_view: Node3D = null
 
