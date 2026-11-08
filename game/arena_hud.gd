@@ -268,6 +268,8 @@ class MedalRow extends Control:
 		return out
 
 	func advance(delta: float) -> void:
+		if shown.is_empty():
+			return
 		var life := IN_SEC + HOLD_SEC + OUT_SEC
 		for i in range(shown.size() - 1, -1, -1):
 			shown[i]["age"] = float(shown[i]["age"]) + delta
@@ -1040,7 +1042,7 @@ func present_scores() -> void:
 			var right := sides[1] if left == sides[0] else sides[0]
 			var l := game.match_node.teams.team(left)
 			var r := game.match_node.teams.team(right)
-			strip.show_scores(board.team_score(left), board.team_score(right),
+			_show_scores(board.team_score(left), board.team_score(right),
 				l.display_name.to_upper(), r.display_name.to_upper(), l.colour, r.colour)
 			return
 	# A free-for-all: you, and whoever is ahead of you (behind you, when you lead).
@@ -1050,10 +1052,18 @@ func present_scores() -> void:
 			other = record
 			break
 	var leading := mine_record != null and (other == null or mine_record.score >= other.score)
-	strip.show_scores(
+	_show_scores(
 		mine_record.score if mine_record != null else 0, other.score if other != null else 0,
 		"YOU", "%s  %s" % ["2ND" if leading else "1ST", other.display_name.to_upper() if other != null else "-"],
 		ArenaHudGlance.BLUE, ArenaHudGlance.RED)
+
+
+## `strip.show_scores` only when something it shows changed: it queues a redraw on every call, and this runs every frame.
+func _show_scores(p_left: int, p_right: int, p_left_tag: String, p_right_tag: String, p_left_colour: Color, p_right_colour: Color) -> void:
+	if strip.sides and strip.left_score == p_left and strip.right_score == p_right and strip.left_tag == p_left_tag \
+			and strip.right_tag == p_right_tag and strip.left_colour == p_left_colour and strip.right_colour == p_right_colour:
+		return
+	strip.show_scores(p_left, p_right, p_left_tag, p_right_tag, p_left_colour, p_right_colour)
 
 
 ## The ranked row under the strip: a portrait, rank and kill count per player.
