@@ -241,6 +241,8 @@ func _add_bot_think_cvars() -> void:
 	_add_bot_tier_cvar("bot_tier_range", "tiers.far_range", "Metres: the near/far line of bot_tier_every_near and bot_tier_every_far", 0.0)
 	_add_bot_tier_cvar("bot_tier_close", "tiers.close_range", "Metres: a bot this close to a person thinks every tick whatever the person faces", 0.0)
 	_add_bot_tier_cvar("bot_tier_nearest", "tiers.nearest", "This many bots nearest each person think every tick", 0.0)
+	_add_bot_tier_cvar("bot_tier_every_engaged", "tiers.engaged_far_every", "Ticks between thinks of a bot fighting a person beyond bot_tier_engaged_range and out of view (1: every tick)", 1.0)
+	_add_bot_tier_cvar("bot_tier_engaged_range", "tiers.engaged_range", "Metres: a bot fighting a person this close thinks every tick", 0.0)
 	_add_bot_tier_cvar("bot_tier_view", "tiers.view_range", "Metres: a bot inside a person's view cone within this thinks every tick", 0.0)
 	add_cvar("bot_fast_sense", "1" if ArenaBotBrain.fast_sense else "0",
 		"1: bots scan candidates by squared distance and cone cosine (same result, cheaper); 0: dot-bot's stock scan",
