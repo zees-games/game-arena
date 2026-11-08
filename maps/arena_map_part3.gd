@@ -728,12 +728,7 @@ static func dm_pit() -> ArenaMap:
 			Transform3D(Basis.looking_at(to_centre.normalized(), Vector3.UP), at)
 		)
 
-	# Toys (loose only, see [member toys]): the pit is small and close, so two, in its
-	# north and south lanes.
-	map.toys = [
-		{"toy": "beach_ball", "at": [0.0, 0.0, 12.0]},
-		{"toy": "football", "at": [10.0, 0.0, -12.0]},
-	]
+	# No toys: a deathmatch map keeps its floor clear (ArenaTestToys gives the tests theirs).
 	# Packs (health on the east and west, ammo north and south): clear of every box, off the spawns.
 	map.add_pack(PACK_HEALTH, Vector3(-12.0, 0.0, 0.0))
 	map.add_pack(PACK_HEALTH, Vector3(12.0, 0.0, 0.0))

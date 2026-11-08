@@ -601,17 +601,7 @@ static func dm_atrium() -> ArenaMap:
 		"colour": ArenaMapPaint.LAVENDER,
 	})
 
-	# Toys (loose only, see [member toys]): balls in the open courts, barrels by the east
-	# wall, tyres in two corners.
-	map.toys = [
-		{"toy": "beach_ball", "at": [10.0, 0.0, -18.0]},
-		{"toy": "beach_ball", "at": [-22.0, 0.0, 12.0]},
-		{"toy": "football", "at": [4.0, 0.0, -2.0]},
-		{"toy": "barrel", "at": [24.0, 0.0, 10.0]},
-		{"toy": "barrel", "at": [24.8, 0.0, 10.7], "yaw": 40.0},
-		{"toy": "tyre", "at": [-24.0, 0.0, -12.0], "yaw": 30.0},
-		{"toy": "tyre", "at": [8.0, 0.0, 28.0], "yaw": 80.0},
-	]
+	# No toys: a deathmatch map keeps its floor clear (ArenaTestToys gives the tests theirs).
 	# Packs (two health, two ammo, off the building): clear of every box, off the spawns.
 	map.add_pack(PACK_HEALTH, Vector3(-8.0, 0.0, 0.0))
 	map.add_pack(PACK_HEALTH, Vector3(12.0, 0.0, -12.0))

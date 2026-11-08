@@ -370,16 +370,7 @@ static func dm_box() -> ArenaMap:
 			&"red" if index < 4 else &"blue"
 		)
 
-	# Toys (dot-props', loose only: see [member toys]): beach balls on the open floor, a
-	# football, a barrel and a tyre, each clear of every box and two and a half metres from
-	# every spawn.
-	map.toys = [
-		{"toy": "beach_ball", "at": [12.0, 0.0, -8.0]},
-		{"toy": "beach_ball", "at": [-12.0, 0.0, 8.0]},
-		{"toy": "football", "at": [-20.0, 0.0, -10.0]},
-		{"toy": "barrel", "at": [20.0, 0.0, 10.0], "yaw": 25.0},
-		{"toy": "tyre", "at": [-20.0, 0.0, 20.0], "yaw": 60.0},
-	]
+	# No toys: a deathmatch map keeps its floor clear (ArenaTestToys gives the tests theirs).
 	# Packs (health either side of the middle, ammo north and south): clear of every box, off the spawns.
 	map.add_pack(PACK_HEALTH, Vector3(-8.0, 0.0, 0.0))
 	map.add_pack(PACK_HEALTH, Vector3(8.0, 0.0, 0.0))

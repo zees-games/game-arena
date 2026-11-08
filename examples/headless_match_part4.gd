@@ -9,7 +9,7 @@ func _test_toys() -> void:
 	# dm_box last, and kept: each game's level and toys share this one physics space, so the
 	# others are freed before the next is built.
 	for id: StringName in [&"dm_atrium", &"dm_pit", &"dm_box"]:
-		var map: ArenaMap = ArenaMap.by_id(id)
+		var map: ArenaMap = ArenaTestToys.apply(ArenaMap.by_id(id))
 		var g := ArenaGame.new()
 		g.name = "ToyGame_%s" % id
 		g.tick_rate = TICK_RATE
