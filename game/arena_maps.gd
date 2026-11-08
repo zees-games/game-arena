@@ -641,7 +641,7 @@ static func clear_dead() -> void:
 	_dead_keys.clear()
 
 
-## Files the map manifest in [param dir] declares (its lightmap, its surface textures) that the mount lacks:
+## Textures the map manifest in [param dir] declares for its surfaces (a lightmap is optional: imports declare one they may lack) that the mount lacks:
 ## a hollow pack resolves and mounts but has no content. Empty when complete.
 static func missing_declared_files(dir: String, manifest: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
@@ -649,14 +649,6 @@ static func missing_declared_files(dir: String, manifest: Dictionary) -> PackedS
 	# A pack that carries its converted world under `worlds/` keeps its textures and lightmaps there.
 	if DirAccess.open(dir.path_join("worlds")) != null:
 		return out
-
-	var lm: Variant = manifest.get("lightmap", null)
-
-	if lm is Dictionary:
-		var file := str((lm as Dictionary).get("file", ""))
-
-		if not file.is_empty() and not FileAccess.file_exists(dir.path_join(file)):
-			out.append(file)
 
 	var seen := {}
 

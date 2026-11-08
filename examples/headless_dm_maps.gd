@@ -182,7 +182,7 @@ func _test_solo() -> void:
 
 
 ## A fake CDN: 404 for crackhouse, an opaque failure (browser "Failed to fetch", status 0) for aim-forts,
-## a 500 for gg-garage, a hollow pack (resolves, manifest and mesh, but not the lightmap it declares) for
+## a 500 for gg-garage, a hollow pack (resolves, manifest and mesh, but not the texture it declares) for
 ## dm-hollowtest. Any failure drops the map from the list and is never asked for twice; the rest stay.
 func _test_dead_maps() -> void:
 	print("-- any fetch failure (opaque, 5xx, hollow pack) drops the map and is not retried")
@@ -223,7 +223,7 @@ func _test_dead_maps() -> void:
 func _write_hollow_pack(dir: String) -> void:
 	var _m := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
 	var doc := FileAccess.open(dir.path_join("dm-hollowtest.json"), FileAccess.WRITE)
-	doc.store_string(JSON.stringify({"id": "dm-hollowtest", "kind": "arena", "lightmap": {"file": "dm-hollowtest_lightmap.png"}, "surfaces": []}))
+	doc.store_string(JSON.stringify({"id": "dm-hollowtest", "kind": "arena", "surfaces": [{"texture": "wall.png"}]}))
 	doc.close()
 	var mesh := FileAccess.open(dir.path_join("dm-hollowtest.bin"), FileAccess.WRITE)
 	mesh.store_8(0)
