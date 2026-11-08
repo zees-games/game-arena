@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/headless_shot_nodes.gd" id="1_nodes"]
+
+[node name="HeadlessShotNodes" type="Node"]
+script = ExtResource("1_nodes")

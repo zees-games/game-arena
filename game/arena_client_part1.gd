@@ -380,6 +380,9 @@ func _prewarm_tick() -> void:
 				for category in ["pistol", "smg", "rifle", "shotgun"]:
 					for fp in [true, false]:
 						DotWeaponMuzzle.warm(host, category, null, fp)
+				# The first death builds bodies, joints and shapes the physics server has never made (32 ms in a web build): make and drop one now.
+				if ragdolls != null:
+					ragdolls.prewarm()
 				if presentation != null and presentation.fx != null:
 					var cam: Transform3D = body.camera.global_transform
 					var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
