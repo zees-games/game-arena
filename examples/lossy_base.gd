@@ -83,7 +83,16 @@ const RELIABLE_SECONDS := 35.0
 ## Checks per window, and outside them.
 const MEASURE_ATTEMPTS := 6
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 63
+const OTHER_CHECKS := 64
+
+## The share of real time the three games must run at for anything here to be a measurement. ENet, the
+## relay's delays and every round trip keep wall time whatever the box does; a box that runs 64 ticks in
+## two seconds turns the relay's 55 ms into 7 ticks instead of 3.5, and every limit below is then judged
+## against a network twice as slow as the one it names. The build VM does that (one thread 4x slower than
+## dev02's, 96..112 ticks in 3 s) with no gap over the stall limit, so [method _measured] never saw it and
+## the run ended in ~20 failures that read like a netcode regression. See docs/testing.md.
+const PACE_MIN := 0.9
+const PACE_TRIES := 4
 
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
@@ -185,8 +194,14 @@ func _measured(section: Callable) -> void:
 		_stall_ms = 0
 		_last_physics_usec = 0
 		_start_watchdog()
+		var began_usec := Time.get_ticks_usec()
+		var began_frame := Engine.get_physics_frames()
 		await section.call()
-		var stalled := maxi(_stall_ms, _watchdog_stall_ms())
+		# Wall time the ticks did not keep up with: a box that runs every tick a little late never shows one
+		# long gap, yet ends the section as far behind the network as a single stall of that length.
+		var behind := (Time.get_ticks_usec() - began_usec) / 1000 \
+			- (Engine.get_physics_frames() - began_frame) * 1000 / Engine.physics_ticks_per_second
+		var stalled := maxi(maxi(_stall_ms, _watchdog_stall_ms()), behind)
 		if _failed == failed or stalled < _stall_limit_ms() or attempt == MEASURE_ATTEMPTS - 1:
 			if stalled >= _stall_limit_ms():
 				print("    (the runner stalled this process for up to %d ms during it)" % stalled)
@@ -271,6 +286,11 @@ func _track_stall() -> void:
 	if _last_physics_usec != 0:
 		_stall_ms = maxi(_stall_ms, (now - _last_physics_usec) / 1000)
 	_last_physics_usec = now
+
+
+## The share of real time [param ticks] server ticks since [param from_usec] are.
+func _pace(ticks: int, from_usec: int) -> float:
+	return float(ticks) * 1000000.0 / (float(TICK_RATE) * float(maxi(1, Time.get_ticks_usec() - from_usec)))
 
 
 func _until(condition: Callable, seconds: float) -> bool:
@@ -680,8 +700,28 @@ func _connect_everyone() -> bool:
 	var first_starved := first_buffer.starved_count
 	var first_late := first_buffer.late_count
 	var first_tick := _game.current_tick()
-	await _until(func() -> bool: return false, FIRST_SECONDS)
+	var first_usec := Time.get_ticks_usec()
+	await _wait_game(FIRST_SECONDS)
 	var first_ticks := _game.current_tick() - first_tick
+	# Before anything is judged: is this box a place to measure at all? A burst of load gets three more
+	# tries; a box that is simply too slow fails this one check and the run stops here, in half a minute,
+	# instead of playing every window against a network it has made twice as slow.
+	var pace := _pace(first_ticks, first_usec)
+	var paces := "%d%%" % roundi(pace * 100.0)
+	for attempt in range(1, PACE_TRIES):
+		if pace >= PACE_MIN:
+			break
+		await get_tree().create_timer(2.0).timeout
+		var from_tick := _game.current_tick()
+		var from_usec := Time.get_ticks_usec()
+		await _wait_game(2.0)
+		pace = _pace(_game.current_tick() - from_tick, from_usec)
+		paces += ", %d%%" % roundi(pace * 100.0)
+	if not _check(pace >= PACE_MIN,
+			"this box runs the server and both clients in real time (%d%% at least), so what follows measures the netcode" % roundi(PACE_MIN * 100.0),
+			"it ran at %s of %d ticks a second: NOT A MEASUREMENT, the box is too slow or too loaded; run this suite on another" % [paces, TICK_RATE]):
+		_done()
+		return false
 	var first_in_time := 1.0 - float(first_buffer.starved_count - first_starved) / float(maxi(1, first_ticks))
 	_check(first_in_time >= 0.95,
 		"in A's first %d seconds the server had its command for %.1f%% of %d ticks, %d late" % [
