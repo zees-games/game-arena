@@ -280,6 +280,7 @@ func _read_fire(move: DotFpsCommand) -> void:
 
 const ArenaJumpGate := preload("arena_jump_gate.gd")
 const TagRules := preload("arena_name_tag_rules.gd")
+const KillPovRules := preload("arena_kill_pov.gd")
 
 var _jump_gate := ArenaJumpGate.new()
 
@@ -432,6 +433,10 @@ func _watch_projectiles() -> void:
 	if layer != null and not layer.detonated.is_connected(_on_detonated):
 		layer.detonated.connect(_on_detonated)
 
+## Whether the screen shows a replay (the kill view or final killcam): live pickup prompts do not belong over it.
+func _in_replay_view() -> bool:
+	return is_inside_tree() and KillPovRules.is_replay_camera(get_viewport().get_camera_3d())
+
 ## The prompt for the dropped weapon in front of the player, which the use key takes; empty when none.
 func _pickup_hint() -> String:
 	if game.map_io != null and player != null and player.is_alive():
@@ -481,10 +486,16 @@ func _drive_spectator_camera() -> void:
 		if hud != null:
 			# The world panel over a dropped weapon already says "Take ammo"; the HUD line would repeat it.
 			var panel: Node3D = get_meta(&"pickup_view") if has_meta(&"pickup_view") else null
-			hud.use_hint = "" if panel != null and panel.visible else _pickup_hint()
+			hud.use_hint = "" if (panel != null and panel.visible) or _in_replay_view() else _pickup_hint()
 		if not player.camera.current:
 			player.camera.current = true
 		return
+
+	# Dead and watching a replay: the live pickup panel must not stay up over the past.
+	if has_meta(&"pickup_view") and (get_meta(&"pickup_view") as Node3D).visible:
+		(get_meta(&"pickup_view") as Node3D).visible = false
+		if hud != null:
+			hud.use_hint = ""
 
 	if hud != null:
 		var roaming := game.spectate.is_roaming(str(id))
@@ -554,12 +565,19 @@ func sync_name_tags(world_mask: int) -> void:
 	if settings != null:
 		TagRules.client_names = maxi(TagRules.parse(settings.get_string(&"name_tags", "team")), 0)
 		TagRules.client_bars = maxi(TagRules.parse(settings.get_string(&"health_bars", "smart")), 0)
+		TagRules.bar_colour_mode = &"health" if settings.get_string(&"health_bar_colour", "team") == "health" else &"team"
 	TagRules.server_names = int(game.rule("nametags"))
 	TagRules.server_bars = int(game.rule("hpbars"))
 	TagRules.viewer_id = player.player_id if player != null else -1
 	var shown := game.displayed_mode()
 	var sided := shown != null and shown.is_team_mode() and not game.teams().is_empty()
 	TagRules.viewer_team = game.team_of(TagRules.viewer_id) if sided and player != null else -1
+	TagRules.team_colours.clear()
+	TagRules.team_count = 0
+	for t in game.teams():
+		if sided and not t.is_spectator:
+			TagRules.team_count += 1
+			TagRules.team_colours[t.id] = t.colour
 	TagRules.occluder_mask = world_mask
 
 

@@ -108,10 +108,11 @@ static func smoothf(x: float) -> float:
 
 ## Draws what is asked: the bar at [param fraction] when [param bar], the [param player_name] when
 ## [param named] (in the teammate's colour when [param friend]). Hidden when it has neither.
-func update(fraction: float, bar: bool, named: bool, player_name: String, friend: bool, delta: float) -> void:
+func update(fraction: float, bar: bool, named: bool, player_name: String, friend: bool, delta: float, tone: Color = Color(0, 0, 0, 0), tag_scale: float = 1.0) -> void:
 	visible = bar or named
 	_bar.visible = bar
 	_label.visible = named
+	scale = Vector3.ONE * tag_scale
 	_label.position.y = (BAR_SIZE.y * 0.5 + 0.17) if bar else 0.0
 	_target = clampf(fraction, 0.0, 1.0)
 	# The bar eases to its mark and the trail waits a beat, then drains; a heal lifts both at once.
@@ -124,7 +125,7 @@ func update(fraction: float, bar: bool, named: bool, player_name: String, friend
 	var accent := Color(0.55, 0.9, 1.0) if friend else Color(1.0, 0.55, 0.5)
 	_material.set_shader_parameter("fraction", shown_fraction)
 	_material.set_shader_parameter("trail", trail_fraction)
-	_material.set_shader_parameter("fill_colour", fill_for(shown_fraction))
+	_material.set_shader_parameter("fill_colour", fill_for(shown_fraction) if tone.a == 0.0 else tone)
 	_material.set_shader_parameter("accent", accent)
 	if named:
 		_label.text = player_name
