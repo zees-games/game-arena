@@ -481,7 +481,7 @@ func _build_combat() -> DotResult:
 	return DotResult.success(null)
 
 func _build_knives() -> void:
-	knives = ArenaKnives.new()
+	knives = DotWeaponKnives.new()
 	knives.name = "Knives"
 	knives.rules = knife_rules
 	knives.is_authority = is_authority
