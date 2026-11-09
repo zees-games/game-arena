@@ -137,6 +137,7 @@ func _test_worlds() -> void:
 func _test_prop_visuals() -> void:
 	_section("no prop collides without a visual: every library model a world's prop names is on disk")
 	var worlds := 0
+	var no_store := 0
 	var props := 0
 	var unseen: Array[String] = []
 	for root in [ArenaBspMap.WORLD_ROOT, ArenaBspMap.WORLD_ROOT_DM]:
@@ -152,6 +153,11 @@ func _test_prop_visuals() -> void:
 			var licence: Dictionary = (doc as Dictionary).get("licence", {})
 			# simplify_path is lexical and worlds/ is a link: follow the link first, as the importer's reader does.
 			var store := DotMapBspMesh.real_dir(base.path_join(id)).path_join(str(licence.get("model_store", "model-library"))).simplify_path()
+			if not DirAccess.dir_exists_absolute(store):
+				# The gitignored model-library is not copied beside worlds/ when the project is offloaded
+				# through absolute worktree links (gpu.sh only follows ../sibling links): nothing to resolve.
+				no_store += 1
+				continue
 			var files := {}
 			for row: Dictionary in licence.get("model_stand_ins", []):
 				if row.has("store_file"):
@@ -165,6 +171,8 @@ func _test_prop_visuals() -> void:
 					unseen.append("%s: %s" % [id, stand_in])
 	if worlds == 0:
 		_line("  (no worlds linked: skipped)")
+	if no_store > 0:
+		_line("  (%d worlds without a linked model store: skipped)" % no_store)
 	_check(unseen.is_empty(), "%d library props over %d worlds all resolve to a model file" % [props, worlds], str(unseen.slice(0, 5)))
 	_done()
 
