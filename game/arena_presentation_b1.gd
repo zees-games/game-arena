@@ -637,18 +637,12 @@ func on_flag_event(what: StringName, flag_team: int, by_me: bool, my_team: int) 
 ## The grunt scales with the damage (a graze is quieter and higher than a heavy hit) and is left to
 ## the death cry when the damage was lethal, so the two do not stack into one muddy noise.
 func on_hurt(amount: float, lethal: bool = false) -> void:
-	if not lethal:
-		var weight := clampf(amount / HURT_FULL_DAMAGE, 0.0, 1.0)
-		audio.play(&"hurt", lerpf(HURT_MIN_VOLUME, 1.0, weight), lerpf(1.08, 0.94, weight))
+	var _grunt := DotHurtSound.play(audio, &"hurt", amount, lethal)
 	fx.flash(&"hurt_flash")
 	fx.spawn(&"hurt_shake", Transform3D.IDENTITY)
 
 
 const DEATH_BURST_AHEAD := 1.5
-
-## Damage at which the hurt grunt is full volume and lowest, and its volume for a scratch.
-const HURT_FULL_DAMAGE := 40.0
-const HURT_MIN_VOLUME := 0.5
 
 
 func on_died(where: Transform3D) -> void:
