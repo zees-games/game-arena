@@ -108,6 +108,10 @@ func _run() -> void:
 	_prof.config.record_dir = _out
 	_prof.config.keep_recordings = 500
 	_prof.config.budget_ms = 33.0
+	# Unit counts for profiler_groups (e.g. bots:arena.bot,players:arena.p_); read only when that lists them.
+	if _prof.has_method(&"add_counter"):
+		_prof.call(&"add_counter", "players", func() -> int: return (game.call("players") as Array).size(), "arena.p_")
+		_prof.call(&"add_counter", "bots", func() -> int: return maxi((game.call("players") as Array).size() - 1, 0), "arena.bot")
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	DotFpsPhysicsBody.profile = _queries
 	DotFpsPhysicsBody.prof.fill(0)
