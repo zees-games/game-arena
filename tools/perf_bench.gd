@@ -24,6 +24,14 @@ var _motor_us := false
 var _queries := true
 ## `--max-steps N`: ArenaTickBudget.max_steps, as cvar `arena_tick_max_steps`.
 var _max_steps := -1
+## `--res 1920x1080`: the window size (the default is the project's 1152x648).
+var _res := Vector2i.ZERO
+## `--killcam-hz N`: ArenaKillcamBodies.record_hz (default 60), `--lod 0`: ArenaPlayer.present_lod_enabled off.
+var _killcam_hz := -1.0
+var _lod := true
+## `--ablate a,b`: render A/B switches applied after the warm-up: noshadow (every light's shadow off), nofx (ssao, ssil, glow,
+## fog, volumetric fog off in every Environment), nohud, nobots (remote bodies hidden).
+var _ablate := PackedStringArray()
 var _client: Node = null
 var _prof: Node = null
 ## Per-frame sums while recording, for the sidecar.
@@ -50,10 +58,23 @@ func _ready() -> void:
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
 			"--queries": _queries = int(args[i + 1]) != 0
 			"--max-steps": _max_steps = int(args[i + 1])
+			"--res":
+				var wh := args[i + 1].split("x")
+				if wh.size() == 2:
+					_res = Vector2i(int(wh[0]), int(wh[1]))
+			"--killcam-hz": _killcam_hz = float(args[i + 1])
+			"--ablate": _ablate = args[i + 1].split(",")
+			"--lod": _lod = int(args[i + 1]) != 0
 	seed(_seed)
 	if _max_steps > 0:
 		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
 	var _scratch := ArenaPresentation.use_scratch_settings("perf_bench")
+	if _res != Vector2i.ZERO and DisplayServer.get_name() != "headless":
+		get_window().size = _res
+	if _killcam_hz >= 0.0:
+		preload("../game/arena_killcam_bodies.gd").record_hz = _killcam_hz
+	if not _lod:
+		preload("../game/arena_player.gd").present_lod_enabled = false
 	_run.call_deferred()
 
 
@@ -100,6 +121,7 @@ func _run() -> void:
 		add_child(pilot)
 	_say("map %s mode %s players %d, warming %.0f s" % [String(game.get("map").id), String(game.get("mode").id), game.call("players").size(), _warmup])
 	await _wait(_warmup)
+	_apply_ablate(game)
 	_prof = DotRegistry.get_service(&"dot_profiler")
 	if _prof == null:
 		_prof = DotProfiler.new()
@@ -161,6 +183,38 @@ func _print_spikes(report: Dictionary) -> void:
 		var s: Dictionary = spikes[i]
 		print("PERF_BENCH_SPIKE t=%.2f ms=%.0f phys=%.0f script=%.0f render=%.0f cause=%s %s" % [float(s.get("t", 0.0)), float(s.get("ms", 0.0)),
 			float(s.get("physics", 0.0)), float(s.get("script", 0.0)), float(s.get("render", 0.0)), s.get("cause", ""), str(s.get("hints", []))])
+
+
+func _apply_ablate(game: Object) -> void:
+	for a in _ablate:
+		match a:
+			"noshadow":
+				for l in get_tree().root.find_children("*", "Light3D", true, false):
+					(l as Light3D).shadow_enabled = false
+			"nofx":
+				var envs: Array[Environment] = []
+				for we in get_tree().root.find_children("*", "WorldEnvironment", true, false):
+					envs.append((we as WorldEnvironment).environment)
+				for cam in get_tree().root.find_children("*", "Camera3D", true, false):
+					if (cam as Camera3D).environment != null:
+						envs.append((cam as Camera3D).environment)
+				for e in envs:
+					if e != null:
+						e.ssao_enabled = false
+						e.ssil_enabled = false
+						e.glow_enabled = false
+						e.fog_enabled = false
+						e.volumetric_fog_enabled = false
+				_say("nofx: %d environments" % envs.size())
+			"nohud":
+				var hud: Variant = _client.get("hud")
+				if hud != null:
+					hud.visible = false
+			"nobots":
+				for p: Object in game.call("players"):
+					if p.get("camera") == null:
+						p.visible = false
+	_say("ablate %s" % ",".join(_ablate))
 
 
 func _add(key: String, v: float) -> void:
