@@ -43,7 +43,7 @@ func _test_spectating() -> void:
 	_kill_through_combat(game, killer, victim)
 
 	_check(
-		game.spectate.is_spectating(victim),
+		game.spectate.is_spectating(str(victim)),
 		"a dead player is watching something rather than lying on the floor"
 	)
 
@@ -70,20 +70,20 @@ func _test_spectating() -> void:
 		"%d watching %s" % [victim, view.target]
 	)
 
-	var where := game.spectate.camera_for(victim)
+	var where := game.spectate.camera_for(str(victim))
 	_check(
 		where.origin.y > game.map.floor_y + 0.5,
 		"and the camera is off the floor rather than where the body fell",
 		"%.2f" % where.origin.y
 	)
 
-	var cycled := game.spectate.next_target(victim)
+	var cycled := game.spectate.next_target(str(victim))
 	_check(cycled.ok, "the view can be cycled", str(cycled.error))
 
 	game.player_for(victim).spawn(game.map.spawns[0], game.current_tick())
 	game.spectate.manager.on_spawn(str(victim))
 	_check(
-		not game.spectate.is_spectating(victim),
+		not game.spectate.is_spectating(str(victim)),
 		"and respawning stops it"
 	)
 
@@ -94,10 +94,10 @@ func _test_spectating() -> void:
 
 func _test_free_roam_rest(game: ArenaGame, victim: int, rules: DotSpectatorRules) -> void:
 	_check(
-		not game.spectate.is_roaming(victim),
+		not game.spectate.is_roaming(str(victim)),
 		"a restricted camera moves a roamer back onto a player"
 	)
-	_check(not game.spectate.toggle_roam(victim).ok, "and refuses the roam key")
+	_check(not game.spectate.toggle_roam(str(victim)).ok, "and refuses the roam key")
 	_check(rules.set_cvar("mp_freeroam_speed", "20"), "mp_freeroam_speed is read")
 	_check(is_equal_approx(rules.roam_speed, 20.0), "and sets the speed", str(rules.roam_speed))
 
@@ -562,7 +562,7 @@ func _test_free_roam() -> void:
 		"force_camera %d" % rules.force_camera
 	)
 	var mgr := game.spectate.manager
-	_check(game.spectate.can_roam(victim), "a dead player may roam")
+	_check(game.spectate.can_roam(str(victim)), "a dead player may roam")
 
 	var dead: ArenaPlayer = game.player_for(victim)
 	if dead != null and dead.flashlight_cfg != null:
@@ -574,36 +574,36 @@ func _test_free_roam() -> void:
 	else:
 		_check(false, "the dead player is reachable for the flashlight check")
 
-	var before := game.spectate.camera_for(victim)
-	var entered := game.spectate.toggle_roam(victim)
+	var before := game.spectate.camera_for(str(victim))
+	var entered := game.spectate.toggle_roam(str(victim))
 	_check(entered.ok, "the roam key enters a roam", str(entered.error))
-	_check(game.spectate.is_roaming(victim), "and the mode is ROAMING")
+	_check(game.spectate.is_roaming(str(victim)), "and the mode is ROAMING")
 	_check(
-		game.spectate.camera_for(victim).origin.distance_to(before.origin) < 0.01,
+		game.spectate.camera_for(str(victim)).origin.distance_to(before.origin) < 0.01,
 		"seeded where the camera was, not at the origin"
 	)
 
 	var cam := DotSpectatorFreeCam.new()
 	cam.rules = rules
-	cam.seed_from(game.spectate.camera_for(victim))
+	cam.seed_from(game.spectate.camera_for(str(victim)))
 	var moved := cam.step(Vector3(0.0, 0.0, 1.0), false, false, 1.0)
 	var _kept := mgr.move_free(str(victim), moved.origin, moved.basis)
 	_check(
-		game.spectate.camera_for(victim).origin.distance_to(before.origin) > rules.roam_speed * 0.9,
+		game.spectate.camera_for(str(victim)).origin.distance_to(before.origin) > rules.roam_speed * 0.9,
 		"flying forward a second moves the camera by the roam speed"
 	)
 	game.tick({})
-	_check(game.spectate.is_roaming(victim), "and a tick leaves the roam alone")
+	_check(game.spectate.is_roaming(str(victim)), "and a tick leaves the roam alone")
 
-	var left := game.spectate.toggle_roam(victim)
-	_check(left.ok and not game.spectate.is_roaming(victim), "the same key goes back onto a player")
+	var left := game.spectate.toggle_roam(str(victim))
+	_check(left.ok and not game.spectate.is_roaming(str(victim)), "the same key goes back onto a player")
 
 	_check(rules.set_cvar("mp_freeroam", "0"), "mp_freeroam 0 is read")
-	var refused := game.spectate.toggle_roam(victim)
+	var refused := game.spectate.toggle_roam(str(victim))
 	_check(not refused.ok, "with mp_freeroam 0 the roam key is refused")
-	_check(not game.spectate.can_roam(victim), "and the hint is not offered")
+	_check(not game.spectate.can_roam(str(victim)), "and the hint is not offered")
 	_check(rules.set_cvar("mp_freeroam", "1"), "mp_freeroam 1 is read")
-	_check(game.spectate.toggle_roam(victim).ok, "back on, it enters again")
+	_check(game.spectate.toggle_roam(str(victim)).ok, "back on, it enters again")
 	_check(rules.set_cvar("mp_forcecamera", "1"), "mp_forcecamera 1 is read")
 	for t in range(4):
 		game.tick({})
