@@ -217,7 +217,7 @@ func _local_commands(move: DotFpsCommand) -> Dictionary:
 
 func is_roaming() -> bool:
 	return game != null and game.spectate != null and player != null \
-		and game.spectate.is_roaming(player.player_id)
+		and game.spectate.is_roaming(str(player.player_id))
 
 func _touch_held(id: StringName) -> bool:
 	return _touch != null and bool(_touch.call(&"is_held", id))
@@ -472,7 +472,7 @@ func _drive_spectator_camera() -> void:
 
 	var id := player.player_id
 
-	if not game.spectate.is_spectating(id):
+	if not game.spectate.is_spectating(str(id)):
 		if hud != null:
 			hud.roam_hint = ""
 		ArenaWeaponDropWiring.update_panel(self, _held(ArenaBindings.USE), get_process_delta_time())
@@ -485,8 +485,8 @@ func _drive_spectator_camera() -> void:
 		return
 
 	if hud != null:
-		var roaming := game.spectate.is_roaming(id)
-		hud.roam_hint = "Back to players" if roaming else ("Free camera" if game.spectate.can_roam(id) else "")
+		var roaming := game.spectate.is_roaming(str(id))
+		hud.roam_hint = "Back to players" if roaming else ("Free camera" if game.spectate.can_roam(str(id)) else "")
 
 	# The chase and death cameras are pulled out of the level by dot-spectate, given it.
 	var manager := game.spectate.manager
@@ -494,9 +494,9 @@ func _drive_spectator_camera() -> void:
 		manager.camera_world = player.camera.get_world_3d()
 		manager.camera_mask = _level_mask()
 
-	var where := game.spectate.camera_for(id)
+	var where := game.spectate.camera_for(str(id))
 
-	if game.spectate.is_roaming(id):
+	if game.spectate.is_roaming(str(id)):
 		where = _fly_free_camera(id, where)
 	else:
 		_free_cam = null
@@ -575,7 +575,7 @@ func own_body_mode() -> int:
 func _watching_other() -> bool:
 	if player == null or game == null:
 		return false
-	return not player.is_alive() or (game.spectate != null and game.spectate.is_spectating(player.player_id))
+	return not player.is_alive() or (game.spectate != null and game.spectate.is_spectating(str(player.player_id)))
 
 ## The sound manager the flashlight clicks play through, or null before audio is up.
 func _flash_audio_ref() -> DotNodeRef:

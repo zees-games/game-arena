@@ -271,7 +271,7 @@ func _test_spectate_and_back() -> void:
 	_step(4)
 	_check(_row(73).spectating and not _game.player_for(73).is_alive(), "Spectate takes her out of play, body gone", " / ".join(out))
 	_check(_row(73).present and _entities(73) == 1, "her scoreboard row stays and there is still one entity")
-	_check(_game.spectate.is_spectating(73), "dot-spectate has her watching")
+	_check(_game.spectate.is_spectating(str(73)), "dot-spectate has her watching")
 	_step(200)
 	_check(not _game.player_for(73).is_alive(), "and she does not respawn by herself while out")
 	var again := await _switch("play")
@@ -280,7 +280,7 @@ func _test_spectate_and_back() -> void:
 	_check(not _row(73).spectating and back.is_alive(), "Play puts her back in, alive", " / ".join(again))
 	_check(_entities(73) == 1, "with exactly one player entity, no duplicate")
 	_check(_row(73).kills == 2 and _row(73).present, "the scoreboard row and the score are kept")
-	_check(not _game.spectate.is_spectating(73), "and she is no longer watching")
+	_check(not _game.spectate.is_spectating(str(73)), "and she is no longer watching")
 	_check(_game.match_node.scoreboard.find("73") == _row(73), "one row for her, not two")
 	_done()
 

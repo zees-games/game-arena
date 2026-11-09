@@ -1,4 +1,4 @@
-extends Node
+extends DotSpectatorHost
 
 const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
@@ -22,22 +22,18 @@ const ArenaPlayer := preload("arena_player.gd")
 ## add_child(spectate)
 ## spectate.setup()
 ## # on the client, once a frame:
-## camera.global_transform = spectate.camera_for(my_id)
+## camera.global_transform = spectate.camera_for(str(my_id))  # keys are strings
 ## [/codeblock]
 
 const CHANNEL := "arena.spectate"
 
 var game: ArenaGame = null
 
-var manager: DotSpectatorManager = null
-
 
 func setup() -> DotResult:
 	if game == null:
 		return DotResult.fail(DotError.CODE_STATE, "ArenaSpectate needs a game.")
 
-	manager = DotSpectatorManager.new()
-	manager.name = "SpectatorManager"
 	# [b]Authoritative on a client too, over its own camera and nothing else.[/b] This
 	# game's server sends no spectator views — a client learns of a death from the KILL
 	# event and of a respawn from the replicated health — so a MIRROR here would be one
@@ -45,17 +41,13 @@ func setup() -> DotResult:
 	# would never hand over. The client runs the same rules from the same mode over the
 	# players it already draws, and decides nothing the server has to trust; what the
 	# server enforces is what it replicates. See dot-spectate's docs/design.md, on mirrors.
-	manager.authoritative = true
-	manager.rules = _rules()
-	manager.participants_fn = _participants
-	manager.team_fn = func(key: String) -> int: return game.team_of(int(key))
-	manager.alive_fn = func(key: String) -> bool:
-		var player := game.player_for(int(key))
-		return player != null and player.is_alive()
-	manager.pose_fn = _pose_of
-	add_child(manager)
+	authoritative = true
+	# The game's own object, so the cvars the module binds (and a client follows) are the
+	# rules in use.
+	rules = game.spectate_rules
+	_adopt_tuning()
 
-	var res := manager.setup()
+	var res := super.setup()
 	if not res.ok:
 		return res.wrap("arena spectate")
 
@@ -79,27 +71,31 @@ func setup() -> DotResult:
 	return DotResult.success(null)
 
 
+## [b]force_camera and allow_roaming are deliberately not set[/b]: they are the operator's
+## (`mp_forcecamera`, `mp_freeroam`) and default to anybody-may-watch with free roam on.
+## Until 2026-10-21 a team mode forced own-team-only here, which also switched roaming off
+## with nobody having said so.
+func _adopt_tuning() -> void:
+	tick_rate = game.tick_rate
+	death_cam_seconds = 1.0
+	freeze_cam_seconds = 1.5
+	chase_distance = 3.5
+	chase_height = 0.9
+	history_seconds = 4.0
+	eye_height = ArenaPlayer.eye_height()
+
+
 ## The camera timers are seconds turned into ticks at setup; a client whose server runs another
 ## rate adopts it after setup (HELLO), so the bridge calls this again or the death camera would
 ## last the default rate's tick count at the new rate (1 s became 2 s at 33 Hz).
 func retime() -> void:
 	if manager != null:
-		manager.rules = _rules()
+		_adopt_tuning()
+		manager.rules = tune_rules(game.spectate_rules)
 
 
-func _rules() -> DotSpectatorRules:
-	# The game's own object, so the cvars the module binds (and a client follows) are the
-	# rules in use. [b]force_camera and allow_roaming are deliberately not set here[/b]: they
-	# are the operator's (`mp_forcecamera`, `mp_freeroam`) and default to anybody-may-watch
-	# with free roam on. Until 2026-10-21 a team mode forced own-team-only here, which also
-	# switched roaming off with nobody having said so.
-	var rules := game.spectate_rules
-	rules.death_cam_ticks = int(1.0 * float(game.tick_rate))
-	rules.freeze_cam_ticks = int(1.5 * float(game.tick_rate))
-	rules.chase_distance = 3.5
-	rules.chase_height = 0.9
-	rules.history_ticks = 4 * game.tick_rate
-	return rules
+func _channel() -> String:
+	return CHANNEL
 
 
 func _participants() -> PackedStringArray:
@@ -107,6 +103,19 @@ func _participants() -> PackedStringArray:
 	for id in game.player_ids():
 		out.append(str(id))
 	return out
+
+
+func _team_of(key: String) -> int:
+	return game.team_of(int(key))
+
+
+func _is_alive(key: String) -> bool:
+	var player := game.player_for(int(key))
+	return player != null and player.is_alive()
+
+
+func _current_tick() -> int:
+	return game.current_tick()
 
 
 ## Where a player's eyes are.
@@ -120,50 +129,18 @@ func _pose_of(key: String) -> Transform3D:
 	var player := game.player_for(int(key))
 	if player == null or player.controller == null:
 		return Transform3D.IDENTITY
-
 	var state := player.controller.state
-	var basis := Basis.from_euler(
-		Vector3(deg_to_rad(state.pitch), deg_to_rad(state.yaw), 0.0)
-	)
-	return Transform3D(basis, state.position + Vector3(0.0, ArenaPlayer.eye_height(), 0.0))
+	return eye_pose(state.position, state.pitch, state.yaw)
 
 
 func tick(_delta: float) -> void:
-	if manager != null:
-		manager.advance(game.current_tick())
+	advance_live()
 
 
-## Keys seen dead while watching, on a client. See [method client_tick].
-var _seen_dead: Dictionary = {}
-
-
-## A networked client's tick, from [code]ArenaNetBridge.client_tick[/code].
-##
-## [b]Needed because a networked client never calls `game.tick`[/b] — the bridge
-## simulates the predicted player itself — so [method tick] never runs there, and a
-## death camera started on a client that nothing advanced sat on the death camera until
-## the respawn. It also stops a viewer the server has brought back: a client hears no
-## `player_spawned`, so the respawn is read off the replicated health — a viewer who was
-## seen dead and is alive again is playing. "Seen dead" rather than "alive", because the
-## KILL event can arrive before the snapshot that says so, and stopping on "alive" then
-## would end the death camera on the tick it started.
+## A networked client's tick, from [code]ArenaNetBridge.client_tick[/code]: a networked
+## client never calls `game.tick`, see [method DotSpectatorHost.advance_client].
 func client_tick(tick: int) -> void:
-	if manager == null:
-		return
-
-	manager.advance(tick)
-
-	for key in manager.viewers():
-		var player := game.player_for(int(key))
-		if player == null:
-			manager.stop(key)
-			_seen_dead.erase(key)
-			continue
-		if not player.is_alive():
-			_seen_dead[key] = true
-		elif _seen_dead.has(key):
-			_seen_dead.erase(key)
-			manager.on_spawn(key)
+	advance_client(tick)
 
 
 ## A KILL event arrived, on a networked client. The same chain [method _on_killed] starts
@@ -177,65 +154,20 @@ func on_kill_event(info: Dictionary) -> void:
 	if player == null or player.controller == null:
 		# A kill for somebody this client does not hold: nobody here to draw a camera for.
 		return
-	manager.on_death(
-		str(victim), player.controller.state.position, str(killer) if killer != 0 else "",
-		game.current_tick()
-	)
-
-
-## The camera a viewer should be drawn from. Identity when they are playing.
-func camera_for(id: int) -> Transform3D:
-	return manager.camera_of(str(id)) if manager != null else Transform3D.IDENTITY
-
-
-func is_spectating(id: int) -> bool:
-	return manager != null and manager.is_spectating(str(id))
-
-
-func next_target(id: int) -> DotResult:
-	if manager == null:
-		return DotResult.fail(DotError.CODE_STATE, "Spectating is not set up.")
-	return manager.next_target(str(id))
-
-
-func previous_target(id: int) -> DotResult:
-	if manager == null:
-		return DotResult.fail(DotError.CODE_STATE, "Spectating is not set up.")
-	return manager.previous_target(str(id))
+	death(str(victim), player.controller.state.position, str(killer) if killer != 0 else "")
 
 
 ## Cycle first person, chase, roaming — whatever the server's policy allows.
-func cycle_mode(id: int) -> DotResult:
+func cycle_mode(key: String) -> DotResult:
 	if manager == null:
-		return DotResult.fail(DotError.CODE_STATE, "Spectating is not set up.")
-	var view := manager.view(str(id))
+		return _unset()
+	var view := manager.view(key)
 	var next := DotSpectatorView.Mode.CHASE
 	if view.mode == DotSpectatorView.Mode.CHASE:
 		next = DotSpectatorView.Mode.ROAMING
 	elif view.mode == DotSpectatorView.Mode.ROAMING:
 		next = DotSpectatorView.Mode.FIRST_PERSON
-	return manager.set_mode(str(id), next)
-
-
-## The free-roam key. Refused with a line to show when roaming is off (`mp_freeroam 0`) or a
-## restricted camera is set (`mp_forcecamera`). Local to the client that presses it: this
-## game's server sends no spectator views, so the client's manager is authoritative over its
-## own camera and nothing needs telling.
-func toggle_roam(id: int) -> DotResult:
-	if manager == null:
-		return DotResult.fail(DotError.CODE_STATE, "Spectating is not set up.")
-	if not manager.can_roam(str(id)):
-		return DotResult.fail(DotError.CODE_FORBIDDEN, "Free roam is off on this server.")
-	return manager.toggle_roam(str(id))
-
-
-func can_roam(id: int) -> bool:
-	return manager != null and manager.can_roam(str(id))
-
-
-func is_roaming(id: int) -> bool:
-	return manager != null and manager.is_spectating(str(id)) \
-		and manager.view(str(id)).mode == DotSpectatorView.Mode.ROAMING
+	return manager.set_mode(key, next)
 
 
 func _on_killed(entry: DotKillFeed.Entry) -> void:
@@ -251,24 +183,12 @@ func _on_killed(entry: DotKillFeed.Entry) -> void:
 		DotLog.warn(CHANNEL, "a death for a player the game does not hold; the death cam starts at the origin", {
 			"victim": entry.victim_key,
 		})
-	manager.on_death(entry.victim_key, at, entry.killer_key, game.current_tick())
+	death(entry.victim_key, at, entry.killer_key)
 
 
 func _on_spawned(player: ArenaPlayer) -> void:
-	if manager != null:
-		manager.on_spawn(str(player.player_id))
+	spawned(str(player.player_id))
 
 
 func on_leave(id: int) -> void:
-	if manager != null:
-		manager.on_leave(str(id))
-
-
-func describe() -> Dictionary:
-	return manager.describe() if manager != null else {}
-
-
-func describe_lines() -> PackedStringArray:
-	if manager == null:
-		return PackedStringArray(["spectate: not set up"])
-	return manager.describe_lines()
+	left(str(id))
