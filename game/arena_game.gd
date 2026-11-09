@@ -166,6 +166,9 @@ func add_player(
 
 	return DotResult.success(player)
 
+func _mode_shown() -> ArenaMode:
+	return displayed_mode()
+
 func displayed_mode() -> ArenaMode:
 	return shown_mode if shown_mode != null else mode
 

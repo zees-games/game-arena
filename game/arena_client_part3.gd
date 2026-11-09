@@ -556,7 +556,8 @@ func sync_name_tags(world_mask: int) -> void:
 	TagRules.server_names = int(game.rule("nametags"))
 	TagRules.server_bars = int(game.rule("hpbars"))
 	TagRules.viewer_id = player.player_id if player != null else -1
-	var sided := game.mode != null and game.mode.is_team_mode() and not game.teams().is_empty()
+	var shown := game.displayed_mode()
+	var sided := shown != null and shown.is_team_mode() and not game.teams().is_empty()
 	TagRules.viewer_team = game.team_of(TagRules.viewer_id) if sided and player != null else -1
 	TagRules.occluder_mask = world_mask
 

@@ -272,6 +272,7 @@ func server_tick(tick: int) -> void:
 	_watch_map_io()
 	_watch_bullets()
 	_send_ctf(0, tick)
+	_send_teams(0, tick)
 
 	var t_net := Time.get_ticks_usec()
 	if net != null:
@@ -485,6 +486,7 @@ func send_signon(peer_id: int) -> void:
 
 	_send_match_state(peer_id)
 	_send_ctf(peer_id, _tick, true)
+	_send_teams(peer_id, _tick, true)
 
 	# The map's packs that are out right now. A kill's drop lives seconds and a joiner never
 	# misses one; a pack lives the whole map, so a joiner would otherwise not see it until
@@ -700,6 +702,31 @@ func _send_ctf(peer_id: int, tick: int, force: bool = false) -> void:
 	var text: String = game.objectives.ctf_wire_text(tick, force or peer_id != 0)
 	if text != "":
 		send_event(peer_id, ArenaEvents.Kind.CTF, text.to_utf8_buffer())
+
+
+## The last sides text sent to everybody.
+var _teams_wire := ""
+
+
+## Sends who is on which side to [param peer_id] (0 for everyone) when it changed, checked a few times a second.
+func _send_teams(peer_id: int, tick: int, force: bool = false) -> void:
+	if game == null:
+		return
+	if peer_id == 0 and not force and tick % 15 != 0:
+		return
+	var text := ""
+	if not game.teams().is_empty():
+		var parts := PackedStringArray()
+		for id in game.player_ids():
+			parts.append("%d:%d" % [id, game.team_of(id)])
+		text = ";".join(parts)
+	if peer_id == 0:
+		if text == _teams_wire:
+			return
+		_teams_wire = text
+	elif text == "":
+		return
+	send_event(peer_id, ArenaEvents.Kind.TEAM, text.to_utf8_buffer())
 
 
 func _send_match_state(peer_id: int) -> void:
