@@ -48,6 +48,9 @@ func _boot() -> void:
 	map.extent = 150.0
 	map.wall_height = 8.0
 	var _p := map.add_perimeter()
+	# Headless authority only builds ground collision when the map has toys (see _build_toys);
+	# one far-off ball gives the lane its floor without touching the shot.
+	map.toys = [{"toy": "beach_ball", "at": [100.0, 0.0, 100.0]}]
 	var _s1 := map.add_spawn(Transform3D(Basis(), Vector3(0.0, 0.05, 0.0)))
 	var _s2 := map.add_spawn(Transform3D(Basis(), Vector3(5.0, 0.05, 0.0)))
 	_check(_game.setup(map).ok, "the arena sets up")

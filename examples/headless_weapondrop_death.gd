@@ -6,6 +6,7 @@ extends Node
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaTestToys := preload("arena_test_toys.gd")
 const Wiring := preload("../game/arena_weapon_drop_wiring.gd")
 const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")
 
@@ -66,7 +67,7 @@ func _run() -> void:
 	game.register_service = false
 	game.mode = ArenaMode.team_deathmatch()
 	add_child(game)
-	_check(game.setup(ArenaMap.dm_atrium()).ok, "a game sets up")
+	_check(game.setup(ArenaTestToys.give(ArenaMap.dm_atrium())).ok, "a game sets up")
 	game.start(0)
 	var _a := game.add_player(21, "A")
 	game.tick({})
