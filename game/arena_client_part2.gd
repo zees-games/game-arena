@@ -1,5 +1,7 @@
 extends "arena_client_part1.gd"
 
+const ArenaProfilerContext := preload("arena_profiler_context.gd")
+
 func _adopt(candidate: ArenaPlayer) -> void:
 	if candidate == null or player != null:
 		return
@@ -242,6 +244,7 @@ func _build_netcode() -> DotResult:
 
 	var extra := extras.attach(bridge, game)
 	DotLog.result(CHANNEL, "the client's chat, voice and map layers", extra)
+	_install_profiler_context()
 	platform.look_voice = extras.voice
 	platform.look_chat = extras.chat
 	platform.look_gag_action = ArenaBindings.VOICE_GAG
@@ -665,3 +668,14 @@ func _build_ragdolls() -> void:
 	# The map's toys are heard the same way: a bounce, a knock, a barrel's roll.
 	if not game.toy_sound.is_connected(_ragdoll_sound):
 		var _toys := game.toy_sound.connect(_ragdoll_sound)
+
+
+## The profiler's game context and native timers, now if it is up and when it arrives if not.
+func _install_profiler_context() -> void:
+	var prof: Object = DotRegistry.get_service(&"dot_profiler")
+	if prof != null:
+		ArenaProfilerContext.install(prof, game, bridge)
+		return
+	DotRegistry.signals().service_registered.connect(func(svc_name: StringName, inst: Object) -> void:
+		if svc_name == &"dot_profiler":
+			ArenaProfilerContext.install(inst, game, bridge), CONNECT_ONE_SHOT)
