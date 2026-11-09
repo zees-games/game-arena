@@ -334,6 +334,7 @@ func _commands() -> Dictionary:
 		behaviour.last_fire = made[1]
 		behaviour.last_view_lag = -1.0
 		behaviour.last_view_back = -1
+		behaviour.last_view_tick = -1
 
 	for session_id in _behaviours:
 		var behaviour: ArenaPlayerNet = _behaviours[session_id]
