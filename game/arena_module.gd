@@ -68,6 +68,7 @@ func _module_load() -> DotResult:
 	_add_movement_cvars()
 	_add_tag_cvars()
 	_add_drop_cvars()
+	_add_knife_cvars()
 	_add_ctf_cvars()
 	_add_flag_carry_cvars()
 	game.ctf_announced.connect(func(text: String) -> void:

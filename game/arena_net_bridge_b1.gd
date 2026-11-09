@@ -1,4 +1,4 @@
-extends "arena_net_weapon_drops.gd"
+extends "arena_net_knives.gd"
 
 const ArenaEvent := preload("arena_event.gd")
 
@@ -268,6 +268,7 @@ func server_tick(tick: int) -> void:
 	_watch_projectiles()
 	_watch_drops()
 	_watch_weapon_drops()
+	_watch_knives()
 	_watch_panes()
 	_watch_map_io()
 	_watch_bullets()
@@ -498,6 +499,7 @@ func send_signon(peer_id: int) -> void:
 			))
 
 	_send_weapon_drops_signon(peer_id)
+	_send_knives_signon(peer_id)
 	_send_panes_signon(peer_id)
 	if game != null and game.map_io != null:
 		game.map_io.add_peer(peer_id)

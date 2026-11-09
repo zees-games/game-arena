@@ -26,6 +26,20 @@
 
 **A detonation pins the attacker's believed origin to the blast** for that one resolution (`ArenaProjectiles.origin_of`) and puts it back. `DotCombatManager.resolve_shot` corrects any shot whose origin is more than `max_origin_error` from where it believes the attacker is (right for a gun) and re-traces; for a blast that put every explosion in its owner's face. Any check about explosives must ask the thrower's health too.
 
+## Knife throw
+
+The aim key (right mouse; the bash key with `right_mouse_aims` off) with the knife in hand throws it (`game/arena_knives.gd`, server-side in `ArenaGame.tick` before the player simulates). The knife leaves the arsenal and flies under a light gravity (8 m/s²) until its first contact, so it goes where aimed; after that it falls at the players' 22 m/s². The first enemy body it meets before a bounce dies outright (`combat.apply_damage`, type `strike`, weapon `knife`, context `why: knife_throw`), and the knife stays stuck at the hit point. A refused hit, such as a team-mate with friendly fire off, bounces like a wall does. A miss bounces off the world (restitution 0.3, 55% kept along the surface) and lies flat once it is slow on a floor.
+
+Anybody alive without a knife who walks within reach of one lying or stuck takes it back. A knife lying for 90 s, or still flying after 10 s, goes back to its owner, and so does the oldest when more than 32 are out. Clients get one `MORE` event per change (sub-kind `KNIFE`, `game/arena_knife_events.gd`, through `game/arena_net_knives.gd`). `MORE` is the last kind the 5-bit field has room for, so later events become sub-kinds of it. A client flies its mirror against the world between events. On a stuck knife it finds the nearest ragdoll part, rides it with a wound mark, and splats blood behind and below.
+
+| cvar | default | |
+|---|---|---|
+| `arena_knife_throw` | 1 | The aim key throws the knife in hand. |
+| `arena_knife_throw_speed` | 40 | Throw speed in m/s, plus the thrower's own velocity. |
+| `arena_knife_throw_pickup` | 1 | Pickup reach in metres; 0 turns pickup off. |
+
+Bots do not throw. `examples/headless_knife_throw.gd` is the suite, and `tools/knife_shot.sh` renders the frames.
+
 ## Loadouts
 
 - **A spawn hands over the heaviest gun** (`_better_hand`), not the highest slot, which is the throwable in the pack's layout.

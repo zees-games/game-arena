@@ -636,6 +636,8 @@ func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
 			_apply_weapon_drop_event(event.kind, reader)
 		ArenaEvents.Kind.PANE_BROKEN:
 			_apply_pane_broken(reader)
+		ArenaEvents.Kind.MORE:
+			_apply_more_event(reader)
 		ArenaEvents.Kind.PROP_BROKEN:
 			_apply_prop_broken(reader)
 		ArenaEvents.Kind.MAP_STATE:
