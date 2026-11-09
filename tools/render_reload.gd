@@ -7,6 +7,8 @@ extends SceneTree
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaViewArms := preload("../game/arena_view_arms.gd")
+## The fractions to stop at, the wait for a rig to reach one and the contact sheet: dot-weapon's, shared with ZZ's review.
+const ReloadShots := preload("res://addons/dot_weapon/view/dot_weapon_reload_shots.gd")
 
 var OUT_DIR := "screenshots/reload"
 
@@ -139,21 +141,26 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 		if tp:
 			# The watcher's model of the gun: frames on the clock, the magazines under the held model counted.
 			var held: Node = me.get("held")
+			var tp_tiles: Array[Image] = []
 			for f in frames:
 				await _wait(seconds / float(frames))
-				await _shot("%s%s_%02d" % [tag, id, f])
+				tp_tiles.append(await _shot("%s%s_%02d" % [tag, id, f]))
 				var seen := 0
 				if held != null:
 					for m in held.find_children("Magazine*", "MeshInstance3D", true, false):
 						seen += 1 if (m as Node3D).is_visible_in_tree() else 0
 				print("%s tp frame %d: %d carved magazines shown, held %s" % [id, f, seen, held != null])
+			_save_sheet(tag + id, tp_tiles)
 			await _wait(0.8)
 			continue
+		var tiles: Array[Image] = []
+		var due_at := ReloadShots.fractions(frames)
+		var progress := func() -> float:
+			return float(view.get(&"_reload_fraction")) if me.arsenal.is_reloading() else -1.0
 		for f in frames:
 			# Frames are spread over the reload itself: the tree is paused while the arm sets are counted.
-			var due := (float(f) + 0.5) / float(frames)
-			while view != null and me.arsenal.is_reloading() and float(view.get(&"_reload_fraction")) < due:
-				await process_frame
+			if view != null:
+				await ReloadShots.wait_for(self, progress, due_at[f])
 			if not me.arsenal.is_reloading():
 				var cur: DotWeaponSlot = me.arsenal.current()
 				print("%s frame %d: the reload ended first at fraction %.2f (last seen %.2f), magazine %d/%d, reserve %d, current %s" % [id, f, float(view.get(&"_reload_fraction")) if view != null else -1.0, last_seen, cur.magazine if cur != null else -1, def.magazine, me.arsenal._ammo.count(def.ammo_type) if def.ammo_type != &"" else -1, cur.def.id if cur != null else &"none"])
@@ -161,7 +168,7 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 			last_seen = float(view.get(&"_reload_fraction")) if view != null else 0.0
 			var f_before := float(view.get(&"_reload_fraction")) if view != null else 0.0
 			var t_before := Time.get_ticks_msec()
-			await _shot("%s_%02d" % [id, f])
+			tiles.append(await _shot("%s_%02d" % [id, f]))
 			if view == null:
 				print("%s frame %d: hand gaps %s" % [id, f, _hand_gaps()])
 			else:
@@ -182,6 +189,7 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 			least = mini(least, drawn.size())
 			if drawn.size() != 1:
 				print("%s frame %d: %d arm sets drawn %s" % [id, f, drawn.size(), drawn])
+		_save_sheet(id, tiles)
 		await _wait(0.6)
 		print("%s: reload %.2f s (started %s), %d frames, arm sets drawn per frame %d..%d, most magazines in sight %d (none in %d frames), magazine %d/%d" % [id, seconds, started, frames, least, worst, mags_most, mags_none, me.arsenal.current().magazine, def.magazine])
 		var held_now: DotWeaponSlot = me.arsenal.current()
@@ -442,6 +450,13 @@ func _shot(file: String) -> Image:
 	var image: Image = await _render()
 	var _saved := image.save_png("%s/%s.png" % [OUT_DIR, file])
 	return image
+
+
+## The weapon's frames on one sheet, `<id>_sheet.png`.
+func _save_sheet(id: String, tiles: Array[Image]) -> void:
+	var sheet := ReloadShots.sheet(tiles)
+	if sheet != null:
+		var _saved := sheet.save_png("%s/%s_sheet.png" % [OUT_DIR, id])
 
 
 func _shot_vp(sv: SubViewport, file: String) -> void:
