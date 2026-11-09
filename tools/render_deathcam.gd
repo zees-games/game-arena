@@ -112,7 +112,7 @@ func _run() -> void:
 	for at_sec in [0.3, 1.2, 3.0]:
 		await _wait(at_sec - last)
 		last = at_sec
-		var watching: bool = game.spectate != null and game.spectate.is_spectating(me.player_id)
+		var watching: bool = game.spectate != null and game.spectate.is_spectating(str(me.player_id))
 		var eye: Vector3 = me.camera.global_position
 		var body: Vector3 = me.controller.state.position
 		var wall_gap := _ray(body + Vector3.UP, eye)

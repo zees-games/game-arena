@@ -107,9 +107,9 @@ func toggle_roam() -> void:
 	if game == null or game.spectate == null or player == null:
 		return
 	var id := player.player_id
-	if not game.spectate.is_spectating(id):
+	if not game.spectate.is_spectating(str(id)):
 		return
-	var res := game.spectate.toggle_roam(id)
+	var res := game.spectate.toggle_roam(str(id))
 	if not res.ok:
 		if hud != null:
 			hud.notice("Free roam is off on this server.")

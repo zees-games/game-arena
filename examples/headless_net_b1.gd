@@ -69,10 +69,10 @@ func _test_client_death_camera() -> void:
 	var _got := (client["bridge"] as ArenaNetBridge).receive_event(writer.to_bytes())
 
 	_check(
-		client_game.spectate != null and client_game.spectate.is_spectating(victim),
+		client_game.spectate != null and client_game.spectate.is_spectating(str(victim)),
 		"a dead player's own client is watching something rather than lying on the floor"
 	)
-	var eye := client_game.spectate.camera_for(victim) if client_game.spectate != null else Transform3D.IDENTITY
+	var eye := client_game.spectate.camera_for(str(victim)) if client_game.spectate != null else Transform3D.IDENTITY
 	_check(
 		eye != Transform3D.IDENTITY and Vector2(eye.origin.x - fell.x, eye.origin.z - fell.z).length() < 0.5,
 		"from where they fell on that client", "%s against %s" % [eye.origin, fell]
@@ -87,7 +87,7 @@ func _test_client_death_camera() -> void:
 	)
 	_check(view.target == str(killer), "to the one other player", view.target)
 	_check(
-		client_game.spectate.camera_for(victim).origin.distance_to(
+		client_game.spectate.camera_for(str(victim)).origin.distance_to(
 			client_game.player_for(killer).controller.state.position
 		) < 3.0,
 		"and the camera is on them"
@@ -99,9 +99,9 @@ func _test_client_death_camera() -> void:
 	_server_game.player_for(victim).give_default_loadout()
 	_pump(TICK_RATE)
 	_check(
-		client_game.player_for(victim).is_alive() and not client_game.spectate.is_spectating(victim),
+		client_game.player_for(victim).is_alive() and not client_game.spectate.is_spectating(str(victim)),
 		"and the client stops watching once the server has them alive again",
-		"alive=%s watching=%s server alive=%s" % [client_game.player_for(victim).is_alive(), client_game.spectate.is_spectating(victim), _server_game.player_for(victim).is_alive()]
+		"alive=%s watching=%s server alive=%s" % [client_game.player_for(victim).is_alive(), client_game.spectate.is_spectating(str(victim)), _server_game.player_for(victim).is_alive()]
 	)
 	_done()
 

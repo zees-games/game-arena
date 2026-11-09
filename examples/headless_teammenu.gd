@@ -233,7 +233,7 @@ func _run_second(server: Variant) -> void:
 		var r: DotResult = pair[1].call("spectate")
 		_check(r.ok and rec.spectating and not solo.player_for(71).is_alive(), tag + "Spectate leaves play with no body left", str(r.error.message if r.error else ""))
 		_check(rec.deaths == deaths and solo.match_node.scoreboard.record_for("72").kills == kills_other, tag + "leaving scores no death and gives no kill credit")
-		_check(solo.spectate.is_spectating(71) and pair[0].call()["spectating"], tag + "dot-spectate has them, and the menu offers Play")
+		_check(solo.spectate.is_spectating(str(71)) and pair[0].call()["spectating"], tag + "dot-spectate has them, and the menu offers Play")
 		if not mode.teams().is_empty():
 			var on_teams := 0
 			for t in solo.match_node.teams.teams:
@@ -242,7 +242,7 @@ func _run_second(server: Variant) -> void:
 		_now += 10.0
 		r = pair[1].call("play" if mode.teams().is_empty() else "auto")
 		_check(r.ok and not rec.spectating and solo.player_for(71).is_alive(), tag + "Play puts them back in, spawned")
-		_check(not solo.spectate.is_spectating(71) and rec.present, tag + "no longer watching, still on the scoreboard")
+		_check(not solo.spectate.is_spectating(str(71)) and rec.present, tag + "no longer watching, still on the scoreboard")
 		for _f in 8:
 			await get_tree().process_frame
 		var back := solo.player_for(71)
