@@ -159,11 +159,11 @@ func _run() -> void:
 		"the flag is on the carrier's left")
 	_check(pole != null and pole.global_basis.y.normalized().dot(Vector3.UP) > 0.85, "held upright")
 	await _shot("carrier_front")
-	var side := carrier.global_position - right * 3.0
+	var side: Vector3 = carrier.global_position - right * 3.0
 	_put(_ground(game, side), carrier.global_position + Vector3.UP * 1.0, -6.0)
 	await _wait(0.6)
 	await _shot("carrier_left_side")
-	var side_r := carrier.global_position + right * 3.0
+	var side_r: Vector3 = carrier.global_position + right * 3.0
 	_put(_ground(game, side_r), carrier.global_position + Vector3.UP * 1.0, -6.0)
 	await _wait(0.6)
 	await _shot("carrier_right_side")
