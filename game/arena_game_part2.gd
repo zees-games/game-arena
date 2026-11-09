@@ -130,12 +130,17 @@ func tick(commands: Dictionary = {}) -> void:
 	var use_grid := ArenaHullGrid.enabled and body_rules.solid and _roster.size() >= ArenaHullGrid.MIN_PLAYERS
 	if use_grid:
 		_hull_grid.begin(_roster, _roster_ids)
+	# `ArenaFrameProbe.fine` (bench `--fine 1`) splits this loop's own work from the player's tick.
+	var fine := ArenaFrameProbe.fine
+	var t_fine := 0
 	for id in player_ids():
 		var player: ArenaPlayer = _players[id]
 
 		if not player.is_alive():
 			continue
 
+		if fine:
+			t_fine = Time.get_ticks_usec()
 		var pair: Array = commands.get(id, [])
 		_pre_vy[id] = player.controller.state.velocity.y
 		ArenaWeaponDropWiring.input(self, id, player, pair)
@@ -148,7 +153,13 @@ func tick(commands: Dictionary = {}) -> void:
 			match_node.note_activity(str(id), _tick)
 			if surf_rides != null:
 				surf_rides.call(&"before", id, player)
+			if fine:
+				ArenaFrameProbe.add(&"pl_pre", t_fine)
+				t_fine = Time.get_ticks_usec()
 			var outcome := player.simulate_tick(_tick, delta, move, fire)
+			if fine:
+				ArenaFrameProbe.add(&"pl_sim", t_fine)
+				t_fine = Time.get_ticks_usec()
 			if surf_rides != null:
 				surf_rides.call(&"after", id, player, move, _tick)
 			if use_grid:
@@ -164,6 +175,8 @@ func tick(commands: Dictionary = {}) -> void:
 			# A rocket is launched and flown, not resolved as a shot (ArenaProjectiles).
 			if projectiles != null:
 				projectiles.accept(outcome)
+			if fine:
+				ArenaFrameProbe.add(&"pl_post", t_fine)
 
 	_hull_grid.live = false
 	ArenaFrameProbe.add(&"tick_players", t_sim)

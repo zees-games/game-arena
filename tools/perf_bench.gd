@@ -2,6 +2,7 @@ extends DotGamePerfBench
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ClientBench := preload("client_bench.gd")
+const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client, fixed map, mode, bot
 ## count and seed. Windowed on a GPU box (tools/perf_bench.sh), or headless through hv:
@@ -13,6 +14,8 @@ var _pilot := true
 var _motor_us := false
 var _queries := true
 var _max_steps := -1
+## `--fine 1`: the per-player sub-spans of a tick (ArenaFrameProbe.fine): loop work, pre-motor, hitboxes, weapon context.
+var _fine := false
 
 
 func _configure() -> void:
@@ -29,6 +32,7 @@ func _ready() -> void:
 	_motor_us = int(args.get("motor-us", 0)) != 0
 	_queries = int(args.get("queries", 1)) != 0
 	_max_steps = int(args.get("max-steps", -1))
+	_fine = int(args.get("fine", 0)) != 0
 	if _max_steps > 0:
 		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
 
@@ -65,6 +69,7 @@ func _add_counters(game: Object) -> void:
 
 
 func _record_begin() -> void:
+	ArenaFrameProbe.fine = _fine
 	DotFpsPhysicsBody.profile = _queries
 	DotFpsPhysicsBody.prof.fill(0)
 	if _motor_us:
@@ -74,6 +79,7 @@ func _record_begin() -> void:
 
 
 func _record_end() -> void:
+	ArenaFrameProbe.fine = false
 	DotFpsPhysicsBody.profile = false
 	DotFpsMotor.profile = false
 
@@ -95,4 +101,4 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		for i in DotFpsMotor.PHASES.size():
 			if DotFpsMotor.PHASES[i] != "":
 				phases["motor." + DotFpsMotor.PHASES[i]] = snappedf(DotFpsMotor.phase_us[i] / 1000.0 / n, 0.001)
-	return {"phases_ms_per_frame": phases, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "motor_queries": queries}
+	return {"phases_ms_per_frame": phases, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
