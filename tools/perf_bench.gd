@@ -2,6 +2,7 @@ extends Node
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ClientBench := preload("client_bench.gd")
+const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 
 ## The 16v16 benchmark: a solo client on a fixed map, mode, bot count and seed, recorded by the
 ## client's own dot profiler, so the report has the same per-system table as a player's
@@ -22,6 +23,8 @@ var _pilot := true
 var _motor_us := false
 ## `--queries 0`: no motor query timers, which also leaves the native motor on (they force the script one).
 var _queries := true
+## `--fine 1`: the per-player sub-spans of a tick (ArenaFrameProbe.fine): loop work, pre-motor, hitboxes, weapon context.
+var _fine := false
 ## `--max-steps N`: ArenaTickBudget.max_steps, as cvar `arena_tick_max_steps`.
 var _max_steps := -1
 var _client: Node = null
@@ -48,6 +51,7 @@ func _ready() -> void:
 			"--tag": _tag = args[i + 1]
 			"--pilot": _pilot = int(args[i + 1]) != 0
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
+			"--fine": _fine = int(args[i + 1]) != 0
 			"--queries": _queries = int(args[i + 1]) != 0
 			"--max-steps": _max_steps = int(args[i + 1])
 	seed(_seed)
@@ -119,6 +123,7 @@ func _run() -> void:
 		DotFpsMotor.profile = true
 		DotFpsController.phase_us.fill(0)
 		DotFpsMotor.phase_us.fill(0)
+	ArenaFrameProbe.fine = _fine
 	_steps0 = Engine.get_physics_frames()
 	_usec0 = Time.get_ticks_usec()
 	var started: DotResult = _prof.start_recording(_seconds)
@@ -133,6 +138,7 @@ func _run() -> void:
 	await get_tree().process_frame
 	DotFpsPhysicsBody.profile = false
 	DotFpsMotor.profile = false
+	ArenaFrameProbe.fine = false
 	var path: String = _prof.last_saved_path()
 	var side := _sidecar(game, players0)
 	var side_path := ProjectSettings.globalize_path(path).get_basename() + ".bench.json"
@@ -184,6 +190,11 @@ func _sample() -> void:
 ## Engine numbers the per-system table does not hold: renderer, physics server, the motor's queries.
 func _sidecar(game: Object, players0: int) -> Dictionary:
 	var n := maxf(_frames, 1.0)
+	# Ticks the engine ran against the ticks real time asked for: the rest were dropped by the
+	# step cap (ArenaTickBudget), and the game ran that much slower than the clock.
+	var wall_s := maxf(Time.get_ticks_usec() - _usec0, 1.0) / 1000000.0
+	var ticks := Engine.get_physics_frames() - _steps0
+	var dropped := maxf(Engine.physics_ticks_per_second * wall_s - ticks, 0.0)
 	var per_frame := {}
 	for k: String in _acc:
 		per_frame[k] = snappedf(float(_acc[k]) / n, 0.001)
@@ -213,6 +224,7 @@ func _sidecar(game: Object, players0: int) -> Dictionary:
 		"physics_engine": str(ProjectSettings.get_setting("physics/3d/physics_engine", "")),
 		"tick_hz": Engine.physics_ticks_per_second, "frames": _frames,
 		"ticks_per_frame": snappedf(float(Engine.get_physics_frames() - _steps0) / n, 0.001),
-		"ticks_per_sec": snappedf(float(Engine.get_physics_frames() - _steps0) * 1000000.0 / maxf(Time.get_ticks_usec() - _usec0, 1.0), 0.01),
+		"ticks_per_sec": snappedf(ticks / wall_s, 0.01), "wall_s": snappedf(wall_s, 0.001), "ticks": ticks,
+		"dropped_ticks": int(round(dropped)), "dropped_per_sec": snappedf(dropped / wall_s, 0.01), "fine": _fine,
 		"per_frame": per_frame, "motor_queries": queries,
 	}

@@ -87,17 +87,19 @@ static func input(game, id: int, player, pair: Array) -> void:
 		return
 	if game.weapon_drops == null:
 		return
-	var def := class_def_of(game, id)
+	# `auto_pickup` is a server rule, not a class one (not in DotWeaponDropRules.CLASS_KEYS), so it is read off the rules as they are: `resolve(def)` builds a fresh rules object per call, and this ran for every idle player every tick while any drop lay on the floor.
+	var auto_pickup: bool = game.weapon_drops.rules.auto_pickup
 	# Nobody touched a key this tick or last, and nothing here acts without one (the auto pickup needs a drop and its rule on): the use key's hold has nothing to cancel and the prompt query is skipped. This was ~60 us per player per tick at 64 players.
 	if not held and not was and not use_now and not used \
-			and (game.weapon_drops.count() == 0 or not game.weapon_drops.rules.resolve(def).auto_pickup):
+			and (not auto_pickup or game.weapon_drops.count() == 0):
 		return
+	var def := class_def_of(game, id)
 	var velocity: Vector3 = player.controller.state.velocity
 	if held and not was:
 		var _id: int = game.weapon_drops.throw(player.arsenal, player.muzzle_position(), player.aim_direction(), id, def, velocity)
 	elif _use_hold(game, id, player, def, use_now):
 		pass
-	elif game.weapon_drops.rules.resolve(def).auto_pickup and game.weapon_drops.count() > 0:
+	elif auto_pickup and game.weapon_drops.count() > 0:
 		var _taken: int = game.weapon_drops.take_for(player.arsenal, player.controller.state.position + Vector3.UP * 0.5, id, def)
 
 

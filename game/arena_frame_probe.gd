@@ -36,6 +36,13 @@ static var _steps_max: int = 0
 static var _last_physics_frame: int = -1
 static var _elapsed: float = 0.0
 static var _last_usec: int = 0
+## `arena.<section>` per section, built once: a string join and a StringName intern on each of
+## the ~600 spans a 31-bot frame records were a measurable part of the profiler's own cost.
+static var _profiled_names: Dictionary = {}
+
+## The per-player sub-spans of a tick (`pl_pre`, `p_pre`, `p_hitbox`, `p_wctx`, ...): off by
+## default, since each costs two clock reads per player per tick; the bench's `--fine 1`.
+static var fine: bool = false
 
 
 static func on() -> bool:
@@ -75,16 +82,24 @@ static func set_interval(seconds: float) -> void:
 static func add(section: StringName, since_usec: int) -> void:
 	if interval <= 0.0:
 		if DotFrameCost.enabled:
-			DotFrameCost.add_usec(StringName("arena." + section), Time.get_ticks_usec() - since_usec)
+			DotFrameCost.add_usec(_profiled(section), Time.get_ticks_usec() - since_usec)
 		return
 	var spent := Time.get_ticks_usec() - since_usec
 	if DotFrameCost.enabled:
-		DotFrameCost.add_usec(StringName("arena." + section), spent)
+		DotFrameCost.add_usec(_profiled(section), spent)
 	var row: PackedInt64Array = _sections.get(section, PackedInt64Array([0, 0, 0]))
 	row[0] += spent
 	row[1] += 1
 	row[2] = maxi(row[2], spent)
 	_sections[section] = row
+
+
+static func _profiled(section: StringName) -> StringName:
+	var name: Variant = _profiled_names.get(section)
+	if name == null:
+		name = StringName("arena." + section)
+		_profiled_names[section] = name
+	return name
 
 
 ## Counts [param amount] of something that is not a time (replayed ticks, snapshots).

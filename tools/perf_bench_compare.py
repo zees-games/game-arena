@@ -3,6 +3,7 @@
 
   perf_bench_compare.py REF RUN...            each RUN against REF (the first file)
   perf_bench_compare.py --ab A1 B1 A2 B2 ...  group by label (LABEL=path; else A/B by position), mean B-A
+  perf_bench_compare.py --per-tick RUN...     the per-tick systems in ms per game tick (mean over the runs)
 
 A file is a profiler report (.json) or a log with PERF_BENCH_REPORT / PERF_BENCH_SIDECAR lines.
 ms/frame differs with frame rate (2 ticks a frame at 50 ms, fewer on a faster box), so the
@@ -47,9 +48,13 @@ def load(path):
         for k, v in side.get("motor_queries", {}).items():
             rows["query." + k] = {"ms": v["ms_per_frame"], "call": v["us_each"] / 1000.0, "calls": v["per_frame"]}
     head = {
-        "p50": report.get("p50_ms", 0.0), "p95": report.get("p95_ms", 0.0), "frames": report.get("frames", 0),
+        "p50": report.get("p50_ms", 0.0), "p95": report.get("p95_ms", 0.0), "p99": report.get("p99_ms", 0.0),
+        "frames": report.get("frames", 0),
         "ticks/frame": rows.get("arena.physics", {}).get("calls", 0.0),
         "ticks/sec": (side or {}).get("ticks_per_sec", 0.0),
+        # Ticks real time asked for and the step cap dropped (older sidecars: from tick_hz and ticks/sec).
+        "dropped/sec": (side or {}).get("dropped_per_sec", max((side or {}).get("tick_hz", 0) - (side or {}).get("ticks_per_sec", 0.0), 0.0)),
+        "dropped": (side or {}).get("dropped_ticks", -1),
         "box": (side or {}).get("adapter") or (side or {}).get("display", "") or "owner",
     }
     return label, path, head, rows
@@ -68,10 +73,13 @@ def order(rows, top):
 def compare(files, top):
     ref = load(files[0])
     runs = [load(f) for f in files[1:]]
-    print("ref %s  p50 %.1f ms  p95 %.1f  frames %d  ticks/frame %.2f" % (ref[1], ref[2]["p50"], ref[2]["p95"], ref[2]["frames"], ref[2]["ticks/frame"]))
+    def ticks(h):
+        return "ticks/frame %.2f  ticks/sec %.1f  dropped %.1f/s (%d)" % (h["ticks/frame"], h["ticks/sec"], h["dropped/sec"], h["dropped"])
+
+    print("ref %s  p50 %.1f ms  p95 %.1f  p99 %.1f  frames %d  %s" % (ref[1], ref[2]["p50"], ref[2]["p95"], ref[2]["p99"], ref[2]["frames"], ticks(ref[2])))
     for r in runs:
-        print("run %s  p50 %.1f ms (%+.0f%%)  p95 %.1f  frames %d  ticks/frame %.2f  [%s]" % (
-            r[1], r[2]["p50"], pct(ref[2]["p50"], r[2]["p50"]), r[2]["p95"], r[2]["frames"], r[2]["ticks/frame"], r[2]["box"]))
+        print("run %s  p50 %.1f ms (%+.0f%%)  p95 %.1f  p99 %.1f  frames %d  %s  [%s]" % (
+            r[1], r[2]["p50"], pct(ref[2]["p50"], r[2]["p50"]), r[2]["p95"], r[2]["p99"], r[2]["frames"], ticks(r[2]), r[2]["box"]))
     print()
     print("%-32s %9s %9s" % ("system", "ref ms/f", "ms/call") + "".join(" | %8s %7s %8s %7s" % ("ms/f", "d%", "ms/call", "d%") for _ in runs))
     for k in order(ref[3], top):
@@ -111,6 +119,10 @@ def ab(files, top):
     print("%s: %d runs, p50 %s ms   %s: %d runs, p50 %s ms   delta %+.2f ms (%+.1f%%)" % (
         la, len(ga), " ".join("%.1f" % v for v in pa), lb, len(gb), " ".join("%.1f" % v for v in pb),
         statistics.mean(pb) - statistics.mean(pa), pct(statistics.mean(pa), statistics.mean(pb))))
+    qa = [h["p99"] for h, _ in ga]
+    qb = [h["p99"] for h, _ in gb]
+    print("%s p99 %s ms   %s p99 %s ms   delta %+.2f ms" % (
+        la, " ".join("%.1f" % v for v in qa), lb, " ".join("%.1f" % v for v in qb), statistics.mean(qb) - statistics.mean(qa)))
     print()
     print("%-32s %9s %15s %9s %15s %9s %7s  %s" % ("system (ms/frame)", la, "range", lb, "range", "delta", "d%", "noise?"))
     for k in order(ga[0][1], top):
@@ -125,7 +137,8 @@ def ab(files, top):
     print()
     print("%-32s %9s %15s %9s %15s %9s %7s  %s" % ("per call (ms) / ticks", la, "range", lb, "range", "delta", "d%", "noise?"))
     for k in ["arena.physics", "arena.game_tick", "arena.tick_players", "arena.p_controller", "arena.p_weapons",
-              "arena.p_hulls", "arena.bots", "arena.bot_brain", "arena.tick_world"]:
+              "arena.p_hulls", "arena.bots", "arena.bot_brain", "arena.tick_world",
+              "arena.pl_pre", "arena.pl_sim", "arena.pl_post", "arena.p_pre", "arena.p_hitbox", "arena.p_wctx"]:
         a, b = stat(ga, k, "call"), stat(gb, k, "call")
         if a is None or b is None:
             continue
@@ -138,6 +151,26 @@ def ab(files, top):
     sa = [h["ticks/sec"] for h, _ in ga]
     sb = [h["ticks/sec"] for h, _ in gb]
     print("%-32s %9.2f %15s %9.2f" % ("ticks/sec (sim speed)", statistics.mean(sa), "", statistics.mean(sb)))
+    da = [h["dropped/sec"] for h, _ in ga]
+    db = [h["dropped/sec"] for h, _ in gb]
+    print("%-32s %9.2f %15s %9.2f" % ("dropped ticks/sec", statistics.mean(da), "", statistics.mean(db)))
+
+
+def per_tick(files, top):
+    runs = [load(f) for f in files]
+    heads = [r[2] for r in runs]
+    print("%d run(s)  p50 %s ms  p99 %s  ticks/frame %s  ticks/sec %s  dropped/sec %s" % (
+        len(runs), " ".join("%.1f" % h["p50"] for h in heads), " ".join("%.1f" % h["p99"] for h in heads),
+        " ".join("%.2f" % h["ticks/frame"] for h in heads), " ".join("%.1f" % h["ticks/sec"] for h in heads),
+        " ".join("%.1f" % h["dropped/sec"] for h in heads)))
+    print("%-32s %10s %10s %9s" % ("system", "ms/tick", "us/call", "calls/tick"))
+    keys = [k for k in order(runs[0][3], top) if k.startswith("arena.") or k.startswith("query.")]
+    for k in keys:
+        vals = [(r[3][k]["ms"] / max(r[2]["ticks/frame"], 1e-9), r[3][k]["call"] * 1000.0, r[3][k]["calls"] / max(r[2]["ticks/frame"], 1e-9))
+                for r in runs if k in r[3]]
+        if not vals:
+            continue
+        print("%-32s %10.3f %10.1f %9.1f" % (k, statistics.mean(v[0] for v in vals), statistics.mean(v[1] for v in vals), statistics.mean(v[2] for v in vals)))
 
 
 def main():
@@ -151,6 +184,8 @@ def main():
         sys.exit(__doc__)
     if args[0] == "--ab":
         ab(args[1:], top)
+    elif args[0] == "--per-tick":
+        per_tick(args[1:], top)
     else:
         compare(args, top)
 

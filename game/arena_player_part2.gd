@@ -400,6 +400,8 @@ func simulate_tick(
 	if not health.alive:
 		return DotWeaponOutcome.nothing("Dead.")
 
+	var fine := ArenaFrameProbe.fine
+	var t_fine := Time.get_ticks_usec() if fine else 0
 	# Where the tick starts, for the pushes: "was this player in a booster last tick" is
 	# asked of this position rather than remembered. See `arena_map_mechanics.gd`.
 	var start := controller.state.position
@@ -412,14 +414,22 @@ func simulate_tick(
 	ladder.wish = Vector3(intent.x, 0.0, intent.z).normalized()
 	_hull_tick = tick
 	controller.apply_command(movement_command)
+	if fine:
+		ArenaFrameProbe.add(&"p_pre", t_fine)
 	var t_ctl := Time.get_ticks_usec()
 	controller.simulate_tick(tick, delta)
 	ArenaFrameProbe.add(&"p_controller", t_ctl)
+	if fine:
+		t_fine = Time.get_ticks_usec()
 	fit_hitboxes_to_stance()
+	if fine:
+		ArenaFrameProbe.add(&"p_hitbox", t_fine)
 	var t_mech := Time.get_ticks_usec()
 	_run_map_mechanics(start, delta)
 	_follow_map_volumes()
 	ArenaFrameProbe.add(&"p_mechanics", t_mech)
+	if fine:
+		t_fine = Time.get_ticks_usec()
 
 	var state := controller.state
 
@@ -435,14 +445,16 @@ func simulate_tick(
 
 	health.tick(tick, delta)
 
+	# Read once: it walks the view's global transform, and the combat origin and the weapon context want the same point.
+	var muzzle := muzzle_position()
 	if _combat != null:
-		_combat.set_authoritative_origin(player_id, muzzle_position())
+		_combat.set_authoritative_origin(player_id, muzzle)
 
 	# Pushed in from the simulated state, never read out of a rendered one: an
 	# interpolated position differs between client and server by design, and feeding it
 	# to the spread makes the spread differ too.
 	var ctx := DotWeaponContext.make(
-		player_id, tick, muzzle_position(), _command.aim_direction()
+		player_id, tick, muzzle, _command.aim_direction()
 	)
 	ctx.speed = state.horizontal_speed()
 	ctx.airborne = not state.is_grounded()
@@ -456,6 +468,8 @@ func simulate_tick(
 	ctx.authority = arsenal.authority
 	# Sideways speed across the aim, positive right: the client's gun tilts with it, so the wall shot must too.
 	ctx.extra[&"strafe"] = wall_shot_strafe(state)
+	if fine:
+		ArenaFrameProbe.add(&"p_wctx", t_fine)
 
 	# Through the rig, which runs the arsenal and then the bash. It keeps the previous
 	# command itself, for the same edge triggers the arsenal used to be handed it for.
