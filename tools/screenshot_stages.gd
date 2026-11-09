@@ -304,6 +304,14 @@ func _feel_shots_world(id: StringName, victim: ArenaPlayer, hurt: ArenaPlayer, a
 				_hud.visible = true,
 			"wait": 12,
 		},
+		{
+			# The same look straight down with cl_legs off: the client's veto makes the mode BODY_OFF.
+			"name": "%s_feel_body_legs_off" % String(id),
+			"local": true,
+			"arm": func() -> void:
+				_local.present_own_body(DotPlayerViewRules.BODY_OFF, _local.controller.state.yaw),
+			"wait": 12,
+		},
 	]
 
 
