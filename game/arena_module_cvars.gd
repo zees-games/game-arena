@@ -4,6 +4,7 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaNetAoi := preload("arena_net_aoi.gd")
 const ArenaBots := preload("arena_bots.gd")
+const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaBotBrain := preload("arena_bot_brain.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
@@ -259,12 +260,14 @@ func _add_bot_think_cvars() -> void:
 		"1: the bots' sight scan runs in dot-sim when its library is installed (same result, cheaper); 0: in script. Without the library it is script either way",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
-			DotBotWorld.native_enabled = new_value.to_float() >= 0.5)
+			DotBotWorld.native_enabled = new_value.to_float() >= 0.5
+			ArenaPlayerStack.note_native_status())
 	add_cvar("motor_native", "1" if DotFpsPhysicsBody.native_enabled else "0",
 		"1: the players' movement collision queries (sweep, rest contact, overlap) run in dot-sim when its library is installed (bit-identical to the script, so web and native clients still agree; cheaper); 0: in script. Without the library it is script either way",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
-			DotFpsPhysicsBody.native_enabled = new_value.to_float() >= 0.5)
+			DotFpsPhysicsBody.native_enabled = new_value.to_float() >= 0.5
+			ArenaPlayerStack.note_native_status())
 	add_cvar("arena_hull_grid", "1" if ArenaHullGrid.enabled else "0",
 		"1: players' standing hulls are found through a grid filed once per tick (same hulls, cheaper above 12 players); 0: scan the whole roster per bot",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
