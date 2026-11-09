@@ -514,6 +514,8 @@ func present_body() -> void:
 	if scope != null:
 		if hands != null:
 			scope.follow(hands)
+			if scope.mode == 1 and player.camera != null:
+				scope.bind_camera(player.camera, (1 << (hands.view_layer - 1)) if hands.view_layer > 0 else 0)
 		else:
 			scope.fraction = 0.0
 		if scope_up:

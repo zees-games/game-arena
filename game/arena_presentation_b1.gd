@@ -438,6 +438,18 @@ func _add_arm_vars(local: DotConsoleLocal):
 			ArenaViewArms.scope_arms_hide_override = clampf(str(v).to_float(), -1.0, 1.0)
 			return DotResult.success(ArenaViewArms.scope_arms_hide_override)
 	)
+	local.add_var(&"cl_scope_mode", "Sniper scope view: 1 a lens in the middle of a normal screen, 2 the scope filling the screen (a server's ads scope_mode can pin one).",
+		func() -> Variant: return ArenaScopePrefs.mode,
+		func(v: Variant) -> Variant:
+			ArenaScopePrefs.mode = clampi(str(v).to_int(), 1, 2)
+			return DotResult.success(ArenaScopePrefs.mode)
+	)
+	local.add_var(&"cl_scope_walk_clear", "How much of the scope's picture goes see-through while moving (0 solid, 1 fully clear).",
+		func() -> Variant: return ArenaScopePrefs.walk_clear,
+		func(v: Variant) -> Variant:
+			ArenaScopePrefs.walk_clear = clampf(str(v).to_float(), 0.0, 1.0)
+			return DotResult.success(ArenaScopePrefs.walk_clear)
+	)
 	local.add_var(&"cl_fp_max_lean", "Most the first-person arms lean toward a hand out of reach (-1: each weapon's own, 0.4 by default; 0 is no lean).",
 		func() -> Variant: return ArenaViewArms.max_lean_override,
 		func(v: Variant) -> Variant:

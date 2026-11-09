@@ -15,7 +15,7 @@ const ArenaBindings := preload("../game/arena_bindings.gd")
 
 const TICK_RATE := 64
 const DISTANCES := [20.0, 40.0, 80.0]
-const EXPECTED_CHECKS := 40
+const EXPECTED_CHECKS := 42
 
 var _checks := 0
 var _failed := 0
@@ -277,6 +277,7 @@ func _probe_client() -> void:
 			sampler.look_at_angles(a.x, a.y)
 		var hud = client.get("hud")
 		_check(not scoped or me.aim_zoom() < 0.9, "client: the sights are up before the shot" if scoped else "client: hip fire")
+		_check(not scoped or is_equal_approx(float(me.get("_view_fov_scale")), 1.0), "client: with the scope lens (cl_scope_mode 1) the camera keeps the hip's field of view")
 		Input.action_press(ArenaBindings.FIRE)
 		var marker := 0.0
 		for _i in 90:

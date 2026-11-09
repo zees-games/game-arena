@@ -74,7 +74,7 @@ func present(delta: float) -> void:
 			_place_own_body(drawn, delta)
 		# Widened from the player's own field of view, then zoomed by the aim: a scope at a run
 		# is the scope's zoom of a slightly wider lens, and nothing compounds frame to frame.
-		camera.fov = (_base_fov + widen) * _aim_fov_scale
+		camera.fov = (_base_fov + widen) * _view_fov_scale
 	elif body_mesh != null:
 		# A remote player. Its node is moved by `_net_interpolated`, so all that is
 		# left is to face it the way its yaw says -- unless this machine ticks it, when
