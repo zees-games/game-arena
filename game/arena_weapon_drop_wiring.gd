@@ -1,4 +1,6 @@
 extends RefCounted
+
+const ArenaContent := preload("arena_content.gd")
 ## How the arena feeds the shared dropped-weapon layer: building it, the drop key, and the drop on death.
 
 const ArenaFlagCarry := preload("arena_flag_carry.gd")
@@ -24,6 +26,10 @@ static func build(game) -> void:
 		warm_server(layer)
 
 
+## Bodies parked for each weapon a player starts with: a death drops one, and a round's deaths come close together, so one spare left the next drop building a model inside the tick (40 to 70 ms in the bench).
+const POOL_DEPTH := 4
+
+
 ## Weapons worth parking a drop body for: every one with art, the same set the first-person warm-up walks.
 static func prewarm_ids() -> Array:
 	return AwWeaponArtTable.table().keys()
@@ -33,7 +39,7 @@ static func prewarm_ids() -> Array:
 static func prewarm_step(game, ids: Array, from: int, until_msec: int) -> int:
 	var next := from
 	while next < ids.size() and Time.get_ticks_msec() < until_msec and game.weapon_drops != null:
-		game.weapon_drops.prewarm(ids[next], 1)
+		game.weapon_drops.prewarm(ids[next], POOL_DEPTH if ids[next] in ArenaContent.default_loadout() else 1)
 		next += 1
 	return next
 

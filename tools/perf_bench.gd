@@ -143,12 +143,24 @@ func _run() -> void:
 	# The run may be on another box: the report itself goes to stdout too, without spikes and samples.
 	var report: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if report is Dictionary:
+		_print_spikes(report as Dictionary)
 		(report as Dictionary).erase("spikes")
 		(report as Dictionary).erase("samples")
 	print("PERF_BENCH_REPORT %s" % JSON.stringify(report))
 	print("PERF_BENCH_SIDECAR %s" % JSON.stringify(side))
 	print("PERF_BENCH %s" % JSON.stringify({"report": ProjectSettings.globalize_path(path), "sidecar": side_path, "tag": _tag}))
 	get_tree().quit(0)
+
+
+## The worst frames of the recording, one `PERF_BENCH_SPIKE` line each (time, ms, phase split, what changed in it);
+## the report on stdout has no spikes, and hitch work wants to know which frame was which.
+func _print_spikes(report: Dictionary) -> void:
+	var spikes: Array = (report.get("spikes", []) as Array).duplicate()
+	spikes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a.get("ms", 0.0)) > float(b.get("ms", 0.0)))
+	for i in mini(spikes.size(), 25):
+		var s: Dictionary = spikes[i]
+		print("PERF_BENCH_SPIKE t=%.2f ms=%.0f phys=%.0f script=%.0f render=%.0f cause=%s %s" % [float(s.get("t", 0.0)), float(s.get("ms", 0.0)),
+			float(s.get("physics", 0.0)), float(s.get("script", 0.0)), float(s.get("render", 0.0)), s.get("cause", ""), str(s.get("hints", []))])
 
 
 func _add(key: String, v: float) -> void:

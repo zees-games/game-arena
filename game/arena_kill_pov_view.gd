@@ -26,6 +26,7 @@ var label: Label = null
 var _camera: Camera3D = null
 ## A view model built in advance, so a kill does not pay for its 30-odd nodes on the frame it starts.
 var _spare: AwViewModel = null
+var _spare_warm := false
 var _spare_arms: DotPlayerViewArms = null
 var _push := Vector3.ZERO
 var _fire := -1.0
