@@ -5,6 +5,7 @@ const ArenaContent := preload("../game/arena_content.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 
 ## "The bots shoot at me and I take no damage": every shot a bot fires is either a hit that costs the target
 ## health, or a miss whose reason is on record (ArenaShotStats: refused, prevented, aim, blocked, on line).
@@ -30,8 +31,8 @@ const SHOT_TICKS := 1280
 const TAP_TICKS := 32
 const BRAIN_SECONDS := 60.0
 
-const CHECKS := 41
-const SECTIONS := 4
+const CHECKS := 54
+const SECTIONS := 5
 
 var _entered := 0
 var _completed := 0
@@ -50,6 +51,7 @@ func _run() -> void:
 	await _direct("calm server, one tick per frame", 1, 0)
 	await _direct("loaded server, 6 ticks back to back then a 40 ms stall", 6, 40)
 	await _brain()
+	await _crowd()
 	_counter()
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
@@ -235,6 +237,64 @@ func _brain() -> void:
 	_check(float(landed[true]) / maxf(float(shots[true]), 1.0) > 1.3 * float(landed[false]) / maxf(float(shots[false]), 1.0),
 		"compensating the recoil lifts the hit rate by a third or more")
 	print(_game.shot_stats.report())
+	_done()
+
+
+## 16v16 and latency: 30 more players crowd the arena (the rewind moves every one of them each shot) while a strafing
+## target is shot from a still attacker, aimed at where its head and chest WERE `lag` ticks ago (what the shooter's screen
+## showed), resolved as ArenaGame.tick resolves a fired weapon. Nearly every shot must land, head shots in the head zone.
+func _crowd() -> void:
+	_section("crowd: 32 players, strafing target, head and chest, rewound by 0 to 25 ticks")
+	await _boot()
+	for k in 30:
+		var _p := _game.add_player(10 + k, "Crowd%d" % k)
+		_game.player_for(10 + k).spawn(Transform3D(Basis(), Vector3(-10.0 + 3.0 * (k % 8), 0.05, -100.0 - 3.0 * (k / 8))), _game.current_tick())
+	_place(25.0)
+	for _i in _game.match_node.spawn_protection_ticks() + 4:
+		_game.tick({})
+	var shooter: ArenaPlayer = _game.player_for(ATTACKER)
+	var target: ArenaPlayer = _game.player_for(TARGET)
+	var hist := {"head": [], "chest": []}
+	var offsets := {"head": 1.62 * ArenaPlayerTunables.body_scale(), "chest": ArenaBots.chest_height()}
+	var ticks := 0
+	for lag: float in [0.0, 6.0, 12.5, 25.0]:
+		var got := {"head": 0, "chest": 0}
+		var zone := 0
+		var shots := 0
+		for i in 320:
+			_game.tick({TARGET: _strafe(ticks, true)})
+			ticks += 1
+			_game.combat.health_of(TARGET).health = 1.0e7
+			for region: String in hist:
+				hist[region].append(target.global_position + Vector3.UP * offsets[region])
+			if hist["head"].size() < 40 or i % 12 != 0:
+				continue
+			shots += 1
+			var back := int(floor(lag))
+			for region: String in hist:
+				var h: Array = hist[region]
+				var a: Vector3 = h[h.size() - 1 - back]
+				var b: Vector3 = h[h.size() - 1 - back - 1]
+				var at := a.lerp(b, lag - float(back))
+				var shot := DotShot.make(&"crowd_probe", ATTACKER, _game._tick, 0)
+				shot.origin = shooter.muzzle_position()
+				shot.direction = (at - shot.origin).normalized()
+				shot.pellets = [shot.direction]
+				shot.pellet_count = 1
+				shot.damage = 1.0
+				shot.max_range = 200.0
+				shot.damage_type = DotDamageType.new()
+				_game._unlag_shooter = ATTACKER
+				_game._resolve_shot(shot, float(_game._tick) - lag)
+				for d in shot.damages:
+					if d.victim == TARGET:
+						got[region] += 1
+						if region == "head" and String(d.hit_group).contains("head"):
+							zone += 1
+		print("    lag %5.1f ticks: head %d/%d (in the head zone %d), chest %d/%d" % [lag, got["head"], shots, zone, got["chest"], shots])
+		_check(got["chest"] >= int(shots * 0.9), "lag %.1f: chest shots hit the strafing target in a crowd" % lag, "%d of %d" % [got["chest"], shots])
+		_check(got["head"] >= int(shots * 0.9), "lag %.1f: head shots hit the strafing target in a crowd" % lag, "%d of %d" % [got["head"], shots])
+		_check(zone >= int(got["head"] * 0.9), "lag %.1f: head shots are credited to the head zone" % lag, "%d of %d" % [zone, got["head"]])
 	_done()
 
 
