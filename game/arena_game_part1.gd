@@ -495,6 +495,19 @@ func _override_rules(rules: DotMatchRules) -> void:
 	if freeze_sec >= 0.0:
 		rules.countdown_sec = freeze_sec
 
+	_override_ctf_rules(rules)
+
+## After the generic limits, on the first build of the match and on every change: capture the flag is limited by captures (`arena_ctf_capturelimit`) and by seconds only when `arena_ctf_timelimit` says so (0, the default, is no clock; the generic `arena_timelimit` and its 600 s do not apply). Its score is captures only: a kill is still a kill on the scoreboard, worth no points.
+func _override_ctf_rules(rules: DotMatchRules) -> void:
+	if mode == null or mode.objective_layout != &"ctf":
+		return
+	rules.score_limit = ctf_rules.capture_limit
+	rules.time_limit_sec = float(maxi(ctf_rules.time_limit_sec, 0))
+	rules.kill_points = 0
+	rules.suicide_points = 0
+	rules.friendly_points = 0
+	rules.assist_points = 0
+
 func _resolve_shot(shot: DotShot, view_tick: float) -> void:
 	if bullet_bridge == null:
 		combat.resolve_shot(shot, view_tick)

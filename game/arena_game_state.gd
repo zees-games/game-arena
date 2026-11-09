@@ -318,6 +318,9 @@ var drop_rules := {
 ## The server owner's capture-the-flag rules (`arena_ctf_*`), read by the flag layer when it is built and each round.
 var ctf_rules := DotObjectiveCtfRules.new()
 
+## The flag indicator, server cvars sent to clients with the flag state: `arena_ctf_indicator` (a small team-coloured flag icon and distance over each flag, default on) and `arena_ctf_indicator_seethrough` (the icon shows through walls, default on).
+var ctf_view := {"indicator": true, "see_through": true}
+
 ## A line the server announces about the flag (taken, dropped, returned, captured).
 signal ctf_announced(text: String)
 
