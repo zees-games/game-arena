@@ -567,6 +567,9 @@ func sync_name_tags(world_mask: int) -> void:
 ## the `first_person_body` setting, or the server's when it is "auto"; arena's `fp_body` rule keeps at least the legs.
 func own_body_mode() -> int:
 	var picked := presentation.settings.get_string(&"first_person_body", "auto") if presentation != null and presentation.settings != null else "auto"
+	# cl_legs (DotOwnBodySetting) is the client veto: off hides the body whatever the server or the choice says.
+	if presentation != null and presentation.settings != null and not presentation.settings.get_bool(DotOwnBodySetting.KEY, DotOwnBodySetting.DEFAULT):
+		return DotPlayerViewRules.BODY_OFF
 	var mode := game.view_rules.own_body(OWN_BODY_CHOICES.find(StringName(picked)) - 1)
 	return DotPlayerViewRules.BODY_LEGS if mode == DotPlayerViewRules.BODY_OFF and picked == "auto" and game.rule("fp_body") != 0.0 else mode
 

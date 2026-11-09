@@ -35,7 +35,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ## Exits non-zero on any failure.
 
 const SECTIONS := 34
-const CHECKS := 383
+const CHECKS := 385
 
 var _entered := 0
 var _completed := 0
@@ -430,6 +430,12 @@ func _test_own_body() -> void:
 		picks.append(client.own_body_mode())
 	_check(picks == [DotPlayerViewRules.BODY_OFF, DotPlayerViewRules.BODY_FULL, DotPlayerViewRules.BODY_LEGS, DotPlayerViewRules.BODY_LEGS],
 		"none, whole body, the server's choice (legs) and legs each reach the player", str(picks))
+	var _legs_off := again.settings.set_value(DotOwnBodySetting.KEY, false)
+	var _body := again.settings.set_value(&"first_person_body", &"body")
+	_check(client.own_body_mode() == DotPlayerViewRules.BODY_OFF, "cl_legs off vetoes even the whole-body choice")
+	var _legs_on := again.settings.set_value(DotOwnBodySetting.KEY, true)
+	var _back := again.settings.set_value(&"first_person_body", &"legs")
+	_check(client.own_body_mode() == DotPlayerViewRules.BODY_LEGS, "cl_legs back on restores the choice")
 	for _i in 30:
 		g.tick()
 	me.view_now = Vector2(me.controller.state.yaw, -60.0)
