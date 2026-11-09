@@ -90,6 +90,7 @@ func _run() -> void:
 		var cached := _read(path)
 		var stale := String(cached.get("bake", "")) != ArenaSurf.bake_id(nav)
 		print("[surf] %s: cache %s" % [map_id, "STALE (planned on another bake)" if stale else "matches the bake"])
+		print("[surf] %s: bake %s" % [map_id, ArenaSurf.bake_id(nav)])
 		if args.has("--stamp"):
 			_write(path, cached)
 		get_tree().quit(3 if stale and args.has("--check") else 0)
