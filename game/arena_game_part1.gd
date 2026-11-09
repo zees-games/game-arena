@@ -569,19 +569,18 @@ func apply_teams_text(text: String) -> void:
 
 ## The sides in play, empty in a free-for-all.
 func teams() -> Array[DotTeam]:
-	if match_node != null and match_node.teams != null:
-		return match_node.teams.teams
-
 	# A client's own match is the mode it started in (free-for-all), not the one the server plays:
 	# the sides come from the mode it is shown, which is what the server announced.
 	if not is_authority:
 		var shown := _mode_shown()
-		if shown == null or not shown.is_team_mode():
-			return []
-		if _shown_sides_for != shown:
-			_shown_sides_for = shown
-			_shown_sides = shown.teams()
-		return _shown_sides
+		if shown != null and shown.is_team_mode():
+			if _shown_sides_for != shown:
+				_shown_sides_for = shown
+				_shown_sides = shown.teams()
+			return _shown_sides
+
+	if match_node != null and match_node.teams != null:
+		return match_node.teams.teams
 
 	return []
 
