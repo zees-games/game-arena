@@ -1,12 +1,13 @@
 extends Node3D
 
-## Draws capture the flag's flags: a pole with a banner and a faint light in the team's colour, on its stand, on the floor where it was dropped, or on the carrier's back. Built by [ArenaObjectives] when the game draws anything (not headless); it reads [DotObjectiveCtf] every frame, so a rebuilt layout (new map, new match) needs no wiring.
+## Draws capture the flag's flags: a pole with a banner and a faint light in the team's colour, on its stand, on the floor where it was dropped, or in the carrier's hand ([code]arena_flag_carry.gd[/code]). Built by [ArenaObjectives] when the game draws anything (not headless); it reads [DotObjectiveCtf] every frame, so a rebuilt layout (new map, new match) needs no wiring.
 
 const ArenaGame := preload("arena_game.gd")
+const ArenaFlagCarry := preload("arena_flag_carry.gd")
 
 const POLE_HEIGHT := 3.4
 const BANNER_SIZE := Vector2(1.8, 1.2)
-## A carried flag is worn smaller, on the back.
+## A carried flag is held smaller, in the hand.
 const CARRIED_SCALE := 0.55
 const BEAM_HEIGHT := 40.0
 const NAMES := {1: "RED", 2: "BLUE", 3: "GREEN", 4: "YELLOW"}
@@ -18,6 +19,10 @@ var ctf: DotObjectiveCtf = null
 var _views := {}
 ## What each flag was last seen doing: {team: [state, carrier]}, to raise [signal ArenaGameState.ctf_seen] on a change.
 var _last := {}
+## Who held each flag last frame: {team: player}, to let go of their arm.
+var _holders := {}
+## How fast a flag in flight is eased toward the position the server last sent.
+const FLIGHT_EASE := 18.0
 
 
 ## The colour of a team's flag.
@@ -55,22 +60,24 @@ func refresh() -> void:
 		if view == null:
 			view = _build(team)
 			_views[team] = view
-		view.position = _place(flag)
+		var target := _place(flag)
+		if ArenaFlagCarry.flying(game, team):
+			view.position = view.position.lerp(target, clampf(get_process_delta_time() * FLIGHT_EASE, 0.0, 1.0))
+		else:
+			view.position = target
 		_see(flag)
 		var carried := flag.state == DotObjectiveFlag.State.CARRIED
-		view.scale = Vector3.ONE * (CARRIED_SCALE if carried else 1.0)
+		view.basis = Basis.from_scale(Vector3.ONE * (CARRIED_SCALE if carried else 1.0))
 		(view.get_node("Plate") as Node3D).visible = not carried
 		(view.get_node("Tag") as Label3D).text = "%s CARRIER" % name_of(team) if carried else "%s FLAG" % name_of(team)
 		view.visible = true
-		if carried:
-			var c := _carrier_of(flag)
-			if c != null:
-				view.rotation.y = c.global_rotation.y
-				# Worn by the player whose eyes these are, it would be a pole in their face: the HUD tells them instead.
-				var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
-				view.visible = cam == null or cam.global_position.distance_to(c.global_position + Vector3.UP * 1.4) > 1.2
-		else:
-			view.rotation.y = 0.0
+		var c := _carrier_of(flag) if carried else null
+		if c != null:
+			ArenaFlagCarry.pose_view(view, c, get_viewport().get_camera_3d() if is_inside_tree() else null, CARRIED_SCALE)
+		var was: Variant = _holders.get(team)
+		if was != null and was != c and is_instance_valid(was):
+			ArenaFlagCarry.release_arm(was)
+		_holders[team] = c
 	for team: int in _views.keys():
 		if not seen.has(team):
 			(_views[team] as Node3D).queue_free()
@@ -106,11 +113,13 @@ func _carrier_of(flag: DotObjectiveFlag) -> Node3D:
 	return null
 
 
-## Where [param flag]'s pole stands: on a carrier's back, where it fell, or on the floor under its stand (the stand's own point floats a metre up).
+## Where [param flag]'s pole stands: by its carrier (the hand pose then places it), where it is in flight, where it fell, or on the floor under its stand (the stand's own point floats a metre up).
 func _place(flag: DotObjectiveFlag) -> Vector3:
 	var carrier := _carrier_of(flag)
 	if carrier != null:
-		return carrier.global_position + carrier.global_basis.z * 0.45 + Vector3(0.0, 0.35, 0.0)
+		return carrier.global_position
+	if ArenaFlagCarry.flying(game, flag.home_team()):
+		return flag.at
 	return _grounded(flag.at)
 
 

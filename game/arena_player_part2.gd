@@ -1,6 +1,8 @@
 @tool
 extends "arena_player_part1.gd"
 
+const ArenaFlagCarry := preload("arena_flag_carry.gd")
+
 ## Breaks this player's body apart on a death: [param rules] decides how much. Client
 ## side, drawing only. [param direction] is the way the killing hit travelled; the seed
 ## is the victim and the tick, so every client breaks the same body the same way.
@@ -386,6 +388,9 @@ static func wall_shot_strafe(state: DotFpsState) -> float:
 	return state.velocity.dot(Basis(Vector3.UP, deg_to_rad(state.yaw)).x)
 
 
+## Set by the objectives each tick while this player carries a flag under the one-handed rule.
+var flag_one_hand := false
+
 func simulate_tick(
 	tick: int,
 	delta: float,
@@ -424,6 +429,7 @@ func simulate_tick(
 	_command = combat_command.duplicate_command()
 	_command.yaw = state.yaw
 	_command.pitch = state.pitch
+	ArenaFlagCarry.filter_command(self, _command)
 	aiming = _command.is_pressed(BUTTON_AIM)
 	_flashlight_hands(_command.is_pressed(ArenaFlashlight.BUTTON), delta)
 

@@ -117,3 +117,7 @@ The numbers are only comparable on the same box at the same resolution, so the b
 ## headless_ctf
 
 Capture the flag on a real `ArenaGame`: scripted bots (placed with `_stand`, not walking) take, carry, drop and return flags, two and three teams, both limits, the stand fallbacks and the server-to-client state. Run `./game.sh test headless_ctf`.
+
+## headless_ctf_carry
+
+Carrying a flag: the carrier is held to one-handed items (a thinking bot too), the drop key throws the flag ahead of the aim while the gun stays in hand, the thrown flag flies and rests upright on the floor, the `arena_ctf_*` carry cvars switch each part off, and a client learns the rule and the flight from the ctf wire. Run `./game.sh test headless_ctf_carry`.
