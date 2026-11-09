@@ -155,21 +155,14 @@ func _begin_hull_world() -> Object:
 	return _hull_world
 
 
-func tick(commands: Dictionary = {}) -> void:
-	_tick += 1
-	_sync_round_freeze()
+func _start_motor_batch(delta: float) -> bool:
+	if _motor_batch == null:
+		_motor_batch = DotFpsMotorBatch.new()
+	return _motor_batch.start(delta)
 
-	var shots: Array[DotShot] = []
-	var delta := 1.0 / float(tick_rate)
 
-	_pre_vy.clear()
-	var t_sim := Time.get_ticks_usec()
-	_ensure_roster()
-	var use_grid := ArenaHullGrid.enabled and body_rules.solid and _roster.size() >= ArenaHullGrid.MIN_PLAYERS
-	var hull_world: Object = null
-	if use_grid:
-		_hull_grid.begin(_roster, _roster_ids)
-		hull_world = _begin_hull_world()
+## The players' loop, one whole tick after another.
+func _tick_players(commands: Dictionary, delta: float, use_grid: bool, hull_world: Object, shots: Array[DotShot]) -> void:
 	# `ArenaFrameProbe.fine` (bench `--fine 1`) splits this loop's own work from the player's tick.
 	var fine := ArenaFrameProbe.fine
 	var t_fine := 0
@@ -221,6 +214,128 @@ func tick(commands: Dictionary = {}) -> void:
 				projectiles.accept(outcome)
 			if fine:
 				ArenaFrameProbe.add(&"pl_post", t_fine)
+
+
+## [method _tick_players] with the motors in dot-sim's batch: first every player's part before its motor in roster order,
+## then again in order each motor tick (a run of them is one native call, each seeing the earlier ones moved) and the rest
+## of that player's tick. A player whose tick ends elsewhere than its motor left it (a pit, a death) has the later rows
+## run again, so the states are the one-by-one loop's as long as no turn changes another player ([member ArenaHullGrid.batch_faults]).
+func _tick_players_batched(commands: Dictionary, delta: float, hull_world: Object, shots: Array[DotShot]) -> void:
+	var fine := ArenaFrameProbe.fine
+	var t_fine := 0
+	var ids := player_ids()
+	var n := ids.size()
+	if _batch_rows.size() < n:
+		_batch_rows.resize(n)
+		_batch_pairs.resize(n)
+	for i in range(n):
+		var id: int = ids[i]
+		var player: ArenaPlayer = _players[id]
+		_batch_rows[i] = -1
+		if not player.is_alive():
+			continue
+		if fine:
+			t_fine = Time.get_ticks_usec()
+		var pair: Array = commands.get(id, [])
+		_pre_vy[id] = player.controller.state.velocity.y
+		ArenaWeaponDropWiring.input(self, id, player, pair)
+		var move: DotFpsCommand = pair[0] if pair.size() > 0 else DotFpsCommand.new()
+		var fire: DotWeaponCommand = pair[1] if pair.size() > 1 else DotWeaponCommand.new()
+		if knives != null:
+			knives.input(id, player, fire)
+		if move == null or fire == null:
+			continue
+		match_node.note_activity(str(id), _tick)
+		if surf_rides != null:
+			surf_rides.call(&"before", id, player)
+		_batch_pairs[i] = [move, fire]
+		if fine:
+			ArenaFrameProbe.add(&"pl_pre", t_fine)
+			t_fine = Time.get_ticks_usec()
+		player.tick_pre(_tick, move)
+		var controller := player.controller
+		var t_ctl := Time.get_ticks_usec()
+		# -2: the controller does not tick (not started); the rest of the player's tick still runs.
+		_batch_rows[i] = _motor_batch.add(controller.motor, controller.state, controller.current_command) if controller.begin_tick(_tick, delta) else -2
+		player.ctl_usec = Time.get_ticks_usec() - t_ctl
+		if fine:
+			ArenaFrameProbe.add(&"pl_sim", t_fine)
+	for i in range(n):
+		var row := _batch_rows[i]
+		if row == -1:
+			continue
+		var id: int = ids[i]
+		var player: ArenaPlayer = _players[id]
+		var controller := player.controller
+		if not player.is_alive():
+			# Killed by an earlier player's turn after its own tick was prepared.
+			ArenaHullGrid.batch_faults += 1
+			if row >= 0:
+				_motor_batch.skip(row)
+			continue
+		if fine:
+			t_fine = Time.get_ticks_usec()
+		var move: DotFpsCommand = _batch_pairs[i][0]
+		var fire: DotWeaponCommand = _batch_pairs[i][1]
+		var told := false
+		var t_ctl := Time.get_ticks_usec()
+		if row >= 0:
+			if controller.has_external_velocity():
+				ArenaHullGrid.batch_faults += 1
+			told = _motor_batch.finish(row)
+			controller.end_tick(_tick, delta)
+		var rested := controller.state.position
+		ArenaFrameProbe.add(&"p_controller", t_ctl - player.ctl_usec)
+		var outcome := player.tick_post(_tick, delta, fire)
+		if fine:
+			ArenaFrameProbe.add(&"pl_sim", t_fine)
+			t_fine = Time.get_ticks_usec()
+		if surf_rides != null:
+			surf_rides.call(&"after", id, player, move, _tick)
+		_hull_grid.moved(id, player)
+		var feet := controller.state.position
+		var alive := player.is_alive()
+		if not told or feet != rested:
+			hull_world.moved(player.hull_slot, feet.x, feet.y, feet.z)
+		if not alive:
+			hull_world.set_alive(player.hull_slot, false)
+		if row >= 0 and (feet != rested or not alive):
+			_motor_batch.moved_after(row)
+		if demo_stats != null:
+			demo_stats.call(&"after", id, player, move, fire, _tick)
+		shots.append_array(outcome.shots)
+		_note_protected_action(id, player, move, not outcome.shots.is_empty())
+		if horde != null and (not outcome.shots.is_empty() or not outcome.spawns.is_empty()):
+			horde.note_fire(id, player.controller.state.position)
+		if projectiles != null:
+			projectiles.accept(outcome)
+		if fine:
+			ArenaFrameProbe.add(&"pl_post", t_fine)
+	ArenaHullGrid.batch_faults += _motor_batch.stale
+	ArenaHullGrid.batch_rows += _motor_batch.rows
+	_motor_batch.stale = 0
+	_motor_batch.rows = 0
+
+
+func tick(commands: Dictionary = {}) -> void:
+	_tick += 1
+	_sync_round_freeze()
+
+	var shots: Array[DotShot] = []
+	var delta := 1.0 / float(tick_rate)
+
+	_pre_vy.clear()
+	var t_sim := Time.get_ticks_usec()
+	_ensure_roster()
+	var use_grid := ArenaHullGrid.enabled and body_rules.solid and _roster.size() >= ArenaHullGrid.MIN_PLAYERS
+	var hull_world: Object = null
+	if use_grid:
+		_hull_grid.begin(_roster, _roster_ids)
+		hull_world = _begin_hull_world()
+	if hull_world != null and ArenaHullGrid.batch and not DotFpsMotor.profile and _start_motor_batch(delta):
+		_tick_players_batched(commands, delta, hull_world, shots)
+	else:
+		_tick_players(commands, delta, use_grid, hull_world, shots)
 
 	_hull_grid.live = false
 	if hull_world != null:

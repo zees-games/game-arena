@@ -77,6 +77,10 @@ var _hull_grid := ArenaHullGrid.new()
 ## dot-sim's `DotSimHullWorld` for the players' loop ([method _begin_hull_world]), and its per-slot data.
 var _hull_world: Object = null
 var _hull_world_data := PackedFloat64Array()
+## The players' motors ticked in runs of one native call ([method _tick_players_batched]), and each roster slot's row and commands.
+var _motor_batch: DotFpsMotorBatch = null
+var _batch_rows := PackedInt32Array()
+var _batch_pairs: Array = []
 
 
 ## Rebuilds [member _roster] (the players in join order, and their ids) after a join or a leave.

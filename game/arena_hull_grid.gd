@@ -19,6 +19,14 @@ static var fast := true
 ## Cvar `arena_hull_native`: with [member fast], a mover that is not lag-compensated gathers its hulls in dot-sim's
 ## `DotSimHullWorld` (same hulls, no script call per player); 0 or without the library, by script.
 static var native := true
+## Cvar `arena_motor_batch`: with the hull world, the players' loop prepares every player's tick first and dot-sim ticks
+## their motors in runs of one call (`DotSimMotorBatch`, same states to the bit); 0 or without it, one call per player.
+static var batch := true
+## Players the batched loop found changed by another player's turn (dead, moved or pushed after its own preparation):
+## the one-by-one loop would have ticked them differently. A match counts none.
+static var batch_faults := 0
+## Motor ticks the batch ran, for the tests and the bench.
+static var batch_rows := 0
 ## With [member verify], native gathers checked against the script's (exact AABB equality) and how many differed.
 static var native_verified := 0
 static var native_mismatches := 0

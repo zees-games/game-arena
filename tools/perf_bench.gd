@@ -3,13 +3,15 @@ extends DotGamePerfBench
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ClientBench := preload("client_bench.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
+const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client, fixed map, mode, bot
 ## count and seed. Windowed on a GPU box (tools/perf_bench.sh), or headless through hv:
 ## `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's own flags: `--pilot 0`, `--motor-us 1` (the controller's and motor's phase timers, a little costly, totals in the
 ## sidecar), `--queries 0` (no motor query timers, which also leaves the native motor on), `--max-steps N` (ArenaTickBudget.max_steps),
-## `--native-us 1` (dot-sim's own timers: each engine query and each whole native tick, in the sidecar as `native`).
+## `--native-us 1` (dot-sim's own timers: each engine query and each whole native tick, in the sidecar as `native`),
+## `--batch 0` (`arena_motor_batch` off: the players' motors one call each; the sidecar's `hulls` counts the batch's rows).
 ## Render knobs: `--res 1920x1080` (window size), `--killcam-hz N` (ArenaKillcamBodies.record_hz), `--lod 0` (ArenaPlayer.present_lod_enabled
 ## off), `--ablate a,b` (applied after the warm-up: noshadow, nofx = ssao/ssil/glow/fog/volumetric fog off, nohud, nobots).
 
@@ -49,6 +51,8 @@ func _ready() -> void:
 		get_window().size = Vector2i(int(wh[0]), int(wh[1]))
 	if args.has("killcam-hz"):
 		preload("../game/arena_killcam_bodies.gd").record_hz = float(args["killcam-hz"])
+	if int(args.get("batch", 1)) == 0:
+		ArenaHullGrid.batch = false
 	if int(args.get("lod", 1)) == 0:
 		preload("../game/arena_player.gd").present_lod_enabled = false
 	_ablate = String(args.get("ablate", "")).split(",", false)
@@ -151,6 +155,9 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 					native_n += 1
 			hulls["roster"] = (roster as Array).size()
 		hulls["native"] = native_n
+		hulls["batch"] = ArenaHullGrid.batch
+		hulls["batch_rows"] = ArenaHullGrid.batch_rows
+		hulls["batch_faults"] = ArenaHullGrid.batch_faults
 	return {"phases_ms_per_frame": phases, "native": native, "hulls": hulls, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
 
 

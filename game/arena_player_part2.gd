@@ -399,12 +399,25 @@ func simulate_tick(
 ) -> DotWeaponOutcome:
 	if not health.alive:
 		return DotWeaponOutcome.nothing("Dead.")
+	tick_pre(tick, movement_command)
+	var t_ctl := Time.get_ticks_usec()
+	controller.simulate_tick(tick, delta)
+	ArenaFrameProbe.add(&"p_controller", t_ctl)
+	return tick_post(tick, delta, combat_command)
 
+
+## Where this tick started ([method tick_pre]) and what its controller cost before the motor (the batched loop's).
+var _tick_start := Vector3.ZERO
+var ctl_usec := 0
+
+
+## [method simulate_tick] up to the controller's tick; the game's batched loop runs the controller's two halves itself.
+func tick_pre(tick: int, movement_command: DotFpsCommand) -> void:
 	var fine := ArenaFrameProbe.fine
 	var t_fine := Time.get_ticks_usec() if fine else 0
 	# Where the tick starts, for the pushes: "was this player in a booster last tick" is
 	# asked of this position rather than remembered. See `arena_map_mechanics.gd`.
-	var start := controller.state.position
+	_tick_start = controller.state.position
 	_yaw_before_tick = controller.state.yaw
 	# The previous state's position before this tick replaces it: two ticks back after it.
 	_position_two_back = controller.render_state(0.0).position
@@ -416,16 +429,17 @@ func simulate_tick(
 	controller.apply_command(movement_command)
 	if fine:
 		ArenaFrameProbe.add(&"p_pre", t_fine)
-	var t_ctl := Time.get_ticks_usec()
-	controller.simulate_tick(tick, delta)
-	ArenaFrameProbe.add(&"p_controller", t_ctl)
-	if fine:
-		t_fine = Time.get_ticks_usec()
+
+
+## [method simulate_tick] after the controller's tick: the map's mechanics, the health and the weapons.
+func tick_post(tick: int, delta: float, combat_command: DotWeaponCommand) -> DotWeaponOutcome:
+	var fine := ArenaFrameProbe.fine
+	var t_fine := Time.get_ticks_usec() if fine else 0
 	fit_hitboxes_to_stance()
 	if fine:
 		ArenaFrameProbe.add(&"p_hitbox", t_fine)
 	var t_mech := Time.get_ticks_usec()
-	_run_map_mechanics(start, delta)
+	_run_map_mechanics(_tick_start, delta)
 	_follow_map_volumes()
 	ArenaFrameProbe.add(&"p_mechanics", t_mech)
 	if fine:
