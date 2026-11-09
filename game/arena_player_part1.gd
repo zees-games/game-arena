@@ -593,7 +593,7 @@ func spawn(at: Transform3D, tick: int, protection_ticks: int = 0) -> void:
 
 ## Builds a tag and frees it, so the loading screen's warm-up compiles the bar's shader before the first hit.
 static func warm_health_tag() -> void:
-	ArenaNameTag.new().free()
+	DotHealthTag.new().free()
 
 ## The tag over a remote player's head: their name and a health bar, each drawn when the player's setting and
 ## the server's rule both allow it (see [code]arena_name_tag_rules.gd[/code]), facing the camera.
@@ -629,19 +629,13 @@ func _present_health_tag(delta: float) -> void:
 		return
 
 	if _health_tag == null:
-		_health_tag = ArenaNameTag.new()
+		_health_tag = DotHealthTag.new()
 		add_child(_health_tag)
 
 	# Over the body as drawn, which an offline bot's is between ticks (`interpolate_body`).
 	var over := body_mesh.global_position if body_mesh != null else global_position
 	_health_tag.global_position = over + Vector3(0.0, TagRules.tag_height, 0.0)
-	if camera_now != null:
-		# The whole tag turns to the camera, so the fill stays on its background; with the
-		# camera straight above or below, UP is colinear and the engine warns every frame.
-		var to_eye := camera_now.global_position - _health_tag.global_position
-		var up := Vector3.UP if Vector2(to_eye.x, to_eye.z).length_squared() > 1e-4 else Vector3.FORWARD
-		if not to_eye.is_zero_approx():
-			_health_tag.look_at(camera_now.global_position, up, true)
+	_health_tag.face(camera_now)
 	var tone := TagRules.bar_tone(friend, team) if TagRules.bar_colour_mode == &"team" else Color(0, 0, 0, 0)
 	_health_tag.update(now / health.max_health, bar, named, display_name, friend, delta, tone, TagRules.tag_scale)
 
