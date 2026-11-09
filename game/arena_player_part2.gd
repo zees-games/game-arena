@@ -443,7 +443,8 @@ func simulate_tick(
 	var t_wp := Time.get_ticks_usec()
 	var out: DotWeaponOutcome
 	# (Proper home: AwWeaponRig.would_idle(command) in arena-weapons; until it exists, ask the arsenal directly.)
-	if weapons.arsenal.is_idle_for(_command, weapons.get(&"_previous_command")):
+	# The posture feeds the spread (running, air, slide and crouch change the cone), so the fast path is only for a player who is still, grounded and standing.
+	if _posture_idle(state) and weapons.arsenal.is_idle_for(_command, weapons.get(&"_previous_command")):
 		out = weapons.simulate_tick(_command, tick, null)
 		ArenaFrameProbe.add(&"p_weapons", t_wp)
 		return out
@@ -472,6 +473,12 @@ func simulate_tick(
 	out = weapons.simulate_tick(_command, tick, ctx)
 	ArenaFrameProbe.add(&"p_weapons", t_wp)
 	return out
+
+## True when movement posture cannot change the weapon spread: standing still on the ground, not sliding, sprinting or wall running.
+func _posture_idle(state: DotFpsState) -> bool:
+	return state.horizontal_speed() < 0.05 and state.is_grounded() and not state.is_crouched() and not state.is_sliding() \
+		and not state.sprinting and not state.is_wall_running()
+
 
 ## Whether the body is drawn sliding: the replicated slide timer (net_flags), for bots, humans and remote copies alike.
 func _drawn_sliding(drawn: DotFpsState) -> bool:
