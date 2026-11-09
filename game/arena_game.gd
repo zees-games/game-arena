@@ -44,7 +44,7 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 
 
 ## [method _add_hull] over [param cand] for a mover whose neighbours are where they stand now (no lag compensation): the same tests, with the loop invariants (ids, roster, the pair callable) hoisted out of the per-candidate call. Cvar `arena_hull_fast`.
-## The pair test is asked once per pair and tick ([method _pair_index]): about 10 us a call through dot-team's block rules, the largest part of a gather.
+## The pair test is asked once per pair and tick ([method _pair_index]), and only of living players: about 10 us a call through dot-team's block rules, the largest part of a gather.
 ## One answer serves both players of a pair: dot-team's `blocks(a, b)` is symmetric (one relation, both players' overrides).
 func _add_hulls_local(out: Array, cand: Array, id: int, me_at: Vector3, coarse: float, tick: int = -1) -> void:
 	var ids := _roster_ids
@@ -67,6 +67,8 @@ func _add_hulls_local(out: Array, cand: Array, id: int, me_at: Vector3, coarse: 
 		var feet := ctl.state.position
 		if feet.distance_squared_to(me_at) > coarse:
 			continue
+		if not other.is_alive():
+			continue
 		if paired:
 			var known: int = _pair_memo[row + i] if row >= 0 else 0
 			if known == 0:
@@ -76,8 +78,6 @@ func _add_hulls_local(out: Array, cand: Array, id: int, me_at: Vector3, coarse: 
 					_pair_memo[i * n + me_i] = known
 			if known == 2:
 				continue
-		if not other.is_alive():
-			continue
 		var tunables := ctl.tunables
 		var radius: float = tunables.radius
 		out.append(AABB(feet - Vector3(radius, 0.0, radius), Vector3(radius * 2.0, tunables.stand_height, radius * 2.0)))
