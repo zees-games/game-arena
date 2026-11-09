@@ -38,6 +38,8 @@ func _solid_walk_checks(c: Dictionary) -> void:
 	var _settle_moving := _flight_window(0, 24, 0, {2: idle, 3: idle})
 	var stops_before := ArenaSolidBody.hull_stops
 	var moving_worst := 0.0
+	var lag_repeats := 0
+	var lag_worst := 0.0
 	ArenaNetBridge.solid_trace = OS.get_environment("NC_SOLID_TRACE") == "1"
 	# A leg is seven ticks at 66 Hz; slower rates need more ticks to cover the same ground.
 	var leg_ticks := maxi(7, ceili(7.0 * 66.0 / float(TICK_RATE)))
@@ -51,6 +53,8 @@ func _solid_walk_checks(c: Dictionary) -> void:
 		lean.yaw = 0.0
 		var window := _flight_window(2, leg_ticks, 0, {2: lean, 3: strafe})
 		moving_worst = maxf(moving_worst, float(window["worst_aligned"]))
+		lag_repeats += int(window["lag_repeats"])
+		lag_worst = maxf(lag_worst, float(window["lag_worst"]))
 	ArenaNetBridge.solid_trace = false
 	var moving_stops := ArenaSolidBody.hull_stops - stops_before
 	print("  measured: a strafing, jumping blocker, %d hull stops, worst prediction gap %.3f m" % [moving_stops, moving_worst])
@@ -58,6 +62,12 @@ func _solid_walk_checks(c: Dictionary) -> void:
 		moving_stops > 0 and moving_worst < 0.03,
 		"a walk into a blocker that strafes and jumps is predicted where the server stopped it",
 		"%d stops, worst %.3f m" % [moving_stops, moving_worst]
+	)
+	# What a shot on such a tick is rewound by: the lag is held, not aged with the command.
+	_check(
+		lag_repeats > 0 and lag_worst < 0.01,
+		"a command repeated over a lost packet has the view lag the client's lost one carried",
+		"%d repeated ticks, worst %.2f ticks apart" % [lag_repeats, lag_worst]
 	)
 
 

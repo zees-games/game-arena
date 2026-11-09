@@ -267,14 +267,22 @@ func remote_feet(other_id: int, mover_id: int, tick: int) -> Variant:
 	var mover: ArenaPlayerNet = _behaviours.get(mover_id)
 	if mover == null or game == null:
 		return null
-	# A command repeated over a lost packet is that many ticks old, and so is its view: the
-	# client measured this tick's lag against the same drawn world, one tick further behind.
-	# Holding the lag instead moved the view on a tick and the two ends met a strafer apart.
-	var aged := maxi(tick - mover.last_view_tick, 0) if mover.last_view_tick >= 0 and mover.last_view_lag >= 0.0 else 0
-	var lag := game.collision_lag(mover.last_view_lag + float(aged))
+	# A command repeated over a lost packet keeps its view LAG: the client's receive timeline walks
+	# with its clock (`DotNetClock.advance`), so the tick the packet was lost for measured the same
+	# lag one tick on. What does not move on is the snapshot bracket, which names two recorded
+	# ticks: it is aged by the ticks since, then stepped to the pair the view has reached.
+	# Holding the bracket's offset instead blended between two ticks the client never held
+	# (0.04 m against a strafer); ageing the lag with it put the view a whole tick behind.
+	var lag := game.collision_lag(mover.last_view_lag)
 	var at: Variant = null
 	if lag >= 0.0:
-		var older := tick - aged - mover.last_view_back if mover.last_view_back >= 0 else -1
+		var older := -1
+		if mover.last_view_back >= 0:
+			var aged := maxi(tick - mover.last_view_tick, 0) if mover.last_view_tick >= 0 else 0
+			older = tick - aged - mover.last_view_back
+			if aged > 0 and mover.last_view_span > 0:
+				while float(tick) - lag > float(older + mover.last_view_span):
+					older += mover.last_view_span
 		at = _remote_feet_at(other_id, float(tick) - lag, older, mover.last_view_span)
 	if solid_trace:
 		_trace_feet(other_id, mover, tick, lag, at)

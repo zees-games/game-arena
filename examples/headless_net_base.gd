@@ -51,7 +51,7 @@ var SNAPSHOT_RATE: int:
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 296
+const CHECKS := 297
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
@@ -741,7 +741,15 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 
 	var commands: Dictionary = send.call(first)
 
+	var lag_repeats := 0
+	var lag_worst := 0.0
 	for tick in range(first, first + ticks):
+		# The receive timeline walks with the clock (`DotNetClock.advance` does it in the game);
+		# ticks set by hand skip that, and the view lag would then grow by one on every tick
+		# without a snapshot, which no client's does. dot-net has no public step for this.
+		for peer_id in _clients:
+			var walked: DotNetClock = _clients[peer_id]["net"].clock
+			walked._received_tick = maxi(walked._received_tick, tick - 1)
 		for peer_id in _clients:
 			var pair2: Array = commands[peer_id]
 			_clients[peer_id]["net"].clock.tick = tick
@@ -753,6 +761,16 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 		_server_bridge.server_tick(tick)
 		var apart := server_a.controller.state.position - server_b.controller.state.position
 		closest = minf(closest, Vector2(apart.x, apart.z).length())
+
+		# A tick whose packet was lost: the server repeated the last command. The lag it resolves
+		# this tick's shots and contacts with, against the lag the client's lost command carried.
+		if peer != 0:
+			var lag_session := int(_clients[peer]["session"])
+			var sent: ArenaPlayerNet = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(lag_session)
+			var held: ArenaPlayerNet = _server_bridge.behaviour_for(lag_session)
+			if held.last_view_tick >= 0 and held.last_view_tick < tick and sent.last_view_lag >= 0.0:
+				lag_repeats += 1
+				lag_worst = maxf(lag_worst, absf(held.last_view_lag - sent.last_view_lag))
 
 		# Both ends ran this tick: the prediction against the server, before the snapshot replaces it.
 		var measure := peer != 0 and int(_clients[peer]["net"].stats.packets_received) != heard_before
@@ -779,4 +797,5 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 		_downstream.clear()
 
 	return {"worst_gap": worst, "grounded_ticks": grounded, "worst_at": worst_at,
-		"worst_aligned": worst_aligned, "closest": closest}
+		"worst_aligned": worst_aligned, "closest": closest,
+		"lag_repeats": lag_repeats, "lag_worst": lag_worst}

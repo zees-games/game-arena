@@ -338,6 +338,8 @@ func _commands() -> Dictionary:
 
 	for session_id in _behaviours:
 		var behaviour: ArenaPlayerNet = _behaviours[session_id]
+		# The lag as it was sent, on a repeated command too: the client's view runs that far behind
+		# its tick on every tick, so the lost command carried the same (headless_net measures it).
 		out[int(session_id)] = [behaviour.last_move, behaviour.last_fire, behaviour.last_view_lag]
 
 	return out

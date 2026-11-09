@@ -129,8 +129,9 @@ var last_view_back: int = -1
 var last_view_span: int = 0
 
 ## The tick the view lag and bracket above were measured for, or -1. The server repeats a
-## command over a tick whose packet was lost; the view it names stays where it was, it does
-## not move on with the tick ([method ArenaNetBridge.remote_feet]).
+## command over a tick whose packet was lost: the lag still holds for that tick (shots and
+## collision use it as it is), the bracket's two snapshot ticks stay where they were
+## ([method ArenaNetBridge.remote_feet]).
 var last_view_tick: int = -1
 
 ## Newest tick whose state this behaviour has adopted. Client side, for reconciliation.
