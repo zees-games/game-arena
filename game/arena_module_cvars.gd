@@ -378,6 +378,22 @@ func _add_snapshot_rate_cvar() -> void:
 		DotConVar.FLAG_ARCHIVE).with_range(0.0, 128.0)
 
 
+## The arena's own limits on `sv_tickrate` (dot-server's range is wider; [constant ArenaGame.MIN_TICK_RATE] to
+## [constant ArenaGame.MAX_TICK_RATE]), and `bot_think_hz`: the bots' think rate in Hertz, so 33 means a think every 2nd
+## tick at 66 and every 4th at 128 (`bot_think_every` counts ticks; the last one set wins; 0 leaves it to `bot_think_every`).
+func _add_tick_rate_cvars() -> void:
+	var tickrate := console.find_cvar("sv_tickrate")
+	if tickrate != null:
+		var _ranged := tickrate.with_range(float(ArenaGame.MIN_TICK_RATE), float(ArenaGame.MAX_TICK_RATE))
+	add_cvar("bot_think_hz", "0",
+		"Bot brain runs this many times a second whatever the tick rate (a far bot's cadence for bot_think_every); 0 uses bot_think_every ticks",
+		DotConVar.FLAG_ARCHIVE).with_range(0.0, 128.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			var hz := new_value.to_float()
+			if hz > 0.0:
+				ArenaBots.think_every = ArenaBots.every_for_hz(hz, game.tick_rate))
+
+
 ## The target `sv_snapshot_rate` names, or the game's default when it is 0 or unset.
 func snapshot_target() -> int:
 	var asked := _cv_snapshot_rate.get_int() if _cv_snapshot_rate != null else 0

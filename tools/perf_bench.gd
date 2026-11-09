@@ -15,6 +15,8 @@ const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 var _pilot := true
 var _motor_us := false
 var _queries := true
+## `--tick N`: the game and engine tick rate (default: the game's, 66); 128 for the 128 Hz cost.
+var _tick := 0
 var _max_steps := -1
 ## `--fine 1`: the per-player sub-spans of a tick (ArenaFrameProbe.fine): loop work, pre-motor, hitboxes, weapon context.
 var _fine := false
@@ -36,6 +38,7 @@ func _ready() -> void:
 	_queries = int(args.get("queries", 1)) != 0
 	_max_steps = int(args.get("max-steps", -1))
 	_fine = int(args.get("fine", 0)) != 0
+	_tick = int(args.get("tick", 0))
 	if _max_steps > 0:
 		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
 	var wh := String(args.get("res", "")).split("x")
@@ -54,6 +57,10 @@ func _setup_client(c: Node) -> void:
 
 
 func _select(game: Object) -> void:
+	if _tick > 0:
+		game.config.tick_rate = _tick
+		game.tick_rate = _tick
+		Engine.physics_ticks_per_second = _tick
 	var _warmed := AwModelCache.warm(AwWeaponArtTable.model_paths())
 	var picked: DotResult = null
 	if String(game.get("map").id) != map:

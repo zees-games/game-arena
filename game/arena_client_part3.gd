@@ -604,8 +604,13 @@ func _flash_audio_ref() -> DotNodeRef:
 		return null
 	return DotNodeRef.of_path(presentation.audio.get_path())
 
+## Ticks the flashlight button is held: the game's rate once it exists, the default before.
+func _flash_hold_ticks() -> int:
+	return ArenaFlashlight.hold_ticks(game.tick_rate if game != null else ArenaGame.DEFAULT_TICK_RATE)
+
+
 func _on_flash_switch(_want: bool) -> void:
-	_flash_ticks = ArenaFlashlight.HOLD_TICKS
+	_flash_ticks = _flash_hold_ticks()
 	_flash_msec = Time.get_ticks_msec()
 
 ## The eye's light follows the server (but not for 0.4 s after our own switch, which shows at once); everyone else's beams follow theirs.
