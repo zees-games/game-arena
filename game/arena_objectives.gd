@@ -3,6 +3,7 @@ extends Node
 const ArenaGame := preload("arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaFlagView := preload("arena_flag_view.gd")
+const ArenaFlagCarry := preload("arena_flag_carry.gd")
 
 ## What the round is about, when the mode says it is about something.
 ##
@@ -46,6 +47,8 @@ var ctf: DotObjectiveCtf = null
 
 ## The drawn flags when the game draws at all (never headless); null otherwise.
 var flag_view: ArenaFlagView = null
+## A dropped flag in flight: {team: velocity}, INF once it rests. A client only knows which fly.
+var flag_motion := {}
 
 var _last_wire := ""
 var _wire_tick := -1000000
@@ -254,6 +257,7 @@ func ctf_wire_text(tick: int, force: bool = false) -> String:
 		return ""
 	var wire: Dictionary = ctf.to_json_wire()
 	wire["view"] = {"i": 1 if game.ctf_view.indicator else 0, "x": 1 if game.ctf_view.see_through else 0}
+	ArenaFlagCarry.write_wire(self, wire)
 	var text := JSON.stringify(wire)
 	if not force and text == _last_wire and tick - _wire_tick < game.tick_rate * 2:
 		return ""
@@ -273,6 +277,7 @@ func apply_ctf_text(text: String) -> void:
 		if view is Dictionary:
 			game.ctf_view.indicator = int(view.get("i", 1)) != 0
 			game.ctf_view.see_through = int(view.get("x", 1)) != 0
+		ArenaFlagCarry.read_wire(self, parsed)
 
 
 ## A client has no effects layer, so the slowdown it predicts with is applied here, from the same base the effects layer uses.
@@ -400,14 +405,17 @@ static func build(
 
 # --- The tick -----------------------------------------------------------------
 
-func tick(_delta: float) -> void:
+func tick(delta: float) -> void:
 	if manager == null:
 		return
 
 	if ctf != null:
 		ctf.advance(game.current_tick(), game.match_node != null and game.match_node.is_live())
-		if not game.is_authority:
+		if game.is_authority:
+			ArenaFlagCarry.step(self, delta)
+		else:
 			_apply_carrier_speed()
+		ArenaFlagCarry.mark_carriers(self)
 		return
 
 	# Live exactly while the match is being played. A capture made during warmup is one

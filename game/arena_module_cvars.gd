@@ -9,6 +9,7 @@ const ArenaBotThreads := preload("arena_bot_threads.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
 const ArenaTickBudget := preload("arena_tick_budget.gd")
 const TagRules := preload("arena_name_tag_rules.gd")
+const ArenaFlagCarry := preload("arena_flag_carry.gd")
 
 ## Base of [ArenaModule]: the operator-facing cvars that map onto a rule table, so the module itself
 ## holds the lifecycle. Split out for the size gate; the state they read lives here too.
@@ -173,6 +174,14 @@ const CTF_CVARS := {
 	"arena_ctf_friendly_return": ["friendly_return", "The flag's own team returns a dropped flag by touching it (1) or only the timer does (0)"],
 	"arena_ctf_require_home": ["require_home", "A carrier scores only while their own flag is at home (1) or at any time (0)"],
 	"arena_ctf_teams": ["team_count", "Teams in capture the flag, 2 to 8 (from the next map)"],
+}
+
+## cvar -> the [code]arena_flag_carry.gd[/code] setting it sets, and what it means.
+const FLAG_CARRY_CVARS := {
+	"arena_ctf_one_hand": ["one_hand", "A flag carrier holds only one-handed items: melee, sidearm, thrown (1, the default) or anything (0)"],
+	"arena_ctf_drop_key": ["drop_key", "The drop key drops a carried flag ahead of the aim (1, the default) or the weapon as usual (0)"],
+	"arena_ctf_drop_speed": ["drop_speed", "Metres a second a dropped flag leaves the hand at, on top of the carrier's speed (4 is the default)"],
+	"arena_ctf_flag_physics": ["physics", "A dropped flag falls, slides and bounces upright (1, the default) or lies on the floor at once (0)"],
 }
 
 const SPAWN_CVARS := {
@@ -405,6 +414,20 @@ func _add_ctf_cvars() -> void:
 				game.ctf_rules.carrier_speed = clampf(game.ctf_rules.carrier_speed, 0.1, 2.0)
 				game.apply_match_limits()
 				log_info("ctf rule changed", {"rule": key, "value": new_value})
+		)
+
+
+func _add_flag_carry_cvars() -> void:
+	for cvar in FLAG_CARRY_CVARS:
+		var key: String = FLAG_CARRY_CVARS[cvar][0]
+		var value: Variant = ArenaFlagCarry.setting(key)
+		var text := ("1" if value else "0") if value is bool else str(value)
+		add_cvar(
+			cvar, text, FLAG_CARRY_CVARS[cvar][1], DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+		).with_min(0.0).changed.connect(
+			func(_old: String, new_value: String) -> void:
+				ArenaFlagCarry.set_setting(key, new_value)
+				log_info("flag carry rule changed", {"rule": key, "value": new_value})
 		)
 
 

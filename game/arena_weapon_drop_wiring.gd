@@ -1,6 +1,8 @@
 extends RefCounted
 ## How the arena feeds the shared dropped-weapon layer: building it, the drop key, and the drop on death.
 
+const ArenaFlagCarry := preload("arena_flag_carry.gd")
+
 
 ## The weapon layer, on both sides: the server simulates it, a client draws what it is told.
 static func build(game) -> void:
@@ -71,6 +73,9 @@ static func input(game, id: int, player, pair: Array) -> void:
 	var use_now: bool = (pair[1] as DotWeaponCommand).is_pressed(DotWeaponCommand.BUTTON_USE)
 	var used: bool = game.use_held.get(id, false)
 	game.use_held[id] = use_now
+	# A flag carrier's drop key lets go of the flag, not the gun.
+	if held and not was and ArenaFlagCarry.try_drop(game, id, player):
+		return
 	# One key, one target: a map button or door looked at in reach wins; else the weapon on the floor.
 	if use_now and not used and game.map_io != null and game.map_io.press_for(player, id):
 		return

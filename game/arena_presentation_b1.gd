@@ -1,6 +1,7 @@
 extends Node
 
 const ArenaRecoilView := preload("arena_recoil_view.gd")
+const ArenaFlagCarry := preload("arena_flag_carry.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
 
@@ -394,6 +395,7 @@ func _local_commands() -> DotConsoleLocal:
 			return DotResult.success(1 if ArenaViewArms.debug_pose else 0)
 	)
 	_add_arm_vars(local)
+	ArenaFlagCarry.bind_console(local, settings)
 	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
 	local.add_var(&"cl_recoil_view", "How far each shot's recoil turns your view: 0 keeps the crosshair still (bullets still climb), 1 as tuned, up to 5.",
 		func() -> Variant: return ArenaRecoilView.scale,
