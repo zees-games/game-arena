@@ -2,6 +2,7 @@ extends Node
 
 const ArenaRecoilView := preload("arena_recoil_view.gd")
 const ArenaFlagCarry := preload("arena_flag_carry.gd")
+const ArenaKillPovRecoil := preload("arena_kill_pov_recoil.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
 
@@ -402,6 +403,12 @@ func _local_commands() -> DotConsoleLocal:
 		func(v: Variant) -> Variant:
 			ArenaRecoilView.scale = clampf(float(str(v).strip_edges()), 0.0, 5.0)
 			return DotResult.success(ArenaRecoilView.scale)
+	)
+	local.add_var(&"cl_killcam_recoil", "How far the killer's recoil turns the killcam view: 0 holds it still, 1 as they saw it (default), up to 5.",
+		func() -> Variant: return ArenaKillPovRecoil.scale,
+		func(v: Variant) -> Variant:
+			ArenaKillPovRecoil.scale = clampf(float(str(v).strip_edges()), 0.0, 5.0)
+			return DotResult.success(ArenaKillPovRecoil.scale)
 	)
 	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",
 		func() -> Variant: return 1 if ArenaWeaponIcons.shared.sprites else 0,

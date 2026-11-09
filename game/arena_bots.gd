@@ -169,6 +169,21 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 ## Off only for tests that measure the bots without the correction (headless_bot_hitreg).
 static var recoil_compensation := true
 
+## bot_recoil_control: the share of the recoil a bot pulls its aim back against, 0..1; below 0 (the default, -1)
+## by difficulty from [constant RECOIL_CONTROL]. A whole share made every bot's burst a laser no person matches.
+static var recoil_control := -1.0
+const RECOIL_CONTROL := {"easy": 0.3, "medium": 0.55, "hard": 0.75, "nightmare": 0.9}
+
+
+## The share of the recoil [param mind]'s bot pulls back against.
+static func recoil_share(mind: Mind) -> float:
+	if recoil_control >= 0.0:
+		return clampf(recoil_control, 0.0, 1.0)
+	var preset := DotBotProfile.DEFAULT_PRESET
+	if mind != null and mind.brain != null and mind.brain.settings != null and mind.brain.settings.profile != null:
+		preset = mind.brain.settings.profile.preset_name
+	return float(RECOIL_CONTROL.get(preset, RECOIL_CONTROL[DotBotProfile.DEFAULT_PRESET]))
+
 
 ## The commands with the aim turned against the recoil the next shot will carry. The weapon offsets each bullet by
 ## the kick left from the shots before it (dot-weapon's recoil rules); a player pulls the view back against it, but
@@ -182,7 +197,7 @@ static func _recoil_comp(bot: ArenaPlayer, mind: Mind, cmds: Array, tick: int, t
 	var fire: DotWeaponCommand = cmds[1]
 	if bot == null or bot.arsenal == null or not fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK):
 		return cmds
-	var offset := next_recoil_offset(bot, tick, tick_rate)
+	var offset := next_recoil_offset(bot, tick, tick_rate) * recoil_share(mind)
 	if offset == Vector2.ZERO:
 		return cmds
 	var move: DotFpsCommand = cmds[0]
