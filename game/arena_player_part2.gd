@@ -395,6 +395,7 @@ func simulate_tick(
 	if not health.alive:
 		return DotWeaponOutcome.nothing("Dead.")
 
+	var t_prep := Time.get_ticks_usec()
 	# Where the tick starts, for the pushes: "was this player in a booster last tick" is
 	# asked of this position rather than remembered. See `arena_map_mechanics.gd`.
 	var start := controller.state.position
@@ -407,15 +408,19 @@ func simulate_tick(
 	ladder.wish = Vector3(intent.x, 0.0, intent.z).normalized()
 	_hull_tick = tick
 	controller.apply_command(movement_command)
+	ArenaFrameProbe.add(&"p_prep", t_prep)
 	var t_ctl := Time.get_ticks_usec()
 	controller.simulate_tick(tick, delta)
 	ArenaFrameProbe.add(&"p_controller", t_ctl)
+	var t_fit := Time.get_ticks_usec()
 	fit_hitboxes_to_stance()
+	ArenaFrameProbe.add(&"p_hitfit", t_fit)
 	var t_mech := Time.get_ticks_usec()
 	_run_map_mechanics(start, delta)
 	_follow_map_volumes()
 	ArenaFrameProbe.add(&"p_mechanics", t_mech)
 
+	var t_ctx := Time.get_ticks_usec()
 	var state := controller.state
 
 	# The aim comes from the movement command, not from a second sample. Sampling the
@@ -450,6 +455,7 @@ func simulate_tick(
 	ctx.authority = arsenal.authority
 	# Sideways speed across the aim, positive right: the client's gun tilts with it, so the wall shot must too.
 	ctx.extra[&"strafe"] = wall_shot_strafe(state)
+	ArenaFrameProbe.add(&"p_context", t_ctx)
 
 	# Through the rig, which runs the arsenal and then the bash. It keeps the previous
 	# command itself, for the same edge triggers the arsenal used to be handed it for.

@@ -27,6 +27,8 @@ const CHANNEL := "arena.perf"
 static var interval: float = 0.0
 
 static var _sections: Dictionary = {}
+## section -> &"arena.<section>", built once: a span is hit some 500 times a frame at 16v16, and building the name each time was a string concat and an intern per hit, charged to the span it measured.
+static var _cost_names: Dictionary = {}
 static var _frames: PackedFloat32Array = PackedFloat32Array()
 static var _process_max: float = 0.0
 static var _process_sum: float = 0.0
@@ -75,11 +77,11 @@ static func set_interval(seconds: float) -> void:
 static func add(section: StringName, since_usec: int) -> void:
 	if interval <= 0.0:
 		if DotFrameCost.enabled:
-			DotFrameCost.add_usec(StringName("arena." + section), Time.get_ticks_usec() - since_usec)
+			DotFrameCost.add_usec(_cost_name(section), Time.get_ticks_usec() - since_usec)
 		return
 	var spent := Time.get_ticks_usec() - since_usec
 	if DotFrameCost.enabled:
-		DotFrameCost.add_usec(StringName("arena." + section), spent)
+		DotFrameCost.add_usec(_cost_name(section), spent)
 	var row: PackedInt64Array = _sections.get(section, PackedInt64Array([0, 0, 0]))
 	row[0] += spent
 	row[1] += 1
@@ -162,3 +164,11 @@ static func _reset() -> void:
 	_physics_sum = 0.0
 	_steps_max = 0
 	_elapsed = 0.0
+
+
+static func _cost_name(section: StringName) -> StringName:
+	var name: Variant = _cost_names.get(section)
+	if name == null:
+		name = StringName("arena." + section)
+		_cost_names[section] = name
+	return name

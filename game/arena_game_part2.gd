@@ -136,6 +136,7 @@ func tick(commands: Dictionary = {}) -> void:
 		if not player.is_alive():
 			continue
 
+		var t_in := Time.get_ticks_usec()
 		var pair: Array = commands.get(id, [])
 		_pre_vy[id] = player.controller.state.velocity.y
 		ArenaWeaponDropWiring.input(self, id, player, pair)
@@ -146,7 +147,9 @@ func tick(commands: Dictionary = {}) -> void:
 			match_node.note_activity(str(id), _tick)
 			if surf_rides != null:
 				surf_rides.call(&"before", id, player)
+			ArenaFrameProbe.add(&"p_input", t_in)
 			var outcome := player.simulate_tick(_tick, delta, move, fire)
+			var t_after := Time.get_ticks_usec()
 			if surf_rides != null:
 				surf_rides.call(&"after", id, player, move, _tick)
 			if use_grid:
@@ -162,6 +165,7 @@ func tick(commands: Dictionary = {}) -> void:
 			# A rocket is launched and flown, not resolved as a shot (ArenaProjectiles).
 			if projectiles != null:
 				projectiles.accept(outcome)
+			ArenaFrameProbe.add(&"p_after", t_after)
 
 	_hull_grid.live = false
 	ArenaFrameProbe.add(&"tick_players", t_sim)

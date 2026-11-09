@@ -184,7 +184,7 @@ func _sidecar(game: Object, players0: int) -> Dictionary:
 	var phases := {}
 	if _motor_us:
 		# Totals over the recording in ms per frame; per player tick is these over arena.p_controller calls.
-		var ctl := ["pre", "consume", "motor", "publish", "report", "signals_stats", "post"]
+		var ctl := ["pre", "consume", "motor", "publish", "report", "signals_stats", "post", "publish_set_pos"]
 		for i in ctl.size():
 			phases["ctl." + ctl[i]] = snappedf(DotFpsController.phase_us[i] / 1000.0 / n, 0.001)
 		for i in DotFpsMotor.PHASES.size():
