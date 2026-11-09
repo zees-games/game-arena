@@ -16,6 +16,12 @@ static var enabled := true
 ## Test hook (scale128 --hullverify): every grid answer is also computed by the full scan and compared.
 ## Cvar `arena_hull_fast`: 0 runs the per-candidate [method ArenaGame._add_hull] for the grid's candidates.
 static var fast := true
+## Cvar `arena_hull_native`: with [member fast], a mover that is not lag-compensated gathers its hulls in dot-sim's
+## `DotSimHullWorld` (same hulls, no script call per player); 0 or without the library, by script.
+static var native := true
+## With [member verify], native gathers checked against the script's (exact AABB equality) and how many differed.
+static var native_verified := 0
+static var native_mismatches := 0
 static var verify := false
 static var verified := 0
 static var mismatches := 0

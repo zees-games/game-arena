@@ -37,6 +37,10 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 			ArenaHullGrid.verified += 1
 			if str(full) != str(out):
 				ArenaHullGrid.mismatches += 1
+			if not remote and _hull_world != null and _hull_world.is_live():
+				ArenaHullGrid.native_verified += 1
+				if _hull_world.gather(_roster_at.get(id, -1), me_at.x, me_at.y, me_at.z) != out:
+					ArenaHullGrid.native_mismatches += 1
 		return out
 	for i in range(_roster.size()):
 		_add_hull(out, i, id, me_at, near, coarse, remote, tick)

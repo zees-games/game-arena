@@ -84,6 +84,7 @@ func _ready() -> void:
 			"--hullfast": ArenaHullGrid.fast = args[i + 1] != "0"
 			"--worldcoarse": DotFpsFlatBody.world_coarse = args[i + 1] != "0"
 			"--hullverify": ArenaHullGrid.verify = args[i + 1] != "0"
+			"--hullnative": ArenaHullGrid.native = args[i + 1] != "0"
 			"--threads": ArenaBotThreads.threads = int(args[i + 1])
 			"--thinkevery": ArenaBots.think_every = int(args[i + 1])
 			"--thinknear": ArenaBots.think_near = float(args[i + 1])
@@ -170,6 +171,15 @@ func _report(extra: Dictionary) -> void:
 	if ArenaHullGrid.verify:
 		out["hull_verified"] = ArenaHullGrid.verified
 		out["hull_mismatches"] = ArenaHullGrid.mismatches
+		out["hull_native_verified"] = ArenaHullGrid.native_verified
+		out["hull_native_mismatches"] = ArenaHullGrid.native_mismatches
+	# Hull gathers dot-sim's hull world answered in the motor tick (no script call), and the pair calls it made.
+	var arena := get_tree().root.find_child("Arena", true, false)
+	var world: Object = arena.get(&"_hull_world") if arena != null else null
+	if world != null:
+		var c: PackedInt64Array = world.counters()
+		out["hull_native_gathers"] = c[0]
+		out["hull_native_pair_calls"] = c[1]
 	out["motor_us_per_bot_tick"] = _motor_phases(_count)
 	print("SCALE128 ", JSON.stringify(out))
 

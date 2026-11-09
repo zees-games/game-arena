@@ -281,6 +281,14 @@ var solid_hulls_fn: Callable = Callable()
 ## places the remotes it collides with ([method ArenaGame.solid_hulls_for]).
 var _hull_tick: int = -1
 
+## dot-sim's hull world ([method ArenaGame._begin_hull_world]) this player is filed in as [member hull_slot] while the players' loop runs; a death or a spawn is written to it.
+var hull_world: Object = null
+var hull_slot: int = -1
+## The movement body [member hull_world] was last given to, its slot, and whether the body took it.
+var _hull_body: DotFpsBody = null
+var _hull_body_slot: int = -1
+var _hull_body_ok := false
+
 const MOVEMENT_RULES: PackedStringArray = ArenaPlayerTunables.MOVEMENT_RULES
 const BODY_RULES := ArenaPlayerTunables.BODY_RULES
 const SURF_TUNABLES := ArenaPlayerTunables.SURF_TUNABLES

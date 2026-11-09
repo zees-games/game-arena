@@ -74,6 +74,9 @@ var _pair_memo_tick: int = -1
 var _pair_memo_fn: Callable = Callable()
 ## Where the players stand, for [method solid_hulls_for] while the players' loop runs ([ArenaHullGrid]).
 var _hull_grid := ArenaHullGrid.new()
+## dot-sim's `DotSimHullWorld` for the players' loop ([method _begin_hull_world]), and its per-slot data.
+var _hull_world: Object = null
+var _hull_world_data := PackedFloat64Array()
 
 
 ## Rebuilds [member _roster] (the players in join order, and their ids) after a join or a leave.

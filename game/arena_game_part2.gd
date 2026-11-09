@@ -117,6 +117,44 @@ func _shoot_toys(shots: Array[DotShot]) -> void:
 		for raw: Variant in directions:
 			var _pushed := toys.shot_along(shot.origin, raw as Vector3, maxf(shot.max_range, 1.0), shot.damage, level)
 
+## Starts dot-sim's hull world for this players' loop (cvar `arena_hull_native`): where everybody stands, their hull
+## sizes, who is alive, and which movers may gather natively (not lag-compensated: [method _solid_hulls_for]'s
+## `remote` false). Their movement bodies then gather in the motor tick with no script call, the answer
+## [method _add_hulls_local]'s. With [member ArenaHullGrid.verify] the world is filed but the bodies gather by script,
+## and each gather is checked against it. Null when off or without the library.
+func _begin_hull_world() -> Object:
+	if not (ArenaHullGrid.native and ArenaHullGrid.fast) or not DotFpsPhysicsBody.native_hull_world_available():
+		return null
+	if _hull_world == null:
+		_hull_world = ClassDB.instantiate(&"DotSimHullWorld")
+	var n := _roster.size()
+	_hull_world_data.resize(n * 6)
+	var lagged := remote_feet_fn.is_valid()
+	var lags_known := ArenaHullGrid.enabled and remote_lags_fn.is_valid()
+	var bind := not ArenaHullGrid.verify
+	for i in range(n):
+		var p := _roster[i]
+		var o := i * 6
+		var flags := 0
+		if p != null and p.controller != null and p.controller.state != null:
+			var feet := p.controller.state.position
+			var tunables := p.controller.tunables
+			_hull_world_data[o] = feet.x
+			_hull_world_data[o + 1] = feet.y
+			_hull_world_data[o + 2] = feet.z
+			_hull_world_data[o + 3] = tunables.radius
+			_hull_world_data[o + 4] = tunables.stand_height
+			flags = 1 | (2 if p.is_alive() else 0)
+			var native := bind and (not lagged or (lags_known and not bool(remote_lags_fn.call(_roster_ids[i]))))
+			if p.use_hull_world(_hull_world, i, native) and native:
+				flags |= 4
+		elif p != null:
+			var _off := p.use_hull_world(null, -1, false)
+		_hull_world_data[o + 5] = flags
+	_hull_world.begin(_roster_ids, _hull_world_data, body_rules.pair_fn, HULL_REACH_SQ)
+	return _hull_world
+
+
 func tick(commands: Dictionary = {}) -> void:
 	_tick += 1
 	_sync_round_freeze()
@@ -128,8 +166,10 @@ func tick(commands: Dictionary = {}) -> void:
 	var t_sim := Time.get_ticks_usec()
 	_ensure_roster()
 	var use_grid := ArenaHullGrid.enabled and body_rules.solid and _roster.size() >= ArenaHullGrid.MIN_PLAYERS
+	var hull_world: Object = null
 	if use_grid:
 		_hull_grid.begin(_roster, _roster_ids)
+		hull_world = _begin_hull_world()
 	# `ArenaFrameProbe.fine` (bench `--fine 1`) splits this loop's own work from the player's tick.
 	var fine := ArenaFrameProbe.fine
 	var t_fine := 0
@@ -164,6 +204,10 @@ func tick(commands: Dictionary = {}) -> void:
 				surf_rides.call(&"after", id, player, move, _tick)
 			if use_grid:
 				_hull_grid.moved(id, player)
+			if hull_world != null:
+				var feet := player.controller.state.position
+				hull_world.moved(player.hull_slot, feet.x, feet.y, feet.z)
+				hull_world.set_alive(player.hull_slot, player.is_alive())
 			if demo_stats != null:
 				demo_stats.call(&"after", id, player, move, fire, _tick)
 			shots.append_array(outcome.shots)
@@ -179,6 +223,8 @@ func tick(commands: Dictionary = {}) -> void:
 				ArenaFrameProbe.add(&"pl_post", t_fine)
 
 	_hull_grid.live = false
+	if hull_world != null:
+		hull_world.end()
 	ArenaFrameProbe.add(&"tick_players", t_sim)
 
 	# The toys after everybody moved: a walk into a ball sends it on. Then every shot that

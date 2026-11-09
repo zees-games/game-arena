@@ -98,6 +98,23 @@ func make_dead() -> void:
 	arsenal.disabled = true
 	health.alive = false
 	hitboxes.enabled = false
+	if hull_world != null:
+		hull_world.set_alive(hull_slot, false)
+
+
+## Files this player in [param world] (dot-sim's `DotSimHullWorld`) as roster slot [param slot] for this players' loop;
+## with [param native] its movement body gathers its hulls from the world. Whether the body does.
+func use_hull_world(world: Object, slot: int, native: bool) -> bool:
+	hull_world = world
+	hull_slot = slot
+	var body: DotFpsBody = controller.body if native and controller != null else null
+	if body != _hull_body or slot != _hull_body_slot:
+		if _hull_body != null and _hull_body != body:
+			var _off := _hull_body.set_hull_world(null, -1)
+		_hull_body = body
+		_hull_body_slot = slot
+		_hull_body_ok = body != null and body.set_hull_world(world, slot)
+	return _hull_body_ok
 
 func _on_died(damage: DotDamage) -> void:
 	if before_death.is_valid(): before_death.call()
@@ -588,6 +605,11 @@ func spawn(at: Transform3D, tick: int, protection_ticks: int = 0) -> void:
 
 	if _combat != null:
 		_combat.set_authoritative_origin(player_id, muzzle_position())
+
+	if hull_world != null:
+		var feet := controller.state.position
+		hull_world.moved(hull_slot, feet.x, feet.y, feet.z)
+		hull_world.set_alive(hull_slot, is_alive())
 
 	spawned.emit(at)
 

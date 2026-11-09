@@ -322,6 +322,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaHullGrid.fast = new_value.to_float() >= 0.5)
+	add_cvar("arena_hull_native", "1" if ArenaHullGrid.native else "0",
+		"1: with arena_hull_fast, a mover that is not lag-compensated gathers its hulls in dot-sim (same hulls, no script call per player); 0: by script",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaHullGrid.native = new_value.to_float() >= 0.5)
 	add_cvar("arena_tick_max_steps", str(ArenaTickBudget.max_steps),
 		"Solo: the most ticks a frame may run to catch up with wall-clock time. 8 (default) keeps real time while ticks are cheap; 1 draws more frames while the simulation runs slower",
 		DotConVar.FLAG_ARCHIVE).with_min(1.0).with_max(float(ArenaTickBudget.MAX_STEPS)).changed.connect(
