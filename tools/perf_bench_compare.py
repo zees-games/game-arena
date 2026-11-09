@@ -49,6 +49,7 @@ def load(path):
     head = {
         "p50": report.get("p50_ms", 0.0), "p95": report.get("p95_ms", 0.0), "frames": report.get("frames", 0),
         "ticks/frame": rows.get("arena.physics", {}).get("calls", 0.0),
+        "ticks/sec": (side or {}).get("ticks_per_sec", 0.0),
         "box": (side or {}).get("adapter") or (side or {}).get("display", "") or "owner",
     }
     return label, path, head, rows
@@ -119,6 +120,24 @@ def ab(files, top):
         # A delta inside both runs' spread is not a result.
         noise = "noise" if (b[1] <= a[2] and a[1] <= b[2]) else ""
         print("%-32s %9.2f %7.2f-%-7.2f %9.2f %7.2f-%-7.2f %+9.2f %+6.1f%%  %s" % (k, a[0], a[1], a[2], b[0], b[1], b[2], b[0] - a[0], pct(a[0], b[0]), noise))
+    # A cheaper tick can buy more catch-up ticks a frame instead of a shorter frame (ArenaTickBudget),
+    # so the per-call cost of the per-tick systems is the direct measure of a sim change.
+    print()
+    print("%-32s %9s %15s %9s %15s %9s %7s  %s" % ("per call (ms) / ticks", la, "range", lb, "range", "delta", "d%", "noise?"))
+    for k in ["arena.physics", "arena.game_tick", "arena.tick_players", "arena.p_controller", "arena.p_weapons",
+              "arena.p_hulls", "arena.bots", "arena.bot_brain", "arena.tick_world"]:
+        a, b = stat(ga, k, "call"), stat(gb, k, "call")
+        if a is None or b is None:
+            continue
+        noise = "noise" if (b[1] <= a[2] and a[1] <= b[2]) else ""
+        print("%-32s %9.4f %7.4f-%-7.4f %9.4f %7.4f-%-7.4f %+9.4f %+6.1f%%  %s" % (k, a[0], a[1], a[2], b[0], b[1], b[2], b[0] - a[0], pct(a[0], b[0]), noise))
+    ta = [h["ticks/frame"] for h, _ in ga]
+    tb = [h["ticks/frame"] for h, _ in gb]
+    print("%-32s %9.2f %15s %9.2f" % ("ticks/frame", statistics.mean(ta), "", statistics.mean(tb)))
+    # Simulated ticks per wall second: the game's speed (66 is real time).
+    sa = [h["ticks/sec"] for h, _ in ga]
+    sb = [h["ticks/sec"] for h, _ in gb]
+    print("%-32s %9.2f %15s %9.2f" % ("ticks/sec (sim speed)", statistics.mean(sa), "", statistics.mean(sb)))
 
 
 def main():

@@ -7,6 +7,7 @@ const ArenaBots := preload("arena_bots.gd")
 const ArenaBotBrain := preload("arena_bot_brain.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
+const ArenaTickBudget := preload("arena_tick_budget.gd")
 const TagRules := preload("arena_name_tag_rules.gd")
 
 ## Base of [ArenaModule]: the operator-facing cvars that map onto a rule table, so the module itself
@@ -274,6 +275,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaHullGrid.fast = new_value.to_float() >= 0.5)
+	add_cvar("arena_tick_floor", str(ArenaTickBudget.floor_steps),
+		"Solo: the fewest ticks a frame runs when ticks cost more than they last. 2 (default) keeps the simulation nearer real time; 1 draws more frames while the simulation runs slower",
+		DotConVar.FLAG_ARCHIVE).with_min(1.0).with_max(float(ArenaTickBudget.MIN_STEPS)).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaTickBudget.floor_steps = clampi(int(new_value.to_float()), 1, ArenaTickBudget.MIN_STEPS))
 
 
 ## `sv_grenade_*` (arena_weapons' [AwGrenadeRules]) and `sv_grenade_utility`: 0 keeps flash, smoke and incendiary out of

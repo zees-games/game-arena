@@ -18,12 +18,19 @@ var _seed := 1
 var _out := "user://perf-bench"
 var _tag := ""
 var _pilot := true
+## `--motor-us 1`: the controller's and motor's phase timers (they cost a little), totals in the sidecar.
+var _motor_us := false
+## `--queries 0`: no motor query timers, which also leaves the native motor on (they force the script one).
+var _queries := true
+## `--tick-floor N`: ArenaTickBudget.floor_steps, as cvar `arena_tick_floor`.
+var _tick_floor := -1
 var _client: Node = null
 var _prof: Node = null
 ## Per-frame sums while recording, for the sidecar.
 var _acc := {}
 var _frames := 0
 var _steps0 := 0
+var _usec0 := 0
 
 
 func _ready() -> void:
@@ -40,7 +47,12 @@ func _ready() -> void:
 			"--out": _out = args[i + 1]
 			"--tag": _tag = args[i + 1]
 			"--pilot": _pilot = int(args[i + 1]) != 0
+			"--motor-us": _motor_us = int(args[i + 1]) != 0
+			"--queries": _queries = int(args[i + 1]) != 0
+			"--tick-floor": _tick_floor = int(args[i + 1])
 	seed(_seed)
+	if _tick_floor > 0:
+		preload("../game/arena_tick_budget.gd").floor_steps = _tick_floor
 	var _scratch := ArenaPresentation.use_scratch_settings("perf_bench")
 	_run.call_deferred()
 
@@ -97,9 +109,14 @@ func _run() -> void:
 	_prof.config.keep_recordings = 500
 	_prof.config.budget_ms = 33.0
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
-	DotFpsPhysicsBody.profile = true
+	DotFpsPhysicsBody.profile = _queries
 	DotFpsPhysicsBody.prof.fill(0)
+	if _motor_us:
+		DotFpsMotor.profile = true
+		DotFpsController.phase_us.fill(0)
+		DotFpsMotor.phase_us.fill(0)
 	_steps0 = Engine.get_physics_frames()
+	_usec0 = Time.get_ticks_usec()
 	var started: DotResult = _prof.start_recording(_seconds)
 	if not started.ok:
 		_say("recording did not start: %s" % started.error.message)
@@ -111,6 +128,7 @@ func _run() -> void:
 		_sample()
 	await get_tree().process_frame
 	DotFpsPhysicsBody.profile = false
+	DotFpsMotor.profile = false
 	var path: String = _prof.last_saved_path()
 	var side := _sidecar(game, players0)
 	var side_path := ProjectSettings.globalize_path(path).get_basename() + ".bench.json"
@@ -159,9 +177,19 @@ func _sidecar(game: Object, players0: int) -> Dictionary:
 	for i in names.size():
 		queries[names[i]] = {"per_frame": snappedf(pr[i * 2] / n, 0.01), "ms_per_frame": snappedf(pr[i * 2 + 1] / 1000.0 / n, 0.001),
 			"us_each": snappedf(float(pr[i * 2 + 1]) / maxf(pr[i * 2], 1.0), 0.01)}
+	var phases := {}
+	if _motor_us:
+		# Totals over the recording in ms per frame; per player tick is these over arena.p_controller calls.
+		var ctl := ["pre", "consume", "motor", "publish", "report", "signals_stats", "post"]
+		for i in ctl.size():
+			phases["ctl." + ctl[i]] = snappedf(DotFpsController.phase_us[i] / 1000.0 / n, 0.001)
+		for i in DotFpsMotor.PHASES.size():
+			if DotFpsMotor.PHASES[i] != "":
+				phases["motor." + DotFpsMotor.PHASES[i]] = snappedf(DotFpsMotor.phase_us[i] / 1000.0 / n, 0.001)
 	return {
+		"phases_ms_per_frame": phases,
 		"map": _map, "mode": String(game.get("mode").id), "bots": _bots, "seed": _seed, "seconds": _seconds, "warmup": _warmup,
-		"tag": _tag, "players": players0, "pilot": _pilot,
+		"tag": _tag, "players": players0, "pilot": _pilot, "queries": _queries, "tick_floor": _tick_floor,
 		"host": OS.get_environment("HOSTNAME") if OS.get_environment("HOSTNAME") != "" else OS.get_environment("HOST"),
 		"display": DisplayServer.get_name(), "adapter": RenderingServer.get_video_adapter_name(),
 		"renderer": RenderingServer.get_current_rendering_method(), "window": [get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y],
@@ -169,5 +197,6 @@ func _sidecar(game: Object, players0: int) -> Dictionary:
 		"physics_engine": str(ProjectSettings.get_setting("physics/3d/physics_engine", "")),
 		"tick_hz": Engine.physics_ticks_per_second, "frames": _frames,
 		"ticks_per_frame": snappedf(float(Engine.get_physics_frames() - _steps0) / n, 0.001),
+		"ticks_per_sec": snappedf(float(Engine.get_physics_frames() - _steps0) * 1000000.0 / maxf(Time.get_ticks_usec() - _usec0, 1.0), 0.01),
 		"per_frame": per_frame, "motor_queries": queries,
 	}

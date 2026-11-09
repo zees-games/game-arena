@@ -17,6 +17,8 @@ extends RefCounted
 
 const MIN_STEPS := 2
 const MAX_STEPS := 8
+## Cvar `arena_tick_floor`: 1 lets a dear tick run once a frame, a higher frame rate for a slower simulation.
+static var floor_steps := MIN_STEPS
 ## Wall time a frame may spend ticking while it catches up.
 const PHYSICS_BUDGET_SEC := 0.045
 ## Weight of the newest tick in the cost average.
@@ -34,7 +36,7 @@ func steps_for(tick_cost_sec: float) -> int:
 	_cost_sec = tick_cost_sec if _cost_sec <= 0.0 else lerpf(_cost_sec, tick_cost_sec, SMOOTHING)
 	if _cost_sec <= 0.0:
 		return MAX_STEPS
-	return clampi(int(floorf(PHYSICS_BUDGET_SEC / _cost_sec)), MIN_STEPS, MAX_STEPS)
+	return clampi(int(floorf(PHYSICS_BUDGET_SEC / _cost_sec)), floor_steps, MAX_STEPS)
 
 
 func cost() -> float:
