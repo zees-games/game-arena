@@ -260,6 +260,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			DotBotWorld.native_enabled = new_value.to_float() >= 0.5)
+	add_cvar("wall_shot_fast", "1" if AwWallSlam.fast_barrel else "0",
+		"1 (default): the shot's wall check tries one sphere around the eye first and skips its rays in open air (same answer, cheaper); 0: every ray every tick",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			AwWallSlam.fast_barrel = new_value.to_float() >= 0.5)
 	add_cvar("motor_native", "1" if DotFpsPhysicsBody.native_enabled else "0",
 		"1: the players' movement collision queries (sweep, rest contact, overlap) run in dot-sim when its library is installed (bit-identical to the script, so web and native clients still agree; cheaper); 0: in script. Without the library it is script either way",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(

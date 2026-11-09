@@ -26,6 +26,10 @@ var _queries := true
 var _max_steps := -1
 ## `--bot-threads N`: ArenaBotThreads.threads, as cvar `bot_threads` (-1 = the default).
 var _bot_threads := -1
+## `--wall-fast 0|1`: AwWallSlam.fast_barrel, as cvar `wall_shot_fast` (-1 = the default).
+var _wall_fast := -1
+## `--ads-cache 0|1`: AwAdsRules.cache_def_rows (-1 = the default).
+var _ads_cache := -1
 var _client: Node = null
 var _prof: Node = null
 ## Per-frame sums while recording, for the sidecar.
@@ -53,7 +57,13 @@ func _ready() -> void:
 			"--queries": _queries = int(args[i + 1]) != 0
 			"--max-steps": _max_steps = int(args[i + 1])
 			"--bot-threads": _bot_threads = int(args[i + 1])
+			"--wall-fast": _wall_fast = int(args[i + 1])
+			"--ads-cache": _ads_cache = int(args[i + 1])
 	seed(_seed)
+	if _ads_cache >= 0:
+		AwAdsRules.cache_def_rows = _ads_cache != 0
+	if _wall_fast >= 0:
+		AwWallSlam.fast_barrel = _wall_fast != 0
 	if _bot_threads >= 0:
 		preload("../game/arena_bot_threads.gd").threads = _bot_threads
 	if _max_steps > 0:
@@ -198,7 +208,7 @@ func _sidecar(game: Object, players0: int) -> Dictionary:
 	return {
 		"phases_ms_per_frame": phases,
 		"map": _map, "mode": String(game.get("mode").id), "bots": _bots, "seed": _seed, "seconds": _seconds, "warmup": _warmup,
-		"tag": _tag, "players": players0, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "bot_threads": preload("../game/arena_bot_threads.gd").threads,
+		"tag": _tag, "players": players0, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "bot_threads": preload("../game/arena_bot_threads.gd").threads, "wall_fast": AwWallSlam.fast_barrel, "ads_cache": AwAdsRules.cache_def_rows,
 		"host": OS.get_environment("HOSTNAME") if OS.get_environment("HOSTNAME") != "" else OS.get_environment("HOST"),
 		"display": DisplayServer.get_name(), "adapter": RenderingServer.get_video_adapter_name(),
 		"renderer": RenderingServer.get_current_rendering_method(), "window": [get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y],
