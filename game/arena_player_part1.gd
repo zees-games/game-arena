@@ -202,6 +202,10 @@ func _build_arsenal() -> void:
 	# copy would be twenty-seven resources per player for nothing. Behaviour instances
 	# are per-player, which is the half that actually holds state.
 	arsenal.catalogue = _catalogue()
+	# The posture from the simulated state, as the full weapon context has it; set before the rig, which
+	# otherwise puts its own (read from the controller's motion, without the flinch) there.
+	arsenal.idle_posture = _idle_posture
+	arsenal.idle_still = _idle_still
 	add_child(arsenal)
 
 	var res := arsenal.setup()
@@ -209,6 +213,47 @@ func _build_arsenal() -> void:
 		push_error(res.error.message)
 
 	_build_rig(AwWeaponRig.Role.SERVER, false, null)
+
+## The tick the weapons are being simulated for, read by [method _idle_posture] (the flinch counts from it).
+var _posture_tick: int = 0
+
+
+## The arsenal's [member DotWeaponArsenal.idle_posture] (set in [method _build_arsenal]): the posture fields
+## of the full context [method simulate_tick] builds, from the same simulated state, so an idle tick's
+## spread state matches a full tick's.
+func _idle_posture() -> DotWeaponContext:
+	var ctx := DotWeaponContext.new()
+	ctx.tick = _posture_tick
+	ctx.authority = arsenal.authority if arsenal != null else false
+	if controller == null:
+		return ctx
+	var state := controller.state
+	ctx.speed = state.horizontal_speed()
+	ctx.airborne = not state.is_grounded()
+	ctx.crouched = state.is_crouched()
+	ctx.sliding = state.is_sliding()
+	ctx.sprinting = state.sprinting
+	ctx.wall_running = state.is_wall_running()
+	ctx.hurt_tick = health.last_damage_tick if health != null and health.last_damage_tick >= 0 else -1
+	return ctx
+
+
+## The arsenal's [member DotWeaponArsenal.idle_still]: whether [method _idle_posture] is the settled one
+## (still, grounded, standing, no flinch left), so a weapon with nothing to recover skips its tick.
+## Erring towards false only costs a tick.
+func _idle_still() -> bool:
+	if controller == null:
+		return true
+	var state := controller.state
+	if state.horizontal_speed() != 0.0 or not state.is_grounded() or state.is_crouched() or state.is_sliding() \
+			or state.sprinting or state.is_wall_running():
+		return false
+	var hurt: int = health.last_damage_tick if health != null else -1
+	if hurt < 0 or _posture_tick < hurt:
+		return true
+	var rate := maxi(arsenal.tick_rate, 64) if arsenal != null else 64
+	return _posture_tick - hurt > ceili(DotWeaponAccuracyClass.FLINCH_SEC * float(rate))
+
 
 func _build_hitboxes() -> void:
 	var plan := DotPlayerHitboxes.new()
