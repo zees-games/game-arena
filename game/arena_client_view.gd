@@ -114,7 +114,7 @@ func _use_loadout_menu() -> void:
 		# Remembered under the signed-in site account (or "local" as a guest), and never
 		# from a suite or a render on scratch settings: those must not write, or read back, a
 		# player's real choice.
-		_loadout_scratch = ArenaPresentation.settings_directory.begins_with("user://scratch/")
+		_loadout_scratch = DotSettingsScratch.is_scratch(ArenaPresentation.settings_directory)
 		follow_account(DotRegistry.get_node_service(AUTH_SERVICE))
 
 
