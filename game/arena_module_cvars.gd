@@ -251,7 +251,7 @@ func _add_bot_think_cvars() -> void:
 		func(_old: String, new_value: String) -> void:
 			ArenaBotBrain.fast_sense = new_value.to_float() >= 0.5)
 	add_cvar("bot_threads", str(ArenaBotThreads.threads),
-		"Threads that run the bots' brains in parallel (the main thread is one); 0 thinks one bot after another on the main thread",
+		"Threads that run the bots' brains in parallel (the main thread is one; default: cores-1, at most 4, off under 3 cores or without threads); 0 thinks one bot after another on the main thread",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(64.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaBotThreads.threads = maxi(0, int(new_value.to_float())))

@@ -20,7 +20,7 @@ const SECONDS := 20.0
 const THREADS := [0, 0, 1, 4, 8]
 
 const SECTIONS := 3
-const CHECKS := 13
+const CHECKS := 14
 
 ## An imported map, whose sight is the physics space's (dm_box's is analytic) and whose routes come from a baked mesh.
 const IMPORTED_MAP := &"dm-morpheus"
@@ -95,6 +95,9 @@ func _run() -> void:
 	_check(ArenaBotThreads.active(ArenaBotThreads.MIN_BOTS), "the minimum goes parallel")
 	ArenaBotThreads.threads = 0
 	_check(not ArenaBotThreads.active(64), "bot_threads 0 is off at any count")
+	var auto := ArenaBotThreads.auto_threads()
+	_check(auto == 0 or (auto >= 2 and auto <= ArenaBotThreads.AUTO_MAX and auto < OS.get_processor_count()),
+		"the default (auto) is off or 2..%d threads, under the cores (%d on %d)" % [ArenaBotThreads.AUTO_MAX, auto, OS.get_processor_count()])
 	_done()
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 

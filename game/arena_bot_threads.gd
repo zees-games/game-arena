@@ -1,6 +1,6 @@
 extends RefCounted
 
-## The bots' brains on worker threads (cvar `bot_threads`, 0 = off: the stock one-bot-at-a-time loop).
+## The bots' brains on worker threads (cvar `bot_threads`, default [method auto_threads]; 0 = off: the stock one-bot-at-a-time loop).
 ##
 ## A tick of bot commands is three steps (see [method ArenaBots.think_begin]): per bot on the main thread the
 ## snapshot (the world's contacts, taken once per tick) and the bookkeeping; the brains' decisions, which read
@@ -21,8 +21,13 @@ const MIN_BOTS := 8
 ## Brains per grab from the shared queue.
 const CHUNK := 4
 
-## Threads that decide (the main thread is one); 0 and 1 think on the main thread.
-static var threads: int = 0
+## Threads that decide (the main thread is one); 0 and 1 think on the main thread. On by default
+## ([method auto_threads]): the brains decide the same on any count (headless_botthreads), and on a
+## 16v16 the parallel brains take about a quarter off the bots' share of the tick.
+static var threads: int = auto_threads()
+
+## Most threads the default takes: past this the hand-off and the world's lock eat the gain.
+const AUTO_MAX := 4
 
 ## Ticks whose brains went through the worker path (for the suite).
 static var par_ticks: int = 0
@@ -30,6 +35,15 @@ static var par_ticks: int = 0
 var _jobs: Array = []
 var _next := 0
 var _lock := Mutex.new()
+
+
+## The default [member threads]: the cores but one (for the render and the engine), at most
+## [constant AUTO_MAX]; 0 where there are no threads (web without them) or one or two cores.
+static func auto_threads() -> int:
+	if not DotPlatform.has_threads():
+		return 0
+	var n := mini(OS.get_processor_count() - 1, AUTO_MAX)
+	return n if n >= 2 else 0
 
 
 ## Whether [param bot_count] bots go through [method think_all] this tick.
