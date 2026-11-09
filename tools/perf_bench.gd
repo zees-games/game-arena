@@ -136,7 +136,22 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		for i in mini(slots.size(), c.size() / 2):
 			native[slots[i]] = {"per_frame": snappedf(float(c[i * 2]) / n, 0.01), "ms_per_frame": snappedf(c[i * 2 + 1] / 1000.0 / n, 0.001),
 				"us_each": snappedf(float(c[i * 2 + 1]) / maxf(c[i * 2], 1.0), 0.01)}
-	return {"phases_ms_per_frame": phases, "native": native, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
+	# Which movers gathered their hulls natively (dot-sim's hull world) and which by script: native 0 with a world
+	# false means the loaded libdot_sim predates DotSimHullWorld (rebuild it, ci/install.sh).
+	var hulls := {}
+	if _game != null:
+		hulls["world"] = _game.get(&"_hull_world") != null
+		hulls["remote_feet"] = (_game.get(&"remote_feet_fn") as Callable).is_valid()
+		hulls["remote_lags"] = (_game.get(&"remote_lags_fn") as Callable).is_valid()
+		var native_n := 0
+		var roster: Variant = _game.get(&"_roster")
+		if roster is Array:
+			for p: Variant in roster:
+				if p is Object and bool((p as Object).get(&"_hull_body_ok")):
+					native_n += 1
+			hulls["roster"] = (roster as Array).size()
+		hulls["native"] = native_n
+	return {"phases_ms_per_frame": phases, "native": native, "hulls": hulls, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
 
 
 func _apply_ablate() -> void:
