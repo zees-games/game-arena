@@ -4,10 +4,14 @@
 # --- Match
 # Seconds before a dead player respawns; -1 keeps each mode's own. [-1.0..60.0]
 # respawn_delay_sec: -1.0
-# Seconds of protection after a spawn; -1 keeps each mode's own. [-1.0..60.0]
-# spawn_protection_sec: -1.0
+# Seconds of protection after a spawn (0.5 works); -1 keeps each mode's own. Default 3. [-1.0..60.0]
+# spawn_protection_sec: 3.0
 # What ends spawn protection early: 0 nothing (it runs its seconds out), 1 the first shot (default: a player ... [0..3]
 # spawn_protection_break: 1
+# Feet of travel from the spawn point, in any direction, that end spawn protection. Default 2; 0 turns the di... [0.0..100.0]
+# spawn_protection_move_feet: 2.0
+# Whether a protected player is drawn inside a translucent bubble (everyone else sees it; you do not see your...
+# spawn_protection_bubble: true
 # Friendly fire: -1 keeps each mode's own, 0 off, 1 on. [-1..1]
 # friendly_fire: -1
 

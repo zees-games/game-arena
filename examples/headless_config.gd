@@ -34,7 +34,7 @@ func _run() -> void:
 	var binder := ArenaConfig.make_binder(game.config)
 	binder.strict = true
 	_check(binder.load_layers().ok, "defaults load")
-	_check(binder.schema().size() == 44 and binder.diff().is_empty(), "44 fields, no diff at the code defaults")
+	_check(binder.schema().size() == 46 and binder.diff().is_empty(), "46 fields, no diff at the code defaults")
 	var console := DotConsole.new()
 	add_child(console)
 	binder.bind_cvars(console.cvar, DotConVar.FLAG_ARCHIVE, console.has_name)
