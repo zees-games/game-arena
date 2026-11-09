@@ -128,6 +128,11 @@ var last_view_lag: float = -1.0
 var last_view_back: int = -1
 var last_view_span: int = 0
 
+## The tick the view lag and bracket above were measured for, or -1. The server repeats a
+## command over a tick whose packet was lost; the view it names stays where it was, it does
+## not move on with the tick ([method ArenaNetBridge.remote_feet]).
+var last_view_tick: int = -1
+
 ## Newest tick whose state this behaviour has adopted. Client side, for reconciliation.
 var last_state_tick: int = -1
 
@@ -214,6 +219,7 @@ func _net_apply_input(input: DotNetInput, _tick: int) -> void:
 	last_view_lag = command.view_lag_ticks()
 	last_view_back = command.view_back
 	last_view_span = command.view_span
+	last_view_tick = _tick
 
 
 # --- Simulation ------------------------------------------------------------

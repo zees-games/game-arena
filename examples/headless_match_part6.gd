@@ -642,9 +642,7 @@ func _build() -> void:
 	_game = ArenaGame.new()
 	_game.name = "Arena"
 	# Throwaway achievement store, or a persisted file from an earlier run seeds the lifetime totals.
-	var ach_dir := ProjectSettings.globalize_path("user://headless_match_achievements")
-	OS.move_to_trash(ach_dir) if DirAccess.dir_exists_absolute(ach_dir) else null
-	_game.progress_dir = ach_dir
+	_game.progress_dir = DotSettingsScratch.use("headless_match_achievements")
 	_game.tick_rate = TICK_RATE
 	_game.score_limit = SCORE_LIMIT
 	_game.time_limit_sec = 0.0

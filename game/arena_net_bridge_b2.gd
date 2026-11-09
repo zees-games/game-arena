@@ -267,10 +267,14 @@ func remote_feet(other_id: int, mover_id: int, tick: int) -> Variant:
 	var mover: ArenaPlayerNet = _behaviours.get(mover_id)
 	if mover == null or game == null:
 		return null
-	var lag := game.collision_lag(mover.last_view_lag)
+	# A command repeated over a lost packet is that many ticks old, and so is its view: the
+	# client measured this tick's lag against the same drawn world, one tick further behind.
+	# Holding the lag instead moved the view on a tick and the two ends met a strafer apart.
+	var aged := maxi(tick - mover.last_view_tick, 0) if mover.last_view_tick >= 0 and mover.last_view_lag >= 0.0 else 0
+	var lag := game.collision_lag(mover.last_view_lag + float(aged))
 	var at: Variant = null
 	if lag >= 0.0:
-		var older := tick - mover.last_view_back if mover.last_view_back >= 0 else -1
+		var older := tick - aged - mover.last_view_back if mover.last_view_back >= 0 else -1
 		at = _remote_feet_at(other_id, float(tick) - lag, older, mover.last_view_span)
 	if solid_trace:
 		_trace_feet(other_id, mover, tick, lag, at)

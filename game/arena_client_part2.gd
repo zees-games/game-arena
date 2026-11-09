@@ -674,8 +674,15 @@ func _build_ragdolls() -> void:
 func _install_profiler_context() -> void:
 	var prof: Object = DotRegistry.get_service(&"dot_profiler")
 	if prof != null:
-		ArenaProfilerContext.install(prof, game, bridge)
+		ArenaProfilerContext.install(prof, game, _bot_host(), presentation)
 		return
-	DotRegistry.signals().service_registered.connect(func(svc_name: StringName, inst: Object) -> void:
-		if svc_name == &"dot_profiler":
-			ArenaProfilerContext.install(inst, game, bridge), CONNECT_ONE_SHOT)
+	# Not one-shot: that would spend the connection on whichever service registers next, usually not the profiler.
+	if not DotRegistry.signals().service_registered.is_connected(_on_profiler_registered):
+		var _c := DotRegistry.signals().service_registered.connect(_on_profiler_registered)
+
+
+func _on_profiler_registered(svc_name: StringName, inst: Object) -> void:
+	if svc_name != &"dot_profiler":
+		return
+	DotRegistry.signals().service_registered.disconnect(_on_profiler_registered)
+	ArenaProfilerContext.install(inst, game, _bot_host(), presentation)

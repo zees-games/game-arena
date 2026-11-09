@@ -74,6 +74,16 @@ func _remove_offline_bot(id: int) -> void:
 	game.remove_player(id)
 
 
+## The offline bots' ids, under the name the net bridge uses for the ones it hosts.
+func bot_ids() -> Array:
+	return _bots.keys()
+
+
+## Whatever hosts this process's bots: the net bridge when connected, this client when solo.
+func _bot_host() -> Object:
+	return bridge if bridge != null else self
+
+
 ## How many bots a solo launch starts with: `-- --bots N`, else [member offline_bots].
 func _launch_bots() -> int:
 	var args := OS.get_cmdline_user_args()

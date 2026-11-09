@@ -6,8 +6,11 @@ const ArenaProfilerContext := preload("../game/arena_profiler_context.gd")
 ## native timers in extras, and none of it failing where the library is missing.
 ## Run: [code]./game.sh test headless_profiler_context[/code]
 
-const SECTIONS := 3
-const CHECKS := 19
+const ArenaAudioManager := preload("../game/arena_audio_manager.gd")
+const ArenaGame := preload("../game/arena_game.gd")
+
+const SECTIONS := 5
+const CHECKS := 37
 
 var _entered := 0
 var _completed := 0
@@ -23,6 +26,8 @@ func _run() -> void:
 	_test_natives()
 	await _test_report()
 	_test_degrades()
+	_test_roster()
+	await _test_audio()
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
@@ -60,6 +65,10 @@ func _test_report() -> void:
 	var report := prof.build_report()
 	_check(report.get("context", {}).has("game") and report.context.game.get("game") == "arena", "context.game names the game", str(report.get("context", {}).keys()))
 	_check(report.context.has("natives") and report.context.natives.has("status"), "context.natives has the status")
+	_check(report.context.has("audio") and report.context.audio.has("driver") and report.context.audio.has("latency_ms"), "context.audio has the driver and its latency")
+	_check(report.context.get("build", {}).has("commit") and report.context.build.get("source") in ["git", "stamp", "unknown"], "context.build has the commit and where it came from", str(report.context.get("build", {})))
+	_check(report.context.get("build", {}).get("addons") is Dictionary, "context.build lists the addons' commits")
+	_check(report.context.get("launch") is Array, "context.launch has the launch arguments")
 	_check(report.context.get("machine", {}).has("os") and report.context.machine.has("cpu"), "context.machine has os and cpu")
 	var native: Variant = report.get("extras", {}).get("native", {})
 	if ClassDB.class_exists(&"DotSimFpsBody"):
@@ -88,4 +97,69 @@ func _test_degrades() -> void:
 		_check(ArenaProfilerContext.end_native(null).is_empty(), "the timer hook reports nothing without the library")
 	else:
 		_check(true, "library present: the timers are covered above")
+	_done()
+
+
+class _Roster extends RefCounted:
+	var ids: Array[int] = []
+
+	func player_ids() -> Array[int]:
+		return ids
+
+
+class _Bridge extends RefCounted:
+	var bots: Array[int] = []
+
+	func bot_ids() -> Array[int]:
+		return bots
+
+
+class _Holder extends RefCounted:
+	var audio: Node = null
+
+
+func _test_roster() -> void:
+	_section("bots are counted from the roster, hosted here or not")
+	var roster := _Roster.new()
+	roster.ids = [1, 2, ArenaGame.BOT_SESSION_BASE + 1, ArenaGame.BOT_SESSION_BASE + 2, ArenaGame.BOT_SESSION_BASE + 3]
+	var remote := ArenaProfilerContext.game_context(roster, _Bridge.new())
+	_check(remote.bots == 3, "a client of a remote server counts the server's bots", str(remote))
+	_check(remote.bots_hosted == 0, "and says it hosts none")
+	_check(remote.players == 5, "players is the whole roster")
+	var bridge := _Bridge.new()
+	bridge.bots = [ArenaGame.BOT_SESSION_BASE + 1, ArenaGame.BOT_SESSION_BASE + 2, ArenaGame.BOT_SESSION_BASE + 3]
+	var host := ArenaProfilerContext.game_context(roster, bridge)
+	_check(host.bots == 3 and host.bots_hosted == 3, "a host counts the same bots once", str(host))
+	roster.ids = [7]
+	_check(ArenaProfilerContext.game_context(roster, null).bots == 0, "no bots, no bridge: zero")
+	_done()
+
+
+func _test_audio() -> void:
+	_section("sound is a span and a line of context")
+	var manager := ArenaAudioManager.new()
+	manager.catalogue = DotAudioCatalogue.new()
+	manager.mixer = DotAudioMixer.new()
+	add_child(manager)
+	_check(manager.setup().ok, "the arena's manager sets up")
+	var holder := _Holder.new()
+	holder.audio = manager
+	var ctx := ArenaProfilerContext.audio_context(holder)
+	for key: String in ["driver", "mix_rate", "latency_ms", "sink", "playing", "capacity"]:
+		_check(ctx.has(key), "audio context has %s" % key, str(ctx.keys()))
+	_check(ArenaProfilerContext.audio_context(null).has("driver"), "no manager still names the driver")
+	# The profiler freed above turns the cost table off as it leaves: let it go first.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var was := DotFrameCost.enabled
+	DotFrameCost.reset()
+	DotFrameCost.enabled = true
+	var _h := manager.play(&"nothing_by_this_name")
+	manager._process(0.0)
+	var cost: Dictionary = DotFrameCost.take().get(&"arena.audio", {})
+	var seen := int(cost.get("calls", 0)) == 2
+	DotFrameCost.enabled = was
+	DotFrameCost.reset()
+	_check(seen, "a played sound and the reap are charged to arena.audio")
+	manager.queue_free()
 	_done()

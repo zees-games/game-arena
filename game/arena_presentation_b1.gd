@@ -4,6 +4,7 @@ const ArenaRecoilView := preload("arena_recoil_view.gd")
 const ArenaFlagCarry := preload("arena_flag_carry.gd")
 const ArenaKillPovRecoil := preload("arena_kill_pov_recoil.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
+const ArenaAudioManager := preload("arena_audio_manager.gd")
 
 
 const ArenaBlood := preload("arena_blood.gd")

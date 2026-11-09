@@ -174,6 +174,9 @@ func _make_manager(is_server: bool, scope: StringName, peer_id: int) -> DotNetMa
 	net.config = DotNetConfig.new()
 	net.config.tick_rate = TICK_RATE
 	net.config.snapshot_rate = SNAPSHOT_RATE
+	# These ticks are driven by hand, as fast as the host runs them: the adaptive buffer would
+	# size the interpolation delay from wall-clock arrival gaps, a different view lag on every box.
+	net.config.adaptive_interpolation = false
 	# From the game, exactly as `ArenaModule` and `ArenaClient` do it. A suite that
 	# left this at dot-net's default would agree with itself on both ends and prove
 	# nothing about the two that actually ship — which is how the 128-against-256
