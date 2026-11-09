@@ -132,7 +132,8 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 	if video != null:
 		video.section("Image").add(DotMenuRow.toggle(&"view_model", "Weapon in view", "Your hands and gun. A server may turn them off.")) \
 			.add(DotMenuRow.select(&"first_person_body", "My body", "What you see of yourself when you look down. Server default follows the server.",
-				[[&"auto", "Server default"], [&"off", "None"], [&"legs", "Legs and feet"], [&"body", "Whole body"]]))
+				[[&"auto", "Server default"], [&"off", "None"], [&"legs", "Legs and feet"], [&"body", "Whole body"]])) \
+			.add(DotMenuRow.toggle(DotOwnBodySetting.KEY, "Show legs", "Show your own legs and body when you look down. Off hides them whatever the server or the choice above says."))
 		video.section("Players").add(DotMenuRow.select(&"name_tags", "Name tags", "Whose name floats over their head. The server may allow fewer.",
 				[[&"always", "Everybody"], [&"team", "Team-mates"], [&"team_hover", "Team-mates and under cursor"], [&"hover", "Under cursor"], [&"off", "Off"]])) \
 			.add(DotMenuRow.select(&"health_bars", "Health bars", "Whose health bar floats over their head. Smart: team-mates, whoever the cursor is on, anybody just hurt. The server may allow fewer.",
