@@ -11,8 +11,10 @@ const ArenaBindings := preload("../game/arena_bindings.gd")
 ## gap between camera and muzzle. The bullet must leave the camera ray with spread (plus the weapon's recoil offset)
 ## only: a view punch that the bullet does not share is a systematic miss.
 ##
+## Frames are stepped, two a tick (game.sh's FIXED_FPS table), not paced by the wall clock: see the note at the checks.
+##
 ## [codeblock]
-## godot --headless --path . res://examples/headless_aimlocal.tscn
+## godot --headless --fixed-fps 132 --path . res://examples/headless_aimlocal.tscn
 ## [/codeblock]
 
 const DISTANCES := [5.0, 15.0, 30.0]
@@ -25,6 +27,9 @@ const MAX_ORIGIN_GAP := 0.3
 var _checks := 0
 var _failed := 0
 var _shots: Array = []
+## Frames in the firing windows, and how many of them ran a physics tick: the cadence the gap depends on.
+var _frames := 0
+var _frames_ticked := 0
 
 
 func _ready() -> void:
@@ -162,9 +167,13 @@ func _run() -> void:
 					_shots.clear()
 					hits.clear()
 					Input.action_press(ArenaBindings.FIRE)
+					var pf := Engine.get_physics_frames()
 					for _i in 24:
 						await get_tree().process_frame
 						sampler.look_at_angles(a.x, a.y)
+						_frames += 1
+						_frames_ticked += 1 if Engine.get_physics_frames() > pf else 0
+						pf = Engine.get_physics_frames()
 					Input.action_release(ArenaBindings.FIRE)
 					for _i in 20:
 						await get_tree().process_frame
@@ -193,6 +202,11 @@ func _run() -> void:
 	var worst_origin := 0.0
 	for o in all_origin:
 		worst_origin = maxf(worst_origin, float(o))
+	# The camera follows the recoil once a frame and the bullet takes it in the tick, so the gap is a function of
+	# how frames and ticks interleave. Stepped (--fixed-fps 132: two frames a tick) it is the same number on every
+	# box; on the wall clock a starved box skips frames and the gap grows with the load, not with the code.
+	print("  firing frames %d, %d of them ran a tick%s" % [_frames, _frames_ticked,
+		"" if _frames_ticked * 2 == _frames else "  (NOT STEPPED: run with --fixed-fps 132, as game.sh does; the gap below depends on this box's load)"])
 	_check(fired_total > 0, "shots were fired and measured", str(fired_total))
 	_check(worst <= MAX_RAY_GAP_EXTRA, "the bullet leaves the camera ray (spread is added later, so the gap is recoil follow only: <= %.2f deg)" % MAX_RAY_GAP_EXTRA, "worst %.3f" % worst)
 	_check(worst_origin <= MAX_ORIGIN_GAP, "the muzzle sits on the camera (+%.2f m)" % MAX_ORIGIN_GAP, "worst %.3f" % worst_origin)

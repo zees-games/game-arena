@@ -3,11 +3,19 @@ extends "lossy_windows.gd"
 ## about 0.4 s to the round trip, and the server's `sv_allow_client_latency 0` takes it back off.
 ## `--legacy` is the control: the client drives its frame the way it did before the bridge carried the
 ## delay (nothing releases the held snapshots, inputs skip the delay), and the checks fail.
+##
+## This is real ENet on the wall clock with a server and a client in one process, so a box that cannot give
+## the process a tick's worth of CPU every tick makes it catch up in bursts: inputs then reach the server
+## several to a frame and a window's medians measure the box. The windows are counted in game time, each
+## waits for the process to keep up before it samples, and the whole measurement goes through `_measured`
+## (a failure is taken again only when the process was stalled during it; no limit moves).
 
 const LAG := 0.2
 const SETTLE := 3.0
 const SAMPLE := 5.0
 const SECTIONS := 6
+## How long a window waits for a second without a stall before it samples anyway.
+const QUIET_SECONDS := 10.0
 
 var _legacy := false
 var _sent_at: Dictionary = {}
@@ -16,6 +24,7 @@ var _up_ms: Array[float] = []
 var _down_ms: Array[float] = []
 var _sampling := false
 var _checks := 0
+var _attempts := 0
 
 
 func _ready() -> void:
@@ -29,7 +38,8 @@ func _run() -> void:
 	DotPaths.remove_tree(DATA)
 	Engine.physics_ticks_per_second = TICK_RATE
 	if await _boot() and await _connect_one():
-		await _measure_all()
+		var _followed := (_clients["A"]["net"] as DotNetManager).latency.follow_cvars(_clients["A"]["link"])
+		await _measured(_measure_all)
 	await _teardown()
 	DotPaths.remove_tree(DATA)
 	_report_sections(_entered, _completed, SECTIONS, _passed + _failed)
@@ -48,8 +58,10 @@ func _connect_one() -> bool:
 func _measure_all() -> void:
 	var a: Dictionary = _clients["A"]
 	var net: DotNetManager = a["net"]
-	var link: DotClientLink = a["link"]
-	var _followed := net.latency.follow_cvars(link)
+	# Taken again after a stall, this starts from the request the last attempt left; the first has the default.
+	if _attempts > 0:
+		var _zero := net.latency.set_cvar("cl_latency_baseline", "0")
+	_attempts += 1
 	_section("baseline: no added latency")
 	var base := await _window(a)
 	_report_window("baseline", base)
@@ -87,26 +99,43 @@ func _measure_all() -> void:
 	_done()
 
 
-## Plays SETTLE seconds, then samples SAMPLE seconds; medians in ms.
+## Plays SETTLE seconds, waits for the process to keep up, then samples SAMPLE seconds; medians in ms.
+## All of it in game time: a window counted on the wall clock holds as few ticks as the box had time for.
 func _window(a: Dictionary) -> Dictionary:
 	var net: DotNetManager = a["net"]
-	await _until(func() -> bool: return false, SETTLE)
+	await _wait_game(SETTLE)
+	await _quiet()
 	_up_ms.clear()
 	_down_ms.clear()
 	var buffer := _module().net.input_buffer_for(_peer_of("A"))
 	var late0 := buffer.late_count
+	var frames0 := Engine.get_process_frames()
+	_window_stall_ms = 0
 	_sampling = true
-	await _until(func() -> bool: return false, SAMPLE)
+	await _wait_game(SAMPLE)
 	_sampling = false
 	var up := _median(_up_ms)
 	var down := _median(_down_ms)
 	return {"up": up, "down": down, "round_trip": up + down, "rtt": net.clock.rtt_ms(),
-		"enet": ArenaNetBridge.link_rtt_ms(a["link"]), "late": buffer.late_count - late0, "n": _up_ms.size()}
+		"enet": ArenaNetBridge.link_rtt_ms(a["link"]), "late": buffer.late_count - late0, "n": _up_ms.size(),
+		"frames": Engine.get_process_frames() - frames0, "stall": _window_stall_ms}
+
+
+## Waits until the process has run a second of ticks with no gap over the stall limit, QUIET_SECONDS at
+## most. The first window starts while the match is still loading in, and a window that begins inside a
+## catch-up burst measures the burst.
+func _quiet() -> void:
+	var deadline := Time.get_ticks_msec() + int(QUIET_SECONDS * 1000.0)
+	var calm := 0
+	while calm < TICK_RATE and Time.get_ticks_msec() < deadline:
+		_window_stall_ms = 0
+		await get_tree().physics_frame
+		calm = calm + 1 if _window_stall_ms < _stall_limit_ms() else 0
 
 
 func _report_window(label: String, w: Dictionary) -> void:
-	print("    %-13s up %4.0f ms  down %4.0f ms  round trip %4.0f ms  clock rtt %4.0f ms  ENet rtt %3.0f ms  late %d  (%d samples)" % [
-		label, w["up"], w["down"], w["round_trip"], w["rtt"], w["enet"], w["late"], w["n"]])
+	print("    %-13s up %4.0f ms  down %4.0f ms  round trip %4.0f ms  clock rtt %4.0f ms  ENet rtt %3.0f ms  late %d  (%d samples, %d frames, longest gap %d ms)" % [
+		label, w["up"], w["down"], w["round_trip"], w["rtt"], w["enet"], w["late"], w["n"], w["frames"], w["stall"]])
 
 
 static func _median(values: Array[float]) -> float:
@@ -117,7 +146,17 @@ static func _median(values: Array[float]) -> float:
 	return sorted[sorted.size() / 2]
 
 
+## The longest gap between two physics callbacks in the window being sampled.
+var _window_stall_ms := 0
+var _window_last_usec := 0
+
+
 func _physics_process(delta: float) -> void:
+	_track_stall()
+	var now := Time.get_ticks_usec()
+	if _window_last_usec != 0:
+		_window_stall_ms = maxi(_window_stall_ms, (now - _window_last_usec) / 1000)
+	_window_last_usec = now
 	if not _driving:
 		return
 	var a: Dictionary = _clients["A"]

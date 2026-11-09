@@ -56,6 +56,10 @@ PARSE=1
 # A suite that legitimately needs at least this long, as name=seconds; a larger
 # --timeout still wins.
 MIN_TIMEOUTS="headless_imported=3000 headless_bots=2400"
+# A suite whose frames are stepped at a fixed rate instead of on the wall clock, as
+# name=frames-per-second (the engine's --fixed-fps): what it measures between a frame and
+# a tick is then the same on an idle box and a starved one.
+FIXED_FPS="headless_aimlocal=132"
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 CR=$'\r\033[K'
 [ -t 1 ] || { RED=""; GRN=""; YLW=""; OFF=""; CR=""; }
@@ -130,7 +134,11 @@ run_suite() {
     for mkv in $MIN_TIMEOUTS; do
         [ "${mkv%%=*}" = "$scene" ] && [ "$limit" -lt "${mkv#*=}" ] && limit="${mkv#*=}"
     done
-    timeout "$limit" "$GODOT" --headless --path . "res://examples/$scene.tscn" ${SUITE_ARGS[@]+-- "${SUITE_ARGS[@]}"} >"$log" 2>&1
+    local fixed=()
+    for mkv in $FIXED_FPS; do
+        [ "${mkv%%=*}" = "$scene" ] && fixed=(--fixed-fps "${mkv#*=}")
+    done
+    timeout "$limit" "$GODOT" --headless --path . ${fixed[@]+"${fixed[@]}"} "res://examples/$scene.tscn" ${SUITE_ARGS[@]+-- "${SUITE_ARGS[@]}"} >"$log" 2>&1
     status=$?
     summary="$(grep -Eo '[0-9]+ (passed|checks), [0-9]+ failed' "$log" | tail -1)"
     # Section accounting: "N sections entered, M finished" from DotGameCheckSuite._report_sections.
