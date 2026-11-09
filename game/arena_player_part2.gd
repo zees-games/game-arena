@@ -386,6 +386,14 @@ static func wall_shot_strafe(state: DotFpsState) -> float:
 	return state.velocity.dot(Basis(Vector3.UP, deg_to_rad(state.yaw)).x)
 
 
+## What [code]controller.render_state(0.0).position[/code] returns, without the copy of the whole state it makes to
+## get it: the previous tick's position, or the current one where the controller does not blend (a remote copy, no rate).
+func _previous_tick_position() -> Vector3:
+	if controller.drive == DotFpsController.Drive.REMOTE or controller.tick_rate <= 0:
+		return controller.state.position
+	return controller._previous_state.position
+
+
 func simulate_tick(
 	tick: int,
 	delta: float,
@@ -401,7 +409,7 @@ func simulate_tick(
 	var start := controller.state.position
 	_yaw_before_tick = controller.state.yaw
 	# The previous state's position before this tick replaces it: two ticks back after it.
-	_position_two_back = controller.render_state(0.0).position
+	_position_two_back = _previous_tick_position()
 	ladder.now = tick
 	var view := DotFpsMotor._view_basis(controller.state.yaw, 0.0)
 	var intent: Vector3 = view.right * movement_command.move.x + view.forward * movement_command.move.y
@@ -434,14 +442,16 @@ func simulate_tick(
 
 	health.tick(tick, delta)
 
+	# Read once: nothing between the two uses moves the view.
+	var muzzle := muzzle_position()
 	if _combat != null:
-		_combat.set_authoritative_origin(player_id, muzzle_position())
+		_combat.set_authoritative_origin(player_id, muzzle)
 
 	# Pushed in from the simulated state, never read out of a rendered one: an
 	# interpolated position differs between client and server by design, and feeding it
 	# to the spread makes the spread differ too.
 	var ctx := DotWeaponContext.make(
-		player_id, tick, muzzle_position(), _command.aim_direction()
+		player_id, tick, muzzle, _command.aim_direction()
 	)
 	ctx.speed = state.horizontal_speed()
 	ctx.airborne = not state.is_grounded()

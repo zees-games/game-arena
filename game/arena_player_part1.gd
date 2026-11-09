@@ -357,7 +357,10 @@ func _run_map_mechanics(start: Vector3, delta: float) -> void:
 
 	# A push moved the state after the controller wrote it out; the node follows, as the
 	# controller's own publish does, so the muzzle and the hitboxes are where the player is.
-	global_position = state.position
+	# Only when it moved: a set, even to the same place, re-propagates the transform down the
+	# whole player (hitboxes, view, body) and the controller has just written this one.
+	if global_position != state.position:
+		global_position = state.position
 
 func _apply_body_rules() -> void:
 	if body_motion == null:
