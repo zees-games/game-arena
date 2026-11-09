@@ -518,6 +518,11 @@ var _tick: int = 0
 ## Player id to the tick of their last spawn and last shot, for the instant loadout swap.
 var _spawned_tick: Dictionary = {}
 var _fired_tick: Dictionary = {}
+
+## Player id -> where their spawn protection started, for `spawn_protection_move_feet`.
+var _protect_anchor: Dictionary = {}
+
+const FEET_TO_METRES := 0.3048
 var _registered_name: StringName = &""
 
 ## The tick each (player, hurt volume) pair is next hurt on, kept after the player leaves

@@ -219,6 +219,13 @@ var challenge_value: int = 0
 ## everybody (`ArenaPlayerNet.net_beacon`), who each draw it in [method present].
 var beacon: bool = false
 
+## Whether to draw the spawn-protection bubble round this player. The server decides it (protected and
+## `spawn_protection_bubble`) and replicates it (`ArenaPlayerNet.net_protected`).
+var protected_view: bool = false
+
+## The bubble node while one is drawn. See [method _present_bubble].
+var protection_bubble: DotSpawnBubble3D = null
+
 ## The marker [member beacon] draws, while it does. Client side; built and freed by
 ## [method present].
 var beacon_marker: DotFxBeacon = null
