@@ -8,7 +8,7 @@ extends SceneTree
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaViewArms := preload("../game/arena_view_arms.gd")
 
-const OUT_DIR := "screenshots/reload"
+var OUT_DIR := "screenshots/reload"
 
 var client: Node = null
 var _failed := 0
@@ -26,6 +26,9 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	var _a0 := OS.get_cmdline_user_args()
+	if _a0.has("--out"):
+		OUT_DIR = _a0[_a0.find("--out") + 1]
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 	var args := OS.get_cmdline_user_args()
 	var frames := int(_arg(args, "--frames", "12"))

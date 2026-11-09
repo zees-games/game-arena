@@ -6,6 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 out=screenshots/reload
+args=("$@")
+for i in "${!args[@]}"; do [ "${args[$i]}" = "--out" ] && out="${args[$((i+1))]}"; done
 rm -rf "$out"; mkdir -p "$out"
 rc=0
 xvfb-run -a -s "-screen 0 1920x1080x24" timeout 900 godot --path . --resolution 1920x1080 \
