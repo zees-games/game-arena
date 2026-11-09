@@ -141,6 +141,8 @@ func tick(commands: Dictionary = {}) -> void:
 		ArenaWeaponDropWiring.input(self, id, player, pair)
 		var move: DotFpsCommand = pair[0] if pair.size() > 0 else DotFpsCommand.new()
 		var fire: DotWeaponCommand = pair[1] if pair.size() > 1 else DotWeaponCommand.new()
+		if knives != null:
+			knives.input(id, player, fire)
 
 		if move != null and fire != null:
 			match_node.note_activity(str(id), _tick)
@@ -206,6 +208,9 @@ func tick(commands: Dictionary = {}) -> void:
 
 	if grenades != null:
 		grenades.tick(delta)
+
+	if knives != null and is_authority:
+		knives.tick(_tick, delta)
 
 	if props != null:
 		props.tick(delta)

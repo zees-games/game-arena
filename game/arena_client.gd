@@ -96,6 +96,8 @@ func _present_frame(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	var t := Time.get_ticks_usec()
+	if game != null and game.knives != null:
+		game.knives.bind_view(ragdolls, presentation.blood if presentation != null else null)
 	_present_frame(delta)
 	ArenaFrameProbe.add(&"present", t)
 	ArenaFrameProbe.frame(delta, _probe_extra)

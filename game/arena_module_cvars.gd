@@ -392,6 +392,29 @@ func _add_ctf_cvars() -> void:
 		)
 
 
+## cvar -> the key in `ArenaGame.knife_rules` it sets, and what it means (defaults 1, 40, 1).
+const KNIFE_CVARS := {
+	"arena_knife_throw": ["enabled", "The aim key throws a knife in hand (1), or does nothing (0)"],
+	"arena_knife_throw_speed": ["speed", "Metres per second a thrown knife leaves the hand at"],
+	"arena_knife_throw_pickup": ["pickup", "Metres from a lying or embedded knife a player picks it up (0 off)"],
+}
+
+
+func _add_knife_cvars() -> void:
+	for cvar in KNIFE_CVARS:
+		var key: String = KNIFE_CVARS[cvar][0]
+		var value: Variant = game.knife_rules[key]
+		add_cvar(
+			cvar, ("1" if value else "0") if value is bool else str(value),
+			KNIFE_CVARS[cvar][1], DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+		).with_min(0.0).changed.connect(
+			func(_old: String, new_value: String) -> void:
+				var was: Variant = game.knife_rules[key]
+				game.knife_rules[key] = new_value.to_float() != 0.0 if was is bool else new_value.to_float()
+				log_info("knife rule changed", {"rule": key, "value": new_value})
+		)
+
+
 func _add_drop_cvars() -> void:
 	for cvar in DROP_CVARS:
 		var key: String = DROP_CVARS[cvar][0]
