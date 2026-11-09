@@ -167,6 +167,11 @@ signal mode_shown(shown: ArenaMode)
 ## effects, and it applies nothing.
 @export var is_authority: bool = true
 
+## A client only: the sides the server announced (player id -> team), from `ArenaEvents.Kind.TEAM`.
+## [method ArenaGame.team_of] answers from it on a client, because the client's own match assigns
+## sides by its own join order and knows nothing of a menu switch or a rebalance.
+var replicated_teams: Dictionary = {}
+
 ## Analytic geometry, or Godot physics. See [enum ArenaPlayer.Mode].
 @export var headless: bool = true
 

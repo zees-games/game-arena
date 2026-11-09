@@ -245,12 +245,12 @@ func _name_colour(key: String, team: int, me: String) -> Color:
 
 ## [param team]'s colour, or transparent when it is no side (a free-for-all, nobody).
 func _team_colour(team: int) -> Color:
-	if team <= 0 or game == null or game.match_node == null or game.match_node.teams == null:
+	if team <= 0 or game == null:
 		return Color(0, 0, 0, 0)
 	var mode := game.displayed_mode()
 	if mode == null or not mode.is_team_mode():
 		return Color(0, 0, 0, 0)
-	var side := game.match_node.teams.team(team)
+	var side := game.team_def(team)
 	return side.colour if side != null else Color(0, 0, 0, 0)
 
 
