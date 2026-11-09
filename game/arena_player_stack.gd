@@ -95,6 +95,12 @@ static func _print_dot_sim_status() -> void:
 		return
 	_dot_sim_status_printed = true
 	print(dot_sim_status())
+	note_native_status()
+
+
+## Puts the dot-sim status in the profiler report's run line; call again when motor_native or bot_native changes.
+static func note_native_status() -> void:
+	DotFrameCost.notes["native"] = dot_sim_status().trim_prefix("dot-sim: ")
 
 
 ## [code]dot-sim: native motor=on bots=on snapshot=on[/code], or that the library is not loaded.
