@@ -9,6 +9,8 @@ const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 ## `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's own flags: `--pilot 0`, `--motor-us 1` (the controller's and motor's phase timers, a little costly, totals in the
 ## sidecar), `--queries 0` (no motor query timers, which also leaves the native motor on), `--max-steps N` (ArenaTickBudget.max_steps).
+## Render knobs: `--res 1920x1080` (window size), `--killcam-hz N` (ArenaKillcamBodies.record_hz), `--lod 0` (ArenaPlayer.present_lod_enabled
+## off), `--ablate a,b` (applied after the warm-up: noshadow, nofx = ssao/ssil/glow/fog/volumetric fog off, nohud, nobots).
 
 var _pilot := true
 var _motor_us := false
@@ -16,6 +18,7 @@ var _queries := true
 var _max_steps := -1
 ## `--fine 1`: the per-player sub-spans of a tick (ArenaFrameProbe.fine): loop work, pre-motor, hitboxes, weapon context.
 var _fine := false
+var _ablate := PackedStringArray()
 
 
 func _configure() -> void:
@@ -35,6 +38,14 @@ func _ready() -> void:
 	_fine = int(args.get("fine", 0)) != 0
 	if _max_steps > 0:
 		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
+	var wh := String(args.get("res", "")).split("x")
+	if wh.size() == 2 and DisplayServer.get_name() != "headless":
+		get_window().size = Vector2i(int(wh[0]), int(wh[1]))
+	if args.has("killcam-hz"):
+		preload("../game/arena_killcam_bodies.gd").record_hz = float(args["killcam-hz"])
+	if int(args.get("lod", 1)) == 0:
+		preload("../game/arena_player.gd").present_lod_enabled = false
+	_ablate = String(args.get("ablate", "")).split(",", false)
 
 
 func _setup_client(c: Node) -> void:
@@ -70,6 +81,7 @@ func _add_counters(game: Object) -> void:
 
 func _record_begin() -> void:
 	ArenaFrameProbe.fine = _fine
+	_apply_ablate()
 	DotFpsPhysicsBody.profile = _queries
 	DotFpsPhysicsBody.prof.fill(0)
 	if _motor_us:
@@ -102,3 +114,36 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 			if DotFpsMotor.PHASES[i] != "":
 				phases["motor." + DotFpsMotor.PHASES[i]] = snappedf(DotFpsMotor.phase_us[i] / 1000.0 / n, 0.001)
 	return {"phases_ms_per_frame": phases, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
+
+
+func _apply_ablate() -> void:
+	for a in _ablate:
+		match a:
+			"noshadow":
+				for l in get_tree().root.find_children("*", "Light3D", true, false):
+					(l as Light3D).shadow_enabled = false
+			"nofx":
+				var envs: Array[Environment] = []
+				for we in get_tree().root.find_children("*", "WorldEnvironment", true, false):
+					envs.append((we as WorldEnvironment).environment)
+				for cam in get_tree().root.find_children("*", "Camera3D", true, false):
+					if (cam as Camera3D).environment != null:
+						envs.append((cam as Camera3D).environment)
+				for e in envs:
+					if e != null:
+						e.ssao_enabled = false
+						e.ssil_enabled = false
+						e.glow_enabled = false
+						e.fog_enabled = false
+						e.volumetric_fog_enabled = false
+				say("nofx: %d environments" % envs.size())
+			"nohud":
+				var hud: Variant = client.get("hud")
+				if hud != null:
+					hud.visible = false
+			"nobots":
+				for p: Object in client.get("game").call("players"):
+					if p.get("camera") == null:
+						p.visible = false
+	if not _ablate.is_empty():
+		say("ablate %s" % ",".join(_ablate))
