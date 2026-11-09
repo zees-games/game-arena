@@ -22,8 +22,8 @@ var _pilot := true
 var _motor_us := false
 ## `--queries 0`: no motor query timers, which also leaves the native motor on (they force the script one).
 var _queries := true
-## `--tick-floor N`: ArenaTickBudget.floor_steps, as cvar `arena_tick_floor`.
-var _tick_floor := -1
+## `--max-steps N`: ArenaTickBudget.max_steps, as cvar `arena_tick_max_steps`.
+var _max_steps := -1
 var _client: Node = null
 var _prof: Node = null
 ## Per-frame sums while recording, for the sidecar.
@@ -49,10 +49,10 @@ func _ready() -> void:
 			"--pilot": _pilot = int(args[i + 1]) != 0
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
 			"--queries": _queries = int(args[i + 1]) != 0
-			"--tick-floor": _tick_floor = int(args[i + 1])
+			"--max-steps": _max_steps = int(args[i + 1])
 	seed(_seed)
-	if _tick_floor > 0:
-		preload("../game/arena_tick_budget.gd").floor_steps = _tick_floor
+	if _max_steps > 0:
+		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
 	var _scratch := ArenaPresentation.use_scratch_settings("perf_bench")
 	_run.call_deferred()
 
@@ -189,7 +189,7 @@ func _sidecar(game: Object, players0: int) -> Dictionary:
 	return {
 		"phases_ms_per_frame": phases,
 		"map": _map, "mode": String(game.get("mode").id), "bots": _bots, "seed": _seed, "seconds": _seconds, "warmup": _warmup,
-		"tag": _tag, "players": players0, "pilot": _pilot, "queries": _queries, "tick_floor": _tick_floor,
+		"tag": _tag, "players": players0, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps,
 		"host": OS.get_environment("HOSTNAME") if OS.get_environment("HOSTNAME") != "" else OS.get_environment("HOST"),
 		"display": DisplayServer.get_name(), "adapter": RenderingServer.get_video_adapter_name(),
 		"renderer": RenderingServer.get_current_rendering_method(), "window": [get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y],

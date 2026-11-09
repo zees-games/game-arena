@@ -275,11 +275,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaHullGrid.fast = new_value.to_float() >= 0.5)
-	add_cvar("arena_tick_floor", str(ArenaTickBudget.floor_steps),
-		"Solo: the fewest ticks a frame runs when ticks cost more than they last. 2 (default) keeps the simulation nearer real time; 1 draws more frames while the simulation runs slower",
-		DotConVar.FLAG_ARCHIVE).with_min(1.0).with_max(float(ArenaTickBudget.MIN_STEPS)).changed.connect(
+	add_cvar("arena_tick_max_steps", str(ArenaTickBudget.max_steps),
+		"Solo: the most ticks a frame may run to catch up with wall-clock time. 8 (default) keeps real time while ticks are cheap; 1 draws more frames while the simulation runs slower",
+		DotConVar.FLAG_ARCHIVE).with_min(1.0).with_max(float(ArenaTickBudget.MAX_STEPS)).changed.connect(
 		func(_old: String, new_value: String) -> void:
-			ArenaTickBudget.floor_steps = clampi(int(new_value.to_float()), 1, ArenaTickBudget.MIN_STEPS))
+			ArenaTickBudget.max_steps = clampi(int(new_value.to_float()), 1, ArenaTickBudget.MAX_STEPS))
 
 
 ## `sv_grenade_*` (arena_weapons' [AwGrenadeRules]) and `sv_grenade_utility`: 0 keeps flash, smoke and incendiary out of
