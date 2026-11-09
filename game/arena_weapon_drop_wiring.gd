@@ -1,6 +1,7 @@
 extends RefCounted
 ## How the arena feeds the shared dropped-weapon layer: building it, the drop key, and the drop on death.
 
+const KillPovRules := preload("arena_kill_pov.gd")
 
 ## The weapon layer, on both sides: the server simulates it, a client draws what it is told.
 static func build(game) -> void:
@@ -105,7 +106,9 @@ static func update_panel(client, pressed: bool, delta: float) -> void:
 		client.set_meta(&"pickup_view", view)
 		client.set_meta(&"pickup_hold", hold)
 	var info := {}
-	if game.weapon_drops != null and player != null and player.is_alive() and player.arsenal != null and game.weapon_drops.count() > 0:
+	# A replay (killcam) draws a past moment: the live "E to pickup" tag must not hang over its ground weapons.
+	var replaying: bool = client.is_inside_tree() and KillPovRules.is_replay_camera(client.get_viewport().get_camera_3d())
+	if not replaying and game.weapon_drops != null and player != null and player.is_alive() and player.arsenal != null and game.weapon_drops.count() > 0:
 		info = game.weapon_drops.prompt_for(player.arsenal, player.camera.global_position, -player.camera.global_basis.z, game.weapon_drop_class_of(player.player_id), game.team_of(player.player_id) if not game.teams().is_empty() else 0)
 	hold.hold_time = game.weapon_drops.rules.hold_time if game.weapon_drops != null else 0.6
 	var _event := hold.step(pressed, delta, not info.is_empty() and (info.get("mode", "") == "ammo" or bool(info.get("hold", false))))

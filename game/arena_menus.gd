@@ -135,6 +135,8 @@ static func add_pages(menu: DotMenu, browser: ArenaBrowser = null) -> void:
 				[[&"auto", "Server default"], [&"off", "None"], [&"legs", "Legs and feet"], [&"body", "Whole body"]]))
 		video.section("Players").add(DotMenuRow.select(&"name_tags", "Name tags", "Whose name floats over their head. The server may allow fewer.",
 				[[&"always", "Everybody"], [&"team", "Team-mates"], [&"team_hover", "Team-mates and under cursor"], [&"hover", "Under cursor"], [&"off", "Off"]])) \
+			.add(DotMenuRow.select(&"health_bar_colour", "Health bar colour", "Team: enemies red, team-mates light green, each side its own colour with more than two sides. Health: green to red by health left.",
+				[[&"team", "Team"], [&"health", "Health"]])) \
 			.add(DotMenuRow.select(&"health_bars", "Health bars", "Whose health bar floats over their head. Smart: team-mates, whoever the cursor is on, anybody just hurt. The server may allow fewer.",
 				[[&"always", "Everybody"], [&"smart", "Smart"], [&"team", "Team-mates"], [&"team_hover", "Team-mates and under cursor"], [&"hover", "Under cursor"], [&"off", "Off"]]))
 		DotMenuStock.add_gore_row(video)

@@ -36,6 +36,16 @@ static var server_names: int = ALL
 static var server_bars: int = ALL
 static var viewer_id: int = -1
 static var viewer_team: int = -1  # -1: a free-for-all, nobody is a team-mate
+## Sides in play (spectators not counted) and each side's colour, so a bar can wear a side's colour when there are more than two.
+static var team_count: int = 0
+static var team_colours: Dictionary = {}
+## Bar colour: &"team" (red enemies, light green mates, a side's own colour with 3+ sides) or &"health" (the old green-to-red by health).
+static var bar_colour_mode: StringName = &"team"
+## Size of the bar and name against the original, and the metres above the feet the tag floats at.
+static var tag_scale: float = 0.7
+static var tag_height: float = 2.0
+const ENEMY_COLOUR := Color(1.0, 0.25, 0.22)
+const FRIEND_COLOUR := Color(0.55, 1.0, 0.55)
 static var occluder_mask: int = 0  # physics layers that hide a body from the cursor; 0 skips the test
 
 
@@ -78,6 +88,14 @@ static func shows(client: int, server: int, is_team: bool, hovered: bool, hurt: 
 	return admits(client, is_team, hovered, hurt) and admits(server, is_team, hovered, hurt)
 
 
+## The colour of the bar over somebody on [param other_team]: red for an enemy, light green for a team-mate, and
+## their own side's colour when more than two sides play.
+static func bar_tone(friend: bool, other_team: int) -> Color:
+	if team_count > 2 and team_colours.has(other_team):
+		return team_colours[other_team]
+	return FRIEND_COLOUR if friend else ENEMY_COLOUR
+
+
 ## Whether either mask needs the cursor test at all (it costs a ray).
 static func needs_hover(a: int, b: int) -> bool:
 	return ((a | b) & HOVER) != 0 and ((a & b) & ALL) == 0
@@ -106,4 +124,5 @@ static func ray_hits_body(from: Vector3, dir: Vector3, feet: Vector3, height: fl
 ## The two player settings, declared into the presentation schema.
 static func declare_settings(s: DotSettingsSchema) -> void:
 	s.add(DotSettingsDef.choice(&"name_tags", &"team", [&"always", &"team", &"team_hover", &"hover", &"off"], &"video").with_description("Names over other players' heads: everybody, team-mates, team-mates and whoever your cursor is on, only the cursor, or none. A server may allow fewer (mp_nametags)."))
+	s.add(DotSettingsDef.choice(&"health_bar_colour", &"team", [&"team", &"health"], &"video").with_description("Health bar colour: team colours (enemies red, team-mates light green, a side's own colour with more than two sides) or by how much health is left."))
 	s.add(DotSettingsDef.choice(&"health_bars", &"smart", [&"always", &"smart", &"team", &"team_hover", &"hover", &"off"], &"video").with_description("Health bars over other players: smart is team-mates, whoever your cursor is on and anybody just hurt. A server may allow fewer (mp_hpbars)."))

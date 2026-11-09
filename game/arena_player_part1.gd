@@ -634,7 +634,7 @@ func _present_health_tag(delta: float) -> void:
 
 	# Over the body as drawn, which an offline bot's is between ticks (`interpolate_body`).
 	var over := body_mesh.global_position if body_mesh != null else global_position
-	_health_tag.global_position = over + Vector3(0.0, 2.25, 0.0)
+	_health_tag.global_position = over + Vector3(0.0, TagRules.tag_height, 0.0)
 	if camera_now != null:
 		# The whole tag turns to the camera, so the fill stays on its background; with the
 		# camera straight above or below, UP is colinear and the engine warns every frame.
@@ -642,7 +642,8 @@ func _present_health_tag(delta: float) -> void:
 		var up := Vector3.UP if Vector2(to_eye.x, to_eye.z).length_squared() > 1e-4 else Vector3.FORWARD
 		if not to_eye.is_zero_approx():
 			_health_tag.look_at(camera_now.global_position, up, true)
-	_health_tag.update(now / health.max_health, bar, named, display_name, friend, delta)
+	var tone := TagRules.bar_tone(friend, team) if TagRules.bar_colour_mode == &"team" else Color(0, 0, 0, 0)
+	_health_tag.update(now / health.max_health, bar, named, display_name, friend, delta, tone, TagRules.tag_scale)
 
 
 ## Whether the camera's crosshair is on this body and nothing solid is in between.

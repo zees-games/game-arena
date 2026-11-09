@@ -733,6 +733,7 @@ func _check_tag_rules(player: ArenaPlayer) -> void:
 	player.present(0.016)
 	_check(tag.visible, "until they are hurt")
 	player.health.health = player.health.max_health
+	_check_tag_colours(Rules)
 	Rules.client_names = saved[0]
 	Rules.client_bars = saved[1]
 	Rules.server_names = saved[2]
@@ -774,3 +775,21 @@ func _test_stock_avatars_differ() -> void:
 		"and a player's stock look is the same every time it is asked for"
 	)
 	_done()
+
+
+## Bar colour: enemies red, team-mates light green, a side's own colour only with more than two sides; smaller and lower.
+func _check_tag_colours(Rules) -> void:
+	var saved_count: int = Rules.team_count
+	var saved_cols: Dictionary = Rules.team_colours
+	Rules.team_colours = {1: Color.BLUE, 2: Color.YELLOW, 3: Color.PURPLE}
+	Rules.team_count = 2
+	_check(Rules.bar_tone(false, 2) == Rules.ENEMY_COLOUR and Rules.bar_tone(true, 1) == Rules.FRIEND_COLOUR,
+		"two sides: enemies red, team-mates light green")
+	Rules.team_count = 0
+	_check(Rules.bar_tone(false, 0) == Rules.ENEMY_COLOUR, "free-for-all or 1v1: enemies red")
+	Rules.team_count = 3
+	_check(Rules.bar_tone(false, 3) == Color.PURPLE and Rules.bar_tone(true, 1) == Color.BLUE,
+		"more than two sides: the side's own colour")
+	Rules.team_count = saved_count
+	Rules.team_colours = saved_cols
+	_check(Rules.tag_scale < 1.0 and Rules.tag_height < 2.25, "the tag is smaller and lower than before")
