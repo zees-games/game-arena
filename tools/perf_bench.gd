@@ -8,13 +8,15 @@ const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 ## count and seed. Windowed on a GPU box (tools/perf_bench.sh), or headless through hv:
 ## `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's own flags: `--pilot 0`, `--motor-us 1` (the controller's and motor's phase timers, a little costly, totals in the
-## sidecar), `--queries 0` (no motor query timers, which also leaves the native motor on), `--max-steps N` (ArenaTickBudget.max_steps).
+## sidecar), `--queries 0` (no motor query timers, which also leaves the native motor on), `--max-steps N` (ArenaTickBudget.max_steps),
+## `--native-us 1` (dot-sim's own timers: each engine query and each whole native tick, in the sidecar as `native`).
 ## Render knobs: `--res 1920x1080` (window size), `--killcam-hz N` (ArenaKillcamBodies.record_hz), `--lod 0` (ArenaPlayer.present_lod_enabled
 ## off), `--ablate a,b` (applied after the warm-up: noshadow, nofx = ssao/ssil/glow/fog/volumetric fog off, nohud, nobots).
 
 var _pilot := true
 var _motor_us := false
 var _queries := true
+var _native_us := false
 ## `--tick N`: the game and engine tick rate (default: the game's, 66); 128 for the 128 Hz cost.
 var _tick := 0
 var _max_steps := -1
@@ -36,6 +38,7 @@ func _ready() -> void:
 	_pilot = int(args.get("pilot", 1)) != 0
 	_motor_us = int(args.get("motor-us", 0)) != 0
 	_queries = int(args.get("queries", 1)) != 0
+	_native_us = int(args.get("native-us", 0)) != 0 and ClassDB.class_exists(&"DotSimFpsBody")
 	_max_steps = int(args.get("max-steps", -1))
 	_fine = int(args.get("fine", 0)) != 0
 	_tick = int(args.get("tick", 0))
@@ -95,12 +98,17 @@ func _record_begin() -> void:
 		DotFpsMotor.profile = true
 		DotFpsController.phase_us.fill(0)
 		DotFpsMotor.phase_us.fill(0)
+	if _native_us:
+		ClassDB.class_call_static(&"DotSimFpsBody", &"reset_profile")
+		ClassDB.class_call_static(&"DotSimFpsBody", &"set_profile", true)
 
 
 func _record_end() -> void:
 	ArenaFrameProbe.fine = false
 	DotFpsPhysicsBody.profile = false
 	DotFpsMotor.profile = false
+	if _native_us:
+		ClassDB.class_call_static(&"DotSimFpsBody", &"set_profile", false)
 
 
 func _sidecar_extra(_game: Object) -> Dictionary:
@@ -120,7 +128,15 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		for i in DotFpsMotor.PHASES.size():
 			if DotFpsMotor.PHASES[i] != "":
 				phases["motor." + DotFpsMotor.PHASES[i]] = snappedf(DotFpsMotor.phase_us[i] / 1000.0 / n, 0.001)
-	return {"phases_ms_per_frame": phases, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
+	var native := {}
+	if _native_us:
+		# Count then microseconds per slot: the four engine queries, then whole native ticks; the tick less the queries is dot-sim's own work.
+		var c: PackedInt64Array = ClassDB.class_call_static(&"DotSimFpsBody", &"profile_counters")
+		var slots := ["cast", "rest", "overlap", "ray", "tick"]
+		for i in mini(slots.size(), c.size() / 2):
+			native[slots[i]] = {"per_frame": snappedf(float(c[i * 2]) / n, 0.01), "ms_per_frame": snappedf(c[i * 2 + 1] / 1000.0 / n, 0.001),
+				"us_each": snappedf(float(c[i * 2 + 1]) / maxf(c[i * 2], 1.0), 0.01)}
+	return {"phases_ms_per_frame": phases, "native": native, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
 
 
 func _apply_ablate() -> void:
