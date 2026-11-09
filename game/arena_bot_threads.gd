@@ -66,6 +66,11 @@ static func _decide(pending: Array[int], minds: Array) -> void:
 		for mind: ArenaBots.Mind in jobs:
 			mind.t_intent = mind.brain.think(mind.t_me, mind.t_world, mind.t_world.now())
 	else:
+		# Native (godot-rust) brain state may only be touched on the main thread: brains that think
+		# on workers move into script first (a no-op once they are).
+		for mind: ArenaBots.Mind in jobs:
+			if mind.brain.has_method(&"leave_native"):
+				mind.brain.leave_native()
 		var run := new()
 		par_ticks += 1
 		run._jobs = jobs
