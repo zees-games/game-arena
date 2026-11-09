@@ -571,7 +571,7 @@ func _on_local_damaged(damage: DotDamage) -> void:
 		var scale := game.ads_rules.hit_flinch_for(held.id) if held != null and game != null else 1.0
 		_aim_break.note_hit(Time.get_ticks_msec() * 0.001, player.controller.tunables, damage.amount, scale)
 	if presentation != null:
-		presentation.on_hurt(damage.amount)
+		presentation.on_hurt(damage.amount, player != null and player.health != null and not player.health.alive)
 
 func _on_local_died(_damage: DotDamage) -> void:
 	if presentation == null or player == null:
