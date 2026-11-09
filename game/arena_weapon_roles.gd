@@ -258,13 +258,42 @@ static func describe_lines() -> PackedStringArray:
 	return out
 
 
+## Throwables that are not weapons: they go in the special slot (5), never next to the frag.
+const UTILITY_KINDS: Array[StringName] = [&"flash", &"smoke", &"incendiary"]
+
+
+## The special slot, 5: smoke, flash and incendiary grenades only.
+static func special_slot() -> int:
+	use_layout()
+	return AwWeaponIds.heavy_slot()
+
+
+## True for a slot that holds a throwable (the lethal grenade slot 4 or the special slot 5).
+static func is_grenade_slot(slot: int) -> bool:
+	use_layout()
+	return slot == AwWeaponIds.thrown_slot() or slot == AwWeaponIds.heavy_slot()
+
+
+## Pins [param def] to the slot its kind belongs in, whatever the pack file asks for: melee 1, sidearms 2,
+## EVERY gun 3 (the minigun, beamer and railgun too, which the pack puts in the special slot), frag and
+## sticky 4, and 5 only for the utility throwables. Both [method weapons] and the role picker call it.
+static func normalise_slot(def: DotWeaponDef) -> void:
+	use_layout()
+	if def.slot <= AwWeaponIds.SLOT_SIDEARM:
+		return
+	if def.tags.has(&"thrown"):
+		var kind: StringName = def.params.get(&"kind", &"frag")
+		def.slot = AwWeaponIds.heavy_slot() if UTILITY_KINDS.has(kind) else AwWeaponIds.thrown_slot()
+	else:
+		def.slot = AwWeaponIds.SLOT_PRIMARY
+
+
 static func _settle() -> void:
 	var by_id := {}
 
 	for def in AwWeaponCatalogue.weapons(AwWeaponDamage.table()):
 		# The railgun (charge rifle) is primary-only, as in `ArenaContent.weapons`: never a heavy-slot pick, auto or forced.
-		if def.id == AwWeaponIds.CHARGE_RIFLE:
-			def.slot = AwWeaponIds.SLOT_PRIMARY
+		normalise_slot(def)
 		by_id[def.id] = def
 
 	var forced: Dictionary = DotAddonConfig.get_value(config, "weapons.roles", {})

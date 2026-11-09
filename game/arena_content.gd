@@ -131,9 +131,20 @@ static func weapons() -> Array[DotWeaponDef]:
 	AwWeaponPack.game = GAME_ID
 	var out := AwWeaponCatalogue.weapons(damage_table())
 	for def in out:
-		if PRIMARY_ONLY.has(def.id):
-			def.slot = AwWeaponIds.SLOT_PRIMARY
+		normalise_slot(def)
 	return out
+
+
+static func special_slot() -> int:
+	return Roles.special_slot()
+
+
+static func is_grenade_slot(slot: int) -> bool:
+	return Roles.is_grenade_slot(slot)
+
+
+static func normalise_slot(def: DotWeaponDef) -> void:
+	Roles.normalise_slot(def)
 
 
 ## Guns that may only ever sit in the primary slot, whatever slot the pack file asks for.
@@ -263,9 +274,9 @@ static func loadout_slot_for(slot: int) -> StringName:
 		return &"melee"
 	if slot == AwWeaponIds.SLOT_SIDEARM:
 		return &"secondary"
-	if slot == AwWeaponIds.SLOT_PRIMARY or slot == AwWeaponIds.heavy_slot():
+	if slot == AwWeaponIds.SLOT_PRIMARY:
 		return &"primary"
-	if slot == AwWeaponIds.thrown_slot():
+	if is_grenade_slot(slot):
 		return &"thrown"
 	return &"primary"
 
@@ -287,11 +298,11 @@ static func give_rank(slot: int) -> int:
 	Roles.use_layout()
 	if slot == AwWeaponIds.SLOT_MELEE:
 		return 0
-	if slot == AwWeaponIds.SLOT_PRIMARY or slot == AwWeaponIds.heavy_slot():
+	if slot == AwWeaponIds.SLOT_PRIMARY:
 		return 1
 	if slot == AwWeaponIds.SLOT_SIDEARM:
 		return 2
-	return 3 if slot == AwWeaponIds.thrown_slot() else 4
+	return 3 if is_grenade_slot(slot) else 4
 
 
 ## [param entries] (`DotLoadoutManager.resolve`'s) in [method give_rank] order, stably.

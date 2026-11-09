@@ -498,9 +498,9 @@ func leave_combat() -> void:
 
 ## Which of two slots to spawn holding: the heaviest GUN, never the grenade.
 static func _better_hand(have: int, slot: int) -> int:
-	if slot == AwWeaponIds.thrown_slot():
+	if ArenaContent.is_grenade_slot(slot):
 		return have if have > 0 else slot
-	if have == 0 or have == AwWeaponIds.thrown_slot() or slot > have:
+	if have == 0 or ArenaContent.is_grenade_slot(have) or slot > have:
 		return slot
 	return have
 
