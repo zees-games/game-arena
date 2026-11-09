@@ -190,6 +190,8 @@ var camera_motion: DotFpsViewMotion = null
 
 ## The aim's zoom this frame, from the view model: [method present] multiplies the lens by it.
 var _aim_fov_scale: float = 1.0
+## What the camera takes of the aim zoom: all of it with the full-screen scope, none with the scope lens, which zooms in its own camera.
+var _view_fov_scale: float = 1.0
 
 ## What a remote player is drawn as. Null on the local player, who sees their own eyes.
 var body_mesh: Node3D = null
