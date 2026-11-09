@@ -8,6 +8,7 @@ const ClientBench := preload("client_bench.gd")
 ## Solo (offline) client with N bots on `--map`, frame and physics cost per frame:
 ## `godot --path . res://tools/offline_cost.tscn -- --map blackhawkdown --bots 10 --seconds 25`.
 ## Prints fps, frame p50/p95/max, the engine's physics and process monitors and physics steps per frame. `--native 0` keeps the bots' sight scan in script when dot-sim is installed; `--motor-native 0` the movement collision queries.
+## `--motor-lod N`, `--motor-lod-near 1`: bot_motor_lod and bot_motor_lod_near (far, and near, bots step their motor one tick in N).
 ## `--motor-tick 1|0`: [member DotFpsMotor.native_tick], a plain ground or air tick's start and end in dot-sim (needs a library with the motor tick).
 
 var _bots := 10
@@ -50,6 +51,8 @@ func _ready() -> void:
 			"--motor-native": DotFpsPhysicsBody.native_enabled = int(args[i + 1]) != 0
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
 			"--motor-tick": DotFpsMotor.native_tick = int(args[i + 1]) != 0
+			"--motor-lod": preload("../game/arena_bots.gd").motor_lod_every = maxi(1, int(args[i + 1]))
+			"--motor-lod-near": preload("../game/arena_bots.gd").motor_lod_near = int(args[i + 1]) != 0
 	var _scratch := ArenaPresentation.use_scratch_settings("offline_cost")
 	_run.call_deferred()
 
@@ -122,6 +125,7 @@ func _run() -> void:
 		print("  section %-14s %.3f ms/frame | %.3f ms/call x%d | max %.2f ms" % [key, float(row[0]) / _n / 1000.0, float(row[0]) / maxi(row[1], 1) / 1000.0, row[1], row[2] / 1000.0])
 	print("  combat shots %d hits %d headshots %d kills %d hit_rate %.3f" % [_shots, _hits, _heads, _kills, float(_hits) / maxi(1, _shots)])
 	print("  bot tiers: %s" % JSON.stringify(preload("../game/arena_bots.gd").tiers.describe()))
+	print("  motor lod every %d (near %s): %d motor ticks skipped" % [preload("../game/arena_bots.gd").motor_lod_every, preload("../game/arena_bots.gd").motor_lod_near, ArenaPlayer.motor_skipped])
 	print("  controller queries per physics step: %.1f" % (float(_queries(self) - _q0) / maxf(float(Engine.get_physics_frames() - _steps0), 1.0)))
 	var pr := DotFpsPhysicsBody.prof
 	print("  engine queries/frame: cast %.1f (%.2f ms) rest %.1f (%.2f ms) overlap %.1f (%.2f ms) ray %.1f (%.2f ms)" % [pr[0] / float(_n), pr[1] / 1000.0 / _n, pr[2] / float(_n), pr[3] / 1000.0 / _n, pr[4] / float(_n), pr[5] / 1000.0 / _n, pr[6] / float(_n), pr[7] / 1000.0 / _n])

@@ -269,6 +269,16 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			DotFpsMotor.native_tick = new_value.to_float() >= 0.5)
+	add_cvar("bot_motor_lod", str(ArenaBots.motor_lod_every),
+		"Ticks between motor steps of a bot out of every person's view and beyond bot_tier_range (the skipped ticks' time goes into the next step; grounded bots only; needs bot think tiers on); 1 = every tick (off)",
+		DotConVar.FLAG_ARCHIVE).with_min(1.0).with_max(4.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.motor_lod_every = clampi(int(new_value.to_float()), 1, 4))
+	add_cvar("bot_motor_lod_near", "1" if ArenaBots.motor_lod_near else "0",
+		"1: bot_motor_lod also covers a bot out of view inside bot_tier_range (not engaged); 0: far bots only",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.motor_lod_near = new_value.to_float() >= 0.5)
 	add_cvar("arena_hull_grid", "1" if ArenaHullGrid.enabled else "0",
 		"1: players' standing hulls are found through a grid filed once per tick (same hulls, cheaper above 12 players); 0: scan the whole roster per bot",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(

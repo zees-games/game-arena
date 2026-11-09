@@ -273,6 +273,17 @@ var solid_hulls_fn: Callable = Callable()
 ## places the remotes it collides with ([method ArenaGame.solid_hulls_for]).
 var _hull_tick: int = -1
 
+## Motor LOD (`bot_motor_lod`): a bot the think tiers put out of everyone's sight moves one tick in this many,
+## the skipped ticks' time folded into the next step. 1 = every tick (people, bots in view, the default).
+## Set by [method ArenaBots.think_finish]; only a grounded body skips, so a fall or a jump steps every tick.
+var motor_every: int = 1
+## Ticks since the motor last stepped (the step that runs covers them all), and the movement buttons
+## pressed on the skipped ones, so a jump pressed on a skipped tick still happens on the next step.
+var _motor_owed: int = 0
+var _motor_owed_buttons: int = 0
+## Ticks the motor skipped under [member motor_every], all players (offline_cost reports it).
+static var motor_skipped: int = 0
+
 const MOVEMENT_RULES: PackedStringArray = ArenaPlayerTunables.MOVEMENT_RULES
 const BODY_RULES := ArenaPlayerTunables.BODY_RULES
 const SURF_TUNABLES := ArenaPlayerTunables.SURF_TUNABLES

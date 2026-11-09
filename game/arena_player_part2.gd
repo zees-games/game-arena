@@ -386,6 +386,7 @@ func simulate_tick(
 	combat_command: DotWeaponCommand
 ) -> DotWeaponOutcome:
 	if not health.alive:
+		_motor_owed = 0
 		return DotWeaponOutcome.nothing("Dead.")
 
 	# Where the tick starts, for the pushes: "was this player in a booster last tick" is
@@ -394,11 +395,55 @@ func simulate_tick(
 	_yaw_before_tick = controller.state.yaw
 	# The previous state's position before this tick replaces it: two ticks back after it.
 	_position_two_back = controller.render_state(0.0).position
+	_hull_tick = tick
+	_motor_owed += 1
+	if _motor_skips(tick):
+		_motor_hold(movement_command)
+	else:
+		_motor_step(tick, delta, start, movement_command)
+	return _combat_tick(tick, delta, combat_command)
+
+
+## Motor LOD: whether this tick's movement step waits for a later one. Only a grounded body under a local
+## drive, never `motor_every` ticks in a row, and on a beat spread by the player id so the bots that skip
+## do not all step on the same tick.
+func _motor_skips(tick: int) -> bool:
+	if motor_every <= 1 or _motor_owed >= motor_every:
+		return false
+	if posmod(tick + player_id, motor_every) == 0:
+		return false
+	return controller.state.mode == DotFpsState.Mode.GROUND and controller.drive != DotFpsController.Drive.REMOTE
+
+
+## A skipped motor tick: the body stays put and is drawn there (the previous state becomes the current one, as
+## on a teleport, so the drawing does not replay the last step). The view still turns, so the aim is this tick's,
+## and the buttons pressed are kept for the next step.
+func _motor_hold(movement_command: DotFpsCommand) -> void:
+	motor_skipped += 1
+	controller.apply_command(movement_command)
+	var state := controller.state
+	controller._position_two_back = controller._previous_state.position
+	controller._previous_state.copy_from(state)
+	if movement_command != null:
+		_motor_owed_buttons |= movement_command.buttons
+		state.yaw = movement_command.yaw
+		state.pitch = clampf(movement_command.pitch, controller.tunables.pitch_min, controller.tunables.pitch_max)
+
+
+func _motor_step(tick: int, delta: float, start: Vector3, movement_command: DotFpsCommand) -> void:
+	var steps := _motor_owed
+	_motor_owed = 0
+	if steps > 1:
+		# The skipped ticks' time in one step, and the state's own tick counted for them (effects expire on it).
+		delta *= float(steps)
+		controller.state.tick += steps - 1
+		if movement_command != null:
+			movement_command.buttons |= _motor_owed_buttons
+	_motor_owed_buttons = 0
 	ladder.now = tick
 	var view := DotFpsMotor._view_basis(controller.state.yaw, 0.0)
 	var intent: Vector3 = view.right * movement_command.move.x + view.forward * movement_command.move.y
 	ladder.wish = Vector3(intent.x, 0.0, intent.z).normalized()
-	_hull_tick = tick
 	controller.apply_command(movement_command)
 	var t_ctl := Time.get_ticks_usec()
 	controller.simulate_tick(tick, delta)
@@ -409,6 +454,8 @@ func simulate_tick(
 	_follow_map_volumes()
 	ArenaFrameProbe.add(&"p_mechanics", t_mech)
 
+
+func _combat_tick(tick: int, delta: float, combat_command: DotWeaponCommand) -> DotWeaponOutcome:
 	var state := controller.state
 
 	# The aim comes from the movement command, not from a second sample. Sampling the

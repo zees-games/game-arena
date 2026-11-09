@@ -133,11 +133,18 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 		mind.far = false
 		var engaged := intent.target_id >= 0 and not world.brains.has(intent.target_id)
 		# every here is the coast's length: to the bot's next beat at its tier's period.
+		var far_before: int = tiers.counts.get(&"far", 0)
+		var near_before: int = tiers.counts.get(&"near", 0)
 		mind.every = DotBotThinkTier.until_beat(tick, mind.seed, tiers.period(bot.player_id, me.position, engaged))
+		# Motor LOD: a bot out of everyone's view and range moves every `motor_lod_every` ticks (bot_motor_lod).
+		var lod: bool = int(tiers.counts.get(&"far", 0)) > far_before \
+			or (motor_lod_near and int(tiers.counts.get(&"near", 0)) > near_before)
+		bot.motor_every = motor_lod_every if lod else 1
 		mind.coasting = mind.every > 1 and _tier_coastable(mind, intent)
 	else:
 		mind.far = _every > 1 and _nobody_near(me, world)
 		mind.every = _every if mind.far else 1
+		bot.motor_every = 1
 		# Only a think on the bot's own beat starts a coast, so the coast's steps count from it.
 		mind.coasting = mind.far and (tick + mind.seed) % _every == 0 and _coastable(mind, intent, move, fire)
 	if mind.coasting:
@@ -168,6 +175,12 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 
 ## Off only for tests that measure the bots without the correction (headless_bot_hitreg).
 static var recoil_compensation := true
+
+## `bot_motor_lod`: ticks between motor steps of a bot the think tiers call far (out of every person's view and
+## [member DotBotThinkTier.far_range]); 1 = every tick (off). Only with think tiers on. See [member ArenaPlayer.motor_every].
+static var motor_lod_every := 1
+## `bot_motor_lod_near`: the same for a bot the tiers call near (out of view, inside far_range, not engaged).
+static var motor_lod_near := false
 
 
 ## The commands with the aim turned against the recoil the next shot will carry. The weapon offsets each bullet by
