@@ -2,6 +2,8 @@ extends DotGameCheckSuite
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaFlagView := preload("../game/arena_flag_view.gd")
+const ArenaHud := preload("../game/arena_hud.gd")
+const ArenaObjectives := preload("../game/arena_objectives.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
@@ -173,9 +175,48 @@ func _run() -> void:
 		fv.refresh()
 		var homes_ok := fv.drawn_count() == 2
 		for flag in flags:
-			homes_ok = homes_ok and fv.view_position(flag.home_team()).distance_to(flag.at) < 0.5
+			var drawn := fv.view_position(flag.home_team())
+			# On the floor under the stand (the stand's point floats a metre up), never above it.
+			homes_ok = homes_ok and Vector2(drawn.x, drawn.z).distance_to(Vector2(flag.at.x, flag.at.z)) < 0.3 \
+				and drawn.y <= flag.at.y + 0.05 and drawn.y > flag.at.y - 2.0
 		_check(homes_ok, "and the flag view draws both, one per side, at those homes")
 		fv.queue_free()
+		# The real client path: game.headless is true there (collision backend) and a screen decides drawing.
+		var objs: ArenaObjectives = _game.objectives
+		_check(_game.headless and objs.flag_view == null, "a headless server builds no flag view")
+		_check(ArenaObjectives.draws_flags(false) and not ArenaObjectives.draws_flags(true), "a process with a screen draws flags whatever game.headless says")
+		objs.draw_flags = true
+		objs._build_flag_view()
+		await get_tree().process_frame
+		var built: bool = objs.flag_view != null and objs.flag_view.drawn_count() == 2 and objs.flag_view.is_inside_tree()
+		_check(built, "a client game (game.headless true) with a screen builds the flag view, two flags drawn")
+		# What the view reports as the flag changes hands (the client's sounds hang off this), and the carrier's HUD line.
+		var seen: Array[String] = []
+		_game.ctf_seen.connect(func(what: StringName, team: int, by: int) -> void: seen.append("%d:%s:%d" % [team, what, by]))
+		var one: DotObjectiveFlag = flags[0]
+		var team_one := one.home_team()
+		var thief := 1
+		var _added := _game.add_player(thief, "thief")
+		var _spawned := _game.respawn_player(thief)
+		objs.flag_view.refresh()
+		one.state = DotObjectiveFlag.State.CARRIED
+		one.carrier = str(thief)
+		objs.flag_view.refresh()
+		one.drop(one.at + Vector3(4, 0, 0))
+		objs.flag_view.refresh()
+		one.send_home("")
+		objs.flag_view.refresh()
+		_check(seen == ["%d:taken:%d" % [team_one, thief], "%d:dropped:%d" % [team_one, thief], "%d:returned:0" % team_one], "the flag view reports taken, dropped, returned as the flag changes hands", str(seen))
+		var hud := ArenaHud.new()
+		add_child(hud)
+		hud.build(_game)
+		hud.follow(_game.player_for(thief))
+		_check(hud.carrying_flag_text() == "", "the HUD has no carry line while nothing is carried")
+		one.state = DotObjectiveFlag.State.CARRIED
+		one.carrier = str(thief)
+		_check(hud.carrying_flag_text().begins_with("YOU HAVE THE "), "the carrier's HUD says they have the flag", hud.carrying_flag_text())
+		one.send_home("")
+		hud.queue_free()
 
 	_report_sections(6, 6, 6, -1)
 

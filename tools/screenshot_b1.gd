@@ -1,0 +1,727 @@
+extends "screenshot_stages.gd"
+
+const OUT_DIR := "screenshots"
+const ScreenshotGlanceStates := preload("screenshot_glance_states.gd")
+const GLANCE_MEDALS: Array = [ArenaAwards.Medal.HEADSHOT, ArenaAwards.Medal.DOUBLE_KILL]
+const ScreenshotUse := preload("screenshot_use.gd")
+const ScreenshotDrop := preload("screenshot_drop.gd")
+
+
+func _initialize_rest(args: PackedStringArray, id: StringName) -> void:
+	_append_views(args, id)
+
+
+## `--glance`: a game on the map, played by [method _process] and photographed.
+func _stage_glance(map: ArenaMap, id: StringName, args: PackedStringArray, glance_at: int) -> void:
+	var mode := StringName(args[glance_at + 1]) if glance_at + 1 < args.size() and not args[glance_at + 1].begins_with("--") else &"ffa"
+	_glance_game = ArenaGame.new()
+	_glance_game.name = "Game"
+	_glance_game.headless = true
+	_glance_game.is_authority = true
+	_glance_game.register_service = false
+	_glance_game.mode_id = mode
+	root.add_child(_glance_game)
+	_staged_map = map
+	_staged_id = id
+	_glance_ballot = args.has("--ballot") or args.has("--map-ballot")
+	_glance_map_ballot = args.has("--map-ballot")
+	_glance_chat = args.has("--chat")
+
+
+## The `--view` frames of [param args], appended to the shots. An imported map takes them too
+## (a jail or a pack on it is somewhere none of the fixed frames points).
+func _append_views(args: PackedStringArray, id: StringName) -> void:
+	var at := 0
+
+	while true:
+		at = args.find("--view", at)
+		if at < 0 or at + 3 >= args.size():
+			break
+
+		var from: Variant = _vector(args[at + 2])
+		var target: Variant = _vector(args[at + 3])
+
+		if from == null or target == null:
+			push_error("--view wants <name> <x,y,z> <x,y,z>, got %s" % str(args.slice(at, at + 4)))
+		else:
+			_shots.append({
+				"name": "%s_%s" % [String(id), args[at + 1]],
+				"from": from,
+				"at": target,
+			})
+
+		at += 4
+
+
+## `"x,y,z"` as a Vector3, or null when it is not three numbers.
+static func _vector(text: String) -> Variant:
+	var parts := text.split(",")
+
+	if parts.size() != 3:
+		return null
+
+	for part in parts:
+		if not part.strip_edges().is_valid_float():
+			return null
+
+	return Vector3(float(parts[0]), float(parts[1]), float(parts[2]))
+
+
+var _wait := 0
+var _armed := false
+
+
+## [b]Frame-counted rather than awaited.[/b] `SceneTree._process` is expected to return a bool
+## synchronously; making it a coroutine returns a signal object instead, which is truthy.
+
+
+## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+var _seq_active := false
+
+
+func _process(delta: float) -> bool:
+	if _toy_box != null and not _toy_placements.is_empty():
+		var _built := _toy_box.build(_toy_placements)
+		_toy_placements = []
+		_wait = maxi(_wait, 2)
+
+	if _imported_game != null and _shots.is_empty():
+		_play_imported()
+		return false
+
+	if _glance_game != null and _shots.is_empty():
+		_play_glance()
+		return false
+
+	for body in _players:
+		body.present(delta)
+
+	# `--action`: a body in this stage is not presented as a client's is, so the figure is driven here.
+	if _action_figure != null:
+		_action_figure.set_motion({"on_floor": true, "vertical": 0.0, "crouched": false, "alive": true, "aim": 0.0})
+		_action_figure.animate(0.0, delta)
+
+	if _index >= _shots.size():
+		return true
+
+	if _wait > 0:
+		_wait -= 1
+		# `late`: [frames before the grab, Callable] pairs, for what must still be on screen when
+		# the frame is taken.
+		var current: Dictionary = _shots[_index]
+		if _armed and current.has("late"):
+			for stage: Array in current["late"]:
+				if _wait == int(stage[0]):
+					(stage[1] as Callable).call()
+		return false
+
+	if not _armed:
+		var shot: Dictionary = _shots[_index]
+		if shot.has("arm"):
+			(shot["arm"] as Callable).call()
+		if shot.get("local", false):
+			_local.camera.current = true
+		else:
+			_camera.current = true
+			_camera.position = shot["from"]
+			_camera.look_at(shot["at"], Vector3.UP)
+		_armed = true
+		_wait = int(shot.get("wait", 3))
+		return false
+
+	if _seq_active:
+		if _seq.step(root):
+			return false
+		_seq_active = false
+		_index += 1
+		_armed = false
+		return false
+
+	var image := root.get_texture().get_image()
+	# SHOT_SUFFIX names a run's frames apart (`_compat`, `_1280x960`) so two runs at two
+	# sizes or in two renderers can be looked at side by side.
+	var suffix := OS.get_environment("SHOT_SUFFIX")
+	var path := OUT_DIR.path_join("%s%s.png" % [_shots[_index]["name"], suffix])
+	image.save_png(path)
+	print("wrote %s (%d x %d)" % [path, image.get_width(), image.get_height()])
+
+	if _seq.enabled():
+		_seq.begin(path)
+		_seq_active = true
+		return false
+
+	_index += 1
+	_armed = false
+	return false
+
+
+## The HUD as a player sees it mid-match, every piece with something in it: a real [ArenaGame]
+## (free-for-all, or `--glance tdm`) with eight players and a few kills filed through dot-match.
+var _glance_game: ArenaGame = null
+
+
+## `--glance --ballot`: the game vote open over the HUD, as a server running several games
+## shows it. See [method _stage_shell_ballot].
+var _glance_ballot := false
+
+
+## `--glance --map-ballot`: the tallest ballot this game puts up, its own map vote (six maps and
+## Extend, seven rows), which reaches further down the right edge than the game vote's six.
+var _glance_map_ballot := false
+
+
+## `--glance --chat`: a full chat log (eight rows, a vote line wrapped across two) in the box
+## the game builds, scaled with the HUD as [ArenaPresentation] scales it.
+var _glance_chat := false
+
+
+## `--glance --theme <id>`: which of dot-menu's themes the HUD is drawn in; empty is dot-ui's
+## default. Names the frame.
+var _glance_theme := ""
+
+
+const GLANCE_NAMES := ["You", "gamemann", "a_very_long_display_name", "bo", "quiet_one", "newcomer", "Rocket", "Viper"]
+
+
+## Sets the glance game up, seats eight players and runs it into the live state; false (and quits) when setup fails.
+func _glance_go_live(game: ArenaGame) -> bool:
+	var res := game.setup(_staged_map)
+	if not res.ok:
+		push_error("the glance game did not set up: ", res.error.message)
+		quit(1)
+		return false
+	for i in GLANCE_NAMES.size():
+		var _added := game.add_player(112 + i, GLANCE_NAMES[i])
+	# Live, through the real state machine (headless_match's `_go_live`): in warmup
+	# nobody scores, and the strip would say so.
+	game.match_node.rules.warmup_sec = 0.0
+	game.match_node.rules.countdown_sec = 0.0
+	game.match_node.rules.min_players = 1
+	game.start(game.current_tick())
+	var guard := 0
+	while not game.match_node.is_live() and guard < 64 * 20:
+		game.tick({})
+		guard += 1
+	for _t in range(64 * 23):
+		game.tick({})
+	return true
+
+
+func _play_glance() -> void:
+	var game := _glance_game
+	if not _glance_go_live(game):
+		return
+	# Kills filed through dot-match, as the game files them: the scores, the ranks and the
+	# feed all come from these.
+	var kills := [
+		[113, 115, &"rifle", false], [112, 114, &"sniper", true], [116, 112, &"shotgun", false],
+		[113, 117, &"smg", false], [112, 118, &"rifle", true], [119, 113, &"launcher", false],
+		[113, 114, &"marksman", false], [112, 119, &"pistol", false], [117, 116, &"minigun", false],
+		[113, 118, &"knife", false], [112, 116, &"rifle", false], [114, 119, &"beamer", true],
+	]
+	for k in kills:
+		var _entry := game.match_node.report_kill(str(k[0]), str(k[1]), k[2], game.current_tick(), bool(k[3]))
+	for player in game.players():
+		if player.player_id != 112:
+			player.attach_body_mesh(Color.from_hsv(fmod(float(player.player_id) * 0.37, 1.0), 0.55, 0.85),
+				ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(player.player_id))))
+			_players.append(player)
+
+	_local = game.player_for(112)
+	_local.attach_camera(100.0)
+	AwModelCache.set_asset_root("res://")
+	var hands := AwViewModel.new()
+	hands.name = "Hands"
+	_local.camera.add_child(hands)
+	_local.arm_first_person(hands, true)
+	var _given := _local.weapons.give_everything()
+	if OS.get_cmdline_user_args().has("--sprites"):
+		# `cl_weapon_sprites 1`: the flat sprite under the camera in place of the hands.
+		ArenaWeaponIcons.shared.sprites = true
+		hands.visible = false
+		var flat = ArenaSpriteWeapon.make(ArenaSpriteWeapon.Mode.VIEW)
+		_local.camera.add_child(flat)
+		flat.show_weapon(&"marksman")
+	var ask := DotWeaponCommand.new()
+	ask.slot = AwWeaponIds.SLOT_PRIMARY
+	for tick in range(game.current_tick() + 1, game.current_tick() + 60):
+		var _o := _local.simulate_tick(tick, 1.0 / 64.0, DotFpsCommand.new(), ask)
+		ask = DotWeaponCommand.new()
+	_players.append(_local)
+
+	_hud = ArenaHud.new()
+	_hud.name = "Hud"
+	_hud.config = DotUiConfig.new()
+	_hud.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_hud)
+	_hud.build(game)
+	_hud.follow(_local)
+	var _caught := _hud.catch_up()
+	# `--theme <id>`: the HUD in one of dot-menu's themes, as the menu sets it
+	# (`DotMenu.follow_hud`); without it, dot-ui's default, which is the dark HUD.
+	var args := OS.get_cmdline_user_args()
+	var theme_at := args.find("--theme")
+	if theme_at >= 0 and theme_at + 1 < args.size():
+		_glance_theme = args[theme_at + 1]
+		_hud.theme = DotMenuThemes.stock().named(StringName(_glance_theme)).hud_theme(ArenaHud.accent_theme())
+	var scale_at := args.find("--hud-scale")
+	if scale_at >= 0 and scale_at + 1 < args.size():
+		_hud.user_scale = float(args[scale_at + 1])
+
+	if OS.get_cmdline_user_args().has("--use"):
+		_shots = ScreenshotUse.stage(game, _local, _hud)
+		if _shots.is_empty():
+			push_error("--use needs a converted map with the jail button")
+			quit(1)
+		return
+
+	if OS.get_cmdline_user_args().has("--drop"):
+		_shots = ScreenshotDrop.stage(game, _local, _hud)
+		if _shots.is_empty():
+			push_error("--drop needs a game with the weapon drop layer")
+			quit(1)
+		return
+
+	if OS.get_cmdline_user_args().has("--flashlight"):
+		ScreenshotGlanceStates.stage_flashlight(_local, game)
+
+	if OS.get_cmdline_user_args().has("--fire-mode"):
+		# An automatic rifle with the selector moved once, as N does.
+		var _gave := _local.arsenal.give(&"rifle")
+		for n: int in _local.arsenal.slots():
+			if _local.arsenal.slot_at(n).def.id == &"rifle":
+				var _chose := _local.arsenal.select(n, 0)
+		var _moved := _local.arsenal.cycle_fire_mode()
+
+	var slot := _local.arsenal.current()
+	if slot != null and slot.def.magazine > 0:
+		slot.magazine = maxi(1, slot.def.magazine / 3)
+	_local.health.health = _local.health.max_health * 0.64
+	_local.health.armour = 35.0
+	if OS.get_cmdline_user_args().has("--low"):
+		_local.health.health = _local.health.max_health * 0.14
+		_local.health.armour = 0.0
+	_local.controller.state.launch_cooldown_left = 4.2
+	_local.controller.state.dash_cooldown_left = 1.3
+	_local.controller.state.slide_time = 0.3
+	_local.controller.state.wall_jumps_in_air = 1
+	var late: Array = []
+	var streak_at := args.find("--streak")
+	if streak_at >= 0 and streak_at + 1 < args.size():
+		var run := int(args[streak_at + 1])
+		late.append([14, func() -> void: _hud.streaks[112] = run])
+	if ScreenshotGlanceStates.stage(self, game, late):
+		return
+	if _glance_chat:
+		_stage_full_chat()
+	_play_glance_rest(game, args, late, streak_at)
+
+
+func _play_glance_rest(game: ArenaGame, args: PackedStringArray, late: Array, streak_at: int) -> void:
+	if _glance_ballot:
+		_stage_shell_ballot()
+		# What the server says in chat as the ballot opens, which this client centre-prints
+		# (`ArenaClient._on_said`, a system line). Staged late: the notice fades in 4 s.
+		var said := "Vote: Box, Atrium, Pit, Foundry, Canals, Spire (20s)" if _glance_map_ballot \
+			else "Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)"
+		late.append([10, func() -> void: _hud.notice(said)])
+
+	_shots = [{
+		"name": ScreenshotGlanceStates.shot_name(self, game, args, streak_at),
+		"local": true,
+		"late": [
+			[12, func() -> void:
+				var medals := GLANCE_MEDALS
+				_hud.note_award(
+					{"killer_id": 112, "victim_id": 118, "medals": medals,
+						"points": ArenaAwards.points_for(medals), "streak": 3},
+					112, "newcomer", "You"
+				)],
+			[4, func() -> void:
+				var target := game.player_for(117)
+				if target != null:
+					_hud.note_hit(117, 34.0, target.global_position + Vector3(0.0, 1.5, 0.0), false, false)],
+		] + late,
+		"wait": 34,
+	}]
+
+
+## `--killcam`: the kill view as a victim sees it, played from a clip of [param killer_id]'s eye swinging onto the local
+## player, advanced partway so the replay is still on screen. The real client plays the server's clip the same way (DotKillViewClient).
+func _play_killview(game: ArenaGame, killer_id: int) -> void:
+	var rules := DotKillViewRules.new()
+	rules.enabled = true
+	var ring := DotKillViewRing.new(rules)
+	var killer := game.player_for(killer_id)
+	var eye := killer.global_position + Vector3(0.0, 1.6, 0.0)
+	var aim := _local.global_position + Vector3(0.0, 1.2, 0.0)
+	var on_target := Basis.looking_at((aim - eye).normalized())
+	for i in range(121):
+		var t := float(i) / 30.0
+		var swing := Basis(Vector3.UP, deg_to_rad(40.0 * clampf(1.0 - t / 3.0, 0.0, 1.0)))
+		var _r := ring.record(killer_id, t, Transform3D(swing * on_target, eye), 83.6, Vector2(0.5, 0.5))
+	var _n := ring.note_kill(killer_id, 112, 3.0, {"killer": killer.display_name, "weapon": "rifle"})
+	var clips := ring.collect(4.0)
+	var view := DotKillViewClient.new()
+	view.name = "KillView"
+	root.add_child(view)
+	view.setup(rules)
+	view.kv.auto_process = false
+	view.hide_fn = func() -> Array: return [_hud]
+	var _started := view.play(clips[0]["clip"], {"killer": killer.display_name, "weapon": "Rifle"})
+	for _i in range(15):
+		view.kv.advance(0.1)
+
+
+## A stand-in for the client shell's notice overlay with the game vote open: its drawn ballot,
+## placed where dot-server-deploy's `client/notice_overlay.gd` places it (a copy.
+func _stage_full_chat() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "ChatLayer"
+	layer.layer = 100
+	root.add_child(layer)
+	var screen := Control.new()
+	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(screen)
+	var window := ArenaPresentation.make_chat_window()
+	screen.add_child(window)
+	ArenaPresentation.fit_chat_screen(screen, root.get_visible_rect().size)
+	window.add_text("Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)", Color(0.80, 0.82, 0.86))
+	for i in range(6):
+		window.add_said("Player %d" % (i + 1), "line %d of a full log" % (i + 1), Color(0.62, 0.78, 1.0))
+
+
+func _stage_shell_ballot() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "ShellStandIn"
+	layer.layer = 20
+	root.add_child(layer)
+	# Below 1280x720 the shell draws on a 1280x720 canvas stretched to the window, its ballot and
+	# the game's HUD alike.
+	var fit := ArenaHud.fit_scale(Vector2(root.size))
+	var canvas := Vector2(root.size) / fit
+	var overlay := Control.new()
+	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay.theme = DotUiTheme.space().build()
+	layer.add_child(overlay)
+	overlay.scale = Vector2(fit, fit)
+	overlay.size = canvas
+
+	var width := clampf(canvas.x * 0.34, 240.0, 360.0)
+	var column := VBoxContainer.new()
+	column.anchor_left = 1.0
+	column.anchor_right = 1.0
+	column.anchor_bottom = 1.0
+	column.offset_left = -16.0 - width
+	column.offset_right = -16.0
+	column.offset_top = 110.0
+	column.offset_bottom = -16.0
+	overlay.add_child(column)
+	var ballot := DotBallotPanel.new()
+	ballot.ui_theme = DotUiTheme.space()
+	ballot.panel_width = width
+	column.add_child(ballot)
+	if _glance_map_ballot:
+		var maps: Array = []
+		for label: String in ["Box", "Atrium", "Pit", "Foundry", "Canals", "Spire", "Extend"]:
+			maps.append({"id": label.to_lower(), "label": label, "votes": 0.0})
+		ballot.show_state({
+			"open": true, "title": "Vote for the next map", "command": "vote",
+			"seconds": 19.0, "input": "both", "options": maps, "voters": {}, "people": {},
+		})
+		return
+	ballot.show_state({
+		"open": true, "title": "Vote for the next game", "command": "game_vote",
+		"seconds": 19.0, "input": "both",
+		"options": [
+			{"id": "smash", "label": "Smash Copter", "votes": 0.0},
+			{"id": "hideseek", "label": "Hide & Seek", "votes": 0.0},
+			{"id": "delivery", "label": "Dangerous Delivery", "votes": 0.0},
+			{"id": "playground", "label": "Playground", "votes": 0.0},
+			{"id": "g2gfast", "label": "g2gfast", "votes": 0.0},
+			{"id": "keep", "label": "Don't change", "votes": 0.0},
+		],
+		"voters": {}, "people": {},
+	})
+
+
+## An imported combat surf map, with a deathmatch played on it for a few seconds first.
+const IMPORTED_TICKS := 160
+var _imported_game: ArenaGame = null
+
+
+## The map's health and ammo packs, drawn the way a client draws the ones the server announces:
+## through the drops layer's own `mirror_drop`.
+func _stage_packs(map: ArenaMap) -> void:
+	if map.packs.is_empty():
+		return
+	var layer := ArenaDrops.new()
+	layer.name = "Packs"
+	layer.is_authority = false
+	layer.draws = true
+	root.add_child(layer)
+	for index in range(map.packs.size()):
+		var pack: Dictionary = map.packs[index]
+		layer.mirror_drop(ArenaDrops.PACK_ID_BASE + index, int(pack["kind"]), pack["at"], pack["at"], 0)
+
+
+func _stage_imported(map: ArenaMap, id: StringName) -> void:
+	_imported_game = ArenaGame.new()
+	_imported_game.name = "Game"
+	_imported_game.headless = true
+	_imported_game.is_authority = true
+	_imported_game.register_service = false
+	root.add_child(_imported_game)
+	_staged_map = map
+	_staged_id = id
+
+
+var _staged_map: ArenaMap = null
+var _overview_box := AABB()
+var _overview_reach := 1.0
+
+
+## What the overview frames: the map's bounds, but for an imported map only what is drawn.
+func _frame_overview() -> void:
+	_overview_box = _staged_map.bounds
+	_overview_reach = _staged_map.extent
+
+	# A map with no 3D skybox writes `"skybox": null`, which does not cast to a Dictionary.
+	var sky: Variant = ArenaMap.ArenaImportedMaps.manifest(_staged_map.id).get("skybox", null) if _staged_map.is_imported() else null
+	if not (sky is Dictionary) or not bool((sky as Dictionary).get("drawn", false)):
+		return
+
+	var drawn := _staged_map.to_scene()
+	var box := AABB()
+	var first := true
+
+	for child in drawn.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).mesh != null:
+			var part: AABB = (child as MeshInstance3D).transform * (child as MeshInstance3D).mesh.get_aabb()
+			box = part if first else box.merge(part)
+			first = false
+
+	drawn.free()
+
+	if not first:
+		_overview_box = box
+		_overview_reach = maxf(box.size.x, box.size.z) * 0.5
+var _staged_id: StringName = &""
+
+
+## Run on the first frame, once the game is in the tree (its children ready there).
+func _play_imported() -> void:
+	var game := _imported_game
+	var res := game.setup(_staged_map)
+
+	if not res.ok:
+		push_error("the imported map did not set up: %s" % res.error.message)
+		quit(1)
+		return
+
+	game.match_node.rules.warmup_sec = 0.0
+	game.match_node.rules.countdown_sec = 0.0
+
+	# The jail's gate and button, as a client draws them (the game here is headless, which
+	# draws none of its own presentation).
+	if _staged_map.jail != null:
+		var jail_view := ArenaJailView.new()
+		root.add_child(jail_view)
+		jail_view.build(_staged_map.jail, func() -> int: return 0)
+
+	for i in range(5):
+		var _added := game.add_player(201 + i, "Bot %d" % (i + 1))
+
+	game.start(0)
+
+	for tick in range(IMPORTED_TICKS):
+		var commands := {}
+
+		for player in game.players():
+			var move := DotFpsCommand.new()
+			# Each bot walks its own way, turning slowly, so they spread out of the
+			# spawn room the way players do, without a fight ending it in a second.
+			move.yaw = fmod(float(player.player_id) * 77.0 + float(tick) * 0.6, 360.0)
+			# Three stand where they spawned and two walk off into the map, so the
+			# frames have both somebody on a spawn's floor and somebody on a ramp.
+			move.move = Vector2(0.0, 1.0) if tick > 40 and player.player_id > 203 else Vector2.ZERO
+			move.sanitise()
+			commands[player.player_id] = [move, DotWeaponCommand.new()]
+
+		game.tick(commands)
+
+	var mechanics_shots := _stage_mechanics(game)
+	var players := game.players()
+
+	for player in players:
+		player.attach_body_mesh(
+			Color.from_hsv(fmod(float(player.player_id) * 0.37, 1.0), 0.55, 0.85),
+			ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(player.player_id)))
+		)
+		_players.append(player)
+		print("  %s at %s, %s" % [
+			player.display_name, player.controller.state.position,
+			"standing" if player.controller.state.is_grounded() else "in the air"
+		])
+
+	# Over the shoulder of somebody STANDING, at whoever is nearest them: a frame whose
+	# subject is in mid-air on a ramp says nothing about the floor.
+	var first: ArenaPlayer = players[0]
+
+	for player in players:
+		if player.controller.state.is_grounded():
+			first = player
+			break
+
+	_frame_overview()
+	var feet := first.controller.state.position
+	var facing := Basis(Vector3.UP, deg_to_rad(first.controller.state.yaw)) * Vector3.FORWARD
+	var centre := Vector3.ZERO
+	var nearest := INF
+
+	for player in players:
+		var d := player.controller.state.position.distance_to(feet)
+
+		if player != first and player.controller.state.is_grounded() and d < nearest:
+			nearest = d
+			centre = player.controller.state.position
+
+	if nearest == INF:
+		centre = feet + facing * 6.0
+	else:
+		facing = Vector3(centre.x - feet.x, 0.0, centre.z - feet.z).normalized()
+
+	# Below the horizon is sky too: these maps float in their skybox, and the procedural
+	# sky's brown "ground" reads as a floor a long way down that is not there.
+	for node in root.get_children():
+		if node is WorldEnvironment:
+			var material := (node as WorldEnvironment).environment.sky.sky_material as ProceduralSkyMaterial
+			material.ground_bottom_color = material.sky_horizon_color
+			material.ground_horizon_color = material.sky_horizon_color
+
+	_shots = [
+		{
+			# Behind the first player, over their shoulder, at the others.
+			"name": "%s_players" % String(_staged_id),
+			"from": feet - facing * 3.0 + Vector3.UP * 2.2,
+			"at": centre + Vector3.UP * 0.9,
+		},
+		{
+			# Their own body hidden, as a first-person view draws it: a camera at the eye of
+			# a body that is drawn has that body's arm across the frame.
+			"name": "%s_eye" % String(_staged_id),
+			"from": feet + Vector3.UP * 1.6,
+			"at": feet + Vector3.UP * 1.6 + facing * 10.0,
+			"arm": func() -> void:
+				if first.body_mesh != null:
+					first.body_mesh.visible = false,
+		},
+		{
+			"name": "%s_spawns" % String(_staged_id),
+			"arm": func() -> void:
+				if first.body_mesh != null:
+					first.body_mesh.visible = true,
+			"from": feet + Vector3(-14.0, 18.0, -14.0),
+			"at": feet,
+		},
+		{
+			"name": "%s_overview" % String(_staged_id),
+			"from": _overview_box.get_center() + Vector3(-1.0, 0.6, -1.0) * _overview_reach,
+			"at": _overview_box.get_center(),
+		},
+	]
+
+	_shots.append_array(mechanics_shots)
+	_append_views(OS.get_cmdline_user_args(), _staged_id)
+	var ramp := _biggest_ramp(_staged_map)
+
+	if not ramp.is_empty():
+		var normal: Vector3 = ramp["normal"]
+		var across := normal.cross(Vector3.UP).normalized()
+		_shots.append({
+			"name": "%s_ramp" % String(_staged_id),
+			"from": (ramp["centre"] as Vector3) + normal * 6.0 + across * 10.0 + Vector3.UP * 3.0,
+			"at": ramp["centre"],
+		})
+
+	_camera.far = 2000.0
+
+
+## Two of the walking bots handed to the map's own mechanics, and a frame of each: one put in its
+## deepest pool to the chest and left to sink (`<id>_water`).
+func _stage_mechanics(game: ArenaGame) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var mech := _staged_map.mechanics
+	var swimmer := game.player_for(205)
+	var rider := game.player_for(204)
+
+	if mech == null or swimmer == null or rider == null:
+		return out
+
+	var probe := DotFpsPhysicsBody.for_node(_staged_map.collision_root)
+	var tunables := swimmer.controller.tunables
+	var depth := swimmer.swim.waist + 0.3
+	var pool := AABB()
+	var in_water := Vector3.ZERO
+
+	for w in mech.water:
+		if w.size.x < 3.0 or w.size.z < 3.0 or w.size.y < 1.5 or w.size.y <= pool.size.y:
+			continue
+		for i in range(1, 8):
+			for j in range(1, 8):
+				var at := Vector3(w.position.x + w.size.x * i / 8.0, w.end.y - depth,
+					w.position.z + w.size.z * j / 8.0)
+				var height := tunables.stand_height - 0.2
+				if not probe.overlaps(at + Vector3.UP * (0.1 + height * 0.5), height, tunables.radius - 0.05):
+					pool = w
+					in_water = at
+					break
+			if pool == w:
+				break
+
+	var booster := {}
+	for p: Dictionary in mech.pushes:
+		var push: Vector3 = p["push"]
+		if not p["once"] and (p["box"] as AABB).size.y < 0.5 and Vector2(push.x, push.z).length() \
+				> Vector2(booster.get("push", Vector3.ZERO).x, booster.get("push", Vector3.ZERO).z).length():
+			booster = p
+
+	if pool.size != Vector3.ZERO:
+		swimmer.controller.teleport(in_water, 0.0, 0.0)
+	if not booster.is_empty():
+		var pad: AABB = booster["box"]
+		rider.controller.teleport(Vector3(pad.get_center().x, pad.end.y + 0.02, pad.get_center().z), 0.0, 0.0)
+
+	# Long enough for the rider to be carried off the end of a booster most of a
+	# hundred metres long, and the swimmer to sink a little.
+	var start := rider.controller.state.position
+	for _i in range(18):
+		var idle := {}
+		for player in game.players():
+			idle[player.player_id] = [DotFpsCommand.new(), DotWeaponCommand.new()]
+		game.tick(idle)
+
+	if pool.size != Vector3.ZERO:
+		var at: Vector3 = swimmer.controller.state.position
+		print("  swimmer at %s, mode %s, %.2f m under the surface" % [
+			at, swimmer.controller.motor.mode_name(swimmer.controller.state.mode), pool.end.y - at.y])
+		out.append({
+			"name": "%s_water" % String(_staged_id),
+			"from": Vector3(at.x, pool.end.y + 1.2, at.z) + Vector3(3.0, 0.0, 3.0),
+			"at": at + Vector3.UP * 0.9,
+		})
+
+	if not booster.is_empty():
+		var at: Vector3 = rider.controller.state.position
+		var push: Vector3 = booster["push"]
+		var along := Vector3(push.x, 0.0, push.z).normalized()
+		print("  booster rider carried %.1f m to %s, %.1f m/s" % [
+			start.distance_to(at), at, rider.controller.state.horizontal_speed()])
+		out.append({
+			"name": "%s_booster" % String(_staged_id),
+			"from": at - along * 7.0 + along.cross(Vector3.UP) * 3.0 + Vector3.UP * 2.5,
+			"at": at + Vector3.UP * 0.9,
+		})
+
+	return out

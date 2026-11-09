@@ -428,6 +428,7 @@ func _build_combat() -> DotResult:
 
 	combat.entity_killed.connect(_on_entity_killed)
 	combat.damage_applied.connect(_on_damage_applied)
+	shot_stats.attach(self)
 
 	_build_bullets()
 

@@ -89,10 +89,20 @@ func _run() -> void:
 		await _wait(0.3)
 		await _shot("arena_loadout_every_spawn_on")
 		_check(screen.random_spawn_on(), "the Every spawn toggle turns on")
+		_check(screen.spawn_locked() and (screen.find_child("Random", true, false) as Button).disabled, "ticked: every other loadout control is locked")
+		var before_pick: Dictionary = screen.draft.duplicate()
+		var any_pick := false
+		for i in screen.choices().size():
+			any_pick = any_pick or screen.pick(i)
+		_check(not any_pick and screen.draft == before_pick, "ticked: no card can be picked")
 		var plate := menu.toast_plate
 		_check(plate != null and plate.visible and plate.get_global_rect().position.y > root.size.y * 0.5,
 			"the toast sits below the loadout panel, not over its intro text")
 		screen.toggle_random_spawn()
+		_check(not screen.spawn_locked(), "unticked: the controls are live again")
+		screen.show_slot(0)
+		await _wait(0.3)
+		await _shot("arena_loadout_every_spawn_off")
 	screen.show_slot(3)
 	await _shot("arena_loadout_grenades")
 	screen.show_slot(0)

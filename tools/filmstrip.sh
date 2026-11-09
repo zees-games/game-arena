@@ -9,8 +9,13 @@ out=screenshots/filmstrip
 mkdir -p "$out"
 clips=("$@")
 [[ ${#clips[@]} -gt 0 ]] || mapfile -t clips < <(python3 -c 'import json;print("\n".join(c["name"] for c in json.load(open("tools/filmstrip_scenarios.json"))["clips"]))')
+gpu_sh=${GPU_SH:-}
+for c in /home/gamedev/godot/dot-bootstrap/tools/gpu.sh ../gpu.sh; do
+  [[ -z $gpu_sh && -f $c ]] && gpu_sh=$c
+done
+[[ -f $gpu_sh ]] || { echo "gpu.sh not found (set GPU_SH=path)" >&2; exit 1; }
 for clip in "${clips[@]}"; do
-  GPU_SHOT_BOXES=${GPU_SHOT_BOXES:-staging02} ../gpu.sh shot "$(basename "$PWD")" tools/filmstrip_run.sh "$clip" "${FPS:-60}"
+  GPU_SHOT_BOXES=${GPU_SHOT_BOXES:-staging02} "$gpu_sh" shot "$(basename "$PWD")" tools/filmstrip_run.sh "$clip" "${FPS:-60}"
   rsync -az -e "ssh -i ${GPU_KEY:-$HOME/.ssh/gpu-laptop} -o BatchMode=yes" \
     "gamedev@staging02.deacon.internal:gpu/shot/$(basename "$PWD")/$out/$clip.mp4" "gamedev@staging02.deacon.internal:gpu/shot/$(basename "$PWD")/$out/${clip}_report.txt" "$out/"
 done

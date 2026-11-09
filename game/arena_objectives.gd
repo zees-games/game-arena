@@ -60,7 +60,9 @@ func setup() -> DotResult:
 	if game.mode == null:
 		return DotResult.fail(DotError.CODE_STATE, "There is no mode.")
 
-	layout = game.mode.objective_layout
+	# The mode being played: on a networked client the server's (RULES mode_index), whose own `mode` stays the default.
+	var played = game.displayed_mode()
+	layout = played.objective_layout
 	if layout == &"":
 		return DotResult.fail(
 			DotError.CODE_STATE, "This mode has no objectives."
@@ -141,9 +143,18 @@ func _setup_ctf() -> DotResult:
 	return DotResult.success(null)
 
 
+## True when this process has a screen. `game.headless` must not be asked: it is the collision backend and is true on every client, which hid the flags (2026-11-08).
+static func draws_flags(platform_headless: bool) -> bool:
+	return not platform_headless
+
+
+## Forces the flag view on, for a check that runs without a screen.
+var draw_flags := false
+
+
 ## The flags are drawn wherever the game draws (a client, a listen server, a solo game); a dedicated or headless server has no eyes for them.
 func _build_flag_view() -> void:
-	if flag_view != null or ctf == null or game.headless:
+	if flag_view != null or ctf == null or not (draw_flags or draws_flags(DotPlatform.is_headless())):
 		return
 	flag_view = ArenaFlagView.new()
 	flag_view.name = "FlagView"
@@ -155,7 +166,7 @@ func _build_flag_view() -> void:
 ## Where each team's flag stands (team id -> position): a flag spawn the map or the workbench placed, else the middle of the team's own spawns, else a cluster of all spawns, else the ends of the map's longest axis.
 func ctf_bases() -> Dictionary:
 	var team_ids: Array[int] = []
-	for team in game.mode.teams():
+	for team in game.displayed_mode().teams():
 		team_ids.append(team.id)
 
 	var sites: Array[DotSpawnSite] = []
@@ -494,7 +505,7 @@ func _on_map_changed(new_map: ArenaMap) -> void:
 	if manager == null:
 		return
 
-	var wanted: StringName = game.mode.objective_layout if game.mode != null else &""
+	var wanted: StringName = game.displayed_mode().objective_layout if game.displayed_mode() != null else &""
 	if wanted == &"":
 		# The new mode has no objectives. Emptying the set is right and freeing the
 		# layer is not: `ArenaGame.objectives` is read by the HUD and by the net

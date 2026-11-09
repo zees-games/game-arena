@@ -21,6 +21,9 @@ const MAX_STEPS := 8
 const PHYSICS_BUDGET_SEC := 0.045
 ## Weight of the newest tick in the cost average.
 const SMOOTHING := 0.1
+## Share of a tick's length its cost may take before the bots think less often.
+const LOAD_HEADROOM := 0.8
+const MAX_LOAD_SCALE := 2.0
 
 var _cost_sec := 0.0
 
@@ -36,3 +39,12 @@ func steps_for(tick_cost_sec: float) -> int:
 
 func cost() -> float:
 	return _cost_sec
+
+
+## How much to stretch the bots' think periods (DotBotThinkTier.load_scale) for the cost measured so far:
+## 1 while a tick fits in [constant LOAD_HEADROOM] of its [param period_sec], else the overshoot, so a tick that
+## costs 1.5 periods asks the thinning bots for 1.5 times the periods. Capped at [constant MAX_LOAD_SCALE].
+func load_scale(period_sec: float) -> float:
+	if _cost_sec <= 0.0 or period_sec <= 0.0:
+		return 1.0
+	return clampf(_cost_sec / (period_sec * LOAD_HEADROOM), 1.0, MAX_LOAD_SCALE)

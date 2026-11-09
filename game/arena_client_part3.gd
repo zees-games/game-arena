@@ -33,6 +33,11 @@ func _ready() -> void:
 
 	# Connected here, before anything can create a player, rather than inside `_watch`.
 	game.player_added.connect(_on_player_added)
+	# The flag's sounds: from what the flag view draws, so a dedicated server's client hears them too.
+	game.ctf_seen.connect(func(what: StringName, team: int, by: int) -> void:
+		if presentation != null:
+			presentation.on_flag_event(what, team, player != null and by == player.player_id, game.team_of(player.player_id) if player != null else 0)
+	)
 	# The mode's banner, the moment a client learns it: "Gun Game: every kill gives you a
 	# different gun", the way the genre says it when you spawn into one.
 	game.mode_shown.connect(func(shown: ArenaMode) -> void:
@@ -122,14 +127,8 @@ func toggle_view() -> void:
 
 ## Solo: the bridge's per-tick record and delivery, in this process. Only the local player's clip is played.
 func _tick_solo_killview() -> void:
-	if solo_killview == null or not game.killview_rules.enabled:
-		return
-	var tick := game.current_tick()
-	var now := float(tick) / float(game.tick_rate)
-	solo_killview.record(now)
-	for ready: Dictionary in solo_killview.collect(now, tick):
-		if player != null and int(ready["victim"]) == player.player_id:
-			_on_killview(ready["clip"], ready["info"])
+	if solo_killview != null:
+		solo_killview.tick(game.current_tick())
 
 ## The kill view, the final killcam and the winner reveal each hide the HUD and put back what they found. When two overlap, the later one found it already hidden and restores it hidden, for the rest of the session; this is the one owner that says no screen is up, so the HUD returns.
 func _restore_hud_if_orphaned() -> void:
@@ -350,6 +349,8 @@ func _physics_process(delta: float) -> void:
 	if _offline and _tick_budget != null:
 		# Catch up with wall-clock time as far as ticks are cheap enough to (ArenaTickBudget).
 		Engine.max_physics_steps_per_frame = _tick_budget.steps_for((Time.get_ticks_usec() - t) / 1000000.0)
+		# Ticks dearer than their length cannot keep real time: the thinning bots think less often (ArenaBots.tiers).
+		ArenaBots.tiers.load_scale = _tick_budget.load_scale(1.0 / maxf(float(Engine.physics_ticks_per_second), 1.0))
 
 ## A connected client's respawn faces the way its spawn faces. [b]Only the client can turn the
 ## view[/b]: the server teleports the player facing the spawn, then applies the next command, whose

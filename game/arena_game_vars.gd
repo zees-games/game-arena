@@ -4,6 +4,7 @@ extends "arena_game_state.gd"
 const ArenaFlashlight := preload("arena_flashlight.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
+const ArenaShotStats := preload("arena_shot_stats.gd")
 const HULL_NEAR_SQ := 144.0
 
 ## Beyond this a hull cannot touch one tick's sweep (top speed times a tick, plus both radii, with room to spare).
@@ -24,6 +25,9 @@ var loadout_identity := ArenaLoadoutIdentity.new()
 
 ## Movement-dependent spread, recoil patterns and the spread crosshair (dot-game's opt-in; sv_spread_*, sv_recoil_*, on here).
 var combat_feel: DotGameCombatFeel = _make_combat_feel()
+
+## Shots fired against damage applied, per shooter (bots and players): the counter behind `arena_shot_stats`.
+var shot_stats := ArenaShotStats.new()
 
 ## Ammo profiles (`cfg/game/game-arena/ammo`): what each gun's round can penetrate, read by the hitscan behaviour.
 var ammo_types: DotWeaponAmmoTypes = _load_ammo_types()

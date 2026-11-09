@@ -178,6 +178,7 @@ func _play(preset: String) -> void:
 			var tick := game.current_tick()
 			var bot := game.player_for(BOT)
 			var ref := game.player_for(REFERENCE)
+			var comp_before: Vector2 = bot_mind.recoil_comp
 			var commands := {
 				BOT: ArenaBots.think(game, bot, bot_mind, tick, float(TICK_RATE)),
 				REFERENCE: ArenaBots.think(game, ref, ref_mind, tick, float(TICK_RATE)),
@@ -193,7 +194,8 @@ func _play(preset: String) -> void:
 			if bot.is_alive():
 				# Against the view the bot had going into the tick, never the last command: a
 				# spawn turns the view too, and that is the map's doing, not the bot's.
-				fastest = maxf(fastest, absf(wrapf(move.yaw - bot.controller.state.yaw, -180.0, 180.0)) * TICK_RATE)
+				# The brain's own turn: the view it steers from and aims at both carry the recoil correction, which is not a turn of its choosing.
+				fastest = maxf(fastest, absf(wrapf((move.yaw + bot_mind.recoil_comp.x) - (bot.controller.state.yaw + comp_before.x), -180.0, 180.0)) * TICK_RATE)
 				if fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK) and bot_mind.throw_stage == 0:
 					shots += 1
 					var target := game.player_for(brain.last.target_id) if brain.last.target_id >= 0 else null
