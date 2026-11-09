@@ -233,7 +233,7 @@ func _add_fire_buffer_cvar() -> void:
 			log_info("fire buffer changed", {"seconds": game.fire_buffer_seconds}))
 
 
-## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]); `bot_native`: dot-sim's sight scan; `motor_native`: dot-sim's movement collision queries and collide-and-slide.
+## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]); `bot_native`: dot-sim's sight scan; `motor_native`: dot-sim's movement collision queries and collide-and-slide; `motor_native_tick`: a plain ground or air tick's start and end in dot-sim.
 func _add_bot_think_cvars() -> void:
 	add_cvar("bot_think_every", str(ArenaBots.think_every),
 		"A bot far from every enemy runs its brain one tick in this many (1 = every tick, 0 = 2 above 16 players)",
@@ -274,6 +274,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			DotFpsPhysicsBody.native_enabled = new_value.to_float() >= 0.5)
+	add_cvar("motor_native_tick", "1" if DotFpsMotor.native_tick else "0",
+		"1: a plain ground or air tick's start and end (ground check, friction, acceleration, gravity, collide-and-slide) run in dot-sim as one call each when its library has the motor tick (bit-identical to the script); 0: in script. Needs motor_native; without the library it is script either way",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			DotFpsMotor.native_tick = new_value.to_float() >= 0.5)
 	add_cvar("arena_hull_grid", "1" if ArenaHullGrid.enabled else "0",
 		"1: players' standing hulls are found through a grid filed once per tick (same hulls, cheaper above 12 players); 0: scan the whole roster per bot",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
