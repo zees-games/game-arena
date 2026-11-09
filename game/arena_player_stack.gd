@@ -74,6 +74,7 @@ func setup(p_game: ArenaGame) -> DotResult:
 		DotRegistry.register(SERVICE, self)
 		_registered = true
 
+	_print_dot_sim_status()
 	DotLog.info(CHANNEL, "player stack up", {
 		"tick_rate": game.tick_rate,
 		"classes": classes.catalogue.ids().size(),
@@ -81,6 +82,38 @@ func setup(p_game: ArenaGame) -> DotResult:
 	})
 
 	return DotResult.success(null)
+
+
+static var _dot_sim_status_printed: bool = false
+
+
+## One line per process saying whether dot-sim's library loaded and what runs in it, so a
+## player or a log can tell native from the GDScript twins (bootstrap fetches the library;
+## the web never has it).
+static func _print_dot_sim_status() -> void:
+	if _dot_sim_status_printed:
+		return
+	_dot_sim_status_printed = true
+	print(dot_sim_status())
+
+
+## [code]dot-sim: native motor=on bots=on snapshot=on[/code], or that the library is not loaded.
+static func dot_sim_status() -> String:
+	var natives := {"motor": &"DotSimFpsBody", "bots": &"DotSimBotSenses", "snapshot": &"DotSimSnapshotCodec"}
+	var parts: PackedStringArray = []
+	var any := false
+	for module: String in natives:
+		var loaded := ClassDB.class_exists(natives[module])
+		any = any or loaded
+		var used := loaded
+		if module == "motor":
+			used = loaded and DotFpsPhysicsBody.native_enabled
+		elif module == "bots":
+			used = loaded and DotBotWorld.native_enabled
+		parts.append("%s=%s" % [module, ("on" if used else "off") if loaded else "missing"])
+	if not any:
+		return "dot-sim: native library not loaded, the GDScript twins run (bootstrap fetches it; web never has it)"
+	return "dot-sim: native " + " ".join(parts)
 
 
 func _exit_tree() -> void:

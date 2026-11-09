@@ -109,7 +109,14 @@ static var think_near: float = 30.0
 ## Think-rate tiers (cvars `bot_tier_*`): above [member DotBotThinkTier.above] players a bot that fights a person,
 ## was hurt by one, is near or in view of one, or is among the nearest to one thinks every tick; the rest every 2-4
 ## ticks and coast between, fighting included. Server-side commands only: the motor and prediction are untouched.
-static var tiers := DotBotThinkTier.new()
+static var tiers := _make_tiers()
+static func _make_tiers() -> DotBotThinkTier:
+	var t := DotBotThinkTier.new()
+	# A bot fighting a person beyond 25 m and out of every view cone thinks every other tick.
+	t.engaged_far_every = 2
+	return t
+
+
 ## Whether tiers decide this tick (else the `bot_think_every` stagger does).
 static var _tier_on: bool = false
 const _COAST_FIRE := DotWeaponCommand.BUTTON_ATTACK | DotWeaponCommand.BUTTON_AIM
