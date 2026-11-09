@@ -2,6 +2,7 @@
   "format": 1,
   "addons": {
     "arena_weapons": 8,
+    "dot_combat": 6,
     "dot_bot": 16,
     "dot_audio": 14,
     "dot_loadout": 1,

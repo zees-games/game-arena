@@ -115,28 +115,15 @@ func _add_movement_cvars() -> void:
 				game.set_movement_rules({key: new_value.to_float()})
 				log_info("movement rule changed", {"rule": key, "value": new_value})
 		)
-	for cvar in HIT_GROUP_CVARS:
-		_add_hit_group_cvar(cvar, HIT_GROUP_CVARS[cvar][0], HIT_GROUP_CVARS[cvar][1])
+	_add_hit_group_cvars()
 
 
-## cvar -> the hit zone whose damage multiplier it sets on the server, and its help. Defaults are dot-combat's.
-const HIT_GROUP_CVARS := {
-	"arena_head_mult": [DotHitGroup.HEAD, "Damage multiplier on a head hit (default 4: a rifle round to the head is 92 of a spawn's 100 health)"],
-	"arena_neck_mult": [DotHitGroup.NECK, "Damage multiplier on a neck hit (default 2)"],
-	"arena_stomach_mult": [DotHitGroup.STOMACH, "Damage multiplier on a stomach hit (default 1.25)"],
-	"arena_leg_mult": [DotHitGroup.LEG, "Damage multiplier on a leg hit (default 0.75)"],
-}
-
-
-func _add_hit_group_cvar(cvar: String, group: StringName, help: String) -> void:
+## arena_head_mult, _neck_mult, _stomach_mult and _leg_mult: dot-combat's `DotHitGroup.bind_cvars` on the resolver's table (defaults are dot-combat's).
+func _add_hit_group_cvars() -> void:
 	var groups: DotHitGroup = game.combat.resolver.hit_groups if game.combat != null and game.combat.resolver != null else null
 	if groups == null:
 		return
-	add_cvar(cvar, str(groups.multiplier(group)), help, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0).changed.connect(
-		func(_old: String, new_value: String) -> void:
-			groups.set_multiplier(group, maxf(new_value.to_float(), 0.0))
-			log_info("hit zone multiplier changed", {"cvar": cvar, "value": new_value})
-	)
+	groups.bind_cvars(add_cvar, "arena", DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
 
 
 ## cvar -> the rule key whose value is a TagRules mask, and what it means.
