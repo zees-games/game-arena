@@ -2,6 +2,7 @@ extends Node
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ClientBench := preload("client_bench.gd")
+const ArenaBots := preload("../game/arena_bots.gd")
 
 ## The 16v16 benchmark: a solo client on a fixed map, mode, bot count and seed, recorded by the
 ## client's own dot profiler, so the report has the same per-system table as a player's
@@ -14,6 +15,8 @@ var _mode := "ctf"
 var _bots := 31
 ## The engine script profiler's N costliest functions (needs godot -d); 0 is off.
 var _script_top := 0
+## `--bot-set think_every=2,tiers.above=16,...`: ArenaBots statics (and fields of ArenaBots.tiers) set before the run, for A/B.
+var _bot_set := ""
 var _seconds := 30.0
 var _warmup := 20.0
 var _seed := 1
@@ -54,6 +57,23 @@ func _ready() -> void:
 			"--queries": _queries = int(args[i + 1]) != 0
 			"--max-steps": _max_steps = int(args[i + 1])
 			"--script-top": _script_top = int(args[i + 1])
+			"--bot-set": _bot_set = args[i + 1]
+	for pair in _bot_set.split(",", false):
+		var kv := pair.split("=")
+		var v := kv[1].to_float()
+		match kv[0]:
+			"think_every": ArenaBots.think_every = int(v)
+			"think_near": ArenaBots.think_near = v
+			"tiers.above": ArenaBots.tiers.above = int(v)
+			"tiers.near_every": ArenaBots.tiers.near_every = int(v)
+			"tiers.far_every": ArenaBots.tiers.far_every = int(v)
+			"tiers.far_range": ArenaBots.tiers.far_range = v
+			"tiers.close_range": ArenaBots.tiers.close_range = v
+			"tiers.nearest": ArenaBots.tiers.nearest = int(v)
+			"tiers.engaged_far_every": ArenaBots.tiers.engaged_far_every = int(v)
+			"tiers.engaged_range": ArenaBots.tiers.engaged_range = v
+			"tiers.view_range": ArenaBots.tiers.view_range = v
+			_: push_error("perf_bench: unknown --bot-set key %s" % kv[0])
 	seed(_seed)
 	if _max_steps > 0:
 		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
