@@ -13,6 +13,7 @@ var OUT_DIR := "screenshots/reload"
 var client: Node = null
 var _failed := 0
 var _arm_failed := 0
+var retried: Array = []
 
 
 func _initialize() -> void:
@@ -39,6 +40,15 @@ func _run() -> void:
 		if gate == null or (gate as Object).call(&"is_open"):
 			break
 		await _wait(0.5)
+
+	# The round going LIVE hands the player the loadout again and equips its first gun, cancelling a reload in progress: wait it out,
+	# or the weapons rendered over that moment lose their last frames ("the reload ended first", the rifle in hand afterwards).
+	var match_node: Object = client.get("match_node")
+	for i in 400:
+		if match_node == null or int(match_node.get("state")) == DotMatch.State.LIVE:
+			break
+		await _wait(0.5)
+	await _wait(1.0)
 
 	var ids: Array = []
 	for id: StringName in AwWeaponCatalogue.table():
@@ -107,6 +117,9 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 		var least := 99
 		var mags_most := 0
 		var mags_none := 0
+		var frames_taken := 0
+		var last_seen := 0.0
+		var slow_captures := 0
 		var view := _view_model(me)
 		if view != null and not view.has_method(&"reload_sequence"):
 			view = null
@@ -136,8 +149,12 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 			while view != null and me.arsenal.is_reloading() and float(view.get(&"_reload_fraction")) < due:
 				await process_frame
 			if not me.arsenal.is_reloading():
-				print("%s frame %d: the reload ended first" % [id, f])
+				var cur: DotWeaponSlot = me.arsenal.current()
+				print("%s frame %d: the reload ended first at fraction %.2f (last seen %.2f), magazine %d/%d, reserve %d, current %s" % [id, f, float(view.get(&"_reload_fraction")) if view != null else -1.0, last_seen, cur.magazine if cur != null else -1, def.magazine, me.arsenal._ammo.count(def.ammo_type) if def.ammo_type != &"" else -1, cur.def.id if cur != null else &"none"])
 				break
+			last_seen = float(view.get(&"_reload_fraction")) if view != null else 0.0
+			var f_before := float(view.get(&"_reload_fraction")) if view != null else 0.0
+			var t_before := Time.get_ticks_msec()
 			await _shot("%s_%02d" % [id, f])
 			if view == null:
 				print("%s frame %d: hand gaps %s" % [id, f, _hand_gaps()])
@@ -147,19 +164,38 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 				mags_none += 1 if mags == 0 else 0
 				print("%s frame %d: f %.2f, %d parts shown, %d magazines in sight, phase %s, hand gaps %s" % [id, f, float(view.get(&"_reload_fraction")), view.call(&"reload_parts_shown"), mags, _phase(view), _hand_gaps()])
 			var drawn := await _drawn_sets(me)
+			# The reload runs on the sim's clock, not the tree's: a capture that costs more of the reload than the gap to the next
+			# frame (slow render on llvmpipe, a busy box) makes the reload end before the last frames. Say so, it is not a short reload.
+			if view != null:
+				var burn := float(view.get(&"_reload_fraction")) - f_before
+				print("%s frame %d: capture took %d ms, the reload advanced %.2f meanwhile (a frame gap is %.2f)" % [id, f, Time.get_ticks_msec() - t_before, burn, 1.0 / float(frames)])
+				if burn > 1.0 / float(frames):
+					slow_captures += 1
+			frames_taken += 1
 			worst = maxi(worst, drawn.size())
 			least = mini(least, drawn.size())
 			if drawn.size() != 1:
 				print("%s frame %d: %d arm sets drawn %s" % [id, f, drawn.size(), drawn])
 		await _wait(0.6)
 		print("%s: reload %.2f s (started %s), %d frames, arm sets drawn per frame %d..%d, most magazines in sight %d (none in %d frames), magazine %d/%d" % [id, seconds, started, frames, least, worst, mags_most, mags_none, me.arsenal.current().magazine, def.magazine])
-		if worst != 1 or least != 1:
+		var held_now: DotWeaponSlot = me.arsenal.current()
+		if frames_taken < frames:
+			var swapped := held_now != null and held_now.def.id != id
+			print("%s: only %d of %d frames captured: %s (the reload itself is %.2f s, %d captures cost more than a frame gap)" % [id, frames_taken, frames, "the game swapped the gun for %s mid-reload (a loadout re-applied), not a short reload" % held_now.def.id if swapped else "the reload ended", seconds, slow_captures])
+			if swapped and not retried.has(id):
+				retried.append(id)
+				ids.append(id)
+				print("%s: rendering it again" % id)
+				continue
+		if frames_taken == 0:
+			print("%s: no frame captured, arm sets not counted" % id)
+		elif worst != 1 or least != 1:
 			_arm_failed += 1
 		# Exactly one magazine in sight per frame bar the instant the hand fetches the next: never two.
 		if mags_most > 1 or not started:
 			_failed += 1
 			print("%s: FAILED, %d magazines in sight at once" % [id, mags_most])
-	print("render_reload: %d weapons with two arm sets at some frame (not fatal)" % _arm_failed)
+	print("render_reload: %d weapons with two arm sets (or none) at some frame (not fatal)" % _arm_failed)
 	print("render_reload: %d weapons failed the one-magazine check" % _failed)
 	quit(1 if _failed > 0 else 0)
 
