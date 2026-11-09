@@ -247,8 +247,10 @@ func _probe_client() -> void:
 		if not InputMap.has_action(act):
 			InputMap.add_action(act)
 	var sounds: Array = []
+	var asked: Array = []
 	var audio: DotAudioManager = client.get("presentation").audio
 	audio.played.connect(func(id: StringName, _h: int, why: StringName) -> void:
+		asked.append("%s:%s" % [id, why])
 		if why == &"ok":
 			sounds.append(id))
 	for scoped in [false, true]:
@@ -260,7 +262,10 @@ func _probe_client() -> void:
 		var on_hit := func(a: int, v: int, _amt: float, _pt: Vector3, _h: bool, _l: bool) -> void:
 			hits.append([a, v])
 		g.hit_confirmed.connect(on_hit)
+		# Headless the sink never ends a voice, so two hit sounds from one pass would hold both of its slots for the next.
+		audio.stop_all()
 		sounds.clear()
+		asked.clear()
 		var at := bot.global_position
 		var space := me.get_world_3d().direct_space_state
 		var spot := _clear_spot(space, at)
@@ -291,7 +296,7 @@ func _probe_client() -> void:
 		var tag := "scoped" if scoped else "hip"
 		_check(not hits.is_empty(), "client: a %s shot at a still bot registers" % tag, str(hits.size()))
 		_check(marker > 0.0, "client: the hit marker flashes (%s)" % tag, str(marker))
-		_check(sounds.has(&"hit_marker") or sounds.has(&"kill_confirmed"), "client: the hit sound plays (%s)" % tag, str(sounds))
+		_check(sounds.has(&"hit_marker") or sounds.has(&"kill_confirmed"), "client: the hit sound plays (%s)" % tag, str(asked))
 		g.hit_confirmed.disconnect(on_hit)
 		for _i in 200:
 			await get_tree().process_frame

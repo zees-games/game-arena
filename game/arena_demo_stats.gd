@@ -4,6 +4,8 @@ extends RefCounted
 ##
 ## Off unless `bot_record` is on. A bot is never a subject. An engagement starts when a player first has a living enemy in view and ends at their first hit or when the enemy has been out of view for a moment.
 
+const ArenaPlayerTunables := preload("arena_player_tunables.gd")
+
 const CHANNEL := "arena.demo_stats"
 const PLACE := "place"
 const ENGAGE := "engage"
@@ -13,7 +15,7 @@ const VIEW_COS := 0.7
 const VIEW_RANGE := 60.0
 const LOST_GRACE := 0.5
 const ENGAGE_MAX := 10.0
-const EYE := 1.6
+## Chest height of the 1.8 m body the sight line was drawn for; scaled to the body in use.
 const CHEST := 1.25
 ## Seconds after a hit given or taken that a player counts as in a fight.
 const FIGHT_HOLD := 3.0
@@ -258,7 +260,7 @@ func _place(id: int, player: Object, state: DotFpsState, fighting: bool, tick: i
 
 func _engage(id: int, player: Object, state: DotFpsState, move: DotFpsCommand, fire: DotWeaponCommand, tick: int) -> void:
 	var subject := Vector2i(id, 1)
-	var eye := state.position + Vector3(0.0, EYE, 0.0)
+	var eye := state.position + Vector3(0.0, ArenaPlayerTunables.eye_height_m(), 0.0)
 	var aim := Vector3.FORWARD
 	if fire != null:
 		aim = fire.aim_direction()
@@ -281,7 +283,7 @@ func _engage(id: int, player: Object, state: DotFpsState, move: DotFpsCommand, f
 		_engaged.erase(id)
 		recorder.cancel(subject)
 		return
-	var foe_pos: Vector3 = foe.controller.state.position + Vector3(0.0, CHEST, 0.0)
+	var foe_pos: Vector3 = foe.controller.state.position + Vector3(0.0, CHEST * ArenaPlayerTunables.body_scale(), 0.0)
 	var to := foe_pos - eye
 	var seen := to.length() <= VIEW_RANGE and to.normalized().dot(aim) >= VIEW_COS and _sees(eye, foe_pos)
 	e.unseen = 0 if seen else e.unseen + 1
@@ -311,7 +313,7 @@ func _enemy_in_view(player: Object, eye: Vector3, aim: Vector3) -> Object:
 			continue
 		if teams and int(other.get("team")) == int(player.get("team")):
 			continue
-		var to: Vector3 = other.controller.state.position + Vector3(0.0, CHEST, 0.0) - eye
+		var to: Vector3 = other.controller.state.position + Vector3(0.0, CHEST * ArenaPlayerTunables.body_scale(), 0.0) - eye
 		if to.length() > VIEW_RANGE:
 			continue
 		var d := to.normalized().dot(aim)

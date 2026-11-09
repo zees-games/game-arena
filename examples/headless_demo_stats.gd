@@ -4,6 +4,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaDemoStatsScript := preload("../game/arena_demo_stats.gd")
+const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 
 ## Place and engage recordings and heatmap-weighted roaming: off by default, a bot is never recorded, a player standing and aiming at another becomes a `place` and an `engage` episode, and the bots' waypoints repeat where people stand.
 ##
@@ -56,6 +57,10 @@ func _boot() -> void:
 	_check(_game.setup(map).ok, "the arena sets up")
 	_game.match_node.rules.warmup_sec = 0.0
 	_game.match_node.rules.countdown_sec = 0.0
+	# The shot comes within the default protection of the first spawn, which would absorb it.
+	_game.config.spawn_protection_sec = 0.0
+	_game.match_node.rules.spawn_protection_sec = 0.0
+	_game.player_stack.refresh_spawn_rules()
 	for id in [1, 2, 3]:
 		var _a := _game.add_player(id, "P%d" % id)
 	_game.player_for(3).set_meta(&"bot", true)
@@ -114,10 +119,13 @@ func _run() -> void:
 	config.record = true
 	stats.place_span = 1.0
 	var eye: Vector3 = shooter.muzzle_position()
-	var a := angles_to(eye, victim.global_position + Vector3(0.0, 1.62, 0.0))
+	# The head, above the chest the recorder measures against, so the first view error is small but not zero.
+	var a := angles_to(eye, victim.global_position + Vector3(0.0, 1.62 * ArenaPlayerTunables.body_scale(), 0.0))
 	var aim := DotWeaponCommand.BUTTON_USER_0
 	for _i in 150:
 		await _step(aim, a.x, a.y)
+	var hits: Array = []
+	_game.hit_confirmed.connect(func(by: int, at: int, _amount: float, _point: Vector3, _head: bool, _lethal: bool) -> void: hits.append("%d>%d" % [by, at]))
 	await _step(aim | DotWeaponCommand.BUTTON_ATTACK, a.x, a.y)
 	for _i in 12:
 		await _step(aim, a.x, a.y)
@@ -133,7 +141,7 @@ func _run() -> void:
 	_check(places.size() >= 2, "standing about makes place episodes cut at the span", str(places.size()))
 	_check(not places.is_empty() and places[0].key == "all" and places[0].frame_size == 5 and places[0].sample_count() > 0, "a place episode carries position, the fight flag and the speed under its label")
 	_check(places.all(func(e: DotBotDemoEpisode) -> bool: return e.map_id == "demo_lane"), "episodes carry the map")
-	_check(engages.size() == 1, "one engagement, ended by the hit", str(engages.size()))
+	_check(engages.size() == 1, "one engagement, ended by the hit", "%d stored, hits %s" % [engages.size(), hits])
 	var e: DotBotDemoEpisode = engages[0] if not engages.is_empty() else null
 	_check(e != null and e.outcome in ["hit", "kill"], "the engagement ends at the first hit", e.outcome if e != null else "")
 	var fired_at := -1
