@@ -379,6 +379,13 @@ func fit_hitboxes_to_stance() -> void:
 			box.height = maxf(h * k, box.radius * 2.0 + 0.02)
 
 
+## Sideways speed across the aim (positive right) that bends the wall-shot barrel; zero while wall-running, as the drawn view does.
+static func wall_shot_strafe(state: DotFpsState) -> float:
+	if state.is_wall_running():
+		return 0.0
+	return state.velocity.dot(Basis(Vector3.UP, deg_to_rad(state.yaw)).x)
+
+
 func simulate_tick(
 	tick: int,
 	delta: float,
@@ -441,6 +448,8 @@ func simulate_tick(
 	ctx.sprint_blocks_fire = not controller.tunables.sprint_can_shoot
 	ctx.sprint_shot_follows_barrel = controller.tunables.sprint_shot_follows_barrel
 	ctx.authority = arsenal.authority
+	# Sideways speed across the aim, positive right: the client's gun tilts with it, so the wall shot must too.
+	ctx.extra[&"strafe"] = wall_shot_strafe(state)
 
 	# Through the rig, which runs the arsenal and then the bash. It keeps the previous
 	# command itself, for the same edge triggers the arsenal used to be handed it for.

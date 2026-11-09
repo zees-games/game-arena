@@ -5,7 +5,7 @@ const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 
-const EXPECTED_CHECKS := 15
+const EXPECTED_CHECKS := 18
 const STEP := 1.0 / 60.0
 
 ## A server cvar for the wall-run size rules changes whether a run starts beside a 1 m crate:
@@ -71,6 +71,15 @@ func _run() -> void:
 	tall_def.attributes = {"look_down_back": 0.8}
 	_check(is_equal_approx(ArenaPlayer.look_down_back_of(tall_def), 0.8) and is_equal_approx(ArenaPlayer.look_down_back_of(DotPlayerClassDef.new()), 0.45),
 		"a class profile sets how far the own body trails back looking down; none keeps the default")
+
+	var st := DotFpsState.new()
+	st.velocity = Vector3(3.0, 0.0, -5.0)
+	_check(is_equal_approx(ArenaPlayer.wall_shot_strafe(st), 3.0), "the wall shot's strafe is the sideways speed, right positive")
+	st.yaw = 90.0
+	st.velocity = Vector3(0.0, 0.0, -4.0)
+	_check(is_equal_approx(ArenaPlayer.wall_shot_strafe(st), 4.0), "it follows the aim yaw, not the world axes")
+	st.wall_run_time = 0.5
+	_check(ArenaPlayer.wall_shot_strafe(st) == 0.0, "it is zero while wall-running")
 
 	await _test_clip_hulls()
 	_report(EXPECTED_CHECKS)
