@@ -8,6 +8,7 @@ const ClientBench := preload("client_bench.gd")
 ## Solo (offline) client with N bots on `--map`, frame and physics cost per frame:
 ## `godot --path . res://tools/offline_cost.tscn -- --map blackhawkdown --bots 10 --seconds 25`.
 ## Prints fps, frame p50/p95/max, the engine's physics and process monitors and physics steps per frame. `--native 0` keeps the bots' sight scan in script when dot-sim is installed; `--motor-native 0` the movement collision queries.
+## `--motor-tick 1|0`: [member DotFpsMotor.native_tick], a plain ground or air tick's start and end in dot-sim (needs a library with the motor tick).
 
 var _bots := 10
 ## `--physoff 1`: switch the engine's 3D physics step off after warm-up. What the "physics" phase still costs is script (game tick plus every _physics_process); the drop is the engine's own share.
@@ -48,6 +49,7 @@ func _ready() -> void:
 			"--native": DotBotWorld.native_enabled = int(args[i + 1]) != 0
 			"--motor-native": DotFpsPhysicsBody.native_enabled = int(args[i + 1]) != 0
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
+			"--motor-tick": DotFpsMotor.native_tick = int(args[i + 1]) != 0
 	var _scratch := ArenaPresentation.use_scratch_settings("offline_cost")
 	_run.call_deferred()
 
@@ -84,6 +86,7 @@ func _run() -> void:
 				DotFpsController.phase_us.fill(0)
 				DotFpsMotor.phase_us.fill(0)
 				DotFpsPhysicsBody.native_slides = 0
+				DotFpsPhysicsBody.native_ticks = 0
 			ArenaFrameProbe._reset()
 			preload("../game/arena_bots.gd").tiers.counts.clear()
 			_tally_on(_client.game)
@@ -109,7 +112,7 @@ func _run() -> void:
 	for f in _frames:
 		if f > 33.0:
 			hitches += 1
-	print("OFFLINE_COST native sight scan: %s, native motor queries: %s" % [DotBotWorld.native_available(), DotFpsPhysicsBody.native_available()])
+	print("OFFLINE_COST native sight scan: %s, native motor queries: %s, native motor tick: %s" % [DotBotWorld.native_available(), DotFpsPhysicsBody.native_available(), DotFpsMotor.native_tick and DotFpsPhysicsBody.native_tick_available()])
 	print("OFFLINE_COST fps %.1f | frame mean %.2f p50 %.2f p95 %.2f p99 %.2f max %.2f ms | >33ms %d | physics %.2f ms/frame process %.2f ms/frame | steps %.2f/frame (%d Hz, max %d) | %d bots" % [
 		1000.0 / mean, mean, sorted[n / 2], sorted[int(n * 0.95)], sorted[int(n * 0.99)], sorted[n - 1], hitches,
 		_phys / _n, _proc / _n, float(Engine.get_physics_frames() - _steps0) / _n,
@@ -135,7 +138,7 @@ func _run() -> void:
 			if DotFpsMotor.PHASES[i] != "":
 				parts.append("%s %.1f" % [DotFpsMotor.PHASES[i], float(DotFpsMotor.phase_us[i]) / maxf(measured, 1.0)])
 		print("  motor phases us/tick: %s" % ", ".join(parts))
-		print("  native slides %.2f per player tick" % (float(DotFpsPhysicsBody.native_slides) / maxf(measured, 1.0)))
+		print("  native slides %.2f, native tick halves %.2f per player tick" % [float(DotFpsPhysicsBody.native_slides) / maxf(measured, 1.0), float(DotFpsPhysicsBody.native_ticks) / maxf(measured, 1.0)])
 	print("  physics3d active %d islands %d pairs %d" % [Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS), Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT), Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)])
 	get_tree().quit(0)
 
