@@ -37,7 +37,7 @@ func _run() -> void:
 	_split_is_documented()
 	_protection()
 	_jump_gate()
-	_report_sections(ids.size() + 4, ids.size() + 4, ids.size() + 4, ids.size() * 2 + 19)
+	_report_sections(ids.size() + 4, ids.size() + 4, ids.size() + 4, ids.size() * 2 + 27)
 
 
 func _game(map: ArenaMap, mode: ArenaMode, split := true) -> ArenaGame:
@@ -197,6 +197,41 @@ func _protection() -> void:
 	fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
 	game.tick({3: [DotFpsCommand.new(), fire]})
 	_check(not game.player_for(3).health.is_protected(game.current_tick()), "the first shot ends it when the cvar says shot")
+	_check(not game.player_for(3).protected_view, "and the bubble goes with it")
+	# Distance: with the shot/move bits off, travel past spawn_protection_move_feet (2 ft = 0.61 m) ends it.
+	game.config.spawn_protection_break = 0
+	_check(game.config.spawn_protection_move_feet == 2.0 and game.config.spawn_protection_bubble, "defaults: 2 feet, bubble on")
+	game.config.spawn_protection_sec = 3.0
+	var _r6 := game.respawn_player(3)
+	game.tick({})
+	_check(game.player_for(3).protected_view, "a protected player shows the bubble")
+	var start := game.player_for(3).global_position
+	var steps := 0
+	while game.player_for(3).health.is_protected(game.current_tick()) and steps < rate * 2:
+		game.tick({3: [walk, DotWeaponCommand.new()]})
+		steps += 1
+	var travelled := game.player_for(3).global_position.distance_to(start)
+	_check(steps < rate and travelled >= 0.55 and travelled < 1.6, "walking ends protection after about two feet", "ended after %d ticks at %.2f m" % [steps, travelled])
+	_check(not game.effects.has(ArenaEffects.PROTECTED, 3) and not game.player_stack.spawns.protection.is_protected("3", game.current_tick()), "in all three records")
+	game.config.spawn_protection_move_feet = 0.0
+	var _r7 := game.respawn_player(3)
+	for _i in 40:
+		game.tick({3: [walk, DotWeaponCommand.new()]})
+	_check(game.player_for(3).health.is_protected(game.current_tick()), "feet 0 turns the distance check off")
+	game.config.spawn_protection_bubble = false
+	game.tick({3: [walk, DotWeaponCommand.new()]})
+	_check(not game.player_for(3).protected_view, "bubble cvar off hides the bubble")
+	game.config.spawn_protection_move_feet = 2.0
+	game.config.spawn_protection_bubble = true
+	game.config.spawn_protection_sec = 0.5
+	game.match_node.rules.spawn_protection_sec = 0.5
+	game.player_stack.refresh_spawn_rules()
+	var _r8 := game.respawn_player(4)
+	var half := 0
+	while game.player_for(4).health.is_protected(game.current_tick()) and half < rate:
+		game.tick({})
+		half += 1
+	_check(absi(half - rate / 2) <= 2, "0.5 s protection lasts half a second", "%d ticks of %d" % [half, rate])
 	game.queue_free()
 
 

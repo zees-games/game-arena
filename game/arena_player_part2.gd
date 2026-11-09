@@ -635,6 +635,23 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 	var punch: Vector2 = weapons.call(&"view_punch")
 	return punch if punch.is_finite() else Vector2.ZERO
 
+## Draws [member protected_view] as a bubble round the body. Not on your own camera (inside it you would
+## see nothing but its inner edge), and only while alive.
+func _present_bubble(at: Vector3) -> void:
+	var want := protected_view and is_alive() and not (camera != null and camera.current)
+	if not want:
+		if protection_bubble != null:
+			protection_bubble.sync(false)
+		return
+	if protection_bubble == null:
+		protection_bubble = DotSpawnBubble3D.new()
+		protection_bubble.name = "SpawnBubble"
+		protection_bubble.top_level = true
+		add_child(protection_bubble)
+	protection_bubble.global_position = at
+	protection_bubble.sync(true)
+
+
 ## Draws [member beacon], and says when it pings.
 ##
 ## [b]Only while alive.[/b] The flag outlives a death — dot-moderation re-applies it on the

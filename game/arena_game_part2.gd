@@ -310,12 +310,22 @@ func _apply_loadout_deferred(id: int) -> void:
 ## `spawn_protection_break` (config): a player still protected who shoots (bit 1) or moves or jumps (bit 2)
 ## loses the protection now, in all three records. Zero, the default, never calls [method end_spawn_protection].
 func _note_protected_action(id: int, player: ArenaPlayer, move: DotFpsCommand, fired: bool) -> void:
-	var breaks := config.spawn_protection_break
-	if breaks == 0 or not player.health.is_protected(_tick):
+	if not player.health.is_protected(_tick):
+		_protect_anchor.erase(id)
+		player.protected_view = false
 		return
+	var breaks := config.spawn_protection_break
 	var moved: bool = move.move != Vector2.ZERO or move.is_pressed(DotFpsCommand.BUTTON_JUMP)
 	if (fired and breaks & 1 != 0) or (moved and breaks & 2 != 0):
 		end_spawn_protection(id)
+	elif config.spawn_protection_move_feet > 0.0:
+		# Distance from where the protection started (the first protected tick), any direction.
+		var here := player.global_position
+		if not _protect_anchor.has(id):
+			_protect_anchor[id] = here
+		elif (_protect_anchor[id] as Vector3).distance_to(here) > config.spawn_protection_move_feet * FEET_TO_METRES:
+			end_spawn_protection(id)
+	player.protected_view = config.spawn_protection_bubble and player.health.is_protected(_tick)
 
 ## Ends spawn protection for [param id] now: the health window, the `PROTECTED` effect and dot-spawn's ledger.
 func end_spawn_protection(id: int) -> void:
@@ -323,6 +333,8 @@ func end_spawn_protection(id: int) -> void:
 	if player == null:
 		return
 	player.health.invulnerable_until_tick = -1
+	player.protected_view = false
+	_protect_anchor.erase(id)
 	if effects != null:
 		effects.remove(ArenaEffects.PROTECTED, id)
 	if player_stack != null and player_stack.spawns != null and player_stack.spawns.protection != null:
@@ -366,6 +378,7 @@ func _on_respawn_due(key: String, spawn: DotSpawnPoint, tick: int) -> void:
 	player.hitboxes.enabled = true
 	player.spawn(at, tick, match_node.spawn_protection_ticks())
 	_spawned_tick[id] = _tick
+	_protect_anchor.erase(id)
 	_fired_tick.erase(id)
 	if _round_frozen_ids.has(id):
 		_release_from_round(id, player)

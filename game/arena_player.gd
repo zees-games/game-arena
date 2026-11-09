@@ -103,6 +103,7 @@ func present(delta: float) -> void:
 	ArenaFrameProbe.add(&"r_anim", t_anim)
 	var t_beacon := Time.get_ticks_usec()
 	_present_beacon(delta, drawn.position)
+	_present_bubble(drawn.position)
 	ArenaFrameProbe.add(&"r_beacon", t_beacon)
 	var t_mend := Time.get_ticks_usec()
 	_mend_body()
