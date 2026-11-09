@@ -109,6 +109,19 @@ No suite measures a browser's frame either. A threadless web export is the case 
 
 `tools/perf_bench.sh [--box staging02] [--tag T] [-- --bots 31 --res 1920x1080 --killcam-hz N --lod 0]` is the one frame-time bench: 31 bots, cp-orange-x3 CTF, a real client windowed on staging02 through `gpu.sh run`, with dot-profiler's per-system table and `frame_stats` (frame, physics, script, render, wait) compared with the owner's profile. **Always windowed, always staging02**: `--headless` hides about 15 ms a frame of render and present, and a number from another box is not comparable. Xvfb inflates the `render` phase, so judge the render side by `render_gpu_ms` and draw calls in the sidecar. Calibration, results and open findings live on the nightly item `arena-perf-bench-1`, not here.
 
+`--profiler record|idle|off` (after `--`) sets what the profiler does during the measured window: recording (the default), placed but not watching, or not placed at all. The sidecar's `frame_ms` comes from the bench's own clock in every mode, so `tools/perf_bench.sh --ab "DIR::--profiler off" "DIR::--profiler record" -n 3` on one checkout gives the profiler's own cost in the "bench clock" rows. The sidecar also counts `ticks` and `dropped_ticks`.
+
+### Profiling on Windows
+
+1. Get the build: clone dot-bootstrap, run `bootstrap.ps1`, open `game-arena` in Godot 4.7 and press F5 (the first open imports for a few minutes).
+2. Start the match you want to measure (solo with bots, or join a server) and play until the map has loaded.
+3. Press F10. It records `profiler_capture_seconds` (10 unless set) and writes the report; F10 again stops early. Play normally meanwhile.
+4. For another length open the console (the key left of 1) and type `record 60`; `profiler_stop` ends it, `profiler_report` prints the last one, `profiler_overlay 1` shows the live graph.
+5. The files are in `%APPDATA%\Godot\app_userdata\game-arena\profiles`: `<stamp>.json` (send this one), `.txt` (readable) and `.folded` (flame graph).
+6. Compare two runs with `profiler_compare a.json b.json`.
+
+Every report's `context` names the machine, GPU and driver, the build's commit and each addon's, the launch arguments, every console variable and which were changed, map, mode, players and bots, the sound driver, and whether the dot-sim natives loaded, so a file needs no covering note. `arena.audio` in the system table is the game thread's share of sound (starting and reaping voices), not the mix thread. `--no-profiler` on the command line removes the profiler for an A/B.
+
 ## Fuzz sweep
 
 `tools/fuzz.sh [--seeds N] [--minutes M] [--maps a,b|all] [--out DIR]` runs the soak for every (map, seed) pair one after another through `heavy` with a per-run timeout, for overnight use. `--seed` on `tools/soak.tscn` makes a run a pure function of the seed: bot count (4 to 12), difficulty preset and every brain come from it, and the same pair gave identical totals and tick count twice (dm_box seed 2). Each pair writes `<map>-s<seed>.json` (exit code, SOAK line, error lines, stuck lines) and `.log`, the sweep `summary.json` and `summary.txt` (failures first, each with `tools/fuzz.sh --repro MAP SEED`); a pair fails on a nonzero exit, a missing SOAK line or any ERROR, SCRIPT ERROR or leaked line. Default output is `.godot/fuzz/<timestamp>`; the exit code is 1 when any pair failed. It is not part of `./game.sh test` (game.sh is the same file in every game).

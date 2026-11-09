@@ -93,6 +93,8 @@ func _ready() -> void:
 
 	if _offline:
 		_start_offline()
+		# The netcode build installs it for a connected client; an offline one never builds netcode.
+		_install_profiler_context()
 	else:
 		var netted := _build_netcode()
 		DotLog.result(CHANNEL, "netcode", netted)

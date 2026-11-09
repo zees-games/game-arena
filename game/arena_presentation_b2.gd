@@ -660,7 +660,7 @@ static func _base_recipes() -> Dictionary:
 
 
 func _build_audio() -> DotResult:
-	audio = DotAudioManager.new()
+	audio = ArenaAudioManager.new()
 	audio.name = "Audio"
 	audio.catalogue = sound_catalogue()
 	audio.mixer = DotAudioMixer.new()

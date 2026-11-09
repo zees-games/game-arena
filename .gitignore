@@ -106,3 +106,5 @@ __pycache__/
 
 # Git worktrees some sessions put inside the checkout.
 /wt-*/
+# Written by addons/dot_profiler/tools/build_stamp.sh for a build without .git.
+/build_id.json

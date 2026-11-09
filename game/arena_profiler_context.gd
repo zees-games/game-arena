@@ -1,13 +1,14 @@
 extends RefCounted
 
 ## What the in-game profiler (dot-profiler) reports about this game beside its own numbers: the game, map and
-## bot count, the dot-sim natives (tag, which run, the `arena_hull_native` cvar) in every report's `context`,
+## bot count, the sound driver, the dot-sim natives (tag, which run, the `arena_hull_native` cvar) in every report's `context`,
 ## and dot-sim's native timers in `extras.native` of any recording (F10, `profiler_capture`, `record`).
 ##
 ## Without the library every part degrades: the natives line says so and the timer hook reports nothing,
 ## with no error. Costs nothing while no recording runs: the providers are read at a recording's start and
 ## end, and the native timers are on only inside one.
 
+const ArenaGame := preload("arena_game.gd")
 const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
 
@@ -18,19 +19,23 @@ static var _begin_frame := 0
 
 
 ## Registers the providers on [param profiler] (a DotProfiler); [param game] is the ArenaGame and [param bridge]
-## the client's net bridge (its bots, when this process hosts them), both read when asked.
-static func install(profiler: Object, game: Object, bridge: Object = null) -> void:
+## the client's net bridge (its bots, when this process hosts them), both read when asked; [param presentation]
+## is whatever holds the client's `audio` manager.
+static func install(profiler: Object, game: Object, bridge: Object = null, presentation: Object = null) -> void:
 	if profiler == null or not profiler.has_method(&"add_context") or not profiler.has_method(&"add_recording_hook"):
 		return
 	var game_ref: WeakRef = weakref(game) if game != null else null
 	var bridge_ref: WeakRef = weakref(bridge) if bridge != null else null
 	profiler.call(&"add_context", "game", func() -> Dictionary: return game_context(game_ref.get_ref() if game_ref != null else null, bridge_ref.get_ref() if bridge_ref != null else null))
+	var sound_ref: WeakRef = weakref(presentation) if presentation != null else null
+	profiler.call(&"add_context", "audio", func() -> Dictionary: return audio_context(sound_ref.get_ref() if sound_ref != null else null))
 	profiler.call(&"add_context", "natives", natives)
 	profiler.call(&"add_recording_hook", "native",
 		begin_native, func() -> Dictionary: return end_native(profiler))
 
 
-## Game, map, mode, bots (those this process hosts) and tick rate.
+## Game, map, mode, tick rate, and the players and bots in the match. Bots are counted from the roster (their ids
+## start at BOT_SESSION_BASE), so a client of a remote server reports the server's bots; `bots_hosted` is this process's own.
 static func game_context(game: Object, bridge: Object = null) -> Dictionary:
 	var out := {"game": "arena"}
 	if game == null:
@@ -44,10 +49,32 @@ static func game_context(game: Object, bridge: Object = null) -> Dictionary:
 	var mode: Variant = game.get(&"mode_id")
 	if mode != null:
 		out["mode"] = str(mode)
-	var bots := 0
+	var hosted := 0
 	if bridge != null and bridge.has_method(&"bot_ids"):
-		bots = (bridge.call(&"bot_ids") as Array).size()
-	out["bots"] = bots
+		hosted = (bridge.call(&"bot_ids") as Array).size()
+	var bots := 0
+	var players := 0
+	if game.has_method(&"player_ids"):
+		for id: int in game.call(&"player_ids"):
+			players += 1
+			if id >= ArenaGame.BOT_SESSION_BASE:
+				bots += 1
+	out["players"] = players
+	out["bots"] = maxi(bots, hosted)
+	out["bots_hosted"] = hosted
+	return out
+
+
+## The sound driver and its latency, and how busy the game's sound manager is (dot-audio's `describe`).
+static func audio_context(presentation: Object) -> Dictionary:
+	var out := {"driver": AudioServer.get_driver_name(), "output": AudioServer.output_device, "mix_rate": int(AudioServer.get_mix_rate()),
+		"latency_ms": snappedf(AudioServer.get_output_latency() * 1000.0, 0.1), "buses": AudioServer.bus_count}
+	var manager: Variant = presentation.get(&"audio") if presentation != null else null
+	if manager is Object and (manager as Object).has_method(&"describe"):
+		var d: Dictionary = (manager as Object).call(&"describe")
+		for key: String in ["sink", "device", "sounds", "playing", "capacity", "music"]:
+			if d.has(key):
+				out[key] = d[key]
 	return out
 
 
