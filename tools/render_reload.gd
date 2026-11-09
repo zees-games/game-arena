@@ -43,11 +43,17 @@ func _run() -> void:
 
 	# The round going LIVE hands the player the loadout again and equips its first gun, cancelling a reload in progress: wait it out,
 	# or the weapons rendered over that moment lose their last frames ("the reload ended first", the rifle in hand afterwards).
-	var match_node: Object = client.get("match_node")
-	for i in 400:
+	# The match node lives on the game object (client.game), not on the client: reading it off the client gave null and skipped this wait.
+	var game_obj: Object = client.get("game")
+	var match_node: Object = game_obj.get("match_node") if game_obj != null else null
+	if match_node == null:
+		print("render_reload: no match node found, not waiting for LIVE")
+	for i in 600:
 		if match_node == null or int(match_node.get("state")) == DotMatch.State.LIVE:
 			break
 		await _wait(0.5)
+	if match_node != null:
+		print("render_reload: match state %d (LIVE %d) after the wait" % [int(match_node.get("state")), DotMatch.State.LIVE])
 	await _wait(1.0)
 
 	var ids: Array = []
