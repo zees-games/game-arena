@@ -5,6 +5,8 @@ extends CanvasLayer
 const KillPov := preload("arena_kill_pov.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
+const ArenaKillPovRecoil := preload("arena_kill_pov_recoil.gd")
+const ArenaRecoilView := preload("arena_recoil_view.gd")
 const AMMO_FONT := 22
 ## Metres per second the lens may slide out of a wall.
 const EASE_SPEED := 6.0
@@ -29,8 +31,9 @@ var _spare: AwViewModel = null
 var _spare_warm := false
 var _spare_arms: DotPlayerViewArms = null
 var _push := Vector3.ZERO
-var _fire := -1.0
 var _hits := -1.0
+## The killer's recoil, shot by shot, on the replay camera.
+var recoil := ArenaKillPovRecoil.new()
 
 
 func _init() -> void:
@@ -80,7 +83,7 @@ func _clear_lens(cam: Camera3D) -> void:
 ## The killer's recoil and aim on the replay camera, as [code]ArenaPlayer.present[/code] puts them on a live one;
 ## the host or client places the camera afresh each frame, so nothing accumulates.
 func _kick(cam: Camera3D) -> void:
-	var punch := hands.view_punch()
+	var punch := hands.view_punch() + recoil.step(get_process_delta_time(), ArenaRecoilView.POSE_SHARE)
 	if punch.is_finite():
 		cam.rotate_object_local(Vector3.RIGHT, deg_to_rad(punch.x))
 		cam.global_rotate(Vector3.UP, deg_to_rad(punch.y))
@@ -90,8 +93,8 @@ func _kick(cam: Camera3D) -> void:
 func _start(cam: Camera3D) -> void:
 	_end()
 	_camera = cam
-	_fire = -1.0
 	_hits = -1.0
+	recoil.clear()
 	hands = _spare if _spare != null else _new_hands()
 	_spare = null
 	hands.process_mode = Node.PROCESS_MODE_INHERIT
@@ -204,22 +207,17 @@ func _move_hands(aux: PackedFloat32Array, cam: Camera3D) -> void:
 	var flags := int(aux[10])
 	var look := cam.global_basis.get_euler()
 	hands.drive(Vector2(rad_to_deg(look.y), rad_to_deg(look.x)), aux[11], flags & KillPov.GROUNDED != 0 or aux[11] == 0.0, flags & KillPov.CROUCHED != 0)
-	if _fire >= 0.0 and aux[2] != _fire:
-		_fired(id, Vector2(aux[8], aux[9]), flags & KillPov.SIGNED != 0, cam)
-	_fire = aux[2]
+	for outcome in recoil.shots(aux, get_process_delta_time()):
+		_fired(id, outcome, cam)
 	hands.advance(get_process_delta_time())
 	if arms != null:
 		arms.tick(aux[11], get_process_delta_time())
 
 
-## A shot in the replay: the recorded recoil through the view model's own kick, and the muzzle flash.
-func _fired(id: StringName, recoil: Vector2, signed: bool, cam: Camera3D) -> void:
-	var outcome := DotWeaponOutcome.new()
-	outcome.used = true
-	outcome.kind = DotWeaponOutcome.KIND_SHOT
-	outcome.recoil = recoil if recoil != Vector2.ZERO else Vector2(0.5, 0.1)
-	outcome.recoil_signed = signed and recoil != Vector2.ZERO
+## A round in the replay: its kick through the view model's spring and the camera's share, and the muzzle flash.
+func _fired(id: StringName, outcome: DotWeaponOutcome, cam: Camera3D) -> void:
 	hands.on_used(outcome)
+	recoil.kick(outcome)
 	if flashes != null:
 		flashes.play_remote(AwWeaponNet.KIND_SHOT, hands.muzzle_transform(), -cam.global_basis.z, id)
 
@@ -259,6 +257,13 @@ static func mount(parent: Node, game: Object, target: Object, label: String) -> 
 	view.name = label
 	view.feel_rules = game.get(&"feel_rules") as AwViewFeel
 	view.ads_rules = game.get(&"ads_rules") as AwAdsRules
+	var feel: Variant = game.get(&"combat_feel")
+	if feel != null:
+		view.recoil.rules = feel.get(&"recoil") as DotWeaponRecoilRules
+	view.recoil.catalogue = ArenaContent.weapon_catalogue()
+	var rate: Variant = game.get(&"tick_rate")
+	if rate != null:
+		view.recoil.tick_rate = int(rate)
 	var stack: Variant = game.get(&"player_stack")
 	if stack != null and stack.physics != null and stack.physics.layout != null:
 		var layers: Array[StringName] = [&"world", &"prop"]

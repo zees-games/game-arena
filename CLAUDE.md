@@ -39,6 +39,11 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - **Look at it.** No check reaches the screen: `tools/` under `xvfb-run`; a camera change in `render_cameras.sh` (armed) and `render_views.gd`. [client](docs/client.md#looking-at-it)
 - Without the `maps/imported` link the built-in maps play and the imported checks skip; supported.
 
+## Performance
+
+- Frame time: `tools/perf_bench.sh` (31 bots, windowed on staging02, never `--headless`); [testing](docs/testing.md#performance-measurement)
+- Calibration and findings are on the nightly item `arena-perf-bench-1`, not in docs.
+
 ## Rules that bite
 
 **Architecture**

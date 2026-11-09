@@ -20,5 +20,5 @@
 # bot_quota: 4
 
 # --- Simulation
-# Ticks a second for solo and a listen host (project.godot's physics rate is the same default); a dedicated s... [15..128]
+# Ticks a second for solo and a listen host (project.godot's physics rate is the same default); a dedicated s... [20..128]
 # tick_rate: 66

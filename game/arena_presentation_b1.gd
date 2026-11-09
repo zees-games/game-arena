@@ -2,6 +2,7 @@ extends Node
 
 const ArenaRecoilView := preload("arena_recoil_view.gd")
 const ArenaFlagCarry := preload("arena_flag_carry.gd")
+const ArenaKillPovRecoil := preload("arena_kill_pov_recoil.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
 
@@ -403,6 +404,12 @@ func _local_commands() -> DotConsoleLocal:
 			ArenaRecoilView.scale = clampf(float(str(v).strip_edges()), 0.0, 5.0)
 			return DotResult.success(ArenaRecoilView.scale)
 	)
+	local.add_var(&"cl_killcam_recoil", "How far the killer's recoil turns the killcam view: 0 holds it still, 1 as they saw it (default), up to 5.",
+		func() -> Variant: return ArenaKillPovRecoil.scale,
+		func(v: Variant) -> Variant:
+			ArenaKillPovRecoil.scale = clampf(float(str(v).strip_edges()), 0.0, 5.0)
+			return DotResult.success(ArenaKillPovRecoil.scale)
+	)
 	local.add_var(&"cl_weapon_sprites", "1 draws the held weapon as a flat sprite (view model and held), 0 the 3D models.",
 		func() -> Variant: return 1 if ArenaWeaponIcons.shared.sprites else 0,
 		func(v: Variant) -> Variant:
@@ -439,6 +446,18 @@ func _add_arm_vars(local: DotConsoleLocal):
 		func(v: Variant) -> Variant:
 			ArenaViewArms.scope_arms_hide_override = clampf(str(v).to_float(), -1.0, 1.0)
 			return DotResult.success(ArenaViewArms.scope_arms_hide_override)
+	)
+	local.add_var(&"cl_scope_mode", "Sniper scope view: 1 a lens in the middle of a normal screen, 2 the scope filling the screen (a server's ads scope_mode can pin one).",
+		func() -> Variant: return ArenaScopePrefs.mode,
+		func(v: Variant) -> Variant:
+			ArenaScopePrefs.mode = clampi(str(v).to_int(), 1, 2)
+			return DotResult.success(ArenaScopePrefs.mode)
+	)
+	local.add_var(&"cl_scope_walk_clear", "How much of the scope's picture goes see-through while moving (0 solid, 1 fully clear).",
+		func() -> Variant: return ArenaScopePrefs.walk_clear,
+		func(v: Variant) -> Variant:
+			ArenaScopePrefs.walk_clear = clampf(str(v).to_float(), 0.0, 1.0)
+			return DotResult.success(ArenaScopePrefs.walk_clear)
 	)
 	local.add_var(&"cl_fp_max_lean", "Most the first-person arms lean toward a hand out of reach (-1: each weapon's own, 0.4 by default; 0 is no lean).",
 		func() -> Variant: return ArenaViewArms.max_lean_override,
@@ -637,18 +656,12 @@ func on_flag_event(what: StringName, flag_team: int, by_me: bool, my_team: int) 
 ## The grunt scales with the damage (a graze is quieter and higher than a heavy hit) and is left to
 ## the death cry when the damage was lethal, so the two do not stack into one muddy noise.
 func on_hurt(amount: float, lethal: bool = false) -> void:
-	if not lethal:
-		var weight := clampf(amount / HURT_FULL_DAMAGE, 0.0, 1.0)
-		audio.play(&"hurt", lerpf(HURT_MIN_VOLUME, 1.0, weight), lerpf(1.08, 0.94, weight))
+	var _grunt := DotHurtSound.play(audio, &"hurt", amount, lethal)
 	fx.flash(&"hurt_flash")
 	fx.spawn(&"hurt_shake", Transform3D.IDENTITY)
 
 
 const DEATH_BURST_AHEAD := 1.5
-
-## Damage at which the hurt grunt is full volume and lowest, and its volume for a scratch.
-const HURT_FULL_DAMAGE := 40.0
-const HURT_MIN_VOLUME := 0.5
 
 
 func on_died(where: Transform3D) -> void:

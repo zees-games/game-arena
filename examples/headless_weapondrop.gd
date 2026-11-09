@@ -324,11 +324,24 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 	var ids: Array = ArenaWeaponDropWiring.prewarm_ids()
 	_check(ids.size() > 3, "the pre-warm walks every weapon with art", str(ids.size()))
 	var orphans_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	# A weapon a player starts with is parked POOL_DEPTH deep, any other once.
+	var starters := 0
+	var single: StringName = &""
+	for id: StringName in ids:
+		if id in ArenaContent.default_loadout():
+			starters += 1
+		elif single == &"":
+			single = id
+	# The server's own background warm-up and earlier drops of this suite may have parked spares of it; the control counts only the one the pre-warm adds.
+	for spare: Array in drops._parked.get(single, []):
+		(spare[0] as Node).free()
+	drops._parked.erase(single)
+	var want: int = ids.size() + starters * (ArenaWeaponDropWiring.POOL_DEPTH - 1)
 	var next := ArenaWeaponDropWiring.prewarm_step(game, ids, 0, Time.get_ticks_msec() + 60000)
-	_check(next == ids.size() and builds[0] == ids.size(), "one body is built per weapon under the cover", "%d of %d, %d builds" % [next, ids.size(), builds[0]])
+	_check(next == ids.size() and builds[0] == want and single != &"", "one body is built per weapon under the cover, a starting weapon's pool deep", "%d of %d, %d builds, want %d" % [next, ids.size(), builds[0], want])
 	_check(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) - orphans_before >= ids.size(), "the bodies wait out of the tree")
 	var built_warm: int = builds[0]
-	var warmed: StringName = ids[0]
+	var warmed: StringName = single
 	var warm_state: Dictionary = (snap["state"] as Dictionary).duplicate()
 	warm_state["id"] = warmed
 	var _w := drops.spawn(warm_state, open_spot, Vector3.ZERO, 22)

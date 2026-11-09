@@ -57,9 +57,8 @@ const SERVICE := &"arena_game"
 const NET_WORLD_EXTENT := 512.0
 
 ## The range of tick rates the arena is tuned and tested for (`sv_tickrate`, `arena_tick_rate`).
-## Tick counts in the code (THROWER_GRACE_TICKS, flashlight HOLD_TICKS, COLLISION_LAG_MAX_TICKS) are written for
-## 66 Hz: see docs/netcode.md "Tick rate".
-const MIN_TICK_RATE := 15
+## Tick counts in the code (THROWER_GRACE_TICKS, flashlight HOLD_TICKS, COLLISION_LAG_MAX_SEC) are seconds; see docs/netcode.md "Tick rate".
+const MIN_TICK_RATE := 20
 const MAX_TICK_RATE := 128
 
 ## Snapshots a second aimed at; the rate sent is [method snapshot_rate_for] the tick rate.
@@ -477,12 +476,16 @@ var fire_buffer_seconds: float = 0.15:
 		if is_authority and float(movement_rules.get("fire_buffer", -9.0)) != value:
 			call(&"set_movement_rules", {"fire_buffer": value})
 
-## Ticks of position history kept per player for a rewind: two seconds at 64 ticks.
+## The least ticks of position history kept per player for a rewind (two seconds at 64 ticks); see [method unlag_history].
 const UNLAG_HISTORY := 128
 
-## The most ticks back a mover collides with the others: inside both the server's ring and a
-## client's interpolation buffer (32 snapshots), so both ends always find the same answer.
-const COLLISION_LAG_MAX_TICKS := 32.0
+## Seconds of position history kept per player: the ring is this long at ANY tick rate (132 slots at 66, 258 at 128).
+const UNLAG_SECONDS := 2.0
+
+## The most time back a mover collides with the others, in seconds (32 ticks at 66): inside both the
+## server's ring and a client's interpolation buffer, so both ends always find the same answer. The same
+## seconds at any tick rate; [method ArenaGame.collision_lag] converts to ticks.
+const COLLISION_LAG_MAX_SEC := 0.485
 
 ## A jump this far in one tick (metres) is a teleport or respawn: nothing rewinds across it.
 const TELEPORT_CUT := 10.0

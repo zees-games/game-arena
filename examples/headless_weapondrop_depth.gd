@@ -202,7 +202,8 @@ func _run() -> void:
 	world = Node3D.new()
 	add_child(world)
 	_box(world, Vector3(0, -0.5, 0), Vector3(80, 1, 80), deg_to_rad(20.0))
-	await _course("ramp 20 deg", world, ids, _grid(Vector3(-7, 1.2, -4), n), still)
+	# the ramp rises to 1.34 m at z = -4: start above it, not inside the slab
+	await _course("ramp 20 deg", world, ids, _grid(Vector3(-7, 2.0, -4), n), still)
 	world.queue_free()
 
 	world = Node3D.new()

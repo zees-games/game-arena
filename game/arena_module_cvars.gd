@@ -115,6 +115,28 @@ func _add_movement_cvars() -> void:
 				game.set_movement_rules({key: new_value.to_float()})
 				log_info("movement rule changed", {"rule": key, "value": new_value})
 		)
+	for cvar in HIT_GROUP_CVARS:
+		_add_hit_group_cvar(cvar, HIT_GROUP_CVARS[cvar][0], HIT_GROUP_CVARS[cvar][1])
+
+
+## cvar -> the hit zone whose damage multiplier it sets on the server, and its help. Defaults are dot-combat's.
+const HIT_GROUP_CVARS := {
+	"arena_head_mult": [DotHitGroup.HEAD, "Damage multiplier on a head hit (default 4: a rifle round to the head is 92 of a spawn's 100 health)"],
+	"arena_neck_mult": [DotHitGroup.NECK, "Damage multiplier on a neck hit (default 2)"],
+	"arena_stomach_mult": [DotHitGroup.STOMACH, "Damage multiplier on a stomach hit (default 1.25)"],
+	"arena_leg_mult": [DotHitGroup.LEG, "Damage multiplier on a leg hit (default 0.75)"],
+}
+
+
+func _add_hit_group_cvar(cvar: String, group: StringName, help: String) -> void:
+	var groups: DotHitGroup = game.combat.resolver.hit_groups if game.combat != null and game.combat.resolver != null else null
+	if groups == null:
+		return
+	add_cvar(cvar, str(groups.multiplier(group)), help, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			groups.set_multiplier(group, maxf(new_value.to_float(), 0.0))
+			log_info("hit zone multiplier changed", {"cvar": cvar, "value": new_value})
+	)
 
 
 ## cvar -> the rule key whose value is a TagRules mask, and what it means.
@@ -254,6 +276,11 @@ func _add_bot_think_cvars() -> void:
 	_add_bot_tier_cvar("bot_tier_every_engaged", "tiers.engaged_far_every", "Ticks between thinks of a bot fighting a person beyond bot_tier_engaged_range and out of view (1: every tick)", 1.0)
 	_add_bot_tier_cvar("bot_tier_engaged_range", "tiers.engaged_range", "Metres: a bot fighting a person this close thinks every tick", 0.0)
 	_add_bot_tier_cvar("bot_tier_view", "tiers.view_range", "Metres: a bot inside a person's view cone within this thinks every tick", 0.0)
+	add_cvar("bot_recoil_control", str(ArenaBots.recoil_control),
+		"Share of the recoil bots pull their aim back against, 0..1; -1 (default) by difficulty: easy .3, medium .55, hard .75, nightmare .9",
+		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(-1.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.recoil_control = clampf(new_value.to_float(), -1.0, 1.0))
 	add_cvar("bot_fast_sense", "1" if ArenaBotBrain.fast_sense else "0",
 		"1: bots scan candidates by squared distance and cone cosine (same result, cheaper); 0: dot-bot's stock scan",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
@@ -360,6 +387,22 @@ func _add_snapshot_rate_cvar() -> void:
 	_cv_snapshot_rate = add_cvar("sv_snapshot_rate", "0",
 		"Snapshots a second to aim at; 0 is the default (32). Applies when the game is built; clients learn it at join.",
 		DotConVar.FLAG_ARCHIVE).with_range(0.0, 128.0)
+
+
+## The arena's own limits on `sv_tickrate` (dot-server's range is wider; [constant ArenaGame.MIN_TICK_RATE] to
+## [constant ArenaGame.MAX_TICK_RATE]), and `bot_think_hz`: the bots' think rate in Hertz, so 33 means a think every 2nd
+## tick at 66 and every 4th at 128 (`bot_think_every` counts ticks; the last one set wins; 0 leaves it to `bot_think_every`).
+func _add_tick_rate_cvars() -> void:
+	var tickrate := console.find_cvar("sv_tickrate")
+	if tickrate != null:
+		var _ranged := tickrate.with_range(float(ArenaGame.MIN_TICK_RATE), float(ArenaGame.MAX_TICK_RATE))
+	add_cvar("bot_think_hz", "0",
+		"Bot brain runs this many times a second whatever the tick rate (a far bot's cadence for bot_think_every); 0 uses bot_think_every ticks",
+		DotConVar.FLAG_ARCHIVE).with_range(0.0, 128.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			var hz := new_value.to_float()
+			if hz > 0.0:
+				ArenaBots.think_every = ArenaBots.every_for_hz(hz, game.tick_rate))
 
 
 ## The target `sv_snapshot_rate` names, or the game's default when it is 0 or unset.

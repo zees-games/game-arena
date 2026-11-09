@@ -78,10 +78,12 @@ func _ready() -> void:
 ## clock 4 ticks a second ahead of the snapshots.
 static func host_tick_rate() -> int:
 	var rate := maxi(1, Engine.physics_ticks_per_second)
-	if rate < ArenaGame.MIN_TICK_RATE or rate > ArenaGame.MAX_TICK_RATE:
-		DotLog.warn(CHANNEL, "sv_tickrate is outside the range the arena is tuned for", {
-			"rate": rate, "min": ArenaGame.MIN_TICK_RATE, "max": ArenaGame.MAX_TICK_RATE})
-	return rate
+	var clamped := clampi(rate, ArenaGame.MIN_TICK_RATE, ArenaGame.MAX_TICK_RATE)
+	if clamped != rate:
+		DotLog.warn(CHANNEL, "sv_tickrate is outside the range the arena is tuned for, clamped", {
+			"rate": rate, "used": clamped, "min": ArenaGame.MIN_TICK_RATE, "max": ArenaGame.MAX_TICK_RATE})
+		Engine.physics_ticks_per_second = clamped
+	return clamped
 
 
 ## The id after `--map`, or "".

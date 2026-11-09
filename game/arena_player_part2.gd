@@ -450,6 +450,17 @@ func simulate_tick(
 	if _combat != null:
 		_combat.set_authoritative_origin(player_id, muzzle)
 
+	# A shooter with nothing pressed and nothing under way ticks the weapon in hand and no more: the rig
+	# builds its own posture then, so the context below (a dozen writes and an extra dictionary) is skipped.
+	var t_wp := Time.get_ticks_usec()
+	var out: DotWeaponOutcome
+	# (Proper home: AwWeaponRig.would_idle(command) in arena-weapons; until it exists, ask the arsenal directly.)
+	# The posture feeds the spread (running, air, slide and crouch change the cone), so the fast path is only for a player who is still, grounded and standing.
+	if _posture_idle(state) and weapons.arsenal.is_idle_for(_command, weapons.get(&"_previous_command")):
+		out = weapons.simulate_tick(_command, tick, null)
+		ArenaFrameProbe.add(&"p_weapons", t_wp)
+		return out
+	t_wp = Time.get_ticks_usec()
 	# Pushed in from the simulated state, never read out of a rendered one: an
 	# interpolated position differs between client and server by design, and feeding it
 	# to the spread makes the spread differ too.
@@ -473,10 +484,15 @@ func simulate_tick(
 
 	# Through the rig, which runs the arsenal and then the bash. It keeps the previous
 	# command itself, for the same edge triggers the arsenal used to be handed it for.
-	var t_wp := Time.get_ticks_usec()
-	var out := weapons.simulate_tick(_command, tick, ctx)
+	out = weapons.simulate_tick(_command, tick, ctx)
 	ArenaFrameProbe.add(&"p_weapons", t_wp)
 	return out
+
+## True when movement posture cannot change the weapon spread: standing still on the ground, not sliding, sprinting or wall running.
+func _posture_idle(state: DotFpsState) -> bool:
+	return state.horizontal_speed() < 0.05 and state.is_grounded() and not state.is_crouched() and not state.is_sliding() \
+		and not state.sprinting and not state.is_wall_running()
+
 
 ## Whether the body is drawn sliding: the replicated slide timer (net_flags), for bots, humans and remote copies alike.
 func _drawn_sliding(drawn: DotFpsState) -> bool:
@@ -626,6 +642,7 @@ func _kick_landing(drawn: DotFpsState) -> void:
 ## on, and a call by name to a method the shell's copy lacks fails to compile the script.
 func _present_view_model(drawn: DotFpsState) -> Vector2:
 	_aim_fov_scale = 1.0
+	_view_fov_scale = 1.0
 	if weapons == null or weapons.view_model() == null:
 		return Vector2.ZERO
 
@@ -647,7 +664,9 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 	var hands := view_model as AwViewModel
 	if hands != null:
 		hands.aim(aim_held and is_alive() and camera.current)
+		ArenaScopePrefs.apply(hands)
 		_aim_fov_scale = hands.aim_fov_scale()
+		_view_fov_scale = hands.view_fov_scale()
 
 	if not weapons.has_method(&"view_punch"):
 		return Vector2.ZERO
