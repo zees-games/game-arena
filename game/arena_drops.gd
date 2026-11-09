@@ -222,7 +222,8 @@ func _spawn(kind: int, value: int, from: Vector3, at: Vector3, tick: int) -> voi
 
 ## One tick: every live player sweeps the drops, and old ones go. Authority side.
 ##
-## [param players] is id -> {"position": Vector3, "hurt": bool, "heal": Callable}.
+## [param players] is id -> {"position": Vector3, "hurt": bool, "heal": Callable}, and "needs_ammo" (a bool, or a
+## Callable asked only when the player is on an ammo pack) and "ammo": Callable for packs.
 func tick(tick: int, players: Dictionary) -> void:
 	if not is_authority or field == null or (_live.is_empty() and _packs.is_empty()):
 		return
@@ -234,7 +235,8 @@ func tick(tick: int, players: Dictionary) -> void:
 		if pickup.item_id == &"health":
 			return bool(players.get(taker, {}).get("hurt", false))
 		if pickup.item_id == &"ammo_pack":
-			return bool(players.get(taker, {}).get("needs_ammo", false))
+			var needs: Variant = players.get(taker, {}).get("needs_ammo", false)
+			return bool((needs as Callable).call()) if needs is Callable else bool(needs)
 		return true
 
 	for id in players:

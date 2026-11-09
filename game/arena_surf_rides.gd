@@ -202,7 +202,8 @@ func before(id: int, player: Object) -> void:
 	if recorder == null:
 		return
 	_sync()
-	if not is_on():
+	# A bot's ride is never recorded (after() drops it): no track, and no copy of its state every tick.
+	if not is_on() or player.has_meta(&"bot"):
 		return
 	var state: DotFpsState = player.controller.state
 	var t := _track(id)
@@ -216,11 +217,11 @@ func before(id: int, player: Object) -> void:
 func after(id: int, player: Object, command: DotFpsCommand, tick: int) -> void:
 	if not is_on():
 		return
-	var t := _track(id)
-	var state: DotFpsState = player.controller.state
 	if player.has_meta(&"bot"):
 		_tracks.erase(id)
 		return
+	var t := _track(id)
+	var state: DotFpsState = player.controller.state
 	if not bool(player.call(&"is_alive")) or (t.last_pos != Vector3.INF and state.position.distance_to(t.last_pos) > JUMPED):
 		_drop(id, t, "moved or died")
 		t.island = -1

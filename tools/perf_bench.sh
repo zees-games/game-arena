@@ -3,6 +3,7 @@
 # NVIDIA card), and its per-system table against the owner's profile. Run as gamedev, from a checkout:
 #   tools/perf_bench.sh [--box staging02] [--headless] [--tag T] [--ref owner.json] [-- perf_bench args]
 #   tools/perf_bench.sh --ab DIR_A DIR_B [-n 3] [--box staging02] [-- perf_bench args]
+# --debug runs Godot with -d, which the script-function table (-- --script-top 40) needs; it slows GDScript.
 # --ab runs A,B,A,B... (n each) on one pinned box and prints per-system mean deltas.
 # DIR may carry extra bench args after "::", e.g. ~/wt/game-arena-x::--bots 15.
 set -euo pipefail
@@ -11,6 +12,7 @@ here=$(cd "$(dirname "$0")/.." && pwd)
 gpu=${GPU_SH:-/home/gamedev/godot/dot-bootstrap/tools/gpu.sh}
 box=staging02
 headless=0
+debug=0
 tag=""
 ref=${PERF_BENCH_REF:-/home/christian/perf-logs/arena/profile-20261108160712-051.json}
 logs=${PERF_BENCH_LOGS:-/home/gamedev/perf-bench}
@@ -19,6 +21,7 @@ while [[ $# -gt 0 ]]; do
 	case $1 in
 		--box) box=$2; shift 2 ;;
 		--headless) headless=1; shift ;;
+		--debug) debug=1; shift ;;
 		--tag) tag=$2; shift 2 ;;
 		--ref) ref=$2; shift 2 ;;
 		--ab) ab=1; dir_a=$2; dir_b=$3; shift 3 ;;
@@ -38,6 +41,7 @@ run_one() {
 	log="$logs/$(date +%Y%m%d-%H%M%S)-$box-$(basename "$dir")-$label$([[ $headless == 1 ]] && echo -headless).log"
 	local hl=()
 	[[ $headless == 1 ]] && hl=(--headless)
+	[[ $debug == 1 ]] && hl+=(-d)
 	echo "perf_bench: $label on $box: $(basename "$dir") ${extra[*]:-} -> $log" >&2
 	# gpu.sh takes a project under GODOT_ROOT by name: the checkout's parent and its own name.
 	GODOT_ROOT=$(dirname "$dir") GPU_BOX=$box GPU_TIMEOUT=${GPU_TIMEOUT:-900} \

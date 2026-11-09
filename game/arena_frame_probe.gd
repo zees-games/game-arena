@@ -27,6 +27,7 @@ const CHANNEL := "arena.perf"
 static var interval: float = 0.0
 
 static var _sections: Dictionary = {}
+static var _systems: Dictionary = {}
 static var _frames: PackedFloat32Array = PackedFloat32Array()
 static var _process_max: float = 0.0
 static var _process_sum: float = 0.0
@@ -75,16 +76,25 @@ static func set_interval(seconds: float) -> void:
 static func add(section: StringName, since_usec: int) -> void:
 	if interval <= 0.0:
 		if DotFrameCost.enabled:
-			DotFrameCost.add_usec(StringName("arena." + section), Time.get_ticks_usec() - since_usec)
+			DotFrameCost.add_usec(_system_of(section), Time.get_ticks_usec() - since_usec)
 		return
 	var spent := Time.get_ticks_usec() - since_usec
 	if DotFrameCost.enabled:
-		DotFrameCost.add_usec(StringName("arena." + section), spent)
+		DotFrameCost.add_usec(_system_of(section), spent)
 	var row: PackedInt64Array = _sections.get(section, PackedInt64Array([0, 0, 0]))
 	row[0] += spent
 	row[1] += 1
 	row[2] = maxi(row[2], spent)
 	_sections[section] = row
+
+
+## `arena.<section>`, made once per section: ~500 sections a frame each built a String and a StringName while recording.
+static func _system_of(section: StringName) -> StringName:
+	var name: StringName = _systems.get(section, &"")
+	if name == &"":
+		name = StringName("arena." + section)
+		_systems[section] = name
+	return name
 
 
 ## Counts [param amount] of something that is not a time (replayed ticks, snapshots).

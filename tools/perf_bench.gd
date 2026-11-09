@@ -24,6 +24,10 @@ var _motor_us := false
 var _queries := true
 ## `--max-steps N`: ArenaTickBudget.max_steps, as cvar `arena_tick_max_steps`.
 var _max_steps := -1
+## `--script-top N`: the N costliest GDScript functions by self time (needs `-d`: perf_bench.sh --debug).
+var _script_top := 0
+## `--census 1`: node counts by class at the start and end of the recording.
+var _census := false
 var _client: Node = null
 var _prof: Node = null
 ## Per-frame sums while recording, for the sidecar.
@@ -50,6 +54,8 @@ func _ready() -> void:
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
 			"--queries": _queries = int(args[i + 1]) != 0
 			"--max-steps": _max_steps = int(args[i + 1])
+			"--script-top": _script_top = int(args[i + 1])
+			"--census": _census = int(args[i + 1]) != 0
 	seed(_seed)
 	if _max_steps > 0:
 		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
@@ -108,6 +114,10 @@ func _run() -> void:
 	_prof.config.record_dir = _out
 	_prof.config.keep_recordings = 500
 	_prof.config.budget_ms = 33.0
+	if _script_top > 0:
+		_prof.config.script_top = _script_top
+	if _census:
+		_prof.config.census = true
 	# Unit counts for profiler_groups (e.g. bots:arena.bot,players:arena.p_); read only when that lists them.
 	if _prof.has_method(&"add_counter"):
 		_prof.call(&"add_counter", "players", func() -> int: return (game.call("players") as Array).size(), "arena.p_")

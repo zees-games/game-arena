@@ -39,6 +39,7 @@ const FOV_MIN := 40.0
 const FOV_MAX := 160.0
 
 static var _ids: Dictionary = {}
+static var _codes: Dictionary = {}
 static var _ids_generation := -1
 
 
@@ -78,13 +79,13 @@ static func _aux_full(p: Object) -> PackedFloat32Array:
 	var arsenal: Variant = p.get(&"arsenal")
 	var weapons: Variant = p.get(&"weapons")
 	var id := StringName(p.get(&"mirror_weapon")) if bool(p.get(&"mirrored")) else &""
-	if arsenal != null and arsenal.current() != null:
-		var slot: Variant = arsenal.current()
+	var slot: Variant = arsenal.current() if arsenal != null else null
+	if slot != null:
 		id = slot.def.id
 		out[MAG] = float(slot.magazine) if slot.def.magazine > 0 else 0.0
 		out[RESERVE] = float(arsenal.ammo().count(slot.def.ammo_type)) if slot.def.ammo_type != &"" else 0.0
 		out[SPREAD] = float(p.call(&"spread_degrees"))
-	out[WEAPON] = float(int(String(id).hash() & 0xFFFFFF)) if id != &"" else 0.0
+	out[WEAPON] = _weapon_code(id)
 	out[ADS] = 1.0 if bool(p.get(&"aim_held")) else 0.0
 	if bool(p.get(&"mirrored")):
 		out[FIRE_SEQ] = float(int(p.get(&"mirror_fire_seq")) % 4096)
@@ -104,6 +105,17 @@ static func _aux_full(p: Object) -> PackedFloat32Array:
 		out[FLAGS] += (GROUNDED if st.is_grounded() else 0) + (CROUCHED if st.is_crouched() else 0)
 		out[SPEED] = st.horizontal_speed()
 	return out
+
+
+## [param id]'s 24-bit hash as a float (0 for none), kept per id: every living player asks it every tick.
+static func _weapon_code(id: StringName) -> float:
+	if id == &"":
+		return 0.0
+	var code: Variant = _codes.get(id)
+	if code == null:
+		code = float(int(String(id).hash() & 0xFFFFFF))
+		_codes[id] = code
+	return code
 
 
 ## Keeps the rig's last shot's recoil (pitch, yaw, signed) where [method aux_of] reads it: the per-weapon

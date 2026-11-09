@@ -604,23 +604,32 @@ func _resolve_stomps() -> void:
 	_sync_stomp_config()
 	if not stomp.rules.enabled or combat == null:
 		return
+	# Only a player who was falling fast enough can stomp (DotStomp.find's first test): most ticks nobody is,
+	# and the hull table below was built for all 32 players every tick for nothing.
+	var fallers: Array[int] = []
+	for id in player_ids():
+		if -float(_pre_vy.get(id, 0.0)) >= stomp.rules.min_speed and _players[id].is_alive():
+			fallers.append(id)
+	if fallers.is_empty():
+		return
+	var sided := not teams().is_empty()
 	var hulls: Array = []
 	for id in player_ids():
 		var other: ArenaPlayer = _players[id]
 		if not other.is_alive() or other.controller == null:
 			continue
 		hulls.append({
-			"id": id, "feet": other.controller.state.position, "team": team_of(id) if not teams().is_empty() else -1,
+			"id": id, "feet": other.controller.state.position, "team": team_of(id) if sided else -1,
 			"height": other.controller.tunables.stand_height, "radius": other.controller.tunables.radius,
 		})
-	for id in player_ids():
+	for id in fallers:
 		var player: ArenaPlayer = _players[id]
 		if not _pre_vy.has(id) or not player.is_alive():
 			continue
 		var state: DotFpsState = player.controller.state
 		var victim := stomp.find(
 			id, state.position, player.controller.tunables.radius, -float(_pre_vy[id]),
-			team_of(id) if not teams().is_empty() else -1, hulls, _tick, tick_rate
+			team_of(id) if sided else -1, hulls, _tick, tick_rate
 		)
 		if victim == 0:
 			continue
@@ -692,11 +701,13 @@ func _drop_sweepers() -> Dictionary:
 	for id in player_ids():
 		var p: ArenaPlayer = _players[id]
 		if p.is_alive():
+			# Bound methods, not lambdas or answers: the sweep asks needs_ammo only of a player standing on an ammo
+			# pack, and two closures a player a tick were most of this table's cost.
 			sweepers[id] = {
 				"position": p.controller.state.position,
 				"hurt": p.health.health < p.health.max_health,
-				"heal": func(amount: float) -> void: var _h := p.health.heal(amount),
-				"needs_ammo": p.needs_ammo(),
-				"ammo": func(share: float) -> void: p.refill_ammo(share),
+				"heal": p.health.heal,
+				"needs_ammo": p.needs_ammo,
+				"ammo": p.refill_ammo,
 			}
 	return sweepers
