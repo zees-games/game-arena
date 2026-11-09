@@ -66,6 +66,12 @@ var shown_mode: ArenaMode = null
 var _roster: Array[ArenaPlayer] = []
 var _roster_ids := PackedInt64Array()
 var _roster_dirty := true
+## Roster index by player id, rebuilt with [member _roster].
+var _roster_at: Dictionary = {}
+## [method _add_hulls_local]'s pair answers this tick, row-major by roster index: 0 unasked, 1 blocks, 2 passes.
+var _pair_memo := PackedByteArray()
+var _pair_memo_tick: int = -1
+var _pair_memo_fn: Callable = Callable()
 ## Where the players stand, for [method solid_hulls_for] while the players' loop runs ([ArenaHullGrid]).
 var _hull_grid := ArenaHullGrid.new()
 
@@ -76,10 +82,13 @@ func _ensure_roster() -> void:
 		return
 	_roster.clear()
 	_roster_ids.resize(0)
+	_roster_at.clear()
 	for key: Variant in _players.keys():
+		_roster_at[int(key)] = _roster.size()
 		_roster.append(_players[key])
 		_roster_ids.append(int(key))
 	_roster_dirty = false
+	_pair_memo_tick = -1
 	_hull_grid.live = false
 ## The sorted ids of [member _players], rebuilt when somebody joins or leaves ([method player_ids]); empty means stale.
 var _ids_cache: Array[int] = []

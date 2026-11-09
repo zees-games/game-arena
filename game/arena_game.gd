@@ -26,7 +26,7 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 	if near and _hull_grid.live:
 		var cand: Array = _hull_grid.near(me_at, coarse)
 		if ArenaHullGrid.fast and not remote:
-			_add_hulls_local(out, cand, id, me_at, coarse)
+			_add_hulls_local(out, cand, id, me_at, coarse, tick)
 		else:
 			for i: int in cand:
 				_add_hull(out, i, id, me_at, near, coarse, remote, tick)
@@ -44,11 +44,16 @@ func _solid_hulls_for(id: int, tick: int = -1) -> Array:
 
 
 ## [method _add_hull] over [param cand] for a mover whose neighbours are where they stand now (no lag compensation): the same tests, with the loop invariants (ids, roster, the pair callable) hoisted out of the per-candidate call. Cvar `arena_hull_fast`.
-func _add_hulls_local(out: Array, cand: Array, id: int, me_at: Vector3, coarse: float) -> void:
+## The pair test is asked once per pair and tick ([method _pair_index]): about 10 us a call through dot-team's block rules, the largest part of a gather.
+## One answer serves both players of a pair: dot-team's `blocks(a, b)` is symmetric (one relation, both players' overrides).
+func _add_hulls_local(out: Array, cand: Array, id: int, me_at: Vector3, coarse: float, tick: int = -1) -> void:
 	var ids := _roster_ids
 	var roster := _roster
 	var pair := body_rules.pair_fn
 	var paired := pair.is_valid()
+	var n := ids.size()
+	var me_i := _pair_index(id, tick, pair) if paired and tick >= 0 else -1
+	var row := me_i * n if me_i >= 0 else -1
 	for i: int in cand:
 		var other_id := ids[i]
 		if other_id == id:
@@ -62,13 +67,34 @@ func _add_hulls_local(out: Array, cand: Array, id: int, me_at: Vector3, coarse: 
 		var feet := ctl.state.position
 		if feet.distance_squared_to(me_at) > coarse:
 			continue
-		if paired and not bool(pair.call(id, other_id)):
-			continue
+		if paired:
+			var known: int = _pair_memo[row + i] if row >= 0 else 0
+			if known == 0:
+				known = 1 if bool(pair.call(id, other_id)) else 2
+				if row >= 0:
+					_pair_memo[row + i] = known
+					_pair_memo[i * n + me_i] = known
+			if known == 2:
+				continue
 		if not other.is_alive():
 			continue
 		var tunables := ctl.tunables
 		var radius: float = tunables.radius
 		out.append(AABB(feet - Vector3(radius, 0.0, radius), Vector3(radius * 2.0, tunables.stand_height, radius * 2.0)))
+
+
+## [param id]'s roster index, its row in [member _pair_memo], or -1 when it is not on the roster.
+## The memo is cleared when the tick, the roster or the pair callable changes: block rules and
+## sides change between ticks (commands, team switches), not while the players' loop runs.
+func _pair_index(id: int, tick: int, pair: Callable) -> int:
+	var n := _roster_ids.size()
+	if tick != _pair_memo_tick or pair != _pair_memo_fn or _pair_memo.size() != n * n:
+		_pair_memo.resize(n * n)
+		_pair_memo.fill(0)
+		_pair_memo_tick = tick
+		_pair_memo_fn = pair
+	var at: int = _roster_at.get(id, -1)
+	return at
 
 
 ## Appends roster player [param i]'s hull to [param out] when it is one [param id] stops at.
