@@ -5,6 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
+const ArenaFlagView := preload("../game/arena_flag_view.gd")
 
 ## Capture the flag online: a dedicated arena server (this script again with `--role server`, real ENet, capture the flag on
 ## `--map`) and the real client (arena.tscn) connected to it. The server walks the human onto the enemy flag, then onto their own
@@ -184,8 +185,15 @@ func _run() -> void:
 	game.ctf_seen.connect(func(what: StringName, team: int, by: int) -> void: _seen.append("%d:%s:%d" % [team, what, by]))
 	var view = game.objectives.flag_view
 	_check(view != null and view.drawn_count() == 2, "the client draws both flags")
+	# The server tells the client its side (ArenaEvents.Kind.TEAM); until it has, team_of is a local guess.
+	var known: bool = await _until(func() -> bool: return game.replicated_teams.has(me.player_id) and game.team_of(me.player_id) in [1, 2], 20.0)
+	_check(known, "the client learns its own team from the server (team %d, announced %s)" % [game.team_of(me.player_id), game.replicated_teams])
 	var mine: int = game.team_of(me.player_id)
 	var enemy := 2 if mine == 1 else 1
+	var presentation = _client.get("presentation")
+	var played: Array[StringName] = []
+	if presentation != null and presentation.audio != null:
+		presentation.audio.played.connect(func(id: StringName, _handle: int, _why: StringName) -> void: played.append(id))
 	for team in [mine, enemy]:
 		var at: Vector3 = ctf.flag_of(team).at
 		var drawn: Vector3 = view.view_position(team)
@@ -194,10 +202,20 @@ func _run() -> void:
 	var hud = _client.get("hud")
 	var taken: bool = await _until(func() -> bool: return ctf.flag_of(enemy).state == DotObjectiveFlag.State.CARRIED, 40.0)
 	_check(taken, "the client sees the enemy flag picked up")
+	var carried_home := 0
+	for flag in ctf.flags():
+		if flag.state == DotObjectiveFlag.State.CARRIED and flag.carrier == str(me.player_id):
+			carried_home = flag.home_team()
+	_check(carried_home != 0 and carried_home != mine, "the flag this player carries is not their own team's (carries %d, my team %d)" % [carried_home, mine])
 	await get_tree().create_timer(1.0).timeout
 	var line: String = str(hud.carrying_flag_text())
 	print("  carry line: '%s'  carrier %s, me %d" % [line, ctf.flag_of(enemy).carrier, me.player_id])
 	_check(line != "", "the HUD says the local player has the flag")
+	_check(line.contains(ArenaFlagView.name_of(enemy)) and not line.contains(ArenaFlagView.name_of(mine)), "the HUD line names the enemy flag, not mine ('%s')" % line)
+	var side_colour: Color = hud._team_colour(mine)
+	var enemy_colour: Color = hud._team_colour(enemy)
+	_check(side_colour.a > 0.0 and enemy_colour.a > 0.0 and side_colour != enemy_colour, "the HUD colours my side and the enemy's differently (%s, %s)" % [side_colour, enemy_colour])
+	_check(side_colour == game.team_def(mine).colour, "the HUD colours my side with my team's colour")
 	await _shot("carrying")
 	var scored: bool = await _until(func() -> bool: return int(ctf.scores.get(mine, 0)) >= 1, 40.0)
 	_check(scored, "the client sees the capture score (%s)" % [ctf.scores])
@@ -206,6 +224,12 @@ func _run() -> void:
 	await _shot("after_capture")
 	print("  seen: %s" % [_seen])
 	_check(_seen.has("%d:taken:%d" % [enemy, me.player_id]) and _seen.has("%d:captured:%d" % [enemy, me.player_id]), "the client raised taken and captured (the flag sounds)")
+	_check(played.has(&"flag_taken_by_me") and played.has(&"flag_captured"), "the flag sounds played for my pickup and capture (%s)" % [played])
+	# The own-team check of the flag sounds: somebody else taking MY flag is a loss, taking THEIRS is a gain.
+	played.clear()
+	presentation.on_flag_event(&"taken", mine, false, game.team_of(me.player_id))
+	presentation.on_flag_event(&"taken", enemy, false, game.team_of(me.player_id))
+	_check(played == [&"flag_lost", &"flag_taken"], "somebody taking my flag sounds as a loss, theirs as a gain (%s)" % [played])
 	await _finish(link)
 
 

@@ -118,6 +118,13 @@ enum Kind {
 	##
 	## After PROP_BROKEN, for the reason VOTE gives.
 	CTF,
+	## Who is on which side: `id:team;id:team` text (empty in a free-for-all). A client's own
+	## match put people on sides by its own join order, which is not the server's; this is the
+	## server's answer, whenever it changes (a join, a team menu switch, a rebalance, a map
+	## change) and to a joiner at signon.
+	##
+	## After CTF, for the reason VOTE gives.
+	TEAM,
 }
 
 enum Ask {

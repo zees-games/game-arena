@@ -546,17 +546,57 @@ func _sync_stomp_config() -> void:
 
 ## Which side a player is on, or 0 in a free-for-all.
 func team_of(id: int) -> int:
+	if not is_authority and replicated_teams.has(id):
+		return int(replicated_teams[id])
+
 	if match_node == null or match_node.teams == null:
 		return 0
 
 	return match_node.teams.team_of(str(id))
 
+## A client takes the server's sides (`ArenaEvents.Kind.TEAM` text, `id:team;...`; empty for none).
+func apply_teams_text(text: String) -> void:
+	replicated_teams.clear()
+	for part in text.split(";", false):
+		var pair := part.split(":")
+		if pair.size() == 2 and pair[0].is_valid_int() and pair[1].is_valid_int():
+			replicated_teams[int(pair[0])] = int(pair[1])
+	for id in player_ids():
+		var player := player_for(id)
+		if player != null:
+			player.team = team_of(id)
+
 ## The sides in play, empty in a free-for-all.
 func teams() -> Array[DotTeam]:
-	if match_node == null or match_node.teams == null:
-		return []
+	if match_node != null and match_node.teams != null:
+		return match_node.teams.teams
 
-	return match_node.teams.teams
+	# A client's own match is the mode it started in (free-for-all), not the one the server plays:
+	# the sides come from the mode it is shown, which is what the server announced.
+	if not is_authority:
+		var shown := _mode_shown()
+		if shown == null or not shown.is_team_mode():
+			return []
+		if _shown_sides_for != shown:
+			_shown_sides_for = shown
+			_shown_sides = shown.teams()
+		return _shown_sides
+
+	return []
+
+## The mode on show (the top layer answers; null here).
+func _mode_shown() -> ArenaMode:
+	return null
+
+var _shown_sides_for: ArenaMode = null
+var _shown_sides: Array[DotTeam] = []
+
+## The side with [param team_id], or null (a free-for-all, nobody).
+func team_def(team_id: int) -> DotTeam:
+	for side in teams():
+		if side.id == team_id:
+			return side
+	return null
 
 ## After everybody moved: a player who came down onto another's head kills them, and bounces.
 ## Server-authoritative; a client's prediction of the bounce is corrected by the next snapshot.

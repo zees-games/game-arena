@@ -647,6 +647,9 @@ func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
 		ArenaEvents.Kind.CTF:
 			if game != null and game.objectives != null:
 				game.objectives.apply_ctf_text(event.body.get_string_from_utf8())
+		ArenaEvents.Kind.TEAM:
+			if game != null:
+				game.apply_teams_text(event.body.get_string_from_utf8())
 		ArenaEvents.Kind.JAIL:
 			var told_jail := ArenaEvents.read_jail(reader)
 			if bool(told_jail["ok"]) and game != null:
