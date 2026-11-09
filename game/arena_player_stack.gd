@@ -109,7 +109,7 @@ static func dot_sim_status() -> String:
 		if module == "motor":
 			used = loaded and DotFpsPhysicsBody.native_enabled
 			if used and DotFpsMotor.native_tick and DotFpsPhysicsBody.native_tick_available():
-				parts.append("motor_tick=on")
+				parts.append("motor_tick=%s" % ("full" if DotFpsMotor.native_full and DotFpsPhysicsBody.native_full_available() else "on"))
 		elif module == "bots":
 			used = loaded and DotBotWorld.native_enabled
 		parts.append("%s=%s" % [module, ("on" if used else "off") if loaded else "missing"])
