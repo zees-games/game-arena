@@ -438,6 +438,16 @@ func simulate_tick(
 	if _combat != null:
 		_combat.set_authoritative_origin(player_id, muzzle_position())
 
+	# A shooter with nothing pressed and nothing under way ticks the weapon in hand and no more: the rig
+	# builds its own posture then, so the context below (a dozen writes and an extra dictionary) is skipped.
+	var t_wp := Time.get_ticks_usec()
+	var out: DotWeaponOutcome
+	# (Proper home: AwWeaponRig.would_idle(command) in arena-weapons; until it exists, ask the arsenal directly.)
+	if weapons.arsenal.is_idle_for(_command, weapons.get(&"_previous_command")):
+		out = weapons.simulate_tick(_command, tick, null)
+		ArenaFrameProbe.add(&"p_weapons", t_wp)
+		return out
+	t_wp = Time.get_ticks_usec()
 	# Pushed in from the simulated state, never read out of a rendered one: an
 	# interpolated position differs between client and server by design, and feeding it
 	# to the spread makes the spread differ too.
@@ -459,8 +469,7 @@ func simulate_tick(
 
 	# Through the rig, which runs the arsenal and then the bash. It keeps the previous
 	# command itself, for the same edge triggers the arsenal used to be handed it for.
-	var t_wp := Time.get_ticks_usec()
-	var out := weapons.simulate_tick(_command, tick, ctx)
+	out = weapons.simulate_tick(_command, tick, ctx)
 	ArenaFrameProbe.add(&"p_weapons", t_wp)
 	return out
 
