@@ -4,6 +4,7 @@ const ArenaBrowser := preload("../game/arena_browser.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
+const ArenaTestPorts := preload("test_ports.gd")
 
 
 const ArenaVote := preload("../game/arena_vote.gd")

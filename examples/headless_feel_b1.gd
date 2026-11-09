@@ -4,6 +4,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaTestPorts := preload("test_ports.gd")
 
 
 ## dot-net's lossy UDP relay, by path (it has no class_name).

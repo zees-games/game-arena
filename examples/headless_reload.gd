@@ -13,6 +13,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaNetLink := preload("../game/arena_net_link.gd")
+const ArenaTestPorts := preload("test_ports.gd")
 
 var PORT := ArenaTestPorts.free_port()
 const DATA := "user://arena_reload"

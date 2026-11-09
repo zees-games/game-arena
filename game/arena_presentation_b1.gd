@@ -104,11 +104,12 @@ var _bake_ids: Array = []
 
 ## Bakes the recipes named by [param ids] (consumed from the end) into [param bank] until
 ## [param budget_msec] is spent; one recipe is never split, so the call overruns by at most one.
+## Stock voices (dot_audio stock/voices, self-synthesised) replace the sine-sweep stand-ins for shot, hit, hurt, die, impact, boom.
 static func bake_into(bank: Dictionary, catalogue: DotAudioCatalogue, recipes: Dictionary, ids: Array, budget_msec: int) -> void:
 	var until := Time.get_ticks_msec() + budget_msec
 	while not ids.is_empty() and Time.get_ticks_msec() < until:
 		var id: Variant = ids.pop_back()
-		bank.merge(DotAudioSynth.bank(catalogue, {id: recipes[id]}))
+		bank.merge(DotAudioSynth.bank(catalogue, {id: recipes[id]}, true))
 
 
 ## Calls [method bake_into] on the sink's bank until the frame's budget is spent, then lets the gate

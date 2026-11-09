@@ -5,6 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaTestPorts := preload("test_ports.gd")
 
 ## An administrator's live tools, on a real dedicated server, typed the way a person types
 ## them.

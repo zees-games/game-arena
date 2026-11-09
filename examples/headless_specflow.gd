@@ -5,6 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 const ArenaNetBridge := preload("../game/arena_net_bridge.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
+const ArenaTestPorts := preload("test_ports.gd")
 
 ## Spectate then Play from the team menu, on a dedicated server with real sessions: `/teams spectate` and `/teams play` typed as a player, in a free-for-all.
 ## The world is asserted: the scoreboard row, the one player entity, the bot fill, who is alive.
