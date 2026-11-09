@@ -456,6 +456,7 @@ func _build_combat() -> DotResult:
 		return who.global_position if who != null else null
 	apply_drop_rules()
 	ArenaWeaponDropWiring.build(self)
+	_build_knives()
 	apply_jail_rules()
 
 	if not headless and map != null and map.jail != null:
@@ -464,6 +465,20 @@ func _build_combat() -> DotResult:
 		jail_view.build(map.jail, sim_tick)
 
 	return DotResult.success(null)
+
+func _build_knives() -> void:
+	knives = ArenaKnives.new()
+	knives.name = "Knives"
+	knives.rules = knife_rules
+	knives.is_authority = is_authority
+	knives.draws = not DotPlatform.is_headless()
+	knives.tick_rate = tick_rate
+	knives.combat = combat
+	knives.player_for = player_for
+	knives.player_ids = player_ids
+	knives.look_of = func(weapon: StringName) -> Node3D: return ArenaWeaponDropWiring.look(weapon)
+	add_child(knives)
+
 
 ## A presentation rule's current value: the server's, or the default.
 func rule(key: String) -> float:

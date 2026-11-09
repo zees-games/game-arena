@@ -23,6 +23,7 @@ const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaProgress := preload("arena_progress.gd")
 const ArenaStats := preload("arena_stats.gd")
 const ArenaProjectiles := preload("arena_projectiles.gd")
+const ArenaKnives := preload("arena_knives.gd")
 const ArenaGrenades := preload("arena_grenades.gd")
 const ArenaDrops := preload("arena_drops.gd")
 const ArenaJailView := preload("arena_jail_view.gd")
@@ -254,6 +255,9 @@ var drops: ArenaDrops = null
 ## under [member weapon_drop_rules], whose cvars are the server owner's and outlive a map change.
 var weapon_drops: DotWeaponDrops = null
 var weapon_drop_rules: DotWeaponDropRules = DotWeaponDropRules.new()
+## Thrown knives (ArenaKnives), and their server rules: one dictionary for the game's life, so cvars outlive a map.
+var knives: ArenaKnives = null
+var knife_rules := {"enabled": true, "speed": 40.0, "pickup": 1.0}
 
 
 ## The converted map's doors, lifts and buttons, or null for a map without any (it then costs nothing per tick).

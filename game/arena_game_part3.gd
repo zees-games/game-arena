@@ -474,6 +474,10 @@ func _teardown_world() -> void:
 		drops.queue_free()
 		drops = null
 	ArenaWeaponDropWiring.teardown(self)
+	if knives != null:
+		remove_child(knives)
+		knives.queue_free()
+		knives = null
 	_free_map_io()
 
 	for point in _spawn_points:

@@ -125,6 +125,9 @@ enum Kind {
 	##
 	## After CTF, for the reason VOTE gives.
 	TEAM,
+	## The last kind KIND_BITS has room for: a varint sub-kind, then its body (ArenaKnifeEvents.More).
+	## Thrown knives are the first; later events go here as sub-kinds, after TEAM for the reason VOTE gives.
+	MORE,
 }
 
 enum Ask {
