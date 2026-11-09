@@ -217,6 +217,16 @@ func _test_effects_and_the_player_who_asked_for_none() -> void:
 	)
 	p.settings.set_value(&"allow_flashes", true)
 
+	# The grunt: scaled by the damage, and left to the death cry when the hit was lethal.
+	var q := _make()
+	var hurt_sink := q.audio.sink as DotAudioSinkNull
+	hurt_sink.forget()
+	q.on_hurt(5.0)
+	q.on_hurt(60.0, true)
+	var grunts := hurt_sink.count_of(&"hurt")
+	_check(grunts == 1, "a lethal hit makes no hurt grunt (the death cry has it), a graze does (%d)" % grunts)
+	hurt_sink.forget()
+
 	# A low tier is MISSING the expensive effects rather than running all of them badly.
 	# Halving a particle count on the effect that is killing the frame does not save it.
 	p.settings.set_value(&"fx_quality", 0)
