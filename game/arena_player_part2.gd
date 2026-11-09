@@ -628,6 +628,7 @@ func _kick_landing(drawn: DotFpsState) -> void:
 ## on, and a call by name to a method the shell's copy lacks fails to compile the script.
 func _present_view_model(drawn: DotFpsState) -> Vector2:
 	_aim_fov_scale = 1.0
+	_view_fov_scale = 1.0
 	if weapons == null or weapons.view_model() == null:
 		return Vector2.ZERO
 
@@ -649,7 +650,9 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 	var hands := view_model as AwViewModel
 	if hands != null:
 		hands.aim(aim_held and is_alive() and camera.current)
+		ArenaScopePrefs.apply(hands)
 		_aim_fov_scale = hands.aim_fov_scale()
+		_view_fov_scale = hands.view_fov_scale()
 
 	if not weapons.has_method(&"view_punch"):
 		return Vector2.ZERO
