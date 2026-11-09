@@ -167,6 +167,16 @@ func _run() -> void:
 		_check(camera.is_position_in_frustum(flag.at + Vector3.UP * 1.5), "the %s flag is in view from 6 m" % pair[0])
 		await _shot("%s_flag_6m" % pair[0])
 
+	# 1b. The enemy flag from my own base, across the map: the marker (team-coloured flag icon and its distance, through walls) and no beam.
+	_put(_stand_near(game, f_mine.at, f_enemy.at, 2.0), f_enemy.at + Vector3.UP * 3.0, -2.0)
+	await _wait(0.8)
+	var far_view: Node3D = view._views.get(enemy)
+	var far_dist := far_view.get_node_or_null("Dist") as Label3D if far_view != null else null
+	print("  enemy marker from my base: '%s'" % [far_dist.text if far_dist != null else "<none>"])
+	_check(far_view != null and far_view.get_node_or_null("Beam") == null and far_view.get_node_or_null("Icon") != null, "the enemy flag has an icon marker and no beam")
+	_check(far_dist != null and far_dist.text.ends_with("m") and far_dist.text.to_float() > 5.0, "the marker reads the distance in metres")
+	await _shot("enemy_marker_far")
+
 	# 2. Standing on my own flag's plate, nothing carried.
 	var plate := _stand_near(game, f_mine.at, f_enemy.at, 0.3)
 	_put(plate, f_enemy.at, -15.0)

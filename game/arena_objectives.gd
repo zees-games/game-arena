@@ -252,7 +252,9 @@ func ctf_wire_text(tick: int, force: bool = false) -> String:
 		return ""
 	if not force and tick - _wire_tick < maxi(game.tick_rate / 8, 1):
 		return ""
-	var text := JSON.stringify(ctf.to_json_wire())
+	var wire: Dictionary = ctf.to_json_wire()
+	wire["view"] = {"i": 1 if game.ctf_view.indicator else 0, "x": 1 if game.ctf_view.see_through else 0}
+	var text := JSON.stringify(wire)
 	if not force and text == _last_wire and tick - _wire_tick < game.tick_rate * 2:
 		return ""
 	_last_wire = text
@@ -267,6 +269,10 @@ func apply_ctf_text(text: String) -> void:
 	var parsed: Variant = JSON.parse_string(text)
 	if parsed is Dictionary:
 		ctf.apply_wire(parsed)
+		var view: Variant = (parsed as Dictionary).get("view")
+		if view is Dictionary:
+			game.ctf_view.indicator = int(view.get("i", 1)) != 0
+			game.ctf_view.see_through = int(view.get("x", 1)) != 0
 
 
 ## A client has no effects layer, so the slowdown it predicts with is applied here, from the same base the effects layer uses.

@@ -110,11 +110,6 @@ func apply_match_limits() -> void:
 		match_node.rules.countdown_sec = from_mode.countdown_sec
 	_freeze_overridden = freeze_sec >= 0.0
 	_override_rules(match_node.rules)
-	# After the generic limits: capture the flag is limited by captures (`arena_ctf_capturelimit`), and by seconds only when `arena_ctf_timelimit` says so.
-	if mode.objective_layout == &"ctf":
-		match_node.rules.score_limit = ctf_rules.capture_limit
-		if ctf_rules.time_limit_sec > 0:
-			match_node.rules.time_limit_sec = float(ctf_rules.time_limit_sec)
 
 ## The movement overrides the current map asks for, after the server's rules.
 ##

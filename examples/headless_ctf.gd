@@ -2,8 +2,9 @@ extends "headless_match_part2.gd"
 
 ## Capture the flag end to end: scripted bots carry flags on a real game, two and three teams, drop and return, both limits, the fallback bases, authored flag stands and the replicated state.
 
-const SECTIONS_CTF := 7
-const CHECKS_CTF := 58
+const SECTIONS_CTF := 9
+const CHECKS_CTF := 83
+const ArenaFlagView := preload("res://game/arena_flag_view.gd")
 
 
 func _ready() -> void:
@@ -22,6 +23,8 @@ func _run() -> void:
 	await _test_bases()
 	await _test_replication()
 	await _test_cvars()
+	await _test_score_is_captures()
+	await _test_indicator()
 
 	_report_sections(_entered, _completed, SECTIONS_CTF, CHECKS_CTF)
 
@@ -293,4 +296,87 @@ func _test_cvars() -> void:
 	_check(module_keys.size() == 8, "capture limit, time limit, return, drop, carrier speed, friendly return, flag at home and teams")
 	var rules := DotObjectiveCtfRules.new()
 	_check(rules.validate().ok and rules.team_count == 2 and rules.capture_limit == 3, "the defaults are two teams and three captures")
+	_done()
+
+
+## Owner 2026-11-08: a side was on 8 with fewer captures, and the match kept ending. Kills were worth a team point (the deathmatch rules) and reached the capture limit; the generic 600 s clock applied too.
+func _test_score_is_captures() -> void:
+	_section("ctf: the score is captures only, and there is no clock by default")
+	var game := _ctf_game()
+	if game == null:
+		return
+	var rules := game.match_node.rules
+	_check(rules.time_limit_sec == 0.0, "no time limit by default, whatever arena_timelimit says", "%s (game %s)" % [rules.time_limit_sec, game.time_limit_sec])
+	_check(rules.kill_points == 0 and rules.friendly_points == 0 and rules.suicide_points == 0, "a kill is worth no points")
+	_check(rules.score_limit == game.ctf_rules.capture_limit, "the score limit is the capture limit")
+	var one := _team_ids(game, 1)
+	var two := _team_ids(game, 2)
+	var board := game.match_node.scoreboard
+	for victim in two:
+		_kill_through_combat(game, one[0], victim)
+		game.tick({})
+	_check(board.team_score(1) == 0 and board.team_score(2) == 0, "two kills leave both teams on 0", str(board.team_scores()))
+	_check(board.find(str(one[0])).kills == 2, "and still show as kills in the tab", str(board.find(str(one[0])).kills))
+	_check(board.find(str(one[0])).score == 0, "the killer's own score stays 0")
+	_check(game.match_node.is_live(), "kills past the capture limit do not end the match")
+	for id in two + [one[1]]:
+		_go(game, id, Vector3(900, 0, 900), 1)
+	_go(game, one[0], _stand_of(game, 2))
+	_go(game, one[0], _stand_of(game, 1))
+	_check(board.team_score(1) == 1 and game.objectives.ctf.scores[1] == 1, "one capture is a score of 1", str(board.team_scores()))
+	_check(board.find(str(one[0])).score == 1, "and the capturer's score is 1")
+	for i in 2:
+		game.tick({})
+	_check(game.match_node.is_live(), "still live after a capture under the limit")
+	game.ctf_rules.time_limit_sec = 90
+	game.apply_match_limits()
+	_check(game.match_node.rules.time_limit_sec == 90.0, "arena_ctf_timelimit turns a clock on")
+	game.ctf_rules.time_limit_sec = 0
+	game.time_limit_sec = 300.0
+	game.apply_match_limits()
+	_check(game.match_node.rules.time_limit_sec == 0.0 and game.match_node.rules.kill_points == 0, "and 0 turns it off again, the generic limit ignored")
+	await _free(game)
+	_done()
+
+
+func _test_indicator() -> void:
+	_section("ctf: the flag marker is a see-through icon and a distance, no beam, no text")
+	var game := _ctf_game()
+	if game == null:
+		return
+	game.objectives.draw_flags = true
+	game.objectives._build_flag_view()
+	var view := game.objectives.flag_view
+	view.refresh()
+	_check(view.drawn_count() == 2, "both flags drawn")
+	var flag: Node3D = view._views[1]
+	var icon := flag.get_node_or_null("Icon") as Sprite3D
+	var dist := flag.get_node_or_null("Dist") as Label3D
+	_check(flag.get_node_or_null("Beam") == null and flag.get_node_or_null("Tag") == null, "no beam and no team-name text")
+	_check(icon != null and icon.texture != null and icon.no_depth_test and icon.fixed_size, "a fixed-size flag icon, through walls by default")
+	_check(icon != null and is_equal_approx(icon.modulate.r, ArenaFlagView.color_of(1).r) and icon.modulate.a < 1.0, "tinted in the team's colour and see-through")
+	_check(dist != null and dist.font_size <= 24, "small distance text beside it")
+	_check(ArenaFlagView.distance_text(19.43) == "19.4m", "the distance reads like Halo's 19.4m", ArenaFlagView.distance_text(19.43))
+	game.ctf_view.see_through = false
+	view.refresh()
+	_check(not icon.no_depth_test and not dist.no_depth_test, "arena_ctf_indicator_seethrough 0 hides it behind walls")
+	game.ctf_view.indicator = false
+	view.refresh()
+	_check(not icon.visible and not dist.visible, "arena_ctf_indicator 0 hides it")
+	var wire: String = game.objectives.ctf_wire_text(game.current_tick(), true)
+	var client := ArenaGame.new()
+	client.name = "CtfViewClient"
+	client.tick_rate = TICK_RATE
+	client.headless = true
+	client.register_service = false
+	client.is_authority = false
+	client.mode = ArenaMode.capture_the_flag(3)
+	add_child(client)
+	var _r := client.setup(ArenaMap.dm_atrium())
+	_check(client.ctf_view.indicator and client.ctf_view.see_through, "a client starts with both on")
+	client.objectives.apply_ctf_text(wire)
+	_check(not client.ctf_view.indicator and not client.ctf_view.see_through, "and takes the server's settings with the flag state")
+	_check(ArenaModule.CTF_VIEW_CVARS.size() == 2 and ArenaModule.CTF_VIEW_CVARS.has("arena_ctf_indicator_seethrough"), "both are server cvars")
+	await _free(client)
+	await _free(game)
 	_done()

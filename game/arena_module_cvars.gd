@@ -166,7 +166,7 @@ const DROP_CVARS := {
 ## cvar -> the key in `ArenaPlayerStack.spawn_settings` it sets, and what it means.
 const CTF_CVARS := {
 	"arena_ctf_capturelimit": ["capture_limit", "Captures that win a capture-the-flag match (0 for none)"],
-	"arena_ctf_timelimit": ["time_limit_sec", "Seconds a capture-the-flag match lasts, most captures wins (0 for the mode's own)"],
+	"arena_ctf_timelimit": ["time_limit_sec", "Seconds a capture-the-flag match lasts, most captures wins (0, the default, for no time limit)"],
 	"arena_ctf_return": ["return_sec", "Seconds a dropped flag waits before it goes home"],
 	"arena_ctf_drop": ["drop_sec", "Seconds after a drop before the dropper may take the flag again"],
 	"arena_ctf_carrier_speed": ["carrier_speed", "A flag carrier's speed as a fraction of normal"],
@@ -371,7 +371,23 @@ func _add_spawn_cvars() -> void:
 				log_info("spawn rule changed", {"rule": key, "value": new_value}))
 
 
+## How the flags are shown, not how they are played: kept out of [constant CTF_CVARS], whose every key names a [DotObjectiveCtfRules] rule. Sent to clients with the flag state.
+const CTF_VIEW_CVARS := {
+	"arena_ctf_indicator": ["indicator", "A small team-coloured flag icon with its distance (\"19.4m\") over each flag (1, default) or none (0)"],
+	"arena_ctf_indicator_seethrough": ["see_through", "The flag indicator shows through walls (1, default) or only in plain sight (0)"],
+}
+
+
 func _add_ctf_cvars() -> void:
+	for cvar in CTF_VIEW_CVARS:
+		var view_key: String = CTF_VIEW_CVARS[cvar][0]
+		add_cvar(
+			cvar, "1" if game.ctf_view[view_key] else "0", CTF_VIEW_CVARS[cvar][1], DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY
+		).with_min(0.0).changed.connect(
+			func(_old: String, new_value: String) -> void:
+				game.ctf_view[view_key] = new_value.to_float() != 0.0
+				log_info("ctf view changed", {"rule": view_key, "value": new_value})
+		)
 	for cvar in CTF_CVARS:
 		var key: String = CTF_CVARS[cvar][0]
 		var value: Variant = game.ctf_rules[key]
