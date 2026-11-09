@@ -22,8 +22,10 @@ var _pilot := true
 var _motor_us := false
 ## `--queries 0`: no motor query timers, which also leaves the native motor on (they force the script one).
 var _queries := true
+## `--tick N`: the game and engine tick rate (default: the game's, 66); 128 for the 128 Hz cost.
 ## `--max-steps N`: ArenaTickBudget.max_steps, as cvar `arena_tick_max_steps`.
 var _max_steps := -1
+var _tick := 0
 var _client: Node = null
 var _prof: Node = null
 ## Per-frame sums while recording, for the sidecar.
@@ -50,6 +52,7 @@ func _ready() -> void:
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
 			"--queries": _queries = int(args[i + 1]) != 0
 			"--max-steps": _max_steps = int(args[i + 1])
+			"--tick": _tick = int(args[i + 1])
 	seed(_seed)
 	if _max_steps > 0:
 		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
@@ -85,6 +88,10 @@ func _run() -> void:
 	var _warmed := AwModelCache.warm(AwWeaponArtTable.model_paths())
 	await _wait_gate(120.0)
 	var game: Object = _client.get("game")
+	if _tick > 0:
+		game.config.tick_rate = _tick
+		game.tick_rate = _tick
+		Engine.physics_ticks_per_second = _tick
 	var picked: DotResult = null
 	if String(game.get("map").id) != _map:
 		picked = await _client.call("change_from_menu", StringName("map:" + _map), StringName("mode:" + _mode))

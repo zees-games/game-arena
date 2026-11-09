@@ -448,7 +448,7 @@ func _test_pack_weapons() -> void:
 
 	# The flashlight: one press of its button is one switch, and holding it is not another.
 	var lit_before: bool = p.flashlight
-	for i in range(ArenaFlashlight.HOLD_TICKS):
+	for i in range(ArenaFlashlight.hold_ticks(game.tick_rate)):
 		_hold(game, 900, ArenaFlashlight.BUTTON)
 	_settle(game, 900, 2)
 	var lit_after: bool = p.flashlight

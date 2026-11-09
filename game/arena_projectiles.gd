@@ -67,16 +67,18 @@ const REST_SPEED := 1.2
 ## two walls for its whole fuse, and a sweep per bounce is a sweep per tick.
 const MAX_BOUNCES := 12
 
-## Ticks a thrown grenade ignores its thrower, against one tick for a rocket.
+## Seconds a thrown grenade ignores its thrower (8 ticks at 66; the same time at any rate), against one tick for a rocket.
 ##
 ## Longer, because a grenade lobbed while running forward is overtaken by its thrower's
 ## own hull on the second or third tick, and then bounces off their face.
-const THROWER_GRACE_TICKS := 8
+const THROWER_GRACE_SEC := 0.12
 
 
 var _live: Array[Flying] = []
 var _combat: DotCombatManager = null
 var _gravity: float = 20.0
+## Seconds a tick lasts, as the last [method tick] was given it.
+var _tick_seconds: float = 1.0 / 66.0
 
 ## What the [code]sticks[/code] param is read from: a spawn carries the weapon's id and
 ## the definition carries the rule. Null leaves every fused spawn a bouncer.
@@ -209,6 +211,7 @@ func clear() -> void:
 ## know only the first kind, so a thrown grenade would have gone off on the first wall it
 ## met, and one cooked in the hand floated where it was for twelve seconds.
 func tick(delta: float) -> void:
+	_tick_seconds = maxf(delta, 0.0001)
 	for i in range(_live.size() - 1, -1, -1):
 		var f: Flying = _live[i]
 		f.age_ticks += 1
@@ -324,7 +327,7 @@ func _sweep(f: Flying, step: Vector3) -> DotHitbox.Hit:
 	var shooter := _combat.hitboxes_of(f.spawn.owner_entity)
 	# Not the person who fired it, at first, or every rocket detonates in the shooter's
 	# face. After that it may.
-	var grace := 1 if f.spawn.fuse_ticks <= 0 else THROWER_GRACE_TICKS
+	var grace := 1 if f.spawn.fuse_ticks <= 0 else maxi(1, roundi(THROWER_GRACE_SEC / _tick_seconds))
 	var excluded: Array = [shooter] if shooter != null and f.age_ticks <= grace else []
 
 	# Team-mates it was launched inside, for the same grace and then for as long as it is

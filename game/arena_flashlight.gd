@@ -5,8 +5,12 @@ extends RefCounted
 const GAME_ID := "game-arena"
 ## The wire bit the client holds for a few ticks to ask the server for a switch.
 const BUTTON := DotWeaponCommand.BUTTON_USER_1
-## Ticks the bit is held: long enough that one lost command does not lose the press.
-const HOLD_TICKS := 3
+## Seconds the bit is held (3 ticks at 66): long enough that one lost command does not lose the press.
+const HOLD_SEC := 0.045
+
+## [constant HOLD_SEC] in ticks at [param tick_rate].
+static func hold_ticks(tick_rate: int) -> int:
+	return maxi(1, ceili(HOLD_SEC * float(tick_rate) - 0.001))
 
 
 ## A config with this game's defaults: F switches it, and it starts off on the lit maps.

@@ -745,6 +745,7 @@ func _adopt_tick_rate(rate: int, snapshot_rate: int = 0) -> void:
 	net.config.tick_rate = rate
 	# The server's own number when HELLO carried one (sv_snapshot_rate), else derived as before.
 	net.config.snapshot_rate = snapshot_rate if snapshot_rate > 0 and snapshot_rate <= rate else ArenaGame.snapshot_rate_for(rate)
+	net.config.interpolation_buffer = ArenaGame.client_interp_buffer(net.config.snapshot_rate)
 	# A copy taken at setup() that writing the config does not touch.
 	net.clock.tick_rate = rate
 	if game.spectate != null:

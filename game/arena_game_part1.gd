@@ -22,6 +22,19 @@ static func snapshot_rate_for(rate: int, target: int = NET_SNAPSHOT_RATE) -> int
 			best = candidate
 	return best
 
+## Snapshots of interpolation delay for a client receiving [param snapshot_rate] a second: `cl_interp` seconds
+## (launch option, 0 = unset) wins over `cl_interp_ratio` snapshots (default 2, dot-net's own). The delay in TIME is then
+## the same at any tick rate, as CS2's cl_interp is; never under one snapshot.
+static func interp_buffer_for(snapshot_rate: int, interp_sec: float, ratio: float) -> float:
+	var buffer := interp_sec * float(maxi(snapshot_rate, 1)) if interp_sec > 0.0 else ratio
+	return clampf(buffer, 1.0, 10.0)
+
+## The two launch options (`--cl_interp S`, `--cl_interp_ratio N`, or the same query parameters in a browser) as a buffer.
+static func client_interp_buffer(snapshot_rate: int) -> float:
+	var sec := ArenaFrameProbe.launch_value("cl_interp")
+	var ratio := ArenaFrameProbe.launch_value("cl_interp_ratio")
+	return interp_buffer_for(snapshot_rate, sec.to_float() if sec != "" else 0.0, ratio.to_float() if ratio != "" else 2.0)
+
 ## The simulation tick the players are on, for what is drawn from it: a player's own state, since
 ## that is the tick the pits are asked about, and the game's own count before there is one.
 func sim_tick() -> int:
@@ -123,8 +136,9 @@ func unlag_position_at(id: int, at: float) -> Variant:
 	var positions: PackedVector3Array = ring[0]
 	var ticks: PackedInt32Array = ring[1]
 	var lo := floori(at)
-	var a := lo % UNLAG_HISTORY
-	var b := (lo + 1) % UNLAG_HISTORY
+	var size := positions.size()
+	var a := lo % size
+	var b := (lo + 1) % size
 	if ticks[a] != lo:
 		return null
 	if ticks[b] != lo + 1:
@@ -663,6 +677,10 @@ func _resolve_stomps() -> void:
 ## [param commands] is `{player id: [DotFpsCommand, DotWeaponCommand]}`. A player with
 ## no entry repeats their last command, which is what a dropped input packet should
 ## look like.
+## Slots in a position ring: [constant UNLAG_SECONDS] of ticks at this game's rate (never under [constant UNLAG_HISTORY]).
+func unlag_history() -> int:
+	return maxi(UNLAG_HISTORY, ceili(UNLAG_SECONDS * float(tick_rate)) + 2)
+
 ## Records every player's position for this tick, for [method _unlag_rewind].
 func _unlag_record() -> void:
 	for id in _players:
@@ -670,9 +688,9 @@ func _unlag_record() -> void:
 		var ring: Array = _unlag.get(id, [])
 		if ring.is_empty():
 			var positions := PackedVector3Array()
-			positions.resize(UNLAG_HISTORY)
+			positions.resize(unlag_history())
 			var ticks := PackedInt32Array()
-			ticks.resize(UNLAG_HISTORY)
+			ticks.resize(unlag_history())
 			ticks.fill(-1)
 			ring = [positions, ticks]
 			_unlag[id] = ring
@@ -680,8 +698,8 @@ func _unlag_record() -> void:
 		# on a copy and the history stays empty (it did, the first time).
 		var positions: PackedVector3Array = ring[0]
 		var ticks: PackedInt32Array = ring[1]
-		var slot := _tick % UNLAG_HISTORY
-		var before := (_tick - 1) % UNLAG_HISTORY
+		var slot := _tick % ticks.size()
+		var before := (_tick - 1) % ticks.size()
 		# A respawn or a teleport: rewinding across it would stand hitboxes where they died.
 		if ticks[before] == _tick - 1 and positions[before].distance_to(player.global_position) > TELEPORT_CUT:
 			ticks.fill(-1)

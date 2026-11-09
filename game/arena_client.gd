@@ -160,7 +160,7 @@ func _notification(what: int) -> void:
 func switch_flashlight() -> void:
 	if _watching_other():
 		return
-	_flash_ticks = ArenaFlashlight.HOLD_TICKS
+	_flash_ticks = _flash_hold_ticks()
 	_flash_msec = Time.get_ticks_msec()
 	if flash != null and is_instance_valid(flash):
 		var _asked := flash.toggle()

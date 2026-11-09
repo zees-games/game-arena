@@ -79,7 +79,7 @@ func _solid_lag_checks(c: Dictionary) -> void:
 	var saved_unlag := _server_game.max_unlag_ms
 	var cap := _server_game.collision_lag(127.0)
 	_check(
-		cap > 0.0 and cap <= ArenaGame.COLLISION_LAG_MAX_TICKS and _server_game.collision_lag(2.5) == 2.5,
+		cap > 0.0 and cap <= ArenaGame.COLLISION_LAG_MAX_SEC * float(_server_game.tick_rate) + 0.001 and _server_game.collision_lag(2.5) == 2.5,
 		"a claimed view lag of 127 ticks collides at most %.0f back" % cap
 	)
 	# No event link here: RULES handed over as the link would carry it.

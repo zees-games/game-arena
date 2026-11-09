@@ -265,11 +265,11 @@ func unlag_position_between(id: int, older: int, newer: int, at: float, snap := 
 	return (a as Vector3).lerp(b, clampf((at - float(older)) / float(newer - older), 0.0, 1.0))
 
 ## A mover's view lag in ticks as both ends collide with it: -1 (the present) when none was sent
-## or compensation is off, else at most `max_unlag_ms` and [constant COLLISION_LAG_MAX_TICKS].
+## or compensation is off, else at most `max_unlag_ms` and [constant COLLISION_LAG_MAX_SEC].
 func collision_lag(view_lag: float) -> float:
 	if view_lag < 0.0 or max_unlag_ms <= 0.0:
 		return -1.0
-	return minf(view_lag, minf(max_unlag_ms * 0.001 * float(tick_rate), COLLISION_LAG_MAX_TICKS))
+	return minf(view_lag, minf(max_unlag_ms * 0.001, COLLISION_LAG_MAX_SEC) * float(tick_rate))
 
 func current_tick() -> int:
 	return _tick

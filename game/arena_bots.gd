@@ -51,6 +51,11 @@ static func world_for(game: Object) -> World:
 
 
 ## [move, fire] for [param bot] this tick.
+## Ticks between thinks that give [param hz] thinks a second at [param tick_rate] (never under 1).
+static func every_for_hz(hz: float, tick_rate: int) -> int:
+	return maxi(1, roundi(float(tick_rate) / maxf(hz, 0.001)))
+
+
 static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_rate: float) -> Array:
 	var early := think_begin(game, bot, mind, tick, tick_rate)
 	if not early.is_empty():

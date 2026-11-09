@@ -181,7 +181,7 @@ func validate() -> DotResult:
 
 @export_group("Simulation")
 ## Ticks a second for solo and a listen host (project.godot's physics rate is the same default); a dedicated server runs the host's sv_tickrate instead. Above 66 costs CPU in proportion; not yet measured with 32 bots.
-@export_range(15, 128, 1) var tick_rate: int = ArenaContent.TICK_RATE
+@export_range(20, 128, 1) var tick_rate: int = ArenaContent.TICK_RATE
 
 ## The surf fields as [method DotAudioSurfRules.apply_values] takes them.
 func surf_values() -> Dictionary:
