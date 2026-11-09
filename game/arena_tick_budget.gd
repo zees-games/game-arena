@@ -24,6 +24,11 @@ static var max_steps := MAX_STEPS
 const PHYSICS_BUDGET_SEC := 0.045
 ## Weight of the newest tick in the cost average.
 const SMOOTHING := 0.1
+## A single tick counts for at most this many times the running cost: one hitched tick (a first-use build, a
+## stall of 300 ms) is not a price the next ticks pay, and with the newest-tick weight above it would have held
+## the cap at the floor for twenty frames (the simulation slowed after every hitch, the spiral's mirror image).
+## A real rise in cost still moves the average, doubling in about seven ticks.
+const OUTLIER := 2.0
 ## Share of a tick's length its cost may take before the bots think less often.
 const LOAD_HEADROOM := 0.8
 const MAX_LOAD_SCALE := 2.0
@@ -34,7 +39,7 @@ var _cost_sec := 0.0
 ## The cap for the next frame given what a tick just cost; [param tick_cost_sec] is one
 ## tick's wall time.
 func steps_for(tick_cost_sec: float) -> int:
-	_cost_sec = tick_cost_sec if _cost_sec <= 0.0 else lerpf(_cost_sec, tick_cost_sec, SMOOTHING)
+	_cost_sec = tick_cost_sec if _cost_sec <= 0.0 else lerpf(_cost_sec, minf(tick_cost_sec, _cost_sec * OUTLIER), SMOOTHING)
 	if _cost_sec <= 0.0:
 		return max_steps
 	return clampi(int(floorf(PHYSICS_BUDGET_SEC / _cost_sec)), mini(MIN_STEPS, max_steps), max_steps)

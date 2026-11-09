@@ -10,7 +10,7 @@ const ArenaTickBudget := preload("../game/arena_tick_budget.gd")
 ## Run: [code]godot --headless --path . res://examples/headless_tickbudget.tscn[/code]
 
 const SECTIONS := 4
-const CHECKS := 15
+const CHECKS := 17
 
 var _entered := 0
 var _completed := 0
@@ -64,6 +64,16 @@ func _run() -> void:
 		dear = b.steps_for(0.030)
 	_check(dear == ArenaTickBudget.MIN_STEPS, "a tick dearer than the budget falls back to the floor", "%d" % dear)
 	_check(ArenaTickBudget.new().steps_for(0.0) == ArenaTickBudget.MAX_STEPS, "no measurement yet allows the most")
+	var spiky := ArenaTickBudget.new()
+	for _i in 30:
+		spiky.steps_for(0.0118)
+	var before := spiky.steps_for(0.0118)
+	var hitched := spiky.steps_for(0.357)
+	_check(before >= 3 and hitched >= 3, "one 357 ms hitched tick does not drop the cap to the floor", "%d -> %d" % [before, hitched])
+	var kept := 0
+	for _i in 4:
+		kept = spiky.steps_for(0.0118)
+	_check(kept >= 3, "and the cap is back at once after it", "%d" % kept)
 	_done()
 
 	_section("17 fps with cheap ticks")
