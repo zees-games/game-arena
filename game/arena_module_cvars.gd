@@ -274,8 +274,7 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			DotFpsPhysicsBody.native_enabled = new_value.to_float() >= 0.5)
-	# On here (the addon's default is off): the arena suites run it against the script's bits.
-	DotFpsMotor.native_tick = true
+	# On by default (ArenaPlayerStack._static_init); the arena suites run it against the script's bits.
 	add_cvar("motor_native_tick", "1",
 		"1: a plain ground or air tick's start and end (ground check, friction, acceleration, gravity, collide-and-slide) run in dot-sim as one call each when its library has the motor tick (bit-identical to the script); 0: in script. Needs motor_native; without the library it is script either way",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(

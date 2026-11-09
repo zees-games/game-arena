@@ -87,6 +87,12 @@ func setup(p_game: ArenaGame) -> DotResult:
 static var _dot_sim_status_printed: bool = false
 
 
+# The addon's default is off. On at script load, so a solo client and a listen host run it too
+# (motor_native_tick exists only where ArenaModule loads), and that cvar can still turn it off.
+static func _static_init() -> void:
+	DotFpsMotor.native_tick = true
+
+
 ## One line per process saying whether dot-sim's library loaded and what runs in it, so a
 ## player or a log can tell native from the GDScript twins (bootstrap fetches the library;
 ## the web never has it).
