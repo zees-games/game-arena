@@ -1,0 +1,173 @@
+extends Node
+
+const ArenaPresentation := preload("../game/arena_presentation.gd")
+const ClientBench := preload("client_bench.gd")
+
+## The 16v16 benchmark: a solo client on a fixed map, mode, bot count and seed, recorded by the
+## client's own dot profiler, so the report has the same per-system table as a player's
+## `profiler_record`. Windowed on a GPU box (tools/perf_bench.sh), or headless through hv:
+## `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
+## Prints `PERF_BENCH {json}` with the report path and a sidecar of engine numbers beside it.
+
+var _map := "cp-orange-x3"
+var _mode := "ctf"
+var _bots := 31
+var _seconds := 30.0
+var _warmup := 20.0
+var _seed := 1
+var _out := "user://perf-bench"
+var _tag := ""
+var _pilot := true
+var _client: Node = null
+var _prof: Node = null
+## Per-frame sums while recording, for the sidecar.
+var _acc := {}
+var _frames := 0
+var _steps0 := 0
+
+
+func _ready() -> void:
+	preload("../game/arena_weapon_roles.gd").ensure()
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size() - 1):
+		match args[i]:
+			"--map": _map = args[i + 1]
+			"--mode": _mode = args[i + 1]
+			"--bots": _bots = int(args[i + 1])
+			"--seconds": _seconds = float(args[i + 1])
+			"--warmup": _warmup = float(args[i + 1])
+			"--seed": _seed = int(args[i + 1])
+			"--out": _out = args[i + 1]
+			"--tag": _tag = args[i + 1]
+			"--pilot": _pilot = int(args[i + 1]) != 0
+	seed(_seed)
+	var _scratch := ArenaPresentation.use_scratch_settings("perf_bench")
+	_run.call_deferred()
+
+
+func _say(text: String) -> void:
+	print("PERF_BENCH_LOG t=%.1f %s" % [Time.get_ticks_msec() / 1000.0, text])
+
+
+func _wait(sec: float) -> void:
+	await get_tree().create_timer(sec, true, false, true).timeout
+
+
+func _wait_gate(limit: float) -> void:
+	var t := 0.0
+	while t < limit:
+		var gate: Variant = _client.get("gate")
+		if gate == null or (gate as Object).call("is_open"):
+			return
+		await _wait(0.5)
+		t += 0.5
+
+
+func _run() -> void:
+	# The map and mode are picked like the M menu does (the client also reads `--map` itself).
+	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
+	_client.set("force_offline", true)
+	_client.set("mouse_capture_override", true)
+	_client.set("offline_bots", _bots)
+	add_child(_client)
+	var _warmed := AwModelCache.warm(AwWeaponArtTable.model_paths())
+	await _wait_gate(120.0)
+	var game: Object = _client.get("game")
+	var picked: DotResult = null
+	if String(game.get("map").id) != _map:
+		picked = await _client.call("change_from_menu", StringName("map:" + _map), StringName("mode:" + _mode))
+	elif String(game.get("mode").id) != _mode:
+		picked = await _client.call("change_from_menu", StringName("mode:" + _mode))
+	if picked != null:
+		_say("map %s mode %s: %s" % [_map, _mode, "ok" if picked.ok else picked.error.message])
+		await _wait_gate(120.0)
+	game = _client.get("game")
+	if _pilot:
+		var pilot := ClientBench.Pilot.new()
+		pilot.process_priority = -999
+		add_child(pilot)
+	_say("map %s mode %s players %d, warming %.0f s" % [String(game.get("map").id), String(game.get("mode").id), game.call("players").size(), _warmup])
+	await _wait(_warmup)
+	_prof = DotRegistry.get_service(&"dot_profiler")
+	if _prof == null:
+		_prof = DotProfiler.new()
+		add_child(_prof)
+		_say("client has no profiler; placed one")
+	_prof.config.record_dir = _out
+	_prof.config.keep_recordings = 500
+	_prof.config.budget_ms = 33.0
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+	DotFpsPhysicsBody.profile = true
+	DotFpsPhysicsBody.prof.fill(0)
+	_steps0 = Engine.get_physics_frames()
+	var started: DotResult = _prof.start_recording(_seconds)
+	if not started.ok:
+		_say("recording did not start: %s" % started.error.message)
+		get_tree().quit(1)
+		return
+	var players0: int = game.call("players").size()
+	while _prof.is_recording():
+		await get_tree().process_frame
+		_sample()
+	await get_tree().process_frame
+	DotFpsPhysicsBody.profile = false
+	var path: String = _prof.last_saved_path()
+	var side := _sidecar(game, players0)
+	var side_path := ProjectSettings.globalize_path(path).get_basename() + ".bench.json"
+	var f := FileAccess.open(side_path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(side, " "))
+		f.close()
+	# The run may be on another box: the report itself goes to stdout too, without spikes and samples.
+	var report: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if report is Dictionary:
+		(report as Dictionary).erase("spikes")
+		(report as Dictionary).erase("samples")
+	print("PERF_BENCH_REPORT %s" % JSON.stringify(report))
+	print("PERF_BENCH_SIDECAR %s" % JSON.stringify(side))
+	print("PERF_BENCH %s" % JSON.stringify({"report": ProjectSettings.globalize_path(path), "sidecar": side_path, "tag": _tag}))
+	get_tree().quit(0)
+
+
+func _add(key: String, v: float) -> void:
+	_acc[key] = float(_acc.get(key, 0.0)) + v
+
+
+func _sample() -> void:
+	_frames += 1
+	var vp := get_viewport().get_viewport_rid()
+	_add("render_cpu_ms", RenderingServer.viewport_get_measured_render_time_cpu(vp) + RenderingServer.get_frame_setup_time_cpu())
+	_add("render_gpu_ms", RenderingServer.viewport_get_measured_render_time_gpu(vp))
+	_add("draw_calls", Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	_add("objects", Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
+	_add("primitives", Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
+	_add("phys_active", Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS))
+	_add("phys_pairs", Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS))
+	_add("phys_islands", Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT))
+	_add("nodes", Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+
+
+## Engine numbers the per-system table does not hold: renderer, physics server, the motor's queries.
+func _sidecar(game: Object, players0: int) -> Dictionary:
+	var n := maxf(_frames, 1.0)
+	var per_frame := {}
+	for k: String in _acc:
+		per_frame[k] = snappedf(float(_acc[k]) / n, 0.001)
+	var pr := DotFpsPhysicsBody.prof
+	var queries := {}
+	var names := ["cast", "rest", "overlap", "ray"]
+	for i in names.size():
+		queries[names[i]] = {"per_frame": snappedf(pr[i * 2] / n, 0.01), "ms_per_frame": snappedf(pr[i * 2 + 1] / 1000.0 / n, 0.001),
+			"us_each": snappedf(float(pr[i * 2 + 1]) / maxf(pr[i * 2], 1.0), 0.01)}
+	return {
+		"map": _map, "mode": String(game.get("mode").id), "bots": _bots, "seed": _seed, "seconds": _seconds, "warmup": _warmup,
+		"tag": _tag, "players": players0, "pilot": _pilot,
+		"host": OS.get_environment("HOSTNAME") if OS.get_environment("HOSTNAME") != "" else OS.get_environment("HOST"),
+		"display": DisplayServer.get_name(), "adapter": RenderingServer.get_video_adapter_name(),
+		"renderer": RenderingServer.get_current_rendering_method(), "window": [get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y],
+		"vsync": DisplayServer.window_get_vsync_mode(), "cpu": OS.get_processor_name(), "threads": OS.get_processor_count(),
+		"physics_engine": str(ProjectSettings.get_setting("physics/3d/physics_engine", "")),
+		"tick_hz": Engine.physics_ticks_per_second, "frames": _frames,
+		"ticks_per_frame": snappedf(float(Engine.get_physics_frames() - _steps0) / n, 0.001),
+		"per_frame": per_frame, "motor_queries": queries,
+	}
