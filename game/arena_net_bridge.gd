@@ -249,20 +249,10 @@ func receive_input(peer_id: int, payload: PackedByteArray) -> DotResult:
 	if batch.is_empty():
 		return DotResult.fail(DotError.CODE_PARSE, "Input packet carries no command.")
 
-	var buffer := net.input_buffer_for(peer_id)
-	var newest := batch[batch.size() - 1]
-	var pushed := DotResult.success(false)
-
-	# The copies of ticks already simulated are skipped rather than pushed, or every one
-	# would count as a late input and the number that says "this client's clock is
-	# behind" would say it about every healthy client. The packet's own tick is always
-	# pushed, so a genuinely late one is still counted.
-	for command in batch:
-		if command != newest and command.tick <= buffer.last_consumed_tick():
-			continue
-		pushed = buffer.push(command)
-
-	return pushed
+	# One call a packet: the copies of ticks already simulated are skipped rather than counted
+	# late, and the arrival lead is measured on the packet's own command only. A resend seen
+	# first here was in a lost packet, and measuring it made the client's clock jump under loss.
+	return net.input_buffer_for(peer_id).push_batch(batch)
 
 
 # --- Events and requests ---------------------------------------------------
