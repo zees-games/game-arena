@@ -90,10 +90,16 @@ func _run() -> void:
 		var p: Object = _client.get("player")
 		return p != null and bool(p.call("is_alive")), 40.0)
 	_check(alive, "the local player is alive on the server")
+	# Owner batch 2026-11-10 item 11: the boot map's match sat IDLE until the first map change.
+	var running := await _until(func() -> bool:
+		var match_node: Object = game.get("match_node")
+		return match_node != null and int(match_node.get("state")) != DotMatch.State.IDLE, 15.0)
+	_check(running, "the boot map's match runs before any map change")
 	var net: Object = _client.get("net")
 	var synced := await _until(func() -> bool: return net != null and net.get("clock") != null and bool(net.get("clock").call("is_synced")), 20.0)
 	_check(synced, "the clock is synced to the server")
 	_check(OS.is_process_running(pid), "the server process is running")
+	await _menu_checks(host)
 	await _owner_checks(game)
 	_check(OS.is_process_running(pid), "the server process outlived all of that")
 
@@ -117,6 +123,35 @@ func _row(prefix: String) -> String:
 		if str(row["id"]).begins_with(prefix) and not bool(row["current"]) and (prefix == "mode:" or str(row.get("detail", "")) == ""):
 			return str(row["id"])
 	return ""
+
+
+## B and the team screen ask the server process over its link, as a connected client's do (owner batch
+## 2026-11-10: B opened nothing, and asking again was refused as "sending messages too quickly").
+func _menu_checks(host: ArenaSimHost) -> void:
+	var refused := [0]
+	host.link.chat_received.connect(func(payload: Dictionary) -> void:
+		if str(payload).contains("too quickly"):
+			refused[0] += 1)
+	var loadout: Object = _client.get("loadout_menu")
+	_check(loadout != null and bool(loadout.call(&"is_online")), "the loadout menu asks the server process")
+	if loadout == null:
+		return
+	var menu: Object = _client.get("game_menu")
+	var opened := false
+	for _press in range(8):
+		loadout.call(&"open")
+		var _answered := await _until(func() -> bool: return int(loadout.get(&"_waiting_since_msec")) < 0, 5.0)
+		var screen: Object = menu.get(&"loadout_screen")
+		if screen != null and bool(screen.call(&"is_open")):
+			opened = true
+			screen.call(&"close")
+	var said := str(loadout.get(&"last_said"))
+	_check(int(loadout.get(&"_waiting_since_msec")) < 0 and (opened or (said != "" and not said.contains("did not answer"))),
+		"the server answers B", str(loadout.call(&"describe")))
+	var teams: Object = menu.get(&"teams")
+	_check(teams != null and teams.get(&"link") == host.link, "the team screen asks the server process too")
+	await get_tree().create_timer(0.5).timeout
+	_check(refused[0] == 0, "eight presses of B are not refused as too quick", "%d refusals" % refused[0])
 
 
 ## What solo does in its own process, asked of the server process: bots, difficulty, cheats, pause, map and mode.

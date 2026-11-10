@@ -764,6 +764,31 @@ func _build_loadout_command() -> void:
 	loadout_command.set(&"item_alias_fn", Callable(ArenaContent.Roles, &"alias"))
 	loadout_command.set(&"applied_fn", func(_ctx: Object, key: String) -> bool:
 		return await rearm_if_allowed(loadout_identity.id_of(key)))
+	# DotNotice drops data holding a PackedStringArray (the offer's tags), so a client over a link got an empty answer and B opened nothing.
+	loadout_command.set(&"notice_fn", _send_loadout_notice)
+
+
+func _send_loadout_notice(ctx: Object, data: Dictionary) -> bool:
+	var session: Variant = ctx.get(&"session") if ctx != null else null
+	var server: Object = DotRegistry.get_service(&"dot_server")
+	if not (session is Object) or server == null or not server.has_method(&"send_notice"):
+		return false
+	var topic: StringName = loadout_command.get_script().get_script_constant_map().get("TOPIC", &"loadout_menu")
+	return bool(server.call(&"send_notice", session, DotNotice.make(&"", "", -1.0, topic, plain_data(data) as Dictionary)))
+
+
+## [param value] with every PackedStringArray turned into an Array, which DotNotice carries.
+static func plain_data(value: Variant) -> Variant:
+	if value is PackedStringArray:
+		return Array(value as PackedStringArray)
+	if value is Array:
+		return (value as Array).map(func(v: Variant) -> Variant: return plain_data(v))
+	if value is Dictionary:
+		var out := {}
+		for k: Variant in value:
+			out[k] = plain_data((value as Dictionary)[k])
+		return out
+	return value
 
 func _build_loadouts() -> DotResult:
 	loadouts = DotLoadoutManager.new()

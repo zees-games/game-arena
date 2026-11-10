@@ -105,6 +105,7 @@ func _use_loadout_menu() -> void:
 		return
 	loadout_menu = game_menu.call(&"use_loadout", loadout_offer, choose_loadout, decorate_loadout_choice)
 	if loadout_menu != null:
+		_link_menu(loadout_menu)
 		# Items the player does not own, greyed with a store button, solo and connected.
 		if DotAddonApi.build_level("dot_game") >= 40:
 			platform.add_loadout_store(loadout_menu, func() -> Object: return game.loadout_command if game != null else null,
@@ -116,6 +117,13 @@ func _use_loadout_menu() -> void:
 		# player's real choice.
 		_loadout_scratch = DotSettingsScratch.is_scratch(ArenaPresentation.settings_directory)
 		follow_account(DotRegistry.get_node_service(AUTH_SERVICE))
+
+
+## Joined to its own server process, nobody registers `dot_client_link`, so a menu that asks the
+## server is handed the host's link; without it B took the solo path on a client with no loadouts.
+func _link_menu(menu_part: Object) -> void:
+	if menu_part != null and link != null and not _offline and &"link" in menu_part:
+		menu_part.set(&"link", link)
 
 
 ## The key a loadout is remembered under for [param auth] (a DotAuthClient, or null): its

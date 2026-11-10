@@ -778,7 +778,9 @@ func _build_interface() -> void:
 			var pair := _local_team_menu.bind_local(game, func() -> int: return player.player_id if player != null else 0)
 			offer = pair[0]
 			choose = pair[1]
-		var _teams: Variant = game_menu.call(&"use_teams", offer, choose)
+		var teams: Variant = game_menu.call(&"use_teams", offer, choose)
+		if teams is Object:
+			_link_menu(teams as Object)
 	platform.add_store_panel(game_menu, func() -> String:
 		var key := loadout_account_key(DotRegistry.get_node_service(AUTH_SERVICE))
 		return "" if key == "local" else key)
