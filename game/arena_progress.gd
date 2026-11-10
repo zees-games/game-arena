@@ -1,9 +1,11 @@
 extends Node
 
+const ArenaAwardStore := preload("arena_award_store.gd")
 const ArenaAwards := preload("arena_awards.gd")
 const ArenaBoards := preload("arena_boards.gd")
 const ArenaGame := preload("arena_game.gd")
 const ArenaStats := preload("arena_stats.gd")
+const ArenaStatsStore := preload("arena_stats_store.gd")
 
 ## What a player keeps when the match ends: statistics, achievements and boards.
 ##
@@ -50,11 +52,7 @@ const BOARDS_CONFIG_PATH := "user://arena_boards.json"
 
 @export_group("Storage")
 
-## Where achievement progress is kept. Empty keeps it in memory only.
-##
-## A dedicated server wants a directory; the headless suite wants memory, because a
-## suite that writes a player's lifetime totals to disk is a suite that passes
-## differently the second time it is run.
+## Where achievement progress is kept. Empty is the tracker's own [member DotAchievementTracker.store_directory].
 @export_dir var progress_dir: String = ""
 
 const STATS_SERVICE := &"dot_stats_tracker"
@@ -214,6 +212,11 @@ func set_reporting(on: bool) -> DotResult:
 func _exit_tree() -> void:
 	if stats != null:
 		DotRegistry.unregister_instance(STATS_SERVICE, stats)
+		# The tracker (a child, so already out) has just merged its last interval; no frame may follow to write it.
+		if stats.store is ArenaStatsStore:
+			(stats.store as ArenaStatsStore).finish()
+	if achievements != null and achievements.store is ArenaAwardStore:
+		(achievements.store as ArenaAwardStore).finish()
 
 
 func _build() -> DotResult:
@@ -225,7 +228,7 @@ func _build() -> DotResult:
 	stats.define_on_start = true
 	# Before add_child, so the tracker's flush timer also writes the store.
 	if _game != null and _game.stats_file != "":
-		stats.store = DotStatsStoreFile.new(_game.stats_file)
+		stats.store = ArenaStatsStore.new(_game.stats_file)
 	add_child(stats)
 	_kill_feed = DotStatsEventFeed.new(stats)
 	_kill_feed.key_of = func(id: Variant) -> StringName: return StringName(_key_of(int(id)))
@@ -264,10 +267,8 @@ func _build() -> DotResult:
 	# tracker publishes itself, which is how a console command finds it.
 	achievements.register_as = DotAchievementTracker.SERVICE
 
-	if progress_dir != "":
-		var file_store := DotAchievementStoreFile.new()
-		file_store.directory = progress_dir
-		achievements.store = file_store
+	# The tracker's own default is a file store in its store_directory; this is the same files, written behind the frame.
+	achievements.store = ArenaAwardStore.new(progress_dir if progress_dir != "" else achievements.store_directory)
 
 	add_child(achievements)
 

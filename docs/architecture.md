@@ -107,6 +107,7 @@ Everything is flat under `game/` and `maps/`, grouped here by what it is for.
 | `game/arena_net_*.gd`, `arena_player_net.gd`, `arena_npc_net.gd`, `arena_events.gd`, `arena_event.gd`, `arena_request.gd` | the dot-net bridge, link, commands, per-entity net state, events and requests |
 | `game/arena_client.gd`, `arena_client_extras.gd`, `arena_hud.gd`, `arena_menus.gd`, `arena_bindings.gd`, `arena_hud_glance.gd`, `arena_presentation.gd`, `arena_browser.gd`, `arena_party.gd`, `arena_avatars.gd`, `arena_projectile_view.gd`, `arena.tscn` | the client: never loaded by a dedicated server |
 | `game/arena_stats.gd`, `arena_awards.gd`, `arena_boards.gd`, `arena_progress.gd`, `arena_identity.gd` | progression and identity |
+| `game/arena_stats_store.gd`, `arena_award_store.gd` | the stats file and the achievement files written once per save, off the frame (the addons' file stores write per player in the saving frame; `ArenaProgress._exit_tree` calls `finish()`) |
 | `game/arena_paths.gd` | `rebase` for every `res://` path (pack delivery) |
 | `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
 | `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the arena-surf-dm-maps link |
