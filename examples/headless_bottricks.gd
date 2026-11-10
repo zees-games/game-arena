@@ -18,7 +18,7 @@ const BOT := 1
 const OTHER := 2
 const MAPS: Array[StringName] = [&"dm_atrium", &"dm_pit"]
 
-const CHECKS := 24
+const CHECKS := 25
 const SECTIONS := 6
 
 var _entered := 0
@@ -107,7 +107,12 @@ func _play(map_id: StringName, preset: String, launch: bool) -> Dictionary:
 
 	var motor: Variant = game.player_for(BOT).controller.motor
 	var counts: Dictionary = minds[BOT].brain.tricks.counts
-	var result := {"slides": motor.slides, "wall_runs": motor.wall_runs, "launches": motor.launches, "ducks": ducks, "air_jump": counts[&"air_jump"], "started_slide": counts[&"slide"], "started_wall": counts[&"wall"], "seen_crouch": seen_crouch, "seen_slide": seen_slide, "wire_ok": wire_ok, "remote_slides": remote_slides, "drawn_ok": drawn_ok}
+	var gate_tun: DotFpsTunables = game.player_for(BOT).controller.tunables
+	var tricks: Object = minds[BOT].brain.tricks
+	var gates_ok: bool = is_equal_approx(tricks.slide_speed, gate_tun.slide_min_speed * 1.18) \
+			and is_equal_approx(tricks.wall_run_speed, gate_tun.wall_run_min_speed * 1.17) \
+			and tricks.slide_speed > gate_tun.slide_min_speed and tricks.wall_run_speed > gate_tun.wall_run_min_speed
+	var result := {"slides": motor.slides, "wall_runs": motor.wall_runs, "launches": motor.launches, "ducks": ducks, "air_jump": counts[&"air_jump"], "started_slide": counts[&"slide"], "started_wall": counts[&"wall"], "seen_crouch": seen_crouch, "seen_slide": seen_slide, "wire_ok": wire_ok, "remote_slides": remote_slides, "drawn_ok": drawn_ok, "gates_ok": gates_ok}
 	if launch:
 		_results["%s/%s" % [preset, map_id]] = result
 		print("       %s" % [result])
@@ -146,6 +151,10 @@ func _compare() -> void:
 		drawn_ok = drawn_ok and bool(_results[key2]["drawn_ok"])
 		remote_slides += int(_results[key2]["remote_slides"])
 	_check(drawn_ok and remote_slides > 0, "a remote copy rebuilt from net_flags is drawn sliding while the bot slides", str(remote_slides))
+	var gates := true
+	for key3: String in _results:
+		gates = gates and bool(_results[key3]["gates_ok"])
+	_check(gates, "the bot's slide and wall-run gates follow the motor's tunables, not constants")
 	_check(wire, "slide and wall-run flags survive the net_flags pack and unpack")
 	_check(int(hard["slides"]) >= 20, "nightmare bots slide on the real motor", str(hard["slides"]))
 	_check(int(hard["wall_runs"]) >= 4, "nightmare bots wall run on the real motor", str(hard["wall_runs"]))
