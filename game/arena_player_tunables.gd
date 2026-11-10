@@ -79,15 +79,8 @@ static func make() -> DotFpsTunables:
 	# and the owner reported sprint as broken. With arena_dash 1 the same bit also dashes.
 	tunables.sprint_speed_scale = SPRINT_SCALE
 	tunables.crouch_speed_scale = 0.45
-	# Crouch at a run slides: a burst and a long, low-friction carry, then a crouch. The
-	# minimum is under the 5.74 m/s run so any real run slides and a crouch-walk never does.
-	tunables.slide_enabled = true
-	tunables.slide_min_speed = 4.1
-	tunables.slide_boost = 3.5
-	tunables.slide_max_speed = 14.0
-	tunables.slide_friction = 0.9
-	tunables.slide_duration = 0.9
-	tunables.slide_cooldown = 0.6
+	# Crouch at a run slides (DotFpsSlidePreset.apply_run: a burst and a long, low-friction carry).
+	DotFpsSlidePreset.apply_run(tunables)
 	# E throws you upward on a cooldown, on the command's first user bit (the weapon buttons
 	# ride in their own). Off by default: a stray E must not fire the player; arena_launch 1 enables it.
 	tunables.launch_enabled = false
