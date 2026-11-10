@@ -7,7 +7,7 @@ const ShardArgs := preload("shard_args.gd")
 ## holds that every shard's log is there and that together they entered all SECTIONS.
 ## Every shard boots and connects: two sections each, which the merge counts once.
 const SHARED_SECTIONS := 2
-const SHARDS := {"windows": [5, 59], "moves": [6, 35], "rest": [8, 40]}
+const SHARDS := {"windows": [5, 59], "moves": [6, 37], "rest": [8, 40]}
 
 
 func _ready() -> void:
@@ -137,11 +137,22 @@ func _physics_process(delta: float) -> void:
 
 
 func _physics_rest(server_tick: int) -> void:
-	if _hop_from >= 0:
+	if _clients.has("A") and _clients["A"].get("link") != null:
 		var hop_buffer := _module().net.input_buffer_for(int((_clients["A"]["link"] as DotClientLink).multiplayer.get_unique_id()))
 		if hop_buffer != null and hop_buffer.starved_count != _hop_starved_seen:
 			_hop_starved_seen = hop_buffer.starved_count
 			_hop_starved.append(server_tick)
+	if _hop_from >= 0:
+		var predictor: Object = (_clients["A"]["net"] as DotNetManager).predictor
+		var applied := int(predictor.get("_corrections_applied"))
+		var input_tick := (_clients["A"]["net"] as DotNetManager).clock.input_tick()
+		if _hop_clock_seen >= 0 and input_tick != _hop_clock_seen + 1:
+			_hop_steps.append("%d:%+d" % [server_tick - _hop_from, input_tick - _hop_clock_seen - 1])
+		_hop_clock_seen = input_tick
+		if applied != _hop_fix_seen:
+			_hop_fixes.append([server_tick, float(predictor.get("_worst_error")), applied - _hop_fix_seen, int(predictor.get("_last_replay_ticks")), input_tick])
+			_hop_fix_seen = applied
+			predictor.set("_worst_error", 0.0)
 	if not _w.is_empty():
 		_sample_clock(server_tick)
 		# What the server will find for A on the tick it runs next: there, a hole in what
@@ -305,37 +316,53 @@ func _test_wall_moves() -> void:
 	# The script is the classic run (jump, dash, run, jump off); the auto-start run would start a
 	# second one on the first touch.
 	var _auto_off := _server.console.set_cvar("arena_wall_run_auto", "0")
-	await _until(func() -> bool: return own.controller.tunables.dash_enabled, RELIABLE_SECONDS)
+	await _moves_told(own)
 	_wall_idle = true
 	_wall_from = -1
 	# Twice: the commands A sent before it went idle are still arriving for a few ticks after
 	# the first teleport, and carried it up to a metre off the spot (and out of the wall's
 	# reach) one run in two.
-	for _i in range(2):
-		server_a.controller.teleport(Vector3(-7.0, 0.1, -23.6), -90.0, 0.0)
-		await _wait_game(0.75)
-
 	var heard := {"runs": 0, "jumps": 0}
-	var on_run := func(running: bool) -> void:
-		if running:
-			heard["runs"] += 1
-	var on_jump := func() -> void: heard["jumps"] += 1
-	own.controller.wall_run_changed.connect(on_run)
-	own.controller.wall_jumped.connect(on_jump)
-	var runs := server_a.controller.motor.wall_runs
-	var jumps := server_a.controller.motor.wall_jumps
-	var replays := int(net.predictor.get("_replays"))
-	var corrections := int(net.predictor.get("_corrections_applied"))
+	var on_run: Callable
+	var on_jump: Callable
+	var runs := 0
+	var jumps := 0
+	var replays := 0
+	var corrections := 0
+	# Again when the server ran a tick of the script on another command than A's (see _edge_holes).
+	for attempt in range(3):
+		_wall_from = -1
+		for _i in range(2):
+			server_a.controller.teleport(Vector3(-7.0, 0.1, -23.6), -90.0, 0.0)
+			await _wait_game(0.75)
 
-	_wall_from = net.clock.input_tick() + 4
-	await _wait_game(2.6)
+		heard["runs"] = 0
+		heard["jumps"] = 0
+		on_run = func(running: bool) -> void:
+			if running:
+				heard["runs"] += 1
+		on_jump = func() -> void: heard["jumps"] += 1
+		own.controller.wall_run_changed.connect(on_run)
+		own.controller.wall_jumped.connect(on_jump)
+		runs = server_a.controller.motor.wall_runs
+		jumps = server_a.controller.motor.wall_jumps
+		replays = int(net.predictor.get("_replays"))
+		corrections = int(net.predictor.get("_corrections_applied"))
 
-	runs = server_a.controller.motor.wall_runs - runs
-	jumps = server_a.controller.motor.wall_jumps - jumps
-	replays = int(net.predictor.get("_replays")) - replays
-	corrections = int(net.predictor.get("_corrections_applied")) - corrections
-	own.controller.wall_run_changed.disconnect(on_run)
-	own.controller.wall_jumped.disconnect(on_jump)
+		_wall_from = net.clock.input_tick() + 4
+		await _wait_game(2.6)
+
+		runs = server_a.controller.motor.wall_runs - runs
+		jumps = server_a.controller.motor.wall_jumps - jumps
+		replays = int(net.predictor.get("_replays")) - replays
+		corrections = int(net.predictor.get("_corrections_applied")) - corrections
+		own.controller.wall_run_changed.disconnect(on_run)
+		own.controller.wall_jumped.disconnect(on_jump)
+		var holes := _wall_holes(_wall_from)
+		if holes.is_empty():
+			break
+		print("    the server ran ticks %s of the script (from %d) on a command A had changed: %s" % [
+			holes, _wall_from, "once more" if attempt < 2 else "three times over"])
 
 	var track: Dictionary = _server_track.get(session, {})
 	var diffs: Array[float] = []
@@ -367,12 +394,13 @@ func _test_wall_moves() -> void:
 	_done()
 
 
-## p95 and max distance between A's prediction and the server's A over input ticks [from, to).
-func _prediction_gap(session: int, from: int, to: int) -> Array:
+## p95 and max distance between A's prediction and the server's A over input ticks [from, to),
+## less those of [param skip] (see [method _excused]).
+func _prediction_gap(session: int, from: int, to: int, skip: Dictionary = {}) -> Array:
 	var track: Dictionary = _server_track.get(session, {})
 	var diffs: Array[float] = []
 	for tick in range(from, to):
-		if _predicted.has(tick) and track.has(tick):
+		if _predicted.has(tick) and track.has(tick) and not skip.has(tick):
 			diffs.append((_predicted[tick] as Vector3).distance_to(track[tick]))
 	diffs.sort()
 	if diffs.is_empty():
@@ -407,7 +435,7 @@ func _test_stamina_under_loss() -> void:
 		t.stamina_exhaust_delay = 0.5
 	var _dash_on := _server.console.set_cvar("arena_dash", "1")
 	var _auto_off := _server.console.set_cvar("arena_wall_run_auto", "0")
-	await _until(func() -> bool: return own.controller.tunables.dash_enabled, RELIABLE_SECONDS)
+	await _moves_told(own)
 
 	var lows := {"min": 1.0, "exhausted": 0, "client_min": 1.0}
 	var sample := func() -> void:
@@ -433,7 +461,9 @@ func _test_stamina_under_loss() -> void:
 	await _wait_game(0.5)
 	replays = int(net.predictor.get("_replays")) - replays
 	corrections = int(net.predictor.get("_corrections_applied")) - corrections
-	var open: Array = _prediction_gap(session, from, last)
+	_stam_from = from
+	var open: Array = _prediction_gap(session, from, last, _excused(_edge_holes(from, last, _command_a), net))
+	_stam_from = -1
 	print("    stamina: the server's A fell to %.2f and was exhausted on %d frames; A's copy fell to %.2f" % [
 		lows["min"], lows["exhausted"], lows["client_min"]])
 	print("    A's prediction over %d ticks: p95 %.3f / max %.3f m; %d of %d replays corrected" % [
@@ -463,21 +493,30 @@ func _stamina_wall_run(server_a: ArenaPlayer, session: int, net: DotNetManager) 
 	var replays := 0
 	var corrections := 0
 	var from := 0
+	var runs := 0
 	_wall_idle = true
-	_wall_from = -1
-	for _i in range(2):
-		server_a.controller.teleport(Vector3(-7.0, 0.1, -23.6), -90.0, 0.0)
-		await _wait_game(0.75)
-	var runs := server_a.controller.motor.wall_runs
-	replays = int(net.predictor.get("_replays"))
-	corrections = int(net.predictor.get("_corrections_applied"))
-	_wall_hold_sprint = true
-	_wall_from = net.clock.input_tick() + 4
-	from = _wall_from
-	await _wait_game(2.6)
-	runs = server_a.controller.motor.wall_runs - runs
-	replays = int(net.predictor.get("_replays")) - replays
-	corrections = int(net.predictor.get("_corrections_applied")) - corrections
+	# Again when the server ran a tick of the script on another command than A's (see _edge_holes).
+	for attempt in range(3):
+		_wall_hold_sprint = false
+		_wall_from = -1
+		for _i in range(2):
+			server_a.controller.teleport(Vector3(-7.0, 0.1, -23.6), -90.0, 0.0)
+			await _wait_game(0.75)
+		runs = server_a.controller.motor.wall_runs
+		replays = int(net.predictor.get("_replays"))
+		corrections = int(net.predictor.get("_corrections_applied"))
+		_wall_hold_sprint = true
+		_wall_from = net.clock.input_tick() + 4
+		from = _wall_from
+		await _wait_game(2.6)
+		runs = server_a.controller.motor.wall_runs - runs
+		replays = int(net.predictor.get("_replays")) - replays
+		corrections = int(net.predictor.get("_corrections_applied")) - corrections
+		var holes := _wall_holes(from)
+		if holes.is_empty():
+			break
+		print("    the server ran ticks %s of the script (from %d) on a command A had changed: %s" % [
+			holes, from, "once more" if attempt < 2 else "three times over"])
 	var wall: Array = _prediction_gap(session, from, from + 120)
 	print("    wall run with sprint held: %d runs; prediction over %d ticks p95 %.3f / max %.3f m; %d of %d replays corrected" % [
 		runs, wall[0], wall[1], wall[2], corrections, replays])
@@ -706,6 +745,8 @@ func _hop_section(title: String, pilot: bool, seconds: float) -> void:
 
 	var replays := int(net.predictor.get("_replays"))
 	var corrections := int(net.predictor.get("_corrections_applied"))
+	_hop_fixes.clear()
+	_hop_fix_seen = corrections
 
 	_hop_from = net.clock.input_tick() + 4
 	var worst_before := float(net.predictor.get("_worst_error"))
@@ -717,18 +758,43 @@ func _hop_section(title: String, pilot: bool, seconds: float) -> void:
 
 	replays = int(net.predictor.get("_replays")) - replays
 	corrections = int(net.predictor.get("_corrections_applied")) - corrections
-	var worst := float(net.predictor.get("_worst_error"))
-	net.predictor.set("_worst_error", maxf(worst, worst_before))
-
+	# A correction that came down within a snapshot's trip of a hole on a changed command is the
+	# hole's: the server did not run what A predicted with. The others are held to the limits.
+	var hop_from := _hop_from
+	var holes := _edge_holes(hop_from, last, func(t: int) -> DotFpsCommand:
+		return _pilot_command(t - hop_from) if pilot else _hop_command(t - hop_from))
+	var skip := _excused(holes, net)
 	var track: Dictionary = _server_track.get(session, {})
+	# ... and only where A's first prediction really was off the server's there: a replay that
+	# moves a prediction which was right is the predictor's, hole or no hole.
+	var off: Array[int] = []
+	for tick: int in skip:
+		if _predicted.has(tick) and track.has(tick) and (_predicted[tick] as Vector3).distance_to(track[tick]) > 0.02:
+			off.append(tick)
+	var worst := float(net.predictor.get("_worst_error"))
+	var worst_all := worst
+	var excused := 0
+	for fix: Array in _hop_fixes:
+		worst_all = maxf(worst_all, fix[1])
+		var at_tick := int(fix[0])
+		var near := func(h: int) -> bool: return h >= at_tick - _down_ticks() - 1 and h <= at_tick + 1
+		if holes.any(near) and off.any(near):
+			excused += int(fix[2])
+		else:
+			worst = maxf(worst, fix[1])
+	net.predictor.set("_worst_error", maxf(worst_all, worst_before))
+
 	var diffs: Array[float] = []
+	var ticks := 0
 	var pinned := 0
 	var hops := 0
 	var low := true
 	for tick in range(_hop_from, last):
 		if _predicted.has(tick) and track.has(tick):
 			var at: Vector3 = track[tick]
-			diffs.append((_predicted[tick] as Vector3).distance_to(at))
+			ticks += 1
+			if not skip.has(tick):
+				diffs.append((_predicted[tick] as Vector3).distance_to(at))
 			if pilot and (_predicted[tick] as Vector3).distance_to(at) > 0.02:
 				var cmd := _pilot_command(tick - _hop_from)
 				print("      off by %.3f at tick %d (k %d): predicted %s, server %s, jump %s; server starved at %s" % [
@@ -742,12 +808,18 @@ func _hop_section(title: String, pilot: bool, seconds: float) -> void:
 	diffs.sort()
 	var d95 := diffs[int(diffs.size() * 0.95)] if not diffs.is_empty() else -1.0
 	var dmax := diffs[diffs.size() - 1] if not diffs.is_empty() else -1.0
-	print("    the server's A left the floor %d times; %d of %d ticks at the wall" % [hops, pinned, diffs.size()])
-	print("    A's prediction: p95 %.3f / max %.3f m; %d of %d replays corrected, the worst by %.3f m" % [
-		d95, dmax, corrections, replays, worst])
+	print("    the server's A left the floor %d times; %d of %d ticks at the wall" % [hops, pinned, ticks])
+	print("    A's prediction over %d ticks: p95 %.3f / max %.3f m; %d of %d replays corrected (%d after a hole, the worst of all %.3f m), the worst of the rest by %.3f m" % [
+		diffs.size(), d95, dmax, corrections, replays, excused, worst_all, worst])
+	corrections -= excused
+	if corrections > 0:
+		print("      corrections [server tick, metres, count, ticks replayed, input tick] %s from %d; holes %s; all starved %s; clock steps %s" % [
+			_hop_fixes, hop_from, holes, _hop_starved.filter(func(t: int) -> bool: return t >= hop_from - 3), _hop_steps])
+	_hop_steps.clear()
+	_hop_clock_seen = -1
 
-	_check(hops >= 5 and pinned > diffs.size() / 2,
-		"the server's A hopped against the wall", "%d hops, %d of %d ticks there" % [hops, pinned, diffs.size()])
+	_check(hops >= 5 and pinned > ticks / 2,
+		"the server's A hopped against the wall", "%d hops, %d of %d ticks there" % [hops, pinned, ticks])
 	_check(diffs.size() > 4 * Engine.physics_ticks_per_second and d95 >= 0.0 and d95 <= 0.05 and dmax <= 0.5,
 		"A's prediction of it within 5 cm for 95% of its ticks, never half a metre off",
 		"%d ticks, p95 %.3f, max %.3f" % [diffs.size(), d95, dmax])

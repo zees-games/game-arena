@@ -416,3 +416,60 @@ static func _missing(sent: Array, got: Array) -> String:
 			twice.append(item)
 	return "missing %s, twice %s, first %s, last %s" % [lacks, twice,
 		got[0] if not got.is_empty() else "-", got[got.size() - 1] if not got.is_empty() else "-"]
+
+
+## [b]A hole.[/b] With 20% loss a packet's four resends cover two lost in a row; three in a row leave
+## the server a tick without A's command, which it runs on the last one it had (dot-net's
+## `note_starved`), 0.3 to 0.5% of ticks. Where A's script changes there the server did not run what A
+## predicted with, and at 22 Hz one tick's walk is 26 cm. Returns those server ticks of [from - 2, to):
+## the starved ones (a run of them counts from its first) whose command differs from the one repeated.
+func _edge_holes(from: int, to: int, command_of: Callable) -> Array[int]:
+	var out: Array[int] = []
+	for h in _hop_starved:
+		if h < from - 2 or h >= to:
+			continue
+		var first := h
+		while _hop_starved.has(first - 1):
+			first -= 1
+		# The tick is read a frame after the server ran it, so one either side counts.
+		var held: DotFpsCommand = command_of.call(first - 2)
+		for u in range(first - 1, h + 2):
+			var c: DotFpsCommand = command_of.call(u)
+			if c.buttons != held.buttons or c.move != held.move or not is_equal_approx(c.yaw, held.yaw):
+				out.append(h)
+				break
+	return out
+
+
+func _wall_holes(from: int) -> Array[int]:
+	return _edge_holes(from, from + 120, func(t: int) -> DotFpsCommand: return _wall_command(t - from))
+
+
+## Server ticks a snapshot takes to reach A at worst: the relay's 55 ms and 25 ms of jitter, and two lost in a row.
+func _down_ticks() -> int:
+	return ceili(0.1 * Engine.physics_ticks_per_second) + 3
+
+
+## The input ticks A predicted before it could know of each of [param holes]: from the hole until the
+## snapshot of it is down, A's lead further on. Its prediction of those is not held to the server's.
+func _excused(holes: Array[int], net: DotNetManager) -> Dictionary:
+	var out := {}
+	var reach := maxi(0, net.clock.input_tick() - _game.current_tick()) + _down_ticks() + 1
+	for h in holes:
+		for t in range(h - 1, h + reach + 1):
+			out[t] = true
+	if not holes.is_empty():
+		print("    the server ran ticks %s on a command A had changed: %d ticks of prediction not measured" % [holes, out.size()])
+	return out
+
+
+## Waits for arena_dash 1 and arena_wall_run_auto 0 to reach A's own tunables. Checked, not only
+## waited for: a section that went on without them compared two different sets of moves and
+## failed its prediction checks by metres, which named the wrong thing.
+func _moves_told(own: ArenaPlayer) -> void:
+	var from := Time.get_ticks_msec()
+	var told := await _until(func() -> bool:
+		return own.controller.tunables.dash_enabled and not own.controller.tunables.wall_run_auto, RELIABLE_SECONDS)
+	_check(told, "arena_dash 1 and arena_wall_run_auto 0 reached A's tunables",
+		"after %d ms: dash %s, auto run %s" % [Time.get_ticks_msec() - from,
+			own.controller.tunables.dash_enabled, own.controller.tunables.wall_run_auto])

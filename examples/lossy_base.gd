@@ -83,7 +83,7 @@ const RELIABLE_SECONDS := 35.0
 ## Checks per window, and outside them.
 const MEASURE_ATTEMPTS := 6
 const WINDOW_CHECKS := 16
-const OTHER_CHECKS := 64
+const OTHER_CHECKS := 66
 
 ## The share of real time the three games must run at for anything here to be a measurement. ENet, the
 ## relay's delays and every round trip keep wall time whatever the box does; a box that runs 64 ticks in
@@ -152,6 +152,11 @@ var _hop_from := -1
 var _hop_pilot := false
 var _hop_starved: Array[int] = []
 var _hop_starved_seen := 0
+## Per frame of a hop section that corrected A: [server tick, the worst error, corrections].
+var _hop_fixes: Array = []
+var _hop_fix_seen := 0
+var _hop_steps := PackedStringArray()
+var _hop_clock_seen := -1
 
 ## A's input tick its sprint pattern starts on (-1 off), and whether the wall script holds sprint.
 var _stam_from := -1
