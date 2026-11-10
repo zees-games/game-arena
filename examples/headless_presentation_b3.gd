@@ -248,6 +248,28 @@ func _test_effects_and_the_player_who_asked_for_none() -> void:
 		"and at the highest it is drawn (%s)" % str(why)
 	)
 
+	# Texture detail and filtering reach the world's viewport through dot-fx's render quality,
+	# which follows the presentation's settings only because the client hands them over.
+	var screen := SubViewport.new()
+	add_child(screen)
+	var client := ArenaClient.new()
+	client.presentation = p
+	client.platform = DotGameClient.new()
+	var quality: Node = load("res://addons/dot_fx/runtime/dot_fx_render_quality.gd").new()
+	quality.set(&"viewport", screen)
+	add_child(quality)
+	client.platform.render_quality = quality
+	client._follow_render_quality()
+	p.settings.set_value(&"mip_bias", 1.0)
+	p.settings.set_value(&"aniso", 8)
+	_check(is_equal_approx(screen.texture_mipmap_bias, 1.0), "the menu's Texture detail reaches the viewport (%.2f)" % screen.texture_mipmap_bias)
+	_check(screen.anisotropic_filtering_level == Viewport.ANISOTROPY_8X, "and so does its anisotropic filtering (%d)" % screen.anisotropic_filtering_level)
+	p.settings.set_value(&"mip_bias", 0.0)
+	p.settings.set_value(&"aniso", -1)
+	for node: Node in [quality, screen, client.platform]:
+		node.free()
+	client.free()
+
 	p.queue_free()
 	_done()
 

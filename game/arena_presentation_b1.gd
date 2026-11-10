@@ -8,6 +8,7 @@ const ArenaAudioManager := preload("arena_audio_manager.gd")
 
 
 const ArenaBlood := preload("arena_blood.gd")
+const ArenaHoleSizes := preload("arena_hole_sizes.gd")
 
 
 const ArenaAwards := preload("arena_awards.gd")
@@ -527,9 +528,9 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 		# drawing this layer's as well was two flashes, two sparks and a stand-in rifle report under the real one.
 		for at in shot.impacts:
 			if weapon_draws:
-				fx.spawn_decal(&"bullet_hole", facing(at, shot.direction))
+				ArenaHoleSizes.fit(fx.spawn_decal(&"bullet_hole", facing(at, shot.direction)), shot.weapon_id)
 			else:
-				on_impact(facing(at, shot.direction), false)
+				on_impact(facing(at, shot.direction), false, shot.weapon_id)
 
 		fx.spawn_penetration_decals(shot.penetrations)
 		fx.spawn_ricochet_decals(shot.ricochets)
@@ -561,10 +562,13 @@ func on_explosion(at: Vector3, eye: Vector3) -> void:
 		fx.shake.add(EXPLOSION_SHAKE * near * near)
 
 
-func on_impact(at: Transform3D, on_player: bool) -> void:
+func on_impact(at: Transform3D, on_player: bool, weapon_id: StringName = &"") -> void:
 	# Checked decal first: a miss's endpoint is open air, and a spark there floats too.
-	if not on_player and fx.spawn_decal(&"bullet_hole", at) == null:
-		return
+	if not on_player:
+		var hole := fx.spawn_decal(&"bullet_hole", at)
+		if hole == null:
+			return
+		ArenaHoleSizes.fit(hole, weapon_id)
 	audio.play_at(&"impact", at.origin)
 	fx.spawn(&"impact_spark", at)
 

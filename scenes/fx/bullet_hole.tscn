@@ -16,5 +16,5 @@ fill_to = Vector2(1, 0.5)
 
 [node name="Decal" type="Decal" parent="."]
 rotation = Vector3(1.5707964, 0, 0)
-size = Vector3(0.14, 0.4, 0.14)
+size = Vector3(0.06, 0.4, 0.06)
 texture_albedo = SubResource("hole_tex")
