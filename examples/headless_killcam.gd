@@ -6,7 +6,7 @@ const Bodies := preload("../game/arena_killcam_bodies.gd")
 const KillcamShots := preload("../game/arena_killcam_shots.gd")
 const KillPovView := preload("../game/arena_kill_pov_view.gd")
 
-const EXPECTED_CHECKS := 51
+const EXPECTED_CHECKS := 56
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -372,5 +372,26 @@ func _check_lens(gm: Object, me: Object, killer: Object) -> void:
 	_check(after < peak * 0.5, "and lowers it again in the open", "%s of %s" % [after, peak])
 	view.present({})
 	_check(not KillPov.is_replay_camera(cam), "ending the replay unflags the camera")
+	# The rig pool: a kill view builds nothing it has built before.
+	var used: Array = view.parked()
+	var held := KillPov.weapon_of(aux[0])
+	_check(view.hands == null and held != &"" and used.has(held), "the ended replay parks its view model, weapon in hand", str(used))
+	var ids: Array = AwWeaponArtTable.table().keys()
+	var _made: Array = view.warm(ids)
+	_check(view.parked().size() == KillPovView.RIGS, "warming parks a view model per weapon up to the pool's size", str(view.parked()))
+	var children := view.get_child_count()
+	_check(view.warm_meshes(ids, 0, 0) == 1, "holding every weapon once goes a slice at a time")
+	var at := 1
+	while at < ids.size():
+		at = view.warm_meshes(ids, at, Time.get_ticks_msec() + 50)
+	await get_tree().process_frame
+	_check(view.get_child_count() == children and view.parked().size() == KillPovView.RIGS, "and leaves no view model behind", "%d of %d" % [view.get_child_count(), children])
+	var parked_rig: Variant = null
+	for child in view.get_children():
+		if child is AwViewModel and (child as AwViewModel).equipped() == held:
+			parked_rig = child
+	view.present({"camera": cam, "aux": aux, "fov": 75.0, "behind": false})
+	_check(view.hands != null and view.hands == parked_rig, "the next kill by that weapon takes the parked view model")
+	view.present({})
 	cam.queue_free()
 	view.queue_free()

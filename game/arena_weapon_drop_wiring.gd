@@ -41,6 +41,40 @@ static func prewarm_step(game, ids: Array, from: int, until_msec: int) -> int:
 	while next < ids.size() and Time.get_ticks_msec() < until_msec and game.weapon_drops != null:
 		game.weapon_drops.prewarm(ids[next], POOL_DEPTH if ids[next] in ArenaContent.default_loadout() else 1)
 		next += 1
+	if next >= ids.size() and game.weapon_drops != null:
+		game.weapon_drops.set_meta(POOLED, true)
+	return next
+
+
+## Set on a layer whose bodies [method prewarm_step] has parked. A map change builds a new layer, without it.
+const POOLED := &"arena_drops_pooled"
+
+
+## Whether [param game]'s drop layer still has to be given its parked bodies (true after every game or map rebuild).
+static func needs_pool(game) -> bool:
+	return game != null and game.weapon_drops != null and game.weapon_drops.draws and not game.weapon_drops.has_meta(POOLED)
+
+
+const CHARGE_FX := preload("res://addons/arena_weapons/view/aw_charge_fx.gd")
+
+## The meshes and materials of the world model of each weapon of [param ids] from index [param from] until
+## [param until_msec], appended to [param into]; returns the next index. A drop body waits outside the tree and
+## a held weapon is built when its carrier spawns, so neither is drawn under the loading cover unless handed to it.
+static func warm_looks(ids: Array, from: int, until_msec: int, into: Array) -> int:
+	var next := from
+	if from == 0:
+		# The charge ball a watcher sees is built on the first charge (r_held_hooks 346 ms in the owner's profile).
+		var ball: Node = CHARGE_FX.new()
+		DotRenderWarmup.collect(ball, into)
+		ball.free()
+	while next < ids.size() and Time.get_ticks_msec() < until_msec:
+		var model := look(ids[next])
+		if model != null:
+			# The watcher's reload splits the magazine out of the gun on its first frame; the cut is cached by model.
+			model.on_reloading(true)
+			DotRenderWarmup.collect(model, into)
+			model.free()
+		next += 1
 	return next
 
 

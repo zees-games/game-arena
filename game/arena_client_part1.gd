@@ -131,6 +131,8 @@ func _on_map_changed(map: DotMapDef) -> void:
 			"map": String(map.id),
 		})
 
+	# The rebuilt game's drop layer is empty; fill it before the cover lifts (the hold must precede the map's release).
+	_repool_drops()
 	await _enter_level(true)
 
 	# A mirroring client's combat manager is never rebuilt — `change_map` is the server's —
@@ -428,8 +430,21 @@ func _prewarm_tick() -> void:
 			var ids: Array = _warm.get("drop_ids", ArenaWeaponDropWiring.prewarm_ids())
 			_warm.drop_ids = ids
 			var slice := int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8
-			_warm.drop_next = ArenaWeaponDropWiring.prewarm_step(game, ids, int(_warm.get("drop_next", 0)), Time.get_ticks_msec() + slice)
-			if _warm.drop_next >= ids.size():
+			var drops_until := Time.get_ticks_msec() + slice
+			_warm.drop_next = ArenaWeaponDropWiring.prewarm_step(game, ids, int(_warm.get("drop_next", 0)), drops_until)
+			# Their shaders too: a parked body is outside the tree and a carried weapon is built at its carrier's
+			# spawn, so the cover drew neither (first drop 163 ms, first held weapon 360 ms in the owner's profile).
+			if _warm.drop_next >= ids.size() and int(_warm.get("look_next", 0)) < ids.size():
+				var looks: Array = []
+				_warm.look_next = ArenaWeaponDropWiring.warm_looks(ids, int(_warm.get("look_next", 0)), drops_until, looks)
+				gate.warm_up(looks)
+			elif _warm.drop_next >= ids.size() and int(_warm.get("screens", 0)) < KILL_SCREENS.size():
+				# The killer's screen: view models holding the starting weapons, arms, flash pool, crosshair. One screen a frame.
+				_warm_kill_screen(int(_warm.get("screens", 0)))
+				_warm.screens = int(_warm.get("screens", 0)) + 1
+			elif _warm.drop_next >= ids.size() and _warm_kill_meshes(drops_until):
+				pass
+			elif _warm.drop_next >= ids.size():
 				_warm.phase = 3
 				ArenaLoadTimeline.mark("prewarm 2 done: weapon drop bodies, own work %d ms" % (int(_warm_work_usec.get(2, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 		3:
@@ -455,6 +470,58 @@ func _prewarm_tick() -> void:
 				_prewarm_end()
 	# CPU time this phase spent in its own ticks (a slow frame with little of it is the renderer).
 	_warm_work_usec[phase_now] = int(_warm_work_usec.get(phase_now, 0)) + Time.get_ticks_usec() - tick_start
+
+## The two screens that draw a killer's view: the kill view's and the final killcam's.
+const KILL_SCREENS: Array[String] = ["KillViewScreen", "KillcamScreen"]
+
+## Builds kill screen [param index]'s parked nodes and hands their meshes and materials to the cover.
+func _warm_kill_screen(index: int) -> void:
+	var screen := get_node_or_null(KILL_SCREENS[index])
+	if screen != null and screen.has_method(&"warm"):
+		# Every starting weapon for the kill view (most kills); the final killcam plays once a match, the primary does.
+		var weapons: Array = ArenaContent.default_loadout()
+		if index > 0:
+			weapons = [ArenaContent.Roles.resolve(&"primary")]
+		gate.warm_up(screen.call(&"warm", weapons))
+	if index == 0 and killcam_shots != null:
+		gate.warm_up(killcam_shots.warm())
+
+## Holds every weapon once on the kill view's own kind of view model, a slice a frame: true while there is more.
+func _warm_kill_meshes(until_msec: int) -> bool:
+	var screen := get_node_or_null(KILL_SCREENS[0])
+	var arts: Array = _warm.get("kill_ids", AwWeaponArtTable.table().keys())
+	_warm.kill_ids = arts
+	var at := int(_warm.get("kill_next", 0))
+	if screen == null or not screen.has_method(&"warm_meshes") or at >= arts.size():
+		return false
+	var began := Time.get_ticks_usec()
+	_warm.kill_next = int(screen.call(&"warm_meshes", arts, at, until_msec))
+	_warm.kill_usec = int(_warm.get("kill_usec", 0)) + Time.get_ticks_usec() - began
+	if int(_warm.kill_next) >= arts.size():
+		ArenaLoadTimeline.mark("prewarm: kill view held %d weapons, own work %d ms" % [arts.size(), int(_warm.kill_usec) / 1000])
+	return true
+
+## Parks the drop bodies again after the game was rebuilt (a map or mode change frees the drop layer and its
+## parked bodies with it, and the warm-up above runs once): under the new map's cover, a slice a frame.
+func _repool_drops() -> void:
+	if DotPlatform.is_headless() or gate == null or not ArenaWeaponDropWiring.needs_pool(game) or _repool_next >= 0:
+		return
+	_repool_next = 0
+	gate.hold(&"pools", "Preparing weapons")
+	get_tree().process_frame.connect(_repool_tick)
+
+func _repool_tick() -> void:
+	var ids := ArenaWeaponDropWiring.prewarm_ids()
+	var slice := int(gate.call(&"slice_msec", 8)) if gate != null and gate.has_method(&"slice_msec") else 8
+	if ArenaWeaponDropWiring.needs_pool(game):
+		_repool_next = ArenaWeaponDropWiring.prewarm_step(game, ids, _repool_next, Time.get_ticks_msec() + slice)
+		if _repool_next < ids.size():
+			return
+	_repool_next = -1
+	get_tree().process_frame.disconnect(_repool_tick)
+	ArenaLoadTimeline.mark("drop bodies parked again for the new map")
+	if gate != null:
+		gate.release(&"pools")
 
 func _prewarm_end() -> void:
 	if get_tree().process_frame.is_connected(_prewarm_tick):

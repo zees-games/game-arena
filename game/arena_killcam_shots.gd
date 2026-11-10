@@ -92,10 +92,7 @@ func take(id: int, at: float) -> Dictionary:
 func play(shot: Dictionary, p: Node, kind: int) -> void:
 	if parent == null or not is_instance_valid(parent) or not parent.is_inside_tree():
 		return
-	if fx == null or not is_instance_valid(fx):
-		fx = AwShotFx.new()
-		fx.name = "KillcamShotFx"
-		parent.add_child(fx)
+	_build_fx()
 	fx.exclude_carrier(p)
 	var held: Object = p.get(&"held")
 	if held != null:
@@ -103,6 +100,22 @@ func play(shot: Dictionary, p: Node, kind: int) -> void:
 	var dir: Vector3 = shot["dir"]
 	var weapon: StringName = held.call(&"equipped") if held != null and held.has_method(&"equipped") else &"rifle"
 	fx.play_remote(kind, Transform3D(Basis.looking_at(dir, Vector3.UP if absf(dir.y) < 0.99 else Vector3.RIGHT), shot["origin"]), dir, weapon)
+
+
+func _build_fx() -> void:
+	if fx == null or not is_instance_valid(fx):
+		fx = AwShotFx.new()
+		fx.name = "KillcamShotFx"
+		parent.add_child(fx)
+
+
+## Builds the replay's flash, tracer and spark pools now (under a loading cover) instead of on the first replayed
+## shot, which made them in the middle of a kill view; returns their meshes and materials for the cover to draw.
+func warm() -> Array:
+	if parent == null or not is_instance_valid(parent) or not parent.is_inside_tree():
+		return []
+	_build_fx()
+	return DotRenderWarmup.collect(fx)
 
 
 ## Forgets everything, for a new match.

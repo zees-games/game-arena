@@ -32,8 +32,23 @@ const OUTLIER := 2.0
 ## Share of a tick's length its cost may take before the bots think less often.
 const LOAD_HEADROOM := 0.8
 const MAX_LOAD_SCALE := 2.0
+## While frames keep dropping owed ticks (see [method note_frame]) the thinning bots' periods stretch up to this,
+## past [constant MAX_LOAD_SCALE]: the cost-based stretch alone stops at 2 and a 27 ms tick stays behind.
+const BEHIND_SCALE := 3.0
+## How fast [method shed] rises per frame that dropped ticks and falls per frame that did not. It falls five
+## times slower than it rises, so shedding does not flap on and off around the point where ticks just fit.
+const SHED_RISE := 0.05
+const SHED_FALL := 0.01
+## From this [method shed] on, cosmetic per-tick work is dropped (ArenaAudioManager's distant one-shots).
+const SHED_ON := 0.5
+
+## [method shed] of the running solo game, 0 anywhere else. Read by cosmetic code only: nothing that decides
+## the simulation or what goes on the wire may look at it.
+static var shed_now := 0.0
 
 var _cost_sec := 0.0
+var _ticks := 0
+var _shed := 0.0
 
 
 ## The cap for the next frame given what a tick just cost; [param tick_cost_sec] is one
@@ -55,4 +70,26 @@ func cost() -> float:
 func load_scale(period_sec: float) -> float:
 	if _cost_sec <= 0.0 or period_sec <= 0.0:
 		return 1.0
-	return clampf(_cost_sec / (period_sec * LOAD_HEADROOM), 1.0, MAX_LOAD_SCALE)
+	return maxf(clampf(_cost_sec / (period_sec * LOAD_HEADROOM), 1.0, MAX_LOAD_SCALE), lerpf(1.0, BEHIND_SCALE, _shed))
+
+
+## One physics tick ran in the frame being drawn.
+func note_tick() -> void:
+	_ticks += 1
+
+
+## One frame of [param frame_sec] wall time was drawn after the ticks counted by [method note_tick], under a cap
+## of [param cap] steps. A frame that ran its whole cap and was still owed more dropped ticks: the game is
+## behind, and [method shed] rises; it falls again once frames stop dropping. Returns [method shed].
+func note_frame(frame_sec: float, period_sec: float, cap: int) -> float:
+	var behind := period_sec > 0.0 and _ticks >= cap and frame_sec / period_sec > float(_ticks) + 0.5
+	_ticks = 0
+	_shed = minf(_shed + SHED_RISE, 1.0) if behind else maxf(_shed - SHED_FALL, 0.0)
+	return _shed
+
+
+## 0 while the game keeps wall-clock time, towards 1 the longer frames have been dropping owed ticks. What may
+## be shed with it is only work that changes nothing in the simulation: the thinning bots' think periods (which
+## [method load_scale] already stretches with cost) and cosmetic sound.
+func shed() -> float:
+	return _shed

@@ -96,6 +96,12 @@ func _present_frame(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	var t := Time.get_ticks_usec()
+	# Frames that run their whole step cap and still drop owed ticks: shed cosmetic work (ArenaTickBudget.shed).
+	if _offline and _tick_budget != null and _frame_at_usec > 0:
+		ArenaTickBudget.shed_now = _tick_budget.note_frame((t - _frame_at_usec) / 1000000.0, 1.0 / maxf(float(Engine.physics_ticks_per_second), 1.0), Engine.max_physics_steps_per_frame)
+	else:
+		ArenaTickBudget.shed_now = 0.0
+	_frame_at_usec = t
 	if game != null and game.knives != null:
 		game.knives.bind_view(ragdolls, presentation.blood if presentation != null else null)
 	_present_frame(delta)
@@ -141,6 +147,7 @@ func touch_next_weapon() -> void:
 ## back and ask for a click on return, which also re-arms browser pointer lock.
 func _exit_tree() -> void:
 	super()
+	ArenaTickBudget.shed_now = 0.0
 	if _local_team_menu != null:
 		_local_team_menu.release()
 		_local_team_menu = null

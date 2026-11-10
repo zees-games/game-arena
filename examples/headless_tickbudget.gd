@@ -1,6 +1,7 @@
 extends DotGameCheckSuite
 
 const ArenaTickBudget := preload("../game/arena_tick_budget.gd")
+const ArenaAudioManager := preload("../game/arena_audio_manager.gd")
 
 ## A solo frame must keep the simulation on wall-clock time. Models the engine's loop
 ## (time owed accumulates, at most `cap` ticks run, the rest is dropped) with
@@ -9,8 +10,8 @@ const ArenaTickBudget := preload("../game/arena_tick_budget.gd")
 ## speed (the owner's 16v16 footage: "time feels slowed down").
 ## Run: [code]godot --headless --path . res://examples/headless_tickbudget.tscn[/code]
 
-const SECTIONS := 4
-const CHECKS := 17
+const SECTIONS := 5
+const CHECKS := 26
 
 var _entered := 0
 var _completed := 0
@@ -113,6 +114,61 @@ func _run() -> void:
 	_check(followed > flat + 0.2, "and the difference is large", "%.2f vs %.2f" % [followed, flat])
 	_done()
 	Engine.max_physics_steps_per_frame = 8
+
+	# Behind: frames run their whole cap and are still owed ticks (the owner's profile: every frame caught up,
+	# 1876 ticks dropped). The budget then asks for cosmetic work to be shed, and gives it back afterwards.
+	_section("a game that stays behind sheds cosmetic work")
+	var period := 1.0 / 66.0
+	var sb := ArenaTickBudget.new()
+	for _f in 60:
+		for _k in 4:
+			sb.note_tick()
+		sb.note_frame(0.059, period, 8)
+	_check(is_zero_approx(sb.shed()), "frames that ran every owed tick shed nothing", "%.2f" % sb.shed())
+	sb.steps_for(0.027)
+	var cost_only := sb.load_scale(period)
+	for _f in 40:
+		for _k in 2:
+			sb.note_tick()
+		sb.note_frame(0.057, period, 2)
+	_check(sb.shed() >= ArenaTickBudget.SHED_ON, "40 frames that each dropped ticks at the cap turn shedding on", "%.2f" % sb.shed())
+	_check(sb.load_scale(period) > cost_only and sb.load_scale(period) <= ArenaTickBudget.BEHIND_SCALE, "and stretch the thinning bots' periods past the cost-based cap", "%.2f -> %.2f" % [cost_only, sb.load_scale(period)])
+	var one := ArenaTickBudget.new()
+	one.note_tick()
+	one.note_tick()
+	one.note_frame(0.4, period, 2)
+	_check(one.shed() < ArenaTickBudget.SHED_ON, "one hitched frame does not", "%.2f" % one.shed())
+	for _f in 200:
+		sb.note_tick()
+		sb.note_frame(0.015, period, 8)
+	_check(is_zero_approx(sb.shed()), "shedding ends once frames stop dropping ticks", "%.2f" % sb.shed())
+
+	var audio := ArenaAudioManager.new()
+	add_child(audio)
+	var refused: Array = []
+	audio.played.connect(func(_id: StringName, handle: int, why: StringName) -> void:
+		if handle == 0 and why == &"shed":
+			refused.append(why))
+	audio.listener_position = Vector3.ZERO
+	ArenaTickBudget.shed_now = 0.0
+	for _n in 6:
+		audio.play_at(&"no_such_sound", Vector3(40, 0, 0))
+	_check(audio.shed_count == 0, "on time, no sound is shed", "%d" % audio.shed_count)
+	ArenaTickBudget.shed_now = 1.0
+	for _n in 6:
+		audio.play_at(&"no_such_sound", Vector3(40, 0, 0))
+	_check(audio.shed_count == 6 - ArenaAudioManager.SHED_FAR_PER_FRAME and refused.size() == audio.shed_count, "behind, distant one-shots past the first two of a frame are refused", "%d" % audio.shed_count)
+	var was := audio.shed_count
+	for _n in 6:
+		audio.play_at(&"no_such_sound", Vector3(3, 0, 0))
+		audio.play(&"no_such_sound")
+	_check(audio.shed_count == was, "sounds near the listener and sounds without a position always play")
+	await get_tree().process_frame
+	audio.play_at(&"no_such_sound", Vector3(40, 0, 0))
+	_check(audio.shed_count == was, "and the next frame has its own allowance")
+	ArenaTickBudget.shed_now = 0.0
+	audio.queue_free()
+	_done()
 
 
 ## Real ticks per wall second over [param seconds] (as a share of the tick rate) with frames

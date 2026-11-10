@@ -7,6 +7,7 @@ const ArenaContent := preload("arena_content.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
 const ArenaKillPovRecoil := preload("arena_kill_pov_recoil.gd")
 const ArenaRecoilView := preload("arena_recoil_view.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const AMMO_FONT := 22
 ## Metres per second the lens may slide out of a wall.
 const EASE_SPEED := 6.0
@@ -26,10 +27,17 @@ var crosshair: DotCrosshair = null
 var label: Label = null
 
 var _camera: Camera3D = null
-## A view model built in advance, so a kill does not pay for its 30-odd nodes on the frame it starts.
-var _spare: AwViewModel = null
-var _spare_warm := false
+## Most view models kept parked between kills (each holds one weapon, built).
+const RIGS := 4
+## View models parked under this layer, hidden and stopped: built in advance and kept after a kill with the
+## weapon they drew, so a kill starts by moving nodes, not by making them (KillerHands and its weapon cost 100-430 ms).
+var _rigs: Array[AwViewModel] = []
 var _spare_arms: DotPlayerViewArms = null
+## The flash pool, crosshair and ammo line of the last kill, parked for the next.
+var _spare_fx: AwShotFx = null
+var _spare_crosshair: DotCrosshair = null
+var _spare_label: Label = null
+var _warm_rig: AwViewModel = null
 var _push := Vector3.ZERO
 var _hits := -1.0
 ## The killer's recoil, shot by shot, on the replay camera.
@@ -54,7 +62,7 @@ func present(view: Dictionary) -> void:
 	if own is CanvasItem:
 		(own as CanvasItem).visible = false
 	if cam != _camera:
-		_start(cam)
+		_start(cam, KillPov.weapon_of(aux[0]))
 	KillPov.mark_replay_camera(cam, true)
 	if not behind:
 		_clear_lens(cam)
@@ -90,13 +98,13 @@ func _kick(cam: Camera3D) -> void:
 	cam.fov *= hands.aim_fov_scale()
 
 
-func _start(cam: Camera3D) -> void:
+func _start(cam: Camera3D, weapon: StringName = &"") -> void:
+	var began := Time.get_ticks_usec()
 	_end()
 	_camera = cam
 	_hits = -1.0
 	recoil.clear()
-	hands = _spare if _spare != null else _new_hands()
-	_spare = null
+	hands = _take_rig(weapon)
 	hands.process_mode = Node.PROCESS_MODE_INHERIT
 	hands.visible = true
 	hands.name = "KillerHands"
@@ -107,27 +115,92 @@ func _start(cam: Camera3D) -> void:
 		hands.get_parent().remove_child(hands)
 	cam.add_child(hands)
 	_mount_arms(cam)
-	flashes = AwShotFx.new()
-	flashes.name = "KillerShotFx"
-	flashes.catalogue = ArenaContent.weapon_catalogue()
+	flashes = _spare_fx if _live(_spare_fx) else _new_fx()
+	_spare_fx = null
+	if flashes.get_parent() != null:
+		flashes.get_parent().remove_child(flashes)
 	cam.add_child(flashes)
-	crosshair = DotCrosshair.new()
-	crosshair.set_anchors_preset(Control.PRESET_FULL_RECT)
-	crosshair.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(crosshair)
-	label = Label.new()
-	# Just above the killcam's bottom bar (16% of the height), which would cover it.
-	label.anchor_left = 1.0
-	label.anchor_right = 1.0
-	label.anchor_top = 0.83
-	label.anchor_bottom = 0.83
-	label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	label.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	label.offset_right = -40.0
-	label.add_theme_font_size_override("font_size", AMMO_FONT)
-	add_child(label)
+	crosshair = _spare_crosshair if _live(_spare_crosshair) else _new_crosshair()
+	_spare_crosshair = null
+	crosshair.visible = true
+	label = _spare_label if _live(_spare_label) else _new_label()
+	_spare_label = null
+	label.text = ""
+	label.visible = true
 	# A frame or so on, not this one: the next kill finds it built.
 	get_tree().create_timer(0.5).timeout.connect(_prepare_spare)
+	ArenaFrameProbe.add(&"killview_start", began)
+
+
+static func _live(node: Variant) -> bool:
+	return node != null and is_instance_valid(node) and not (node as Node).is_queued_for_deletion()
+
+
+## A parked view model already holding [param weapon]; else one holding nothing; else the oldest; else a new one.
+func _take_rig(weapon: StringName) -> AwViewModel:
+	var pick := -1
+	for i in _rigs.size():
+		if not _live(_rigs[i]):
+			continue
+		var held := _rigs[i].equipped()
+		if weapon != &"" and held == weapon:
+			pick = i
+			break
+		if pick < 0 or (held == &"" and _rigs[pick].equipped() != &""):
+			pick = i
+	if pick < 0:
+		return _new_hands()
+	var rig := _rigs[pick]
+	_rigs.remove_at(pick)
+	return rig
+
+
+## Parks [param rig] under this layer, hidden and stopped; past [constant RIGS] the oldest goes.
+func _park_rig(rig: AwViewModel) -> void:
+	rig.aim(false)
+	rig.on_reset()
+	rig.visible = false
+	rig.process_mode = Node.PROCESS_MODE_DISABLED
+	rig.name = "SpareHands"
+	if rig.get_parent() != self:
+		if rig.get_parent() != null:
+			rig.get_parent().remove_child(rig)
+		add_child(rig, true)
+	_rigs.append(rig)
+	while _rigs.size() > RIGS:
+		var old: AwViewModel = _rigs.pop_front()
+		if _live(old):
+			old.queue_free()
+
+
+func _new_fx() -> AwShotFx:
+	var fx := AwShotFx.new()
+	fx.name = "KillerShotFx"
+	fx.catalogue = ArenaContent.weapon_catalogue()
+	return fx
+
+
+func _new_crosshair() -> DotCrosshair:
+	var cross := DotCrosshair.new()
+	cross.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cross.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(cross)
+	return cross
+
+
+func _new_label() -> Label:
+	var line := Label.new()
+	# Just above the killcam's bottom bar (16% of the height), which would cover it.
+	line.anchor_left = 1.0
+	line.anchor_right = 1.0
+	line.anchor_top = 0.83
+	line.anchor_bottom = 0.83
+	line.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	line.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	line.offset_right = -40.0
+	line.add_theme_font_size_override("font_size", AMMO_FONT)
+	add_child(line)
+	return line
 
 
 ## An unbuilt view model with its arms setting made, which [method _start] would otherwise make.
@@ -139,7 +212,7 @@ func _new_hands() -> AwViewModel:
 
 func _exit_tree() -> void:
 	# The spare rig waits outside the tree, so nothing frees it with the view.
-	if _spare_arms != null and is_instance_valid(_spare_arms):
+	if _spare_arms != null and is_instance_valid(_spare_arms) and not _spare_arms.is_inside_tree():
 		_spare_arms.free()
 	_spare_arms = null
 
@@ -156,14 +229,108 @@ func _new_arms() -> DotPlayerViewArms:
 func _prepare_spare() -> void:
 	if not is_inside_tree():
 		return
-	if _spare == null:
-		_spare = _new_hands()
-		_spare.name = "SpareHands"
-		_spare.visible = false
-		_spare.process_mode = Node.PROCESS_MODE_DISABLED
-		add_child(_spare)
-	if _spare_arms == null and _shares_arms(_spare):
+	for i in range(_rigs.size() - 1, -1, -1):
+		if not _live(_rigs[i]):
+			_rigs.remove_at(i)
+	if _rigs.is_empty():
+		var rig := _new_hands()
+		add_child(rig)
+		_park_rig(rig)
+	if not _live(_spare_arms) and _shares_arms(_rigs[0]):
 		_spare_arms = _new_arms()
+	if not _live(_spare_fx) and flashes == null:
+		# In the tree once, so its light and mesh pools are built here and not under the kill's camera.
+		_spare_fx = _new_fx()
+		add_child(_spare_fx)
+	if not _live(_spare_crosshair) and crosshair == null:
+		_spare_crosshair = _new_crosshair()
+		_spare_crosshair.visible = false
+	if not _live(_spare_label) and label == null:
+		_spare_label = _new_label()
+		_spare_label.visible = false
+
+
+## Builds, under a loading cover, everything a kill would otherwise make on its first frame: a parked view
+## model holding each of [param weapons] (at most [constant RIGS]), the arms, the flash pool, the crosshair
+## and the ammo line. Returns the materials and meshes made, for the cover to draw once (their shaders).
+func warm(weapons: Array) -> Array:
+	if not is_inside_tree() or hands != null:
+		return []
+	_prepare_spare()
+	var table := AwWeaponArtTable.table()
+	for id: Variant in weapons:
+		var art: Variant = table.get(id)
+		if not (art is AwWeaponVisual) or _holds(id):
+			continue
+		var rig: AwViewModel = null
+		for parked in _rigs:
+			if _live(parked) and parked.equipped() == &"":
+				rig = parked
+				break
+		if rig == null:
+			if _rigs.size() >= RIGS:
+				break
+			rig = _new_hands()
+			add_child(rig)
+			_park_rig(rig)
+		if feel_rules != null:
+			rig.feel_rules = feel_rules
+		rig.ads_rules = ads_rules
+		var _drawn := rig.equip(art as AwWeaponVisual)
+	var out: Array = []
+	for rig in _rigs:
+		if _live(rig):
+			DotRenderWarmup.collect(rig, out)
+	if _live(_spare_arms):
+		DotRenderWarmup.collect(_spare_arms, out)
+	if _live(_spare_fx):
+		DotRenderWarmup.collect(_spare_fx, out)
+	return out
+
+
+## Holds each of [param ids] once on a scratch view model set up as a killer's hands are, from index
+## [param from] until [param until_msec]: the view model's mesh work (sight cut, hand reach, magazine carve) is
+## cached by its rules, so a killer's weapon outside the parked [constant RIGS] costs a swap, not a build
+## (350 ms mid-match in the owner's profile). Returns the next index; [code]ids.size()[/code] when done.
+func warm_meshes(ids: Array, from: int, until_msec: int) -> int:
+	if not is_inside_tree():
+		return ids.size()
+	if not _live(_warm_rig):
+		_warm_rig = _new_hands()
+		_warm_rig.visible = false
+		add_child(_warm_rig)
+	if feel_rules != null:
+		_warm_rig.feel_rules = feel_rules
+	_warm_rig.ads_rules = ads_rules
+	var table := AwWeaponArtTable.table()
+	var next := from
+	while next < ids.size():
+		var art: Variant = table.get(ids[next])
+		if art is AwWeaponVisual:
+			var _drawn := _warm_rig.equip(art as AwWeaponVisual)
+		next += 1
+		if Time.get_ticks_msec() >= until_msec:
+			break
+	if next >= ids.size():
+		_warm_rig.queue_free()
+		_warm_rig = null
+	return next
+
+
+func _holds(weapon: Variant) -> bool:
+	for rig in _rigs:
+		if _live(rig) and rig.equipped() == weapon:
+			return true
+	return false
+
+
+## How many view models wait parked, and which weapons they hold (tests, the load timeline).
+func parked() -> Array:
+	var out: Array = []
+	for rig in _rigs:
+		if _live(rig):
+			out.append(rig.equipped())
+	return out
 
 
 ## Whether the shared arm rig draws the hands; the view model's own sleeves are then built off, not left drawn under the gun.
@@ -175,14 +342,15 @@ func _shares_arms(model: AwViewModel = null) -> bool:
 func _mount_arms(cam: Camera3D) -> void:
 	if not _shares_arms():
 		return
-	arms = _spare_arms if _spare_arms != null else _new_arms()
+	arms = _spare_arms if _live(_spare_arms) else _new_arms()
 	_spare_arms = null
 	arms.name = "KillerArms"
 	arms.visible = true
 	if arms.get_parent() != null:
 		arms.get_parent().remove_child(arms)
 	cam.add_child(arms)
-	hands.hands_reached.connect(_on_hands)
+	if not hands.hands_reached.is_connected(_on_hands):
+		hands.hands_reached.connect(_on_hands)
 
 
 func _on_hands(anchor: Node3D, grip: Vector3, fore: Vector3, pose: StringName) -> void:
@@ -202,7 +370,9 @@ func _move_hands(aux: PackedFloat32Array, cam: Camera3D) -> void:
 	if id != &"" and hands.equipped() != id:
 		var art: Variant = AwWeaponArtTable.table().get(id)
 		if art is AwWeaponVisual:
+			var began := Time.get_ticks_usec()
 			var _drawn := hands.equip(art as AwWeaponVisual)
+			ArenaFrameProbe.add(&"killview_equip", began)
 	hands.aim(aux[1] > 0.5)
 	var flags := int(aux[10])
 	var look := cam.global_basis.get_euler()
@@ -232,21 +402,43 @@ func _hud(aux: PackedFloat32Array, fov: float) -> void:
 	label.text = "%d / %d" % [int(aux[4]), int(aux[5])] if aux[4] > 0.0 or aux[5] > 0.0 else ""
 
 
+## Ends the killer's screen. Its nodes are parked for the next kill, not freed: the next one then makes nothing.
 func _end() -> void:
-	if hands != null and is_instance_valid(hands):
-		hands.queue_free()
+	if _live(hands):
+		if hands.has_signal(&"hands_reached") and hands.hands_reached.is_connected(_on_hands):
+			hands.hands_reached.disconnect(_on_hands)
+		_park_rig(hands)
 	hands = null
-	if arms != null and is_instance_valid(arms):
-		arms.queue_free()
+	if _live(arms):
+		# Outside the tree, as a spare rig waits ([method _exit_tree] frees it).
+		if arms.get_parent() != null:
+			arms.get_parent().remove_child(arms)
+		if _live(_spare_arms):
+			arms.queue_free()
+		else:
+			arms.visible = false
+			_spare_arms = arms
 	arms = null
 	_grip = null
 	_push = Vector3.ZERO
-	for n: Node in [crosshair, label, flashes]:
-		if n != null and is_instance_valid(n):
-			n.queue_free()
-	crosshair = null
-	label = null
+	if _live(flashes):
+		flashes.stop_flashes()
+		if flashes.get_parent() != null:
+			flashes.get_parent().remove_child(flashes)
+		if _live(_spare_fx) or not is_inside_tree():
+			flashes.queue_free()
+		else:
+			add_child(flashes)
+			_spare_fx = flashes
 	flashes = null
+	if _live(crosshair):
+		crosshair.visible = false
+		_spare_crosshair = crosshair
+	crosshair = null
+	if _live(label):
+		label.visible = false
+		_spare_label = label
+	label = null
 	KillPov.mark_replay_camera(_camera, false)
 	_camera = null
 

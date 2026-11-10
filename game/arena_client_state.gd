@@ -217,6 +217,9 @@ var presentation: ArenaPresentation = null
 ## Weapon model files still to read into AwModelCache under the gate (_prewarm_models); next < 0 until started.
 var _model_paths: Array = []
 var _model_paths_next := -1
+## Next weapon whose drop bodies are parked again after a map change ([method _repool_drops]); < 0 when idle.
+var _repool_next := -1
+var _frame_at_usec := 0
 ## State of the load-gate warm-up, see [method _prewarm_tick]; empty when idle.
 var _warm := {}
 

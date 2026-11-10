@@ -351,6 +351,7 @@ func _physics_process(delta: float) -> void:
 	_physics_step(delta)
 	ArenaFrameProbe.add(&"physics", t)
 	if _offline and _tick_budget != null:
+		_tick_budget.note_tick()
 		# Catch up with wall-clock time as far as ticks are cheap enough to (ArenaTickBudget).
 		Engine.max_physics_steps_per_frame = _tick_budget.steps_for((Time.get_ticks_usec() - t) / 1000000.0)
 		# Ticks dearer than their length cannot keep real time: the thinning bots think less often (ArenaBots.tiers).
