@@ -157,35 +157,155 @@ class Ink:
 		return w
 
 
+## The score strip with any number of sides: dot-ui's two plates for two, and for more a plate
+## each, yours next to the clock and the rest alternating outwards, narrowed to fit this
+## control's width (the tag goes first, then the plate shrinks to its number).
+class TeamStrip extends DotScoreStrip:
+	## Narrowest plate: a two-digit score still reads.
+	const MIN_PLATE_W := 44.0
+	## Below this a plate drops its tag.
+	const TAG_PLATE_W := 80.0
+
+	## `{tag, score, colour}` per side, yours first; empty, or two, is dot-ui's own strip.
+	var teams: Array[Dictionary] = []
+
+	## [param p_teams] as [member teams]; two or fewer go to [method DotScoreStrip.show_scores].
+	func show_teams(p_teams: Array[Dictionary]) -> void:
+		if p_teams.size() <= 2:
+			if p_teams.size() == 2:
+				show_scores(int(p_teams[0]["score"]), int(p_teams[1]["score"]), str(p_teams[0]["tag"]),
+					str(p_teams[1]["tag"]), p_teams[0]["colour"], p_teams[1]["colour"])
+			return
+		if p_teams == teams and sides:
+			return
+		teams = p_teams.duplicate(true)
+		sides = true
+		queue_redraw()
+
+	func show_scores(p_left: int, p_right: int, p_left_tag: String, p_right_tag: String, p_left_colour: Color, p_right_colour: Color) -> void:
+		teams = []
+		super(p_left, p_right, p_left_tag, p_right_tag, p_left_colour, p_right_colour)
+
+	func hide_scores() -> void:
+		teams = []
+		super()
+
+	## Each plate's width for [member teams]: what half this control's width leaves beside the clock, per plate on the fuller side.
+	func plate_width() -> float:
+		var per_side := ceili(float(teams.size()) * 0.5)
+		var room := size.x * 0.5 - CLOCK_W * 0.5
+		return clampf(room / float(per_side) - GAP, MIN_PLATE_W, PLATE_W)
+
+	## Where the plate for [member teams] index [param i] goes: 0 left of the clock, 1 right, 2 outside 0, and on.
+	func plate_rect(i: int) -> Rect2:
+		var w := plate_width()
+		var out := floorf(float(i) * 0.5)
+		var mid := size.x * 0.5
+		var x := mid - CLOCK_W * 0.5 - (GAP + w) * (out + 1.0) if i % 2 == 0 \
+			else mid + CLOCK_W * 0.5 + GAP + (GAP + w) * out
+		return Rect2(x, 0.0, w, H)
+
+	func footprint() -> Rect2:
+		var base := super()
+		if not sides or teams.size() <= 2:
+			return base
+		# Either side of the clock as wide as the fuller one, as dot-ui's is: the line under it is centred too.
+		var half := CLOCK_W * 0.5 + (GAP + plate_width()) * ceilf(float(teams.size()) * 0.5)
+		var left := minf(size.x * 0.5 - half, base.position.x)
+		return Rect2(left, 0.0, size.x - 2.0 * left, H + 28.0)
+
+	func _draw() -> void:
+		if teams.size() <= 2:
+			super()
+			return
+		var narrow := plate_width() < TAG_PLATE_W
+		for i in teams.size():
+			var t: Dictionary = teams[i]
+			_side(plate_rect(i), t["colour"], "" if narrow else str(t["tag"]), int(t["score"]))
+		var keep := sides
+		# The clock and the line under it are dot-ui's: drawn with the two plates switched off.
+		sides = false
+		super()
+		sides = keep
+		if clock == "":
+			var clock_rect := Rect2(size.x * 0.5 - CLOCK_W * 0.5, 0.0, CLOCK_W, H)
+			var plate := colour(&"plate")
+			ink_plate(clock_rect, Color(plate, minf(plate.a + 0.2, 1.0)), 8, colour(&"plate_edge"), 1)
+
+	func describe() -> Dictionary:
+		var out := super()
+		if teams.size() > 2:
+			var scores: Array[int] = []
+			for t in teams:
+				scores.append(int(t["score"]))
+			out["teams"] = scores
+		return out
+
+
 ## Under the scores: every player ranked, a portrait each with their rank over it and their
 ## kills under it. Your own ring is gold; in a team mode the others are their side's colour.
+## In a mode scored by objectives each face has two smaller numbers under it, an icon left of
+## each: captures (a flag) over kills (a skull). Faces that do not fit the screen are dropped
+## from the end, yours last.
 class Portraits extends Control:
 	const MAX_SHOWN := 10
 	const SPACING := 50.0
 	const RADIUS := 19.0
+	const FLAG_ICON := "res://assets/medals/flag.png"
+	const KILL_ICON := "res://assets/medals/skull.png"
 
-	## `{texture, name, rank, kills, ring, me}` per player, best first.
+	## `{texture, name, rank, kills, ring, me}` per player, best first; `objectives` too when
+	## [member objective] is on.
 	var entries: Array[Dictionary] = []
+	## The mode is scored by objectives: show captures and kills, not kills alone.
+	var objective: bool = false
 
-	func show_players(p_entries: Array[Dictionary]) -> void:
+	func show_players(p_entries: Array[Dictionary], p_objective: bool = false) -> void:
 		entries = p_entries.slice(0, MAX_SHOWN)
+		objective = p_objective
 		queue_redraw()
 
-	## The rank over the first face to the kills under the last.
+	## How many faces fit across what the viewport shows of this control.
+	func fits() -> int:
+		var room := size.x
+		if is_inside_tree():
+			var inverse := get_global_transform().affine_inverse()
+			var left := (inverse * Vector2.ZERO).x
+			var right := (inverse * Vector2(get_viewport_rect().size.x, 0.0)).x
+			room = minf(room, 2.0 * minf(size.x * 0.5 - left, right - size.x * 0.5))
+		return clampi(int(floor((room - 60.0) / SPACING)) + 1, 1, MAX_SHOWN)
+
+	## The entries drawn: the first that fit, with yours kept in the last place when it would fall off.
+	func shown() -> Array[Dictionary]:
+		var count := mini(entries.size(), fits())
+		var out := entries.slice(0, count)
+		if count < entries.size() and count > 0:
+			for e in entries.slice(count):
+				if bool(e.get("me", false)):
+					out[count - 1] = e
+					break
+		return out
+
+	func _height() -> float:
+		# 25, not more: at 1280x720 the medal row starts at 152, a pixel under this row.
+		return 14.0 + RADIUS * 2.0 + (25.0 if objective else 21.0)
+
+	## The rank over the first face to the numbers under the last.
 	func footprint() -> Rect2:
-		var count := entries.size()
+		var count := shown().size()
 		if count == 0:
 			return Rect2()
 		var first := size.x * 0.5 - SPACING * float(count - 1) * 0.5
-		return Rect2(first - 30.0, 0.0, SPACING * float(count - 1) + 60.0, 14.0 + RADIUS * 2.0 + 21.0)
+		return Rect2(first - 30.0, 0.0, SPACING * float(count - 1) + 60.0, _height())
 
 	func _draw() -> void:
-		var count := entries.size()
+		var drawn := shown()
+		var count := drawn.size()
 		if count == 0:
 			return
 		var first := size.x * 0.5 - SPACING * float(count - 1) * 0.5
 		for i in range(count):
-			var e: Dictionary = entries[i]
+			var e: Dictionary = drawn[i]
 			var c := Vector2(first + SPACING * float(i), 14.0 + RADIUS)
 			var me := bool(e.get("me", false))
 			var ring: Color = Ink.c(self, &"highlight") if me else e.get("ring", Color(1, 1, 1, 0.85))
@@ -202,8 +322,25 @@ class Portraits extends Control:
 			else:
 				var initials := str(e.get("name", "?")).substr(0, 2).to_upper()
 				Ink.text(self, c + Vector2(-RADIUS, 6.0), initials, 15, Ink.c(self, &"text"), HORIZONTAL_ALIGNMENT_CENTER, RADIUS * 2.0, 4)
-			Ink.text(self, Vector2(c.x - 30.0, c.y + RADIUS + 17.0), str(int(e.get("kills", 0))), 14,
-				Ink.c(self, &"highlight") if me else Ink.c(self, &"text"), HORIZONTAL_ALIGNMENT_CENTER, 60.0, 4)
+			var ink: Color = Ink.c(self, &"highlight") if me else Ink.c(self, &"text")
+			if objective:
+				_stat(Vector2(c.x, c.y + RADIUS + 9.0), Ink.texture(FLAG_ICON), int(e.get("objectives", 0)), ink)
+				_stat(Vector2(c.x, c.y + RADIUS + 20.0), Ink.texture(KILL_ICON), int(e.get("kills", 0)), Color(ink, 0.85))
+			else:
+				Ink.text(self, Vector2(c.x - 30.0, c.y + RADIUS + 17.0), str(int(e.get("kills", 0))), 14,
+					ink, HORIZONTAL_ALIGNMENT_CENTER, 60.0, 4)
+
+	## A small icon and its number, centred together on [param mid].x with [param mid].y the middle of the line.
+	func _stat(mid: Vector2, tex: Texture2D, value: int, ink: Color) -> void:
+		const ICON_H := 10.0
+		var words := str(value)
+		var w := ICON_H + 3.0 + Ink.width(words, 11)
+		var x := mid.x - w * 0.5
+		if tex != null:
+			# A dark copy a pixel down and right: a white icon over a pale wall.
+			draw_texture_rect(tex, Rect2(x + 1.0, mid.y - ICON_H * 0.5 + 1.0, ICON_H, ICON_H), false, Color(0, 0, 0, 0.7 * ink.a))
+			Ink.icon(self, tex, Vector2(x, mid.y), ICON_H, Color(1, 1, 1, ink.a))
+		Ink.text(self, Vector2(x + ICON_H + 3.0, mid.y + 4.0), words, 11, ink, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 3)
 
 
 ## Top right: who killed whom, with the weapon's silhouette between the names, on a plate

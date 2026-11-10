@@ -99,7 +99,7 @@ func build(p_game: ArenaGame) -> void:
 	_fit_feed()
 	feed.lifetime_sec = config.feed_lifetime_sec if config != null else 6.0
 
-	strip = DotScoreStrip.new()
+	strip = ArenaHudGlance.TeamStrip.new()
 	strip.name = "Scores"
 	_place(strip, Control.PRESET_CENTER_TOP, Rect2(-260.0, 0.0, 520.0, 72.0))
 
@@ -343,21 +343,26 @@ func present_scores() -> void:
 	var board := game.match_node.scoreboard
 	var me := str(player.player_id) if _live() else ""
 	var mine_record: DotPlayerScore = board.find(me) if me != "" else null
-	if mode != null and mode.is_team_mode() and game.match_node.teams != null:
-		# Your side on the left, as the genre has it.
-		var sides: Array[int] = []
-		for id: int in game.match_node.teams.team_ids():
-			var side := game.match_node.teams.team(id)
-			if side != null and not side.is_spectator:
-				sides.append(id)
+	# The sides from the game, not the match: a client's own match (solo's too) never has teams; the server's arrive as TEAM events.
+	if mode != null and mode.is_team_mode():
+		var sides: Array[DotTeam] = []
+		for side in game.teams():
+			if not side.is_spectator:
+				sides.append(side)
 		if sides.size() >= 2:
-			var mine := mine_record.team if mine_record != null else sides[0]
-			var left := mine if sides.has(mine) else sides[0]
-			var right := sides[1] if left == sides[0] else sides[0]
-			var l := game.match_node.teams.team(left)
-			var r := game.match_node.teams.team(right)
-			_show_scores(board.team_score(left), board.team_score(right),
-				l.display_name.to_upper(), r.display_name.to_upper(), l.colour, r.colour)
+			# Your side first: on the left, next to the clock, as the genre has it.
+			var mine := game.team_of(player.player_id) if _live() else 0
+			for i in sides.size():
+				if sides[i].id == mine:
+					sides.push_front(sides.pop_at(i))
+					break
+			var rows: Array[Dictionary] = []
+			for side in sides:
+				rows.append({"tag": _side_tag(side), "score": _side_score(side), "colour": side.colour})
+			if rows.size() == 2:
+				_show_scores(int(rows[0]["score"]), int(rows[1]["score"]), rows[0]["tag"], rows[1]["tag"], rows[0]["colour"], rows[1]["colour"])
+			else:
+				strip.show_teams(rows)
 			return
 	# A free-for-all: you, and whoever is ahead of you (behind you, when you lead).
 	var other: DotPlayerScore = null
@@ -372,6 +377,28 @@ func present_scores() -> void:
 		ArenaHudGlance.BLUE, ArenaHudGlance.RED)
 
 
+## A side's name over its score, with what became of its flag in capture the flag: "RED", "RED · TAKEN", "RED · 12s" to its return.
+func _side_tag(side: DotTeam) -> String:
+	var tag := side.display_name.to_upper()
+	var flag := game.objectives.ctf.flag_of(side.id) if game.objectives != null and game.objectives.ctf != null else null
+	if flag == null:
+		return tag
+	match flag.state:
+		DotObjectiveFlag.State.CARRIED:
+			return "%s · TAKEN" % tag
+		DotObjectiveFlag.State.DROPPED:
+			var returns_in := ceili(float(flag.return_left) / float(maxi(game.objectives.ctf.tick_rate, 1)))
+			return "%s · %ds" % [tag, returns_in] if returns_in > 0 else "%s · DROPPED" % tag
+	return tag
+
+
+## A side's score for the strip: captures in capture the flag (the CTF state every client mirrors at once), else the scoreboard's.
+func _side_score(side: DotTeam) -> int:
+	if game.objectives != null and game.objectives.ctf != null:
+		return int(game.objectives.ctf.scores.get(side.id, 0))
+	return game.match_node.scoreboard.team_score(side.id)
+
+
 ## `strip.show_scores` only when something it shows changed: it queues a redraw on every call, and this runs every frame.
 func _show_scores(p_left: int, p_right: int, p_left_tag: String, p_right_tag: String, p_left_colour: Color, p_right_colour: Color) -> void:
 	if strip.sides and strip.left_score == p_left and strip.right_score == p_right and strip.left_tag == p_left_tag \
@@ -380,33 +407,47 @@ func _show_scores(p_left: int, p_right: int, p_left_tag: String, p_right_tag: St
 	strip.show_scores(p_left, p_right, p_left_tag, p_right_tag, p_left_colour, p_right_colour)
 
 
-## The ranked row under the strip: a portrait, rank and kill count per player.
+## The ranked row under the strip: a portrait, rank and kill count per player; in a mode scored
+## by objectives ranked by captures, then kills, and showing both. Yours is kept in the last
+## place when you rank below what is shown.
 func present_portraits() -> void:
 	var entries: Array[Dictionary] = []
 	var me := str(player.player_id) if _live() else ""
 	var mode := game.displayed_mode()
 	var teams := mode != null and mode.is_team_mode()
+	var objective := mode != null and mode.objective_layout != &""
+	var order: Array[DotPlayerScore] = []
+	for record in (ArenaEvents.ranked_by_objectives(game.match_node.scoreboard) if objective else game.match_node.scoreboard.ranked()):
+		if record.present:
+			order.append(record)
 	var ids: Array = []
-	var rank := 1
-	for record in game.match_node.scoreboard.ranked():
-		if not record.present or rank > ArenaHudGlance.Portraits.MAX_SHOWN:
+	for i in order.size():
+		var record := order[i]
+		var shown := i < ArenaHudGlance.Portraits.MAX_SHOWN
+		if not shown and record.key != me:
 			continue
 		var id := int(record.key) if record.key.is_valid_int() else 0
-		ids.append(id)
 		var who := game.player_for(id) if id != 0 else null
 		var avatar: DotAvatar = who.avatar if who != null and who.avatar != null \
 			else ArenaAvatars.stock_avatar(StringName(ArenaGame.storage_key(id)))
-		var side := _team_colour(record.team) if teams else Color(0, 0, 0, 0)
-		entries.append({
-			"name": record.display_name, "rank": rank, "kills": record.kills, "me": record.key == me,
+		var side := _team_colour(game.team_of(id)) if teams and id != 0 else Color(0, 0, 0, 0)
+		var entry := {
+			"name": record.display_name, "rank": i + 1, "kills": record.kills, "me": record.key == me,
+			"objectives": ArenaEvents.objectives_of(record),
 			"ring": side if side.a > 0.0 else Color(1, 1, 1, 0.85),
 			"colour": Color.from_hsv(fmod(float(id) * 0.37, 1.0), 0.55, 0.85),
 			"texture": portrait_cache.portrait(id, avatar) if portrait_cache != null else null,
-		})
-		rank += 1
-	portraits.show_players(entries)
+		}
+		if shown:
+			entries.append(entry)
+			ids.append(id)
+		else:
+			entries[entries.size() - 1] = entry
+			ids[ids.size() - 1] = id
+	portraits.show_players(entries, objective)
 	if portrait_cache != null:
 		portrait_cache.keep_only(ids)
+
 
 
 ## Health, ammunition, the carried weapons and the key hints, from the followed player.
@@ -681,25 +722,6 @@ func present_blind(delta: float) -> void:
 		blind_overlay.size = inverse.basis_xform(get_viewport_rect().size)
 
 
-## Capture the flag: each team's captures and what became of its flag, and the clock when there is a limit.
-func _ctf_line(ctf: DotObjectiveCtf) -> String:
-	var state := ctf.hud_state()
-	var teams: Dictionary = state["teams"]
-	var ids: Array = teams.keys()
-	ids.sort()
-	var parts := PackedStringArray()
-	for id: int in ids:
-		var t: Dictionary = teams[id]
-		var what := String(t["state"]).substr(0, 4)
-		if t["state"] == "DROPPED":
-			what += " %d" % ceili(float(t["returns_in"]))
-		parts.append("T%d %d [%s]" % [id, t["captures"], what])
-	var left := float(state["time_left"])
-	if left >= 0.0:
-		parts.append("%d:%02d" % [int(left) / 60, int(left) % 60])
-	return "  ".join(parts)
-
-
 ## What the followed player carries, as a line for the screen: "YOU HAVE THE RED FLAG - TAKE IT TO YOUR BASE", or "" when they carry nothing.
 func carrying_flag_text() -> String:
 	if game == null or game.objectives == null or game.objectives.ctf == null or not _live():
@@ -727,8 +749,9 @@ func _objective_line() -> String:
 	if not manager.has_objectives():
 		return ""
 
+	# Capture the flag says it all in the strip: the captures on each side's plate, its flag's state in the tag.
 	if game.objectives.ctf != null:
-		return _ctf_line(game.objectives.ctf)
+		return ""
 
 	var parts := PackedStringArray()
 

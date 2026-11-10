@@ -364,6 +364,39 @@ func _test_hud_fits_the_frame() -> void:
 			and ArenaHud.fit_scale(Vector2(200, 100)) == hud.fit_min
 			and hud.fit_design == ArenaHud.DESIGN_FRAME and hud.fit_min == 0.5,
 		"below it, it is scaled by the short side's share of 1280x720, never under half")
+
+	# Four sides' plates and a capture-ranked row with two stats a card still fit, the row
+	# dropping players where the frame is too narrow.
+	var sides: Array[Dictionary] = []
+	for s in [["RED · TAKEN", Color.RED], ["BLUE", Color.BLUE], ["GREEN · 12s", Color.GREEN], ["GOLD", Color.GOLD]]:
+		sides.append({"tag": s[0], "score": sides.size() * 3, "colour": s[1]})
+	hud.strip.show_teams(sides)
+	hud.strip.show_clock("9:37", false, "First to 3 captures", "Capture the flag")
+	var cards: Array[Dictionary] = []
+	for i in range(10):
+		cards.append({"name": "P%d" % i, "rank": i + 1, "kills": 20 - i, "objectives": 3 - int(i / 3.0), "me": i == 9})
+	hud.portraits.show_players(cards, true)
+	var crowded := PackedStringArray()
+	for frame: Vector2 in [Vector2(854, 480), Vector2(960, 720), Vector2(1280, 720)]:
+		hud.fit_to_frame(frame)
+		hud.notice("Vote: Smash Copter, Hide & Seek, Dangerous Delivery, Playground, g2gfast (20s)")
+		await get_tree().process_frame
+		var rects := hud.footprints()
+		var keys: Array = rects.keys()
+		for i in range(keys.size()):
+			if not Rect2(Vector2.ZERO, frame).encloses(rects[keys[i]]):
+				crowded.append("%s outside at %s" % [keys[i], frame])
+			for j in range(i + 1, keys.size()):
+				if (rects[keys[i]] as Rect2).intersects(rects[keys[j]]):
+					crowded.append("%s/%s at %s" % [keys[i], keys[j], frame])
+	_check(crowded.is_empty() and hud.strip.teams.size() == 4 and hud.portraits.objective,
+		"four sides' plates and the capture row fit every frame, meeting nothing", ", ".join(crowded))
+	var kept: Array = hud.portraits.shown()
+	_check(not kept.is_empty() and bool((kept.back() as Dictionary).get("me", false)),
+		"a card row cut short still ends with your own card", "%d shown" % kept.size())
+	hud.strip.show_scores(1, 2, "RED", "BLUE", Color.RED, Color.BLUE)
+	_check(hud.strip.teams.is_empty() and hud.strip.left_score == 1 and hud.strip.right_score == 2,
+		"two sides go back to the plain two plates")
 	# The clock is dot-ui's `DotScoreStrip.clock_text`, which rounds up: a clock never says
 	# 0:00 with time left. Arena's own rounded down (9:37.4 read 9:37).
 	_check(DotScoreStrip.clock_text(577.4) == "9:38" and DotScoreStrip.clock_text(0.3) == "0:01"

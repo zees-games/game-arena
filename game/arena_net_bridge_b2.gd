@@ -643,6 +643,10 @@ func _on_world_event(event: ArenaEvent, reader: DotNetReader) -> void:
 		ArenaEvents.Kind.TEAM:
 			if game != null:
 				game.apply_teams_text(event.body.get_string_from_utf8())
+		ArenaEvents.Kind.SCORE:
+			var told_scores := ArenaEvents.read_scores(reader)
+			if bool(told_scores["ok"]) and game != null:
+				_apply_scores(told_scores)
 		ArenaEvents.Kind.JAIL:
 			var told_jail := ArenaEvents.read_jail(reader)
 			if bool(told_jail["ok"]) and game != null:
@@ -757,3 +761,27 @@ func _drop_session(session_id: int) -> void:
 			_players_by_peer.erase(peer_id)
 
 	game.remove_player(session_id)
+
+
+## The server's counters over this client's scoreboard, whose records JOIN made with names and nothing else.
+## Whole values, not deltas, so a missed event or a round reset is mended by the next one.
+func _apply_scores(told: Dictionary) -> void:
+	if game.is_authority or game.match_node == null or game.match_node.scoreboard == null:
+		return
+	var board: DotScoreboard = game.match_node.scoreboard
+	for row: Dictionary in told["rows"]:
+		var record := board.find(str(int(row["session_id"])))
+		if record == null:
+			continue
+		record.kills = int(row["kills"])
+		record.deaths = int(row["deaths"])
+		record.assists = int(row["assists"])
+		record.score = int(row["score"])
+		record.extra = {&"objectives": int(row["objectives"])} if int(row["objectives"]) > 0 else {}
+		board.score_changed.emit(record)
+	var teams: Dictionary = told["teams"]
+	for team: int in teams:
+		board.add_team_score(team, int(teams[team]) - board.team_score(team))
+	for team in board.team_scores():
+		if not teams.has(team):
+			board.add_team_score(int(team), -board.team_score(int(team)))

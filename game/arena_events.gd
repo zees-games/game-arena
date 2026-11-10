@@ -180,6 +180,8 @@ static func prop_acts_fit() -> bool:
 const NAME_BYTES := 64
 const MAP_BYTES := 64
 const TEXT_BYTES := 256
+## Rows (players, or teams) one SCORE event may carry: the scoreboard's own record limit.
+const MAX_SCORE_ROWS := 512
 
 ## Bits a weapon name occupies in a KILL. Short because it is a label, not an id.
 const WEAPON_BYTES := 32
@@ -382,22 +384,76 @@ static func read_match(reader: DotNetReader) -> Dictionary:
 
 # --- SCORE -----------------------------------------------------------------
 
-static func write_score(session_id: int, kills: int, deaths: int) -> PackedByteArray:
+## A record's objective count (flag captures, hill holds): the sum of its mode counters, which on a client is the one SCORE carried.
+static func objectives_of(record: DotPlayerScore) -> int:
+	var total := 0
+	for counter in record.extra:
+		total += int(record.extra[counter])
+	return total
+
+
+## [param board]'s records best first by objectives (captures), then kills, fewest deaths, then key, so every machine agrees.
+static func ranked_by_objectives(board: DotScoreboard) -> Array[DotPlayerScore]:
+	var out := board.players()
+	var counts := {}
+	for record in out:
+		counts[record.key] = objectives_of(record)
+	out.sort_custom(func(a: DotPlayerScore, b: DotPlayerScore) -> bool:
+		if counts[a.key] != counts[b.key]:
+			return counts[a.key] > counts[b.key]
+		if a.kills != b.kills:
+			return a.kills > b.kills
+		if a.deaths != b.deaths:
+			return a.deaths < b.deaths
+		return a.key < b.key
+	)
+	return out
+
+
+## Every present player's counters and every team's score, so a client's scoreboard (the HUD,
+## the Tab board) matches the server's. Rows are session id, kills, deaths, assists, score and
+## objectives (captures: the sum of the record's mode counters).
+static func write_scores(rows: Array[Dictionary], team_scores: Dictionary) -> PackedByteArray:
 	var writer := _w()
-	writer.write_varint(session_id)
-	writer.write_varint(kills)
-	writer.write_varint(deaths)
+	writer.write_varint(rows.size())
+	for row in rows:
+		writer.write_varint(int(row.get("session_id", 0)))
+		writer.write_varint(maxi(int(row.get("kills", 0)), 0))
+		writer.write_varint(maxi(int(row.get("deaths", 0)), 0))
+		writer.write_varint(maxi(int(row.get("assists", 0)), 0))
+		writer.write_svarint(int(row.get("score", 0)))
+		writer.write_varint(maxi(int(row.get("objectives", 0)), 0))
+	var teams: Array = team_scores.keys()
+	writer.write_varint(teams.size())
+	for team in teams:
+		writer.write_varint(maxi(int(team), 0))
+		writer.write_svarint(int(team_scores[team]))
 	return writer.to_bytes()
 
 
-static func read_score(reader: DotNetReader) -> Dictionary:
-	var out := {
-		"session_id": reader.read_varint(),
-		"kills": reader.read_varint(),
-		"deaths": reader.read_varint(),
-	}
-	out["ok"] = reader.ok()
-	return out
+static func read_scores(reader: DotNetReader) -> Dictionary:
+	var rows: Array[Dictionary] = []
+	var teams := {}
+	var count := reader.read_varint()
+	# A count above any real server is a corrupt body: refuse it rather than loop on it.
+	var sane := count <= MAX_SCORE_ROWS
+	if reader.ok() and sane:
+		for i in count:
+			rows.append({
+				"session_id": reader.read_varint(),
+				"kills": reader.read_varint(),
+				"deaths": reader.read_varint(),
+				"assists": reader.read_varint(),
+				"score": reader.read_svarint(),
+				"objectives": reader.read_varint(),
+			})
+		var team_count := reader.read_varint()
+		sane = team_count <= MAX_SCORE_ROWS
+		if reader.ok() and sane:
+			for i in team_count:
+				var team := reader.read_varint()
+				teams[team] = reader.read_svarint()
+	return {"rows": rows, "teams": teams, "ok": reader.ok() and sane}
 
 
 # --- NOTICE ----------------------------------------------------------------
