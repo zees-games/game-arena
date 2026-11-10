@@ -263,6 +263,16 @@ func _add_bot_think_cvars() -> void:
 	_add_bot_tier_cvar("bot_tier_every_engaged", "tiers.engaged_far_every", "Ticks between thinks of a bot fighting a person beyond bot_tier_engaged_range and out of view (1: every tick)", 1.0)
 	_add_bot_tier_cvar("bot_tier_engaged_range", "tiers.engaged_range", "Metres: a bot fighting a person this close thinks every tick", 0.0)
 	_add_bot_tier_cvar("bot_tier_view", "tiers.view_range", "Metres: a bot inside a person's view cone within this thinks every tick", 0.0)
+	add_cvar("bot_tier_floor", str(ArenaBots.think_floor),
+		"Fewest ticks between thinks of a bot while the tiers apply, whatever its tier (1: every tick); it coasts between",
+		DotConVar.FLAG_ARCHIVE).with_min(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.think_floor = maxi(1, int(new_value.to_float())))
+	add_cvar("bot_tier_floor_engaged", str(ArenaBots.think_floor_engaged),
+		"bot_tier_floor for a bot fighting a person",
+		DotConVar.FLAG_ARCHIVE).with_min(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.think_floor_engaged = maxi(1, int(new_value.to_float())))
 	add_cvar("bot_recoil_control", str(ArenaBots.recoil_control),
 		"Share of the recoil bots pull their aim back against, 0..1; -1 (default) by difficulty: easy .3, medium .55, hard .75, nightmare .9",
 		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(-1.0).with_max(1.0).changed.connect(

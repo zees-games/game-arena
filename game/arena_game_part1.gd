@@ -738,11 +738,6 @@ func _drop_sweepers() -> Dictionary:
 	for id in player_ids():
 		var p: ArenaPlayer = _players[id]
 		if p.is_alive():
-			sweepers[id] = {
-				"position": p.controller.state.position,
-				"hurt": p.health.health < p.health.max_health,
-				"heal": func(amount: float) -> void: var _h := p.health.heal(amount),
-				"needs_ammo": p.needs_ammo(),
-				"ammo": func(share: float) -> void: p.refill_ammo(share),
-			}
+			# The player, asked only when a pickup is in reach: what it lacks is a walk over its slots.
+			sweepers[id] = {"position": p.controller.state.position, "player": p}
 	return sweepers

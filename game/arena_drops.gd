@@ -232,14 +232,18 @@ func tick(tick: int, players: Dictionary) -> void:
 
 	field.wants_fn = func(taker: int, pickup: DotPickup) -> bool:
 		if pickup.item_id == &"health":
-			return bool(players.get(taker, {}).get("hurt", false))
+			return bool(_filled(players.get(taker, {})).get("hurt", false))
 		if pickup.item_id == &"ammo_pack":
-			return bool(players.get(taker, {}).get("needs_ammo", false))
+			return bool(_filled(players.get(taker, {})).get("needs_ammo", false))
 		return true
 
 	for id in players:
 		var entry: Dictionary = players[id]
-		for pickup in field.sweep(int(id), entry["position"], tick):
+		var swept := field.sweep(int(id), entry["position"], tick)
+		if swept.is_empty():
+			continue
+		entry = _filled(entry)
+		for pickup in swept:
 			if pickup.has_meta(&"pack"):
 				var pack := _packs[int(pickup.get_meta(&"pack"))]
 				var give := &"ammo" if pickup.item_id == &"ammo_pack" else &"heal"
@@ -261,6 +265,19 @@ func tick(tick: int, players: Dictionary) -> void:
 	for drop_id in _live.keys():
 		if tick >= int(_live[drop_id]["expires"]):
 			_forget(int(drop_id), 0)
+
+
+## A sweeper given as {"position", "player"} (the game's, each tick) gets what it lacks and how to give it
+## the first time a pickup asks; one given whole (a suite's) is left as it is.
+static func _filled(entry: Dictionary) -> Dictionary:
+	if entry.has("hurt") or not entry.has("player"):
+		return entry
+	var p: Object = entry["player"]
+	entry["hurt"] = p.health.health < p.health.max_health
+	entry["heal"] = func(amount: float) -> void: var _h: Variant = p.health.heal(amount)
+	entry["needs_ammo"] = p.needs_ammo()
+	entry["ammo"] = func(share: float) -> void: p.refill_ammo(share)
+	return entry
 
 
 func _forget(id: int, taker: int) -> void:

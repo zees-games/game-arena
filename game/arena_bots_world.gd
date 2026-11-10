@@ -117,6 +117,15 @@ static func _make_tiers() -> DotBotThinkTier:
 	return t
 
 
+## The fewest ticks between thinks while the tiers are on (cvars `bot_tier_floor`, `bot_tier_floor_engaged`). 1, the
+## default: the tiers alone decide. 3 and 2: a bot the tiers would have think every tick (in a person's view, close
+## to one) thinks at 22 Hz at 66, one fighting a person at 33 Hz, on its own beat, and coasts between with the view
+## carried on; a bot a person hurt still thinks on the next tick. Off by default: the windowed bench (staging02,
+## 24 and 32 bots) gained 2 percent of the tick from 3/2, inside its noise, and it changes how fast a bot reacts.
+static var think_floor: int = 1
+static var think_floor_engaged: int = 1
+
+
 ## Whether tiers decide this tick (else the `bot_think_every` stagger does).
 static var _tier_on: bool = false
 const _COAST_FIRE := DotWeaponCommand.BUTTON_ATTACK | DotWeaponCommand.BUTTON_AIM
