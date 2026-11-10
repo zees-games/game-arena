@@ -512,6 +512,10 @@ func _build_platform() -> void:
 	platform.name = "Platform"
 	# A solo game hosted beside this process is joined like any server, whatever asked for offline.
 	platform.force_offline = force_offline and _sim_host == null
+	if _sim_host != null:
+		# `--offline` means no remote server; the link to this machine's own server survives it.
+		platform.link = _sim_host.link
+		platform.local_link = true
 	platform.use_settings = false
 	platform.use_console = false
 	platform.capture_pointer = false

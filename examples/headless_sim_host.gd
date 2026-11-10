@@ -46,6 +46,8 @@ func _run() -> void:
 	print("game-arena: the solo game hosted beside the client")
 	_check(not ArenaSimHost.wanted(), "a suite's or a tool's client stays in this process")
 	_check(ArenaSimHost.wanted(true), "the launched game is hosted")
+	_check(ArenaSimHost.wanted_for(PackedStringArray(["--offline", "+bot_quota", "8"]), true), "a launcher's --offline is still hosted")
+	_check(not ArenaSimHost.wanted_for(PackedStringArray(["--offline", "--sim_host", "0"]), true), "--sim_host 0 opts out under --offline")
 	ArenaSimHost.forced = 0
 	_check(not ArenaSimHost.wanted(true), "and can be told not to be")
 
@@ -73,6 +75,9 @@ func _run() -> void:
 	var game: Object = _client.get("game")
 	_check(not bool(game.get("is_authority")), "this process is not the authority")
 	_check(not bool(_client.get("_offline")), "the client runs the connected path")
+	var platform: Object = _client.get("platform")
+	_check(platform != null and bool(platform.get("local_link")) and platform.get("link") == host.link,
+		"the platform holds the host's link as local, so --offline keeps it")
 	var seen := await _until(func() -> bool: return _players() >= BOTS + 1, 40.0)
 	_check(seen, "the client sees itself and the bots", "%d of %d" % [_players(), BOTS + 1])
 	# A client's own `mode` stays the default; what the server plays arrives as `shown_mode`.

@@ -28,15 +28,19 @@ var _anchor: Node = null
 var _ready_path := ""
 
 
-## Whether this session is hosted: a second process needs a desktop build. [param launched] is true for the game started as itself, which is hosted unless `--sim_host 0`; a suite or tool that instances the client in its own scene keeps the in-process game it reads, unless it sets [member forced].
 ## Whether this process is the server a hosted game started ([constant SERVER_FLAG]).
 static func is_server_child() -> bool:
 	return _arg(SERVER_FLAG) == "1"
 
 
+## Whether this session is hosted: a second process needs a desktop build. [param launched] is true for the game started as itself, which is hosted unless `--sim_host 0`, `--offline` included (the launchers pass it); a suite or tool that instances the client in its own scene keeps the in-process game it reads, unless it sets [member forced].
 static func wanted(launched: bool = false) -> bool:
-	var args := OS.get_cmdline_user_args()
-	if args.has("--offline") or DotPlatform.is_web() or not DotPlatform.has_threads():
+	return wanted_for(OS.get_cmdline_user_args(), launched)
+
+
+## [method wanted] for the given user args.
+static func wanted_for(args: PackedStringArray, launched: bool) -> bool:
+	if DotPlatform.is_web() or not DotPlatform.has_threads():
 		return false
 	if DotRegistry.get_service(&"dot_client_link") != null:
 		return false

@@ -7,7 +7,7 @@ Solo play runs the whole authoritative game (players, bots, weapons, projectiles
 The game launched as itself (`game/arena.tscn` the current scene) on a desktop build hosts; `-- --sim_host 0` opts out, `-- --sim_host 1` forces it. A suite, a tool or a shell that instances the client in its own scene stays in-process unless it sets `ArenaSimHost.forced`. `ArenaSimHost` (`game/arena_sim_host.gd`) starts the same executable again as a second, headless process on a free loopback port (`--headless --log-file user://logs/sim_server.log -- --sim_server 1 --port N ...`); that process runs the main scene, which hands over to `scenes/arena_sim_server.tscn` at once. No scene path or `--path` goes on the child's command line: a release export refuses both ("compiled without support for path overrides"). The host waits for the child's ready file; if the child dies while booting, the fallback line carries its exit code and the last errors of its log. Then the host joins it with a `DotClientLink` over UDP. The client then takes the connected path it already has: it predicts its own player, interpolates everyone else from snapshots, and draws. The server process is the same `ArenaModule` on dot-server that a public server runs, so hit registration, lag compensation and every simulation result are the tested online ones; nothing in the simulation changed.
 
 - It is a launch flag, not a console cvar: it is read before the client builds anything, like `--map`.
-- `--offline` turns it off: dot-game's `DotGameClient` reads that flag as "no link", so a hosted client under it would play the offline path. dot-bootstrap's `--play`, `--play-export`, `-Play` and `-PlayExport` all pass `--offline`; run the executable directly to get the host.
+- `--offline` keeps it on: it means "no remote server", and the client hands the host's link to `DotGameClient` as `local_link` (dot-game API 55), which that flag does not drop. So dot-bootstrap's `--play`, `--play-export`, `-Play` and `-PlayExport` (all pass `--offline`) are hosted; `-- --sim_host 0` still opts out.
 - Any failure (no server scene, no port, the process dies, no join in time) is logged on `arena.client` and the stock in-process solo game starts instead.
 - The server ends a few seconds after its one remote player left, and after two minutes if none ever came. A process cannot ask the OS about its parent, so it watches its sessions.
 - The link sits at `/root/ArenaSimServer/Server` in the client because RPCs address nodes by path and that is where the server's node is.
@@ -21,7 +21,7 @@ The client owns its server process (`ArenaSimOwner`, `game/arena_sim_owner.gd`; 
 
 Match end, the kill view, the team menu and chat take the connected paths, the ones a public server tests.
 
-Not covered: web and shell-delivered packs (no second process, or no server scene in the pack), and launches with `--offline`.
+Not covered: web and shell-delivered packs (no second process, or no server scene in the pack).
 
 ## What must stay on the main thread
 
@@ -31,7 +31,6 @@ So a simulation thread may own plain data (states, commands, the rewind history,
 
 ## Later stages
 
-1. The `--offline` launches hosted too: dot-game must let a client with a link it was handed play connected under `--offline`.
-2. The same server in a thread of the client process, joined through an in-memory transport instead of a socket. It needs the simulation free of scene-tree calls (today `ArenaPlayer` bodies are nodes), which is the real work; it buys web-with-threads and delivered packs.
-3. Double-buffered snapshots for presentation: the simulation writes buffer A while the frame reads buffer B, swapped at the tick boundary with one atomic index, so drawing never waits for a tick.
-4. Fork-join inside a tick: `WorkerThreadPool.add_group_task` over players for the movement step, joined before weapons resolve, so results stay ordered and identical. Smaller win than moving the tick, and only once the bodies are thread-owned.
+1. The same server in a thread of the client process, joined through an in-memory transport instead of a socket. It needs the simulation free of scene-tree calls (today `ArenaPlayer` bodies are nodes), which is the real work; it buys web-with-threads and delivered packs.
+2. Double-buffered snapshots for presentation: the simulation writes buffer A while the frame reads buffer B, swapped at the tick boundary with one atomic index, so drawing never waits for a tick.
+3. Fork-join inside a tick: `WorkerThreadPool.add_group_task` over players for the movement step, joined before weapons resolve, so results stay ordered and identical. Smaller win than moving the tick, and only once the bodies are thread-owned.
