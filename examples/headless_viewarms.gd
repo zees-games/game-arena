@@ -138,6 +138,7 @@ func _weapon(me: Node, id: StringName) -> void:
 				Input.action_press(&"dot_fps_forward")
 				Input.action_press(&"dot_fps_sprint")
 				await _sample(worst, 3.0)
+				_check(worst.sprint >= 0.99, "%s sprint: the gun goes to its sprint carry with no weapon key down" % id, "sprint blend %.2f over %d samples" % [worst.sprint, worst.n])
 				Input.action_release(&"dot_fps_forward")
 				Input.action_release(&"dot_fps_sprint")
 				sampler.look_at_angles(yaw + 180.0, 0.0)
