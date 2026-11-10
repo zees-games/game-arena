@@ -648,6 +648,7 @@ func _start_offline() -> void:
 
 	_bind_bot_console()
 	_keep_offline_bots(_launch_bots())
+	_run_launch_commands()
 
 func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
 	if presentation != null and presentation.audio != null:

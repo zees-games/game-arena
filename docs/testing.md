@@ -115,16 +115,18 @@ No suite measures a browser's frame either. A threadless web export is the case 
 
 `--profiler record|idle|off` (after `--`) sets what the profiler does during the measured window: recording (the default), placed but not watching, or not placed at all. The sidecar's `frame_ms` comes from the bench's own clock in every mode, so `tools/perf_bench.sh --ab "DIR::--profiler off" "DIR::--profiler record" -n 3` on one checkout gives the profiler's own cost in the "bench clock" rows. The sidecar also counts `ticks` and `dropped_ticks`.
 
-### Profiling on Windows
+### Profiling a release build
 
-1. Get the build: clone dot-bootstrap, run `bootstrap.ps1`, open `game-arena` in Godot 4.7 and press F5 (the first open imports for a few minutes).
+1. Get the build: clone dot-bootstrap and run `.\bootstrap.ps1 -GetGodot game-arena`, then `.\bootstrap.ps1 -PlayExport arena` (Linux: `./bootstrap.sh --get-godot game-arena`, `./bootstrap.sh --play-export arena`). That exports a release build (no editor, no debugger) into `game-arena\build\windows` (`build/linux`) and starts it as `-- --offline +bot_quota 8 +profiler_overlay 1 +profiler_record_seconds 60`: offline, eight players, the overlay up, a minute per `profiler_record` (F10 stays `profiler_capture_seconds`, add `+profiler_capture_seconds 60` to change it). The first run downloads the export templates (1.2 GB, once, SHA-512 checked) and exports for several minutes; the export fails when the dot-sim library is not beside the executable. More arguments go last and win: `-PlayArgs "+bot_quota 16 --map dm_atrium"` (Linux: after the name, `--play-export arena +bot_quota 16 --map dm_atrium`). `-Export arena` (`--export arena`) rebuilds after a pull. The presets are `export_presets.example.cfg`. For a debug run instead, open `game-arena` in Godot 4.7 and press F5.
+
+   `+name value` on the command line of a solo start is a console line (`game/arena_launch_commands.gd`): it runs as soon as the local console knows the name (the profiler's are bound a little after the bots'), is logged as `launch command: ...`, and is dropped with a warning after 10 s when nothing claims it. `+profiler_record 30` starts a recording without a key press.
 2. Start the match you want to measure (solo with bots, or join a server) and play until the map has loaded.
 3. Press F10. It records `profiler_capture_seconds` (10 unless set) and writes the report; F10 again stops early. Play normally meanwhile.
-4. For another length open the console (the key left of 1) and type `record 60`; `profiler_stop` ends it, `profiler_report` prints the last one, `profiler_overlay 1` shows the live graph.
-5. The files are in `%APPDATA%\Godot\app_userdata\game-arena\profiles`: `<stamp>.json` (send this one), `.txt` (readable) and `.folded` (flame graph).
+4. For another length open the console (the key left of 1) and type `profiler_record 60`; `profiler_stop` ends it, `profiler_report` prints the last one, `profiler_overlay 1` shows the live graph.
+5. The files are in `%APPDATA%\Godot\app_userdata\game-arena\profiles` (Linux: `~/.local/share/godot/app_userdata/game-arena/profiles`): `<stamp>.json` (send this one), `.txt` (readable) and `.folded` (flame graph).
 6. Compare two runs with `profiler_compare a.json b.json`.
 
-Every report's `context` names the machine, GPU and driver, the build's commit and each addon's, the launch arguments, every console variable and which were changed, map, mode, players and bots, the sound driver, and whether the dot-sim natives loaded, so a file needs no covering note. `arena.audio` in the system table is the game thread's share of sound (starting and reaping voices), not the mix thread. `--no-profiler` on the command line removes the profiler for an A/B.
+Every report's `context` names the machine, GPU and driver, the build's commit and each addon's, the launch arguments, every console variable and which were changed, map, mode, players and bots, the sound driver, and whether the dot-sim natives loaded, so a file needs no covering note. `arena.audio` in the system table is the game thread's share of sound (starting and reaping voices), not the mix thread. `--no-profiler` on the command line removes the profiler for an A/B. In a release build `profiler_script_top` has nothing to show (the engine keeps per-function script times only under the debugger); the system table, frame times and spikes are the same.
 
 ## Fuzz sweep
 

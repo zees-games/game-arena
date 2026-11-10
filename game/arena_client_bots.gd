@@ -2,6 +2,7 @@ extends "arena_client_view.gd"
 ## The solo client's offline bots, split out of [ArenaClient] so that file stays under the size gate.
 
 const ArenaBotThreads := preload("arena_bot_threads.gd")
+const ArenaLaunchCommands := preload("arena_launch_commands.gd")
 
 
 ## The offline bots: the brain a server's bots run (ArenaBots, dot-bot), with the same
@@ -122,6 +123,23 @@ func _bind_bot_console() -> void:
 			_keep_offline_bots(DotBotRoster.solo_wanted(maxi(0, text.to_int())))
 			return DotResult.success(_bots.size() + 1)
 	)
+
+
+## Runs the `+name value` console lines of a solo launch (`-- +bot_quota 8 +profiler_overlay 1`),
+## each as soon as the local console knows its name. See `arena_launch_commands.gd`.
+func _run_launch_commands() -> void:
+	# Said once per solo start: an exported build that lost its library runs the script
+	# twins without a word, and that is a different thing to measure.
+	DotLog.info(CHANNEL, "dot-sim native modules: %s" % [DotSim.loaded()])
+	if presentation == null or presentation.local_console == null:
+		return
+	var lines := ArenaLaunchCommands.parse(OS.get_cmdline_user_args())
+	if lines.is_empty():
+		return
+	var runner := ArenaLaunchCommands.new()
+	runner.name = "LaunchCommands"
+	add_child(runner)
+	var _waiting := runner.start(presentation.local_console, lines)
 
 
 ## The menu's Bot difficulty (General, Solo bots) onto this match's bots, as it is changed.
