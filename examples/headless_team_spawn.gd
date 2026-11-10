@@ -198,6 +198,12 @@ func _protection() -> void:
 	game.tick({3: [DotFpsCommand.new(), fire]})
 	_check(not game.player_for(3).health.is_protected(game.current_tick()), "the first shot ends it when the cvar says shot")
 	_check(not game.player_for(3).protected_view, "and the bubble goes with it")
+	_protection_distance(game, walk)
+
+
+## Spawn protection by distance walked, the bubble cvar and a 0.5 s window; frees [param game].
+func _protection_distance(game: ArenaGame, walk: DotFpsCommand) -> void:
+	var rate := game.tick_rate
 	# Distance: with the shot/move bits off, travel past spawn_protection_move_feet (2 ft = 0.61 m) ends it.
 	game.config.spawn_protection_break = 0
 	_check(game.config.spawn_protection_move_feet == 2.0 and game.config.spawn_protection_bubble, "defaults: 2 feet, bubble on")

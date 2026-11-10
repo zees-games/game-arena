@@ -254,50 +254,55 @@ func _probe_client() -> void:
 		if why == &"ok":
 			sounds.append(id))
 	for scoped in [false, true]:
-		# The hip shot uses a rifle: the sniper's 8 degree hip cone (a missed shot at 6 m, now that the body is
-		# the 72 unit one and a third smaller in area) tests the weapon's inaccuracy, not that the shot registers.
-		var _fill := me.arsenal.give(AwWeaponIds.SNIPER if scoped else AwWeaponIds.RIFLE)
-		var _sel := me.arsenal.select(AwWeaponIds.big_gun_slot() if scoped else AwWeaponIds.SLOT_PRIMARY, g.current_tick())
-		var hits: Array = []
-		var on_hit := func(a: int, v: int, _amt: float, _pt: Vector3, _h: bool, _l: bool) -> void:
-			hits.append([a, v])
-		g.hit_confirmed.connect(on_hit)
-		# Headless the sink never ends a voice, so two hit sounds from one pass would hold both of its slots for the next.
-		audio.stop_all()
-		sounds.clear()
-		asked.clear()
-		var at := bot.global_position
-		var space := me.get_world_3d().direct_space_state
-		var spot := _clear_spot(space, at)
-		_check(spot != Vector3.INF, "client: a clear line to the bot")
-		me.spawn(Transform3D(Basis(), spot), g.current_tick())
-		g.combat.health_of(bot.player_id).health = 100000.0
-		var sampler = client.get("_sampler")
-		if scoped:
-			Input.action_press(ArenaBindings.AIM)
-		for _i in 200:
-			await get_tree().process_frame
-			# Chest, not head: a hip shot leaves the muzzle and crosses the crosshair at hip_zero, so it lands a hand below the muzzle line and a head-height aim missed the capsule top.
-			var a := angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, 1.2 * ArenaPlayer.stand_height() / 1.8, 0.0))
-			sampler.look_at_angles(a.x, a.y)
-		var hud = client.get("hud")
-		_check(not scoped or me.aim_zoom() < 0.9, "client: the sights are up before the shot" if scoped else "client: hip fire")
-		_check(not scoped or is_equal_approx(float(me.get("_view_fov_scale")), 1.0), "client: with the scope lens (cl_scope_mode 1) the camera keeps the hip's field of view")
-		Input.action_press(ArenaBindings.FIRE)
-		var marker := 0.0
-		for _i in 90:
-			await get_tree().process_frame
-			if hud != null and hud.hit_marker != null:
-				marker = maxf(marker, hud.hit_marker.alpha())
-			if not hits.is_empty() and _i > 3:
-				Input.action_release(ArenaBindings.FIRE)
-		Input.action_release(ArenaBindings.FIRE)
-		Input.action_release(ArenaBindings.AIM)
-		var tag := "scoped" if scoped else "hip"
-		_check(not hits.is_empty(), "client: a %s shot at a still bot registers" % tag, str(hits.size()))
-		_check(marker > 0.0, "client: the hit marker flashes (%s)" % tag, str(marker))
-		_check(sounds.has(&"hit_marker") or sounds.has(&"kill_confirmed"), "client: the hit sound plays (%s)" % tag, str(asked))
-		g.hit_confirmed.disconnect(on_hit)
+		await _shoot_bot(client, g, me, bot, audio, sounds, asked, scoped)
 		for _i in 200:
 			await get_tree().process_frame
 	client.queue_free()
+
+
+## One pass of [method _probe_client]: [param me] fires at the still [param bot], hip or scoped, and the hit, marker and sound are checked.
+func _shoot_bot(client: Node, g: ArenaGame, me: ArenaPlayer, bot: ArenaPlayer, audio: DotAudioManager, sounds: Array, asked: Array, scoped: bool) -> void:
+	# The hip shot uses a rifle: the sniper's 8 degree hip cone (a missed shot at 6 m, now that the body is
+	# the 72 unit one and a third smaller in area) tests the weapon's inaccuracy, not that the shot registers.
+	var _fill := me.arsenal.give(AwWeaponIds.SNIPER if scoped else AwWeaponIds.RIFLE)
+	var _sel := me.arsenal.select(AwWeaponIds.big_gun_slot() if scoped else AwWeaponIds.SLOT_PRIMARY, g.current_tick())
+	var hits: Array = []
+	var on_hit := func(a: int, v: int, _amt: float, _pt: Vector3, _h: bool, _l: bool) -> void:
+		hits.append([a, v])
+	g.hit_confirmed.connect(on_hit)
+	# Headless the sink never ends a voice, so two hit sounds from one pass would hold both of its slots for the next.
+	audio.stop_all()
+	sounds.clear()
+	asked.clear()
+	var at := bot.global_position
+	var space := me.get_world_3d().direct_space_state
+	var spot := _clear_spot(space, at)
+	_check(spot != Vector3.INF, "client: a clear line to the bot")
+	me.spawn(Transform3D(Basis(), spot), g.current_tick())
+	g.combat.health_of(bot.player_id).health = 100000.0
+	var sampler = client.get("_sampler")
+	if scoped:
+		Input.action_press(ArenaBindings.AIM)
+	for _i in 200:
+		await get_tree().process_frame
+		# Chest, not head: a hip shot leaves the muzzle and crosses the crosshair at hip_zero, so it lands a hand below the muzzle line and a head-height aim missed the capsule top.
+		var a := angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, 1.2 * ArenaPlayer.stand_height() / 1.8, 0.0))
+		sampler.look_at_angles(a.x, a.y)
+	var hud = client.get("hud")
+	_check(not scoped or me.aim_zoom() < 0.9, "client: the sights are up before the shot" if scoped else "client: hip fire")
+	_check(not scoped or is_equal_approx(float(me.get("_view_fov_scale")), 1.0), "client: with the scope lens (cl_scope_mode 1) the camera keeps the hip's field of view")
+	Input.action_press(ArenaBindings.FIRE)
+	var marker := 0.0
+	for _i in 90:
+		await get_tree().process_frame
+		if hud != null and hud.hit_marker != null:
+			marker = maxf(marker, hud.hit_marker.alpha())
+		if not hits.is_empty() and _i > 3:
+			Input.action_release(ArenaBindings.FIRE)
+	Input.action_release(ArenaBindings.FIRE)
+	Input.action_release(ArenaBindings.AIM)
+	var tag := "scoped" if scoped else "hip"
+	_check(not hits.is_empty(), "client: a %s shot at a still bot registers" % tag, str(hits.size()))
+	_check(marker > 0.0, "client: the hit marker flashes (%s)" % tag, str(marker))
+	_check(sounds.has(&"hit_marker") or sounds.has(&"kill_confirmed"), "client: the hit sound plays (%s)" % tag, str(asked))
+	g.hit_confirmed.disconnect(on_hit)

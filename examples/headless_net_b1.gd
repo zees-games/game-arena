@@ -284,22 +284,7 @@ func _test_killview_reaches_the_victim() -> void:
 	_check(_server_bridge.killview != null and _server_bridge.killview.ring.sample_count(bot) > 10,
 		"every tick records the bot's eye", str(_server_bridge.killview.ring.sample_count(bot) if _server_bridge.killview != null else -1))
 
-	# The killer's own field of view: a client's setting reaches the server, a bot is drawn with the default.
-	var fov_writer := DotNetWriter.new()
-	var _fov_wrote := _server_net.messages.encode(ArenaRequest.new(ArenaEvents.Ask.FOV, ArenaEvents.write_fov(110.0)), fov_writer)
-	var _fov_asked := _server_bridge.receive_request(2, fov_writer.to_bytes())
-	var want_fov := KillPov.degrees_to_vertical(110.0)
-	_check(is_equal_approx(KillPov.fov_of(target), want_fov) and absf(want_fov - 83.6) > 5.0,
-		"a client's field of view setting is what its kill view is drawn with", "%.2f vs %.2f" % [KillPov.fov_of(target), want_fov])
-	_check(is_equal_approx(KillPov.degrees_to_vertical(100.0), 83.6) or absf(KillPov.degrees_to_vertical(100.0) - 83.6) < 0.1, "100 at 4:3 is the 83.6 the addon assumed")
-	var recorded_fov := 0.0
-	for e: Dictionary in _server_bridge.killview.eyes_fn.call():
-		if int(e["id"]) == victim:
-			recorded_fov = float(e["fov"])
-	_check(is_equal_approx(recorded_fov, want_fov), "and the server records that lens in the clip", str(recorded_fov))
-	KillPov.note_field_of_view(target, 9000.0)
-	_check(is_equal_approx(KillPov.fov_of(target), want_fov), "a nonsense setting changes nothing")
-	_check(is_equal_approx(KillPov.fov_of(_server_game.player_for(bot)), KillPov.DEFAULT_FOV), "a bot has no screen: the default")
+	_check_killer_fov(target, victim, bot)
 
 	var usual_delay := _server_game.match_node.rules.respawn_delay_sec
 	_server_game.match_node.rules.respawn_delay_sec = 2.0
@@ -345,6 +330,26 @@ func _test_killview_reaches_the_victim() -> void:
 	_server_bridge.link = previous
 	link.free()
 	_done()
+
+
+## The killer's field of view: a client's setting reaches the server and its kill view is drawn with it.
+func _check_killer_fov(target: ArenaPlayer, victim: int, bot: int) -> void:
+	# The killer's own field of view: a client's setting reaches the server, a bot is drawn with the default.
+	var fov_writer := DotNetWriter.new()
+	var _fov_wrote := _server_net.messages.encode(ArenaRequest.new(ArenaEvents.Ask.FOV, ArenaEvents.write_fov(110.0)), fov_writer)
+	var _fov_asked := _server_bridge.receive_request(2, fov_writer.to_bytes())
+	var want_fov := KillPov.degrees_to_vertical(110.0)
+	_check(is_equal_approx(KillPov.fov_of(target), want_fov) and absf(want_fov - 83.6) > 5.0,
+		"a client's field of view setting is what its kill view is drawn with", "%.2f vs %.2f" % [KillPov.fov_of(target), want_fov])
+	_check(is_equal_approx(KillPov.degrees_to_vertical(100.0), 83.6) or absf(KillPov.degrees_to_vertical(100.0) - 83.6) < 0.1, "100 at 4:3 is the 83.6 the addon assumed")
+	var recorded_fov := 0.0
+	for e: Dictionary in _server_bridge.killview.eyes_fn.call():
+		if int(e["id"]) == victim:
+			recorded_fov = float(e["fov"])
+	_check(is_equal_approx(recorded_fov, want_fov), "and the server records that lens in the clip", str(recorded_fov))
+	KillPov.note_field_of_view(target, 9000.0)
+	_check(is_equal_approx(KillPov.fov_of(target), want_fov), "a nonsense setting changes nothing")
+	_check(is_equal_approx(KillPov.fov_of(_server_game.player_for(bot)), KillPov.DEFAULT_FOV), "a bot has no screen: the default")
 
 
 func _test_disconnect() -> void:

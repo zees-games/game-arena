@@ -72,24 +72,10 @@ func _run() -> void:
 		var goal: Vector3 = tries[t]["goal"]
 		bot.controller.state.position = foot
 		bot.controller.state.velocity = Vector3.ZERO
-		var mind := ArenaBots.Mind.new()
-		mind.seed = 5 + t
-		var done := false
-		var grabbed_now := false
-		var steps := int(CLIMB_SECONDS * TICK_RATE)
-		for i in steps:
-			var commands := {BOT: ArenaBots.think(game, bot, mind, tick, float(TICK_RATE))}
-			if i == 1:
-				mind.brain.set(&"_waypoint", goal)
-			game.tick(commands)
-			tick += 1
-			grabbed_now = grabbed_now or bot.controller.state.mode == bot.ladder.mode_id
-			var feet: Vector3 = bot.controller.state.position
-			if Vector2(feet.x - goal.x, feet.z - goal.z).length() < 2.0 and absf(feet.y - goal.y) < 1.0:
-				done = true
-				break
-			if i % 16 == 0:
-				await get_tree().physics_frame
+		var result: Dictionary = await _climb(game, bot, goal, 5 + t, tick)
+		tick = result["tick"]
+		var done: bool = result["done"]
+		var grabbed_now: bool = result["grabbed"]
 		print("try %d foot %s goal %s grabbed %s climbed %s ended %s" % [t, foot, goal, grabbed_now, done, bot.controller.state.position])
 		reached += 1 if done else 0
 		grabbed += 1 if grabbed_now else 0
@@ -103,6 +89,29 @@ func _run() -> void:
 	game.queue_free()
 	await get_tree().process_frame
 	_report_sections(1, 1, SECTIONS, CHECKS)
+
+
+## Drives [param bot] up toward [param goal] for CLIMB_SECONDS; returns {done, grabbed, tick}.
+func _climb(game: ArenaGame, bot: ArenaPlayer, goal: Vector3, seed_value: int, tick: int) -> Dictionary:
+	var mind := ArenaBots.Mind.new()
+	mind.seed = seed_value
+	var done := false
+	var grabbed_now := false
+	var steps := int(CLIMB_SECONDS * TICK_RATE)
+	for i in steps:
+		var commands := {BOT: ArenaBots.think(game, bot, mind, tick, float(TICK_RATE))}
+		if i == 1:
+			mind.brain.set(&"_waypoint", goal)
+		game.tick(commands)
+		tick += 1
+		grabbed_now = grabbed_now or bot.controller.state.mode == bot.ladder.mode_id
+		var feet: Vector3 = bot.controller.state.position
+		if Vector2(feet.x - goal.x, feet.z - goal.z).length() < 2.0 and absf(feet.y - goal.y) < 1.0:
+			done = true
+			break
+		if i % 16 == 0:
+			await get_tree().physics_frame
+	return {"done": done, "grabbed": grabbed_now, "tick": tick}
 
 
 ## Up to a few {foot, goal}: a ladder's foot and a mesh point on its top platform 4 to 8 m off whose route to the foot crosses a ladder ride and cannot be walked.

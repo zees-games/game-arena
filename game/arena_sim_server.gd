@@ -49,24 +49,7 @@ func _ready() -> void:
 		_die("the arena could not be built: %s" % built.error.message)
 		return
 
-	var config := DotServerConfig.new()
-	config.hostname = "solo"
-	config.port = port
-	config.tickrate = game.tick_rate
-	config.max_players = 64
-	config.bind_address = "127.0.0.1"
-	config.transport_mode = "dual"
-	config.rcon_password = ""
-	config.admins_path = "%s/admins.json" % data
-	config.bans_path = "%s/bans.json" % data
-	config.audit_log_path = "%s/audit.jsonl" % data
-	config.hibernate_when_empty = false
-	config.startup_config = ""
-	config.autoexec_config = ""
-	config.query_enabled = false
-	config.enet_share_udp_port = false
-	config.stdin_console_enabled = false
-	config.log_level = "warn"
+	var config := _server_config(port, game.tick_rate, data)
 	var server := DotServer.new()
 	server.name = "Server"
 	server.config = config
@@ -103,6 +86,29 @@ func _ready() -> void:
 	_server = server
 	print("SIM_HOST ready map=%s mode=%s bots=%d" % [String(game.map.id), String(game.mode.id), bots])
 	_report(module.net)
+
+
+## The loopback server config for the solo host: [param data] holds its admin, ban and audit files.
+static func _server_config(port: int, tickrate: int, data: String) -> DotServerConfig:
+	var config := DotServerConfig.new()
+	config.hostname = "solo"
+	config.port = port
+	config.tickrate = tickrate
+	config.max_players = 64
+	config.bind_address = "127.0.0.1"
+	config.transport_mode = "dual"
+	config.rcon_password = ""
+	config.admins_path = "%s/admins.json" % data
+	config.bans_path = "%s/bans.json" % data
+	config.audit_log_path = "%s/audit.jsonl" % data
+	config.hibernate_when_empty = false
+	config.startup_config = ""
+	config.autoexec_config = ""
+	config.query_enabled = false
+	config.enet_share_udp_port = false
+	config.stdin_console_enabled = false
+	config.log_level = "warn"
+	return config
 
 
 func _process(delta: float) -> void:

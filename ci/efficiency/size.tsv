@@ -76,7 +76,6 @@ maps/arena_map_part3.gd::dm_pit	270
 maps/arena_map_survey.gd::_jumps	86
 tools/client_bench.gd::_measure	101
 tools/client_bench.gd::_run	81
-tools/net_probe.gd::_run	144
 tools/screenshot.gd::_initialize	104
 tools/screenshot_b1.gd::_play_glance	108
 tools/screenshot_b1.gd::_play_imported	139
