@@ -475,6 +475,8 @@ func tick_post(tick: int, delta: float, combat_command: DotWeaponCommand) -> Dot
 	if weapons.arsenal.is_idle_for(_command, weapons.get(&"_previous_command")):
 		out = weapons.simulate_tick(_command, tick, null)
 		ArenaFrameProbe.add(&"p_weapons", t_wp)
+		if fine:
+			ArenaFrameProbe.charge_weapon_phases()
 		return out
 	t_wp = Time.get_ticks_usec()
 	# Pushed in from the simulated state, never read out of a rendered one: an
@@ -502,6 +504,8 @@ func tick_post(tick: int, delta: float, combat_command: DotWeaponCommand) -> Dot
 	# command itself, for the same edge triggers the arsenal used to be handed it for.
 	out = weapons.simulate_tick(_command, tick, ctx)
 	ArenaFrameProbe.add(&"p_weapons", t_wp)
+	if fine:
+		ArenaFrameProbe.charge_weapon_phases()
 	return out
 
 ## Whether the body is drawn sliding: the replicated slide timer (net_flags), for bots, humans and remote copies alike.

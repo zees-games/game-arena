@@ -112,6 +112,39 @@ static func lap(section: StringName, since_usec: int) -> int:
 	return now
 
 
+## The rig's and the arsenal's phase clocks as read at the last [method charge_weapon_phases].
+static var _pw_seen := PackedInt64Array()
+static var _pa_seen := PackedInt64Array()
+static var _pw_names: Array[StringName] = []
+static var _pa_names: Array[StringName] = []
+
+
+## Charges what the weapon rig's and arsenal's phase clocks gained since the last call to `arena.pw_<part>` and
+## `arena.pa_<part>`, so a recorded profile splits p_weapons. After each p_weapons, while [member fine] is on.
+static func charge_weapon_phases() -> void:
+	if not DotFrameCost.enabled:
+		return
+	var rig := AwWeaponRig.phase_us
+	var ars := DotWeaponArsenal.phase_us
+	if _pw_names.is_empty():
+		for part in AwWeaponRig.PHASES:
+			_pw_names.append(StringName("arena.pw_" + part))
+		for part in DotWeaponArsenal.PHASES:
+			_pa_names.append(StringName("arena.pa_" + part))
+	if _pw_seen.size() != rig.size():
+		_pw_seen = rig.duplicate()
+	if _pa_seen.size() != ars.size():
+		_pa_seen = ars.duplicate()
+	for i in rig.size():
+		if rig[i] != _pw_seen[i]:
+			DotFrameCost.add_usec(_pw_names[i], rig[i] - _pw_seen[i])
+			_pw_seen[i] = rig[i]
+	for i in ars.size():
+		if ars[i] != _pa_seen[i]:
+			DotFrameCost.add_usec(_pa_names[i], ars[i] - _pa_seen[i])
+			_pa_seen[i] = ars[i]
+
+
 static func _profiled(section: StringName) -> StringName:
 	var name: Variant = _profiled_names.get(section)
 	if name == null:

@@ -53,6 +53,8 @@ static func player_count(game: Object) -> int:
 static func begin_fine() -> void:
 	if ArenaFrameProbe.fine_on_record:
 		ArenaFrameProbe.fine = true
+		AwWeaponRig.phase_timers = true
+		DotWeaponArsenal.phase_timers = true
 
 
 ## Off again once the recording ended (a read while it runs, for the overlay, leaves them on).
@@ -60,6 +62,8 @@ static func end_fine(profiler: Object) -> Dictionary:
 	var out := {"sub_spans": ArenaFrameProbe.fine}
 	if ArenaFrameProbe.fine_on_record and profiler != null and profiler.has_method(&"is_recording") and not bool(profiler.call(&"is_recording")):
 		ArenaFrameProbe.fine = false
+		AwWeaponRig.phase_timers = false
+		DotWeaponArsenal.phase_timers = false
 	return out
 
 

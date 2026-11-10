@@ -27,6 +27,8 @@ var _motor_us := false
 var _queries := false
 var _native_us := false
 var _ctl_us := false
+## `--weapon-us 1`: the rig's and the arsenal's parts of p_weapons, in microseconds per call (off by default: the clocks are inside p_weapons).
+var _weapon_us := false
 ## `--tick N`: the game and engine tick rate (default: the game's, 66); 128 for the 128 Hz cost.
 var _tick := 0
 var _max_steps := -1
@@ -50,6 +52,7 @@ func _ready() -> void:
 	_motor_us = int(args.get("motor-us", 0)) != 0
 	_queries = int(args.get("queries", 0)) != 0
 	_ctl_us = int(args.get("ctl-us", 0)) != 0
+	_weapon_us = int(args.get("weapon-us", 0)) != 0
 	_native_us = int(args.get("native-us", 0)) != 0 and ClassDB.class_exists(&"DotSimFpsBody")
 	_max_steps = int(args.get("max-steps", -1))
 	_fine = int(args.get("fine", 1)) != 0
@@ -138,6 +141,12 @@ func _record_begin() -> void:
 	DotFpsPhysicsBody.prof.fill(0)
 	# --ctl-us 1: the controller's phases alone, on whichever motor path runs (--motor-us forces the script one).
 	DotFpsController.phase_timers = _ctl_us
+	AwWeaponRig.phase_timers = _weapon_us
+	DotWeaponArsenal.phase_timers = _weapon_us
+	AwWeaponRig.phase_us.fill(0)
+	AwWeaponRig.phase_calls.fill(0)
+	DotWeaponArsenal.phase_us.fill(0)
+	DotWeaponArsenal.phase_calls.fill(0)
 	if _ctl_us:
 		DotFpsController.phase_us.fill(0)
 	if _motor_us:
@@ -154,6 +163,8 @@ func _record_end() -> void:
 	DotFpsPhysicsBody.profile = false
 	DotFpsMotor.profile = false
 	DotFpsController.phase_timers = false
+	AwWeaponRig.phase_timers = false
+	DotWeaponArsenal.phase_timers = false
 	if _native_us:
 		ClassDB.class_call_static(&"DotSimFpsBody", &"set_profile", false)
 
@@ -176,6 +187,17 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		for i in DotFpsMotor.PHASES.size():
 			if DotFpsMotor.PHASES[i] != "":
 				phases["motor." + DotFpsMotor.PHASES[i]] = snappedf(DotFpsMotor.phase_us[i] / 1000.0 / n, 0.001)
+	var weapon := {}
+	if _weapon_us:
+		# Per rig call (idle and full together); the arsenal's per call of its own, its counts beside.
+		var rc := AwWeaponRig.phase_calls
+		weapon["rig_calls"] = {"idle": rc[0], "full": rc[1]}
+		for i in AwWeaponRig.PHASES.size():
+			weapon["pw." + AwWeaponRig.PHASES[i]] = snappedf(float(AwWeaponRig.phase_us[i]) / maxf(rc[0] + rc[1], 1.0), 0.01)
+		var ac := DotWeaponArsenal.phase_calls
+		weapon["arsenal_calls"] = {"full": ac[0], "idle": ac[1], "idle_rested": ac[2]}
+		for i in DotWeaponArsenal.PHASES.size():
+			weapon["pa." + DotWeaponArsenal.PHASES[i]] = snappedf(float(DotWeaponArsenal.phase_us[i]) / maxf(ac[0] + ac[1], 1.0), 0.01)
 	var native := {}
 	if _native_us:
 		# Count then microseconds per slot: the four engine queries, then whole native ticks; the tick less the queries is dot-sim's own work.
@@ -202,7 +224,7 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		hulls["batch"] = ArenaHullGrid.batch
 		hulls["batch_rows"] = ArenaHullGrid.batch_rows
 		hulls["batch_faults"] = ArenaHullGrid.batch_faults
-	return {"phases_ms_per_frame": phases, "native": native, "hulls": hulls, "sim_host": _sim_host and client.get("_sim_host") != null, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
+	return {"phases_ms_per_frame": phases, "weapon_us_per_call": weapon, "native": native, "hulls": hulls, "sim_host": _sim_host and client.get("_sim_host") != null, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
 
 
 func _apply_ablate() -> void:
