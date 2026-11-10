@@ -78,6 +78,9 @@ const REFERENCE_PROFILE := {
 ## 46 + the setup pair repeated for each of the 2 extra seeds in each of 4 presets.
 const CHECKS := 62
 const SECTIONS := 5
+## The same, split for the shards (`--shard PRESET`) and the merge (`--merge LOG...`): the order checks are six, the presets share the rest.
+const ORDER_CHECKS := 6
+const PRESET_CHECKS := (CHECKS - ORDER_CHECKS) / 4
 
 var _entered := 0
 var _completed := 0
@@ -99,12 +102,52 @@ func _run() -> void:
 	ArenaBots.think_every = 2
 	ArenaBots.think_near = 0.0
 
+	var args := OS.get_cmdline_user_args()
+	var merge := args.find("--merge")
+	var shard := ""
+	if args.find("--shard") >= 0 and args.find("--shard") + 1 < args.size():
+		shard = args[args.find("--shard") + 1]
+
+	if merge >= 0:
+		# The shards' presets, read back from their logs: the order between them is all that is left to hold.
+		_section("the shards' logs")
+		_load_results(args.slice(merge + 1))
+		_done()
+		_test_order()
+		_report_sections(_entered, _completed, 2, ORDER_CHECKS + 1)
+		return
+	if shard != "":
+		await _play(shard)
+		_report_sections(_entered, _completed, 1, PRESET_CHECKS)
+		return
+
 	for preset in DotBotProfile.PRESETS:
 		await _play(preset)
 
 	_test_order()
 
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
+
+
+## What the shards printed (a `PRESET_JSON` line in each log), back into `_results`.
+func _load_results(paths: PackedStringArray) -> void:
+	for path in paths:
+		var f := FileAccess.open(path, FileAccess.READ)
+		if f == null:
+			print("  cannot read %s" % path)
+			continue
+		for line in f.get_as_text().split("\n"):
+			if not line.begins_with("PRESET_JSON "):
+				continue
+			var parsed: Variant = JSON.parse_string(line.substr(12))
+			if parsed is Dictionary:
+				var row: Dictionary = parsed["result"]
+				# A mean over no engagements is NaN, which JSON writes as null.
+				for key in ["reaction", "first_error"]:
+					if row.get(key) == null:
+						row[key] = NAN
+				_results[str(parsed["preset"])] = row
+	_check(_results.size() == DotBotProfile.PRESETS.size(), "every preset's shard log is there", "%d of %d" % [_results.size(), DotBotProfile.PRESETS.size()])
 
 
 func _play(preset: String) -> void:
@@ -227,6 +270,7 @@ func _play(preset: String) -> void:
 	var reaction := _mean(reactions)
 	var first_error := _mean(first_errors)
 	_results[preset] = {"kd": kd, "kills": kills[0], "deaths": kills[1], "reaction": reaction, "first_error": first_error}
+	print("PRESET_JSON " + JSON.stringify({"preset": preset, "result": _results[preset]}))
 	print("       %-9s %2d kills %2d deaths  K/D %.2f  reaction %.3f s (bot_reaction %.2f, %d engagements)  first shot %.2f deg off  turn %.0f deg/s  %d of %d shots blind  %d grenades  per seed %s" % [
 		preset, kills[0], kills[1], kd, reaction, p.reaction, reactions.size(), first_error, fastest, blind_shots, shots, thrown[0], per_seed])
 

@@ -12,9 +12,67 @@ func _ready() -> void:
 	_run.call_deferred()
 
 
+## `-- --shard rest` plays everything but the two per-map loops; `-- --shard mapsN` (N of MAP_SHARDS) plays those two over every
+## MAP_SHARDS-th imported map; `-- --merge LOG...` only holds that every shard's log is there (each shard fails on its own).
+const MAP_SHARDS := 4
+
+var _shard := ""
+var _merging := false
+
+## What the two per-map loops add to the whole run's totals: two sections, and two fixed checks in the first beside one audit check per map.
+const LOOP_SECTIONS := 2
+const LOOP_FIXED_CHECKS := 2
+
+
+func _expected_sections() -> int:
+	if _merging:
+		return 1
+	if _shard == "rest":
+		return SECTIONS - LOOP_SECTIONS
+	return LOOP_SECTIONS if _shard.begins_with("maps") else SECTIONS
+
+
+func _expected_checks() -> int:
+	if _merging:
+		return 1
+	if _shard == "rest":
+		return CHECKS_FIXED - LOOP_FIXED_CHECKS
+	if _shard.begins_with("maps"):
+		return LOOP_FIXED_CHECKS + _map_ids().size()
+	return super()
+
+
+## The imported maps this run covers: all of them, or this shard's every MAP_SHARDS-th.
+func _map_ids() -> Array:
+	var all: Array = ArenaMap.imported_ids()
+	if not _shard.begins_with("maps"):
+		return all
+	var out := []
+	for i in all.size():
+		if i % MAP_SHARDS == int(_shard.trim_prefix("maps")):
+			out.append(all[i])
+	return out
+
+
 func _run() -> void:
 	_line("arena — imported combat surf maps")
 	_line("")
+
+	var user_args := OS.get_cmdline_user_args()
+	if user_args.has("--merge"):
+		_merging = true
+		_section("the shards' logs")
+		var logs := user_args.slice(user_args.find("--merge") + 1)
+		var missing := []
+		for path in logs:
+			if not FileAccess.file_exists(path):
+				missing.append(path)
+		_check(not logs.is_empty() and missing.is_empty(), "every shard's log is there (%d logs)" % logs.size(), "missing %s" % [missing])
+		_done()
+		_finish()
+		return
+	if user_args.has("--shard") and user_args.find("--shard") + 1 < user_args.size():
+		_shard = user_args[user_args.find("--shard") + 1]
 
 	if ArenaMap.imported_ids().is_empty():
 		_line("no imported maps under %s — nothing to check" % ArenaImportedMaps.roots()[0])
@@ -24,6 +82,11 @@ func _run() -> void:
 
 	# The legacy meshes are what the probes below read; _test_worlds turns the worlds on for itself.
 	ArenaMap.use_worlds = false
+	if _shard.begins_with("maps"):
+		await _test_every_map()
+		await _test_collision_audit()
+		_finish()
+		return
 	_test_catalogue()
 	_test_lighting()
 	_test_worlds()
@@ -69,8 +132,9 @@ func _run() -> void:
 	await _test_rotation_rides()
 	await _test_bot_band()
 	await _test_recorded_rides()
-	await _test_every_map()
-	await _test_collision_audit()
+	if _shard == "":
+		await _test_every_map()
+		await _test_collision_audit()
 	await _test_packs()
 	await _test_server_named()
 
@@ -366,7 +430,7 @@ func _test_every_map() -> void:
 	var bad: Array[String] = []
 	var report: Array[String] = []
 
-	for id in ArenaMap.imported_ids():
+	for id in _map_ids():
 		var map := ArenaMap.by_id(id)
 		var solid := map.to_collision()
 		add_child(solid)
@@ -419,8 +483,8 @@ func _test_every_map() -> void:
 	for line in report:
 		_line("     " + line)
 
-	_check(built == ArenaMap.imported_ids().size(),
-		"every one builds a solid (%d of %d)" % [built, ArenaMap.imported_ids().size()])
+	_check(built == _map_ids().size(),
+		"every one builds a solid (%d of %d)" % [built, _map_ids().size()])
 	_check(bad.is_empty(), "and three in four of its spawns stand on a floor, clear of solid (%s fail)" % [bad])
 
 	_done()
@@ -433,7 +497,7 @@ func _test_every_map() -> void:
 func _test_collision_audit() -> void:
 	_section("every imported map: nothing drawn is walked through")
 
-	for id in ArenaMap.imported_ids():
+	for id in _map_ids():
 		var map := ArenaMap.by_id(id)
 		var world := Node3D.new()
 		world.add_child(map.to_scene())

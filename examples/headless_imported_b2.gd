@@ -37,7 +37,16 @@ func _finish() -> void:
 		_game.free()
 		_game = null
 
-	_report_sections(_entered, _completed, SECTIONS, CHECKS_FIXED + ArenaMap.imported_ids().size())
+	_report_sections(_entered, _completed, _expected_sections(), _expected_checks())
+
+
+## What a whole run enters and checks; a shard of it overrides these (headless_imported.gd).
+func _expected_sections() -> int:
+	return SECTIONS
+
+
+func _expected_checks() -> int:
+	return CHECKS_FIXED + ArenaMap.imported_ids().size()
 
 
 func _test_catalogue() -> void:

@@ -42,7 +42,7 @@ PACK="arena"
 EXTRA_PACKS=""
 # headless_lossy plays real ENet through real loss. It was left out while it failed about
 # one run in four; since 2026-10-09 it passed 20 of 20 (see docs/testing.md "headless_lossy").
-SUITES="headless_config headless_slide headless_loadout_persist headless_loadout_open headless_workbench headless_mapcfg headless_match headless_bots headless_bot_hitreg headless_hitzones headless_skins headless_roles headless_net headless_presentation headless_stack headless_admin headless_imported headless_dm_maps headless_ladders headless_delivered headless_workshop dedicated headless_lossy headless_latency headless_feel headless_reload headless_combatfeel headless_recoil headless_ballistics headless_grenades headless_knife_throw headless_weapondrop headless_weapondrop_rest headless_weapondrop_depth headless_weapondrop_hitch headless_shotfx_hitch headless_shot_nodes headless_weapondrop_death headless_teammenu headless_specflow headless_firemode headless_mapuse headless_jailrelease headless_killcam headless_wallsize headless_bottricks headless_bot_ladders headless_bot_spawn headless_bot_seek headless_aim headless_aimlocal headless_viewarms headless_bot_visible headless_botcap headless_tickrate headless_tickbudget headless_lone_spawn headless_spawn_spread headless_team_spawn headless_corpsewall headless_touch headless_demo_stats headless_ride_pilot headless_ctf headless_ctf_carry headless_cp_orange headless_netaoi headless_botthreads headless_remote_lod headless_profiler_context headless_motor_batch"
+SUITES="headless_config headless_loadout_persist headless_loadout_open headless_workbench headless_mapcfg headless_match headless_bots headless_bot_hitreg headless_skins headless_roles headless_net headless_presentation headless_stack headless_admin headless_imported headless_dm_maps headless_ladders headless_delivered headless_workshop dedicated headless_lossy headless_latency headless_feel headless_reload headless_combatfeel headless_recoil headless_ballistics headless_grenades headless_weapondrop headless_weapondrop_rest headless_weapondrop_depth headless_weapondrop_hitch headless_shotfx_hitch headless_shot_nodes headless_weapondrop_death headless_teammenu headless_specflow headless_firemode headless_mapuse headless_jailrelease headless_killcam headless_wallsize headless_bottricks headless_bot_ladders headless_bot_spawn headless_bot_seek headless_aim headless_aimlocal headless_viewarms headless_bot_visible headless_botcap headless_tickrate headless_tickbudget headless_lone_spawn headless_spawn_spread headless_team_spawn headless_corpsewall headless_touch headless_demo_stats headless_ride_pilot headless_ctf headless_cp_orange headless_netaoi headless_botthreads headless_remote_lod headless_profiler_context"
 # --------------------------------------------------------------------------------
 
 set -uo pipefail
@@ -56,10 +56,12 @@ PARSE=1
 # A suite that legitimately needs at least this long, as name=seconds; a larger
 # --timeout still wins.
 MIN_TIMEOUTS="headless_imported=3000 headless_bots=2400"
-# A suite whose frames are stepped at a fixed rate instead of on the wall clock, as
-# name=frames-per-second (the engine's --fixed-fps): what it measures between a frame and
-# a tick is then the same on an idle box and a starved one.
-FIXED_FPS="headless_aimlocal=132"
+# A suite too long for one run, as name=shard,shard,...: `test NAME` plays each shard as its own
+# `examples/NAME.tscn -- --shard SHARD` (up to $SHARD_JOBS at once, default 4) and then runs the
+# suite once more as `-- --merge LOG...` over the shards' logs, which holds the whole-run checks.
+# `test NAME.SHARD` plays one shard; `test NAME.merge` only the merge over logs already in .godot/test-logs.
+# `suites --shards` lists the shards instead of the suite (`hv shard` runs them as separate jobs, then NAME.merge).
+SUITE_SHARDS="headless_bots=easy,medium,hard,nightmare headless_imported=rest,maps0,maps1,maps2,maps3"
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 CR=$'\r\033[K'
 [ -t 1 ] || { RED=""; GRN=""; YLW=""; OFF=""; CR=""; }
@@ -125,20 +127,24 @@ pack_all() {
 }
 
 run_suite() {
-    local scene="$1" log out status summary
-    [ -f "examples/$scene.tscn" ] || { printf '  %s??%s   %s: no examples/%s.tscn\n' "$YLW" "$OFF" "$scene" "$scene"; return 1; }
+    # NAME is a suite, or SUITE.SHARD; ARGS (after NAME) go to the scene as user args.
+    local scene="$1" base="${1%%.*}"
+    shift
+    local extra=("$@") _s
+    case "$scene" in
+        *.merge) extra=(--merge $(for _s in $(shards_of "$base"); do printf '.godot/test-logs/%s.%s.log ' "$base" "$_s"; done) "$@") ;;
+        *.*) extra=(--shard "${scene#*.}" "$@") ;;
+    esac; extra=(${SUITE_ARGS[@]+"${SUITE_ARGS[@]}"} ${extra[@]+"${extra[@]}"})
+    local log out status summary
+    [ -f "examples/$base.tscn" ] || { printf '  %s??%s   %s: no examples/%s.tscn\n' "$YLW" "$OFF" "$scene" "$base"; return 1; }
     mkdir -p .godot/test-logs
     log=".godot/test-logs/$scene.log"
     [ -t 1 ] && printf '  ..   %s' "$scene"
     local limit="$TIMEOUT" mkv
     for mkv in $MIN_TIMEOUTS; do
-        [ "${mkv%%=*}" = "$scene" ] && [ "$limit" -lt "${mkv#*=}" ] && limit="${mkv#*=}"
+        [ "${mkv%%=*}" = "$base" ] && [ "$limit" -lt "${mkv#*=}" ] && limit="${mkv#*=}"
     done
-    local fixed=()
-    for mkv in $FIXED_FPS; do
-        [ "${mkv%%=*}" = "$scene" ] && fixed=(--fixed-fps "${mkv#*=}")
-    done
-    timeout "$limit" "$GODOT" --headless --path . ${fixed[@]+"${fixed[@]}"} "res://examples/$scene.tscn" ${SUITE_ARGS[@]+-- "${SUITE_ARGS[@]}"} >"$log" 2>&1
+    timeout "$limit" "$GODOT" --headless --path . "res://examples/$base.tscn" ${extra[@]+-- "${extra[@]}"} >"$log" 2>&1
     status=$?
     summary="$(grep -Eo '[0-9]+ (passed|checks), [0-9]+ failed' "$log" | tail -1)"
     # Section accounting: "N sections entered, M finished" from DotGameCheckSuite._report_sections.
@@ -229,6 +235,35 @@ parse_all() {
     return "$fails"
 }
 
+# The shards of suite $1 (space separated), empty when it is not sharded.
+shards_of() {
+    local kv
+    for kv in $SUITE_SHARDS; do [ "${kv%%=*}" = "$1" ] && { printf '%s' "${kv#*=}" | tr ',' ' '; return 0; }; done
+}
+
+# Plays every shard of suite $1, up to $SHARD_JOBS at once, then the suite over their logs.
+run_sharded() {
+    local base="$1" shard tmp logs="" bad=0 running=0
+    tmp="$(mktemp -d)"
+    for shard in $(shards_of "$base"); do
+        ( run_suite "$base.$shard" > "$tmp/$shard.out" 2>&1; echo $? > "$tmp/$shard.rc" ) &
+        running=$((running + 1))
+        [ "$running" -ge "${SHARD_JOBS:-4}" ] && { wait -n; running=$((running - 1)); }
+    done
+    wait
+    for shard in $(shards_of "$base"); do
+        cat "$tmp/$shard.out"
+        [ "$(cat "$tmp/$shard.rc" 2>/dev/null)" = 0 ] || bad=1
+        logs="$logs .godot/test-logs/$base.$shard.log"
+    done
+    rm -rf "$tmp"
+    if [ "$bad" -ne 0 ]; then
+        printf '  %sFAIL%s %s: a shard failed, so there is nothing to merge\n' "$RED" "$OFF" "$base"
+        return 1
+    fi
+    run_suite "$base" --merge $logs
+}
+
 do_test() {
     # Everything after a literal `--` goes to each suite as user args (e.g. `test headless_maps -- --map=ID`).
     SUITE_ARGS=()
@@ -253,6 +288,10 @@ do_test() {
     echo "running the suites"
     local scene
     for scene in ${*:-$SUITES}; do
+        if [ -n "$(shards_of "${scene%.tscn}")" ]; then
+            run_sharded "${scene%.tscn}" || fails=$((fails + 1))
+            continue
+        fi
         run_suite "${scene%.tscn}" || fails=$((fails + 1))
     done
 
@@ -305,6 +344,12 @@ case "$cmd" in
         exec tools/netchaos.sh "$@"
         ;;
     suites)
+        if [ "${1:-}" = "--shards" ]; then
+            for s in $SUITES; do
+                if [ -n "$(shards_of "$s")" ]; then printf '%s\n' $(for sh in $(shards_of "$s"); do echo "$s.$sh"; done); else echo "$s"; fi
+            done
+            exit 0
+        fi
         printf '%s\n' $SUITES
         ;;
     perf)
