@@ -460,6 +460,9 @@ class World:
 	func contacts() -> Array:
 		return _contacts
 
+	func contact_of(all: Array, id: int) -> DotBotContact:
+		return _by_id.get(id) if is_same(all, _contacts) else DotBotWorld.find(all, id)
+
 	func line_of_sight(from: Vector3, to: Vector3) -> bool:
 		if par:
 			return _los_par(from, to)
