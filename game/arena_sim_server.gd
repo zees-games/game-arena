@@ -5,14 +5,17 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("arena_module.gd")
 const ArenaSimOwner := preload("arena_sim_owner.gd")
+const ArenaBotThreads := preload("arena_bot_threads.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
-## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH`. It writes PATH once it accepts players, and quits a few seconds after its player left.
+## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N`. It writes PATH once it accepts players, and quits a few seconds after its player left.
 
 const CHANNEL := "arena.sim_server"
 const REPORT_SEC := 5.0
 const GONE_SEC := 5.0
 const NEVER_SEC := 120.0
+## Most brain threads this process takes by default; the client renders on the same machine.
+const BOT_THREADS_MAX := 4
 
 var _server: DotServer = null
 var _joined := false
@@ -26,6 +29,8 @@ func _ready() -> void:
 	if port <= 0:
 		_die("no --port")
 		return
+	# The brains on worker threads: the same match as one thread (headless_botthreads), less of each tick.
+	ArenaBotThreads.threads = maxi(0, int(_arg("--bot_threads", str(default_bot_threads()))))
 	var data := "user://sim_host"
 	var _made := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data))
 
@@ -152,6 +157,12 @@ func _report(net: DotNetManager) -> void:
 func _die(why: String) -> void:
 	printerr("arena sim server: ", why)
 	get_tree().quit(1)
+
+
+## A quarter of the machine's threads, at most [constant BOT_THREADS_MAX]; 0 (one after another) below 8.
+static func default_bot_threads() -> int:
+	var n := mini(floori(OS.get_processor_count() / 4.0), BOT_THREADS_MAX)
+	return n if n >= 2 else 0
 
 
 static func _arg(flag: String, fallback: String) -> String:

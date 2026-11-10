@@ -78,6 +78,9 @@ func start(bots: int) -> DotResult:
 		args.append_array(["--map", map])
 	if mode != "":
 		args.append_array(["--mode", mode])
+	var bot_threads := _arg("--bot_threads")
+	if bot_threads != "":
+		args.append_array(["--bot_threads", bot_threads])
 	_pid = OS.create_process(OS.get_executable_path(), args)
 	if _pid <= 0:
 		return DotResult.fail(DotError.CODE_INVALID, "the server process did not start")
