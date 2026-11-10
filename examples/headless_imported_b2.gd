@@ -144,9 +144,10 @@ func _test_worlds() -> void:
 
 
 func _test_prop_visuals() -> void:
-	_section("no prop collides without a visual: every library model a world's prop names is on disk")
+	_section("no prop collides without a visual: every library model a world's prop names is mapped to a store file")
 	var worlds := 0
 	var no_store := 0
+	var absent := 0
 	var props := 0
 	var unseen: Array[String] = []
 	for root in [ArenaBspMap.WORLD_ROOT, ArenaBspMap.WORLD_ROOT_DM]:
@@ -176,13 +177,19 @@ func _test_prop_visuals() -> void:
 				if not stand_in.begins_with("lib/") or rec.has("box"):
 					continue
 				props += 1
-				if not files.has(stand_in) or not FileAccess.file_exists(store.path_join(files[stand_in])):
+				if not files.has(stand_in):
 					unseen.append("%s: %s" % [id, stand_in])
+				elif not FileAccess.file_exists(store.path_join(files[stand_in])):
+					# The store is gitignored fetched content: a box holding only some packs' models lacks the rest
+					# (dm-maps worlds read the shared library of the surf pack). That is a content gap, not a bad manifest.
+					absent += 1
 	if worlds == 0:
 		_line("  (no worlds linked: skipped)")
 	if no_store > 0:
 		_line("  (%d worlds without a linked model store: skipped)" % no_store)
-	_check(unseen.is_empty(), "%d library props over %d worlds all resolve to a model file" % [props, worlds], str(unseen.slice(0, 5)))
+	if absent > 0:
+		_line("  (%d library props name a model this box's store does not hold: not judged)" % absent)
+	_check(unseen.is_empty(), "%d library props over %d worlds all map to a store file" % [props, worlds], str(unseen.slice(0, 5)))
 	_done()
 
 

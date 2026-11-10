@@ -3,8 +3,15 @@ extends DotGameCheckSuite
 ## down, running into a wall and through every reload frame, each hand reaches its grip point (within REACH_M of the
 ## arms' own palm offset), that point lands on the drawn grip's pixel, and exactly one set of arms is shown.
 ##   godot --headless --path . res://examples/headless_viewarms.tscn
+## `-- --shard wN` plays every SHARDS-th weapon of the sorted catalogue (N of SHARDS); `-- --merge LOG...` holds that
+## every shard's log is there and that together they entered one section per weapon.
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
+const ShardArgs := preload("shard_args.gd")
+
+const SHARDS := 4
+## The catalogue size (the merge has no booted client to count it from): add a weapon and the merge says so.
+const WEAPONS := 27
 
 ## Metres a hand may sit from its target: the IK lands exactly when the target is in reach.
 const REACH_M := 0.03
@@ -25,6 +32,9 @@ var _scratch_dir := ""
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
+	if ShardArgs.is_merge():
+		_merge.call_deferred()
+		return
 	# One settings directory per process: user:// is shared by every run on this machine, and a second run wiping or
 	# rewriting a shared directory re-binds the keys mid-run (a held reload key then drops).
 	_scratch_dir = ArenaPresentation.use_scratch_settings("headless_viewarms")
@@ -33,6 +43,16 @@ func _ready() -> void:
 	_client.set("mouse_capture_override", true)
 	add_child(_client)
 	_run.call_deferred()
+
+
+func _merge() -> void:
+	var logs := ShardArgs.merge_logs()
+	var missing := ShardArgs.missing(logs)
+	_check(logs.size() == SHARDS and missing.is_empty(), "every shard's log is there (%d logs)" % logs.size(), "missing %s" % [missing])
+	var weapons := WEAPONS
+	var entered := ShardArgs.sections_entered(logs)
+	_check(entered == weapons, "the shards entered one section per weapon (%d of %d)" % [entered, weapons])
+	_report_sections(1, 1, 1)
 
 
 func _run() -> void:
@@ -52,8 +72,13 @@ func _run() -> void:
 	me.health.invulnerable = true
 	var ids: Array = AwWeaponCatalogue.table().keys()
 	ids.sort()
-	_sections = ids.size()
-	for id: StringName in ids:
+	var shard := ShardArgs.shard()
+	var play: Array = []
+	for i in ids.size():
+		if shard == "" or shard == "w%d" % (i % SHARDS):
+			play.append(ids[i])
+	_sections = play.size()
+	for id: StringName in play:
 		await _weapon(me, id)
 	_drop_scratch()
 	_report_sections(_entered, _finished, _sections)

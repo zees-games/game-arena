@@ -4,6 +4,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
+const ShardArgs := preload("shard_args.gd")
 
 ## Server-side hit accuracy against a moving, animated target, by body region.
 ##
@@ -17,12 +18,20 @@ const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 ## [codeblock]
 ## godot --headless --path . res://examples/headless_hitbox.tscn
 ## [/codeblock]
+##
+## `-- --shard NAME` plays one of CELLS (the four cells are independent: each respawns both players);
+## `-- --merge LOG...` only holds that every shard's log is there (each shard fails on its own).
 
 const TICK_RATE := 64
 const DIST := 25.0
 const LAGS := [0.0, 6.0, 12.5, 25.0]
 const REGIONS := ["head", "chest", "pelvis", "foot"]
 const SHOTS_PER_CELL := 12
+## The cells as shard=[label, crouch, moving]; the whole run plays all four in this order.
+const CELLS := {
+	"stand_still": ["stand-still", false, false], "stand_strafe": ["stand-strafe", false, true],
+	"crouch_still": ["crouch-still", true, false], "crouch_strafe": ["crouch-strafe", true, true],
+}
 ## Fraction of shots allowed to miss; the printed table is the real report.
 const MAX_MISS := 0.0
 
@@ -173,12 +182,19 @@ func _cell(label: String, stance_crouch: bool, moving: bool, table: Dictionary) 
 
 
 func _run() -> void:
+	if ShardArgs.is_merge():
+		var logs := ShardArgs.merge_logs()
+		_ok(logs.size() == CELLS.size() and ShardArgs.missing(logs).is_empty(), "every shard's log is there (%d logs)" % logs.size())
+		print("%d checks, %d failed" % [_checks, _failed])
+		get_tree().quit(0 if _failed == 0 else 1)
+		return
+	var shard := ShardArgs.shard()
 	await _boot()
 	var table := {}
-	await _cell("stand-still", false, false, table)
-	await _cell("stand-strafe", false, true, table)
-	await _cell("crouch-still", true, false, table)
-	await _cell("crouch-strafe", true, true, table)
+	for key: String in CELLS:
+		if shard == "" or shard == key:
+			var c: Array = CELLS[key]
+			await _cell(c[0], c[1], c[2], table)
 	print("pose source: %s" % _pose_source)
 	var by_region := {}
 	var total := 0

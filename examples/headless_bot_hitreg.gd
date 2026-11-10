@@ -1,5 +1,7 @@
 extends DotGameCheckSuite
 
+const ShardArgs := preload("shard_args.gd")
+
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaGame := preload("../game/arena_game.gd")
@@ -33,6 +35,9 @@ const BRAIN_SECONDS := 60.0
 
 const CHECKS := 54
 const SECTIONS := 5
+## `-- --shard NAME` plays one part as a run of its own: NAME = [sections, checks] it declares. `-- --merge LOG...` holds that
+## every shard's log is there and that together they entered the whole run's sections.
+const SHARDS := {"direct": [2, 26], "brain": [1, 12], "crowd": [2, 16]}
 
 var _entered := 0
 var _completed := 0
@@ -44,16 +49,36 @@ func _ready() -> void:
 	_run.call_deferred()
 
 
+func _merge() -> void:
+	var logs := ShardArgs.merge_logs()
+	var missing := ShardArgs.missing(logs)
+	_check(logs.size() == SHARDS.size() and missing.is_empty(), "every shard's log is there (%d logs)" % logs.size(), "missing %s" % [missing])
+	var entered := ShardArgs.sections_entered(logs)
+	_check(entered == SECTIONS, "the shards entered every section (%d of %d)" % [entered, SECTIONS])
+	_report_sections(1, 1, 1)
+
+
 func _run() -> void:
 	print("game-arena headless bot hit registration")
+	if ShardArgs.is_merge():
+		_merge()
+		return
 	ArenaBots.think_every = 2
 	ArenaBots.think_near = 0.0
-	await _direct("calm server, one tick per frame", 1, 0)
-	await _direct("loaded server, 6 ticks back to back then a 40 ms stall", 6, 40)
-	await _brain()
-	await _crowd()
-	_counter()
-	_report_sections(_entered, _completed, SECTIONS, CHECKS)
+	var shard := ShardArgs.shard()
+	if shard == "" or shard == "direct":
+		await _direct("calm server, one tick per frame", 1, 0)
+		await _direct("loaded server, 6 ticks back to back then a 40 ms stall", 6, 40)
+	if shard == "" or shard == "brain":
+		await _brain()
+	# The counter reads the shots the crowd just fired, so they play together.
+	if shard == "" or shard == "crowd":
+		await _crowd()
+		_counter()
+	if shard == "":
+		_report_sections(_entered, _completed, SECTIONS, CHECKS)
+	else:
+		_report_sections(_entered, _completed, SHARDS[shard][0], SHARDS[shard][1])
 
 
 func _boot(seed_value: int = 1) -> void:

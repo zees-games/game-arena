@@ -61,7 +61,7 @@ MIN_TIMEOUTS="headless_imported=3000 headless_bots=2400"
 # suite once more as `-- --merge LOG...` over the shards' logs, which holds the whole-run checks.
 # `test NAME.SHARD` plays one shard; `test NAME.merge` only the merge over logs already in .godot/test-logs.
 # `suites --shards` lists the shards instead of the suite (`hv shard` runs them as separate jobs, then NAME.merge).
-SUITE_SHARDS="headless_bots=easy,medium,hard,nightmare headless_imported=rest,maps0,maps1,maps2,maps3"
+SUITE_SHARDS="headless_bots=easy,medium,hard,nightmare headless_imported=rest,maps0,maps1,maps2,maps3 headless_hitbox=stand_still,stand_strafe,crouch_still,crouch_strafe headless_viewarms=w0,w1,w2,w3 headless_bot_hitreg=direct,brain,crowd headless_lossy=windows,moves,rest"
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 CR=$'\r\033[K'
 [ -t 1 ] || { RED=""; GRN=""; YLW=""; OFF=""; CR=""; }

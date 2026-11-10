@@ -2,6 +2,12 @@ extends "lossy_windows.gd"
 
 
 const SECTIONS := 15
+const ShardArgs := preload("shard_args.gd")
+## `-- --shard NAME` boots and connects its own server and plays one part, declaring [sections, checks]; `-- --merge LOG...`
+## holds that every shard's log is there and that together they entered all SECTIONS.
+## Every shard boots and connects: two sections each, which the merge counts once.
+const SHARED_SECTIONS := 2
+const SHARDS := {"windows": [5, 59], "moves": [6, 35], "rest": [8, 40]}
 
 
 func _ready() -> void:
@@ -10,30 +16,50 @@ func _ready() -> void:
 	_run.call_deferred()
 
 
+func _merge() -> void:
+	var logs := ShardArgs.merge_logs()
+	var missing := ShardArgs.missing(logs)
+	_check(logs.size() == SHARDS.size() and missing.is_empty(), "every shard's log is there (%d logs)" % logs.size(), "missing %s" % [missing])
+	var entered := ShardArgs.sections_entered(logs)
+	_check(entered - SHARED_SECTIONS * (SHARDS.size() - 1) == SECTIONS, "the shards entered every section (%d, boot and connect counted once, of %d)" % [entered, SECTIONS])
+	_report_sections(1, 1, 1)
+
+
 func _run() -> void:
 	print("game-arena: a real server and real ENet clients through real packet loss")
+	if ShardArgs.is_merge():
+		_merge()
+		return
+	var shard := ShardArgs.shard()
 	DotPaths.remove_tree(DATA)
 	Engine.physics_ticks_per_second = TICK_RATE
 
 	if await _boot():
 		if await _connect_everyone():
-			for window in WINDOWS:
-				await _measured(_play_window.bind(window))
-			await _measured(_test_wall_moves)
-			await _measured(_test_wall_hops)
-			await _measured(_test_wall_pilot)
-			await _measured(_test_stamina_under_loss)
-			await _measured(_test_teleport_under_loss)
-			await _test_server_cvars_reach_the_client()
-			await _test_ambient_cvars_reach_the_client()
-			await _test_view_feel_and_packs_reach_the_client()
-			await _test_loading_cover()
-			await _test_leave()
+			if shard == "" or shard == "windows":
+				for window in WINDOWS:
+					await _measured(_play_window.bind(window))
+			if shard == "" or shard == "moves":
+				await _measured(_test_wall_moves)
+				await _measured(_test_wall_hops)
+				await _measured(_test_wall_pilot)
+				# Right after the wall tests, as in the whole run: played on a fresh connection its first ticks snap the prediction.
+				await _measured(_test_stamina_under_loss)
+			if shard == "" or shard == "rest":
+				await _measured(_test_teleport_under_loss)
+				await _test_server_cvars_reach_the_client()
+				await _test_ambient_cvars_reach_the_client()
+				await _test_view_feel_and_packs_reach_the_client()
+				await _test_loading_cover()
+				await _test_leave()
 
 	await _teardown()
 	DotPaths.remove_tree(DATA)
 
-	_report_sections(_entered, _completed, SECTIONS, CHECKS)
+	if shard == "":
+		_report_sections(_entered, _completed, SECTIONS, CHECKS)
+	else:
+		_report_sections(_entered, _completed, SHARDS[shard][0], SHARDS[shard][1])
 
 
 func _physics_process(delta: float) -> void:
