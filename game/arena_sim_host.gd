@@ -1,6 +1,6 @@
 extends Node
 
-## Solo play with the simulation off the render thread (`-- --sim_host 1`, off by default): starts the solo
+## Solo play with the simulation off the render thread (on for the launched game; `-- --sim_host 0` turns it off): starts the solo
 ## game as a loopback server process ([code]arena_sim_server.gd[/code]) and joins it, so this process only
 ## predicts its own player, interpolates the rest from snapshots and draws. See docs/sim-thread.md.
 ##
@@ -8,6 +8,11 @@ extends Node
 
 const CHANNEL := "arena.sim_host"
 const SERVER_SCENE := "res://scenes/arena_sim_server.tscn"
+## The user arg that makes a started game the server: the child runs the main scene, which hands over to
+## [constant SERVER_SCENE]. A release export refuses a scene path (and `--path`) on its command line.
+const SERVER_FLAG := "--sim_server"
+## The child's own log, so a boot failure can say why; its default log is the parent's file.
+const SERVER_LOG := "user://logs/sim_server.log"
 const ANCHOR := "ArenaSimServer"
 const BOOT_LIMIT_SEC := 60.0
 const JOIN_LIMIT_SEC := 30.0
@@ -26,8 +31,15 @@ var _anchor: Node = null
 var _ready_path := ""
 
 
-## Whether this launch asked for it and can have it: a second process needs a desktop build run from files.
-static func wanted() -> bool:
+## Whether this session is hosted: a second process needs a desktop build. [param launched] is true for the
+## game started as itself, which is hosted unless `--sim_host 0`; a suite or tool that instances the
+## client in its own scene keeps the in-process game it reads, unless it sets [member forced].
+## Whether this process is the server a hosted game started ([constant SERVER_FLAG]).
+static func is_server_child() -> bool:
+	return _arg(SERVER_FLAG) == "1"
+
+
+static func wanted(launched: bool = false) -> bool:
 	var args := OS.get_cmdline_user_args()
 	if args.has("--offline") or DotPlatform.is_web() or not DotPlatform.has_threads():
 		return false
@@ -36,7 +48,9 @@ static func wanted() -> bool:
 	if forced >= 0:
 		return forced == 1
 	var index := args.find("--sim_host")
-	return index >= 0 and index + 1 < args.size() and args[index + 1].to_int() == 1
+	if index >= 0 and index + 1 < args.size():
+		return args[index + 1].to_int() == 1
+	return launched
 
 
 func start(bots: int) -> DotResult:
@@ -48,11 +62,13 @@ func start(bots: int) -> DotResult:
 	_ready_path = ProjectSettings.globalize_path("user://sim_host_%d.ready" % port)
 	if FileAccess.file_exists(_ready_path):
 		var _gone := DirAccess.remove_absolute(_ready_path)
-	var args := PackedStringArray(["--headless"])
+	var log_path := ProjectSettings.globalize_path(SERVER_LOG)
+	var args := PackedStringArray(["--headless", "--log-file", log_path])
+	# An editor binary runs whatever project it is pointed at; an export carries its own and refuses `--path`.
 	var project := ProjectSettings.globalize_path("res://")
-	if project != "":
+	if project != "" and not OS.has_feature("template"):
 		args.append_array(["--path", project])
-	args.append_array([SERVER_SCENE, "--", "--port", str(port), "--bots", str(bots),
+	args.append_array(["--", SERVER_FLAG, "1", "--port", str(port), "--bots", str(bots),
 		"--ready", _ready_path])
 	var map := ask_map if ask_map != "" else _arg("--map")
 	var mode := ask_mode if ask_mode != "" else _arg("--mode")
@@ -67,8 +83,9 @@ func start(bots: int) -> DotResult:
 	var t := 0.0
 	while not FileAccess.file_exists(_ready_path) and t < BOOT_LIMIT_SEC:
 		if not OS.is_process_running(_pid):
+			var why := _exit_reason(log_path)
 			_pid = -1
-			return DotResult.fail(DotError.CODE_INVALID, "the server process exited while booting")
+			return DotResult.fail(DotError.CODE_INVALID, "the server process exited while booting (%s)" % why)
 		await get_tree().create_timer(0.1).timeout
 		t += 0.1
 	if not FileAccess.file_exists(_ready_path):
@@ -117,6 +134,25 @@ func stop() -> void:
 
 func _exit_tree() -> void:
 	stop()
+
+
+## Why the child ended: its exit code and the last error lines of its log.
+func _exit_reason(log_path: String) -> String:
+	var parts := PackedStringArray(["exit %d" % OS.get_process_exit_code(_pid)])
+	var text := FileAccess.get_file_as_string(log_path)
+	if text == "":
+		parts.append("no log at %s" % log_path)
+		return "; ".join(parts)
+	var errors := PackedStringArray()
+	for line in text.split("\n", false):
+		if line.begins_with("ERROR") or line.begins_with("SCRIPT ERROR") or line.contains("Parse Error"):
+			errors.append(line.strip_edges())
+	if errors.is_empty():
+		var lines := text.strip_edges().split("\n", false)
+		errors = lines.slice(maxi(lines.size() - 3, 0))
+	parts.append_array(errors.slice(maxi(errors.size() - 3, 0)))
+	parts.append("log %s" % log_path)
+	return "; ".join(parts)
 
 
 ## A port free for both of the server's sockets (TCP and UDP): asked of the OS, then released for the child.

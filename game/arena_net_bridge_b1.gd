@@ -291,7 +291,7 @@ func server_tick(tick: int) -> void:
 ## Called from every replicated player's [code]_net_simulate[/code]; the first one
 ## through does the work.
 func ensure_game_ticked(tick: int) -> void:
-	if _game_ticked_for == tick or game == null:
+	if _game_ticked_for == tick or game == null or host_paused:
 		return
 
 	_game_ticked_for = tick

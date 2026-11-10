@@ -151,6 +151,8 @@ enum Ask {
 	PROP_TOOL,
 	## My field of view setting (horizontal degrees at 4:3, one byte), so the kill view I am the killer in draws through the same lens.
 	FOV,
+	## A console line from the owner of a solo server process (arena_net_host.gd); every other server drops it.
+	HOST,
 }
 
 ## What a [constant Ask.PROP_TOOL] asks for.

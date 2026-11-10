@@ -704,6 +704,8 @@ func _on_request(message: DotNetMessage) -> void:
 				KillPov.note_field_of_view(who, ArenaEvents.read_fov(request.reader()))
 		ArenaEvents.Ask.PROP_TOOL:
 			_on_prop_act(peer_id, ArenaEvents.read_prop_act(request.reader()))
+		ArenaEvents.Ask.HOST:
+			_on_host_ask(peer_id, request.reader())
 		_:
 			pass
 

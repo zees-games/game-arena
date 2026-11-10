@@ -4,6 +4,7 @@ const ArenaConfig := preload("arena_config.gd")
 const ArenaGame := preload("arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("arena_module.gd")
+const ArenaSimOwner := preload("arena_sim_owner.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback
 ## dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread.
@@ -92,6 +93,10 @@ func _ready() -> void:
 		quota.empty_cvar.force_set("1")
 	for i in bots:
 		var _id: int = module.bridge.add_bot("Bot %d" % (i + 1))
+	var owner_node := ArenaSimOwner.new()
+	owner_node.name = "Owner"
+	add_child(owner_node)
+	owner_node.setup(server, module)
 
 	var ready_path := _arg("--ready", "")
 	if ready_path != "":

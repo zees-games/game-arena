@@ -2,7 +2,7 @@ extends RefCounted
 ## The wire format of the MORE event, the last kind the 5-bit field has: a varint sub-kind, then its body.
 ## KNIFE is the first sub-kind; its body is dot-weapon's DotWeaponKnifeWire.
 
-enum More { KNIFE }
+enum More { KNIFE, HOST }
 
 
 static func _w() -> DotNetWriter:
