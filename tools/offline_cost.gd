@@ -39,6 +39,7 @@ func _ready() -> void:
 			"--solid": _solid = int(args[i + 1]) != 0
 			"--prof": DotFpsPhysicsBody.profile = int(args[i + 1]) != 0
 			"--physoff": _physoff = int(args[i + 1]) != 0
+			"--target-first": (DotBotBrain as Script).set(&"target_first", int(args[i + 1]) != 0)
 			"--near": preload("../game/arena_bots.gd").think_near = float(args[i + 1])
 			"--every": preload("../game/arena_bots.gd").think_every = int(args[i + 1])
 			"--tier-above": preload("../game/arena_bots.gd").tiers.above = int(args[i + 1])

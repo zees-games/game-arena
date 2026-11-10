@@ -58,6 +58,9 @@ func _ready() -> void:
 	ArenaHullGrid.min_players = int(args.get("hull-min", ArenaHullGrid.MIN_PLAYERS))
 	if int(args.get("lod", 1)) == 0:
 		preload("../game/arena_player.gd").present_lod_enabled = false
+	if int(args.get("target-first", 1)) == 0:
+		# By name: the bench also runs against a dot-bot older than the switch.
+		(DotBotBrain as Script).set(&"target_first", false)
 	_ablate = String(args.get("ablate", "")).split(",", false)
 
 
