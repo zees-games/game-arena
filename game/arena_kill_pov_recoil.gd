@@ -1,12 +1,8 @@
 extends RefCounted
 
-## The killer's recoil in a killcam, shot by shot: every round the recorded fire count moved by kicks the
-## replay camera as it kicked the killer's, climbing along a burst and settling once the trigger was let go.
-##
-## The recorded look is the killer's aim, which carries none of the recoil the live camera adds at
-## presentation, so without this a killcam showed a still crosshair under a full-auto burst. A frame can see
-## several rounds (each kicks), and a mirrored killer records no kick, so the pattern is rebuilt from the
-## weapon's own tuning with the server's sv_recoil_* rules, the same function the bullets followed.
+## The killer's recoil in a killcam, shot by shot: every round the recorded fire count moved by kicks the replay camera as it kicked the killer's, climbing along a burst and settling once the trigger was let go.
+## The recorded look is the killer's aim, which carries none of the live camera's recoil, so without this a killcam showed a still crosshair under a full-auto burst. A frame can see several rounds, and a mirrored killer records no kick,
+## so the pattern is rebuilt from the weapon's own tuning with the server's sv_recoil_* rules, the same function the bullets followed.
 
 const KillPov := preload("arena_kill_pov.gd")
 

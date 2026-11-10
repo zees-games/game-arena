@@ -444,10 +444,8 @@ func tick(commands: Dictionary = {}) -> void:
 func _loadout_key(id: int) -> String:
 	return loadout_identity.key_of(id)
 
-## Applies a player's saved loadout. Falls back to the default on any failure.
-##
-## A failure here must never stop a player spawning: an unreachable loadout store is a
-## reason to give them a rifle, not a reason to leave them watching.
+## Applies a player's saved loadout. Falls back to the default on any failure: a failure here must never stop a player spawning,
+## and an unreachable loadout store is a reason to give them a rifle, not to leave them watching.
 func apply_loadout(id: int, at_spawn := false) -> void:
 	var player := player_for(id)
 
@@ -491,10 +489,9 @@ func _apply_loadout_deferred(id: int) -> void:
 		return
 
 	if player.arsenal.slots().is_empty():
-		# The class's loadout first: `DotPlayerClassDef.loadout_id` is the field a mode
-		# changes to change what everybody spawns holding, and it reached nothing until
-		# this line. The hardcoded pair below is the fallback for a game with no
-		# catalogue, which is what `give_default_loadout` always was.
+		# The class's loadout first: `DotPlayerClassDef.loadout_id` is the field a mode changes to change what
+		# everybody spawns holding, and it reached nothing until this line. The hardcoded pair below is the
+		# fallback for a game with no catalogue, which is what `give_default_loadout` always was.
 		var from_class := (
 			player_stack != null and player_stack.give_class_loadout(player)
 		)

@@ -2,12 +2,8 @@ extends Node
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
-## The load timeline offline (ArenaLoadTimeline prints one `arena.load` line when the cover lifts), for
-## comparing a change back to back. Software GL: the CPU side is real, shader compiles are not.
-##
-## [codeblock]
-## xvfb-run -a godot --path . --rendering-driver opengl3 --resolution 480x270 res://tools/load_timeline.tscn [-- --map <id>]
-## [/codeblock]
+## The load timeline offline (ArenaLoadTimeline prints one `arena.load` line when the cover lifts), for comparing a change back to back. Software GL: the CPU side is real, shader compiles are not.
+## `xvfb-run -a godot --path . --rendering-driver opengl3 --resolution 480x270 res://tools/load_timeline.tscn [-- --map <id>]`
 
 
 func _ready() -> void:

@@ -109,7 +109,7 @@ func _serve() -> void:
 	var module := server.modules.get_module("arena") as ArenaModule
 	var quota: DotBotQuota = module.get("_bot_quota")
 	if quota != null and quota.mode_cvar != null:
-		# "off" is wanted = 0: the quota removes every bot a second later (found by arena-128-scale-1).
+		# "off" is wanted = 0: the quota removes every bot a second later (arena-128-scale-1).
 		quota.mode_cvar.force_set("fixed")
 		quota.quota_cvar.force_set(str(_bots))
 		quota.empty_cvar.force_set("1")

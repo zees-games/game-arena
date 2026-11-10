@@ -1,10 +1,8 @@
 extends Node
 
-## Where a solo client's draw calls, objects and primitives go, by ablation: render the same still scene with one
-## category switched off at a time and print what the renderer drew (a frame's `RenderingServer.get_rendering_info`,
-## which is the same number on a software GL as on a GPU; only the milliseconds differ).
+## Where a solo client's draw calls, objects and primitives go, by ablation: the same still scene with one category off at a time (`RenderingServer.get_rendering_info`).
 ## `xvfb-run -a godot --path . --rendering-driver opengl3 res://tools/draw_ablate.tscn -- --bots 3 --map crackhouse [--web 0]`.
-## Web render defaults (no MSAA, 2 sun splits, 60 m sun shadows) are applied first, as the browser does; `--web 0` skips them.
+## Web render defaults (no MSAA, 2 sun splits, 60 m sun shadows) are applied first; `--web 0` skips them.
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const RenderQuality := preload("../addons/dot_game/runtime/dot_game_render_quality.gd")

@@ -517,11 +517,8 @@ func tick_post(tick: int, delta: float, combat_command: DotWeaponCommand) -> Dot
 func _drawn_sliding(drawn: DotFpsState) -> bool:
 	return (drawn.move_flags() & DotFpsState.Move.SLIDE) != 0 and drawn.mode == DotFpsState.Mode.GROUND
 
-## Tells the person how this player moves, and advances its clip. Client side.
-##
-## [b]From the drawn state[/b], the same one the body is placed from, so the stride matches the
-## ground the body covers this frame. The weapon kind picks the arms: a gun, a melee weapon
-## (a swing plays the slash over the legs), or empty hands.
+## Tells the person how this player moves, and advances its clip. Client side. [b]From the drawn state[/b], the same one the body is placed from, so the stride matches the ground covered this frame.
+## The weapon kind picks the arms: a gun, a melee weapon (a swing plays the slash over the legs), or empty hands.
 func _animate_figure(drawn: DotFpsState, delta: float) -> void:
 	if figure == null or body_mesh == null or not body_mesh.visible:
 		return

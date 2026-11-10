@@ -1,11 +1,8 @@
 extends Node
 
-## Where the time to a playable frame goes, stamped in engine milliseconds (Time.get_ticks_msec, from the
-## engine's own start) and printed once when the gate opens, as one console line and
-## `window.dotWeb.published.arena_load` (JSON). A hold appearing or going, the gate's state and the
-## client's own phases (a `mark`) are stamped with the frame number, so a slow phase shows as a long gap
-## and a frame count: long gap in few frames = one big frame, long gap in many = a sliced phase.
-## Always on: about 20 stamps and one line.
+## Where the time to a playable frame goes, stamped in engine milliseconds (Time.get_ticks_msec) and printed once when the gate opens, as one console line and `window.dotWeb.published.arena_load` (JSON). Always on: about 20 stamps and one line.
+## A hold appearing or going, the gate's state and the client's own phases (a `mark`) are stamped with the frame number, so a slow phase shows as a long gap and a frame count:
+## long gap in few frames = one big frame, long gap in many = a sliced phase.
 
 const CHANNEL := "arena.load"
 

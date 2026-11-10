@@ -1,16 +1,8 @@
 extends Node
 
-## Console lines given at launch: `-- +bot_quota 8 +profiler_overlay 1`.
-##
-## Every `+name value...` among the user arguments is one line for the local console, run
-## once the console knows the name. That is the only way to set a client console var in a
-## build with no keyboard yet at hand: an exported release started by a script to be
-## profiled wants its bots, its overlay and its recording length set before the first frame
-## is looked at. A name given twice runs once, with the last value, so a launcher can put
-## its defaults first and whatever the person typed after them.
-##
-## The names do not all exist at the same moment (the profiler binds its own a little after
-## the bots do), so a line waits for its name and is given up on, loudly, after [constant WAIT_SECONDS].
+## Console lines given at launch: `-- +bot_quota 8 +profiler_overlay 1`. Every `+name value...` among the user arguments is one line for the local console, run once the console knows the name: the only way to set a client console var in a build with no keyboard at hand
+## (an exported release started by a script to be profiled). A name given twice runs once, with the last value, so a launcher can put its defaults first and whatever the person typed after.
+## The names do not all exist at the same moment (the profiler binds its own a little after the bots), so a line waits for its name and is given up on, loudly, after [constant WAIT_SECONDS].
 
 const CHANNEL := "arena"
 
@@ -24,10 +16,8 @@ var _pending: Array[String] = []
 var _waited: float = 0.0
 
 
-## The lines in `args`, in the order their names first appear, the last value of each kept.
-##
-## A value runs to the next argument that opens with `+` or `--`; `+-5` style negatives are
-## values, since only a letter after the `+` starts a name.
+## The lines in `args`, in the order their names first appear, the last value of each kept. A value runs to the next argument that opens with `+` or `--`;
+## `+-5` style negatives are values, since only a letter after the `+` starts a name.
 static func parse(args: PackedStringArray) -> Array[String]:
 	var order: Array[String] = []
 	var lines: Dictionary = {}

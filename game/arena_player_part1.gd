@@ -552,12 +552,8 @@ func rebind_map(new_map: ArenaMap) -> void:
 			"player": player_id, "why": rebuilt.error.message
 		})
 
-## Where shots start: the eyes, not the feet.
-##
-## Read off the View node when there is one, because that is what the arsenal is handed to
-## place a shot — computing it a second way here would let the server's idea of the
-## muzzle drift from the one the shots actually came out of, and `_correct_origin`
-## would then relocate every legitimate shot.
+## Where shots start: the eyes, not the feet. Read off the View node when there is one, because that is what the arsenal is handed to place a shot;
+## computing it a second way would let the server's idea of the muzzle drift from the one shots came out of, and `_correct_origin` would relocate every legitimate shot.
 func muzzle_position() -> Vector3:
 	if view != null and view.is_inside_tree():
 		return view.global_position

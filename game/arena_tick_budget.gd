@@ -1,19 +1,8 @@
 extends RefCounted
 
-## How many physics ticks a solo frame may run to keep the game on wall-clock time.
-##
-## [b]Why it exists.[/b] Solo used to cap `Engine.max_physics_steps_per_frame` at 2 "so a
-## slow frame does not owe more", and the engine drops whatever the cap leaves. At 66 Hz a
-## 59 ms frame is owed 4 ticks, got 2, and the owner's footage (16v16 bots, 17 fps) showed
-## gravity and walking at half speed: the simulation ran at about 34 ticks a wall second.
-## The engine's own default (8) catches up, but a catch-up that costs more than the frame
-## has makes the next frame slower still, which the cap was guarding against.
-##
-## So the cap follows the measured cost of a tick: as many steps as fit in
-## [constant PHYSICS_BUDGET_SEC] of wall time, never under [constant MIN_STEPS] (the old
-## behaviour, when ticks are too dear to catch up) and never over [constant MAX_STEPS].
-## When a tick costs more than the tick is long, nothing can keep real time and the
-## simulation slows by exactly the shortfall; only a cheaper tick fixes that.
+## How many physics ticks a solo frame may run to keep the game on wall-clock time. [b]Why it exists.[/b] Solo capped `Engine.max_physics_steps_per_frame` at 2 and the engine drops whatever the cap leaves: a 59 ms frame at 66 Hz is owed 4 ticks, got 2, and the simulation ran at half speed (16v16 bots, 17 fps).
+## The engine's default (8) catches up, but a catch-up that costs more than the frame makes the next frame slower still. So the cap follows the measured cost of a tick: as many steps as fit in [constant PHYSICS_BUDGET_SEC], never under [constant MIN_STEPS] and never over [constant MAX_STEPS].
+## When a tick costs more than the tick is long nothing can keep real time and the simulation slows by exactly the shortfall; only a cheaper tick fixes that.
 
 const MIN_STEPS := 2
 const MAX_STEPS := 8
@@ -24,9 +13,7 @@ static var max_steps := MAX_STEPS
 const PHYSICS_BUDGET_SEC := 0.045
 ## Weight of the newest tick in the cost average.
 const SMOOTHING := 0.1
-## A single tick counts for at most this many times the running cost: one hitched tick (a first-use build, a
-## stall of 300 ms) is not a price the next ticks pay, and with the newest-tick weight above it would have held
-## the cap at the floor for twenty frames (the simulation slowed after every hitch, the spiral's mirror image).
+## A single tick counts for at most this many times the running cost: one hitched tick (a first-use build, a stall of 300 ms) is not a price the next ticks pay, and with the newest-tick weight above it would have held the cap at the floor for twenty frames.
 ## A real rise in cost still moves the average, doubling in about seven ticks.
 const OUTLIER := 2.0
 ## Share of a tick's length its cost may take before the bots think less often.

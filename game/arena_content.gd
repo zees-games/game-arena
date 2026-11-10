@@ -148,7 +148,7 @@ static func normalise_slot(def: DotWeaponDef) -> void:
 
 
 ## Guns that may only ever sit in the primary slot, whatever slot the pack file asks for.
-## The railgun (charge rifle) used to land in the heavy slot 5; every path (give, pickup,
+## The railgun (charge rifle) once landed in the heavy slot 5; every path (give, pickup,
 ## loadout, catalogue, table) goes through [method weapons], so pinning it here covers all.
 const PRIMARY_ONLY: Array[StringName] = [AwWeaponIds.CHARGE_RIFLE]
 

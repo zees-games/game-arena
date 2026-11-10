@@ -6,23 +6,9 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 const ClientBench := preload("client_bench.gd")
 const ArenaKillcamBodies := preload("../game/arena_killcam_bodies.gd")
 
-## What the CLIENT costs per remote player, in one offline process (client and server share the thread, so the
-## client's own sections are timed apart from the tick). Per variant it prints the frame, the engine's process
-## time, every client section in ms per frame and ms per remote player, and a node census per remote player.
-##
-## `godot --headless --path . res://tools/client_cost.tscn -- --bots 16 --seconds 15 [--map dm_atrium] [--variants default,full]`
-##
-## Variants (each measured for `--seconds`, after a warm-up, on the same match):
-##   before   the game as it was before arena-client-perf-1 (cone LOD, kill-cam recording every frame)
-##   default  the game as shipped (LOD on, every cvar at its default)
-##   off8     default with `cl_remote_lod_every 8`
-##   full     present_lod off: every remote player presented every frame (the pre-LOD cost; the upper bound)
-##   no_anim / no_held / no_held_proc / no_rest / bare   `full` with the figure animation / the held gun's update / the held
-##            gun's own process / pose+tag / all of them left out (`ArenaPlayer.present_ablate`): what each part costs alone
-##   still    remote players not presented at all (`ArenaPlayer.present_remote_paused`): the floor, so
-##            `default - still` is the whole client cost of the remotes, instrumented or not
-## Headless draws nothing: this is the script and scene-tree cost. Render (draw calls, skinning, lights, shadow
-## passes) needs a windowed GPU profile.
+## What the CLIENT costs per remote player in one offline process: the frame, engine process time, each client section in ms per frame and per remote player, and a node census.
+## `godot --headless --path . res://tools/client_cost.tscn -- --bots 16 --seconds 15 [--map dm_atrium] [--variants default,full]`; variants `before`, `default`, `off8`, `full`, `no_anim`/`no_held`/`no_held_proc`/`no_rest`/`bare` (`full` less that part, `ArenaPlayer.present_ablate`), `still` (remotes not presented).
+## Headless draws nothing: this is script and scene-tree cost; render cost needs a windowed GPU profile.
 
 var _bots := 16
 var _seconds := 15.0

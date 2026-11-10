@@ -146,7 +146,7 @@ func _setup_ctf() -> DotResult:
 	return DotResult.success(null)
 
 
-## True when this process has a screen. `game.headless` must not be asked: it is the collision backend and is true on every client, which hid the flags (2026-11-08).
+## True when this process has a screen. `game.headless` must not be asked: it is the collision backend and is true on every client, which hid the flags.
 static func draws_flags(platform_headless: bool) -> bool:
 	return not platform_headless
 

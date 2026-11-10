@@ -8,11 +8,8 @@ const LoopbackServer := preload("loopback_server.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFlagView := preload("../game/arena_flag_view.gd")
 
-## Capture the flag online: a dedicated arena server (this script again with `--role server`, real ENet, capture the flag on
-## `--map`) and the real client (arena.tscn) connected to it. The server walks the human onto the enemy flag, then onto their own
-## stand; the client must see two flags drawn at the server's homes, the pickup, the HUD's carry line, the capture and the score.
-## Frames go to screenshots/ctf_online/. Exit 1 on a failed check.
-##   xvfb-run -a godot --path . res://tools/play_ctf_online.tscn -- --map cp-orange-x3
+## Capture the flag online: a dedicated arena server (this script again with `--role server`, real ENet, CTF on `--map`) and the real client (arena.tscn) connected to it; the server walks the human onto the enemy flag, then their own stand.
+## The client must see two flags at the server's homes, the pickup, the HUD's carry line, the capture and the score. Frames go to screenshots/ctf_online/; exit 1 on a failed check. `xvfb-run -a godot --path . res://tools/play_ctf_online.tscn -- --map cp-orange-x3`
 
 const PORT := 27198
 const OUT := "res://screenshots/ctf_online"

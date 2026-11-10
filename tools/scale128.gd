@@ -11,23 +11,9 @@ const ArenaBotBrain := preload("../game/arena_bot_brain.gd")
 const ArenaBotThreads := preload("../game/arena_bot_threads.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 
-## The 128-player scale harness (nightly arena-128-scale-1). Measures; asserts nothing; prints
-## one `SCALE128 {json}` line. Driven by tools/scale128.sh, which runs it through `heavy`.
-##
-## [codeblock]
-## godot --headless --path . res://tools/scale128.tscn -- --role server  --bots 64 --tick 33 --seconds 30
-## godot --headless --path . res://tools/scale128.tscn -- --role offline --bots 32 --tick 66 --seconds 20
-## [/codeblock]
-##
-## [b]server[/b]: a dedicated DotServer + ArenaModule (the game's real server path, analytic
-## HEADLESS movement) with N bots, no client. One physics tick is timed three ways: the span
-## between two sentinel nodes at the extreme process_physics_priorities (every node's
-## `_physics_process`: the script half), Performance.TIME_PHYSICS_PROCESS (the engine's whole
-## physics frame, so the difference is the engine's own step), and wall-clock ticks per second
-## against the target. ArenaFrameProbe's sections split the script half into bots, game and net.
-## [b]offline[/b]: the real offline client (game, bots and drawing in ONE process, ONE thread)
-## and the same numbers, plus how fast game time ran against the wall clock (`sim_speed`) and
-## a census of what one other player costs in nodes.
+## The 128-player scale harness (nightly arena-128-scale-1). Measures; asserts nothing; prints one `SCALE128 {json}` line. Driven by tools/scale128.sh, which runs it through `heavy`.
+## `godot --headless --path . res://tools/scale128.tscn -- --role server --bots 64 --tick 33 --seconds 30` (or `--role offline --bots 32 --tick 66 --seconds 20`). [b]server[/b]: DotServer + ArenaModule with N bots, no client, one physics tick timed three ways (script half between sentinels, TIME_PHYSICS_PROCESS, wall-clock ticks/s).
+## [b]offline[/b]: the real offline client (game, bots and drawing in one process), the same numbers plus how fast game time ran against the wall clock (`sim_speed`) and a node census of one other player.
 
 var _role := "server"
 var _bots := 16
@@ -232,7 +218,7 @@ func _begin_record() -> void:
 	_recording = true
 
 
-# --- server -----------------------------------------------------------------------
+# server
 
 func _serve() -> void:
 	var data := "user://scale128_server"
@@ -292,7 +278,7 @@ func _serve() -> void:
 	get_tree().quit()
 
 
-# --- offline ----------------------------------------------------------------------
+# offline
 
 func _census(g: Node, local: Node) -> Dictionary:
 	var classes := {}

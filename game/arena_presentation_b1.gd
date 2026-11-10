@@ -522,15 +522,9 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 			var weapon_id: StringName = shot.weapon_id if shot.weapon_id != &"" else &"rifle"
 			on_fired(weapon_id, muzzle, true)
 
-		# Impacts are a list because a shotgun is one shot with several of them, and a
-		# single impact sound for eight pellets is a shotgun that sounds like a rifle. Each
-		# faces along the aim, not along its own pellet: close enough for a decal, and the
-		# pellet directions are not kept per impact.
-		#
-		# [b]With the weapon drawing its own shot, only the hole is this layer's.[/b]
-		# arena-weapons' `AwShotFx` puts the flash at the real muzzle, a tracer, a spark
-		# and a report per weapon; drawing this layer's as well was two flashes, two sparks
-		# and a stand-in rifle report under the real one.
+		# Impacts are a list because a shotgun is one shot with several of them, and one impact sound for eight pellets sounds like a rifle. Each faces along the aim, not along its own pellet (the pellet directions are not kept per impact).
+		# [b]With the weapon drawing its own shot, only the hole is this layer's.[/b] arena-weapons' `AwShotFx` puts the flash at the real muzzle, a tracer, a spark and a report per weapon;
+		# drawing this layer's as well was two flashes, two sparks and a stand-in rifle report under the real one.
 		for at in shot.impacts:
 			if weapon_draws:
 				fx.spawn_decal(&"bullet_hole", facing(at, shot.direction))

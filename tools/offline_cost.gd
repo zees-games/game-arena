@@ -5,10 +5,8 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ClientBench := preload("client_bench.gd")
 
-## Solo (offline) client with N bots on `--map`, frame and physics cost per frame:
-## `godot --path . res://tools/offline_cost.tscn -- --map blackhawkdown --bots 10 --seconds 25`.
-## Prints fps, frame p50/p95/max, the engine's physics and process monitors and physics steps per frame. `--native 0` keeps the bots' sight scan in script when dot-sim is installed; `--motor-native 0` the movement collision queries.
-## `--motor-tick 1|0`: [member DotFpsMotor.native_tick], a plain ground or air tick's start and end in dot-sim (needs a library with the motor tick).
+## Solo (offline) client with N bots on `--map`: `godot --path . res://tools/offline_cost.tscn -- --map blackhawkdown --bots 10 --seconds 25`. Prints fps, frame p50/p95/max, the engine's monitors and physics steps per frame.
+## `--native 0` keeps the bots' sight scan in script, `--motor-native 0` the movement queries; `--motor-tick 1|0` toggles [member DotFpsMotor.native_tick] (needs a dot-sim with the motor tick).
 
 var _bots := 10
 ## `--physoff 1`: switch the engine's 3D physics step off after warm-up. What the "physics" phase still costs is script (game tick plus every _physics_process); the drop is the engine's own share.

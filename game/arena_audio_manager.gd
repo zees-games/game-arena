@@ -7,10 +7,8 @@ extends DotAudioManager
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaTickBudget := preload("arena_tick_budget.gd")
 
-## While the solo game is behind wall-clock time (ArenaTickBudget.shed_now), positional one-shots further than
-## [constant SHED_NEAR] from the listener are limited to [constant SHED_FAR_PER_FRAME] a drawn frame; the rest
-## are refused the way dot-audio refuses a sound over its concurrency limit (handle 0, `played` with a reason).
-## Sounds without a position (the own weapon, the interface, announcers) and near ones always play.
+## While the solo game is behind wall-clock time (ArenaTickBudget.shed_now), positional one-shots further than [constant SHED_NEAR] from the listener are limited to [constant SHED_FAR_PER_FRAME] a drawn frame;
+## the rest are refused the way dot-audio refuses a sound over its concurrency limit (handle 0, `played` with a reason). Sounds without a position (own weapon, interface, announcers) and near ones always play.
 const SHED_NEAR := 12.0
 const SHED_FAR_PER_FRAME := 2
 

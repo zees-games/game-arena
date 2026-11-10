@@ -1,11 +1,8 @@
 extends SceneTree
 
-## The weapon lab: one fixed neutral environment, one fixed first-person camera, one fixed model-viewer camera and fixed lighting,
-## so that nothing changes between weapons or runs but the weapon and its animation. See tools/weapon_lab_README.md.
-##   xvfb-run -a godot --path . --resolution 960x540 --fixed-fps 30 --script tools/weapon_lab.gd -- \
-##       --out <dir> [--only a,b] [--anims idle,draw,fire,ads,reload_empty,reload_tactical,melee,holster,sprint] [--no-turntable] [--no-anims]
-## Per weapon, under <out>/<id>/: fp_<anim>.mp4 + fp_<anim>_strip.png (first person), tp_turntable.mp4, tp_orbit_strip.png,
-## closeups (tp_closeup_*.png) and manifest.json. Frames are JPEGs in <out>/<id>/_frames/ for weapon_lab.sh to encode.
+## The weapon lab: one fixed neutral environment, first-person camera, model-viewer camera and lighting, so only the weapon and its animation change. See tools/weapon_lab_README.md.
+## `xvfb-run -a godot --path . --resolution 960x540 --fixed-fps 30 --script tools/weapon_lab.gd -- --out <dir> [--only a,b] [--anims idle,draw,fire,ads,reload_empty,reload_tactical,melee,holster,sprint] [--no-turntable] [--no-anims]`
+## Per weapon, under <out>/<id>/: fp_<anim>.mp4 + strips, tp_turntable.mp4, tp_orbit_strip.png, closeups and manifest.json (JPEG frames in _frames/ for weapon_lab.sh).
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
@@ -96,7 +93,7 @@ func _run() -> void:
 	quit(0 if done > 0 else 1)
 
 
-# ---------------------------------------------------------------- the lab
+# the lab
 
 ## Hides the arena and builds the one neutral room: flat grey floor and backdrop, one fixed sun, flat ambient. The player stands
 ## where it spawned; the stage for the model viewer is the same room built again far away.
@@ -174,7 +171,7 @@ func _make_room(at: Vector3) -> void:
 	holder.add_child(sun)
 
 
-# ---------------------------------------------------------------- first person
+# first person
 
 func _first_person(id: StringName, def: DotWeaponDef, wdir: String, anims: PackedStringArray) -> void:
 	var me = client.get("player")
@@ -384,7 +381,7 @@ func _strip(path: String, d: String, count: int, labels: bool = false) -> void:
 	var _s := sheet.save_png(path)
 
 
-# ---------------------------------------------------------------- model viewer
+# model viewer
 
 func _model_viewer(id: StringName, wdir: String) -> void:
 	var art: AwWeaponVisual = AwWeaponArtTable.get_art(id)
@@ -488,7 +485,7 @@ func _bounds(node: Node3D) -> AABB:
 	return out
 
 
-# ---------------------------------------------------------------- helpers
+# helpers
 
 func _view_model(me: Node) -> AwViewModel:
 	var found := (me.camera as Node).find_children("*", "AwViewModel", true, false)

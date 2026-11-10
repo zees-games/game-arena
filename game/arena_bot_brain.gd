@@ -1,10 +1,7 @@
 extends DotBotBrain
 
-## dot-bot's brain with a cheaper candidate scan (cvar `bot_fast_sense`). The stock scan runs
-## aim_point(), is_enemy(), a vector subtraction, length(), angle_to() and rad_to_deg() for
-## every contact on every think, which is O(bots^2) per tick: at 128 bots it was a large part
-## of the brain's ~200 us per bot. This keeps the same candidates and scores, but rejects on
-## squared distance and the cone's cosine first and takes the angle only for a candidate.
+## dot-bot's brain with a cheaper candidate scan (cvar `bot_fast_sense`). The stock scan runs aim_point(), is_enemy(), a subtraction, length(), angle_to() and rad_to_deg() for every contact on every think: O(bots^2) per tick,
+## a large part of the brain's ~200 us per bot at 128 bots. This keeps the same candidates and scores, but rejects on squared distance and the cone's cosine first and takes the angle only for a candidate.
 
 ## false runs the stock [method DotBotBrain._candidates].
 static var fast_sense: bool = true

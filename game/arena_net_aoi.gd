@@ -1,24 +1,8 @@
 extends RefCounted
 
-## Relevance tiers for a big server (arena-128-scale-1 / net-aoi-1): distance rings around each
-## player that decide how often, and whether, another player is sent. Built on dot-net's own
-## DotNetInterestDistance (radius, far_every, far_distance, far_tiers, far_coherent), so there is
-## no new wire format; this class only chooses the numbers and when they apply.
-##
-## Rings (defaults): inside far_distance (40 m) every snapshot; 40-80 m every far_every-th (2, half
-## rate); 80 m to radius (120 m) every second band (4, quarter rate); past radius nothing. The
-## observer's own entity and a beaconed player (always_relevant) are never culled. Scoreboard,
-## kill feed and match state are events and match replication, not entity snapshots, so they do
-## not depend on these rings.
-##
-## Off until the room is big: with min_players or fewer players (bots count) the interest object
-## keeps the values it had at setup, so a 16v16 (32 players) behaves exactly as before. 32 means
-## the tiers start at the 33rd player. Hysteresis of OFF_MARGIN players stops a room hovering at
-## the line from flipping every second.
-##
-## No pop: an entity that leaves the radius keeps its last drawn pose on the client (the
-## interpolator holds the newest sample); the first snapshot after it returns is blended from that
-## stale sample only for the render-delay slice. Pinned by headless_netaoi.
+## Relevance tiers for a big server (arena-128-scale-1 / net-aoi-1): distance rings around each player that decide how often, and whether, another player is sent, built on dot-net's own DotNetInterestDistance (no new wire format).
+## Defaults: inside far_distance (40 m) every snapshot; 40-80 m every far_every-th (2); 80 m to radius (120 m) every 4th; past radius nothing. The observer's own entity and a beaconed player (always_relevant) are never culled; scoreboard, kill feed and match state are not entity snapshots.
+## Off until the room is big (min_players, 32: the tiers start at the 33rd player, with OFF_MARGIN hysteresis); an entity leaving the radius keeps its last drawn pose on the client (no pop). Pinned by headless_netaoi.
 
 const OFF_MARGIN := 2
 const BASE_UNSET := -1.0

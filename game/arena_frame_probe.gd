@@ -75,12 +75,8 @@ static func set_interval(seconds: float) -> void:
 	_reset()
 
 
-## Adds the time since [param since_usec] to [param section]: `var t := Time.get_ticks_usec()`
-## before the work, `ArenaFrameProbe.add(&"name", t)` after.
-##
-## While the dot profiler records ([member DotFrameCost.enabled]) the same time is charged to
-## [DotFrameCost] as `arena.<section>`, so a recorded profile's hitches name the section
-## (`r_held`, `bot_after`, ...) instead of a bare `engine.script`.
+## Adds the time since [param since_usec] to [param section]: `var t := Time.get_ticks_usec()` before the work, `ArenaFrameProbe.add(&"name", t)` after.
+## While the dot profiler records ([member DotFrameCost.enabled]) the time is also charged to [DotFrameCost] as `arena.<section>`, so a recorded profile's hitches name the section (`r_held`, `bot_after`, ...) instead of a bare `engine.script`.
 static func add(section: StringName, since_usec: int) -> void:
 	if interval <= 0.0:
 		if DotFrameCost.enabled:

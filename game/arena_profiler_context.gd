@@ -1,12 +1,8 @@
 extends RefCounted
 
-## What the in-game profiler (dot-profiler) reports about this game beside its own numbers: the game, map and
-## bot count, the sound driver, the dot-sim natives (tag, which run, the `arena_hull_native` cvar) in every report's `context`,
-## and dot-sim's native timers in `extras.native` of any recording (F10, `profiler_capture`, `record`).
-##
-## Without the library every part degrades: the natives line says so and the timer hook reports nothing,
-## with no error. Costs nothing while no recording runs: the providers are read at a recording's start and
-## end, and the native timers are on only inside one.
+## What the in-game profiler (dot-profiler) reports about this game beside its own numbers: the game, map and bot count, the sound driver, the dot-sim natives (tag, which run, the `arena_hull_native` cvar) in every report's `context`,
+## and dot-sim's native timers in `extras.native` of any recording (F10, `profiler_capture`, `record`). Without the library every part degrades (the natives line says so, the timer hook reports nothing, no error);
+## costs nothing while no recording runs: providers are read at a recording's start and end, and the native timers are on only inside one.
 
 const ArenaGame := preload("arena_game.gd")
 const ArenaPlayerStack := preload("arena_player_stack.gd")

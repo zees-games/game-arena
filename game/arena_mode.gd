@@ -347,7 +347,7 @@ static func capture_the_flag(limit: int = 3) -> ArenaMode:
 	# the flag back, and charging them a point for it as well is paying twice for one
 	# mistake. Deathmatch charges -1 because there the death IS the mistake.
 	rules.suicide_points = 0
-	# The score is captures and nothing else (owner, 2026-11-08: a side was on 8 with fewer
+	# The score is captures and nothing else (owner: a side was on 8 with fewer
 	# captures, and kills reaching the capture limit ended the match). Kills still count as
 	# kills on the scoreboard; they are just worth no points.
 	rules.kill_points = 0

@@ -1,19 +1,8 @@
 extends RefCounted
 
-## Shots fired against damage applied, per shooter: the debug counter behind "the bots shoot at me and I
-## take nothing". Every shot the combat resolves (or refuses) is filed under its attacker:
-##
-## [codeblock]
-## fired        shots handed to the combat (resolved + refused)
-## damaged      shots that took health or armour from somebody
-## refused      shots the combat turned away before tracing (rate limit, shooter dead)
-## prevented    shots that struck a body whose damage was refused (spawn protection, friendly fire, ...)
-## miss_aim     shots that hit nothing and passed more than BODY_RADIUS from every other player
-## miss_blocked shots that stopped on the level short of a player the ray was on line with
-## miss_on_line shots that hit nothing yet were on line with a player and nothing stood between: the bug class
-## [/codeblock]
-##
-## Read with [method report] (one line per shooter). Costs one signal call per shot; bots and players alike.
+## Shots fired against damage applied, per shooter: the debug counter behind "the bots shoot at me and I take nothing". Every shot the combat resolves (or refuses) is filed under its attacker. Read with [method report]; one signal call per shot.
+## fired shots handed to the combat; damaged took health or armour; refused turned away before tracing (rate limit, shooter dead); prevented struck a body whose damage was refused (spawn protection, friendly fire)
+## miss_aim hit nothing, more than BODY_RADIUS from every other player; miss_blocked stopped on the level short of a player in line; miss_on_line hit nothing yet were on line with a player and nothing between: the bug class
 
 ## Metres from a player's body axis that still counts as "on line" for the miss classes (the hull is about 0.4).
 const BODY_RADIUS := 0.3

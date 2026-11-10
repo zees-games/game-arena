@@ -1,16 +1,8 @@
 extends RefCounted
 
-## The bots' brains on worker threads (cvar `bot_threads`, 0 = off: the stock one-bot-at-a-time loop).
-##
-## A tick of bot commands is three steps (see [method ArenaBots.think_begin]): per bot on the main thread the
-## snapshot (the world's contacts, taken once per tick) and the bookkeeping; the brains' decisions, which read
-## that snapshot and write one [DotBotIntent] each, split over [member threads] threads (the main thread is
-## one); per bot on the main thread the commands from the intent (ride steering, throw, view limits). The
-## motor and the weapons run after, on the main thread, from the commands this returns.
-##
-## The brains touch no node: sight and wall rays go to the physics space with queries of their own, routes and
-## waypoints take the world's lock (see [member ArenaBots.World.par]). A brain is only its bot's, so the
-## answers do not depend on which thread runs which bot.
+## The bots' brains on worker threads (cvar `bot_threads`, 0 = off: the stock one-bot-at-a-time loop). A tick of bot commands is three steps (see [method ArenaBots.think_begin]): per bot on the main thread the snapshot and bookkeeping;
+## the brains' decisions, which read that snapshot and write one [DotBotIntent] each, split over [member threads] threads; per bot on the main thread the commands from the intent. The motor and weapons run after, from those commands.
+## The brains touch no node: sight and wall rays use queries of their own, routes and waypoints take the world's lock ([member ArenaBots.World.par]); a brain is only its bot's, so answers do not depend on which thread runs which bot.
 
 const ArenaBots := preload("arena_bots.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")

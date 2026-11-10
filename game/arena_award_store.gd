@@ -1,9 +1,7 @@
 extends DotAchievementStoreFile
 
-## Achievement progress files, written behind the frame that saved them.
-##
-## The tracker's autosave saves every dirty player in one frame and [DotAchievementStoreFile] writes a file for each as it is asked:
-## 24 atomic writes on the main thread every autosave interval (the owner's 55 ms spike, a third of a second after the stats one).
+## Achievement progress files, written behind the frame that saved them. The tracker's autosave saves every dirty player in one frame and [DotAchievementStoreFile] writes a file for each as asked:
+## 24 atomic writes on the main thread every autosave interval (the owner's 55 ms spike).
 ## Here a save keeps the snapshot and returns; a worker writes the batch, or one file a frame goes out where there are no threads.
 
 const LOG := "arena.award_store"

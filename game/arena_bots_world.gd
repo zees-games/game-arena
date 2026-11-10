@@ -92,12 +92,8 @@ class Mind:
 const LOADOUT_EVERY := 4
 
 
-## Think-rate staggering (cvar `bot_think_every`, `bot_think_near`). A bot with no enemy within
-## [member think_near] metres, no target, no ride, no throw, a plain walk and nothing pressed
-## runs its brain one tick in [member think_every], offset by its id so the thinkers spread over
-## the ticks, and repeats its last commands in between. 1 turns it off. Far from a fight a
-## bot's brain only picks a waypoint and walks it; the sight, aim and fight code that costs
-## most is for the nearby enemy, which gets every tick.
+## Think-rate staggering (cvar `bot_think_every`, `bot_think_near`). A bot with no enemy within [member think_near] metres, no target, no ride, no throw, a plain walk and nothing pressed runs its brain one tick in
+## [member think_every], offset by its id so the thinkers spread over the ticks, and repeats its last commands in between; 1 turns it off. Far from a fight a brain only picks a waypoint and walks it; the nearby enemy gets every tick.
 static var think_every: int = 0
 ## Players above which `think_every` 0 (auto) staggers by two: up to a 16-player match every bot thinks every tick.
 const AUTO_STAGGER_ABOVE := 16
@@ -117,11 +113,8 @@ static func _make_tiers() -> DotBotThinkTier:
 	return t
 
 
-## The fewest ticks between thinks while the tiers are on (cvars `bot_tier_floor`, `bot_tier_floor_engaged`). 1, the
-## default: the tiers alone decide. 3 and 2: a bot the tiers would have think every tick (in a person's view, close
-## to one) thinks at 22 Hz at 66, one fighting a person at 33 Hz, on its own beat, and coasts between with the view
-## carried on; a bot a person hurt still thinks on the next tick. Off by default: the windowed bench (staging02,
-## 24 and 32 bots) gained 2 percent of the tick from 3/2, inside its noise, and it changes how fast a bot reacts.
+## The fewest ticks between thinks while the tiers are on (cvars `bot_tier_floor`, `bot_tier_floor_engaged`). 1, the default: the tiers alone decide. 3 and 2: a bot the tiers would have think every tick thinks at 22 Hz at 66
+## (one fighting a person at 33 Hz) and coasts between with the view carried on; a bot a person hurt still thinks on the next tick. Off by default: the windowed bench gained 2 percent of the tick, inside its noise, and it changes how fast a bot reacts.
 static var think_floor: int = 1
 static var think_floor_engaged: int = 1
 
@@ -513,10 +506,8 @@ class World:
 		var spawns: Array = (map as Object).get("spawns") if map is Object else []
 		var surf := surf_for_map()
 		for spawn: Transform3D in spawns:
-			# A combat surf map has dozens of spawns on one platform (surf_snipers_island: 48 on
-			# one island); each as a waypoint outweighs the few landings and ramp starts that are
-			# the only places a ride is taken from, and the bots never rode. With ride edges
-			# linked, spawns closer than this to one kept are one place.
+			# A combat surf map has dozens of spawns on one platform (surf_snipers_island: 48); each as a waypoint outweighed the few landings and ramp starts a ride is taken from, and the bots never rode.
+			# With ride edges linked, spawns closer than this to one kept are one place.
 			if surf != null and out.size() > 0 and _near_any(out, spawn.origin, SPAWN_THINNING):
 				continue
 			out.append(spawn.origin)
@@ -651,16 +642,9 @@ class World:
 			return PackedVector3Array()
 		return graph.find_smooth_path(from, to, -1.0, true)
 
-	## The mesh for an imported map, the bake started on the first route asked on it; null on a
-	## built-in map.
-	##
-	## [b]Not the graph.[/b] The graph is laid over a box list, and an imported map's solid is
-	## hundreds of convex brushes with ramps and ledges at every height, so its bots walked
-	## straight at each other through the walls. dot-bot's [DotBotNav] bakes what a body can
-	## stand on from those brushes ([member ArenaMap.collision_root], on every machine that
-	## simulates). [b]In the background[/b], because the two default surf maps took 2 to 3 s
-	## to bake against a tenth of a second for the whole map change: bots walk straight for
-	## those seconds and route after.
+	## The mesh for an imported map, the bake started on the first route asked on it; null on a built-in map.
+	## [b]Not the graph.[/b] The graph is laid over a box list; an imported map's solid is hundreds of convex brushes with ramps and ledges at every height, so graph bots walked through the walls. dot-bot's [DotBotNav] bakes what a body can stand on
+	## from those brushes ([member ArenaMap.collision_root]). [b]In the background[/b]: the two default surf maps took 2 to 3 s to bake against a tenth of a second for the map change, so bots walk straight for those seconds and route after.
 	func _nav_for_map() -> DotBotNav:
 		var map: Variant = game.get("map")
 		if not (map is Object) or not (map as Object).has_method(&"is_imported") or not bool((map as Object).call(&"is_imported")):

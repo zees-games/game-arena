@@ -1,12 +1,7 @@
 extends RefCounted
 
-## When a name tag and a health bar draw over another player: the pure rules, no nodes.
-##
-## A setting is a set of reasons to show: [constant ALL] (always), [constant TEAM] (a team-mate),
-## [constant HOVER] (the cursor is on the body) and [constant HURT] (hurt in the last few seconds).
-## The player's choice (settings `name_tags`, `health_bars`) and the server's (`mp_nametags`,
-## `mp_hpbars`, replicated in RULES as these masks) are both sets, and a tag draws only when BOTH
-## allow it: the server's value is a ceiling the client can narrow and never widen.
+## When a name tag and a health bar draw over another player: the pure rules, no nodes. A setting is a set of reasons to show: [constant ALL], [constant TEAM] (a team-mate), [constant HOVER] (the cursor is on the body) and [constant HURT] (hurt in the last few seconds).
+## The player's choice (settings `name_tags`, `health_bars`) and the server's (`mp_nametags`, `mp_hpbars`, replicated in RULES as these masks) are both sets, and a tag draws only when BOTH allow it: the server's value is a ceiling the client can narrow and never widen.
 ## Written as a preset (`smart`) or a list (`team,hover`) in a setting, a cvar or a config.
 
 const ALL := 1

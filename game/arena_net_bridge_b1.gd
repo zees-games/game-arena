@@ -66,12 +66,8 @@ var killview: DotKillViewServer = null
 var _pending_hits: Dictionary = {}
 
 
-## Adds a player and makes them a replicated entity. Server side.
-##
-## [param session_id] is the id everything downstream uses — the scoreboard key, the
-## combat entity id, the damage attribution and the loadout key. [b]It is not the peer
-## id.[/b] A peer id is reassigned the moment someone reconnects, and everything keyed
-## by one would be handed to the next player to join.
+## Adds a player and makes them a replicated entity. Server side. [param session_id] is the id everything downstream uses: the scoreboard key, combat entity id, damage attribution and loadout key.
+## [b]It is not the peer id[/b]: a peer id is reassigned when someone reconnects, and everything keyed by one would go to the next player to join.
 func add_player(peer_id: int, session_id: int, display_name: String) -> DotResult:
 	if net == null or not net.is_server:
 		return DotResult.fail(DotError.CODE_FORBIDDEN, "Only the server adds players.")
@@ -81,10 +77,7 @@ func add_player(peer_id: int, session_id: int, display_name: String) -> DotResul
 	if not added.ok:
 		return added
 
-	# Before registering, not after: the manager only builds snapshots for peers it
-	# knows about and only holds an input buffer for those, so an entity registered
-	# to an unknown peer is an entity nothing is ever sent about and nothing can be
-	# driven by. It is silent — the server simulates it perfectly and alone.
+	# Before registering, not after: the manager only builds snapshots and input buffers for peers it knows, so an entity registered to an unknown peer is one nothing is sent about and nothing can drive. It is silent.
 	net.add_peer(peer_id)
 
 	var identity := _build_identity(added.value as ArenaPlayer, peer_id)
@@ -106,11 +99,8 @@ func add_player(peer_id: int, session_id: int, display_name: String) -> DotResul
 	var payload := join_payload(session_id)
 	player_announced.emit(payload)
 
-	# [b]To everybody already in, not only to the next to arrive.[/b] A peer is sent
-	# every player when it says READY, and nothing else ever sent a JOIN — so a client
-	# never learned of anybody who joined after it, and `player_announced` was connected
-	# only in the suite, which forwarded the bytes by hand and so could not see it. Ready
-	# peers only: one that is not ready yet gets the whole roster when it is.
+	# [b]To everybody already in, not only to the next to arrive.[/b] A peer is sent every player when it says READY and nothing else sent a JOIN, so a client never learned of anybody who joined after it.
+	# Ready peers only: one that is not ready yet gets the whole roster when it is.
 	send_event(0, ArenaEvents.Kind.JOIN, payload)
 
 	if _ready_unseated.has(peer_id):
@@ -120,12 +110,8 @@ func add_player(peer_id: int, session_id: int, display_name: String) -> DotResul
 	return DotResult.success(identity)
 
 
-## Builds the identity and behaviour that make an [ArenaPlayer] replicate.
-##
-## The behaviour is added before the identity on purpose: [DotNetIdentity] collects
-## its behaviours in [code]_ready[/code], by walking the entity's subtree, and a
-## behaviour added afterwards would never be found — the entity would register with
-## nothing to replicate and simply never move on any other machine.
+## Builds the identity and behaviour that make an [ArenaPlayer] replicate. The behaviour is added before the identity on purpose: [DotNetIdentity] collects its behaviours in [code]_ready[/code] by walking the entity's subtree,
+## and one added afterwards would never be found, so the entity would register with nothing to replicate and never move on any other machine.
 func _build_identity(player: ArenaPlayer, peer_id: int) -> DotNetIdentity:
 	var behaviour := ArenaPlayerNet.new()
 	behaviour.name = "Net"
@@ -136,10 +122,9 @@ func _build_identity(player: ArenaPlayer, peer_id: int) -> DotNetIdentity:
 	var identity := DotNetIdentity.new()
 	identity.name = "Identity"
 	identity.owner_peer_id = peer_id
-	# SHARED, not SERVER: the server stays authoritative and corrects, and the owning
-	# client predicts. `DotNetIdentity.is_predicted()` is false for any other
-	# authority, so SERVER would mean a client that sees its own movement a full
-	# round trip late — noticeable at 80 ms and unplayable at 150.
+	# SHARED, not SERVER: the server stays authoritative and corrects, and the owning client predicts.
+	# `DotNetIdentity.is_predicted()` is false for any other authority, so SERVER would mean a client that
+	# sees its own movement a full round trip late — noticeable at 80 ms and unplayable at 150.
 	identity.authority = DotNetIdentity.Authority.SHARED
 	player.add_child(identity)
 
@@ -205,10 +190,9 @@ func remove_peer(peer_id: int) -> void:
 	if killview != null:
 		killview.forget(session_id)
 
-	# Announced BEFORE the entity is unregistered, and to everybody still here.
-	# A client that is only told an entity stopped arriving in snapshots has no way to
-	# tell that from a player who walked out of its interest rectangle, so it would
-	# leave a body standing in the arena for ever.
+	# Announced BEFORE the entity is unregistered, and to everybody still here. A client that is only told
+	# an entity stopped arriving in snapshots has no way to tell that from a player who walked out of its
+	# interest rectangle, so it would leave a body standing in the arena for ever.
 	if net != null and net.is_server:
 		send_event(0, ArenaEvents.Kind.LEAVE, ArenaEvents.write_leave(session_id))
 
@@ -233,17 +217,8 @@ func session_for_peer(peer_id: int) -> int:
 	return int(_players_by_peer.get(peer_id, 0))
 
 
-## One authoritative tick. Server side, and it replaces [method ArenaGame.tick].
-##
-## [method DotNetManager.server_tick] hands each peer's input to the entities it owns,
-## simulates, records history for lag compensation and sends snapshots — in that
-## order, and the game tick has to happen between the first two. It does, from
-## [method ArenaPlayerNet._net_simulate], through [method ensure_game_ticked].
-##
-## The call afterwards is not redundant. A server with no players registered runs no
-## behaviours at all, and the match clock still has to advance — otherwise an empty
-## server's warmup never ends and the first player to join arrives into a match that
-## has been frozen since it booted.
+## One authoritative tick. Server side, and it replaces [method ArenaGame.tick]. [method DotNetManager.server_tick] hands each peer's input to its entities, simulates, records lag-compensation history and sends snapshots, in that order;
+## the game tick happens between the first two, from [method ArenaPlayerNet._net_simulate] through [method ensure_game_ticked]. The call afterwards is not redundant: a server with no players runs no behaviours and the match clock still has to advance, or an empty server's warmup never ends.
 ## Monsters this server replicates: instance id -> their [ArenaNpcNet]. Server side.
 var _monster_nets: Dictionary = {}
 
@@ -286,10 +261,7 @@ func server_tick(tick: int) -> void:
 	ArenaFrameProbe.add(&"srv_hits", t_hits)
 
 
-## Runs the whole game for a tick, at most once.
-##
-## Called from every replicated player's [code]_net_simulate[/code]; the first one
-## through does the work.
+## Runs the whole game for a tick, at most once. Called from every replicated player's [code]_net_simulate[/code]; the first one through does the work.
 func ensure_game_ticked(tick: int) -> void:
 	if _game_ticked_for == tick or game == null or host_paused:
 		return
@@ -391,11 +363,8 @@ func add_bot(display_name: String) -> int:
 	return session_id
 
 
-## Everything a client needs to mirror one player.
-##
-## A message rather than a spawn: [DotNetSpawner] builds entities from a prefab table,
-## and an [ArenaPlayer] is built by [method ArenaGame.add_player] so that the netted
-## and the headless deployments get the same player rather than two that drift.
+## Everything a client needs to mirror one player. A message rather than a spawn: [DotNetSpawner] builds entities from a prefab table,
+## and an [ArenaPlayer] is built by [method ArenaGame.add_player] so the netted and headless deployments get the same player rather than two that drift.
 func join_payload(session_id: int) -> PackedByteArray:
 	var behaviour: ArenaPlayerNet = _behaviours.get(session_id)
 
@@ -453,11 +422,8 @@ func encode_event(kind: int, body: PackedByteArray) -> PackedByteArray:
 	return writer.to_bytes()
 
 
-## Everything a joining peer has to be told, in the order it has to be told it.
-##
-## HELLO first, because it carries the tick rate and the client's own id and nothing
-## else can be interpreted without them; then one JOIN per player already in the match,
-## including the joining peer's own; then the match state.
+## Everything a joining peer has to be told, in the order it has to be told it. HELLO first, because it carries the tick rate and the client's own id and nothing else can be interpreted without them;
+## then one JOIN per player already in the match, including the joining peer's own; then the match state.
 func send_signon(peer_id: int) -> void:
 	if net == null or not net.is_server:
 		return
@@ -560,10 +526,9 @@ func _send_map_state(peer: Variant, payload: Dictionary) -> void:
 	send_event(int(peer), ArenaEvents.Kind.MAP_STATE, body)
 
 
-## Follows whichever projectile layer the game has, and tells every client about each
-## launch. Server side, every tick, because a map change builds a new one.
-## The bullet bridge a map change rebuilds, so checked every tick. Sends nothing while sv_ballistics is 0,
-## because nothing is then spawned.
+## Follows whichever projectile layer the game has, and tells every client about each launch. Server
+## side, every tick, because a map change builds a new one. The bullet bridge a map change rebuilds, so
+## checked every tick. Sends nothing while sv_ballistics is 0, because nothing is then spawned.
 func _watch_bullets() -> void:
 	if net == null or not net.is_server or game == null:
 		return
@@ -611,12 +576,8 @@ func _on_launched(spawn: DotWeaponSpawn) -> void:
 	))
 
 
-## Follows whichever horde the game has. Server side.
-##
-## [b]Every tick, not once.[/b] The horde is built by a mode that has one and torn down by a
-## mode change to one that does not — `ArenaGame._reconcile_world_layers` — so a bridge that
-## connected at attach would miss every horde after the first, and one that connected at a
-## mode change would need the game to tell it, which is a second thing to forget.
+## Follows whichever horde the game has. Server side. [b]Every tick, not once.[/b] The horde is built by a mode that has one and torn down by a mode change to one that does not (`ArenaGame._reconcile_world_layers`),
+## so a bridge that connected at attach would miss every horde after the first, and one connected at a mode change would need the game to tell it, a second thing to forget.
 func _watch_horde() -> void:
 	if net == null or not net.is_server or game == null:
 		return
@@ -664,10 +625,8 @@ func _on_monster_spawned(npc: DotNpcInstance) -> void:
 	identity.name = "Identity"
 	identity.owner_peer_id = 0
 	identity.authority = DotNetIdentity.Authority.SERVER
-	# Relevant to everybody, whatever the interest grid's radius says. An arena is sixty
-	# metres across, a gunner fires from eighteen and a horde arrives from anywhere — and the
-	# first version, culled by distance, announced a monster twenty-five metres away and then
-	# never sent it a snapshot: the client drew it frozen where it spawned, facing north.
+	# Relevant to everybody, whatever the interest grid's radius says: an arena is sixty metres across, a gunner fires from eighteen and a horde arrives from anywhere,
+	# and culling by distance announced a monster twenty-five metres away and never sent it a snapshot (drawn frozen where it spawned).
 	identity.always_relevant = true
 	body.add_child(identity)
 
@@ -738,10 +697,8 @@ func _send_match_state(peer_id: int) -> void:
 	if game == null or game.match_node == null:
 		return
 
-	# Ticks, not seconds, because seconds are what the two ends would disagree about:
-	# `seconds_remaining` is derived from the tick rate, and the client's rate is
-	# whatever HELLO told it. Sending the count and letting each end divide by the rate
-	# it is running keeps one number on the wire and one conversion on each side.
+	# Ticks, not seconds, because seconds are what the two ends would disagree about: `seconds_remaining` is derived from the tick rate, and the client's rate is whatever HELLO told it.
+	# Sending the count and letting each end divide keeps one number on the wire and one conversion on each side.
 	send_event(peer_id, ArenaEvents.Kind.MATCH, ArenaEvents.write_match(
 		int(game.match_node.state),
 		int(round(game.match_node.seconds_remaining() * float(net.config.tick_rate))),

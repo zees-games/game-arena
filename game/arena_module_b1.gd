@@ -83,15 +83,9 @@ func _rotation_commands() -> Dictionary:
 	return maps.rotation_file.commands() if maps != null and maps.rotation_file != null else {}
 
 
-## `arena_scorelimit`, `arena_timelimit` and `arena_warmup`: the server's numbers over the
-## mode's, live and kept across map changes ([member ArenaGame.score_limit]).
-##
-## [b]`arena_scorelimit` was registered with no handler[/b] and nothing read it, so a game.yml
-## or content.yml value was a line in the config and nothing else (the shipped "25" equalled
-## the default, which hid it). A cvar writes the game's export, which every match built after
-## it reads, and the live match through `_apply_match_limits`, because a server's config is
-## applied after this module loads, when the first match is already running. Zero, for the
-## two limits, is "the mode's own"; a negative warmup is too.
+## `arena_scorelimit`, `arena_timelimit` and `arena_warmup`: the server's numbers over the mode's, live and kept across map changes ([member ArenaGame.score_limit]). A cvar writes the game's export, which every match built after it reads,
+## and the live match through `_apply_match_limits`, because a server's config is applied after this module loads, when the first match is already running.
+## Zero, for the two limits, is "the mode's own"; a negative warmup is too.
 func _add_match_cvars() -> void:
 	add_cvar(
 		"arena_scorelimit", str(game.score_limit),
@@ -288,11 +282,8 @@ func _module_unload() -> void:
 		DotLog.result(CHANNEL, "unloading the platform module", unloaded)
 
 
-## [b]Admission finishes AFTER a player is seated[/b], so the name and figure they are
-## seated with are a guest's whenever the profile store is slower than the join.
-## `player_admitted` is the moment the real ones exist; a new avatar and an operator's
-## `platform_name` are the same thing later. All three end in a JOIN to every client,
-## which a client already applies to a player it has.
+## [b]Admission finishes AFTER a player is seated[/b], so the name and figure they are seated with are a guest's whenever the profile store is slower than the join. `player_admitted` is the moment the real ones exist;
+## a new avatar and an operator's `platform_name` are the same thing later. All three end in a JOIN to every client, which a client already applies to a player it has.
 func _wire_identity() -> void:
 	if bridge == null:
 		return
@@ -333,33 +324,18 @@ func _on_profile(event: DotEvent) -> void:
 	bridge.refresh_player(session_id, session.display_name, _avatar_for(session_id))
 
 
-## A client finished the signon and is in the world.
-##
-## [b]`client_spawn`, not `client_connected`.[/b] A connected client has a socket and
-## nothing else — no identity, no content, no confirmation it can load the map. Adding
-## them to the match there produces a body for someone who may still fail to join.
+## A client finished the signon and is in the world. [b]`client_spawn`, not `client_connected`.[/b] A connected client has a socket and nothing else (no identity, no content, no confirmation it can load the map),
+## so adding them to the match there produces a body for someone who may still fail to join.
 func _on_client_spawn(event: DotEvent) -> void:
-	# [b]`client_spawn` carries `userid` and `name`. It does not carry `peer_id`.[/b]
-	# This read `event.get_int("peer_id")`, which is 0 on every event, so `session_of(0)`
-	# returned null and the function returned — **nobody ever joined a dedicated arena
-	# server**, silently, for as long as this module has existed. A null session is a
-	# legitimate thing to find, so nothing errored, and `dedicated.tscn` passes its
-	# twenty-one checks without noticing because it never connects a client.
-	#
-	# The family's notes have carried this exact bug, found in game-hungario, since
-	# before this module was written. Nobody checked here.
+	# [b]`client_spawn` carries `userid` and `name`, not `peer_id`.[/b] Reading `event.get_int("peer_id")` gives 0 on every event, so `session_of(0)` returned null and nobody ever joined a dedicated arena server, silently;
+	# a null session is legitimate, so nothing errored, and `dedicated.tscn` never connects a client. The family's notes carry this bug, found in game-hungario.
 	var session := server.session_by_userid(event.get_int("userid"))
 
 	if session == null:
 		return
 
-	# dot-moderation's records, checked here rather than at connect.
-	#
-	# [b]dot-server has its own ban list and this is not it.[/b] Its mute is two
-	# booleans on a session object and a session dies with its connection, so a muted
-	# player reconnects and talks; dot-moderation's records are durable, expiring and
-	# scoped. Both are consulted — dot-server's own admission runs first and this is
-	# the second gate.
+	# dot-moderation's records, checked here rather than at connect. [b]dot-server has its own ban list and this is not it.[/b] Its mute is two booleans on a session that dies with its connection, so a muted player reconnects and talks;
+	# dot-moderation's records are durable, expiring and scoped. Both are consulted: dot-server's admission runs first and this is the second gate.
 	if services != null:
 		var admitted := services.check_admission(session)
 
@@ -374,16 +350,9 @@ func _add(session: DotClientSession) -> void:
 	if _joined.has(session.userid):
 		return
 
-	# The session id, not the peer id. A peer id is reassigned the moment someone
-	# reconnects, and everything downstream of this -- the scoreboard, the combat
-	# entity, the damage attribution -- would then be handed to the next player to
-	# join. dot-server's userid is stable for the life of the session.
-	#
-	# Through the bridge, which adds them to the game AND registers them as a
-	# replicated entity owned by their peer. `game.add_player` alone gives the server a
-	# player nothing is ever sent about: the manager only builds snapshots for peers it
-	# knows and only holds an input buffer for those, so the server would simulate them
-	# perfectly and alone.
+	# The session id, not the peer id: a peer id is reassigned when someone reconnects, and the scoreboard, combat entity and damage attribution would go to the next player to join. dot-server's userid is stable for the session.
+	# Through the bridge, which adds them to the game AND registers them as a replicated entity owned by their peer. `game.add_player` alone gives the server a player nothing is sent about:
+	# the manager only builds snapshots and input buffers for peers it knows, so the server would simulate them perfectly and alone.
 	game.loadout_identity.bind(session)
 	var added := bridge.add_player(
 		session.peer_id, session.userid, session.display_name
@@ -466,25 +435,16 @@ func _on_player_killed(entry: DotKillFeed.Entry) -> void:
 	server.broadcast_message(str(entry))
 
 
-## A player typed `!something`.
-##
-## [b]Claimed, or it is broadcast as chat.[/b] dot-chat holds a command until somebody
-## says they handled it; an unclaimed one with `broadcast_unknown_commands` off is
-## simply dropped, which means a player typing `!rtv` on a server where the vote failed
-## to load gets silence rather than "there is no vote here".
+## A player typed `!something`. [b]Claimed, or it is broadcast as chat.[/b] dot-chat holds a command until somebody says they handled it;
+## an unclaimed one with `broadcast_unknown_commands` off is dropped, so a player typing `!rtv` on a server where the vote failed to load gets silence rather than "there is no vote here".
 func _on_chat_command(peer: int, command: String, args: PackedStringArray) -> void:
 	var session := server.session_of(peer)
 
 	if session == null:
 		return
 
-	# [b]The vote's own commands are not here.[/b] `!rtv`, `!nominate`, `!vote`,
-	# `!nextmap` and `!timeleft` are dot-vote's, registered on the console by
-	# `ArenaVote.install_commands` with `.with_chat()`, and an unclaimed `!` line carries
-	# on to the console. This handler answered all five itself once, beside a console with
-	# none of dot-vote's operator commands: two paths to one director, one of them without
-	# `setnextmap`. Only a server whose vote did not load answers them here, so a player
-	# gets "no vote" rather than silence.
+	# [b]The vote's own commands are not here.[/b] `!rtv`, `!nominate`, `!vote`, `!nextmap` and `!timeleft` are dot-vote's, registered on the console by `ArenaVote.install_commands` with `.with_chat()`, and an unclaimed `!` line carries on to the console.
+	# Answering them here as well made two paths to one director, one without `setnextmap`. Only a server whose vote did not load answers them here, so a player gets "no vote" rather than silence.
 	if vote == null:
 		match command:
 			"rtv", "nominate", "vote":
@@ -553,13 +513,9 @@ func _reply_chat(peer: int, text: String) -> void:
 		server.chat.send_system_to(session, text)
 
 
-## The map changed, whatever caused it — a vote, a rotation, or an admin typing it.
-##
-## [b]This is the one call site that tells the vote what is running, and having two is
-## the bug.[/b] `DotVoteDirector.begin_on_apply` is off precisely so that this signal
-## is the only source: it fires for an operator's `arena_map` as well as for a voted
-## change, and both firing means two entries in the play history for one play — a
-## "not in the last five" cooldown that is quietly a cooldown of two or three.
+## The map changed, whatever caused it: a vote, a rotation, or an admin typing it. [b]This is the one call site that tells the vote what is running, and having two is the bug.[/b]
+## `DotVoteDirector.begin_on_apply` is off so this signal is the only source: it fires for an operator's `arena_map` as well as a voted change,
+## and both firing means two play-history entries for one play, a "not in the last five" cooldown that is quietly two or three.
 func _on_map_changed(map: DotMapDef) -> void:
 	if map_config == null and console != null:
 		map_config = ArenaMapConfig.build(console)
@@ -574,11 +530,8 @@ func _on_map_changed(map: DotMapDef) -> void:
 	if vote != null:
 		vote.note_changed()
 
-	# [b]Every `return` point is a place on the map that just went.[/b] DotModTools
-	# keeps a stack of positions per player, and without this `return Ada` after a
-	# change put her where she had stood on the previous map, inside whatever the new
-	# one has there. `[modtools-return-1]`; playground, hungario and the lobby do the
-	# same.
+	# [b]Every `return` point is a place on the map that just went.[/b] DotModTools keeps a stack of positions per player; without this `return Ada` after a change put her where she had stood on the previous map,
+	# inside whatever the new one has there (`[modtools-return-1]`; playground, hungario and the lobby do the same).
 	if services != null and services.mod_tools != null:
 		services.mod_tools.clear_history()
 
@@ -612,11 +565,8 @@ func _report_map(map_id: String) -> void:
 		server.games.set_current_map(map_id)
 
 
-## The map's clock ran out.
-##
-## The director deliberately does not act on it: on a server with a vote the answer is
-## "open the ballot" and on one without it is "next in rotation", and only this file
-## knows which of those this server is.
+## The map's clock ran out. The director deliberately does not act on it: on a server with a vote the answer is "open the ballot" and on one without it is "next in rotation",
+## and only this file knows which this server is.
 func _on_map_over(_map: DotMapDef, reason: StringName) -> void:
 	if vote != null:
 		var opened := vote.director.open_vote(reason)
@@ -633,20 +583,12 @@ func _on_map_over(_map: DotMapDef, reason: StringName) -> void:
 		DotLog.result(CHANNEL, "changing to the next map", changed)
 
 
-## The commands that only exist once the optional halves loaded.
-##
-## Registered after them rather than beside the others, because a command that reports
-## on a subsystem that failed to load is a command whose only possible answer is "that
-## is not running" — and an operator reading the command list should see what this
-## server actually has.
+## The commands that only exist once the optional halves loaded. Registered after them rather than beside the others,
+## because a command that reports on a subsystem that failed to load can only answer "that is not running", and an operator reading the command list should see what this server has.
 func _add_extra_commands() -> void:
 	if maps != null:
-		# CHANGEMAP and nothing else, like g2gfast's. A map change ends every round in
-		# progress — which is an argument about who may do it, not about where they typed
-		# it, and the flag is what settles that on every source alike. It was console-only
-		# once, and the refusal that produced landed on operators holding the flag rather
-		# than on the players it was written for. `sv_chat_commands 0` puts that back for a
-		# deployment that wants it.
+		# CHANGEMAP and nothing else, like g2gfast's. A map change ends every round in progress, which is about who may do it, not where they typed it, and the flag settles that on every source alike.
+		# `sv_chat_commands 0` makes it console-only for a deployment that wants it.
 		add_command(
 			"arena_map", _cmd_map,
 			"Change the map: arena_map <id>", DotAdminFlags.CHANGEMAP
@@ -655,20 +597,9 @@ func _add_extra_commands() -> void:
 			"arena_nextmap", _cmd_nextmap, "What plays next", ""
 		)
 
-		# `map`, `maps` and `mapinfo` come from dot-map itself. They were dot-server's
-		# `map`, which changed the GAME -- and on a server running one game and several
-		# maps, that is the one thing an operator typing `map` does not mean. dot-server's
-		# game change is `changelevel`, `game` and `gamechange` now.
-		#
-		# `allow_chat_change` is left at its default, which is ON, matching `arena_map`
-		# beside it: CHANGEMAP decides who may end a round in progress, wherever the line
-		# was typed. A relayed website command arrives as `Source.CHAT` and now reaches it
-		# on the same terms; `DotChatRelayConfig.command_source` still promotes a relay to
-		# RCON for an operator who wants their site admins treated as administrators.
-		# The SYNC HOST as the changer, not the session: a map change on this server has to
-		# reach the clients, and `ArenaMapDirector.session` on its own swaps the world in
-		# this process and tells nobody -- which is the absence dot-map's own notes call
-		# "the structural one".
+		# `map`, `maps` and `mapinfo` come from dot-map itself (dot-server's `map` changed the GAME, which is not what an operator typing `map` means); dot-server's game change is `changelevel`, `game` and `gamechange`.
+		# `allow_chat_change` stays at its default, ON, matching `arena_map`: CHANGEMAP decides who may end a round in progress, wherever typed. A relayed website command arrives as `Source.CHAT`;
+		# `DotChatRelayConfig.command_source` can promote a relay to RCON. The SYNC HOST is the changer, not the session: `ArenaMapDirector.session` alone swaps the world in this process and tells nobody.
 		var map_commands := DotMapCommands.new()
 		map_commands.session = maps.session
 		map_commands.changer = maps.sync

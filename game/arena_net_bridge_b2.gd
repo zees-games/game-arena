@@ -170,12 +170,8 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 	return DotResult.success(self)
 
 
-## Creates the RPC surface under [param parent].
-##
-## Separate from [method attach] because the parent differs by end and by deployment:
-## on a server it is the [DotServer] node, on a client the [DotClientLink], and in the
-## headless suite it is a bare [Node] with a loopback in place of a socket. All three
-## must be NAMED the same, because the name is the routing.
+## Creates the RPC surface under [param parent]. Separate from [method attach] because the parent differs by end and deployment: on a server the [DotServer] node, on a client the [DotClientLink],
+## in the headless suite a bare [Node] with a loopback in place of a socket. All three must be NAMED the same, because the name is the routing.
 func open_link(parent: Node) -> ArenaNetLink:
 	link = ArenaNetLink.attached_to(parent, self, net != null and net.is_server)
 	# Through DotGameLink, not a bare add_child: the link sits under the server node (the
@@ -185,10 +181,7 @@ func open_link(parent: Node) -> ArenaNetLink:
 	return link
 
 
-## Where dot-net's own outgoing bytes go.
-##
-## [param delivery] decides the call, not the caller: a snapshot is unreliable and an
-## event is not, and dot-net knows which is which.
+## Where dot-net's own outgoing bytes go. [param delivery] decides the call, not the caller: a snapshot is unreliable and an event is not, and dot-net knows which is which.
 func _send(peer_id: int, payload: PackedByteArray, delivery: int) -> void:
 	if link == null:
 		return
@@ -198,18 +191,13 @@ func _send(peer_id: int, payload: PackedByteArray, delivery: int) -> void:
 	elif net.is_server:
 		link.send_event(peer_id, payload)
 	else:
-		# A client's reliable send is a request. dot-net sends exactly one through here --
-		# its message schema, as it starts -- and it used to go to `send_event`, a call only
-		# the server may make, which the server's end refuses.
+		# A client's reliable send is a request. dot-net sends exactly one through here (its message schema, as it starts);
+		# `send_event` is a call only the server may make, and the server's end refuses it from a client.
 		link.send_request(payload)
 
 
-## Tells everybody who somebody is now: a profile that arrived after they were seated,
-## a new avatar, an operator's rename. Server side.
-##
-## [b]Through JOIN, which a client already applies to a player it has.[/b] A second
-## message for "this person changed" would be a second thing a late joiner has to be
-## told. An empty [param display_name] keeps the one they have.
+## Tells everybody who somebody is now: a profile that arrived after they were seated, a new avatar, an operator's rename. Server side. [b]Through JOIN, which a client already applies to a player it has[/b];
+## a second message for "this person changed" would be one more thing a late joiner has to be told. An empty [param display_name] keeps the one they have.
 func refresh_player(session_id: int, display_name: String, avatar: DotAvatar) -> bool:
 	if net == null or not net.is_server or not _behaviours.has(session_id):
 		return false
@@ -267,12 +255,8 @@ func remote_feet(other_id: int, mover_id: int, tick: int) -> Variant:
 	var mover: ArenaPlayerNet = _behaviours.get(mover_id)
 	if mover == null or game == null:
 		return null
-	# A command repeated over a lost packet keeps its view LAG: the client's receive timeline walks
-	# with its clock (`DotNetClock.advance`), so the tick the packet was lost for measured the same
-	# lag one tick on. What does not move on is the snapshot bracket, which names two recorded
-	# ticks: it is aged by the ticks since, then stepped to the pair the view has reached.
-	# Holding the bracket's offset instead blended between two ticks the client never held
-	# (0.04 m against a strafer); ageing the lag with it put the view a whole tick behind.
+	# A command repeated over a lost packet keeps its view LAG: the client's receive timeline walks with its clock (`DotNetClock.advance`), so the tick the packet was lost for measured the same lag one tick on.
+	# What does not move on is the snapshot bracket, which names two recorded ticks: it is aged by the ticks since, then stepped to the pair the view has reached (holding its offset blended between two ticks the client never held).
 	var lag := game.collision_lag(mover.last_view_lag)
 	var at: Variant = null
 	if lag >= 0.0:
@@ -368,14 +352,9 @@ func apply_join(payload: PackedByteArray) -> DotResult:
 	return mirrored
 
 
-## Sends an event to one peer, or to every ready peer when [param peer_id] is 0.
-##
-## [b]Ready peers, not connected ones.[/b] A peer that has finished dot-server's signon
-## has a socket and has not yet built its scene; an RPC to it lands on a node that does
-## not exist and is lost with one "Node not found" per call. The gate is [enum
-## ArenaEvents.Ask].READY.
-## The server changed a movement rule: every client gets the whole set. Server side; a
-## client's own set_movement_rules emits this too and must not echo it back.
+## Sends an event to one peer, or to every ready peer when [param peer_id] is 0. [b]Ready peers, not connected ones[/b]: a peer past dot-server's signon has a socket and has not built its scene,
+## so an RPC lands on a node that does not exist ("Node not found" per call). The gate is [enum ArenaEvents.Ask].READY.
+## The server changed a movement rule: every client gets the whole set. Server side; a client's own set_movement_rules emits this too and must not echo it back.
 func _on_movement_rules_changed(rules: Dictionary) -> void:
 	if net == null or not net.is_server:
 		return
@@ -710,16 +689,9 @@ func _on_request(message: DotNetMessage) -> void:
 			pass
 
 
-## A client asked to do something with a prop.
-##
-## [b]The origin comes from the simulation and only the direction comes off the
-## wire.[/b] The server already knows where the player is — it moved them — and a
-## client that could name its own origin could grab a prop from anywhere on the map.
-## What it cannot know is where they were looking between two ticks, so that is the
-## one thing the payload carries and the one thing that is a claim.
-##
-## The tool itself decides whether it reaches: `DotPropTool.may_act_on` is what
-## enforces the range, the mass limit and whose prop it is.
+## A client asked to do something with a prop. [b]The origin comes from the simulation and only the direction comes off the wire[/b]: the server knows where the player is, and a client naming its own origin could grab a prop from anywhere.
+## What it cannot know is where they were looking between two ticks, so that is the one thing the payload carries, and a claim.
+## The tool decides whether it reaches: `DotPropTool.may_act_on` enforces the range, the mass limit and whose prop it is.
 func _on_prop_act(peer_id: int, body: Dictionary) -> void:
 	if not bool(body.get("ok", false)) or game == null or game.props == null:
 		return
@@ -742,17 +714,9 @@ func _on_prop_act(peer_id: int, body: Dictionary) -> void:
 	)
 
 
-## The client's own tick rate comes from the SERVER, and from nowhere else.
-##
-## [b]This is the largest measured error in this family's history.[/b] g2gfast's client
-## took its rate from `Engine.physics_ticks_per_second`, which a browser shell never
-## sets — 60 against a 128-tick server. Correction rate 0.96, prediction never
-## converging, and every replicated time wrong by the ratio of the two rates. HELLO has
-## always carried the number; nothing read it back out.
-##
-## All four copies move together, and the engine's is one of them: the fraction a
-## renderer interpolates at is a fraction through a PHYSICS frame, which is a fraction
-## through a tick only while the two rates agree.
+## The client's own tick rate comes from the SERVER, and from nowhere else. [b]This is the largest measured error in this family's history.[/b] g2gfast's client took its rate from `Engine.physics_ticks_per_second`,
+## which a browser shell never sets (60 against a 128-tick server): correction rate 0.96, prediction never converging, every replicated time wrong by the ratio of the rates. HELLO always carried the number; nothing read it back.
+## All four copies move together, the engine's among them: the fraction a renderer interpolates at is a fraction through a PHYSICS frame, a fraction through a tick only while the two rates agree.
 func _adopt_tick_rate(rate: int, snapshot_rate: int = 0) -> void:
 	if rate <= 0 or game == null or net == null:
 		return
@@ -767,10 +731,8 @@ func _adopt_tick_rate(rate: int, snapshot_rate: int = 0) -> void:
 	net.clock.tick_rate = rate
 	if game.spectate != null:
 		game.spectate.retime()
-	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap
-	# to a quarter second of ticks (8 steps are 62.5 ms at 128 Hz, so a client under 16 fps ran
-	# fewer ticks than the server). A shell built before it gets the same rule here, as
-	# game-g2gfast does; remove this branch when the oldest shell is API 7.
+	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap to a quarter second of ticks (a client under 16 fps ran fewer ticks than the server at 128 Hz).
+	# A shell built before it gets the same rule here, as game-g2gfast does; remove this branch when the oldest shell is API 7.
 	if DotAddonApi.build_level("dot_net") >= 7:
 		DotNetClock.adopt_tick_rate(rate)
 	else:

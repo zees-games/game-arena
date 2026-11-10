@@ -288,10 +288,8 @@ func warm(weapons: Array) -> Array:
 	return out
 
 
-## Holds each of [param ids] once on a scratch view model set up as a killer's hands are, from index
-## [param from] until [param until_msec]: the view model's mesh work (sight cut, hand reach, magazine carve) is
-## cached by its rules, so a killer's weapon outside the parked [constant RIGS] costs a swap, not a build
-## (350 ms mid-match in the owner's profile). Returns the next index; [code]ids.size()[/code] when done.
+## Holds each of [param ids] once on a scratch view model set up as a killer's hands are, from index [param from] until [param until_msec]: the view model's mesh work (sight cut, hand reach, magazine carve) is cached by its rules,
+## so a killer's weapon outside the parked [constant RIGS] costs a swap, not a build (350 ms mid-match in the owner's profile). Returns the next index; [code]ids.size()[/code] when done.
 func warm_meshes(ids: Array, from: int, until_msec: int) -> int:
 	if not is_inside_tree():
 		return ids.size()

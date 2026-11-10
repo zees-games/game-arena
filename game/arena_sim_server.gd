@@ -6,12 +6,8 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("arena_module.gd")
 const ArenaSimOwner := preload("arena_sim_owner.gd")
 
-## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback
-## dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread.
-## The same [ArenaModule] a public server runs: hit registration and lag compensation are the connected path's.
-##
-## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH`. It writes PATH
-## once it accepts players, and quits a few seconds after its player left.
+## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
+## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH`. It writes PATH once it accepts players, and quits a few seconds after its player left.
 
 const CHANNEL := "arena.sim_server"
 const REPORT_SEC := 5.0

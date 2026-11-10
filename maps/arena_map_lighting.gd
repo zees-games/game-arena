@@ -115,7 +115,7 @@ static func profile() -> DotLightProfile:
 	return p
 
 
-# --- An imported map --------------------------------------------------------
+# imported map
 
 ## An imported map under its own manifest's lighting.
 static func _build_imported(root: Node3D, map: Object) -> void:
@@ -168,10 +168,8 @@ static func imported_profile() -> DotLightProfile:
 ## A clear day's zenith, for a sky [constant SKY_TOPS] does not know.
 const CLEAR_SKY := Color(0.36, 0.55, 0.82)
 
-## The top of a sky by the name a map gives it, for a map whose ambient cannot say. Lower
-## case, without the `_hdr` suffix. A copy of g2gfast's `G2GLighting.SKY_TOPS`: the stock
-## names are approximate zeniths picked by eye (the textures are not in any map), the
-## custom ones the ambient another map set under the same sky name.
+## The top of a sky by the name a map gives it, for a map whose ambient cannot say. Lower case, without the `_hdr` suffix. A copy of g2gfast's `G2GLighting.SKY_TOPS`:
+## the stock names are approximate zeniths picked by eye (the textures are not in any map), the custom ones the ambient another map set under the same sky name.
 const SKY_TOPS := {
 	"sky_day01_01": Color(0.37, 0.56, 0.82),
 	"sky_day01_04": Color(0.40, 0.58, 0.80),
@@ -308,7 +306,7 @@ static func _apply_packed_sky(root: Node3D, lighting: Dictionary, dir: String) -
 		env.background_mode = Environment.BG_SKY
 
 
-# --- Per-map air ------------------------------------------------------------
+# per-map air
 
 ## What a map's compiled lighting block cannot say, one entry per map: the importer reads no
 ## fog or sea from a BSP, so the two maps whose original looks need them are patched here.

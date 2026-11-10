@@ -1,10 +1,7 @@
 extends SceneTree
 
-## Renders the solo client with the lazy workbench opened (the toggle_action key): screenshots/workbench/open.png.
-## Run under xvfb with the compatibility renderer (Forward+ on llvmpipe segfaults in Mesa's shader code
-## within a second, which Godot reports as "/root: The caller thread can't call propagate_notification()"):
-##   xvfb-run -a godot --path . --rendering-method gl_compatibility --rendering-driver opengl3 \
-##     --resolution 1280x720 --script tools/render_workbench.gd
+## Renders the solo client with the lazy workbench opened (the toggle_action key): screenshots/workbench/open.png. Use the compatibility renderer (Forward+ on llvmpipe segfaults in Mesa):
+## `xvfb-run -a godot --path . --rendering-method gl_compatibility --rendering-driver opengl3 --resolution 1280x720 --script tools/render_workbench.gd`
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const OUT := "res://screenshots/workbench/open.png"

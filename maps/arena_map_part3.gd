@@ -185,11 +185,8 @@ func add_box(box: AABB) -> ArenaMap:
 	boxes.append(box.abs())
 	return self
 
-## Adds the four outer walls.
-##
-## Solid boxes rather than planes, because everything downstream understands a box and
-## only some of it understands a plane — and a map that is boxes all the way down is a
-## map whose three representations cannot disagree.
+## Adds the four outer walls. Solid boxes rather than planes, because everything downstream understands a box and only some of it a plane,
+## and a map that is boxes all the way down is a map whose three representations cannot disagree.
 func add_perimeter(thickness: float = 2.0) -> ArenaMap:
 	var span := extent * 2.0 + thickness * 2.0
 

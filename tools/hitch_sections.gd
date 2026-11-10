@@ -1,8 +1,6 @@
 extends "offline_cost.gd"
 
-## offline_cost with a per-frame hitch breakdown: every frame over `--hitch MS` (default 150)
-## prints which ArenaFrameProbe sections grew in it, the physics and process monitors, and the
-## node count change, so a periodic stall is named by the section that holds it:
+## offline_cost with a per-frame hitch breakdown: every frame over `--hitch MS` (default 150) prints which ArenaFrameProbe sections grew in it, the monitors and the node count change.
 ## `godot --headless --path . res://tools/hitch_sections.tscn -- --map cp-orange-x3 --bots 31 --seconds 40`.
 
 var _hitch_ms := 150.0

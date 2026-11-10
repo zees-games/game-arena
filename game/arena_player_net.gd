@@ -152,10 +152,9 @@ func _register_net_vars() -> void:
 			declaration.interpolated()
 
 		if spec["property"] == &"net_crouch":
-			# DotNetVar's default quantisation range is -1..1 and the crouch fraction
-			# is 0..1, so half the codes would encode a value the property cannot
-			# hold. Six bits over the real range is the ~1.5% the spec's comment
-			# claims; over the default range it would be 3%.
+			# DotNetVar's default quantisation range is -1..1 and the crouch fraction is 0..1, so half the codes
+			# would encode a value the property cannot hold. Six bits over the real range is the ~1.5% the spec's
+			# comment claims; over the default range it would be 3%.
 			declaration.range_of(0.0, 1.0)
 
 	# The pack's `all_specs()` is dot-weapon's three plus its own four, and is the one call

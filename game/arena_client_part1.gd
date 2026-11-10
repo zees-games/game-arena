@@ -198,9 +198,7 @@ func change_from_menu(id: StringName, picked_mode: StringName = &"") -> DotResul
 		_on_map_changed.call(def)
 	return DotResult.success(id)
 
-## The cursor, from one place.
-##
-## A screen that wants the mouse gets it; otherwise the game does, subject to the
+## The cursor, from one place. A screen that wants the mouse gets it; otherwise the game does, subject to the
 ## browser having been clicked at least once.
 func _apply_mouse() -> void:
 	if _menu_open():

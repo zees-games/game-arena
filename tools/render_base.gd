@@ -1,9 +1,7 @@
 extends SceneTree
 
-## What the capture-the-flag render scripts share: the real offline client (arena.tscn) on a
-## map named by `--map`, a frame saved per call, a wait for the round gate and a teleport that
-## looks at a point. A script sets [member _out_dir], [member _scratch_name] and
-## [member _map_id] in [method _setup].
+## What the capture-the-flag render scripts share: the real offline client (arena.tscn) on `--map`, a frame saved per call, a wait for the round gate and a teleport that looks at a point.
+## A script sets [member _out_dir], [member _scratch_name] and [member _map_id] in [method _setup].
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 

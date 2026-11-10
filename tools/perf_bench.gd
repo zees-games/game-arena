@@ -6,19 +6,9 @@ const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 const ArenaSimHost := preload("../game/arena_sim_host.gd")
 
-## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client, fixed map, mode, bot
-## count and seed. Windowed on a GPU box (tools/perf_bench.sh), or headless through hv:
-## `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
-## Arena's own flags: `--pilot 0`, `--motor-us 1` (the controller's and motor's phase timers, a little costly, totals in the
-## sidecar), `--queries 1` (the script query timers: they switch the native body off, so the motor then costs about double),
-## `--ctl-us 1` (the controller's phases on the path really run, native motor left on), `--max-steps N` (ArenaTickBudget.max_steps),
-## `--native-us 1` (dot-sim's own timers: each engine query and each whole native tick, in the sidecar as `native`),
-## `--batch 0` (`arena_motor_batch` off: the players' motors one call each; the sidecar's `hulls` counts the batch's rows),
-## `--hull-min N` (ArenaHullGrid.min_players: the roster from which the hull grid, the native hull world and the batch engage).
-## `--sim-host 1`: the solo game as a loopback server process the client joins (ArenaSimHost), so the frame is a connected client's;
-## the server's own tick rate and cost are its `SIM_HOST` lines in the log.
-## Render knobs: `--res 1920x1080` (window size), `--killcam-hz N` (ArenaKillcamBodies.record_hz), `--lod 0` (ArenaPlayer.present_lod_enabled
-## off), `--ablate a,b` (applied after the warm-up: noshadow, nofx = ssao/ssil/glow/fog/volumetric fog off, nohud, nobots).
+## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client. Windowed on a GPU box (tools/perf_bench.sh) or headless through hv: `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
+## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
+## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots).
 
 var _pilot := true
 var _motor_us := false

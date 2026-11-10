@@ -391,10 +391,9 @@ func _on_damage_applied(damage: DotDamage) -> void:
 				damage.attacker, damage.victim, taken, at, damage.is_headshot(), damage.lethal
 			)
 
-	# Only players are on the scoreboard. Damage to or from anything else a game
-	# layer registered with dot-combat — a monster, a breakable — would otherwise
-	# create a record keyed on an id no player has, for the same reason
-	# `non_player_killed` exists.
+	# Only players are on the scoreboard. Damage to or from anything else a game layer registered with
+	# dot-combat — a monster, a breakable — would otherwise create a record keyed on an id no player has,
+	# for the same reason `non_player_killed` exists.
 	if player_for(damage.victim) == null:
 		return
 

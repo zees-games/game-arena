@@ -1,10 +1,7 @@
 extends SceneTree
 
-## The kill view across its edge cases, offline, with frames at the first drawn frame, mid, last and after the hand-over
-## to the respawn. Run: tools/killcam_audit.sh <outdir> <scenario>
-## Scenarios: crowd (31 free bots kill the player; each frame of the replay's start is checked), bot (a bot shoots the player), world (no attacker), fall (fall damage), killer_dead (the killer dies
-## while the replay plays), killer_left (the killer leaves before the clip arrives), round (the match ends mid-view).
-## Prints one "T" line per 0.1 s and "RESULT" lines; exit 1 on a failed check.
+## The kill view across its edge cases, offline, with frames at the first drawn frame, mid, last and after the hand-over to the respawn. Run: tools/killcam_audit.sh <outdir> <scenario>.
+## Scenarios: crowd, bot, world, fall, killer_dead, killer_left, round (the match ends mid-view). Prints one "T" line per 0.1 s and "RESULT" lines; exit 1 on a failed check.
 
 const ArenaContent := preload("res://game/arena_content.gd")
 

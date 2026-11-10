@@ -9,7 +9,7 @@ static func _w() -> DotNetWriter:
 const NPC_ID_BYTES := 64
 
 
-# --- TOYS ------------------------------------------------------------------
+# toys
 
 static func write_toys(map_id: StringName, net_ids: PackedInt64Array) -> PackedByteArray:
 	var w := _w()
@@ -31,7 +31,7 @@ static func read_toys(r: DotNetReader) -> Dictionary:
 	return {"map_id": map_id, "ids": ids, "ok": r.ok()}
 
 
-# --- AWARD -----------------------------------------------------------------
+# award
 
 ## Bits a medal index occupies. Five is thirty-two medals; there are eleven.
 const MEDAL_BITS := 5
@@ -73,7 +73,7 @@ static func read_award(reader: DotNetReader) -> Dictionary:
 	return out
 
 
-# --- KILLVIEW --------------------------------------------------------------
+# killview
 
 ## Most bytes a KILLVIEW body ([method DotKillViewClip.pack]) may take: the event body's cap, less its framing.
 const KILLVIEW_BYTES := 15000

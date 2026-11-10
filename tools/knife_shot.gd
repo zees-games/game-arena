@@ -1,9 +1,7 @@
 extends SceneTree
 
-## A knife thrown into a bot, then one thrown at the floor: frames of it in flight, stuck in the
-## falling body with its wound, the body at rest, and the miss lying where it bounced to.
-##
-##     tools/knife_shot.sh [map]       # frames in screenshots/knife_throw/
+## A knife thrown into a bot, then one thrown at the floor: frames of it in flight, stuck in the falling body, the body at rest, and the miss lying where it bounced to.
+## `tools/knife_shot.sh [map]` writes screenshots/knife_throw/.
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const OUT_DIR := "res://screenshots/knife_throw"

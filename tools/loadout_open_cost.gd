@@ -2,13 +2,8 @@ extends Node
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
-## What pressing B costs in the offline client: the time of each phase of an open, the nodes,
-## viewports and textures it creates, first open against repeat opens.
-##
-##   xvfb-run -a godot --path . --rendering-method gl_compatibility --rendering-driver opengl3 \
-##     res://tools/loadout_open_cost.tscn -- [--opens 4]
-##
-## Under `--headless` nothing is drawn, so the render-target costs show only on a display (xvfb llvmpipe is a fine stand-in for the relative size).
+## What pressing B costs in the offline client: each phase of an open, the nodes, viewports and textures it creates, first open against repeat opens. Needs a display (`--headless` draws nothing):
+## `xvfb-run -a godot --path . --rendering-method gl_compatibility --rendering-driver opengl3 res://tools/loadout_open_cost.tscn -- [--opens 4]`
 
 var _client: Node = null
 var _opens := 4

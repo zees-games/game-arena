@@ -57,10 +57,9 @@ enum Kind {
 	DROP,
 	## A drop is gone: taken by a player, or by nobody (0) when it expired.
 	TAKEN,
-	## Your damage landed: on whom, how much, where, whether a headshot and whether it
-	## killed. To the attacker alone, one per victim per tick (a shotgun's pellets summed).
-	## The hit marker and the damage numbers are drawn from this and from nothing the
-	## client predicted.
+	## Your damage landed: on whom, how much, where, whether a headshot and whether it killed. To the
+	## attacker alone, one per victim per tick (a shotgun's pellets summed). The hit marker and the damage
+	## numbers are drawn from this and from nothing the client predicted.
 	HIT,
 	## What a kill earned: the killer, the victim, its points, the killer's streak and its
 	## medals ([enum ArenaAwards.Medal]). To everybody, straight after the KILL it belongs to,

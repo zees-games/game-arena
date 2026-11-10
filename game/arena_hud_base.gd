@@ -10,22 +10,9 @@ const ArenaPaths := preload("arena_paths.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
 
-## The in-game display, laid out for a glance (see [ArenaHudGlance] for where each thing
-## is and why): scores, clock and portraits at the top centre, the kill feed top right,
-## health bottom left, magazine and reserve bottom right with the carried weapons up the
-## right edge, abilities bottom centre, key hints on the left; and the kill feedback
-## (hit marker, damage numbers, medals, the streak meter) over the middle. The health, the
-## ammunition, the strip, the prompt, the hints, the hit marker and the damage numbers are
-## dot-ui's glance pieces (`DotHudPiece`); the rest are arena's own.
-##
-## [b]Built here rather than shipped by dot-ui, and that is the division of labour.[/b]
-## dot-ui knows how to draw a bounded self-expiring list of coloured fragments; it does
-## not know what a kill is. It knows how to draw a bar from a `Callable`; it does not
-## know what health is. Every widget below is a dot-ui class bound to a game value, and
-## the binding is the only thing in this file.
-##
-## Almost no art: the bars and plates are drawn; the weapon silhouettes are rendered from
-## the models (`tools/build_weapon_icons.sh`); the medal and ability icons are Kenney's CC0.
+## The in-game display, laid out for a glance (see [ArenaHudGlance]): scores, clock and portraits at the top centre, the kill feed top right, health bottom left, magazine and reserve bottom right with the carried weapons up the right edge, abilities bottom centre, key hints on the left; kill feedback over the middle.
+## [b]Built here rather than shipped by dot-ui, and that is the division of labour.[/b] dot-ui draws a bounded self-expiring list of coloured fragments and a bar from a `Callable`; it does not know what a kill or health is. Every widget below is a dot-ui class bound to a game value, and the binding is the only thing in this file.
+## Almost no art: the bars and plates are drawn; the weapon silhouettes are rendered from the models (`tools/build_weapon_icons.sh`); the medal and ability icons are Kenney's CC0.
 
 
 ## The player this HUD is about. Rebound on spawn, because the body is replaced.
@@ -104,9 +91,7 @@ var objective_label: Label = null
 var carry_label: Label = null
 
 
-## An administrator's `blind`, over the world and under the rest of the HUD.
-##
-## Under the widgets, so the clock, kill feed and health still read as "an admin did this"
+## An administrator's `blind`, over the world and under the rest of the HUD, so the clock, kill feed and health still read as "an admin did this"
 ## rather than a client that stopped drawing. Black, not white: full white hurts in a dark room.
 var blind_overlay: ColorRect = null
 
@@ -115,11 +100,8 @@ var blind_overlay: ColorRect = null
 var scope: AwScopeOverlay = null
 
 
-## Red at the screen's edge when the followed player is badly hurt, and a short pulse of it
-## on every hit. Drawn by a shader per pixel ([constant HURT_SHADER]), so no art and no
-## resolution of its own; strongest at no health, gone above [constant HURT_FROM].
-##
-## A shader, not a gradient texture: a 64 by 64 one stretched over 1080p showed visible steps.
+## Red at the screen's edge when the followed player is badly hurt, and a short pulse of it on every hit. Drawn by a shader per pixel ([constant HURT_SHADER]), so no art and no resolution of its own;
+## strongest at no health, gone above [constant HURT_FROM]. A shader, not a gradient texture: a 64 by 64 one stretched over 1080p showed visible steps.
 var hurt_overlay: ColorRect = null
 const HURT_FROM := 0.35
 
@@ -131,10 +113,8 @@ const HURT_PULSE_GAIN := 2.2
 const HURT_PULSE_MAX := 0.6
 
 
-## The edge, per pixel. Distance is measured in the screen's own shape (an ellipse touching
-## the edges), so the clear middle is the same share of a 4:3 and a 21:9 frame; `smoothstep`
-## then a square gives a soft start and a deep rim. Alpha is the node's modulate, so the
-## strength is one number the HUD writes and the checks read.
+## The edge, per pixel. Distance is measured in the screen's own shape (an ellipse touching the edges), so the clear middle is the same share of a 4:3 and a 21:9 frame; `smoothstep` then a square gives a soft start and a deep rim.
+## Alpha is the node's modulate, so the strength is one number the HUD writes and the checks read.
 const HURT_SHADER := """
 shader_type canvas_item;
 uniform vec4 tint : source_color = vec4(0.62, 0.0, 0.02, 0.78);
@@ -383,19 +363,9 @@ class MedalRow extends Control:
 			)
 
 
-## A line for everybody to read: a chat line, a map change, "REVENGE!". Held for
-## [constant NOTICE_SEC] and faded.
-##
-## [b]It did not exist[/b], and three callers in `ArenaClient` (chat lines, the map
-## changing, the map loaded) had called it since the client was written. Found adding the
-## first caller in this file, which the parser refused where the client's had not.
-##
-## [b]Wrapped, two lines at most, and narrower than the gap between the right-hand column
-## and the middle.[/b] It was one unbounded line: the server's "Vote: Smash Copter, Hide &
-## Seek, …" as a ballot opened ran off the right edge of a 1280-wide frame, behind the drawn
-## ballot the client shell puts down the right-hand side (360 px wide, 16 px in). Centred,
-## the line clears that column only when its half-width is under the distance from the
-## middle to the column, so the width follows the frame: `notice_width`.
+## A line for everybody to read: a chat line, a map change, "REVENGE!". Held for [constant NOTICE_SEC] and faded.
+## [b]Wrapped, two lines at most, and narrower than the gap between the right-hand column and the middle.[/b] It was one unbounded line: the server's "Vote: Smash Copter, Hide & Seek, …" ran off the right edge of a 1280-wide frame, behind the shell's ballot (360 px wide, 16 px in).
+## Centred, the line clears that column only when its half-width is under the distance from the middle to the column, so the width follows the frame: `notice_width`.
 func notice(text: String) -> void:
 	# The ballot already says it, with the time left and the counts: see `is_ballot_line`.
 	if is_ballot_line(text) and DotHudPiece.covered_rect(self).has_area():
@@ -420,12 +390,9 @@ var notice_label: Label = null
 var _notice_age: float = 0.0
 
 
-## [b]A vote's opening line, which a drawn ballot makes a duplicate.[/b] dot-vote says
-## "Vote: Box, Atrium, … (20s)" in chat as its ballot opens, and `ArenaClient._on_said` centre
-## prints every system line, so while the shell's ballot was on screen the same list was in
-## the middle of it as well, two lines deep, over the medals' row. Only that shape: dot-server's
-## yes/no vote ("Vote: <question> — type !yes or !no (20s)") stays, because "!yes" is how to
-## answer it and a ballot is not always drawn for one.
+## [b]A vote's opening line, which a drawn ballot makes a duplicate.[/b] dot-vote says "Vote: Box, Atrium, … (20s)" in chat as its ballot opens, and `ArenaClient._on_said` centre prints every system line,
+## so while the shell's ballot was on screen the same list was in the middle too, over the medals' row. Only that shape: dot-server's yes/no vote ("Vote: <question> — type !yes or !no (20s)") stays,
+## because "!yes" is how to answer it and a ballot is not always drawn for one.
 static func is_ballot_line(text: String) -> bool:
 	if not text.begins_with("Vote: ") or text.contains("!yes"):
 		return false
@@ -433,14 +400,9 @@ static func is_ballot_line(text: String) -> bool:
 	return open > 0 and text.ends_with("s)") and text.substr(open + 2, text.length() - open - 4).is_valid_int()
 
 
-## [b]Keeps the HUD out from under the client shell's ballots[/b], every frame. The shell
-## draws every ballot down the right-hand side, over whatever the game drew, and cannot reach
-## into a delivered game, so the game looks: `DotHudPiece.covered_rect` is every visible
-## member of the `dot_hud_cover` group, merged, in this HUD's own coordinates. dot-ui's
-## pieces (health, ammunition, the strip, the hints) each dim themselves under one. The
-## weapon slots up the right edge tighten, then show only the rows around the current one, to
-## end above a ballot that comes down over them (a seven-row map ballot reaches slot 1 at
-## 1280x720); and the vote's centre line goes while its ballot is drawn.
+## [b]Keeps the HUD out from under the client shell's ballots[/b], every frame. The shell draws every ballot down the right-hand side, over whatever the game drew, and cannot reach into a delivered game, so the game looks:
+## `DotHudPiece.covered_rect` is every visible member of the `dot_hud_cover` group, merged, in this HUD's own coordinates; dot-ui's pieces each dim themselves under one.
+## The weapon slots up the right edge tighten, then show only the rows around the current one, to end above a ballot (a seven-row map ballot reaches slot 1 at 1280x720); the vote's centre line goes while its ballot is drawn.
 func make_room() -> void:
 	var cover := DotHudPiece.covered_rect(self)
 	if slots != null:
@@ -468,11 +430,8 @@ static func notice_width(frame_width: float) -> float:
 	return clampf(frame_width - SHELL_COLUMN * 2.0, 260.0, 640.0)
 
 
-## Where the centre notice starts on a frame [param frame_height] tall: under the medal
-## row's labels (the row is centred at 27 % of the height and its names end about 65 px
-## below that), so a system line arriving with a kill is not printed through "Headshot!",
-## which a fixed 182 px was on any frame over about 600 tall. Never lower than 70 px above
-## the middle, where the crosshair is: on a short frame the medals give way, not the aim.
+## Where the centre notice starts on a frame [param frame_height] tall: under the medal row's labels (centred at 27 % of the height, names ending about 65 px below), so a system line arriving with a kill is not printed through "Headshot!".
+## Never lower than 70 px above the middle, where the crosshair is: on a short frame the medals give way, not the aim.
 static func notice_top(frame_height: float) -> float:
 	return minf(maxf(182.0, frame_height * 0.27 + 70.0), frame_height * 0.5 - 70.0)
 
@@ -652,16 +611,9 @@ func set_safe_area(pixels: float) -> void:
 	_fit_feed()
 
 
-## The frame the HUD is drawn for ([member DotHud.fit_design]): below it the whole HUD is
-## scaled down by `DotHud.fit_scale`, never laid out again. [b]On a frame smaller than this
-## its pieces ran into each other[/b]: standalone at 854x480 the challenge ran over the
-## scores, the ability bar over the health, the medals over the portraits and "Cancel slide"
-## over the health; at 960x720 the scores reached the kill feed. The client shell never shows
-## a game a frame like that (its canvas is 1280x720, stretched to the window), so this is the
-## same answer the shell gives, for the game on its own. Never larger: on a bigger frame the
-## pieces keep their size and the map gets the room. Arena found this and dot-ui took it over
-## (`fit_design`, `fit_scale`, `fit_to_frame`, API 4); below half size (`fit_min`) a frame
-## gets overlap, not dust.
+## The frame the HUD is drawn for ([member DotHud.fit_design]): below it the whole HUD is scaled down by `DotHud.fit_scale`, never laid out again. [b]On a smaller frame its pieces ran into each other[/b]
+## (at 854x480 the challenge ran over the scores, the ability bar over the health; at 960x720 the scores reached the kill feed). The shell never shows a game such a frame (canvas 1280x720, stretched), so this is the same answer for the game on its own.
+## Never larger: on a bigger frame the pieces keep their size and the map gets the room. dot-ui took it over (`fit_design`, `fit_scale`, `fit_to_frame`, API 4); below half size (`fit_min`) a frame gets overlap, not dust.
 const DESIGN_FRAME := Vector2(1280.0, 720.0)
 
 
@@ -671,11 +623,8 @@ func _init() -> void:
 	fit_design = DESIGN_FRAME
 
 
-## Arena's own colour over whichever theme the player picked: gold for "yours" (your ring,
-## row, slot and streak). Everything else (plates, words, ink, key caps) is the theme's, so
-## Paper and High contrast can change it; `ArenaClient` hands this to dot-menu's
-## `follow_hud` with the HUD (Christian's first play test, 2026-10-11: a darker HUD that
-## follows the menu's theme).
+## Arena's own colour over whichever theme the player picked: gold for "yours" (your ring, row, slot and streak). Everything else (plates, words, ink, key caps) is the theme's,
+## so Paper and High contrast can change it; `ArenaClient` hands this to dot-menu's `follow_hud` with the HUD.
 static func accent_theme() -> Theme:
 	var t := Theme.new()
 	t.set_color(&"highlight", &"DotHudPiece", GOLD)
@@ -716,12 +665,9 @@ func _make_label(
 	label.name = node_name
 	label.set_anchors_preset(preset)
 	label.offset_top = offset.y
-	# [b]Grow both ways, or "centred" means "starts at the centre".[/b] A centre-top
-	# preset is a zero-width box at the middle of the screen, and a `Label` wider than
-	# its box grows by `grow_horizontal`, which defaults to END — so the text is pushed
-	# rightwards from the midline and `HORIZONTAL_ALIGNMENT_CENTER` has nothing to centre
-	# inside. The round clock drew at x = 640..680 on a 1280-wide frame, with every
-	# property above reading correctly. Only a rendered frame shows it.
+	# [b]Grow both ways, or "centred" means "starts at the centre".[/b] A centre-top preset is a zero-width box at the middle of the screen, and a `Label` wider than its box grows by `grow_horizontal`,
+	# which defaults to END, so the text is pushed rightwards from the midline and `HORIZONTAL_ALIGNMENT_CENTER` has nothing to centre inside (the round clock drew at x = 640..680 on a 1280-wide frame).
+	# Only a rendered frame shows it.
 	label.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE

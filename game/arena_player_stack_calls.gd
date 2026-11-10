@@ -17,15 +17,8 @@ var roster: DotPlayerRoster = null
 var teams: DotTeamRoster = null
 
 
-## The dot-team side for one of dot-match's team ids.
-##
-## [b]An id, not an index, and the difference is the bug this function exists to
-## avoid.[/b] dot-match's `standard_pair()` is Red `1` and Blue `2`; a spectator team is
-## `31`. Treating `team_of()`'s answer as a position would put team 1 on dot-team's
-## first side and team 2 on its second by luck, and would put a spectator nowhere.
-##
-## So the id is looked up in the match's own ordered team list and the POSITION is what
-## crosses over — the nth playing side there is the nth playing side here.
+## The dot-team side for one of dot-match's team ids. [b]An id, not an index[/b]: dot-match's `standard_pair()` is Red `1` and Blue `2`, a spectator team `31`; treating `team_of()`'s answer as a position would put team 1 on dot-team's first side by luck and a spectator nowhere.
+## So the id is looked up in the match's own ordered team list and the POSITION crosses over: the nth playing side there is the nth playing side here.
 func _side_of_id(team_id: int) -> StringName:
 	if game.match_node.teams == null or team_id <= 0:
 		return &""
@@ -68,12 +61,8 @@ func _score_of_key(key: String) -> float:
 	return float(score.score) if score != null else 0.0
 
 
-## Where a player's EYES are, which is not where their feet are.
-##
-## dot-spectate's own documentation is explicit about it: a chase camera derived from a
-## capsule's origin sits in the floor and a first-person one is at the knees. The
-## controller answers it, because the controller is what knows the eye height and the
-## pitch.
+## Where a player's EYES are, which is not where their feet are. dot-spectate's documentation is explicit: a chase camera derived from a capsule's origin sits in the floor and a first-person one is at the knees.
+## The controller answers it, because it knows the eye height and the pitch.
 func _pose_of_key(key: String) -> Transform3D:
 	var player := game.player_for(int(key))
 
@@ -83,16 +72,12 @@ func _pose_of_key(key: String) -> Transform3D:
 	return player.controller.eye_transform()
 
 
-## Everybody alive who is an enemy of the spawning player: in a free-for-all everybody but
-## them, in a team mode the other sides. The spawning player is never their own enemy: a player
-## respawned while alive (a map change, an admin) was standing on the site being scored and
-## scored it as the most dangerous place on the map.
+## Everybody alive who is an enemy of the spawning player: in a free-for-all everybody but them, in a team mode the other sides.
+## The spawning player is never their own enemy: one respawned while alive (a map change, an admin) stood on the site being scored and scored it as the most dangerous place on the map.
 func _enemy_positions(team: StringName, key: String = "") -> Array:
 	var out: Array = []
-	# The MODE says whether there are sides, not dot-match's team manager: that exists in a
-	# free-for-all too, and the roster keeps whatever side a team mode left everybody on (the
-	# first version filtered by it and told a free-for-all respawner its old team-mates were
-	# friends; headless_match's free-for-all scenarios caught it).
+	# The MODE says whether there are sides, not dot-match's team manager: that exists in a free-for-all too, and the roster keeps whatever side a team mode left everybody on,
+	# which told a free-for-all respawner its old team-mates were friends.
 	var sided := game.mode != null and game.mode.is_team_mode() and team != &""
 
 	for player in game.players():
@@ -122,17 +107,9 @@ func _friend_positions(team: StringName, key: String = "") -> Array:
 	return out
 
 
-## Whether an enemy standing at [param from] can see a site: eye height to head height, walls
-## in the way.
-##
-## [b]Through the map's own trace, the one shots use[/b] (`combat.trace`: the box list on a
-## built-in map, the brushes on an imported one). It asked Godot's physics space, which on
-## a dedicated server, and in any headless game, holds no built-in map at all: the level
-## is analytic there and only a client builds bodies. So every site was "seen" by every
-## enemy, `sight_penalty` charged them all alike and decided nothing, and the first play
-## test respawned in view of the bot that had just killed him. Props are not in the trace;
-## a prop is not cover a spawn should count on. The physics query stays as the fallback for
-## a game with no combat yet.
+## Whether an enemy standing at [param from] can see a site: eye height to head height, walls in the way. [b]Through the map's own trace, the one shots use[/b] (`combat.trace`: the box list on a built-in map, the brushes on an imported one).
+## Godot's physics space holds no built-in map on a dedicated server or in any headless game (the level is analytic there), so every site was "seen" by every enemy and `sight_penalty` decided nothing.
+## Props are not in the trace; a prop is not cover a spawn should count on. The physics query stays as the fallback for a game with no combat yet.
 func _can_see_site(from: Vector3, to: Vector3) -> bool:
 	var eye := from + Vector3(0, ArenaPlayer.eye_height(), 0)
 	var head := to + Vector3(0, ArenaPlayer.eye_height(), 0)

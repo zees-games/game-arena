@@ -60,7 +60,7 @@ const DEGREES_PER_COUNT := 0.022
 
 
 ## Where the four effect scenes are. Rebased once: [method ArenaPaths.rebase] is idempotent,
-## so the second call this line used to make changed nothing either way.
+## so the second call this line made changed nothing either way.
 static var FX_DIR := ArenaPaths.rebase("res://scenes/fx")
 
 
@@ -766,7 +766,7 @@ func _build_fx() -> DotResult:
 	break_fx.add_to_group(&"arena_break_fx")
 	break_fx.follow(settings)
 
-	# [b]Said out loud, because a missing scene is otherwise a DEBUG line.[/b] Until 2026-09-27 all
+	# [b]Said out loud, because a missing scene is otherwise a DEBUG line.[/b] Once all
 	# four scenes this catalogue names were missing and every muzzle flash, spark, hole and gib in
 	# this game was refused for it, with no suite noticing.
 	var missing := fx.catalogue.missing_scenes()

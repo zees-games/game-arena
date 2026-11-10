@@ -1,9 +1,6 @@
 extends RefCounted
-## A spatial index of the players for [method ArenaGame.solid_hulls_for] (cvar `arena_hull_grid`): each bot asked
-## for "every living player within a few metres", which scanned the whole roster, 127 reads per bot per tick at 128.
-## Built once at the start of the players' loop and moved by one player's cell after that player ticked, so a
-## player moved earlier in the tick is found where it moved to, as the full scan found it. The caller applies the
-## same filters to the candidates in roster order, so the answer is the full scan's.
+## A spatial index of the players for [method ArenaGame.solid_hulls_for] (cvar `arena_hull_grid`): each bot asked for "every living player within a few metres", which scanned the whole roster, 127 reads per bot per tick at 128.
+## Built once at the start of the players' loop and moved by one player's cell after that player ticked, so a player moved earlier in the tick is found where it moved to. The caller applies the same filters in roster order, so the answer is the full scan's.
 
 const ArenaPlayer := preload("arena_player.gd")
 

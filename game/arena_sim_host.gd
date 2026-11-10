@@ -1,10 +1,7 @@
 extends Node
 
-## Solo play with the simulation off the render thread (on for the launched game; `-- --sim_host 0` turns it off): starts the solo
-## game as a loopback server process ([code]arena_sim_server.gd[/code]) and joins it, so this process only
-## predicts its own player, interpolates the rest from snapshots and draws. See docs/sim-thread.md.
-##
-## A failure at any step leaves [member up] false and the client plays the stock in-process solo game.
+## Solo play with the simulation off the render thread (on for the launched game; `-- --sim_host 0` turns it off): starts the solo game as a loopback server process ([code]arena_sim_server.gd[/code]) and joins it,
+## so this process only predicts its own player, interpolates the rest from snapshots and draws. See docs/sim-thread.md. A failure at any step leaves [member up] false and the client plays the stock in-process solo game.
 
 const CHANNEL := "arena.sim_host"
 const SERVER_SCENE := "res://scenes/arena_sim_server.tscn"
@@ -31,9 +28,7 @@ var _anchor: Node = null
 var _ready_path := ""
 
 
-## Whether this session is hosted: a second process needs a desktop build. [param launched] is true for the
-## game started as itself, which is hosted unless `--sim_host 0`; a suite or tool that instances the
-## client in its own scene keeps the in-process game it reads, unless it sets [member forced].
+## Whether this session is hosted: a second process needs a desktop build. [param launched] is true for the game started as itself, which is hosted unless `--sim_host 0`; a suite or tool that instances the client in its own scene keeps the in-process game it reads, unless it sets [member forced].
 ## Whether this process is the server a hosted game started ([constant SERVER_FLAG]).
 static func is_server_child() -> bool:
 	return _arg(SERVER_FLAG) == "1"

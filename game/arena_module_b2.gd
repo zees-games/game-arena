@@ -93,13 +93,8 @@ func _bind_rule_cvars() -> void:
 	game.combat_feel.bind_cvars(add_cvar)
 
 
-## The manager, the bridge and the link.
-##
-## [b]The module drives the tick, not the game.[/b] The game's tick has to happen
-## INSIDE dot-net's — between applying each peer's inputs and building the snapshot —
-## which is what `ArenaNetBridge.server_tick` arranges through
-## `ArenaPlayerNet._net_simulate`. A game ticking itself as well would move everybody
-## twice.
+## The manager, the bridge and the link. [b]The module drives the tick, not the game.[/b] The game's tick has to happen INSIDE dot-net's, between applying each peer's inputs and building the snapshot,
+## which is what `ArenaNetBridge.server_tick` arranges through `ArenaPlayerNet._net_simulate`. A game ticking itself as well would move everybody twice.
 func _build_netcode() -> DotResult:
 	net = DotNetManager.new()
 	net.name = "Net"
@@ -193,14 +188,9 @@ func _build_identity() -> DotResult:
 		identity = null
 		return ready
 
-	# [b]Loaded by PATH, not by instance, and the hub is found through the
-	# registry.[/b] `DotModuleHost.load_module` takes a path and constructs the module
-	# itself — it has to, because that is the shape that lets an operator name a module
-	# in a config file — so a pre-built instance with `platform` already assigned would
-	# be thrown away and a fresh one made with `platform` null.
-	#
-	# dot-platform's module falls back to `DotRegistry.get_service(DotPlatformHub.SERVICE)`
-	# for exactly this, which is why `ArenaIdentity` registers the hub.
+	# [b]Loaded by PATH, not by instance, and the hub is found through the registry.[/b] `DotModuleHost.load_module` takes a path and constructs the module itself (that is what lets an operator name a module in a config file),
+	# so a pre-built instance with `platform` assigned would be thrown away and a fresh one made with `platform` null.
+	# dot-platform's module falls back to `DotRegistry.get_service(DotPlatformHub.SERVICE)` for exactly this, which is why `ArenaIdentity` registers the hub.
 	if server.modules != null and not server.modules.has_module("platform"):
 		# Awaited: loading a module runs its `_module_load`, which is allowed to be a
 		# coroutine. An un-awaited one returns at its first suspension, and the line
@@ -251,11 +241,8 @@ func _build_services() -> DotResult:
 	return DotResult.success(services)
 
 
-## noclip, god, slay, bring and the rest, on this server's console and in chat.
-##
-## Through this module as the host, so every one of them is removed on unload like the
-## module's own commands. The handlers are `ArenaModTools`; the flags, the targets and the
-## immunity rule are dot-moderation's `DotModToolCommands`, and neither names the other.
+## noclip, god, slay, bring and the rest, on this server's console and in chat. Through this module as the host, so every one is removed on unload like the module's own commands.
+## The handlers are `ArenaModTools`; the flags, the targets and the immunity rule are dot-moderation's `DotModToolCommands`, and neither names the other.
 func _build_mod_commands() -> void:
 	if services == null or services.mod_tools == null:
 		return
@@ -306,10 +293,8 @@ func _build_maps() -> DotResult:
 		if maps != null:
 			maps.handle(peer, payload)
 
-	# Admitted at READY rather than at the seat: a client builds its world on the default
-	# map, and only an admission tells it the one the server is on. Before this every client
-	# that joined after a map change predicted against the wrong level for the whole map:
-	# a correction on most frames, and walls in the wrong place.
+	# Admitted at READY rather than at the seat: a client builds its world on the default map, and only an admission tells it the one the server is on.
+	# Otherwise every client joining after a map change predicted against the wrong level for the whole map (a correction on most frames, walls in the wrong place).
 	bridge.peer_ready_fn = func(peer: int) -> void:
 		if maps != null:
 			maps.admit_peer(peer)
@@ -347,11 +332,8 @@ func _build_maps() -> DotResult:
 	return DotResult.success(maps)
 
 
-## Both map clocks follow the server's hibernation: they stop while nobody is here and start
-## again from the top when somebody joins. The vote's is the one that runs; the map
-## director's is the fallback for a server whose vote did not load. With hibernation off the
-## vote's own [code]empty_choice[/code] changes the map when the limit runs out on nobody.
-## This module is not on DotGameModule, which does this by itself for the games that are.
+## Both map clocks follow the server's hibernation: they stop while nobody is here and start again from the top when somebody joins. The vote's is the one that runs; the map director's is the fallback for a server whose vote did not load.
+## With hibernation off the vote's own [code]empty_choice[/code] changes the map when the limit runs out on nobody. This module is not on DotGameModule, which does this by itself for the games that are.
 func _follow_hibernation() -> void:
 	if vote != null and vote.director != null:
 		vote.director.follow_hibernation(server)
@@ -442,11 +424,8 @@ var _bot_roster := DotBotRoster.new()
 var _since_bot_check := 0.0
 
 
-## Adds or removes bots until there are as many as the quota wants for the people here.
-##
-## Newest out first, so a person joining takes the place of the bot that came last and the
-## longest-standing bots keep their scores. A bot an admin's map change or a mode change
-## took out is simply counted again.
+## Adds or removes bots until there are as many as the quota wants for the people here. Newest out first, so a person joining takes the place of the bot that came last and the longest-standing bots keep their scores.
+## A bot an admin's map change or a mode change took out is simply counted again.
 func _keep_bots() -> void:
 	if _bot_quota == null or bridge == null or game == null:
 		return
@@ -482,31 +461,18 @@ func _physics_process(delta: float) -> void:
 		_keep_bots()
 		_refresh_aoi()
 
-	# The map clock and the vote clock, from the SIMULATED tick rather than from the
-	# frame. Both addons make the same point and it is the same point: a server that
-	# stalls should not lose that time off its map, and a test must be able to run an
-	# hour of a map in a millisecond.
-	#
-	# [b]One clock, and it is the vote's when there is a vote.[/b] The map director's own
-	# `DotMapTimeLimit` and the vote's `DotVoteClock` both ran here, both thirty minutes
-	# from boot, and the first to expire won: the map director's reached `_on_map_over`,
-	# which opened a SECOND ballot over a winner the players had already chosen and was
-	# waiting for its moment. The map director's clock is the fallback for a server whose
-	# vote did not load, which is the only server that advances it.
+	# The map clock and the vote clock, from the SIMULATED tick rather than from the frame: a server that stalls should not lose that time off its map, and a test must be able to run an hour of a map in a millisecond.
+	# [b]One clock, and it is the vote's when there is a vote.[/b] The map director's `DotMapTimeLimit` and the vote's `DotVoteClock` both ran here from boot and the first to expire won: the director's reached `_on_map_over`
+	# and opened a SECOND ballot over a winner already chosen. The map director's clock is the fallback for a server whose vote did not load, the only server that advances it.
 	if maps != null and vote == null:
 		maps.advance(delta)
 
 	if vote != null:
 		vote.advance(delta)
 
-	# The clock, once a second rather than once a state change.
-	#
-	# `match_state_changed` covers the transitions and nothing covers the time passing
-	# INSIDE one, so a client told the state at signon showed a frozen clock for the
-	# whole round — a number produced correctly on the server and never sent, which is
-	# this family's most repeated shape. Once a second because it is a clock displayed
-	# to whole seconds; at the tick rate it would be 64 reliable messages a second per
-	# client to move a digit sixty times less often than that.
+	# The clock, once a second rather than once a state change. `match_state_changed` covers the transitions and nothing covers the time passing INSIDE one,
+	# so a client told the state at signon showed a frozen clock for the whole round (this family's most repeated shape: produced on the server and never sent).
+	# Once a second because it is displayed to whole seconds; at the tick rate it would be 64 reliable messages a second per client.
 	if _tick % maxi(game.tick_rate, 1) == 0:
 		bridge.announce_match_state()
 
@@ -528,22 +494,9 @@ func _follow_npc_lod(spawner: Object, delta: float) -> void:
 		_npc_lod.follow(delta)
 
 
-## So `changegame`, a vote and the server browser have something to name.
-##
-## Ships inside the build, so `client_scene` stays empty and the signon takes the
-## documented "you already have it" path — dot-server used to fall back to the server's
-## own absolute path there, which `DotClientLink` correctly refuses, and the client
-## then failed signon and timed out.
-## What a server browser is told about this game.
-##
-## [b]dot-browser is the client half of this and it has never asked a real
-## `DotServer` anything.[/b] dot-server answers A2S and its own richer protocol; what
-## a query returns about the GAME comes from providers like this one, and
-## `DotGameDescriptor` alone would say only that the game is called Arena.
-##
-## The numbers here are the ones a person filtering a server list actually filters on:
-## what is being played, on what, how far through it is, and whether it is worth
-## joining.
+## So `changegame`, a vote and the server browser have something to name. Ships inside the build, so `client_scene` stays empty and the signon takes the "you already have it" path
+## (an absolute server path there is refused by `DotClientLink`, and signon timed out). What a server browser is told about this game: [b]dot-browser is the client half and has never asked a real `DotServer` anything[/b];
+## what a query returns about the GAME comes from providers like this one: what is being played, on what, how far through it is, and whether it is worth joining.
 func _build_query_provider() -> void:
 	var provider := ArenaQueryProvider.new()
 	provider.module = self
@@ -602,18 +555,9 @@ func _register_game() -> void:
 	descriptor.display_name = "Arena"
 	descriptor.scene = ArenaPaths.rebase(ArenaPaths.rebase("res://scenes/arena_server.tscn"))
 
-	# [b]`metadata["module"]`, not `descriptor.module`. There is no such property.[/b]
-	# This line read `descriptor.module = "res://game/arena_module.gd"` and Godot
-	# refuses a dynamic property on a Resource — so it pushed an error and set
-	# nothing, on every registration, and the game descriptor named no module at all.
-	#
-	# What that would have cost: `changegame arena` loads the scene and no module, and
-	# the server then reports "the game loaded but its module did not" — which is
-	# exactly the failure this family has already shipped once, from the other end,
-	# when a script under `scenes/` never reached a build.
-	#
-	# `metadata` is where a module path goes, and dot-server-deploy's host reads
-	# it from precisely there.
+	# [b]`metadata["module"]`, not `descriptor.module`: there is no such property.[/b] Godot refuses a dynamic property on a Resource, so setting it pushed an error on every registration and the descriptor named no module at all,
+	# and `changegame arena` would load the scene and no module ("the game loaded but its module did not", a failure this family has shipped before).
+	# `metadata` is where a module path goes; dot-server-deploy's host reads it from there.
 	descriptor.metadata = {
 		"module": ArenaPaths.rebase(ArenaPaths.rebase("res://game/arena_module.gd")),
 		"kind": "arena",
@@ -622,13 +566,8 @@ func _register_game() -> void:
 	server.games.add_game(descriptor)
 
 
-## Set while a refused mode change is being put back, so the `changed` handler does not
-## run on its own correction.
-##
-## A cvar's `changed` signal fires for every write, including the one that undoes a
-## refusal — and without this the undo is a second mode change, which fails for the same
-## reason, and undoes itself. One flag, and the alternative is a stack overflow the first
-## time somebody types a mode that does not exist.
+## Set while a refused mode change is being put back, so the `changed` handler does not run on its own correction. A cvar's `changed` signal fires for every write, including the one that undoes a refusal;
+## without this the undo is a second mode change, which fails for the same reason and undoes itself: a stack overflow the first time somebody types a mode that does not exist.
 var _reverting_mode: bool = false
 
 
@@ -679,11 +618,8 @@ func _change_mode(old_value: String, new_value: String) -> void:
 	})
 
 
-## Put the cvar back to what the game is actually playing.
-##
-## Refused and put back rather than left showing a mode the game is not playing: a cvar
-## that reads `koth` on a server running free-for-all is worse than one that refused,
-## because an operator believes it.
+## Put the cvar back to what the game is actually playing. Refused and put back rather than left showing a mode the game is not playing:
+## a cvar that reads `koth` on a server running free-for-all is worse than one that refused, because an operator believes it.
 func _revert_mode(value: String) -> void:
 	_reverting_mode = true
 	var _res := server.console.set_cvar("arena_mode", value)
@@ -712,15 +648,9 @@ func _cmd_status(ctx: DotCmdContext) -> void:
 		ctx.reply(line)
 
 
-## What `arena_maps` prints.
-##
-## [b]It lists and does not change, and that is the whole state of map handling here.[/b]
-## `ArenaGame.setup` is not re-entrant — it builds the combat trace, the match node and
-## every spawn point as children in one pass — so a `changelevel` that called it twice
-## would leave two matches and two sets of spawns in one tree. The command that would
-## do it properly has to tear that down and tell every connected client, which is a
-## feature and not a line. Until then an operator restarts with `-- --map <id>`, and
-## this is how they find out what to type.
+## What `arena_maps` prints. [b]It lists and does not change.[/b] `ArenaGame.setup` is not re-entrant (it builds the combat trace, the match node and every spawn point as children in one pass),
+## so a `changelevel` that called it twice would leave two matches and two sets of spawns in one tree; doing it properly means tearing that down and telling every client.
+## Until then an operator restarts with `-- --map <id>`, and this is how they find out what to type.
 func _cmd_maps(ctx: DotCmdContext) -> void:
 	var current := game.map.display_name if game.map != null else "?"
 

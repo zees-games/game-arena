@@ -3,15 +3,8 @@ extends Node
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
-## Does the solo game keep wall-clock time? A solo match with N bots and a player walking
-## forward; reports simulated ticks per wall second against the tick rate (the time scale
-## the player feels: gravity, walking, everything) and the player's path in metres a wall
-## second. `--burn MS` busy-waits that long in every frame, standing in for a slow machine.
-## Exit 1 when the scale is under `--min` (default 0.97).
-##
-## [codeblock]
-## xvfb-run -a godot --path . --rendering-driver opengl3 res://tools/timescale_probe.tscn -- --bots 31 --burn 40
-## [/codeblock]
+## Does the solo game keep wall-clock time? A solo match with N bots and a walking player; reports simulated ticks per wall second against the tick rate. `--burn MS` busy-waits that long in every frame; exit 1 when the scale is under `--min` (default 0.97).
+## `xvfb-run -a godot --path . --rendering-driver opengl3 res://tools/timescale_probe.tscn -- --bots 31 --burn 40`
 
 var _bots := 31
 var _seconds := 8.0

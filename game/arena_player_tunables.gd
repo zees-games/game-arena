@@ -75,7 +75,7 @@ static func make() -> DotFpsTunables:
 	tunables.auto_hop = true
 	tunables.coyote_time = 0.08
 	tunables.jump_buffer_time = 0.12
-	# Shift sprints: a quarter over the run, unlimited (no stamina) and fireable. It was 1.0 until 2026-11-08, so Shift did nothing
+	# Shift sprints: a quarter over the run, unlimited (no stamina) and fireable. It was 1.0, so Shift did nothing
 	# and the owner reported sprint as broken. With arena_dash 1 the same bit also dashes.
 	tunables.sprint_speed_scale = SPRINT_SCALE
 	tunables.crouch_speed_scale = 0.45
@@ -101,11 +101,8 @@ static func make() -> DotFpsTunables:
 	tunables.dash_speed = 15.0
 	tunables.dash_lift = 2.5
 	tunables.dash_cooldown = 3.0
-	# Walls: run a few steps along one, jump off it, ride it down. dot-player-controller's
-	# defaults for everything but these four (docs/wall-movement.md there, docs/modes.md here).
-	# The run needs MORE than the 5.74 m/s plain run along the wall, so a run is something a
-	# player does on purpose (a slide, a dash or a strafe into it): at the run speed or under, every jump
-	# taken beside a wall would become a run and peak about 40% lower than the player meant.
+	# Walls: run a few steps along one, jump off it, ride it down. dot-player-controller's defaults for everything but these four (docs/wall-movement.md there, docs/modes.md here).
+	# The run needs MORE than the 5.74 m/s plain run along the wall, so a run is something a player does on purpose: at the run speed or under, every jump beside a wall would become a run and peak about 40% lower than meant.
 	# The wall jump needs no speed at all, and the slide catches a fall against a wall.
 	tunables.wall_run_enabled = true
 	tunables.wall_run_min_speed = 5.9

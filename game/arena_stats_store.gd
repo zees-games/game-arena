@@ -1,10 +1,7 @@
 extends DotStatsStoreFile
 
-## The stats file, written once per flush and off the main thread.
-##
-## [DotStatsStoreFile] rewrites the whole file after every player's merge, and the tracker's timed flush merges every player in one frame:
-## with 24 players that was 24 full serialisations and atomic writes in one frame every report interval (the owner's 130 ms spike).
-## Here a merge only marks the file dirty; the next frame takes one snapshot and a worker serialises and writes it.
+## The stats file, written once per flush and off the main thread. [DotStatsStoreFile] rewrites the whole file after every player's merge, and the tracker's timed flush merges every player in one frame:
+## with 24 players that was 24 full serialisations and atomic writes in one frame (the owner's 130 ms spike). Here a merge only marks the file dirty; the next frame takes one snapshot and a worker serialises and writes it.
 
 const CHANNEL := "arena.stats_store"
 

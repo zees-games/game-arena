@@ -1,13 +1,8 @@
 extends RefCounted
 
-## The camera's half of the recoil: the kick each of the local player's shots turns the view by, piling up
-## along a burst and settling once the trigger is let go, so the crosshair climbs where the bullets go.
-##
-## Same numbers as the bullet, so no desync. The server offsets each bullet by the kick left from earlier
-## shots (DotWeaponRecoilRules, sv_recoil_*); this adds the kick of the same outcomes, decaying at the same
-## recovery rate, to the camera. It is presentation only: added where the camera is written, never to the
-## command, so what the server and the prediction simulate is untouched whatever cl_recoil_view says. Fed by
-## the rig's used signal, which is silent while a correction replays, so a reconciliation never kicks twice.
+## The camera's half of the recoil: the kick each of the local player's shots turns the view by, piling up along a burst and settling once the trigger is let go. Same numbers as the bullet, so no desync:
+## the server offsets each bullet by the kick left from earlier shots (DotWeaponRecoilRules, sv_recoil_*); this adds the kick of the same outcomes, decaying at the same recovery rate, to the camera.
+## Presentation only: added where the camera is written, never to the command. Fed by the rig's used signal, which is silent while a correction replays, so a reconciliation never kicks twice.
 
 ## cl_recoil_view: multiplies the drawn kick. 0 keeps the crosshair still (the bullets still climb), 1 is the profile's.
 static var scale: float = 1.0

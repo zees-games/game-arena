@@ -647,10 +647,9 @@ func remove_player(id: int) -> void:
 		progress.leave(id)
 
 	if player_stack != null:
-		# Before dot-match forgets them: the stack reads the scoreboard and the match's
-		# team for the records it files, and after `match_node.remove_player` there is
-		# nothing there to read. A method rather than a signal, because there is no
-		# signal here and adding one for a single subscriber is worse than a call.
+		# Before dot-match forgets them: the stack reads the scoreboard and the match's team for the records it
+		# files, and after `match_node.remove_player` there is nothing there to read. A method rather than a
+		# signal, because there is no signal here and adding one for a single subscriber is worse than a call.
 		player_stack.drop_player(id)
 
 	player.leave_combat()
