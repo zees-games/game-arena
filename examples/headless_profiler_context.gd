@@ -8,9 +8,10 @@ const ArenaProfilerContext := preload("../game/arena_profiler_context.gd")
 
 const ArenaAudioManager := preload("../game/arena_audio_manager.gd")
 const ArenaGame := preload("../game/arena_game.gd")
+const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 
 const SECTIONS := 5
-const CHECKS := 37
+const CHECKS := 41
 
 var _entered := 0
 var _completed := 0
@@ -59,7 +60,10 @@ func _test_report() -> void:
 	prof.config.record_dir = "user://profiles_ctx_test"
 	add_child(prof)
 	ArenaProfilerContext.install(prof, null, null)
+	_check(ArenaFrameProbe.lap(&"x", ArenaFrameProbe.lap_start()) == 0, "outside a recording a sub-span reads no clock")
 	_check(prof.start_recording(0.2).ok, "a recording starts")
+	_check(ArenaFrameProbe.fine and ArenaFrameProbe.lap(&"x", ArenaFrameProbe.lap_start()) > 0, "a recording turns the sub-spans on")
+	_check(prof.config.per_unit == "players" and is_equal_approx(prof.config.unit_target_us, ArenaProfilerContext.PLAYER_TARGET_US), "the report rates cost per player against the target")
 	for i in 6:
 		await get_tree().process_frame
 	var report := prof.build_report()
@@ -77,6 +81,7 @@ func _test_report() -> void:
 		_check(native is Dictionary and (native as Dictionary).is_empty(), "no library: extras.native is empty")
 	var res := prof.stop_recording()
 	_check(res.ok, "the recording writes")
+	_check(not ArenaFrameProbe.fine, "the sub-spans are off again after the recording")
 	_check(FileAccess.file_exists(String(res.value).get_basename() + ".txt"), "a text report is beside the JSON")
 	var text := FileAccess.get_file_as_string(String(res.value).get_basename() + ".txt")
 	_check(text.contains("dot-sim:"), "the text report shows the natives line")
