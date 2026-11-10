@@ -349,8 +349,10 @@ func tick(commands: Dictionary = {}) -> void:
 		_shoot_toys(shots)
 
 	var t_shots := Time.get_ticks_usec()
+	var t_lap := ArenaFrameProbe.lap_start()
 	if is_authority:
 		_unlag_record()
+		t_lap = ArenaFrameProbe.lap(&"s_unlag", t_lap)
 		for shot in shots:
 			# Traced where the shooter saw the others: the command carries how far behind
 			# the client was drawing (-1 for a local player or bot: nothing is rewound).
@@ -359,47 +361,61 @@ func tick(commands: Dictionary = {}) -> void:
 			var lag: float = float(pair[2]) if pair.size() > 2 else -1.0
 			_unlag_shooter = shot.attacker
 			_resolve_shot(shot, float(_tick) - lag if lag >= 0.0 else -1.0)
+		t_lap = ArenaFrameProbe.lap(&"s_resolve", t_lap)
 		if bullet_bridge != null:
 			bullet_bridge.tick(float(_tick))
+			ArenaFrameProbe.lap(&"s_bullets", t_lap)
 	ArenaFrameProbe.add(&"tick_shots", t_shots)
 
 	var t_world := Time.get_ticks_usec()
+	t_lap = ArenaFrameProbe.lap_start()
 	if map_io != null:
 		map_io.tick()
+		t_lap = ArenaFrameProbe.lap(&"w_map_io", t_lap)
 
 	# After the shots, before everything that can end the round: a hurt volume that kills
 	if is_authority:
 		_resolve_stomps()
+		t_lap = ArenaFrameProbe.lap(&"w_stomps", t_lap)
 
 	# somebody is a death the win check below has to count this tick.
 	if is_authority:
 		_hurt_from_map()
+		t_lap = ArenaFrameProbe.lap(&"w_hurt", t_lap)
 
 	# After the shots, before the match: a kill from a rocket or a monster must be counted
 	# before the win check, or the round is decided a tick late.
 	if projectiles != null:
 		projectiles.tick(delta)
+		t_lap = ArenaFrameProbe.lap(&"w_projectiles", t_lap)
 
 	if grenades != null:
 		grenades.tick(delta)
+		t_lap = ArenaFrameProbe.lap(&"w_grenades", t_lap)
 
 	if knives != null and is_authority:
 		knives.tick(_tick, delta)
+		t_lap = ArenaFrameProbe.lap(&"w_knives", t_lap)
 
 	if props != null:
 		props.tick(delta)
+		t_lap = ArenaFrameProbe.lap(&"w_props", t_lap)
 
 	if horde != null:
 		horde.tick(delta)
+		t_lap = ArenaFrameProbe.lap(&"w_horde", t_lap)
 
 	if effects != null:
 		effects.tick(delta)
+		t_lap = ArenaFrameProbe.lap(&"w_effects", t_lap)
 
 	if objectives != null:
 		objectives.tick(delta)
+		t_lap = ArenaFrameProbe.lap(&"w_objectives", t_lap)
 
 	if spectate != null:
 		spectate.tick(delta)
+		ArenaFrameProbe.lap(&"w_spectate", t_lap)
 
 	ArenaFrameProbe.add(&"tick_world", t_world)
 
@@ -412,7 +428,11 @@ func tick(commands: Dictionary = {}) -> void:
 	# After everybody moved: a point is taken where its taker ended the tick.
 	var t_drops := Time.get_ticks_usec()
 	if drops != null and is_authority:
-		drops.tick(_tick, _drop_sweepers())
+		t_lap = ArenaFrameProbe.lap_start()
+		var sweepers := _drop_sweepers()
+		t_lap = ArenaFrameProbe.lap(&"d_sweepers", t_lap)
+		drops.tick(_tick, sweepers)
+		ArenaFrameProbe.lap(&"d_tick", t_lap)
 	ArenaFrameProbe.add(&"tick_drops", t_drops)
 
 	_sweep_jail_button()

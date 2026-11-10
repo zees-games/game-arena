@@ -122,16 +122,21 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 	mind.t_world = null
 	mind.t_intent = null
 	var t_after := Time.get_ticks_usec()
+	var t_lap := ArenaFrameProbe.lap_start()
 	var surf := world.surf_for_map()
 	if surf != null:
 		surf.call(&"steer", bot, mind, intent, tick, tick_rate)
 	elif mind.ride != null:
 		mind.ride = null
+	t_lap = ArenaFrameProbe.lap(&"ba_surf", t_lap)
 	intent.write_move(move, "BUTTON_USER_0")
 	intent.write_fire(fire)
+	t_lap = ArenaFrameProbe.lap(&"ba_write", t_lap)
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)
+	t_lap = ArenaFrameProbe.lap(&"ba_throw", t_lap)
 	move.sanitise()
 	fire.sanitise()
+	ArenaFrameProbe.lap(&"ba_sanitise", t_lap)
 	ArenaFrameProbe.add(&"bot_after", t_after)
 	world.woken.erase(bot.player_id)
 	if _tier_on and tiers.is_on():

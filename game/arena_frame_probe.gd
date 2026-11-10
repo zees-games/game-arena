@@ -40,9 +40,11 @@ static var _last_usec: int = 0
 ## the ~600 spans a 31-bot frame records were a measurable part of the profiler's own cost.
 static var _profiled_names: Dictionary = {}
 
-## The per-player sub-spans of a tick (`pl_pre`, `p_pre`, `p_hitbox`, `p_wctx`, ...): off by
-## default, since each costs two clock reads per player per tick; the bench's `--fine 1`.
+## The sub-spans inside a section (`p_pre`, `p_hitbox`, `p_wctx`, `w_props`, `s_resolve`, `br_contacts`, ...): off
+## outside a recording, since each costs a clock read; a profiler recording turns them on ([member fine_on_record]).
 static var fine: bool = false
+## Whether a profiler recording turns [member fine] on for its length (`profiler_fine 0` or the bench's `--fine 0` say no).
+static var fine_on_record: bool = true
 
 
 static func on() -> bool:
@@ -92,6 +94,22 @@ static func add(section: StringName, since_usec: int) -> void:
 	row[1] += 1
 	row[2] = maxi(row[2], spent)
 	_sections[section] = row
+
+
+## The clock a run of [method lap]s starts from; 0 while [member fine] is off.
+static func lap_start() -> int:
+	return Time.get_ticks_usec() if fine else 0
+
+
+## Charges the time since [param since_usec] to the sub-span [param section] and returns the clock for the next
+## lap. Only while [member fine] is on (a recording), so a tick outside one pays a call and a test.
+static func lap(section: StringName, since_usec: int) -> int:
+	if not fine:
+		return 0
+	var now := Time.get_ticks_usec()
+	if DotFrameCost.enabled:
+		DotFrameCost.add_usec(_profiled(section), now - since_usec)
+	return now
 
 
 static func _profiled(section: StringName) -> StringName:

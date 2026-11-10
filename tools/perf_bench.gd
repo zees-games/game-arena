@@ -23,8 +23,8 @@ var _native_us := false
 ## `--tick N`: the game and engine tick rate (default: the game's, 66); 128 for the 128 Hz cost.
 var _tick := 0
 var _max_steps := -1
-## `--fine 1`: the per-player sub-spans of a tick (ArenaFrameProbe.fine): loop work, pre-motor, hitboxes, weapon context.
-var _fine := false
+## `--fine 0`: no sub-spans inside a system (ArenaFrameProbe.fine), so a report matches one from before they were on by default.
+var _fine := true
 var _ablate := PackedStringArray()
 
 
@@ -43,7 +43,8 @@ func _ready() -> void:
 	_queries = int(args.get("queries", 1)) != 0
 	_native_us = int(args.get("native-us", 0)) != 0 and ClassDB.class_exists(&"DotSimFpsBody")
 	_max_steps = int(args.get("max-steps", -1))
-	_fine = int(args.get("fine", 0)) != 0
+	_fine = int(args.get("fine", 1)) != 0
+	ArenaFrameProbe.fine_on_record = _fine
 	_tick = int(args.get("tick", 0))
 	if _max_steps > 0:
 		preload("../game/arena_tick_budget.gd").max_steps = _max_steps
