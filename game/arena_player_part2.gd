@@ -474,6 +474,11 @@ func tick_post(tick: int, delta: float, combat_command: DotWeaponCommand) -> Dot
 	_posture_tick = tick
 	if weapons.arsenal.is_idle_for(_command, weapons.get(&"_previous_command")):
 		out = weapons.simulate_tick(_command, tick, null)
+		# The rig's idle tick asks the shared player bridge for the sprint, and this player has none of
+		# its controller nodes: without this the hands never go to the sprint carry on a plain run.
+		var hands := weapons.view_model()
+		if hands != null:
+			hands.set_sprinting(state.sprinting)
 		ArenaFrameProbe.add(&"p_weapons", t_wp)
 		return out
 	t_wp = Time.get_ticks_usec()
