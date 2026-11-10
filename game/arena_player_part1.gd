@@ -293,6 +293,12 @@ func _build_hitboxes() -> void:
 	hitboxes.refresh()
 	_fit_k = -1.0
 
+## The game's tick rate, given before [method setup]: the controller, health and weapons are built
+## on it, and a bot's simulator steps at it, so a rate other than the default must reach them.
+func use_tick_rate(rate: int) -> void:
+	_tick_rate = maxi(rate, 1)
+
+
 ## Builds the whole player. Call before adding to the tree.
 func setup(p_mode: Mode, map: ArenaMap, id: int, name_text: String = "") -> void:
 	mode = p_mode

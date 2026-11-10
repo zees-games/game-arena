@@ -133,6 +133,7 @@ func add_player(
 		return DotResult.fail(DotError.CODE_STATE, "Player %d is already here." % id)
 
 	var player := ArenaPlayer.new()
+	player.use_tick_rate(tick_rate)
 	player.before_death = ArenaWeaponDropWiring.drop_for_death.bind(self, player)
 	player.setup(
 		ArenaPlayer.Mode.HEADLESS if headless else ArenaPlayer.Mode.PHYSICS,

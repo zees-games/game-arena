@@ -196,6 +196,7 @@ func _test_recorded_rides() -> void:
 
 	var human_id := 4
 	var human := _game.player_for(human_id)
+	_check(human.controller.tick_rate == _game.tick_rate, "players move on the game's tick rate (%d, %d)" % [human.controller.tick_rate, _game.tick_rate])
 	# A ride is a line along a ramp beside walls; a jump tap there is not a wall-run.
 	for rider_id in [4, 5]:
 		_game.player_for(rider_id).controller.tunables.wall_run_on_jump = false
@@ -228,7 +229,8 @@ func _test_recorded_rides() -> void:
 	var harvest: DotBotRideHarvest = rides.harvest_on(human.controller)
 	var done: DotResult = await harvest.harvest(store, rides.recorder.map_id, rides.recorder.map_version, ArenaSurfRides.KIND, key)
 	var verified_total: int = harvest.verified + rides.harvested
-	_check(harvest.ready().ok and done.ok and verified_total >= 1,
+	# Most land: with the players' motor on 1/66 s while the game ticked 1/64, edge 4 landed 2 of 5.
+	_check(harvest.ready().ok and done.ok and verified_total >= 1 and verified_total * 2 >= rides.kept,
 		"replayed on the real motor, %d of %d recorded rides land (%d rejected)" % [verified_total, rides.kept, harvest.rejected])
 
 	# A bot rides the verified recording, and is never recorded itself.
