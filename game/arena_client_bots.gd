@@ -148,3 +148,45 @@ func _on_solo_bot_setting(key: StringName, value: Variant, _why: StringName) -> 
 	var settings := DotBotSettings.of(game) if game != null else null
 	if key == &"solo_bot_difficulty" and settings != null and str(value) != settings.difficulty():
 		DotLog.result(CHANNEL, "bot difficulty from the menu", settings.set_difficulty(str(value)))
+
+
+## Solo on the server process (ArenaSimHost): what [method _bind_bot_console] and the launch lines
+## do in this process is asked of that one. The saved difficulty goes once the server answers.
+func _bind_host_console() -> void:
+	# An ask before the server knows this player is from nobody: wait for the join.
+	while player == null and is_inside_tree():
+		await get_tree().process_frame
+	if not is_inside_tree():
+		return
+	host_console = ArenaHostConsole.new()
+	host_console.name = "HostConsole"
+	add_child(host_console)
+	await host_console.attach(bridge, presentation.console if presentation != null else null,
+		presentation.local_console if presentation != null else null)
+	var args := OS.get_cmdline_user_args()
+	var index := args.find("--bot_difficulty")
+	var settings: Object = presentation.settings if presentation != null else null
+	var difficulty := args[index + 1] if index >= 0 and index + 1 < args.size() else (
+		str(settings.call(&"get_string", &"solo_bot_difficulty", "medium")) if settings != null else "")
+	if difficulty != "":
+		DotLog.result(CHANNEL, "bot difficulty to the solo server", await host_console.ask("bot_difficulty %s" % difficulty))
+	if settings != null and not settings.changed.is_connected(_on_host_bot_setting):
+		settings.changed.connect(_on_host_bot_setting)
+	host_console.run_launch_commands(args)
+
+
+func _on_host_bot_setting(key: StringName, value: Variant, _why: StringName) -> void:
+	if key == &"solo_bot_difficulty" and host_console != null:
+		DotLog.result(CHANNEL, "bot difficulty from the menu", await host_console.ask("bot_difficulty %s" % str(value)))
+
+
+## M under the server process: the pack fetched here first (one user:// for both), then the change asked for.
+func _change_on_host(id: String, picked_mode: String) -> DotResult:
+	var map_id := id.substr(4) if id.begins_with("map:") else "-"
+	var mode_id := id.substr(5) if id.begins_with("mode:") else (picked_mode.substr(5) if picked_mode.begins_with("mode:") else "-")
+	if map_id != "-" and _catalogue().get_map(StringName(map_id)) != null:
+		var fetched: DotResult = await _fetch_picked(StringName(map_id))
+		if not fetched.ok:
+			return fetched
+	var changed: DotResult = await host_console.ask("host_change %s %s" % [map_id, mode_id])
+	return DotResult.success(StringName(id)) if changed.ok else changed

@@ -1,6 +1,10 @@
 extends "arena_client_part2.gd"
 
 func _ready() -> void:
+	# The server a hosted game started runs this same main scene: an export takes no scene path.
+	if ArenaSimHost.is_server_child():
+		_become_sim_server()
+		return
 	# arena-weapons' art is this game's copy of it, wherever this game is mounted. A
 	# delivered pack sits under `res://dot_cloud/<id>/<version>/`, and the pack's art table
 	# names `res://assets/...` — so without this every gun loads invisible, one WARN each.
@@ -9,7 +13,7 @@ func _ready() -> void:
 	ArenaWeaponSkins.apply()
 	ArenaFrameProbe.from_launch()
 
-	if ArenaSimHost.wanted():
+	if ArenaSimHost.wanted(get_tree().current_scene == self):
 		await _start_sim_host()
 
 	# Closed before anything else is built, so no frame shows a half-made world.
@@ -103,6 +107,8 @@ func _ready() -> void:
 		DotLog.result(CHANNEL, "netcode", netted)
 		if netted.ok and link != null:
 			_start_remote_workbench()
+		if netted.ok and _sim_host != null:
+			_bind_host_console()
 
 	# The server's arena_ambient* (a link tells them) drive the quiet layer; the player's sliders multiply on top.
 	if presentation != null and presentation.ambient != null:
@@ -348,6 +354,14 @@ func _physics_step(delta: float) -> void:
 		bridge.send_input(tick, move, _fire)
 
 # --- The loop --------------------------------------------------------------
+
+## Hands this process over to the loopback server scene; nothing of the client is built.
+func _become_sim_server() -> void:
+	set_process(false)
+	set_physics_process(false)
+	set_process_input(false)
+	set_process_unhandled_input(false)
+	get_tree().change_scene_to_file.call_deferred(ArenaSimHost.SERVER_SCENE)
 
 func _physics_process(delta: float) -> void:
 	var t := Time.get_ticks_usec()

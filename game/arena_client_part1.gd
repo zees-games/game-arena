@@ -163,6 +163,8 @@ func _on_map_changed(map: DotMapDef) -> void:
 ## Solo: a map (`map:<id>`) or a mode on this map (`mode:<id>`), now. The game changes and the
 ## level is rebuilt as a server's change would have it rebuilt ([method _on_map_changed]).
 func change_from_menu(id: StringName, picked_mode: StringName = &"") -> DotResult:
+	if host_console != null:
+		return await _change_on_host(String(id), String(picked_mode))
 	if not _offline:
 		return DotResult.fail(DotError.CODE_STATE, "The server changes the map.")
 	var text := String(id)

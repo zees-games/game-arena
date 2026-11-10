@@ -2,6 +2,7 @@ extends Node
 
 const ArenaTickBudget := preload("arena_tick_budget.gd")
 const ArenaSimHost := preload("arena_sim_host.gd")
+const ArenaHostConsole := preload("arena_host_console.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
 const ArenaBindings := preload("arena_bindings.gd")
@@ -134,6 +135,8 @@ var _offline := true
 var _tick_budget: ArenaTickBudget = ArenaTickBudget.new()
 ## `--sim_host 1`: the solo game as a loopback server process this client joined, else null.
 var _sim_host: ArenaSimHost = null
+## The console of that process; null in every other session.
+var host_console: ArenaHostConsole = null
 var _solo_binder: DotGameConfigBinder = null
 var _workbench: Node = null
 ## Asks a server whether this player may edit it (sv_workbench_remote); null offline.

@@ -234,7 +234,7 @@ var _menu_catalogue: DotMapCatalogue = null
 func _catalogue() -> DotMapCatalogue:
 	if _menu_catalogue == null:
 		_menu_catalogue = ArenaMaps.catalogue()
-		if _offline:
+		if _offline or _sim_host != null:
 			var _adopted := ArenaMaps.adopt_delivered(_menu_catalogue, ArenaMaps.standalone_keys(_menu_catalogue))
 	return _menu_catalogue
 
@@ -272,7 +272,7 @@ func map_menu_rows() -> Array:
 	if game == null:
 		return []
 	var here := game.map.id if game.map != null else &""
-	return ArenaMaps.menu_rows(_catalogue(), here, game.mode, ArenaModes.all())
+	return ArenaMaps.menu_rows(_catalogue(), here, game.displayed_mode(), ArenaModes.all())
 
 
 ## The map an offline client starts on: `-- --map <id>`, else `dm_box`.

@@ -45,7 +45,10 @@ func _players() -> int:
 
 func _run() -> void:
 	print("game-arena: the solo game hosted beside the client")
-	_check(not ArenaSimHost.wanted(), "off unless the launch asks for it")
+	_check(not ArenaSimHost.wanted(), "a suite's or a tool's client stays in this process")
+	_check(ArenaSimHost.wanted(true), "the launched game is hosted")
+	ArenaSimHost.forced = 0
+	_check(not ArenaSimHost.wanted(true), "and can be told not to be")
 
 	ArenaSimHost.forced = 1
 	ArenaSimHost.ask_map = "dm_box"
@@ -87,12 +90,85 @@ func _run() -> void:
 	var synced := await _until(func() -> bool: return net != null and net.get("clock") != null and bool(net.get("clock").call("is_synced")), 20.0)
 	_check(synced, "the clock is synced to the server")
 	_check(OS.is_process_running(pid), "the server process is running")
+	await _owner_checks(game)
+	_check(OS.is_process_running(pid), "the server process outlived all of that")
 
 	_client.queue_free()
 	_client = null
 	var gone := await _until(func() -> bool: return not OS.is_process_running(pid), 20.0)
 	_check(gone, "the server process ends with the client")
 	_end()
+
+
+func _ask(line: String) -> DotResult:
+	return await (_client.get("host_console") as Node).call("ask", line)
+
+
+func _tick_of(answer: DotResult) -> int:
+	return str(answer.value).get_slice("tick ", 1).to_int() if answer.ok else -1
+
+
+func _row(prefix: String) -> String:
+	for row: Dictionary in _client.call("map_menu_rows"):
+		if str(row["id"]).begins_with(prefix) and not bool(row["current"]) and (prefix == "mode:" or str(row.get("detail", "")) == ""):
+			return str(row["id"])
+	return ""
+
+
+## What solo does in its own process, asked of the server process: bots, difficulty, cheats, pause, map and mode.
+func _owner_checks(game: Object) -> void:
+	var bound := await _until(func() -> bool:
+		var console: Node = _client.get("host_console")
+		return console != null and (console.get("source") as DotConsoleRemote).names().has("bot_quota"), 20.0)
+	_check(bound, "the client knows the server's console names")
+	if _client.get("host_console") == null:
+		return
+	await get_tree().create_timer(2.0).timeout
+	_check(_players() == BOTS + 1, "joining did not change the bot count", str(_players()))
+	var quota: DotResult = await _ask("bot_quota 3")
+	var three := await _until(func() -> bool: return _players() == 3, 20.0)
+	_check(quota.ok and three, "bot_quota counts the player, as solo does", "%s, %d players" % [quota.ok, _players()])
+	var hard: DotResult = await _ask("bot_difficulty hard")
+	var hard_now: DotResult = await _ask("bot_difficulty")
+	_check(hard.ok and str(hard_now.value).contains("hard"), "bot_difficulty reaches the server", str(hard_now.value))
+	var cheats: DotResult = await _ask("sv_cheats 1")
+	var cheats_now: DotResult = await _ask("sv_cheats")
+	_check(cheats.ok and str(cheats_now.value).contains("1"), "sv_cheats reaches the server", str(cheats_now.value))
+	var unknown: DotResult = await _ask("no_such_thing_at_all 1")
+	_check(not unknown.ok and unknown.error.message != "", "a wrong name is answered with the server's refusal", "" if unknown.ok else unknown.error.message)
+
+	var paused: DotResult = await _ask("host_pause 1")
+	await get_tree().create_timer(0.5).timeout
+	var still: DotResult = await _ask("host_pause")
+	_check(paused.ok and _tick_of(paused) >= 0 and _tick_of(still) == _tick_of(paused), "pause stops the game", "%s | %s" % [paused.value, still.value])
+	var resumed: DotResult = await _ask("host_pause 0")
+	await get_tree().create_timer(0.5).timeout
+	var later: DotResult = await _ask("host_pause")
+	_check(resumed.ok and _tick_of(later) > _tick_of(still), "and it runs on when resumed", "%s | %s" % [still.value, later.value])
+	_check((_client.get("link") as Object) != null and _players() == 3, "the pause did not drop the player")
+
+	var rows: Array = _client.call("map_menu_rows")
+	var lists_mode := false
+	for row: Dictionary in rows:
+		lists_mode = lists_mode or (str(row["id"]) == "mode:ctf" and bool(row["current"]))
+	_check(lists_mode, "the map menu marks the mode the server plays")
+	var mode_id := _row("mode:")
+	var moded: DotResult = await _client.call("change_from_menu", StringName(mode_id))
+	var mode_seen := await _until(func() -> bool:
+		var shown: Object = game.get("shown_mode")
+		return shown != null and "mode:%s" % shown.get("id") == mode_id, 30.0)
+	_check(moded.ok and mode_seen, "a mode picked in the menu is played", "%s %s" % [mode_id, "" if moded.ok else moded.error.message])
+	var map_id := _row("map:")
+	var mapped: DotResult = await _client.call("change_from_menu", StringName(map_id))
+	var map_seen := await _until(func() -> bool:
+		return game.get("map") != null and "map:%s" % game.get("map").id == map_id, 60.0)
+	_check(mapped.ok and map_seen, "a map picked in the menu is played", "%s %s" % [map_id, "" if mapped.ok else mapped.error.message])
+	var alive := await _until(func() -> bool:
+		var p: Object = _client.get("player")
+		return p != null and bool(p.call("is_alive")), 40.0)
+	_check(alive and _players() == 3, "the player and the bots are on the new map", str(_players()))
+	var bad: DotResult = await _client.call("change_from_menu", &"map:no_such_map_at_all")
+	_check(not bad.ok and bad.error.message != "The server changes the map.", "a map that does not exist is refused with the reason", "" if bad.ok else bad.error.message)
 
 
 func _end() -> void:

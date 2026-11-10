@@ -1,4 +1,4 @@
-extends "arena_net_weapon_drops.gd"
+extends "arena_net_host.gd"
 ## The thrown-knife events between server and clients, carried as the KNIFE sub-kind of MORE.
 
 const ArenaKnifeEvents := preload("arena_knife_events.gd")
@@ -39,3 +39,5 @@ func _apply_more_event(reader: DotNetReader) -> void:
 			var k := ArenaKnifeEvents.read_knife(reader)
 			if bool(k["ok"]) and game != null and game.knives != null:
 				game.knives.mirror(int(k["id"]), int(k["owner"]), int(k["phase"]), int(k["victim"]), k["at"], k["motion"])
+		ArenaKnifeEvents.More.HOST:
+			_apply_host_reply(reader)
