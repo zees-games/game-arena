@@ -35,7 +35,7 @@ const ArenaVote := preload("../game/arena_vote.gd")
 ## Exits non-zero on any failure.
 
 const SECTIONS := 34
-const CHECKS := 390
+const CHECKS := 395
 
 var _entered := 0
 var _completed := 0
@@ -112,6 +112,14 @@ func _outcome(from: Vector3, aim: Vector3, impacts: Array[Vector3]) -> DotWeapon
 	shot.impacts = impacts
 	out.add_shot(shot)
 	return out
+
+
+## How wide [param hole]'s decal is across the surface, or -1 without one.
+func _hole_across(hole: Variant) -> float:
+	if not hole is Node:
+		return -1.0
+	var decals := (hole as Node).find_children("*", "Decal")
+	return (decals[0] as Decal).size.x if not decals.is_empty() else -1.0
 
 
 ## Whether [param hole] holds a [Decal] whose projection (its -Y) runs along [param aim].
@@ -381,6 +389,14 @@ func _test_decals_need_a_surface(p: ArenaPresentation, eye: Vector3, aim: Vector
 	var hole: Variant = drawn.get(&"bullet_hole")
 	_check(hole is Node3D, "a shot at a surface makes a hole on the crate", str(hole))
 	_check(hole is Node and crate.is_ancestor_of(hole), "and a moving crate carries it: the hole is its child")
+	_check(_hole_across(hole) > 0.0 and _hole_across(hole) < 0.1, "a rifle's hole is a few centimetres, not a plate (%.3f m)" % _hole_across(hole))
+	var rifle_across := _hole_across(hole)
+	for draws in [false, true]:
+		drawn.clear()
+		var pellets := _outcome(eye, toward_crate, [face])
+		pellets.shots[0].weapon_id = &"shotgun"
+		p.on_used(pellets, draws)
+		_check(_hole_across(drawn.get(&"bullet_hole")) < rifle_across, "a shotgun pellet's hole is smaller than a rifle's (weapon_draws %s, %.3f m)" % [draws, _hole_across(drawn.get(&"bullet_hole"))])
 	if hole is Node3D:
 		crate.global_position += Vector3(0.0, 2.0, 0.0)
 		_check((hole as Node3D).global_position.y > 3.0, "so the hole moves with the crate")

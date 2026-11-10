@@ -119,11 +119,23 @@ func _ready() -> void:
 	_grab_mouse()
 	platform.slide_settings = presentation.settings
 	DotLog.result(CHANNEL, "the platform", platform.setup())
+	_follow_render_quality()
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
 	_suspend_input(platform.is_input_blocked())
 
 ## The view key: the other view if the server's `mp_forceview` allows it, a line if not.
+## dot-game's render quality follows `platform.settings`, which arena leaves unset (it keeps its own),
+## so the menu's Texture detail, Anisotropic filtering, AA and sharpness rows did nothing (nightly 1722).
+## The operator's `--render-*` cvars are read again after, as dot-game orders them.
+func _follow_render_quality() -> void:
+	var quality := platform.render_quality
+	if quality == null or presentation == null or not quality.has_method(&"follow"):
+		return
+	quality.call(&"follow", presentation.settings)
+	quality.call(&"load_layers")
+
+
 func toggle_view() -> void:
 	if player == null:
 		return
