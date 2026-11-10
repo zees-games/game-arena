@@ -100,6 +100,7 @@ func _ready() -> void:
 			var _stored := f.store_string(str(config.effective_enet_port()))
 			f.close()
 	_server = server
+	print("SIM_HOST ready map=%s mode=%s bots=%d" % [String(game.map.id), String(game.mode.id), bots])
 	_report(module.net)
 
 

@@ -49,6 +49,7 @@ func _run() -> void:
 
 	ArenaSimHost.forced = 1
 	ArenaSimHost.ask_map = "dm_box"
+	ArenaSimHost.ask_mode = "ctf"
 	_check(ArenaSimHost.wanted(), "a tool can ask for it")
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	# What a bench sets: the host is joined all the same.
@@ -72,6 +73,12 @@ func _run() -> void:
 	_check(not bool(_client.get("_offline")), "the client runs the connected path")
 	var seen := await _until(func() -> bool: return _players() >= BOTS + 1, 40.0)
 	_check(seen, "the client sees itself and the bots", "%d of %d" % [_players(), BOTS + 1])
+	# A client's own `mode` stays the default; what the server plays arrives as `shown_mode`.
+	var served := await _until(func() -> bool:
+		var shown: Object = game.get("shown_mode")
+		return shown != null and String(shown.get("id")) == "ctf", 20.0)
+	var shown_now: Object = game.get("shown_mode")
+	_check(served, "the server plays the mode that was asked for", "none" if shown_now == null else String(shown_now.get("id")))
 	var alive := await _until(func() -> bool:
 		var p: Object = _client.get("player")
 		return p != null and bool(p.call("is_alive")), 40.0)
@@ -91,6 +98,7 @@ func _run() -> void:
 func _end() -> void:
 	ArenaSimHost.forced = -1
 	ArenaSimHost.ask_map = ""
+	ArenaSimHost.ask_mode = ""
 	if _client != null:
 		_client.queue_free()
 		await get_tree().process_frame
