@@ -1,0 +1,141 @@
+extends Node
+
+## Solo play with the simulation off the render thread (`-- --sim_host 1`, off by default): starts the solo
+## game as a loopback server process ([code]arena_sim_server.gd[/code]) and joins it, so this process only
+## predicts its own player, interpolates the rest from snapshots and draws. See docs/sim-thread.md.
+##
+## A failure at any step leaves [member up] false and the client plays the stock in-process solo game.
+
+const CHANNEL := "arena.sim_host"
+const SERVER_SCENE := "res://scenes/arena_sim_server.tscn"
+const ANCHOR := "ArenaSimServer"
+const BOOT_LIMIT_SEC := 60.0
+const JOIN_LIMIT_SEC := 30.0
+
+## Set by a tool before the client loads: 1 on, 0 off, -1 the command line decides.
+static var forced := -1
+## The map and mode a tool asks for; "" reads `--map` and `--mode` from the command line.
+static var ask_map := ""
+static var ask_mode := ""
+
+## True once the link is playing on the local server.
+var up := false
+var link: DotClientLink = null
+var _pid := -1
+var _anchor: Node = null
+var _ready_path := ""
+
+
+## Whether this launch asked for it and can have it: a second process needs a desktop build run from files.
+static func wanted() -> bool:
+	var args := OS.get_cmdline_user_args()
+	if args.has("--offline") or DotPlatform.is_web() or not DotPlatform.has_threads():
+		return false
+	if DotRegistry.get_service(&"dot_client_link") != null:
+		return false
+	if forced >= 0:
+		return forced == 1
+	var index := args.find("--sim_host")
+	return index >= 0 and index + 1 < args.size() and args[index + 1].to_int() == 1
+
+
+func start(bots: int) -> DotResult:
+	if not ResourceLoader.exists(SERVER_SCENE):
+		return DotResult.fail(DotError.CODE_UNSUPPORTED, "the server scene is not in this build")
+	var port := _free_port()
+	if port <= 0:
+		return DotResult.fail(DotError.CODE_INVALID, "no free loopback port")
+	_ready_path = ProjectSettings.globalize_path("user://sim_host_%d.ready" % port)
+	if FileAccess.file_exists(_ready_path):
+		var _gone := DirAccess.remove_absolute(_ready_path)
+	var args := PackedStringArray(["--headless"])
+	var project := ProjectSettings.globalize_path("res://")
+	if project != "":
+		args.append_array(["--path", project])
+	args.append_array([SERVER_SCENE, "--", "--port", str(port), "--bots", str(bots),
+		"--ready", _ready_path])
+	var map := ask_map if ask_map != "" else _arg("--map")
+	var mode := ask_mode if ask_mode != "" else _arg("--mode")
+	if map != "":
+		args.append_array(["--map", map])
+	if mode != "":
+		args.append_array(["--mode", mode])
+	_pid = OS.create_process(OS.get_executable_path(), args)
+	if _pid <= 0:
+		return DotResult.fail(DotError.CODE_INVALID, "the server process did not start")
+
+	var t := 0.0
+	while not FileAccess.file_exists(_ready_path) and t < BOOT_LIMIT_SEC:
+		if not OS.is_process_running(_pid):
+			_pid = -1
+			return DotResult.fail(DotError.CODE_INVALID, "the server process exited while booting")
+		await get_tree().create_timer(0.1).timeout
+		t += 0.1
+	if not FileAccess.file_exists(_ready_path):
+		stop()
+		return DotResult.fail(DotError.CODE_INVALID, "the server did not come up in time")
+
+	link = DotClientLink.new()
+	link.name = "Server"
+	link.transport_preference = "udp"
+	# RPCs address a node by path: the link sits where the server's own node does, `/root/ArenaSimServer/Server`.
+	_anchor = Node.new()
+	_anchor.name = ANCHOR
+	get_tree().root.add_child(_anchor)
+	_anchor.add_child(link)
+	var asked: DotResult = await link.connect_to_server("127.0.0.1:%d" % port)
+	if not asked.ok:
+		stop()
+		return asked
+	t = 0.0
+	while not link.is_playing() and t < JOIN_LIMIT_SEC:
+		await get_tree().create_timer(0.1).timeout
+		t += 0.1
+	if not link.is_playing():
+		stop()
+		return DotResult.fail(DotError.CODE_INVALID, "never joined the local server")
+	up = true
+	return DotResult.success({"port": port, "pid": _pid, "boot_sec": t})
+
+
+## Ends the server process and drops the link; safe to call twice.
+func stop() -> void:
+	up = false
+	if link != null and is_instance_valid(link):
+		if link.is_playing():
+			link.disconnect_from_server("done")
+	link = null
+	if _anchor != null and is_instance_valid(_anchor):
+		_anchor.queue_free()
+	_anchor = null
+	if _pid > 0:
+		var _killed := OS.kill(_pid)
+		_pid = -1
+	if _ready_path != "" and FileAccess.file_exists(_ready_path):
+		var _gone := DirAccess.remove_absolute(_ready_path)
+
+
+func _exit_tree() -> void:
+	stop()
+
+
+## A port free for both of the server's sockets (TCP and UDP): asked of the OS, then released for the child.
+static func _free_port() -> int:
+	for attempt in 8:
+		var tcp := TCPServer.new()
+		if tcp.listen(0, "127.0.0.1") != OK:
+			continue
+		var port := tcp.get_local_port()
+		tcp.stop()
+		var udp := PacketPeerUDP.new()
+		var bound := udp.bind(port, "127.0.0.1") == OK
+		udp.close()
+		if bound:
+			return port
+	return 0
+
+
+static func _arg(flag: String) -> String:
+	var args := OS.get_cmdline_user_args()
+	var index := args.find(flag)
+	return args[index + 1] if index >= 0 and index + 1 < args.size() else ""

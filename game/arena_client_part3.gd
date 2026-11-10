@@ -9,6 +9,9 @@ func _ready() -> void:
 	ArenaWeaponSkins.apply()
 	ArenaFrameProbe.from_launch()
 
+	if ArenaSimHost.wanted():
+		await _start_sim_host()
+
 	# Closed before anything else is built, so no frame shows a half-made world.
 	_build_platform()
 	_offline = platform.offline

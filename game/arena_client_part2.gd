@@ -510,7 +510,8 @@ func _weapon_warm_items() -> Array:
 func _build_platform() -> void:
 	platform = DotGameClient.new()
 	platform.name = "Platform"
-	platform.force_offline = force_offline
+	# A solo game hosted beside this process is joined like any server, whatever asked for offline.
+	platform.force_offline = force_offline and _sim_host == null
 	platform.use_settings = false
 	platform.use_console = false
 	platform.capture_pointer = false
@@ -588,6 +589,28 @@ func _start_solo_workbench() -> void:
 			platform.release_pointer(&"workbench")
 			_apply_mouse())
 	_workbench = wb
+
+## `--sim_host 1`: the solo game in its own process, joined over loopback. Nothing of this client exists
+## yet, so its callbacks stay off until the server answers; a failure plays the stock solo game.
+func _start_sim_host() -> void:
+	set_process(false)
+	set_physics_process(false)
+	set_process_input(false)
+	set_process_unhandled_input(false)
+	var host := ArenaSimHost.new()
+	host.name = "SimHost"
+	add_child(host)
+	var started: DotResult = await host.start(_launch_bots())
+	DotLog.result(CHANNEL, "sim host", started)
+	if started.ok:
+		_sim_host = host
+	else:
+		host.queue_free()
+	set_process(true)
+	set_physics_process(true)
+	set_process_input(true)
+	set_process_unhandled_input(true)
+
 
 func _start_offline() -> void:
 	# Offline catches up with wall-clock time only as far as a tick is cheap enough to

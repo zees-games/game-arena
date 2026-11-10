@@ -4,6 +4,7 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ClientBench := preload("client_bench.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
+const ArenaSimHost := preload("../game/arena_sim_host.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client, fixed map, mode, bot
 ## count and seed. Windowed on a GPU box (tools/perf_bench.sh), or headless through hv:
@@ -13,6 +14,8 @@ const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 ## `--native-us 1` (dot-sim's own timers: each engine query and each whole native tick, in the sidecar as `native`),
 ## `--batch 0` (`arena_motor_batch` off: the players' motors one call each; the sidecar's `hulls` counts the batch's rows),
 ## `--hull-min N` (ArenaHullGrid.min_players: the roster from which the hull grid, the native hull world and the batch engage).
+## `--sim-host 1`: the solo game as a loopback server process the client joins (ArenaSimHost), so the frame is a connected client's;
+## the server's own tick rate and cost are its `SIM_HOST` lines in the log.
 ## Render knobs: `--res 1920x1080` (window size), `--killcam-hz N` (ArenaKillcamBodies.record_hz), `--lod 0` (ArenaPlayer.present_lod_enabled
 ## off), `--ablate a,b` (applied after the warm-up: noshadow, nofx = ssao/ssil/glow/fog/volumetric fog off, nohud, nobots).
 
@@ -26,6 +29,7 @@ var _max_steps := -1
 ## `--fine 0`: no sub-spans inside a system (ArenaFrameProbe.fine), so a report matches one from before they were on by default.
 var _fine := true
 var _ablate := PackedStringArray()
+var _sim_host := false
 
 
 func _configure() -> void:
@@ -67,9 +71,17 @@ func _ready() -> void:
 func _setup_client(c: Node) -> void:
 	super(c)
 	c.set("mouse_capture_override", true)
+	_sim_host = int(args.get("sim-host", 0)) != 0
+	if _sim_host:
+		ArenaSimHost.forced = 1
+		ArenaSimHost.ask_map = map
+		ArenaSimHost.ask_mode = mode
 
 
 func _select(game: Object) -> void:
+	if _sim_host:
+		await _select_hosted()
+		return
 	if _tick > 0:
 		game.config.tick_rate = _tick
 		game.tick_rate = _tick
@@ -83,6 +95,21 @@ func _select(game: Object) -> void:
 	if picked != null:
 		say("map %s mode %s: %s" % [map, mode, "ok" if picked.ok else picked.error.message])
 		await wait_gate(120.0)
+
+
+## The server booted on the map and mode already: wait for the client to exist, load and see the roster.
+func _select_hosted() -> void:
+	var t := 0.0
+	while client.get("gate") == null and t < 120.0:
+		await wait(0.25)
+		t += 0.25
+	await wait_gate(120.0)
+	var _warmed := AwModelCache.warm(AwWeaponArtTable.model_paths())
+	t = 0.0
+	while _players(client.get("game")) < bots + 1 and t < 30.0:
+		await wait(0.25)
+		t += 0.25
+	say("sim host: hosted %s, map %s, players %d" % [client.get("_sim_host") != null, String(client.get("game").get("map").id), _players(client.get("game"))])
 
 
 func _start_pilot(_game: Object) -> void:
@@ -164,7 +191,7 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		hulls["batch"] = ArenaHullGrid.batch
 		hulls["batch_rows"] = ArenaHullGrid.batch_rows
 		hulls["batch_faults"] = ArenaHullGrid.batch_faults
-	return {"phases_ms_per_frame": phases, "native": native, "hulls": hulls, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
+	return {"phases_ms_per_frame": phases, "native": native, "hulls": hulls, "sim_host": _sim_host and client.get("_sim_host") != null, "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
 
 
 func _apply_ablate() -> void:
