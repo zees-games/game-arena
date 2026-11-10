@@ -43,7 +43,8 @@ static func _near_home(drawn: Vector3, at: Vector3) -> bool:
 
 
 func _hud_line() -> String:
-	return str(client.get("hud").call("_objective_line"))
+	var strip = client.get("hud").get("strip")
+	return "%s %d | %s %d" % [strip.left_tag, strip.left_score, strip.right_tag, strip.right_score]
 
 
 func _hud_carry() -> String:

@@ -249,6 +249,7 @@ func server_tick(tick: int) -> void:
 	_watch_bullets()
 	_send_ctf(0, tick)
 	_send_teams(0, tick)
+	_send_scores(0, tick)
 
 	var t_net := Time.get_ticks_usec()
 	if net != null:
@@ -457,6 +458,7 @@ func send_signon(peer_id: int) -> void:
 	_send_match_state(peer_id)
 	_send_ctf(peer_id, _tick, true)
 	_send_teams(peer_id, _tick, true)
+	_send_scores(peer_id, _tick, true)
 
 	# The map's packs that are out right now. A kill's drop lives seconds and a joiner never
 	# misses one; a pack lives the whole map, so a joiner would otherwise not see it until
@@ -691,6 +693,33 @@ func _send_teams(peer_id: int, tick: int, force: bool = false) -> void:
 	elif text == "":
 		return
 	send_event(peer_id, ArenaEvents.Kind.TEAM, text.to_utf8_buffer())
+
+
+## The last SCORE body sent to everybody.
+var _scores_wire := PackedByteArray()
+
+
+## Sends every player's counters and the team scores to [param peer_id] (0 for everyone) when they changed, checked a few times a second.
+## Without it a client's scoreboard has names and no numbers: kills, captures and team scores live on the server.
+func _send_scores(peer_id: int, tick: int, force: bool = false) -> void:
+	if game == null or game.match_node == null or game.match_node.scoreboard == null:
+		return
+	if peer_id == 0 and not force and tick % 15 != 0:
+		return
+	var board: DotScoreboard = game.match_node.scoreboard
+	var rows: Array[Dictionary] = []
+	for id in game.player_ids():
+		var record := board.find(str(id))
+		if record == null:
+			continue
+		rows.append({"session_id": id, "kills": record.kills, "deaths": record.deaths,
+			"assists": record.assists, "score": record.score, "objectives": ArenaEvents.objectives_of(record)})
+	var body := ArenaEvents.write_scores(rows, board.team_scores())
+	if peer_id == 0:
+		if body == _scores_wire:
+			return
+		_scores_wire = body
+	send_event(peer_id, ArenaEvents.Kind.SCORE, body)
 
 
 func _send_match_state(peer_id: int) -> void:

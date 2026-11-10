@@ -9,6 +9,7 @@ const ArenaStats := preload("arena_stats.gd")
 const ArenaPaths := preload("arena_paths.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaHudGlance := preload("arena_hud_glance.gd")
+const ArenaEvents := preload("arena_events.gd")
 
 ## The in-game display, laid out for a glance (see [ArenaHudGlance]): scores, clock and portraits at the top centre, the kill feed top right, health bottom left, magazine and reserve bottom right with the carried weapons up the right edge, abilities bottom centre, key hints on the left; kill feedback over the middle.
 ## [b]Built here rather than shipped by dot-ui, and that is the division of labour.[/b] dot-ui draws a bounded self-expiring list of coloured fragments and a bar from a `Callable`; it does not know what a kill or health is. Every widget below is a dot-ui class bound to a game value, and the binding is the only thing in this file.
@@ -37,8 +38,8 @@ var ammo: DotAmmoCounter = null
 var slots: ArenaHudGlance.WeaponSlots = null
 ## Top right: killer, weapon silhouette, victim.
 var feed: ArenaHudGlance.KillFeed = null
-## Top centre: the two scores and the clock, the target and the mode.
-var strip: DotScoreStrip = null
+## Top centre: each side's score (yours and the leader's in a free-for-all), the clock, the target and the mode.
+var strip: ArenaHudGlance.TeamStrip = null
 ## Under the strip: every player ranked, portrait, rank and kills.
 var portraits: ArenaHudGlance.Portraits = null
 var portrait_cache: ArenaHudGlance.PortraitCache = null

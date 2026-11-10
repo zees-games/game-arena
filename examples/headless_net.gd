@@ -478,11 +478,21 @@ func _test_event_wire() -> void:
 		"and both were appended after TAKEN, so no older kind moved"
 	)
 
-	var score := ArenaEvents.read_score(DotNetReader.new(ArenaEvents.write_score(11, 7, 3)))
+	var score_rows: Array[Dictionary] = [
+		{"session_id": 11, "kills": 7, "deaths": 3, "assists": 1, "score": -2, "objectives": 2},
+		{"session_id": 12, "kills": 0, "deaths": 9, "assists": 0, "score": 0, "objectives": 0},
+	]
+	var score := ArenaEvents.read_scores(DotNetReader.new(ArenaEvents.write_scores(score_rows, {1: 3, 2: -1})))
+	var first_row: Dictionary = score["rows"][0] if score["rows"].size() == 2 else {}
 	_check(
-		bool(score["ok"]) and int(score["kills"]) == 7 and int(score["deaths"]) == 3,
-		"a SCORE round-trips"
+		bool(score["ok"]) and int(first_row.get("kills", 0)) == 7 and int(first_row.get("deaths", 0)) == 3
+			and int(first_row.get("score", 0)) == -2 and int(first_row.get("objectives", 0)) == 2
+			and int(score["teams"].get(1, 0)) == 3 and int(score["teams"].get(2, 0)) == -1,
+		"a SCORE round-trips every row (a negative score too) and the team scores", str(score)
 	)
+	var cut := ArenaEvents.write_scores(score_rows, {1: 3})
+	cut.resize(cut.size() - 3)
+	_check(not bool(ArenaEvents.read_scores(DotNetReader.new(cut))["ok"]), "and a cut SCORE is not ok")
 
 	# A truncated body must not read as a valid event of nothing. `StreamPeerBuffer`
 	# reads past its end by returning zeros rather than failing, and dot-timer shipped a

@@ -426,13 +426,9 @@ func _on_client_disconnected(session: DotClientSession, _reason: String) -> void
 
 
 func _on_player_killed(entry: DotKillFeed.Entry) -> void:
-	# The kill feed as chat is a placeholder for a real one, and it is deliberately
-	# not nothing: a dedicated server with no HUD still has to be able to show an
-	# operator what is happening in the match it is running.
-	if server.chat == null:
-		return
-
-	server.broadcast_message(str(entry))
+	# The server log, not chat: every client draws the kill feed top-right, so a chat
+	# line repeated it (owner 2026-11-10). A headless operator still reads kills here.
+	log_info("kill", {"line": str(entry)})
 
 
 ## A player typed `!something`. [b]Claimed, or it is broadcast as chat.[/b] dot-chat holds a command until somebody says they handled it;

@@ -2,6 +2,7 @@ extends RefCounted
 
 const ArenaBindings := preload("arena_bindings.gd")
 const ArenaBrowser := preload("arena_browser.gd")
+const ArenaEvents := preload("arena_events.gd")
 const ArenaModes := preload("arena_modes.gd")
 
 ## The Escape menu and the Tab board: dot-menu's, with this game's pages on it.
@@ -306,28 +307,54 @@ class Board extends RefCounted:
 		var you := str(snap.get("you", ""))
 		var rows: Array = []
 		var rank := 1
-		var sides := {}
-		for record in _records.ranked():
+		# The sides are the game's (a client's records carry no team), so a team mode run solo
+		# still gets its columns; a mode scored by objectives ranks by them, then kills.
+		var sides: Array[DotTeam] = []
+		var objective := false
+		if _game != null and is_instance_valid(_game):
+			for side: DotTeam in _game.call(&"teams"):
+				if not side.is_spectator:
+					sides.append(side)
+			var mode: Resource = _game.call(&"displayed_mode")
+			var layout: StringName = StringName(mode.get(&"objective_layout")) if mode != null else &""
+			objective = layout != &""
+			if objective:
+				board.add_column({"key": &"objectives", "title": "Caps" if layout == &"ctf" else "Obj",
+					"kind": DotMenuScoreboard.KIND_NUMBER}, &"kills")
+		elif _teams != null:
+			for side: DotTeam in _teams.teams:
+				if not side.is_spectator:
+					sides.append(side)
+		if not objective:
+			var _gone := board.remove_column(&"objectives")
+		for record in (ArenaEvents.ranked_by_objectives(_records) if objective else _records.ranked()):
 			if not record.present:
 				continue
 			var known: Dictionary = roster.get(record.key, {})
 			rows.append({
-				"id": record.key, "rank": rank, "name": record.display_name, "team": record.team,
+				"id": record.key, "rank": rank, "name": record.display_name, "team": _team_of(record),
 				"kills": record.kills, "deaths": record.deaths, "assists": record.assists, "score": record.score,
+				"objectives": ArenaEvents.objectives_of(record),
 				"seconds": int(known.get("seconds", -1)), "ping": int(known.get("ping", -1)),
 				"you": record.key == _me or (you != "" and record.key == you),
 			})
-			if record.team > 0:
-				sides[record.team] = true
 			rank += 1
 		snap["players"] = rows
-		if _teams != null and sides.size() > 1:
+		if sides.size() > 1:
+			var ctf: Object = null
+			var objectives: Object = _game.get(&"objectives") if _game != null and is_instance_valid(_game) else null
+			if objectives != null:
+				ctf = objectives.get(&"ctf")
 			var listed: Array = []
-			for id: int in _teams.team_ids():
-				var side := _teams.team(id)
-				if side != null and not side.is_spectator:
-					listed.append({"id": id, "name": side.display_name, "color": side.colour,
-						"score": _records.team_score(id)})
+			for side in sides:
+				var score := int((ctf.get(&"scores") as Dictionary).get(side.id, 0)) if ctf != null else _records.team_score(side.id)
+				listed.append({"id": side.id, "name": side.display_name, "color": side.colour, "score": score})
 			snap["teams"] = listed
 		if not snap.has("server"):
 			snap["server"] = {"name": "Arena"}
+
+	## A client's records carry no side; the game's own map (the server's TEAM event) does.
+	func _team_of(record: DotPlayerScore) -> int:
+		if _game != null and is_instance_valid(_game) and record.key.is_valid_int():
+			return int(_game.call(&"team_of", int(record.key)))
+		return record.team
