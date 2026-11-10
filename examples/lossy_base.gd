@@ -94,6 +94,11 @@ const OTHER_CHECKS := 64
 const PACE_MIN := 0.9
 const PACE_TRIES := 4
 
+## The share of the ticks in A's first seconds the server must have had A's command for, and how many
+## connections A gets to show it when a stall spoiled the one before. See [method _connect_everyone].
+const FIRST_IN_TIME := 0.95
+const FIRST_TRIES := 4
+
 var CHECKS := OTHER_CHECKS + WINDOW_CHECKS * WINDOWS.size()
 
 var _entered := 0
@@ -193,6 +198,7 @@ func _measured(section: Callable) -> void:
 		var completed := _completed
 		_stall_ms = 0
 		_last_physics_usec = 0
+		_gaps.clear()
 		_start_watchdog()
 		var began_usec := Time.get_ticks_usec()
 		var began_frame := Engine.get_physics_frames()
@@ -205,6 +211,10 @@ func _measured(section: Callable) -> void:
 		if _failed == failed or stalled < _stall_limit_ms() or attempt == MEASURE_ATTEMPTS - 1:
 			if stalled >= _stall_limit_ms():
 				print("    (the runner stalled this process for up to %d ms during it)" % stalled)
+			elif _failed != failed:
+				# A failure the box did not cause, said in so many words: it is the netcode's to explain.
+				print("    (failed with no stall over the limit: longest physics gap %d ms, sleeper %d ms, %d ms behind; limit %d; gaps as (tick, ms) %s)" % [
+					_stall_ms, _watchdog_stall_ms(), behind, _stall_limit_ms(), _gaps])
 			return
 		print("    NOT A MEASUREMENT: the runner stalled this process for %d ms (limit %d) and %d checks failed; again" % [
 			stalled, _stall_limit_ms(), _failed - failed])
@@ -225,6 +235,10 @@ func _stall_limit_ms() -> int:
 ## The longest gap between two physics callbacks since [method _measured] began, and the last one.
 var _stall_ms := 0
 var _last_physics_usec := 0
+
+## Every physics gap over a tick and a half since it was last cleared, as `(server tick, ms)`: where a
+## stall fell, for the line that says a failure had one or had none.
+var _gaps: Array[Vector2i] = []
 
 
 ## A thread that only sleeps 1 ms and records how late it wakes. The physics gap cannot see a runner
@@ -285,6 +299,8 @@ func _track_stall() -> void:
 	var now := Time.get_ticks_usec()
 	if _last_physics_usec != 0:
 		_stall_ms = maxi(_stall_ms, (now - _last_physics_usec) / 1000)
+		if (now - _last_physics_usec) * TICK_RATE > 1500000:
+			_gaps.append(Vector2i(_game.current_tick(), (now - _last_physics_usec) / 1000))
 	_last_physics_usec = now
 
 
@@ -502,7 +518,10 @@ func _connect_client(label: String, udp_port: int, lift_cover: bool = true) -> D
 		"bridge": null, "session": 0, "spawned": [false], "gone": [""], "hello": [{}],
 	}
 	link.spawned.connect(func() -> void: record["spawned"][0] = true)
-	link.disconnected.connect(func(reason: String) -> void: record["gone"][0] = reason)
+	# A client whose link went is why everything after it fails: said where it happened, in any section.
+	link.disconnected.connect(func(reason: String) -> void:
+		record["gone"][0] = reason
+		print("    (%s's link ended at server tick %d: \"%s\")" % [label, _game.current_tick(), reason]))
 
 	# Started without `await`, so a failed join is read off the link rather than waited on.
 	link.connect_to_server("127.0.0.1:%d" % PORT)
@@ -673,11 +692,87 @@ func _listen_as_a(a: Dictionary) -> void:
 	)
 
 
+## A's first [constant FIRST_SECONDS] on its connection, after half a second for its first commands to
+## cross: the ticks the server ran, how many found no command of A's (`starved`) or one too late, when
+## the window began (`usec`), the longest stall in it (`stalled`, as [method _measured] takes it, the half
+## second included) and every physics gap over a tick and a half as `(tick of the window, ms)`.
+func _first_seconds() -> Dictionary:
+	_stall_ms = 0
+	_last_physics_usec = 0
+	_gaps.clear()
+	_start_watchdog()
+	_driving = true
+	var began_usec := Time.get_ticks_usec()
+	var began_frame := Engine.get_physics_frames()
+	await _until(func() -> bool: return false, 0.5)
+	var buffer := _module().net.input_buffer_for(_peer_of("A"))
+	var starved := buffer.starved_count
+	var late := buffer.late_count
+	var tick := _game.current_tick()
+	var usec := Time.get_ticks_usec()
+	await _wait_game(FIRST_SECONDS)
+	var behind := (Time.get_ticks_usec() - began_usec) / 1000 \
+		- (Engine.get_physics_frames() - began_frame) * 1000 / Engine.physics_ticks_per_second
+	var gaps: Array[Vector2i] = []
+	for gap in _gaps:
+		gaps.append(Vector2i(gap.x - tick, gap.y))
+	return {
+		"ticks": _game.current_tick() - tick, "usec": usec,
+		"starved": buffer.starved_count - starved, "late": buffer.late_count - late,
+		"stalled": maxi(maxi(_stall_ms, _watchdog_stall_ms()), behind), "gaps": gaps,
+	}
+
+
+## Takes a client off the server and out of the tree, so [method _connect_client] can seat it afresh.
+func _drop_client(label: String) -> void:
+	var c: Dictionary = _clients[label]
+	var session := int(c["session"])
+	_driving = false
+	var _erased := _clients.erase(label)
+	(c["link"] as DotClientLink).disconnect_from_server("again")
+	(c["net"] as DotNetManager).stop()
+	var _gone := await _until(func() -> bool: return _game.player_for(session) == null, RELIABLE_SECONDS)
+	var side: Node = c["side"]
+	remove_child(side)
+	side.queue_free()
+	await get_tree().process_frame
+
+
 func _connect_everyone() -> bool:
 	_section("two clients connect, A through the relay at %s" % WINDOWS[0][0])
 
-	var a := await _connect_client("A", _relay.port())
-	_clients["A"] = a
+	# [b]The first seconds of a connection, which is where the clock had nothing to go on.[/b]
+	# A plays from here, before B has even connected. Its round trip used to come from the
+	# link's heartbeat, which is -1 until the first one comes back -- two seconds at best,
+	# eight in one run -- and until then the clock left the flight time out of its lead
+	# and the commands arrived after their ticks. Half a second for the first ones to cross.
+	#
+	# [b]A stall in them is not the clock's.[/b] Server and clients share this process: a frame that takes
+	# 100 ms runs its ticks in one burst, with nothing delivered between them, and the server finds no
+	# command for those however good A's clock is. So a window that failed with a stall over the limit is
+	# no measurement, as in [method _measured]; and since a connection has its first seconds once, A
+	# connects again for another.
+	var a: Dictionary = {}
+	var first: Dictionary = {}
+	var first_in_time := 0.0
+	for attempt in range(FIRST_TRIES):
+		a = await _connect_client("A", _relay.port())
+		_clients["A"] = a
+		if a.get("bridge") == null or int(a["session"]) == 0:
+			break
+		first = await _first_seconds()
+		first_in_time = 1.0 - float(int(first["starved"])) / float(maxi(1, int(first["ticks"])))
+		var stalled := int(first["stalled"])
+		if first_in_time >= FIRST_IN_TIME or stalled < _stall_limit_ms() or attempt == FIRST_TRIES - 1:
+			if stalled >= _stall_limit_ms():
+				print("    (the runner stalled this process for up to %d ms during A's first seconds: gaps %s)" % [
+					stalled, first["gaps"]])
+			break
+		print("    NOT A MEASUREMENT: the runner stalled this process for %d ms (limit %d) in A's first seconds and the server had its command for %.1f%% of %d ticks; physics gaps as (tick, ms) %s. A connects again" % [
+			stalled, _stall_limit_ms(), first_in_time * 100.0, int(first["ticks"]), first["gaps"]])
+		await _drop_client("A")
+		await get_tree().create_timer(2.0).timeout
+
 	if not _check(a.get("bridge") != null and int(a["session"]) != 0,
 			"A connects over ENet through the relay, and is told who it is",
 			str(a.get("error", ""))):
@@ -689,24 +784,10 @@ func _connect_everyone() -> bool:
 
 	print("    A's ENet packet throttle: %d/32" % _throttle_of("A"))
 
-	# [b]The first seconds of a connection, which is where the clock had nothing to go on.[/b]
-	# A plays from here, before B has even connected. Its round trip used to come from the
-	# link's heartbeat, which is -1 until the first one comes back -- two seconds at best,
-	# eight in one run -- and until then the clock left the flight time out of its lead
-	# and the commands arrived after their ticks. Half a second for the first ones to cross.
-	_driving = true
-	await _until(func() -> bool: return false, 0.5)
-	var first_buffer := _module().net.input_buffer_for(_peer_of("A"))
-	var first_starved := first_buffer.starved_count
-	var first_late := first_buffer.late_count
-	var first_tick := _game.current_tick()
-	var first_usec := Time.get_ticks_usec()
-	await _wait_game(FIRST_SECONDS)
-	var first_ticks := _game.current_tick() - first_tick
 	# Before anything is judged: is this box a place to measure at all? A burst of load gets three more
 	# tries; a box that is simply too slow fails this one check and the run stops here, in half a minute,
 	# instead of playing every window against a network it has made twice as slow.
-	var pace := _pace(first_ticks, first_usec)
+	var pace := _pace(int(first["ticks"]), int(first["usec"]))
 	var paces := "%d%%" % roundi(pace * 100.0)
 	for attempt in range(1, PACE_TRIES):
 		if pace >= PACE_MIN:
@@ -722,11 +803,11 @@ func _connect_everyone() -> bool:
 			"it ran at %s of %d ticks a second: NOT A MEASUREMENT, the box is too slow or too loaded; run this suite on another" % [paces, TICK_RATE]):
 		_done()
 		return false
-	var first_in_time := 1.0 - float(first_buffer.starved_count - first_starved) / float(maxi(1, first_ticks))
-	_check(first_in_time >= 0.95,
+	_check(first_in_time >= FIRST_IN_TIME,
 		"in A's first %d seconds the server had its command for %.1f%% of %d ticks, %d late" % [
-			int(FIRST_SECONDS), first_in_time * 100.0, first_ticks, first_buffer.late_count - first_late],
-		"its clock's round trip %d ms" % int((a["net"] as DotNetManager).clock.rtt_ms()))
+			int(FIRST_SECONDS), first_in_time * 100.0, int(first["ticks"]), int(first["late"])],
+		"its clock's round trip %d ms; longest stall %d ms (limit %d), physics gaps as (tick, ms) %s" % [
+			int((a["net"] as DotNetManager).clock.rtt_ms()), int(first["stalled"]), _stall_limit_ms(), first["gaps"]])
 
 	var a_game: ArenaGame = a["game"]
 	_listen_as_a(a)
