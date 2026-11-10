@@ -683,6 +683,9 @@ func _build_audio() -> DotResult:
 	steps = DotAudioFootsteps.new()
 	steps.name = "Footsteps"
 	steps.manager = audio
+	# The loudest stock step carries 32 m, and no rule here reads a step: a body past
+	# earshot costs no ground ray per tick (32 players made 31 of them).
+	steps.hear_distance = 36.0
 	add_child(steps)
 	ambience = DotAudioAmbience.new()
 	ambience.name = "Ambience"
