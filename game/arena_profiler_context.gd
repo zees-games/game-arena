@@ -11,9 +11,12 @@ extends RefCounted
 const ArenaGame := preload("arena_game.gd")
 const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
 const STAMP := "res://addons/dot_sim/bin/.natives"
 const SLOTS := ["cast", "rest", "overlap", "ray", "tick"]
+## What a player may cost a tick, in microseconds: the report's suspects are rated against it.
+const PLAYER_TARGET_US := 70.0
 
 static var _begin_frame := 0
 
@@ -32,6 +35,32 @@ static func install(profiler: Object, game: Object, bridge: Object = null, prese
 	profiler.call(&"add_context", "natives", natives)
 	profiler.call(&"add_recording_hook", "native",
 		begin_native, func() -> Dictionary: return end_native(profiler))
+	profiler.call(&"add_recording_hook", "fine", begin_fine, func() -> Dictionary: return end_fine(profiler))
+	if game_ref != null and profiler.has_method(&"add_counter"):
+		profiler.call(&"add_counter", "players", func() -> int: return player_count(game_ref.get_ref()), "arena.p_")
+	# The report's cost per player and its target; only a profiler new enough to have them, and only where nobody chose.
+	var config: Variant = profiler.get(&"config")
+	if config is Object and (config as Object).get(&"per_unit") is String and String((config as Object).get(&"per_unit")) == "":
+		(config as Object).set(&"per_unit", "players")
+		(config as Object).set(&"unit_target_us", PLAYER_TARGET_US)
+
+
+static func player_count(game: Object) -> int:
+	return (game.call(&"player_ids") as Array).size() if game != null and game.has_method(&"player_ids") else 0
+
+
+## Turns the sub-spans inside the tick's sections on for the recording, so one profile names the part of a section.
+static func begin_fine() -> void:
+	if ArenaFrameProbe.fine_on_record:
+		ArenaFrameProbe.fine = true
+
+
+## Off again once the recording ended (a read while it runs, for the overlay, leaves them on).
+static func end_fine(profiler: Object) -> Dictionary:
+	var out := {"sub_spans": ArenaFrameProbe.fine}
+	if ArenaFrameProbe.fine_on_record and profiler != null and profiler.has_method(&"is_recording") and not bool(profiler.call(&"is_recording")):
+		ArenaFrameProbe.fine = false
+	return out
 
 
 ## Game, map, mode, tick rate, and the players and bots in the match. Bots are counted from the roster (their ids

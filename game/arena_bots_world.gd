@@ -231,6 +231,7 @@ class World:
 		_by_id.clear()
 		_players.clear()
 		_tunables = null
+		var t_lap := ArenaFrameProbe.lap_start()
 		var teams := _team_mode()
 		for p: ArenaPlayer in game.call("players"):
 			var c := DotBotContact.new()
@@ -253,10 +254,12 @@ class World:
 			_contacts.append(c)
 			_by_id[c.id] = c
 			_players[c.id] = p
+		t_lap = ArenaFrameProbe.lap(&"br_contacts", t_lap)
 		if tiers != null and tiers.applies(_contacts.size()):
 			_tier_begin()
 		elif tiers != null:
 			tiers.begin(_contacts.size(), PackedVector3Array(), PackedVector3Array(), PackedInt32Array(), PackedVector3Array())
+		t_lap = ArenaFrameProbe.lap(&"br_tiers", t_lap)
 		near_cells.clear()
 		near_cell = 0.0
 		if ArenaHullGrid.enabled and near_reach > 0.0 and _contacts.size() > 16:
@@ -269,6 +272,7 @@ class World:
 						near_cells[k] = [c]
 					else:
 						(cell as Array).append(c)
+		ArenaFrameProbe.lap(&"br_near", t_lap)
 
 	## Hands the tiers the live people's eyes and views and the bots' positions (a person is a contact with no brain).
 	func _tier_begin() -> void:
@@ -495,7 +499,10 @@ class World:
 			var held := _waypoints()
 			_par_lock.unlock()
 			return held
-		return _waypoints()
+		var t_lap := ArenaFrameProbe.lap_start()
+		var points := _waypoints()
+		ArenaFrameProbe.lap(&"bot_waypoints", t_lap)
+		return points
 
 	func _waypoints() -> PackedVector3Array:
 		var out := PackedVector3Array()
@@ -523,7 +530,10 @@ class World:
 			var held := _route_detail(from, to)
 			_par_lock.unlock()
 			return held
-		return _route_detail(from, to)
+		var t_lap := ArenaFrameProbe.lap_start()
+		var detail := _route_detail(from, to)
+		ArenaFrameProbe.lap(&"bot_route_detail", t_lap)
+		return detail
 
 	func _route_detail(from: Vector3, to: Vector3) -> Dictionary:
 		var surf := surf_for_map()
@@ -688,7 +698,10 @@ class World:
 			var held := super(at)
 			_par_lock.unlock()
 			return held
-		return super(at)
+		var t_lap := ArenaFrameProbe.lap_start()
+		var spot := super(at)
+		ArenaFrameProbe.lap(&"bot_walkable", t_lap)
+		return spot
 
 	func drops() -> Array:
 		if par:
@@ -696,7 +709,10 @@ class World:
 			var held := super()
 			_par_lock.unlock()
 			return held
-		return super()
+		var t_lap := ArenaFrameProbe.lap_start()
+		var lying := super()
+		ArenaFrameProbe.lap(&"bot_drops", t_lap)
+		return lying
 
 	func ladder(ride_id: int) -> Dictionary:
 		if par:
@@ -743,7 +759,10 @@ class World:
 			var held := _projectile_speed(shooter)
 			_par_lock.unlock()
 			return held
-		return _projectile_speed(shooter)
+		var t_lap := ArenaFrameProbe.lap_start()
+		var speed := _projectile_speed(shooter)
+		ArenaFrameProbe.lap(&"bot_proj_speed", t_lap)
+		return speed
 
 	func _projectile_speed(shooter: DotBotContact) -> float:
 		var p: ArenaPlayer = _players.get(shooter.id) if shooter != null else null
