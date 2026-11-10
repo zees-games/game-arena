@@ -10,6 +10,9 @@ const ONE_HAND: Array[StringName] = [&"melee", &"thrown", &"fists"]
 const HANDS_MIN_DISTANCE := 0.3
 ## DotPlayerViewArms' own hand size, for a weapon whose profile does not say.
 const DEFAULT_HAND_SCALE := 0.5
+## Where the middle knuckle sits from the grip point (arms' frame: x out, y up, -z forward). dot-player-char's
+## default seats it 8 cm below and behind, so the drawn hand missed the grip; this keeps it on the grip's side.
+const PALM_OFFSET := Vector3(0.015, -0.01, 0.02)
 
 ## cl_pose_debug: draws the grip sockets, hand targets and arm bones over the view.
 static var debug_pose := false
@@ -46,6 +49,7 @@ static func mount(parent: Node, model: AwViewModel, body: Node3D, look: DotHuman
 	mounted.add_child(mounted.arms)
 	mounted.arms.build(look, 1.8)
 	mounted._own_lean = mounted.arms.max_lean
+	mounted.arms.palm_offset = PALM_OFFSET
 	if &"hands_scale" in model:
 		model.hands_scale = mounted.arms.held_scale
 		model.hands_min_distance = HANDS_MIN_DISTANCE
