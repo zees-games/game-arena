@@ -20,6 +20,9 @@ static var forced := -1
 static var ask_map := ""
 static var ask_mode := ""
 
+## The host that is up, for a profile's or a bench's header (ArenaNetContext); null while none is.
+static var live: Node = null
+
 ## True once the link is playing on the local server.
 var up := false
 var link: DotClientLink = null
@@ -111,14 +114,19 @@ func start(bots: int) -> DotResult:
 		stop()
 		return DotResult.fail(DotError.CODE_INVALID, "never joined the local server")
 	up = true
+	live = self
 	return DotResult.success({"port": port, "pid": _pid, "boot_sec": t})
 
 
 ## Ends the server process and drops the link; safe to call twice.
 func stop() -> void:
 	up = false
+	if live == self:
+		live = null
 	if link != null and is_instance_valid(link):
-		if link.is_playing():
+		# On quit this runs from _exit_tree after the link has left the tree, where its `multiplayer` is null and
+		# disconnect_from_server raised a script error; the server process is killed below either way.
+		if link.is_inside_tree() and link.is_playing():
 			link.disconnect_from_server("done")
 	link = null
 	if _anchor != null and is_instance_valid(_anchor):

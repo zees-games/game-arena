@@ -8,6 +8,7 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
+const ArenaNetContext := preload("arena_net_context.gd")
 
 const STAMP := "res://addons/dot_sim/bin/.natives"
 const SLOTS := ["cast", "rest", "overlap", "ray", "tick"]
@@ -29,6 +30,8 @@ static func install(profiler: Object, game: Object, bridge: Object = null, prese
 	var sound_ref: WeakRef = weakref(presentation) if presentation != null else null
 	profiler.call(&"add_context", "audio", func() -> Dictionary: return audio_context(sound_ref.get_ref() if sound_ref != null else null))
 	profiler.call(&"add_context", "natives", natives)
+	# Whether the sim ran in its own process and what it cost there, and this client's lead and replays.
+	profiler.call(&"add_context", "net", func() -> Dictionary: return ArenaNetContext.describe(bridge_ref.get_ref() if bridge_ref != null else null))
 	profiler.call(&"add_recording_hook", "native",
 		begin_native, func() -> Dictionary: return end_native(profiler))
 	profiler.call(&"add_recording_hook", "fine", begin_fine, func() -> Dictionary: return end_fine(profiler))

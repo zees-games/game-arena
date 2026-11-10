@@ -33,6 +33,11 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 
+## The render itself; every tool extending this one overrides it.
+func _run() -> void:
+	pass
+
+
 func _wait(sec: float) -> void:
 	await create_timer(sec, true, false, true).timeout
 
