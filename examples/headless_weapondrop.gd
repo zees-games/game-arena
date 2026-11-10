@@ -18,7 +18,7 @@ const ArenaRoles := preload("../game/arena_weapon_roles.gd")
 ## [/codeblock]
 
 const TICK_RATE := 64
-const EXPECTED_CHECKS := 51
+const EXPECTED_CHECKS := 55
 
 const WeaponDropWiring := preload("../game/arena_weapon_drop_wiring.gd")
 
@@ -103,6 +103,24 @@ func _run() -> void:
 	await _step(game, 21, false, 2)
 	_check(drops.count() == 0, "sv_weapon_drop_key 0: the key throws nothing")
 	rules.key_enabled = true
+
+	# Hold-to-drop (DotWeaponDropKey): nothing on the press, a throw when the hold is over, none on an early release.
+	rules.key_hold = 0.25
+	await _step(game, 21, true, 8)
+	_check(drops.count() == 0, "sv_weapon_drop_key_hold: the press alone throws nothing", str(drops.count()))
+	await _step(game, 21, false, 2)
+	await _step(game, 21, true, 8)
+	await _step(game, 21, false, 2)
+	_check(drops.count() == 0, "a release before the hold is over throws nothing", str(drops.count()))
+	await _step(game, 21, true, 24)
+	_check(drops.count() == 1, "it throws when the hold is over", str(drops.count()))
+	await _step(game, 21, true, 24)
+	_check(drops.count() == 1, "and once per hold, not again while still down", str(drops.count()))
+	await _step(game, 21, false, 2)
+	rules.key_hold = 0.0
+	drops.clear()
+	player.give_default_loadout()
+	game.tick({})
 
 	var held_id: StringName = player.arsenal.current().id()
 	rules.auto_pickup = true

@@ -626,6 +626,7 @@ func build_map_io_async(slice: DotFrameSlice) -> void:
 		built.free()
 
 func remove_player(id: int) -> void:
+	ArenaWeaponDropWiring.reset_drop_key(self, id)
 	_unlag.erase(id)
 	if block_rules != null:
 		block_rules.forget(id)

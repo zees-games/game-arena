@@ -114,7 +114,13 @@ static func input(game, id: int, player, pair: Array) -> void:
 	var used: bool = game.use_held.get(id, false)
 	game.use_held[id] = use_now
 	# A flag carrier's drop key lets go of the flag, not the gun.
+	var swallowed: Dictionary = game.get_meta(&"drop_swallowed", {})
+	game.set_meta(&"drop_swallowed", swallowed)
+	if not held:
+		swallowed.erase(id)
 	if held and not was and ArenaFlagCarry.try_drop(game, id, player):
+		# The press let go of the flag: the weapon key waits for a release, or it would read the next tick as a new press.
+		swallowed[id] = true
 		return
 	# One key, one target: a map button or door looked at in reach wins; else the weapon on the floor.
 	if use_now and not used and game.map_io != null and game.map_io.press_for(player, id):
@@ -129,9 +135,11 @@ static func input(game, id: int, player, pair: Array) -> void:
 		return
 	var def := class_def_of(game, id)
 	var velocity: Vector3 = player.controller.state.velocity
+	var _thrown: int = _drop_key(game, id).step(game.weapon_drops, player.arsenal, player.muzzle_position(),
+		player.aim_direction(), id, held and not swallowed.has(id), game.get_physics_process_delta_time(), def, velocity)
 	if held and not was:
-		var _id: int = game.weapon_drops.throw(player.arsenal, player.muzzle_position(), player.aim_direction(), id, def, velocity)
-	elif _use_hold(game, id, player, def, use_now):
+		return
+	if _use_hold(game, id, player, def, use_now):
 		pass
 	elif auto_pickup and game.weapon_drops.count() > 0:
 		var _taken: int = game.weapon_drops.take_for(player.arsenal, player.controller.state.position + Vector3.UP * 0.5, id, def)
@@ -190,6 +198,26 @@ static func hook_shots(game) -> void:
 			var _n := drops.blast(centre, radius, 8.0)
 
 
+## The player's drop key: a press throws at once, or after `sv_weapon_drop_key_hold` seconds held.
+static func _drop_key(game, id: int) -> DotWeaponDropKey:
+	var keys: Dictionary = game.get_meta(&"drop_keys", {})
+	game.set_meta(&"drop_keys", keys)
+	var key: DotWeaponDropKey = keys.get(id)
+	if key == null:
+		key = DotWeaponDropKey.new()
+		keys[id] = key
+	return key
+
+
+## Forgets a hold in progress: call on death, respawn and disconnect.
+static func reset_drop_key(game, id: int) -> void:
+	var keys: Dictionary = game.get_meta(&"drop_keys", {})
+	if keys.has(id):
+		(keys[id] as DotWeaponDropKey).reset()
+	var swallowed: Dictionary = game.get_meta(&"drop_swallowed", {})
+	swallowed.erase(id)
+
+
 ## The use key on a dropped weapon: the shared rules in [DotWeaponUseKey].
 static func _use_hold(game, id: int, player, def: DotPlayerClassDef, pressed: bool) -> bool:
 	var keys: Dictionary = game.get_meta(&"use_keys", {})
@@ -221,6 +249,7 @@ static func look(weapon_id: StringName) -> Node3D:
 
 ## Called by the player as it dies, before its arsenal is disabled (a dead arsenal gives up nothing).
 static func drop_for_death(game, player) -> void:
+	reset_drop_key(game, player.player_id)
 	if game.weapon_drops == null or not game.is_authority:
 		return
 	var state: Variant = player.controller.state

@@ -233,6 +233,7 @@ func respawn_player(id: int) -> DotResult:
 		return DotResult.fail(DotError.CODE_INVALID, "Player %d is not in the match." % id)
 
 	var key := str(id)
+	ArenaWeaponDropWiring.reset_drop_key(self, id)
 
 	if match_node.respawns != null:
 		match_node.respawns.cancel(key)
