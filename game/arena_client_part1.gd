@@ -380,6 +380,21 @@ func _guard_camera(p: ArenaPlayer) -> void:
 ## the explosion in front of the camera (the first shot cost 375-420 ms, the first explosion 95).
 ## How many throwaway people the warm-up builds, so their art and materials are loaded before the first bot.
 const PREWARM_FIGURES := 4
+## Effects parked for other players' hands: one per seat of a full 16 v 16, and a charge ball for a squad's worth.
+const FX_POOL_SHOTS := 32
+const FX_POOL_CHARGES := 12
+const FX_POOL_FLASH_FRAMES := 600
+
+## Builds the pool every remote hand takes its first shot, charge and flash from, [param budget_msec] a frame.
+## True when it is full. The first shot of each of 24 bots built its own in the tick (345 ms in the owner's profile).
+func _fill_fx_pool(budget_msec: float) -> bool:
+	if fx_pool == null:
+		fx_pool = AwFxPool.new()
+		fx_pool.name = "FxPool"
+		add_child(fx_pool)
+	var full := fx_pool.fill(FX_POOL_SHOTS, FX_POOL_CHARGES, budget_msec)
+	var _drawn := fx_pool.fill_flashes()
+	return full
 
 func _prewarm_tick() -> void:
 	var body: Variant = _warm.get("body")
@@ -444,7 +459,10 @@ func _prewarm_tick() -> void:
 				_warm.screens = int(_warm.get("screens", 0)) + 1
 			elif _warm.drop_next >= ids.size() and _warm_kill_meshes(drops_until):
 				pass
+			elif _warm.drop_next >= ids.size() and not _fill_fx_pool(float(slice)):
+				pass
 			elif _warm.drop_next >= ids.size():
+				ArenaLoadTimeline.mark("prewarm: fx pool holds %d shot effects, %d charge balls, %d flashes" % [fx_pool.spare_shots(), fx_pool.spare_charges(), fx_pool.flash_count()])
 				_warm.phase = 3
 				ArenaLoadTimeline.mark("prewarm 2 done: weapon drop bodies, own work %d ms" % (int(_warm_work_usec.get(2, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 		3:
@@ -466,7 +484,9 @@ func _prewarm_tick() -> void:
 				ArenaLoadTimeline.mark("prewarm 3 done: figures, own work %d ms" % (int(_warm_work_usec.get(3, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 		_:
 			_warm.frames += 1
-			if _warm.frames >= 3 and DotWeaponMuzzle.warm_done() and not (_previews != null and _previews.is_warming()):
+			# The shared flashes build a node a frame; a renderer that never finishes one must not hold the cover.
+			var flashes_drawn: bool = fx_pool == null or fx_pool.flashes_ready() or int(_warm.frames) > FX_POOL_FLASH_FRAMES
+			if _warm.frames >= 3 and DotWeaponMuzzle.warm_done() and flashes_drawn and not (_previews != null and _previews.is_warming()):
 				_prewarm_end()
 	# CPU time this phase spent in its own ticks (a slow frame with little of it is the renderer).
 	_warm_work_usec[phase_now] = int(_warm_work_usec.get(phase_now, 0)) + Time.get_ticks_usec() - tick_start
@@ -504,7 +524,11 @@ func _warm_kill_meshes(until_msec: int) -> bool:
 ## Parks the drop bodies again after the game was rebuilt (a map or mode change frees the drop layer and its
 ## parked bodies with it, and the warm-up above runs once): under the new map's cover, a slice a frame.
 func _repool_drops() -> void:
-	if DotPlatform.is_headless() or gate == null or not ArenaWeaponDropWiring.needs_pool(game) or _repool_next >= 0:
+	if DotPlatform.is_headless() or gate == null or _repool_next >= 0:
+		return
+	# The old map's hands took their effects with them: top the pool up as well as the drop layer.
+	var fx_short := fx_pool != null and (fx_pool.spare_shots() < FX_POOL_SHOTS or fx_pool.spare_charges() < FX_POOL_CHARGES)
+	if not ArenaWeaponDropWiring.needs_pool(game) and not fx_short:
 		return
 	_repool_next = 0
 	gate.hold(&"pools", "Preparing weapons")
@@ -517,6 +541,8 @@ func _repool_tick() -> void:
 		_repool_next = ArenaWeaponDropWiring.prewarm_step(game, ids, _repool_next, Time.get_ticks_msec() + slice)
 		if _repool_next < ids.size():
 			return
+	if fx_pool != null and not fx_pool.fill(FX_POOL_SHOTS, FX_POOL_CHARGES, float(slice)):
+		return
 	_repool_next = -1
 	get_tree().process_frame.disconnect(_repool_tick)
 	ArenaLoadTimeline.mark("drop bodies parked again for the new map")

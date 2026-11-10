@@ -222,6 +222,9 @@ var _repool_next := -1
 var _frame_at_usec := 0
 ## State of the load-gate warm-up, see [method _prewarm_tick]; empty when idle.
 var _warm := {}
+## Shot effects, charge balls and muzzle flashes built under the cover for every other player's hand
+## ([method _fill_fx_pool]). A child of the client, so a map change keeps what is still parked.
+var fx_pool: AwFxPool = null
 
 ## Microseconds of CPU each [method _prewarm_tick] phase spent in its own ticks (load timeline only).
 var _warm_work_usec := {}
