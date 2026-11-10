@@ -10,7 +10,8 @@ const ArenaSimHost := preload("../game/arena_sim_host.gd")
 ## count and seed. Windowed on a GPU box (tools/perf_bench.sh), or headless through hv:
 ## `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's own flags: `--pilot 0`, `--motor-us 1` (the controller's and motor's phase timers, a little costly, totals in the
-## sidecar), `--queries 0` (no motor query timers, which also leaves the native motor on), `--max-steps N` (ArenaTickBudget.max_steps),
+## sidecar), `--queries 1` (the script query timers: they switch the native body off, so the motor then costs about double),
+## `--ctl-us 1` (the controller's phases on the path really run, native motor left on), `--max-steps N` (ArenaTickBudget.max_steps),
 ## `--native-us 1` (dot-sim's own timers: each engine query and each whole native tick, in the sidecar as `native`),
 ## `--batch 0` (`arena_motor_batch` off: the players' motors one call each; the sidecar's `hulls` counts the batch's rows),
 ## `--hull-min N` (ArenaHullGrid.min_players: the roster from which the hull grid, the native hull world and the batch engage).
@@ -21,8 +22,11 @@ const ArenaSimHost := preload("../game/arena_sim_host.gd")
 
 var _pilot := true
 var _motor_us := false
-var _queries := true
+## Off by default: the script query timers switch the native body off, so every player would run the
+## script collision path (about twice the motor cost) instead of the one a match really runs.
+var _queries := false
 var _native_us := false
+var _ctl_us := false
 ## `--tick N`: the game and engine tick rate (default: the game's, 66); 128 for the 128 Hz cost.
 var _tick := 0
 var _max_steps := -1
@@ -44,7 +48,8 @@ func _ready() -> void:
 	super()
 	_pilot = int(args.get("pilot", 1)) != 0
 	_motor_us = int(args.get("motor-us", 0)) != 0
-	_queries = int(args.get("queries", 1)) != 0
+	_queries = int(args.get("queries", 0)) != 0
+	_ctl_us = int(args.get("ctl-us", 0)) != 0
 	_native_us = int(args.get("native-us", 0)) != 0 and ClassDB.class_exists(&"DotSimFpsBody")
 	_max_steps = int(args.get("max-steps", -1))
 	_fine = int(args.get("fine", 1)) != 0
@@ -131,6 +136,10 @@ func _record_begin() -> void:
 	_apply_ablate()
 	DotFpsPhysicsBody.profile = _queries
 	DotFpsPhysicsBody.prof.fill(0)
+	# --ctl-us 1: the controller's phases alone, on whichever motor path runs (--motor-us forces the script one).
+	DotFpsController.phase_timers = _ctl_us
+	if _ctl_us:
+		DotFpsController.phase_us.fill(0)
 	if _motor_us:
 		DotFpsMotor.profile = true
 		DotFpsController.phase_us.fill(0)
@@ -144,6 +153,7 @@ func _record_end() -> void:
 	ArenaFrameProbe.fine = false
 	DotFpsPhysicsBody.profile = false
 	DotFpsMotor.profile = false
+	DotFpsController.phase_timers = false
 	if _native_us:
 		ClassDB.class_call_static(&"DotSimFpsBody", &"set_profile", false)
 
@@ -157,11 +167,12 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		queries[names[i]] = {"per_frame": snappedf(pr[i * 2] / n, 0.01), "ms_per_frame": snappedf(pr[i * 2 + 1] / 1000.0 / n, 0.001),
 			"us_each": snappedf(float(pr[i * 2 + 1]) / maxf(pr[i * 2], 1.0), 0.01)}
 	var phases := {}
-	if _motor_us:
+	if _motor_us or _ctl_us:
 		# Totals over the recording in ms per frame; per player tick is these over arena.p_controller calls.
-		var ctl := ["pre", "consume", "motor", "publish", "report", "signals_stats", "post"]
+		var ctl := ["pre", "consume", "motor", "publish", "report", "signals_stats", "post", "set_position"]
 		for i in ctl.size():
 			phases["ctl." + ctl[i]] = snappedf(DotFpsController.phase_us[i] / 1000.0 / n, 0.001)
+	if _motor_us:
 		for i in DotFpsMotor.PHASES.size():
 			if DotFpsMotor.PHASES[i] != "":
 				phases["motor." + DotFpsMotor.PHASES[i]] = snappedf(DotFpsMotor.phase_us[i] / 1000.0 / n, 0.001)
