@@ -293,10 +293,25 @@ func _build_hitboxes() -> void:
 	hitboxes.refresh()
 	_fit_k = -1.0
 
-## The game's tick rate, given before [method setup]: the controller, health and weapons are built
-## on it, and a bot's simulator steps at it, so a rate other than the default must reach them.
+## The game's tick rate: the controller, health and weapons are built on it, and a bot's simulator
+## steps at it, so a rate other than the default must reach them. Given before [method setup], and
+## again whenever the game's rate changes ([method ArenaGame.set_tick_rate]: a client learns the
+## server's from HELLO after its players exist), when it reaches the parts already built.
 func use_tick_rate(rate: int) -> void:
 	_tick_rate = maxi(rate, 1)
+	if controller != null:
+		controller.tick_rate = _tick_rate
+		# The controller hands its rate to the motor once, when it readies.
+		if controller.motor != null:
+			controller.motor.set_tick_rate(_tick_rate)
+			DotFpsNetSync.set_tick_rate(_tick_rate)
+	if health != null:
+		health.set_tick_rate(_tick_rate)
+	if weapons != null:
+		# The rig's setter passes it on to its arsenal.
+		weapons.tick_rate = _tick_rate
+	elif arsenal != null:
+		arsenal.tick_rate = _tick_rate
 
 
 ## Builds the whole player. Call before adding to the tree.

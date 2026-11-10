@@ -96,9 +96,15 @@ func _run() -> void:
 		_finish()
 		return
 
-	# `-- --rides`: only the recorded rides, for working on them (the suite's own totals then do not hold).
+	# `-- --rides`: only the recorded rides, for working on them (the suite's own totals then do not hold);
+	# `-- --record-edge=N` records surf_ski_2's edge N instead of RECORD_EDGES, `-- --ride-rate=N` rides at N Hz.
 	if OS.get_cmdline_user_args().has("--rides"):
-		await _test_recorded_rides()
+		var only: Array = RECORD_EDGES
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--record-edge="):
+				only = [int(arg.trim_prefix("--record-edge="))]
+		for record_edge: int in only:
+			await _test_recorded_rides(record_edge)
 		get_tree().quit(1 if _failed > 0 else 0)
 		return
 
@@ -131,7 +137,8 @@ func _run() -> void:
 	await _test_fallout_all()
 	await _test_rotation_rides()
 	await _test_bot_band()
-	await _test_recorded_rides()
+	for record_edge: int in RECORD_EDGES:
+		await _test_recorded_rides(record_edge)
 	if _shard == "":
 		await _test_every_map()
 		await _test_collision_audit()

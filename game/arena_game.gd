@@ -125,6 +125,15 @@ func _add_hull(out: Array, i: int, id: int, me_at: Vector3, near: bool, coarse: 
 			return
 	var tunables := ctl.tunables
 	out.append(ArenaSolidBody.hull_at(feet, tunables.stand_height, tunables.radius))
+## Changes the game's tick rate and every player's with it. Assigning [member tick_rate] alone
+## reaches only players added afterwards: a client learns the server's rate from HELLO after its
+## players exist, and one left on the old rate predicts every tick a different distance.
+func set_tick_rate(rate: int) -> void:
+	tick_rate = maxi(rate, 1)
+	for player: ArenaPlayer in _players.values():
+		player.use_tick_rate(tick_rate)
+
+
 ## Adds a player, builds their body, and puts them in the match.
 func add_player(
 	id: int, display_name: String, wanted_team: int = 0

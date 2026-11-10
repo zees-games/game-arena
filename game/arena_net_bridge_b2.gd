@@ -757,7 +757,8 @@ func _adopt_tick_rate(rate: int, snapshot_rate: int = 0) -> void:
 	if rate <= 0 or game == null or net == null:
 		return
 
-	game.tick_rate = rate
+	# Players that already exist too, not only the ones added after this.
+	game.set_tick_rate(rate)
 	net.config.tick_rate = rate
 	# The server's own number when HELLO carried one (sv_snapshot_rate), else derived as before.
 	net.config.snapshot_rate = snapshot_rate if snapshot_rate > 0 and snapshot_rate <= rate else ArenaGame.snapshot_rate_for(rate)

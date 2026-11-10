@@ -391,7 +391,9 @@ func steer(bot: Object, mind: Object, intent: DotBotIntent, tick: int, tick_rate
 ## (never its solid-players wrapper: the others' hulls would stand still in a forecast), the
 ## map's pushes as its mechanics, the edge's course as its oracle.
 func _sim_for(edge: Edge, controller: DotFpsController) -> DotFpsSimulator:
-	if edge.sim != null:
+	# Rebuilt when the rider steps at another rate than the one it was built for: a forecast
+	# stepped at a stale rate vetoes rides that would land and passes ones that fall.
+	if edge.sim != null and is_equal_approx(edge.sim.delta, 1.0 / float(maxi(controller.tick_rate, 1))):
 		return edge.sim
 	var body: DotFpsBody = map.call(&"movement_body")
 	if body == null:

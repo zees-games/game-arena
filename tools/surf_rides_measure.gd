@@ -6,9 +6,13 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaSurf := preload("../game/arena_surf.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
+const ArenaContent := preload("../game/arena_content.gd")
 
 
-const TICK_RATE := 64
+## The rate rides are planned and measured at: the game's default, which a listen server and the
+## suites' recorded rides play at. The caches planned before ArenaGame.add_player applied the game's
+## rate were stepped at this one too (the controller's default), whatever their stamp said.
+const TICK_RATE := ArenaContent.TICK_RATE
 
 
 ## A perturbed start: up to this far sideways and along, metres, and moving at up to the

@@ -69,8 +69,17 @@ const RIDE_MAP := &"surf_ski_2"
 ## Its starts, and how many must land.
 const RIDE_STARTS := 3
 const RIDE_LANDING := 2
-## The edge the recorded-ride check records: one that lands from the lip at rest (edges 0 and 1 miss), never "the first linked", which moves on every replan.
-const RECORD_EDGE := 6
+## The edges the recorded-ride check records, each its own section: ones whose live rides land from the lip at rest
+## (5 of 6 at 64 and 66 Hz), never "the first linked", which moves on every replan. Edge 4 does too when run alone
+## (`-- --rides --record-edge=4`), but after the rest shard's sections keeps 1 of 6 ("moved or died"), so it is not
+## here. Edges 0 and 1 miss; 3 lands 1 of 6 (it touches island 33 on the way, so its rides are filed 18>33) and 7 none:
+## both fall or stall, and want a replan.
+const RECORD_EDGES := [6]
+## The rate the ride caches were planned at (ArenaContent.TICK_RATE, the game's default), which the
+## recorded rides are ridden at: a cache stepped at another rate drifts off its line and the ride dies.
+const RIDE_CACHE_RATE := 66
+## The recorded-ride check's rate: [constant RIDE_CACHE_RATE] unless `-- --ride-rate=N` says otherwise (for working on the rides).
+var _ride_rate := RIDE_CACHE_RATE
 ## How long a roaming bot is given to take a ride of its own accord, seconds.
 const ROAM_SECONDS := 90.0
 
@@ -154,8 +163,12 @@ func _roam_takes_ride(surf: ArenaSurf, start: Vector3, tick: int) -> int:
 
 ## Players' rides are recorded when the server turns it on, replayed on the real motor, and a bot
 ## rides the verified recording: off by default, bots never recorded, one cap and one target.
-func _test_recorded_rides() -> void:
-	_section("players' rides are recorded, harvested on the motor and ridden by a bot")
+func _test_recorded_rides(record_edge: int) -> void:
+	_section("players' rides on edge %d are recorded, harvested on the motor and ridden by a bot" % record_edge)
+	_ride_rate = RIDE_CACHE_RATE
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--ride-rate="):
+			_ride_rate = clampi(int(arg.trim_prefix("--ride-rate=")), 15, 128)
 	var changed := _game.change_map(ArenaMap.by_id(RIDE_MAP))
 	var world := ArenaBots.world_for(_game)
 	var _first := world.route(Vector3.ZERO, Vector3.ONE)
@@ -164,14 +177,19 @@ func _test_recorded_rides() -> void:
 		await get_tree().process_frame
 		frames += 1
 	var surf: ArenaSurf = world.surf_for_map() if changed.ok else null
-	var planned: Array = surf.edges.filter(func(e: ArenaSurf.Edge) -> bool: return e.linked and e.id == RECORD_EDGE) if surf != null else []
+	var planned: Array = surf.edges.filter(func(e: ArenaSurf.Edge) -> bool: return e.linked and e.id == record_edge) if surf != null else []
 	if planned.is_empty():
-		_check(false, "%s has linked ride edge %d to record" % [RIDE_MAP, RECORD_EDGE])
+		_check(false, "%s has linked ride edge %d to record" % [RIDE_MAP, record_edge])
 		_done()
 		return
 	var edge: ArenaSurf.Edge = planned[0]
 
 	# Off until the config says so, and the two numbers are the recorder's own.
+	# Existing players follow the game's rate (set_tick_rate reaches them, not only new ones).
+	var suite_rate := _game.tick_rate
+	_game.set_tick_rate(_ride_rate)
+	_check(_game.players().all(func(p: ArenaPlayer) -> bool: return p.controller.tick_rate == _ride_rate),
+		"players already in the game move on its new tick rate (%d)" % _ride_rate)
 	var started := _game.start_ride_recording()
 	var rides: RefCounted = _game.surf_rides
 	_check(started.ok and rides != null and not rides.is_on() and not rides.demo.record,
@@ -187,7 +205,7 @@ func _test_recorded_rides() -> void:
 	cfg.target = DotBotDemoConfig.new().target
 	var store := DotBotDemoStoreMemory.new()
 	var fresh: RefCounted = ArenaSurfRides.new()
-	var ready: DotResult = fresh.call(&"setup", _game, cfg, store, float(TICK_RATE))
+	var ready: DotResult = fresh.call(&"setup", _game, cfg, store, float(_ride_rate))
 	_check(ready.ok, "a recorder and its ride book are built over a store")
 	# release() breaks the callables that point back at the recorder, or it outlives the run.
 	rides.call(&"release")
@@ -229,7 +247,7 @@ func _test_recorded_rides() -> void:
 	var harvest: DotBotRideHarvest = rides.harvest_on(human.controller)
 	var done: DotResult = await harvest.harvest(store, rides.recorder.map_id, rides.recorder.map_version, ArenaSurfRides.KIND, key)
 	var verified_total: int = harvest.verified + rides.harvested
-	# Most land: with the players' motor on 1/66 s while the game ticked 1/64, edge 4 landed 2 of 5.
+	# Most land: with the players' motor on 1/66 s while the game ticked 1/64, edge 4 landed 2 of 5; on one rate, all 5.
 	_check(harvest.ready().ok and done.ok and verified_total >= 1 and verified_total * 2 >= rides.kept,
 		"replayed on the real motor, %d of %d recorded rides land (%d rejected)" % [verified_total, rides.kept, harvest.rejected])
 
@@ -238,7 +256,7 @@ func _test_recorded_rides() -> void:
 	var rebuilt := DotBotRideBook.new(rides.ride_config)
 	rebuilt.set_map(rides.recorder.map_id, rides.recorder.map_version)
 	rides.book = rebuilt
-	var loaded: DotResult = await rebuilt.load_edge(store, ArenaSurfRides.KIND, key, rides.schema, float(TICK_RATE))
+	var loaded: DotResult = await rebuilt.load_edge(store, ArenaSurfRides.KIND, key, rides.schema, float(_ride_rate))
 	rides._edge_keys[edge.id] = key
 	_check(loaded.ok and rebuilt.recorded_count(key) >= 1, "the book holds %d verified recordings of the edge" % rebuilt.recorded_count(key))
 	var bot := _game.player_for(5)
@@ -260,6 +278,7 @@ func _test_recorded_rides() -> void:
 	surf.rides = null
 	fresh.call(&"release")
 	_game.surf_rides = null
+	_game.set_tick_rate(suite_rate)
 	_done()
 
 
@@ -277,8 +296,8 @@ func _bot_rides(bot: ArenaPlayer, surf: ArenaSurf, edge: ArenaSurf.Edge, landed_
 		var intent := DotBotIntent.new()
 		intent.ride = edge.id
 		ridden = 0
-		while ridden < int(ArenaSurf.RIDE_SECONDS * TICK_RATE) + 4:
-			surf.steer(bot, mind, intent, tick, float(TICK_RATE))
+		while ridden < int(ArenaSurf.RIDE_SECONDS * _ride_rate) + 4:
+			surf.steer(bot, mind, intent, tick, float(_ride_rate))
 			if mind.ride == null:
 				break
 			source = str((mind.ride as DotBotSurfRide).picked.get("source", ""))
@@ -309,10 +328,11 @@ func _ride_as_player(player: ArenaPlayer, edge: ArenaSurf.Edge, surf: ArenaSurf,
 		player.controller.state.velocity = velocity
 		var mind := ArenaBots.Mind.new()
 		mind.seed = 300 + k
-		mind.ride = DotBotSurfRide.new().begin(edge.cache, edge.course, surf._sim_for(edge, player.controller), tick, float(TICK_RATE))
+		var outcome := [surf.landed, surf.fell, surf.timed_out]
+		mind.ride = DotBotSurfRide.new().begin(edge.cache, edge.course, surf._sim_for(edge, player.controller), tick, float(_ride_rate))
 		var ticks := 0
-		while mind.ride != null and ticks < int(ArenaSurf.RIDE_SECONDS * TICK_RATE) + 4:
-			_game.tick({player.player_id: ArenaBots.think(_game, player, mind, tick, float(TICK_RATE))})
+		while mind.ride != null and ticks < int(ArenaSurf.RIDE_SECONDS * _ride_rate) + 4:
+			_game.tick({player.player_id: ArenaBots.think(_game, player, mind, tick, float(_ride_rate))})
 			tick += 1
 			ticks += 1
 			if ticks % 32 == 0:
@@ -320,8 +340,15 @@ func _ride_as_player(player: ArenaPlayer, edge: ArenaSurf.Edge, surf: ArenaSurf,
 		var st := player.controller.state
 		# A few ticks standing on the far platform, which is where a recorded ride ends.
 		for _s in range(8):
-			_game.tick({player.player_id: ArenaBots.think(_game, player, ArenaBots.Mind.new(), tick, float(TICK_RATE))})
+			_game.tick({player.player_id: ArenaBots.think(_game, player, ArenaBots.Mind.new(), tick, float(_ride_rate))})
 			tick += 1
+		# `-- --ride-notes` says where each ride ended, for working on an edge that does not land.
+		var nav: Variant = _game.surf_rides.get("nav") if _game.surf_rides != null else null
+		if nav != null and OS.get_cmdline_user_args().has("--ride-notes"):
+			var island: int = nav.island_at(st.position, 0.6)
+			print("  ride %d: landed/fell/timed out %d/%d/%d after %d ticks, at %s on island %d (edge %d lands on %d)" % [k,
+				surf.landed - outcome[0], surf.fell - outcome[1], surf.timed_out - outcome[2], ticks, str(st.position.round()),
+				int(_game.surf_rides.call(&"canonical", island)), edge.id, int(_game.surf_rides.call(&"canonical", edge.course.landing_island))])
 	return tick
 
 
