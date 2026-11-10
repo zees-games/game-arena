@@ -156,6 +156,12 @@ var _severed: bool = false
 ## This player's body went down as a ragdoll (or was hidden by the server's style), so a
 ## respawn has to draw it again. Client side.
 var _fell: bool = false
+## When the body last went down, and whether this client has since seen the player dead: a mirror's
+## death arrives by snapshot, often after the KILL, and mending on the stale alive flag stood the
+## figure back up to play its own death fall, a second body (owner batch 2026-11-10).
+var _down_at_ms: int = 0
+var _down_seen_dead: bool = true
+const DOWN_GRACE_MS := 1500
 
 ## Draws a box avatar's own body in first person ([method present_own_body]).
 var _first_person: DotPlayerFirstPersonBody = null

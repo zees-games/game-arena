@@ -500,6 +500,29 @@ func _test_bodies_fall_rest(g: ArenaGame, floor_body: StaticBody3D, yard: DotPla
 	_check(client.ragdolls.live().size() == 1, "solo, a kill's entry carries the fall and the client draws it")
 	_check(client.ragdolls.rules == g.ragdoll_rules, "and it draws under the game's (the server's) rules")
 
+	# Connected, the KILL often lands before the snapshot that says the victim is dead: the stale
+	# alive flag must not stand the figure up again to play a second, standing death (owner batch 2026-11-10).
+	yard.rules.style = DotPlayerRagdollRules.Style.RAGDOLL
+	yard.rules.enabled = true
+	player.health.alive = true
+	player.present(0.016)
+	var before := yard.live().size()
+	var early := player.fall_body(yard, DotPlayerDeath.new())
+	player.present(0.016)
+	_check(early != null and not player.body_mesh.visible,
+		"a fall while the mirror still reads alive keeps the standing figure hidden")
+	_check(player.fall_body(yard, DotPlayerDeath.new()) == null and yard.live().size() == before + 1,
+		"a second fall of the same body builds no second ragdoll (%d live)" % (yard.live().size() - before))
+	player.make_dead()
+	player.present(0.016)
+	player.health.alive = true
+	player.present(0.016)
+	_check(player.body_mesh.visible, "once seen dead, the respawn draws the figure again")
+	var _late := player.fall_body(yard, DotPlayerDeath.new())
+	player.set(&"_down_at_ms", Time.get_ticks_msec() - 5000)
+	player.present(0.016)
+	_check(player.body_mesh.visible, "and if the dead snapshot never came, it gets up after a grace")
+
 	client.ragdolls.queue_free()
 	client.free()
 	yard.queue_free()

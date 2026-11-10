@@ -18,6 +18,7 @@ func break_body(
 	)
 
 	if made != null:
+		_went_down()
 		# A person's limbs are baked off its skin and its bones shrunk; the respawn mends them.
 		_severed = figure != null
 		for mesh in before:
@@ -34,6 +35,9 @@ func break_body(
 func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath, gun_prop: bool = true) -> DotPlayerRagdoll:
 	if yard == null or body_mesh == null or not body_mesh.is_inside_tree():
 		return null
+	# Already down and hidden: copying it again would build a second ragdoll from hidden meshes.
+	if _fell and not body_mesh.visible:
+		return null
 	# Your own body in first person has no head; the one that falls has.
 	if figure != null:
 		figure.hide_head = false
@@ -45,12 +49,23 @@ func fall_body(yard: DotPlayerRagdolls, death: DotPlayerDeath, gun_prop: bool = 
 		held.visible = false
 	var made := yard.spawn(body_mesh, death, controller.state.velocity)
 	_fell = made != null or not body_mesh.visible
+	if _fell:
+		_went_down()
 	if held != null and not _fell:
 		held.visible = gun_shown
 	return made
 
-## Puts a broken or fallen body back together once the player is alive again.
+func _went_down() -> void:
+	_down_at_ms = Time.get_ticks_msec()
+	_down_seen_dead = not is_alive()
+
+## Puts a broken or fallen body back together once the player is alive again: after this client saw
+## them dead, or after a grace in case that snapshot never came (a respawn inside one snapshot gap).
 func _mend_body() -> void:
+	if not is_alive():
+		_down_seen_dead = true
+	elif not _down_seen_dead and Time.get_ticks_msec() - _down_at_ms < DOWN_GRACE_MS:
+		return
 	if _severed and is_alive() and figure != null:
 		_severed = false
 		figure.mend()
@@ -137,7 +152,7 @@ func _present_held(remote: bool = false) -> void:
 		switching = arsenal.is_switching()
 		reloading = arsenal.is_reloading()
 
-	held.visible = is_alive() and not ArenaWeaponIcons.shared.sprites
+	held.visible = is_alive() and not _fell and not ArenaWeaponIcons.shared.sprites
 	var t_sprite := Time.get_ticks_usec()
 	_present_held_sprite(id)
 	ArenaFrameProbe.add(&"r_held_sprite", t_sprite)

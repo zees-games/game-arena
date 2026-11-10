@@ -48,6 +48,9 @@ func _ready() -> void:
 	if not built.ok:
 		_die("the arena could not be built: %s" % built.error.message)
 		return
+	# As ArenaServer does: without it the boot map's match stays IDLE (nobody spawns, no
+	# rounds) until the first host_change restarts it (owner batch 2026-11-10, item 11).
+	game.start(0)
 
 	var config := _server_config(port, game.tick_rate, data)
 	var server := DotServer.new()
@@ -107,6 +110,9 @@ static func _server_config(port: int, tickrate: int, data: String) -> DotServerC
 	config.query_enabled = false
 	config.enet_share_udp_port = false
 	config.stdin_console_enabled = false
+	# Only the owner chats here, and the menus ask over chat (B, the team screen's 2 s refresh): the
+	# public 20 a minute refused them with "sending messages too quickly" (owner batch 2026-11-10).
+	config.chat_rate_per_minute = 240
 	config.log_level = "warn"
 	return config
 
