@@ -7,7 +7,7 @@ extends DotGameCheckSuite
 ## every shard's log is there and that together they entered one section per weapon.
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
-const ShardArgs := preload("shard_args.gd")
+const ShardArgs := DotGameShardArgs
 
 const SHARDS := 4
 ## The catalogue size (the merge has no booted client to count it from): add a weapon and the merge says so.

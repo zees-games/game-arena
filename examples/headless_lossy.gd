@@ -1,7 +1,7 @@
 extends "headless_lossy_b1.gd"
 
 const SECTIONS := 15
-const ShardArgs := preload("shard_args.gd")
+const ShardArgs := DotGameShardArgs
 ## `-- --shard NAME` boots and connects its own server and plays one part, declaring [sections, checks]; `-- --merge LOG...`
 ## holds that every shard's log is there and that together they entered all SECTIONS.
 ## Every shard boots and connects: two sections each, which the merge counts once.

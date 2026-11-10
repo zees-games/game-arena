@@ -4,7 +4,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
-const ShardArgs := preload("shard_args.gd")
+const ShardArgs := DotGameShardArgs
 
 ## Server-side hit accuracy against a moving, animated target, by body region: a synthetic shot
 ## resolved as ArenaGame.tick does at `tick - lag`, aimed where the bone was, must hit.

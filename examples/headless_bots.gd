@@ -110,16 +110,12 @@ func _run() -> void:
 	# The K/D bands are per bot_difficulty: one shared preset, no persona's scale or spread on top.
 	ArenaBots.personas_mode = ArenaBots.PERSONAS_OFF
 
-	var args := OS.get_cmdline_user_args()
-	var merge := args.find("--merge")
-	var shard := ""
-	if args.find("--shard") >= 0 and args.find("--shard") + 1 < args.size():
-		shard = args[args.find("--shard") + 1]
+	var shard := DotGameShardArgs.shard()
 
-	if merge >= 0:
+	if DotGameShardArgs.is_merge():
 		# The shards' presets, read back from their logs: the order between them is all that is left to hold.
 		_section("the shards' logs")
-		_load_results(args.slice(merge + 1))
+		_load_results(DotGameShardArgs.merge_logs())
 		_done()
 		_test_order()
 		_report_sections(_entered, _completed, 2, ORDER_CHECKS + 1)

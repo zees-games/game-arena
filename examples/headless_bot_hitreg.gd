@@ -1,6 +1,6 @@
 extends DotGameCheckSuite
 
-const ShardArgs := preload("shard_args.gd")
+const ShardArgs := DotGameShardArgs
 
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaContent := preload("../game/arena_content.gd")

@@ -58,21 +58,16 @@ func _run() -> void:
 	_line("arena — imported combat surf maps")
 	_line("")
 
-	var user_args := OS.get_cmdline_user_args()
-	if user_args.has("--merge"):
+	if DotGameShardArgs.is_merge():
 		_merging = true
 		_section("the shards' logs")
-		var logs := user_args.slice(user_args.find("--merge") + 1)
-		var missing := []
-		for path in logs:
-			if not FileAccess.file_exists(path):
-				missing.append(path)
+		var logs := DotGameShardArgs.merge_logs()
+		var missing := DotGameShardArgs.missing(logs)
 		_check(not logs.is_empty() and missing.is_empty(), "every shard's log is there (%d logs)" % logs.size(), "missing %s" % [missing])
 		_done()
 		_finish()
 		return
-	if user_args.has("--shard") and user_args.find("--shard") + 1 < user_args.size():
-		_shard = user_args[user_args.find("--shard") + 1]
+	_shard = DotGameShardArgs.shard()
 
 	if ArenaMap.imported_ids().is_empty():
 		_line("no imported maps under %s — nothing to check" % ArenaImportedMaps.roots()[0])
