@@ -27,7 +27,7 @@ static func build(game) -> void:
 
 
 ## Bodies parked for each weapon a player starts with: a death drops one, and a round's deaths come close together, so one spare left the next drop building a model inside the tick (40 to 70 ms in the bench).
-const POOL_DEPTH := 4
+const POOL_DEPTH := 8
 
 
 ## Weapons worth parking a drop body for: every one with art, the same set the first-person warm-up walks.
