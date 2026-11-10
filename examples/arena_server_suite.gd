@@ -5,9 +5,8 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
 
 ## The part every live-server suite repeats: a real [DotServer] on a free loopback port with
-## [ArenaModule] loaded into it by path, sessions adopted without a socket, and the ticks
-## driven by the suite. [method _boot_server] is the bring-up; the rest is the plumbing a
-## check calls on the way.
+## [ArenaModule] loaded by path, sessions adopted without a socket, ticks driven by the suite.
+## [method _boot_server] is the bring-up; the rest is plumbing a check calls.
 
 var _entered := 0
 var _completed := 0
@@ -144,10 +143,9 @@ func _teardown() -> void:
 		_game.queue_free()
 
 
-## Types a `!command` into chat as [param speaker], and waits for the reply. What
-## `DotChatManager._handle_command` does minus the socket: `player_command` fires (where this
-## game's services claim `!rtv` and the rest), then the line goes to the console with a CHAT
-## context from the speaker's session; the reply sink is a list instead of an RPC.
+## Types a `!command` into chat as [param speaker], and waits for the reply: what
+## `DotChatManager._handle_command` does minus the socket. `player_command` fires, then the
+## line goes to the console with a CHAT context; the reply sink is a list instead of an RPC.
 func _say(speaker: DotClientSession, line: String) -> PackedStringArray:
 	_replies.clear()
 	var trimmed := line.trim_prefix("!").strip_edges()

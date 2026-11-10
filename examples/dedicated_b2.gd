@@ -216,11 +216,9 @@ func _test_module_loaded() -> void:
 	_end()
 
 
-## Chat, voice, moderation and the identity chain, on a real server.
-##
-## [b]Each of these five addons passes its own suite with a stub host.[/b] Untested elsewhere:
-## all of them up in one process on one [DotServer], with dot-moderation before the two routers
-## that look up its `dot_mute_source` (a router that starts first enforces no gag).
+## Chat, voice, moderation and the identity chain, on a real server: all five addons up in one
+## process on one [DotServer], with dot-moderation before the two routers that look up its
+## `dot_mute_source` (a router that starts first enforces no gag).
 func _test_services() -> void:
 	_begin()
 	print("")
@@ -344,7 +342,7 @@ func _test_services() -> void:
 		"leaving nothing behind"
 	)
 
-	# --- Identity ---------------------------------------------------------
+	# identity
 
 	if _check(module.identity != null, "the identity layer is up"):
 		_check(module.identity.platform != null, "with a platform hub")
@@ -703,12 +701,9 @@ func _test_unload() -> void:
 	_end()
 
 
-## [b]The one line that leaked mg-buses-from-hell's whole script graph at exit.[/b] A script
-## that `extends DotNetMessage` and preloads ITSELF, loaded from a module a running
-## [DotServer] loads, leaves every script alive at exit on Godot 4.7.2.
-##
-## [b]Asserted on the source[/b], because the engine reports the leak after `quit()`: every
-## message script in `game/`, read as text.
+## The one line that leaked a game's whole script graph at exit: a script that `extends
+## DotNetMessage` and preloads ITSELF, loaded by a running [DotServer]'s module. Asserted on
+## the source (every message script in `game/`), as the engine reports the leak after `quit()`.
 func _test_no_message_preloads_itself() -> void:
 	_begin()
 	print("")

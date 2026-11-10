@@ -3,10 +3,9 @@ extends Node
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaSimHost := preload("../game/arena_sim_host.gd")
 
-## `--sim_host 1`: the solo game runs as a loopback server process and this client joins it, so the
-## simulation is off the render thread. Off unless asked for; asked for, the client is a connected one
-## (no authority here), sees the bots, lives, and the server process ends with the client.
-## Run: [code]godot --headless --path . res://examples/headless_sim_host.tscn[/code]
+## `--sim_host 1`: the solo game runs as a loopback server process and this client joins it, so
+## the simulation is off the render thread. Off unless asked for; the client sees the bots, lives,
+## and the server process ends with the client.
 
 const BOTS := 4
 

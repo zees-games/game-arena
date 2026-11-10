@@ -1,12 +1,7 @@
 extends DotGameCheckSuite
 
-## ArenaNetAoi: the relevance rings are off for a 16v16, on above sv_net_aoi_players with hysteresis, read
-## their cvars live, and describe the same rings dot-net applies (the packet-level proof is dot-net's
-## netcode_demo `[distance rings]`).
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_netaoi.tscn
-## [/codeblock]
+## ArenaNetAoi: the relevance rings are off for a 16v16, on above sv_net_aoi_players with
+## hysteresis, read their cvars live, and describe the same rings dot-net applies.
 
 const ArenaNetAoi := preload("../game/arena_net_aoi.gd")
 

@@ -2,7 +2,7 @@ extends RefCounted
 
 const ArenaMap := preload("../maps/arena_map.gd")
 
-## Test-only loose physics props. The built-in maps place none (owner 2026-11-08: toys stay in
+## Test-only loose physics props. The built-in maps place none (owner: toys stay in
 ## playground, prop hunt, murder mystery and hide n seek); the toy wire path and the
 ## sim stay covered by giving a test map these placements explicitly.
 

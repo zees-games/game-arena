@@ -2,12 +2,9 @@ extends Node
 
 const ArenaContent := preload("../game/arena_content.gd")
 
-## The slot audit: melee 1, sidearms 2, EVERY gun 3 (rifles, smgs, lmg, sniper, launchers, minigun,
-## beamer, railgun), frag and sticky 4, and slot 5 only for the utility throwables (flash, smoke, incendiary).
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_slots.tscn
-## [/codeblock]
+## The slot audit: melee 1, sidearms 2, EVERY gun 3 (rifles, smgs, lmg, sniper, launchers,
+## minigun, beamer, railgun), frag and sticky 4, and slot 5 only for the utility throwables
+## (flash, smoke, incendiary).
 
 var _checks := 0
 var _failed := 0

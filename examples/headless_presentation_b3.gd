@@ -236,7 +236,7 @@ func _test_effects_and_the_player_who_asked_for_none() -> void:
 		"at the lowest tier the expensive effect does not exist"
 	)
 	p.settings.set_value(&"fx_quality", 3)
-	# Until 2026-09-27 this asserted the refusal's reason was `missing`, because the scene
+	# This once asserted the refusal's reason was `missing`, because the scene
 	# was not in the repository -- which made a check out of the bug. It is drawn now.
 	var why := []
 	p.fx.spawned.connect(func(_id: StringName, node: Node, reason: StringName) -> void:
@@ -252,7 +252,7 @@ func _test_effects_and_the_player_who_asked_for_none() -> void:
 	_done()
 
 
-## [b]Every effect this game names was refused until 2026-09-27[/b], because `scenes/fx/` did not
+## [b]Every effect this game names was refused once[/b], because `scenes/fx/` did not
 ## exist, and dot-fx logs a missing scene at DEBUG.
 func _test_a_shot_is_drawn() -> void:
 	_section("A shot is drawn: a flash at the gun, a spark and a hole where it stopped")
@@ -768,10 +768,9 @@ func _test_blind_and_beacon() -> void:
 		"blinded, it fades in rather than cutting (%.2f half way)" % hud.blind_overlay.modulate.a
 	)
 	hud.present_blind(1.0)
-	# The whole viewport, not the HUD's rect: `DotHud` insets itself by the safe area and
-	# the first rendered blind left a frame of the world round the edge. This is the one
-	# layout check a 64 x 64 headless viewport can still answer, because the inset is
-	# the same sixteen pixels there.
+	# The whole viewport, not the HUD's rect: `DotHud` insets itself by the safe area and the first rendered
+	# blind left a frame of the world round the edge. This is the one layout check a 64 x 64 headless
+	# viewport can still answer, because the inset is the same sixteen pixels there.
 	_check(
 		hud.blind_overlay.get_global_rect().is_equal_approx(hud.get_viewport_rect()),
 		"and covers the whole screen, not the safe area the HUD sits in",

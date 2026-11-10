@@ -540,15 +540,9 @@ func _commands_for_tick(tick: int) -> Dictionary:
 var _fallout_only := ""
 
 
-## [b]General detector for a destination nobody can leave.[/b] The importer runs no outputs,
-## so a door or floor that only a button moves stays as it rests, and a teleport aimed behind
-## one seals whoever lands there. For every combat surf map this takes its biggest volumes
-## (the floor catch-all first), drops a player on each destination and walks the eight
-## headings in turn; the destination is open when some heading carries the player
-## [constant FALLOUT_OUT_AT] metres off along the ground or off an edge, three metres down. A map listed
-## here that fails wants an `open_doors` entry in game-g2gfast's zones file (README there) or
-## a note saying why not. The scan that finds candidates in the .bsp is
-## `game-g2gfast/tools/teleport_traps.py`.
+## General detector for a destination nobody can leave: a teleport aimed behind a button-moved
+## door seals whoever lands there. Every combat surf map drops a player on each big destination
+## and walks eight headings; a failing map wants an `open_doors` entry or a note why not.
 func _test_fallout_all() -> void:
 	_section("every combat surf map: a faller at a big teleport destination can walk away")
 

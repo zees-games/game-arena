@@ -69,11 +69,9 @@ const RIDE_MAP := &"surf_ski_2"
 ## Its starts, and how many must land.
 const RIDE_STARTS := 3
 const RIDE_LANDING := 2
-## The edges the recorded-ride check records, each its own section: ones whose live rides land from the lip at rest
-## (5 of 6 at 64 and 66 Hz), never "the first linked", which moves on every replan. Edge 4 does too when run alone
-## (`-- --rides --record-edge=4`), but after the rest shard's sections keeps 1 of 6 ("moved or died"), so it is not
-## here. Edges 0 and 1 miss; 3 lands 1 of 6 (it touches island 33 on the way, so its rides are filed 18>33) and 7 none:
-## both fall or stall, and want a replan.
+## The edges the recorded-ride check records, each its own section: ones whose live rides
+## land from the lip at rest, never "the first linked", which moves on every replan. Edges 0,
+## 1, 3 and 7 miss or fall and want a replan; edge 4 alone is not stable after the rest shard.
 const RECORD_EDGES := [6]
 ## The rate the ride caches were planned at (ArenaContent.TICK_RATE, the game's default), which the
 ## recorded rides are ridden at: a cache stepped at another rate drifts off its line and the ride dies.
@@ -89,9 +87,8 @@ const ROAM_SECONDS := 90.0
 ## the last to get any; see docs/imported-maps.md, "Which maps have rides".
 const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island", &"surf_the_flow"]
 ## Their starts, and how many must land. Wider than [constant RIDE_STARTS] on purpose: 10x's
-## edge lands 55% of live rides (`tools/surf_rides.tscn --measure`; the misses clip a
-## teleport near the end), so 2 of 3 would fail a working ride two runs in five, while
-## 2 of 6 fails about one in fifteen and still catches a ride that has stopped working.
+## edge lands 55% of live rides, so 2 of 6 fails about one in fifteen and still catches a
+## ride that has stopped working.
 const ROTATION_RIDE_STARTS := 6
 ## Per planned edge in file order (10x: edges 0, 2 and 5 of the file, the last to the far platform 22).
 ## Measured live 55%, 45% and 40% (`tools/surf_rides.tscn --measure`), and 2 of 6 starts landed on
@@ -106,10 +103,9 @@ const SNIPERS_RIDE_LANDING: Array = [5, 5, 5]
 const FLOW_RIDE_LANDING: Array = [5, 5]
 
 
-## Bots ride the ramps (`game/arena_surf.gd`): the edges are linked into the mesh, a route to a
-## platform below crosses one, a bot handed it by its route lands on the far platform alive from
-## [constant RIDE_STARTS] starts (the edge's own and perturbed ones), and a bot left to roam
-## is handed one by its own route.
+## Bots ride the ramps (`game/arena_surf.gd`): the edges are linked into the mesh, a route
+## crosses one, a bot handed it lands alive from [constant RIDE_STARTS] starts, and a roaming
+## bot is handed one by its own route.
 func _test_surf_rides() -> void:
 	_section("bots ride a ramp to another platform, aiming as they go")
 	var rode := await _ride_on(RIDE_MAP, 0, RIDE_STARTS, [RIDE_LANDING])
@@ -130,12 +126,8 @@ func _roam_takes_ride(surf: ArenaSurf, start: Vector3, tick: int) -> int:
 	if not roamer.is_alive():
 		_game.respawn_player(5)
 	roamer.controller.teleport(start, 0.0, 0.0)
-	# The roamer alone on the map, and the others back afterwards. The ride check above parked them
-	# on this same start platform (pushed about by each other's hulls, so where each ends up
-	# depends on where the deathmatch left it), and a roamer that sees one fights instead of
-	# roaming: it strafes off the platform's lip onto the ramp with no ride, falls, and the map's
-	# fall-out teleport puts it on a closed ledge above the spawns that no route leaves. Whether
-	# this check passed hung on where four idle bots stood. It is about routes, not fights.
+	# The roamer alone on the map, the others back afterwards: bots parked on the start
+	# platform and a roamer that sees one fights instead of roaming. This is about routes.
 	var others: Array[int] = []
 	for other in _game.players():
 		if other.player_id != 5:
@@ -376,10 +368,9 @@ func _test_rotation_rides() -> void:
 const BAND_MAPS: Array[StringName] = [&"surf_snipers_island", &"surf_the_flow", &"surf_10x_reloaded_fixed"]
 ## How long the bots are given on each, seconds of play.
 const BAND_SECONDS := 90.0
-## What six bots must do in that time. They are bands and not records: the mesh lands when the
-## machine finishes it, so no two runs play alike. The floors are set well under what one run
-## measured (90 s, six bots: 30 to 47 kills, 1,700 to 6,800 m walked, 1 to 6 platforms, 4 to 16
-## rides; surf_snipers_island sometimes stays on one island while still riding), to catch bots that stand still, never meet, or never take a ride.
+## What six bots must do in that time, as bands: the floors sit well under what one run
+## measured (30 to 47 kills, 1,700 to 6,800 m walked, 1 to 6 platforms, 4 to 16 rides), to
+## catch bots that stand still, never meet, or never ride.
 const BAND_ISLANDS_MIN := 1
 const BAND_KILLS_MIN := 10
 const BAND_METRES_MIN := 800.0
@@ -462,9 +453,8 @@ func _test_bot_band() -> void:
 	_done()
 
 
-## Loads [param map_id], waits for its mesh, checks its planned edges are linked and that a
-## route crosses the first, then rides that edge from [param starts] starts, [param need] of
-## which must land. Returns
+## Loads [param map_id], waits for its mesh, checks its planned edges are linked and that a route crosses
+## the first, then rides that edge from [param starts] starts, [param need] of which must land. Returns
 ## the map's surf, the edge and the tick reached, or nothing when there was nothing to ride.
 func _ride_on(map_id: StringName, tick: int, starts: int, need: Array) -> Dictionary:
 	var changed := _game.change_map(ArenaMap.by_id(map_id))
@@ -737,10 +727,9 @@ func _test_pits() -> void:
 	_done()
 
 
-## surf_ski_2's catch-all floor teleport aims at a roofed cell whose only way out is a door
-## that the map's button opens. The importer runs no outputs, so the door stayed shut and
-## whoever fell (a bot, in the ride check) was stuck there for good; the map's zones file now
-## opens it (`open_doors`). Armed: with the door back in the import nobody leaves the cell.
+## surf_ski_2's catch-all floor teleport aims at a roofed cell whose only exit is a door the
+## map's button opens; the zones file opens it (`open_doors`). Armed: nobody leaves the cell
+## when the door is back in the import.
 func _test_fallout() -> void:
 	_section("surf_ski_2: a fall into the floor catch-all lands in the cell, and the way out is open")
 

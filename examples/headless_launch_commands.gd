@@ -3,11 +3,7 @@ extends DotGameCheckSuite
 const ArenaLaunchCommands := preload("../game/arena_launch_commands.gd")
 
 ## `-- +bot_quota 8 +profiler_overlay 1` at launch becomes console lines, each run when its
-## name exists.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_launch_commands.tscn
-## [/codeblock]
+## name exists. Run `headless_launch_commands`.
 
 const CHECKS := 11
 

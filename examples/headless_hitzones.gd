@@ -7,13 +7,9 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 
-## Hit zones, damage and bot fairness, measured: what one round of every firearm does to each zone of a fresh
-## player (health and armour full), and what each bot difficulty lands on a target (hit share, head share,
+## Hit zones, damage and bot fairness, measured: what one round of every firearm does to each
+## zone of a fresh player, and what each bot difficulty lands on a target (hit share, head share,
 ## damage rate) with the recoil control it is given.
-##
-## [codeblock]
-## ./game.sh test headless_hitzones
-## [/codeblock]
 
 const TICK_RATE := ArenaContent.TICK_RATE
 const ATTACKER := 1

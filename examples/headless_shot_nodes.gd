@@ -1,10 +1,8 @@
 extends Node
 
-## A shot builds no node once the warm-up has run. The owner's web profile showed the first muzzle flash costing ~45 ms (a `DotMuzzleFlash` and
-## its GPUParticles3D built inside the shot), and again on a second gun of the same flash size. This runs the client's warm-up
-## (`ArenaClient._prewarm_tick` phase 1: pin and draw every size, one spare per size and view) on the local player's `AwShotFx`, fires every weapon
-## class several times, plays impacts, and counts nodes entering the tree by the shot: it must be zero.
-## Run: [code]godot --headless --path . res://examples/headless_shot_nodes.tscn[/code]
+## A shot builds no node once the warm-up has run. This runs the client's warm-up
+## (`ArenaClient._prewarm_tick` phase 1) on the local player's `AwShotFx`, fires every weapon
+## class several times, plays impacts, and counts nodes entering the tree by the shot: zero.
 
 const CLASSES: Array[StringName] = [
 	AwWeaponSound.LIGHT, AwWeaponSound.MAGNUM, AwWeaponSound.SMG, AwWeaponSound.RIFLE, AwWeaponSound.HEAVY,

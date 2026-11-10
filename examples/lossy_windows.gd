@@ -234,11 +234,9 @@ func _measure_window(
 	var link: DotClientLink = a["link"]
 	var said: Dictionary = _relay.describe()
 
-	# --- connection ---
-	# Both ends. A client whose server has dropped it does not find out until its own ENet
-	# gives up, so asking only the client passed a window in which the server had
-	# disconnected A and A had heard nothing for seconds (2026-10-09: ENet's own peer
-	# timeouts, now dot-core's DotTransportENet.peer_timeout_*).
+	# connection: both ends. A client whose server dropped it does not find out until its own
+	# ENet gives up, so asking only the client passed a window in which the server had
+	# disconnected A and A had heard nothing for seconds (see dot-core's peer_timeout_*).
 	var a_session := int(a["session"])
 	var on_server := _game.player_for(a_session) != null
 	_check(link.phase == DotClientLink.Phase.PLAYING and String(a["gone"][0]) == "" and on_server,

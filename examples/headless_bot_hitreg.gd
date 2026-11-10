@@ -9,20 +9,9 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 
-## "The bots shoot at me and I take no damage": every shot a bot fires is either a hit that costs the target
-## health, or a miss whose reason is on record (ArenaShotStats: refused, prevented, aim, blocked, on line).
-##
-## [codeblock]
-## ./game.sh test headless_bot_hitreg
-## [/codeblock]
-##
-## [b]Direct.[/b] An attacker holds the trigger with the aim dead on a target's chest, every tick, from the target's
-## present position: stationary and strafing, point blank, mid and long range. Every shot must damage it. The same
-## again paced like a loaded server: several ticks run back to back (the catch-up after a slow frame) and a stall
-## after them, so wall time and game time part ways.
-##
-## [b]Brain.[/b] The real brain (ArenaBots.think, stagger and coast on) against a stationary and a strafing target
-## for a minute of game time: no shot may be refused or prevented, and none may miss while on line with a body in the open.
+## "The bots shoot at me and I take no damage": every bot shot is a hit that costs health, or a
+## miss whose reason is on record (ArenaShotStats). Direct dead-on shots must all damage, also
+## paced like a loaded server; the real brain for a minute refuses or prevents none.
 
 const TICK_RATE := ArenaContent.TICK_RATE
 const ATTACKER := 1

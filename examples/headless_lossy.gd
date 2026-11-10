@@ -709,10 +709,9 @@ func _teardown() -> void:
 	await get_tree().process_frame
 
 
-## Hopping pinned against a wall replays the jump timers (coyote, buffer, cooldown): a rewind
-## that kept the client's own jumped where the server had not, a correction metres high. So A
-## hops into the east wall for six seconds, its prediction stays on the server's, and a rewind
-## carries the timers.
+## Hopping pinned against a wall replays the jump timers (coyote, buffer, cooldown): a rewind that kept
+## the client's own jumped where the server had not, a correction metres high. So A hops into the east
+## wall for six seconds, its prediction stays on the server's, and a rewind carries the timers.
 func _test_wall_hops() -> void:
 	await _hop_section("hopping pinned against a wall through 20% loss", false, 6.0)
 

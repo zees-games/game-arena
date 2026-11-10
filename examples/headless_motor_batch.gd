@@ -6,18 +6,9 @@ const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModTools := preload("../game/arena_mod_tools.gd")
 
-## `arena_motor_batch`: the players' motors ticked in runs of one dot-sim call play exactly the match the loop one player
-## after another plays. A match of bots is played once and its commands recorded; the recording is then replayed through
-## both loops and every player's position, velocity, movement mode, stance, view and health, to the bit, hashed every
-## few ticks, is identical: a box of walkers and a map with a pit to die in (analytic collision, where the motors leave
-## the batch and tick by themselves), an imported map and surf ramps (where they run in it). The imported map again with
-## the shots judged against the past and lagged movers colliding with it, and with players killed, slapped and pushed
-## between two ticks and after their own turn. Changed before their turn by another player's they are counted instead. Run:
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_motor_batch.tscn
-## ./game.sh test headless_motor_batch
-## [/codeblock]
+## `arena_motor_batch`: the players' motors ticked in runs of one dot-sim call play exactly the
+## match the loop one player after another plays. A recorded bot match is replayed through both
+## loops and every player's state, hashed every few ticks, is identical, on box, pit, imported and surf maps.
 
 const TICK_RATE := 33
 const BOTS := 24
@@ -207,10 +198,9 @@ func _first_diff(a: PackedStringArray, b: PackedStringArray) -> String:
 	return "%d windows" % a.size() if a.size() == b.size() else "%d and %d windows" % [a.size(), b.size()]
 
 
-## One match, the bots thinking ([param think], their commands appended to [param streams]) or [param streams] replayed:
-## [digests, kills, batch rows, batch faults, hits, rewound places or players changed]. [param opts]:
-## [code]lag[/code] sends a view lag with the commands, [code]collide[/code] has the lagged movers collide with the
-## past too, [code]meddle[/code] is where a [Meddler] acts.
+## One match, the bots thinking ([param think], commands appended to [param streams]) or
+## [param streams] replayed: [digests, kills, batch rows, batch faults, hits, rewound changes].
+## [param opts]: `lag`, `collide`, `meddle` (where a [Meddler] acts).
 func _play(batched: bool, map_id: StringName, bots: int, seconds: float, streams: Array, think: bool, opts: Dictionary = {}) -> Array:
 	ArenaHullGrid.batch = batched
 	ArenaHullGrid.batch_rows = 0

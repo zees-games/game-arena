@@ -1,10 +1,8 @@
 extends Node
 
-## The timed stats flush writes the stats file once, not once per player. The owner's 24-player profile had a 130 ms script spike every report
-## interval: `DotStatsStoreFile` re-serialised and atomically rewrote the whole file after each player's merge, all in the flush's frame.
-## This flushes 24 players through `ArenaStatsStore` and through the addon's store, and asserts one write, the same file, and nothing lost
-## when no frame follows the flush. The achievement autosave had the same shape (a file per dirty player in one frame) and gets the same checks.
-## Run: [code]godot --headless --path . res://examples/headless_stats_hitch.tscn[/code]
+## The timed stats flush writes the stats file once, not once per player. This flushes 24 players
+## through `ArenaStatsStore` and the addon's store, and asserts one write, the same file, and
+## nothing lost; the achievement autosave gets the same checks.
 
 const ArenaAwards := preload("../game/arena_awards.gd")
 const ArenaAwardStore := preload("../game/arena_award_store.gd")

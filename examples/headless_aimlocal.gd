@@ -4,18 +4,9 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaBindings := preload("../game/arena_bindings.gd")
 
-## Local play (the offline ArenaClient) aim test. A scripted still bot at 5, 15 and 30 m, the real client firing
-## a held burst from the hip and aimed down the sights, standing and crouched, the crosshair held on the bot's chest
-## the way a player who does not fight the recoil holds it. Each shot reports the angle between the CAMERA ray (what
-## the crosshair shows, view punch included) and the BULLET ray (the shot the arsenal made, recoil included) and the
-## gap between camera and muzzle. The bullet must leave the camera ray with spread (plus the weapon's recoil offset)
-## only: a view punch that the bullet does not share is a systematic miss.
-##
-## Frames are stepped, two a tick (game.sh's FIXED_FPS table), not paced by the wall clock: see the note at the checks.
-##
-## [codeblock]
-## godot --headless --fixed-fps 132 --path . res://examples/headless_aimlocal.tscn
-## [/codeblock]
+## Local play (the offline ArenaClient) aim test: a still bot at 5, 15 and 30 m, a held burst
+## from the hip and aimed. The bullet ray must leave the camera ray with spread and recoil
+## offset only. Frames are stepped, two a tick (game.sh's FIXED_FPS table).
 
 const DISTANCES := [5.0, 15.0, 30.0]
 const BURSTS := 4

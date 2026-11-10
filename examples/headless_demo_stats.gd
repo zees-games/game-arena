@@ -6,11 +6,9 @@ const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaDemoStatsScript := preload("../game/arena_demo_stats.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 
-## Place and engage recordings and heatmap-weighted roaming: off by default, a bot is never recorded, a player standing and aiming at another becomes a `place` and an `engage` episode, and the bots' waypoints repeat where people stand.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_demo_stats.tscn
-## [/codeblock]
+## Place and engage recordings and heatmap-weighted roaming: off by default, a bot is never
+## recorded, a player standing and aiming at another becomes a `place` and an `engage` episode,
+## and the bots' waypoints repeat where people stand.
 
 const TICK_RATE := 64
 const EXPECTED_CHECKS := 29

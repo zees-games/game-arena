@@ -7,14 +7,9 @@ const ArenaRecoilView := preload("../game/arena_recoil_view.gd")
 const KillPov := preload("../game/arena_kill_pov.gd")
 const KillPovRecoil := preload("../game/arena_kill_pov_recoil.gd")
 
-## Per-weapon recoil: the game tier of the Dot profile gives every firearm a kick, the camera climbs with a
-## held trigger and settles after it, the same shots kick the same way on a second run (what the server and
-## a predicting client both compute), cl_recoil_view only scales the drawn view, every firearm's held spray
-## climbs and drifts by its class, and a killcam replays the killer's kick (cl_killcam_recoil).
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_recoil.tscn
-## [/codeblock]
+## Per-weapon recoil: the game tier of the Dot profile gives every firearm a kick, the camera
+## climbs with a held trigger and settles after it, the same shots kick the same way twice,
+## cl_recoil_view only scales the drawn view, and a killcam replays the killer's kick.
 
 const TICK_RATE := 64
 const EXPECTED_SECTIONS := 6

@@ -21,28 +21,8 @@ const TICK_RATE := 64
 
 
 ## Connected windows: name, display fps, loss each way, delay each way (ms), jitter (ms),
-## seconds, jump held, the delay each way the link changes to as the window starts (0:
-## unchanged), whether the local eye is judged, and how far (metres) the bot's step may be
-## off the server's motion in a frame.
-##
-## [b]The delay changing[/b] is what makes slips happen on purpose: a client's clock keeps a
-## lead over the server that follows the round trip, and gains or gives it back by running
-## its ticks a few percent short or long (drift), so for a second or two some physics frames
-## run two ticks or none; and the receive timeline re-anchors a tick at a time. Left to
-## chance that happens as a link settles or loses packets, which a window may or may not see.
-##
-## [b]The eye is judged while the link slows too.[/b] The server says in each snapshot how
-## early the client's commands reach it (dot-net's input lead, `FEATURE_INPUT_LEAD`), and the
-## clock gains the 30 ms by running its ticks a little short. Before that the lead followed
-## ENet's smoothed round trip for seconds, the commands reached the server after their tick
-## and the prediction was corrected dozens of times, the eye going backwards on 63-85 frames.
-## The window prints how many commands came late and when the last did after the change.
-## Snapshots arrive late then too, so the bot is extrapolated for a moment and eased back
-## (4 cm, as with loss).
-##
-## Steady, 2 cm. With loss: a correction is eased, not hidden (3 cm for the eye), and a
-## stalled snapshot stream is guessed along a line and eased back when it resumes (5.5 cm for
-## the bot at 5% loss, 10 at 20%; it was 17 to 32 cm in one frame).
+## seconds, jump held, the delay each way the link changes to, whether the local eye is judged,
+## and the bot's step tolerance in metres. A changing delay makes clock slips happen on purpose.
 const WINDOWS := [
 	["60 Hz display, steady 40 ms", 60, 0.0, 40.0, 0.0, 5.0, false, 0.0, true, 0.02],
 	["144 Hz display, steady 40 ms, jumping", 144, 0.0, 40.0, 0.0, 5.0, true, 0.0, true, 0.02],
@@ -53,10 +33,9 @@ const WINDOWS := [
 ]
 
 
-## Where the local runner's circle is centred: dm_box's open floor south of the stair and
-## the pillar, nothing overhead and no wall within 5 m (the ledges and walkways are ceilings
-## at 3.0, which a jump's head reaches). The circle is about 2.3 m across at a run; hopping
-## drifts it a metre or two. `_check_open_floor` says if a runner did not stay clear.
+## Where the local runner's circle is centred: dm_box's open floor south of the stair and the
+## pillar, nothing overhead and no wall within 5 m. `_check_open_floor` says if a runner did
+## not stay clear.
 const RUN_CENTRE := Vector3(11.75, 0.05, -17.25)
 
 
@@ -135,14 +114,9 @@ func _measure() -> void:
 	_wall.clear()
 
 
-## Why the frames since [method _measure] cannot be judged at [param fps], or "".
-##
-## [b]A feel check reads frames, and a starved machine stalls them.[/b] Under load well over
-## the core count (other suites, a build) a frame can take ten times its budget, and the
-## eye, the lean and the bot then step by that much in one frame: the stair "jumps" 71 mm and
-## the bot 226 mm, with nothing wrong in the game. More than one frame in twenty (and at least
-## four) over twice the display's budget is a machine that was not keeping up; a real hitch is
-## one or two frames, and stays judged.
+## Why the frames since [method _measure] cannot be judged at [param fps], or "". A starved
+## machine stalls frames: more than one in twenty (and at least four) over twice the display's
+## budget is a machine not keeping up; one or two hitches stay judged.
 func _starvation(fps: float) -> String:
 	var budget := 1.0 / maxf(fps, 1.0)
 	var over := 0
@@ -342,13 +316,9 @@ func _connect() -> bool:
 	_client.set("mouse_capture_override", true)
 	_client_side.add_child(_client)
 
-	# **The cover lifts on the server's map, never on the placeholder the client boots on.**
-	# A connected client builds dm_box and learns the server's map a round trip after READY.
-	# Its gate let go of the map at boot, so the cover lifted on dm_box and came back for the
-	# real map: a joiner on dm_atrium saw and walked the wrong level for 140 ms (100 ms each
-	# way), and the cover report made the server count the seat loaded while it was not.
-	# The server here is on dm_box, so this asks the order, not the map: was the server's
-	# map in when the gate first opened?
+	# The cover lifts on the server's map, never on the placeholder the client boots on: a joiner
+	# on another map saw and walked the wrong level for 140 ms. The server here is on dm_box, so
+	# this asks the order: was the server's map in when the gate first opened?
 	var map_in := [false]
 	var opened_on := [""]
 	var extras: Node = _client.get("extras")
@@ -384,17 +354,8 @@ func _connect() -> bool:
 
 
 ## Puts [param p] (on the server) where the circle it runs is centred on [param centre]:
-## [param radius] metres from it, square to the way it is heading. [param heading] is the
-## heading's angle off the yaw in degrees (-45 for forward and right held), and
-## [param turns_left] says which side the centre is on: a runner whose yaw grows turns
-## toward (-cos, 0, sin) of its heading, one whose yaw shrinks the other way.
-##
-## [b]The local runner's yaw shrinks.[/b] The mouse moves right, and it holds forward and
-## right. Until 2026-10-12 it was placed as if it turned left, so every window's circle was
-## centred 4.4 m off, under the east ledge's lip and against the east wall: the jumping
-## window's apex hit the ledge's underside, and the "eye" check measured a ceiling bump and
-## a wall slide, which client and server disagree about by a few centimetres, and failed on a
-## correction whenever a loaded machine lined one up with a judged frame.
+## [param radius] metres from it, square to its heading ([param heading] degrees off the yaw).
+## [param turns_left] says which side the centre is on; the local runner's yaw shrinks.
 func _place_on_circle(p: ArenaPlayer, centre: Vector3, radius: float, heading: float = 0.0,
 		turns_left: bool = true) -> void:
 	if p == null:
@@ -638,16 +599,9 @@ func _local(w: Dictionary, limit: float = 0.02) -> Dictionary:
 			ratios.append(along / (speed * dt))
 			if along < -0.0005:
 				backward += 1
-			# Less 15% of the step: after a slip the drawing runs up to a tenth fast or slow
-			# while it is taken up (DotNetClock.render_alpha), and is drawn along the tick
-			# before, whose velocity this is not. A slip not taken up is a whole step.
-			#
-			# [b]And less what the clock does on purpose.[/b] While it gains lead its ticks run
-			# up to 12% short (`_drift_scale` 0.88: the player moves 14% faster in real time)
-			# and a slip is taken up at twice that (`_slip_recovery` 0.27), so the eye runs up
-			# to half as fast again for a few frames by design. Judged against real time alone,
-			# a frame of that on open floor at a run was 2.4-2.9 cm "off" in about one 40->70
-			# window in four; a still or doubled frame is a whole step, which this still is.
+			# Less 15% of the step: after a slip the drawing runs up to a tenth fast or slow while
+			# taken up (DotNetClock.render_alpha). And less what the clock does on purpose: while it
+			# gains lead its ticks run up to 12% short, so the eye runs faster for a few frames.
 			var clock_share := absf(1.0 / maxf(float(b.get("drift", 1.0)), 0.01) - 1.0)
 			if absf(float(b.get("slip", 0.0))) > 1e-6 or absf(float(a.get("slip", 0.0))) > 1e-6:
 				clock_share += float(b.get("slip_rate", 0.0))
@@ -697,10 +651,9 @@ func _check_local(w: Dictionary, limit: float) -> void:
 		"%d off, %d backwards, max %.1f mm" % [l["jumps"], l["backward"], _pct(l["offs"], 1.0) * 1000.0])
 
 
-## Everybody else as drawn: each frame's step against the step their motion asked for.
-##
-## Offline the truth is their own simulated velocity; connected, the server's track at the
-## render tick this frame and the last were drawn at.
+## Everybody else as drawn: each frame's step against the step their motion asked for. Offline
+## the truth is their own simulated velocity; connected, the server's track at the render tick
+## this frame and the last were drawn at.
 func _others(w: Dictionary, limit: float = 0.02) -> Dictionary:
 	var frames: Array = w["frames"]
 	var offs := []

@@ -1,11 +1,7 @@
 extends DotGameCheckSuite
 
-## Every avatar stands at the configured classic-shooter height: 72 units (crouch 36, eye 64) at the
-## map's 0.01905 m a unit, whichever body model it wears, and the hull, eye and hit zones agree.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_avatar_scale.tscn
-## [/codeblock]
+## Every avatar stands at the configured classic-shooter height: 72 units (crouch 36, eye 64) at
+## the map's 0.01905 m a unit, whichever body model it wears, and the hull, eye and hit zones agree.
 
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")

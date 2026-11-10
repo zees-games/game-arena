@@ -551,10 +551,8 @@ func _connect_client(label: String, udp_port: int, lift_cover: bool = true) -> D
 	return record
 
 
-## [b]dot-combat's `mp_teammate_passthrough` on a client.[/b] The client traces its own shots
-## for tracers and impacts; on its default against a server on 0 or 2 they ended in, or went
-## through, a team-mate where the server's did the opposite. The server's value rides
-## dot-server's replicated cvars before the scene loads, and every change after it.
+## dot-combat's `mp_teammate_passthrough` on a client: the client traces its own shots, so the
+## server's value rides dot-server's replicated cvars before the scene loads, and every change.
 func _test_server_cvars_reach_the_client() -> void:
 	_section("the server's mp_teammate_passthrough reaches a client's world, live")
 	var a: Dictionary = _clients["A"]
@@ -635,10 +633,8 @@ func _test_ambient_cvars_reach_the_client() -> void:
 	_done()
 
 
-## [b]arena-weapons' `mp_vm_*` and the map's packs on a client.[/b] The hands are drawn on the
-## client, so the server's sway, tilt, bob, landing and aim steadiness have to reach it, at the
-## join and live; and a pack lives the whole map, so a client that joined after the server built
-## the map has to be told the packs that are out.
+## arena-weapons' `mp_vm_*` and the map's packs on a client: the server's sway, tilt, bob,
+## landing and aim steadiness reach it at the join and live, and a late joiner is told the packs out.
 func _test_view_feel_and_packs_reach_the_client() -> void:
 	_section("the server's mp_vm_* and the map's packs reach a client")
 	var a: Dictionary = _clients["A"]

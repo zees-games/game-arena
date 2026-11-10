@@ -5,14 +5,9 @@ const ArenaBotThreads := preload("../game/arena_bot_threads.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 
-## `bot_threads`: the bots' brains on worker threads play exactly what they play on one. The same 24 bots on dm_box
-## play SECONDS of a deathmatch four times -- threads 0, 0 again, 1, 4 and 8 -- and the position, view, health and
-## the commands of every bot, hashed every few ticks, are identical in all of them. Run:
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_botthreads.tscn
-## ./game.sh test headless_botthreads
-## [/codeblock]
+## `bot_threads`: the bots' brains on worker threads play exactly what they play on one. The same
+## 24 bots on dm_box play a deathmatch at threads 0, 0 again, 1, 4 and 8; every bot's position,
+## view, health and commands, hashed every few ticks, are identical in all of them.
 
 const TICK_RATE := 33
 const BOTS := 24

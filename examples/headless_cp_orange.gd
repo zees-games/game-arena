@@ -12,10 +12,8 @@ const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 
 ## cp-orange-x3 (arena-dm-maps), a large control point map: its team spawns are red and blue, the
-## manifest lists the modes it hosts, and CTF puts the flags where `flag_spawns` says. Skips (exit 0,
-## says so) when the map is not linked at maps/imported_dm. [codeblock]
-## godot --headless --path . res://examples/headless_cp_orange.tscn
-## [/codeblock]
+## manifest lists the modes it hosts, and CTF puts the flags where `flag_spawns` says. Skips
+## (exit 0, says so) when the map is not linked at maps/imported_dm.
 
 const MAP := &"cp-orange-x3"
 const BOTS := 12

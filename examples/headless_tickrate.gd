@@ -7,16 +7,9 @@ const ArenaFlashlight := preload("../game/arena_flashlight.gd")
 const ArenaContent := preload("../game/arena_content.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 
-## The tick rate is a setting: what has to hold at 22, 33, 66 and 128 Hz.
-##
-## - the snapshot rate is its own number (`sv_snapshot_rate`, carried in HELLO), a whole-tick divisor of any tick rate;
-## - a client that predicts a scripted run (wall run, wall jump, jump, strafe) stays within 2 cm of the server (22 Hz: 10 cm; the wire quantises to a centimetre)
-##   when it is rewound to the server's state every 1, 3 or 6 ticks, and ends a wall run on the server's tick;
-## - a wall-run time cap that is a whole number of ticks ends on that tick for the server and a rewound client.
-##
-## The full-stack prediction check (real wire, real bridge, wall routes) is `headless_net` with `-- --tick-rate=N`
-## (or ARENA_TICK_RATE=N), the same for `headless_lossy`.
-## Run: [code]godot --headless --path . res://examples/headless_tickrate.tscn[/code]
+## The tick rate is a setting: what has to hold at 22, 33, 66 and 128 Hz. The snapshot rate is
+## its own number, a predicting client stays within 2 cm of the server when rewound, and a
+## wall-run cap ends on the same tick. The full-stack check is `headless_net` `-- --tick-rate=N`.
 
 const RATES := [22, 33, 66, 128]
 const SECTIONS := 7

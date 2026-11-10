@@ -3,12 +3,9 @@ extends DotGameCheckSuite
 const ArenaTickBudget := preload("../game/arena_tick_budget.gd")
 const ArenaAudioManager := preload("../game/arena_audio_manager.gd")
 
-## A solo frame must keep the simulation on wall-clock time. Models the engine's loop
-## (time owed accumulates, at most `cap` ticks run, the rest is dropped) with
-## ArenaTickBudget choosing the cap from the cost of a tick, and checks the simulated
-## ticks per wall second: at 17 fps with cheap ticks the old flat cap of 2 gave about half
-## speed (the owner's 16v16 footage: "time feels slowed down").
-## Run: [code]godot --headless --path . res://examples/headless_tickbudget.tscn[/code]
+## A solo frame must keep the simulation on wall-clock time. Models the engine's loop (time owed
+## accumulates, at most `cap` ticks run) with ArenaTickBudget choosing the cap from the cost of
+## a tick, and checks the simulated ticks per wall second at 17 fps with cheap ticks.
 
 const SECTIONS := 5
 const CHECKS := 26
@@ -99,11 +96,9 @@ func _run() -> void:
 	_check(hb.load_scale(1.0 / 66.0) > 1.5 and hb.load_scale(1.0 / 66.0) <= ArenaTickBudget.MAX_LOAD_SCALE, "a tick over its period stretches them, capped")
 	_done()
 
-	# The loop above is a model of the engine. This one is the engine: a frame of 45 ms
-	# (22 fps; `_process` busy-waits) with a 2 ms tick at the project's tick rate, once with
-	# the old flat cap of 2 and once with the cap ArenaTickBudget picks after every tick,
-	# the way ArenaClient._physics_process does. Counts the physics frames that really ran
-	# against wall time.
+	# The loop above is a model; this one is the engine: a frame of 45 ms (22 fps) with a 2 ms
+	# tick, once with the flat cap of 2 and once with ArenaTickBudget's cap, counting the
+	# physics frames that really ran against wall time.
 	_section("the real engine loop at 22 fps")
 	var rate := float(Engine.physics_ticks_per_second)
 	var flat := await _engine_scale(null, 45.0, 2.0, 3.0)

@@ -1,10 +1,8 @@
 extends Node
 
-## The first throw of a weapon must not hitch. Times a spawn and the next physics frames for a cold
-## layer (the model is built and measured on the throw) and for one that was prewarmed, on a server
-## layer (no drawing) and a client layer (the real model), over a flat floor.
-## Checks the prewarmed throw takes a parked body (nothing built) and is not slower than cold.
-## Run: [code]godot --headless --path . res://examples/headless_weapondrop_hitch.tscn[/code]
+## The first throw of a weapon must not hitch. Times a spawn and the next physics frames for a
+## cold layer and a prewarmed one, on a server layer and a client layer, and checks the
+## prewarmed throw takes a parked body and is not slower than cold.
 
 const Wiring := preload("../game/arena_weapon_drop_wiring.gd")
 const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")

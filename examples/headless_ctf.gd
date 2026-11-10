@@ -299,7 +299,7 @@ func _test_cvars() -> void:
 	_done()
 
 
-## Owner 2026-11-08: a side was on 8 with fewer captures, and the match kept ending. Kills were worth a team point (the deathmatch rules) and reached the capture limit; the generic 600 s clock applied too.
+## Owner: a side was on 8 with fewer captures, and the match kept ending. Kills were worth a team point (the deathmatch rules) and reached the capture limit; the generic 600 s clock applied too.
 func _test_score_is_captures() -> void:
 	_section("ctf: the score is captures only, and there is no clock by default")
 	var game := _ctf_game()

@@ -4,10 +4,9 @@ const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 
-## What the bot-on-an-imported-map suites share: the map loop, a game with bots (and
-## optionally one standing human) on a map, the baked route mesh waited for, and the bots'
-## think-and-tick step. A suite supplies [method _title], [method _default_maps] and
-## [method _one].
+## What the bot-on-an-imported-map suites share: the map loop, a game with bots (and optionally
+## one human) on a map, the baked route mesh waited for, and the bots' think-and-tick step.
+## A suite supplies [method _title], [method _default_maps] and [method _one].
 const TICK_RATE := 64
 
 var _world: ArenaBots.World = null

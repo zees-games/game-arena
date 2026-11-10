@@ -7,13 +7,9 @@ const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaEvent := preload("../game/arena_event.gd")
 const ArenaKnifeEvents := preload("../game/arena_knife_events.gd")
 
-## Knife throwing through the whole game: the aim key throws the knife in hand, a miss bounces and
-## settles on the floor, an enemy hit kills and the knife stays in the body, walking over either picks
-## it up, a team-mate is not killed, and the enable and pickup rules; plus the MORE/KNIFE wire record.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_knife_throw.tscn
-## [/codeblock]
+## Knife throwing through the whole game: the aim key throws the knife in hand, a miss bounces
+## and settles, an enemy hit kills and the knife stays in the body, walking over either picks
+## it up, a team-mate is not killed; plus the MORE/KNIFE wire record. Run `headless_knife_throw`.
 
 const TICK_RATE := 64
 const EXPECTED_SECTIONS := 2

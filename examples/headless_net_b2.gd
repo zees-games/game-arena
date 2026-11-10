@@ -521,7 +521,7 @@ func _test_config_agreement() -> void:
 
 	# **A quantised value decoded against a different range is a different value, not a less precise
 	# one.** `world_extent` is the range every replicated position is an integer over, and the
-	# server and the client used to write it separately — 128 in `ArenaModule`.
+	# server and the client wrote it separately — 128 in `ArenaModule`.
 	_check(
 		is_equal_approx(_server_net.config.world_extent, ArenaGame.NET_WORLD_EXTENT),
 		"the server quantises positions over the game's extent",
@@ -537,20 +537,17 @@ func _test_config_agreement() -> void:
 			"%.1f vs %.1f" % [net.config.world_extent, _server_net.config.world_extent]
 		)
 
-		# The tick rate is the other number the two ends must not disagree about, and
-		# the one this family has already paid for: a client counting at its own rate
-		# against a 128-tick server read a 0.218 s finish as 0.466 s and never
-		# converged. HELLO carries it; `_adopt_tick_rate` is what applies it.
+		# The tick rate is the other number the two ends must not disagree about, and the one this family has
+		# already paid for: a client counting at its own rate against a 128-tick server read a 0.218 s finish
+		# as 0.466 s and never converged. HELLO carries it; `_adopt_tick_rate` is what applies it.
 		_check(
 			net.config.tick_rate == _server_net.config.tick_rate,
 			"and counts at the same rate",
 			"%d vs %d" % [net.config.tick_rate, _server_net.config.tick_rate]
 		)
 
-	# The schema hash is the third. Two peers that registered different message types,
-	# or the same ones in a different order, hash differently — and `Array.sort()` on a
-	# StringName sorts by interned POINTER, which every suite in this family missed by
-	# running both ends in one process and sharing one intern table.
+	# The schema hash is the third. Peers that registered different message types, or in a
+	# different order, hash differently (`Array.sort()` on a StringName sorts by pointer).
 	var server_hash := _server_net.messages.schema_hash()
 
 	for peer_id in _clients:
@@ -588,14 +585,9 @@ class EngineErrors extends Logger:
 		return out
 
 
-## dot-map's announce/ready/load protocol, over this game's own link.
-##
-## [b]dot-map's own suite runs this over a loopback `send_fn` and never over
-## dot-net.[/b] Its notes say so, and they say what follows from it: the seam between
-## a map sync host and a real game's transport is the one nothing has run. This is
-## that seam — two [ArenaNetLink]s, a real [DotMapSyncHost] and a real
-## [DotMapSyncClient], with the payloads going through the same `send_map` a socket
-## would use.
+## dot-map's announce/ready/load protocol, over this game's own link: two [ArenaNetLink]s, a
+## real [DotMapSyncHost] and [DotMapSyncClient], payloads through the same `send_map` a socket
+## would use. dot-map's own suite only runs a loopback `send_fn`.
 func _test_map_sync_wire() -> void:
 	print("")
 	_section("[map sync over the link]")
@@ -610,10 +602,9 @@ func _test_map_sync_wire() -> void:
 	add_child(client_link)
 	client_link.name = "MapClientLink"
 
-	# Both loopbacks, crossed. `send_map` refuses to fall through to an RPC when the
-	# byte loopback is set, so a harness that wired one and not the other would get a
-	# silent no-op rather than a crash — which is why the counters are asserted below
-	# rather than only the outcome.
+	# Both loopbacks, crossed. `send_map` refuses to fall through to an RPC when the byte loopback is set,
+	# so a harness that wired one and not the other would get a silent no-op rather than a crash — which is
+	# why the counters are asserted below rather than only the outcome.
 	server_link.loopback = func(_m: StringName, _p: int, _b: PackedByteArray) -> void: pass
 	client_link.loopback = func(_m: StringName, _p: int, _b: PackedByteArray) -> void: pass
 
@@ -639,12 +630,9 @@ func _test_map_sync_wire() -> void:
 		server_link.send_map(peer, payload)
 	add_child(host)
 
-	# The FOLLOWER needs a catalogue too, and leaving it out looks exactly like a
-	# trust refusal: `DotMapSyncClient` accepts an announced map only if it is in its
-	# own catalogue at the same version, or is delivered content. With no session it
-	# has no catalogue, so every one of this game's maps was refused with "a host may
-	# not send a map that is not delivered content" — which is the correct answer to
-	# the question it was actually being asked.
+	# The FOLLOWER needs a catalogue too: `DotMapSyncClient` accepts an announced map only if
+	# it is in its own catalogue at the same version, else it refuses with "a host may not
+	# send a map that is not delivered content".
 	var client_game: ArenaGame = client_entry["game"]
 
 	var follower_session := ArenaMapSession.new()
@@ -689,10 +677,9 @@ func _test_map_sync_wire() -> void:
 		"%d" % client_link.map_received
 	)
 
-	# The report going back is the half that makes the wait mean anything. Without it
-	# the host waits out its whole timeout and swaps without the client — which
-	# `swap_without_stragglers` permits, so the change would still "work" and the peer
-	# would still be on the old map.
+	# The report going back is the half that makes the wait mean anything. Without it the host waits out its
+	# whole timeout and swaps without the client — which `swap_without_stragglers` permits, so the change
+	# would still "work" and the peer would still be on the old map.
 	_check(
 		server_link.map_received > 0,
 		"the client reported back, so the host did not wait out its timeout",
@@ -707,13 +694,9 @@ func _test_map_sync_wire() -> void:
 		String(client_game.map.id)
 	)
 
-	# [b]Where the player stands is the server's, and the client has to follow it.[/b] A
-	# map change respawns everybody on the authority (`[arena-mapchange-floor-1]`: a
-	# position carried over can be inside a box of the next map) and does nothing of the
-	# kind on a mirror, which only rebuilds its geometry. So the client's own predicted
-	# player is left where it stood in the old map until a snapshot says otherwise, and
-	# this is the check that one does — through the predictor, whose rewind adopts the
-	# server's state and replays on top of it, over the same one-in-five loss.
+	# The player's position is the server's and the client has to follow: a map change respawns
+	# everybody on the authority and only rebuilds geometry on a mirror, so this checks the
+	# predictor adopts the server's state over the same one-in-five loss.
 	var peer: int = _clients.keys()[0]
 	var session_id := int(client_entry["session"])
 	var on_server: ArenaPlayer = _server_bridge.behaviour_for(session_id).player

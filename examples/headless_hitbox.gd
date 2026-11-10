@@ -6,21 +6,9 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
 const ShardArgs := preload("shard_args.gd")
 
-## Server-side hit accuracy against a moving, animated target, by body region.
-##
-## A target strafes (or stands, or crouches) 25 m from a still shooter. Every tick the target's drawn
-## pose is recorded: the global position of its skeleton's bones (Head, Torso, Hips, Foot) when the
-## figure built, else the standing zone heights scaled by the crouch. Then a synthetic shot is
-## resolved exactly as ArenaGame.tick does for a fired weapon -- `_resolve_shot(shot, tick - lag)` --
-## aimed at where the bone WAS `lag` ticks ago (what the shooter's screen showed). With a correct rewind
-## and hit zones that match the drawn body every one of them hits; the table lists misses by region.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_hitbox.tscn
-## [/codeblock]
-##
-## `-- --shard NAME` plays one of CELLS (the four cells are independent: each respawns both players);
-## `-- --merge LOG...` only holds that every shard's log is there (each shard fails on its own).
+## Server-side hit accuracy against a moving, animated target, by body region: a synthetic shot
+## resolved as ArenaGame.tick does at `tick - lag`, aimed where the bone was, must hit.
+## `-- --shard NAME` plays one cell; `-- --merge LOG...` holds that every shard's log is there.
 
 const TICK_RATE := 64
 const DIST := 25.0

@@ -1,12 +1,8 @@
 extends Node
 
-## Somebody else's first shot must not build an audio stack. Each other player's world model makes its own `AwShotFx`
-## on its hand's first shot (`AwWorldModel._shot_fx`), and that built a DotAudioManager, enclosure and shot player with
-## thirteen registrations on its own: 40 ms a shooter, thirty-one shooters at 16 v 16 (measured on a laptop, headless).
-## The presentation now hands every remote hand its one shot player (`ArenaPresentation.share_shots`).
-## Times the first shot of 31 shooters on hands that share it and on hands that do not, checks the shared ones build no
-## `AwShotLayers`, play through the presentation, and that the real client wires its bots' hands.
-## Run: [code]godot --headless --path . res://examples/headless_shotfx_hitch.tscn[/code]
+## Somebody else's first shot must not build an audio stack: the presentation hands every remote
+## hand its one shot player (`ArenaPresentation.share_shots`). Times the first shot of 31
+## shooters on hands that share it and that do not, and checks the real client wires its bots' hands.
 
 const SHOOTERS := 31
 const ArenaPresentation := preload("../game/arena_presentation.gd")

@@ -10,20 +10,9 @@ const ArenaTestPorts := preload("test_ports.gd")
 const ArenaVote := preload("../game/arena_vote.gd")
 const ArenaVoteSource := preload("../game/arena_vote_source.gd")
 
-## A real [DotServer], listening, with the arena loaded into it.
-##
-## [codeblock]
-## godot --headless --path . res://examples/dedicated.tscn
-## [/codeblock]
-##
-## Exits non-zero on any failure.
-##
-## [b]What this proves that [code]headless_match[/code] cannot.[/b] That test drives an
-## [ArenaGame] directly. This boots a [DotServer], binds a port, loads [ArenaModule] and
-## exercises its console commands, cvar, session bookkeeping and unload path.
-##
-## It does not connect a client: dot-platform runs that seam, and repeating it would test
-## dot-server rather than this game.
+## A real [DotServer], listening, with the arena loaded into it; exits non-zero on any failure.
+## Unlike `headless_match` (an [ArenaGame] driven directly) this binds a port, loads
+## [ArenaModule] and exercises its console commands, cvar, sessions and unload. No client connects.
 
 
 var PORT := ArenaTestPorts.free_port(2)
@@ -290,7 +279,7 @@ func _test_maps_and_vote() -> void:
 			"and counted against the voter the rest of the game knows them as (77, not u77)"
 		)
 
-	# One clock. The map director's used to run beside the vote's, and whichever expired
+	# One clock. The map director's ran beside the vote's, and whichever expired
 	# first won — which at the end of every map was a second ballot over a winner the
 	# players had already chosen.
 	var map_left := module.maps.session.time_limit.remaining
@@ -422,10 +411,8 @@ func _finish_round_probe(hook: Callable, applied: Array) -> DotVoteDirector:
 	return probe
 
 
-## What a server browser is told.
-##
-## [b]dot-browser is the client half and has never asked a real DotServer anything.[/b] This is
-## the server half: a query provider contributing the numbers a browser filters on.
+## What a server browser is told: dot-browser is the client half; this is the server half, a
+## query provider contributing the numbers a browser filters on.
 func _test_query() -> void:
 	_begin()
 	print("")
@@ -575,10 +562,9 @@ func _test_client_spawn() -> void:
 	print("")
 	print("a client spawning")
 
-	# **`client_spawn` carries `userid` and `name`, not `peer_id`.** The module once looked the
-	# session up by `peer_id` (0 on every event), found null and returned: nobody joined.
-	# This suite never connects a client, so it fires the event dot-server fires and asserts
-	# somebody joined.
+	# `client_spawn` carries `userid` and `name`, not `peer_id`. The module once looked the
+	# session up by `peer_id` (0 on every event) and nobody joined; this suite fires the event
+	# dot-server fires and asserts somebody joined.
 	var module := _server.modules.get_module("arena") as ArenaModule
 
 	if not _check(module != null, "the module is loaded"):

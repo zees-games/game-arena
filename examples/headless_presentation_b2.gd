@@ -365,7 +365,7 @@ func _test_hud_fits_the_frame() -> void:
 			and hud.fit_design == ArenaHud.DESIGN_FRAME and hud.fit_min == 0.5,
 		"below it, it is scaled by the short side's share of 1280x720, never under half")
 	# The clock is dot-ui's `DotScoreStrip.clock_text`, which rounds up: a clock never says
-	# 0:00 with time left. Arena's own rounded down until 2026-10-11 (9:37.4 read 9:37).
+	# 0:00 with time left. Arena's own rounded down (9:37.4 read 9:37).
 	_check(DotScoreStrip.clock_text(577.4) == "9:38" and DotScoreStrip.clock_text(0.3) == "0:01"
 			and DotScoreStrip.clock_text(0.0) == "0:00" and DotScoreStrip.clock_text(600.0) == "10:00",
 		"the clock rounds the seconds left up (%s, %s)" % [DotScoreStrip.clock_text(577.4), DotScoreStrip.clock_text(0.3)])

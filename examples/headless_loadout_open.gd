@@ -2,15 +2,9 @@ extends Node
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
-## Pressing B costs no allocation worth a hitch. The owner's web build stalled hard on the first B: the loadout
-## menu asked AwWeaponPreview for the picture of each of 27 weapons, which made 27 MSAA viewports (543 nodes, 144 MB of
-## render targets) in that one press. The load cover now has the previews render through one shared viewport, so:
-##   - the first open after the prewarm makes no viewport and no preview,
-##   - the second and later opens create no viewport, no preview and no node at all (dot-menu's screen draws nothing
-##     over the state it already drew).
-## Run: [code]godot --headless --path . res://examples/headless_loadout_open.tscn[/code]
-## (Headless draws nothing to read back, so the prewarm makes each id's own viewport a frame at a time there; the checks
-## are the same. `tools/loadout_open_cost.tscn` on a display measures the milliseconds.)
+## Pressing B costs no allocation worth a hitch: the weapon previews render through one shared
+## viewport, so the first open after the prewarm makes no viewport or preview, and later opens
+## create no viewport, preview or node. `tools/loadout_open_cost.tscn` measures milliseconds.
 
 const OPENS := 4
 
