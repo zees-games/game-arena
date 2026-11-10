@@ -13,6 +13,7 @@ The detail behind [CLAUDE.md](../CLAUDE.md). Arena plays free-for-all, team, obj
 | [horde.md](horde.md) | touching monsters (ids, wiring, tactics, heat, figures) or the props tools |
 | [weapons.md](weapons.md) | touching arena-weapons' wiring, the rig, projectiles, or loadout slots |
 | [services.md](services.md) | touching progression, chat and its commands, moderation, voice, the website relay, the admin tools, the map vote, the server browser, or private matches |
+| [sim-thread.md](sim-thread.md) | touching `--sim_host`, the solo server process, or planning what may leave the main thread |
 | [testing.md](testing.md) | adding a check, or believing a green run |
 | [history.md](history.md) | a bug that "cannot be happening"; what this game found and how it looked |
 | [not-yet.md](not-yet.md) | planning: what is not built yet (the dot-game conversion, bots on the nav graph, monster animation, pickups, real audio, …) |
