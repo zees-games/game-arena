@@ -384,6 +384,10 @@ const LOD_FARTHEST := 90.0
 
 var _figure_motion: Dictionary = {}
 var _held_thin: bool = false
+## A remote body past [constant DotHumanoidFigure.DRAW_RANGE] from the eye: its figure is culled there, so
+## what hangs off it (gun, held sprite, crest, spawn bubble) is hidden too rather than floating alone.
+var beyond_figure: bool = false
+var _crest: Node3D = null
 var _lod_frames: int = 0
 var _lod_delta: float = 0.0
 

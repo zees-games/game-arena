@@ -126,9 +126,11 @@ func _ablated_present(drawn: DotFpsState, delta: float) -> void:
 func present_lod(delta: float, eye: Vector3, forward: Vector3, frustum: Array = []) -> void:
 	if camera == null and present_remote_paused:
 		return
+	var to := global_position - eye
+	var d2 := to.length_squared()
+	if camera == null:
+		_set_beyond_figure(figure != null and d2 > DotHumanoidFigure.DRAW_RANGE * DotHumanoidFigure.DRAW_RANGE)
 	if camera == null and present_lod_enabled:
-		var to := global_position - eye
-		var d2 := to.length_squared()
 		var every := 1
 		if d2 > LOD_NEAR * LOD_NEAR and _out_of_sight(to, d2, forward, frustum):
 			every = lod_off_every
@@ -158,6 +160,21 @@ func _out_of_sight(to: Vector3, d2: float, forward: Vector3, frustum: Array) -> 
 		if plane.distance_to(centre) > LOD_RADIUS:
 			return true
 	return false
+
+## Hides what a culled figure carries the frame it passes [constant DotHumanoidFigure.DRAW_RANGE] (a thinned body
+## is presented only every few frames, which would leave its gun in the sky until then).
+func _set_beyond_figure(far: bool) -> void:
+	if far == beyond_figure:
+		return
+	beyond_figure = far
+	if held != null:
+		held.visible = not far and health != null and is_alive() and not ArenaWeaponIcons.shared.sprites
+	if _held_sprite != null:
+		_held_sprite.visible = not far and _held_sprite.visible
+	if is_instance_valid(_crest):
+		_crest.visible = not far
+	if far and protection_bubble != null:
+		protection_bubble.sync(false)
 
 ## A thinned body's gun stops running its own per-frame hand and recoil too (it catches up when drawn again).
 func _set_held_lod(thin: bool) -> void:

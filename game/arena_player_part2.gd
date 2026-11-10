@@ -116,7 +116,7 @@ func _present_held_sprite(id: StringName) -> void:
 		_held_sprite = ArenaSpriteWeapon.make(ArenaSpriteWeapon.Mode.HELD)
 		hand.add_child(_held_sprite)
 	_held_sprite.show_weapon(id)
-	_held_sprite.visible = _held_sprite.visible and is_alive()
+	_held_sprite.visible = _held_sprite.visible and is_alive() and not beyond_figure
 
 ## [param remote]: a body this client only draws, whose gun build may wait for [method held_equip_allowed].
 func _present_held(remote: bool = false) -> void:
@@ -137,7 +137,8 @@ func _present_held(remote: bool = false) -> void:
 		switching = arsenal.is_switching()
 		reloading = arsenal.is_reloading()
 
-	held.visible = is_alive() and not ArenaWeaponIcons.shared.sprites
+	var shown := is_alive() and not ArenaWeaponIcons.shared.sprites and not beyond_figure
+	held.visible = shown
 	var t_sprite := Time.get_ticks_usec()
 	_present_held_sprite(id)
 	ArenaFrameProbe.add(&"r_held_sprite", t_sprite)
@@ -154,6 +155,9 @@ func _present_held(remote: bool = false) -> void:
 
 	var t_hooks := Time.get_ticks_usec()
 	held.on_switching(switching)
+	# on_switching sets the model's own visible (hide_while_switching): it may hide the gun, never show one this hides.
+	if not shown:
+		held.visible = false
 	if held.has_method(&"on_reloading"):
 		held.call(&"on_reloading", reloading and is_alive())
 
@@ -216,6 +220,7 @@ func _wear(avatar: DotAvatar) -> bool:
 	var crown := figure.attachment(&"crest") if crest != null else null
 	if crown != null:
 		crown.add_child(crest)
+		_crest = crest
 	elif crest != null:
 		crest.free()
 
@@ -693,7 +698,7 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 ## Draws [member protected_view] as a bubble round the body. Not on your own camera (inside it you would
 ## see nothing but its inner edge), and only while alive.
 func _present_bubble(at: Vector3) -> void:
-	var want := protected_view and is_alive() and not (camera != null and camera.current)
+	var want := protected_view and is_alive() and not (camera != null and camera.current) and not beyond_figure
 	if not want:
 		if protection_bubble != null:
 			protection_bubble.sync(false)

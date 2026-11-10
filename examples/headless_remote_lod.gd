@@ -7,8 +7,8 @@ const ArenaKillcamBodies := preload("../game/arena_killcam_bodies.gd")
 ## A bare ArenaPlayer has no controller, so `present` returns at once and the counters in `present_lod` are the whole
 ## story. Run: [code]godot --headless --path . res://examples/headless_remote_lod.tscn[/code]
 
-const SECTIONS := 4
-const CHECKS := 13
+const SECTIONS := 5
+const CHECKS := 18
 
 var _entered := 0
 var _completed := 0
@@ -37,6 +37,25 @@ func _body(at: Vector3) -> ArenaPlayer:
 	_root.add_child(p)
 	p.global_position = at
 	return p
+
+
+## A remote body with a figure, a held gun and a crest, as far as [method ArenaPlayer.present_lod] needs one.
+func _armed_body(at: Vector3) -> ArenaPlayer:
+	var p := _body(at)
+	p.health = DotHealth.new()
+	p.add_child(p.health)
+	p.figure = DotHumanoidFigure.new()
+	p.add_child(p.figure)
+	p.held = AwWorldModel.new()
+	p.add_child(p.held)
+	var crest := Node3D.new()
+	p.add_child(crest)
+	p.set("_crest", crest)
+	return p
+
+
+func _shown(node: Variant) -> bool:
+	return node is Node3D and (node as Node3D).visible
 
 
 ## Presents [param p] for [param frames] frames and returns how many of them were let through (lod counter reset).
@@ -102,6 +121,23 @@ func _run() -> void:
 	var cone_back := _body(Vector3(0, 0, 20))
 	_check(_passes(cone_back, 8) == 2, "cl_remote_lod_frustum 0: behind is still thinned")
 	ArenaPlayer.lod_frustum = true
+	_done()
+
+	_section("past the figure's draw range its gun and crest go with it (arena-vm-regress-1)")
+	# The figure's mesh stops drawing at DRAW_RANGE; a gun left on would float alone in the sky.
+	var armed := _armed_body(Vector3(0, 0, -(DotHumanoidFigure.DRAW_RANGE - 20.0)))
+	var _n := _passes(armed, 1)
+	_check(armed.held.visible and _shown(armed.get("_crest")), "20 m inside the range: gun and crest drawn")
+	armed.global_position = Vector3(0, 0, -(DotHumanoidFigure.DRAW_RANGE + 20.0))
+	_n = _passes(armed, 1)
+	_check(not armed.held.visible, "20 m past it: the gun is hidden")
+	_check(armed.get("_crest") != null and not _shown(armed.get("_crest")), "20 m past it: the crest is hidden")
+	armed.held.hide_while_switching = true
+	armed.call(&"_present_held", true)
+	_check(not armed.held.visible, "its present keeps the gun hidden (the model's own switch hook shows it otherwise)")
+	armed.global_position = Vector3(0, 0, -(DotHumanoidFigure.DRAW_RANGE - 20.0))
+	_n = _passes(armed, 1)
+	_check(armed.held.visible and _shown(armed.get("_crest")), "back in range: both drawn again")
 	_done()
 
 	_section("the kill-cam recording cap")
