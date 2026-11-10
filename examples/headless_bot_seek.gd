@@ -1,85 +1,35 @@
-extends DotGameCheckSuite
+extends "bot_map_base.gd"
 
-const ArenaBots := preload("../game/arena_bots.gd")
-const ArenaGame := preload("../game/arena_game.gd")
-const ArenaMap := preload("../maps/arena_map.gd")
 
 ## Bots roaming an imported map must find a player who stands still: some bot must come within [constant REACH] m of the player inside [constant SECONDS] s. Prints the time per map.
 ## Run: [code]./game.sh test headless_bot_seek[/code], or with map names after [code]--[/code].
-const TICK_RATE := 64
 const BOTS := 4
 const SECONDS := 120.0
 const REACH := 8.0
 const PLAYER := 100
-const DEFAULT_MAPS: Array[StringName] = [&"crackhouse", &"dm-morpheus", &"gg-woods", &"dm-overwatch", &"gg-garage", &"aim-forts"]
 
 
-func _ready() -> void:
-	DotLog.set_level(DotLog.Level.ERROR)
-	_run.call_deferred()
+func _title() -> String:
+	return "game-arena bots find a player"
 
 
-func _run() -> void:
-	print("game-arena bots find a player")
-	var maps: Array[StringName] = []
-	for a in OS.get_cmdline_user_args():
-		maps.append(StringName(a))
-	if maps.is_empty():
-		maps = DEFAULT_MAPS
-	var ran := 0
-	for id in maps:
-		if ArenaMap.by_id(id) == null:
-			print("skip %s: not linked" % id)
-			continue
-		await _one(id)
-		ran += 1
-	_report_sections(maps.size(), ran, maps.size(), maps.size())
+func _default_maps() -> Array[StringName]:
+	return [&"crackhouse", &"dm-morpheus", &"gg-woods", &"dm-overwatch", &"gg-garage", &"aim-forts"]
 
 
 func _one(id: StringName) -> void:
-	var game := ArenaGame.new()
-	game.tick_rate = TICK_RATE
-	game.score_limit = 100000
-	game.time_limit_sec = 0.0
-	game.headless = true
-	game.is_authority = true
-	game.register_service = false
-	add_child(game)
-	var map := ArenaMap.by_id(id)
-	if not game.setup(map).ok:
-		_check(false, "%s sets up" % id)
+	var game := await _boot_map(id, BOTS, PLAYER)
+	if game == null:
 		return
-	game.match_node.rules.warmup_sec = 0.0
-	game.match_node.rules.countdown_sec = 0.0
-	for b in BOTS:
-		var _a := game.add_player(b + 1, "Bot%d" % b)
-	var _h := game.add_player(PLAYER, "Human")
-	game.start(0)
-	game.tick({})
-	await get_tree().process_frame
-	var world := ArenaBots.world_for(game)
-	var _first := world.route(Vector3.ZERO, Vector3.ONE)
-	var frames := 0
-	while world.is_route_pending() and frames < 2400:
-		await get_tree().process_frame
-		frames += 1
-	var minds := {}
-	for b in BOTS:
-		var m := ArenaBots.Mind.new()
-		m.seed = 11 + b
-		minds[b + 1] = m
+	var world := _world
+	var minds := _make_minds(BOTS)
 	var tick := 1000
 	var found := -1.0
 	var human := game.player_for(PLAYER)
 	var best := INF
 	var first := -1.0
 	for i in int(SECONDS * TICK_RATE):
-		var commands := {}
-		for b in BOTS:
-			var p := game.player_for(b + 1)
-			if p != null:
-				commands[b + 1] = ArenaBots.think(game, p, minds[b + 1], tick, float(TICK_RATE))
-		game.tick(commands)
+		_tick_bots(game, minds, BOTS, tick)
 		tick += 1
 		if i % 16 == 0:
 			for b in BOTS:
@@ -110,6 +60,4 @@ func _one(id: StringName) -> void:
 			print("DIAG bot%d pos %s closest %s dist %.1f route pts %d end %s" % [b, bp, nv.call(&"closest", bp) if nv != null else "nonav", bp.distance_to(hp), path.size(), path[path.size() - 1] if path.size() > 0 else "none"])
 	print("MAP %s: start gap %.1f m; nearest bot %.1f m; reached within %.0f m after %s s" % [id, first, best, REACH, "%.1f" % found if found >= 0.0 else "never"])
 	_check(found >= 0.0, "%s: a bot reaches the player" % id, "nearest %.1f m in %.0f s" % [best, SECONDS])
-	remove_child(game)
-	game.queue_free()
-	await get_tree().process_frame
+	await _release(game)

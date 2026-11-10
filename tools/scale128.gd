@@ -3,6 +3,7 @@ extends Node
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("../game/arena_module.gd")
+const LoopbackServer := preload("loopback_server.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
@@ -249,38 +250,10 @@ func _serve() -> void:
 	add_child(game)
 	var map := ArenaMap.by_id(StringName(_map))
 	var _set := game.setup(map if map != null else ArenaMap.dm_box())
-	var config := DotServerConfig.new()
-	config.hostname = "scale128"
-	config.port = _port
+	var config := LoopbackServer.config("scale128", _port, data, "error", 256)
 	config.tickrate = _tick
-	config.max_players = 256
-	config.bind_address = "127.0.0.1"
-	config.transport_mode = "dual"
-	config.rcon_password = ""
-	config.admins_path = "%s/admins.json" % data
-	config.bans_path = "%s/bans.json" % data
-	config.audit_log_path = "%s/audit.jsonl" % data
-	config.hibernate_when_empty = false
-	config.startup_config = ""
-	config.autoexec_config = ""
-	config.query_enabled = false
-	config.enet_share_udp_port = false
-	config.stdin_console_enabled = false
-	config.log_level = "error"
-	var server := DotServer.new()
-	server.name = "Server"
-	server.config = config
-	server.config_file = ""
-	server.auto_boot = false
-	add_child(server)
-	var booted: DotResult = await server.boot()
-	if not booted.ok:
-		printerr("scale128: ", booted.error)
-		get_tree().quit(1)
-		return
-	var loaded: DotResult = await server.modules.load_module("res://game/arena_module.gd")
-	if not loaded.ok:
-		printerr("scale128: ", loaded.error)
+	var server := await LoopbackServer.boot(self, config, "scale128")
+	if server == null:
 		get_tree().quit(1)
 		return
 	var module := server.modules.get_module("arena") as ArenaModule

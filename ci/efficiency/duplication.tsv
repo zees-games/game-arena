@@ -1,4 +1,2 @@
 # duplication
 # Baselines only shrink: scripts/<gate> --update lowers or drops entries and refuses to add.
-tools/client_bench.gd	30
-tools/play_online.gd	30

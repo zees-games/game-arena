@@ -4,6 +4,7 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaModule := preload("../game/arena_module.gd")
+const LoopbackServer := preload("loopback_server.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaFlagView := preload("../game/arena_flag_view.gd")
 
@@ -63,36 +64,9 @@ func _serve() -> void:
 	var set := game.setup(map if map != null else ArenaMap.dm_box())
 	if not set.ok:
 		printerr("play_ctf server setup: ", set.error)
-	var config := DotServerConfig.new()
-	config.hostname = "play ctf"
-	config.port = PORT
-	config.bind_address = "127.0.0.1"
-	config.transport_mode = "dual"
-	config.rcon_password = ""
-	config.admins_path = "%s/admins.json" % data
-	config.bans_path = "%s/bans.json" % data
-	config.audit_log_path = "%s/audit.jsonl" % data
-	config.hibernate_when_empty = false
-	config.startup_config = ""
-	config.autoexec_config = ""
-	config.query_enabled = false
-	config.enet_share_udp_port = false
-	config.stdin_console_enabled = false
-	config.log_level = "warn"
-	var server := DotServer.new()
-	server.name = "Server"
-	server.config = config
-	server.config_file = ""
-	server.auto_boot = false
-	add_child(server)
-	var booted: DotResult = await server.boot()
-	if not booted.ok:
-		printerr("play_ctf server: ", booted.error)
-		get_tree().quit(1)
-		return
-	var loaded: DotResult = await server.modules.load_module("res://game/arena_module.gd")
-	if not loaded.ok:
-		printerr("play_ctf server: ", loaded.error)
+	var config := LoopbackServer.config("play ctf", PORT, data, "warn")
+	var server := await LoopbackServer.boot(self, config, "play_ctf server")
+	if server == null:
 		get_tree().quit(1)
 		return
 	var module := server.modules.get_module("arena") as ArenaModule
