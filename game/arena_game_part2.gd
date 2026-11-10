@@ -327,7 +327,7 @@ func tick(commands: Dictionary = {}) -> void:
 	_pre_vy.clear()
 	var t_sim := Time.get_ticks_usec()
 	_ensure_roster()
-	var use_grid := ArenaHullGrid.enabled and body_rules.solid and _roster.size() >= ArenaHullGrid.MIN_PLAYERS
+	var use_grid := ArenaHullGrid.enabled and body_rules.solid and _roster.size() >= ArenaHullGrid.min_players
 	var hull_world: Object = null
 	if use_grid:
 		_hull_grid.begin(_roster, _roster_ids)

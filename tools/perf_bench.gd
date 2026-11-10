@@ -11,7 +11,8 @@ const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 ## Arena's own flags: `--pilot 0`, `--motor-us 1` (the controller's and motor's phase timers, a little costly, totals in the
 ## sidecar), `--queries 0` (no motor query timers, which also leaves the native motor on), `--max-steps N` (ArenaTickBudget.max_steps),
 ## `--native-us 1` (dot-sim's own timers: each engine query and each whole native tick, in the sidecar as `native`),
-## `--batch 0` (`arena_motor_batch` off: the players' motors one call each; the sidecar's `hulls` counts the batch's rows).
+## `--batch 0` (`arena_motor_batch` off: the players' motors one call each; the sidecar's `hulls` counts the batch's rows),
+## `--hull-min N` (ArenaHullGrid.min_players: the roster from which the hull grid, the native hull world and the batch engage).
 ## Render knobs: `--res 1920x1080` (window size), `--killcam-hz N` (ArenaKillcamBodies.record_hz), `--lod 0` (ArenaPlayer.present_lod_enabled
 ## off), `--ablate a,b` (applied after the warm-up: noshadow, nofx = ssao/ssil/glow/fog/volumetric fog off, nohud, nobots).
 
@@ -53,6 +54,7 @@ func _ready() -> void:
 		preload("../game/arena_killcam_bodies.gd").record_hz = float(args["killcam-hz"])
 	if int(args.get("batch", 1)) == 0:
 		ArenaHullGrid.batch = false
+	ArenaHullGrid.min_players = int(args.get("hull-min", ArenaHullGrid.MIN_PLAYERS))
 	if int(args.get("lod", 1)) == 0:
 		preload("../game/arena_player.gd").present_lod_enabled = false
 	_ablate = String(args.get("ablate", "")).split(",", false)

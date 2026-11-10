@@ -36,6 +36,8 @@ static var mismatches := 0
 
 ## Below this many players a scan is cheaper than the lookups.
 const MIN_PLAYERS := 12
+## [constant MIN_PLAYERS], for the bench to move (`--hull-min N`).
+static var min_players := MIN_PLAYERS
 
 ## True from [method begin] until the players' loop ends.
 var live := false
