@@ -54,8 +54,8 @@ func _pivots() -> Array[Vector3]:
 	var space := root.get_world_3d().direct_space_state
 	var skipped := 0
 	for spawn in _map_now().spawns:
-		var eye: Vector3 = spawn.origin + Vector3.UP * 1.6
-		# A spawn the game cannot clear (a mapper's spawn in a stair, 1.5 m under a slab) leaves
+		var eye: Vector3 = spawn.origin + Vector3.UP * ArenaPlayer.eye_height()
+		# A spawn the game cannot clear (a mapper's spawn in a stair) leaves
 		# the eye in solid; DotCameraProbe wants a clear pivot, so that one is not a camera case.
 		if DotCameraProbe.is_inside(space, eye, 0.18, _level_mask()):
 			skipped += 1
@@ -64,6 +64,12 @@ func _pivots() -> Array[Vector3]:
 	if skipped > 0:
 		print("camera tool: %d of %d spawns have the eye in solid even after the game's lift; not flown" % [skipped, _map_now().spawns.size()])
 	return out
+
+
+## The arena's player is 1.37 m tall with its eye at ArenaPlayer.eye_height() (about 1.2 m), not the
+## 1.8 m figure the base tool draws: a spawn under a 1.5 m slab has the game's eye clear and a 1.6 m one inside.
+func _eye_height() -> float:
+	return ArenaPlayer.eye_height()
 
 
 func _offsets() -> Dictionary:
