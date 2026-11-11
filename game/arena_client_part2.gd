@@ -248,6 +248,9 @@ func _build_netcode() -> DotResult:
 			gate.release(&"map"))
 		extras.maps.change_aborted.connect(func(_id: StringName, _reason: String) -> void:
 			gate.release(&"map"))
+	elif _level_map == null and not _level_busy:
+		# No map sync, so no announcement will draw the level: draw the one the game was set up on.
+		_enter_level.call(true)
 	else:
 		gate.release(&"map")
 
@@ -326,6 +329,10 @@ func send_field_of_view() -> void:
 	if bridge != null and not _offline:
 		bridge.send_request(ArenaEvents.Ask.FOV, ArenaEvents.write_fov(_field_of_view()))
 
+## Whether setup is spread over frames: in a client that draws, and not headless (see `_setup_frame`).
+func _builds_in_frames() -> bool:
+	return not DotPlatform.is_headless() and is_inside_tree()
+
 func _build_killview() -> void:
 	killview = DotKillViewClient.new()
 	killview.name = "KillView"
@@ -333,7 +340,7 @@ func _build_killview() -> void:
 	killview.setup(game.killview_rules)
 	killview.hide_fn = func() -> Array: return [hud, view_model]
 	killview.stage = killcam
-	KillPovView.mount(self, game, killview, "KillViewScreen")
+	_pov_spares.append(KillPovView.mount(self, game, killview, "KillViewScreen", not _builds_in_frames()))
 	killview.respawn_requested.connect(func() -> void:
 		if bridge != null:
 			bridge.send_request(ArenaEvents.Ask.RESPAWN)
@@ -361,7 +368,7 @@ func _build_killcam() -> void:
 		return def.display_name if def != null and def.display_name != "" else id.capitalize()
 	killcam.weapon_icon_fn = func(id: String) -> Texture2D:
 		return ArenaWeaponIcons.shared.menu_texture(StringName(id))
-	KillPovView.mount(self, game, killcam, "KillcamScreen")
+	_pov_spares.append(KillPovView.mount(self, game, killcam, "KillcamScreen", not _builds_in_frames()))
 	killcam.over.connect(func(_skipped: bool) -> void: _reveal_winner())
 	add_child(killcam)
 

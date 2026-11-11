@@ -25,6 +25,12 @@ func _ready() -> void:
 	add_child(timeline)
 	await _setup_frame()
 
+	# Reading the map is a frame's work of its own on a big import (169 ms for cp-orange-x3 on staging02),
+	# and it needs no game: read before the game exists, so no frame has a game without a map.
+	var first := _first_map()
+	ArenaLoadTimeline.mark("setup: map read")
+	await _setup_frame()
+
 	game = ArenaGame.new()
 	game.name = "Game"
 	game.is_authority = _offline
@@ -45,7 +51,7 @@ func _ready() -> void:
 	# connected client is told the server's map and rebuilds on it, unless it was built on that map
 	# already: a sim host's map is known before the join, so the level is built once (_first_map).
 	game.defer_map_io = true
-	var built := game.setup(_first_map())
+	var built := game.setup(first)
 
 	ArenaLoadTimeline.mark("setup: game built")
 	if not built.ok:
@@ -54,8 +60,16 @@ func _ready() -> void:
 		return
 
 	# The world, which the server does not need and a player cannot do without. Held, because a map
-	# change has to take it away again — see `_on_map_changed`.
-	_enter_level.call(_offline)
+	# change has to take it away again — see `_on_map_changed`. A client of a remote server does not know the
+	# map yet: it draws the level when the announcement comes (the "map" hold waits for it either way), rather
+	# than drawing the dm_box placeholder only to throw it away.
+	# Drawn after the frame setup ended, and waited for in a client that draws: its first slice and the rest
+	# of setup shared frames of 514 and 736 ms on staging02. Headless builds alongside, as before.
+	if (_offline or _sim_host != null) and _builds_in_frames():
+		await _setup_frame()
+		await _enter_level(_offline)
+	elif _offline or _sim_host != null:
+		_enter_level.call(_offline)
 	await _setup_frame()
 
 	projectile_view = ArenaProjectileView.new()
@@ -67,6 +81,15 @@ func _ready() -> void:
 	_build_killview()
 	ArenaLoadTimeline.mark("setup: projectiles, ragdolls, killcam, kill view")
 	_connect_solo_signals()
+	await _setup_frame()
+	# Each killer's screen's spare hands (about 125 ms each on staging02) in a frame of its own.
+	# Headless, `mount` deferred them as before.
+	for pov in _pov_spares:
+		if is_instance_valid(pov) and _builds_in_frames():
+			pov.call(&"prepare_spare")
+			await _setup_frame()
+	_pov_spares.clear()
+	ArenaLoadTimeline.mark("setup: kill screens prepared")
 
 	_sampler = make_sampler()
 	# C slides as well as Duck: added once the key table has been applied, in
@@ -77,6 +100,7 @@ func _ready() -> void:
 	# defaults.
 	_build_presentation()
 	ArenaLoadTimeline.mark("setup: presentation")
+	await _setup_frame()
 	_build_interface()
 	ArenaLoadTimeline.mark("setup: interface")
 
@@ -132,7 +156,7 @@ func _ready() -> void:
 ## netcode builds it, and be dropped. They wait in the peer instead, as they did behind the one long frame.
 ## Headless (suites, servers) builds in one go, as before.
 func _setup_frame() -> void:
-	if DotPlatform.is_headless() or not is_inside_tree():
+	if not _builds_in_frames():
 		return
 	_set_client_processing(false)
 	var tree := get_tree()
@@ -142,7 +166,8 @@ func _setup_frame() -> void:
 	tree.multiplayer_poll = polling
 
 ## The map the game is first built on: offline the command line's, under a sim host the one its server was
-## started on (so the announcement finds the level already built), and otherwise the dm_box placeholder.
+## started on (so the announcement finds the level already built), and otherwise the dm_box placeholder,
+## whose level is not drawn (the announcement draws the real one).
 func _first_map() -> ArenaMap:
 	if _offline:
 		return _startup_map()

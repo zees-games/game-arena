@@ -272,6 +272,10 @@ static func look_for(game: Object, id: int) -> Array:
 	return [String(key), ArenaAvatars.look_of(avatar, key)]
 
 
+## Builds the spare view model, arms, effects, crosshair and ammo line a kill would otherwise make on its first frame.
+func prepare_spare() -> void:
+	_prepare_spare()
+
 func _prepare_spare() -> void:
 	if not is_inside_tree():
 		return
@@ -503,7 +507,9 @@ func _end() -> void:
 
 
 ## Puts the killer's screen under [param parent] and hands it to a kill view or killcam host as its `present_fn`.
-static func mount(parent: Node, game: Object, target: Object, label: String) -> void:
+## Its spare is built at the end of this frame, unless [param defer_spare] is false: then the caller builds it
+## with [method prepare_spare] (a client that draws, a frame each: two in one frame made a 414 ms frame).
+static func mount(parent: Node, game: Object, target: Object, label: String, defer_spare := true) -> Node:
 	var view := new()
 	view.name = label
 	view.feel_rules = game.get(&"feel_rules") as AwViewFeel
@@ -524,4 +530,6 @@ static func mount(parent: Node, game: Object, target: Object, label: String) -> 
 	parent.add_child(view)
 	target.set(&"present_fn", view.present)
 	# The first kill view found its 30-odd view-model nodes unbuilt (KillerHands, 125 ms); build the spare now, off the kill's frame.
-	view._prepare_spare.call_deferred()
+	if defer_spare:
+		view._prepare_spare.call_deferred()
+	return view
