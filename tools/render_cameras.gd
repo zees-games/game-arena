@@ -33,7 +33,9 @@ func _build_level() -> Node3D:
 	# the convex-hull solid the game collides with.
 	if _map_now().is_imported():
 		var manifest := ArenaImportedMaps.manifest(_map_now().id)
-		level.add_child(ArenaBspMap.build_collision(manifest, _map_now().manifest_path.get_base_dir()))
+		var solid := ArenaBspMap.build_collision(manifest, _map_now().manifest_path.get_base_dir())
+		level.add_child(solid)
+		_map_now().collision_root = solid
 
 	return level
 
@@ -44,8 +46,23 @@ func _build_lighting() -> Node3D:
 
 func _pivots() -> Array[Vector3]:
 	var out: Array[Vector3] = []
+	# From where the game spawns somebody: a mapper's spawn can sit in a stair or a slab, and the
+	# game lifts it clear at load (ArenaGame, `settle_spawns`). Flying from the raw point puts the
+	# camera's pivot, the player's eye, inside solid, which no camera can answer for.
+	if _map_now().is_imported():
+		var _lifted := _map_now().settle_spawns(_map_now().movement_body(), ArenaPlayer.arena_tunables())
+	var space := root.get_world_3d().direct_space_state
+	var skipped := 0
 	for spawn in _map_now().spawns:
-		out.append(spawn.origin + Vector3.UP * 1.6)
+		var eye: Vector3 = spawn.origin + Vector3.UP * 1.6
+		# A spawn the game cannot clear (a mapper's spawn in a stair, 1.5 m under a slab) leaves
+		# the eye in solid; DotCameraProbe wants a clear pivot, so that one is not a camera case.
+		if DotCameraProbe.is_inside(space, eye, 0.18, _level_mask()):
+			skipped += 1
+			continue
+		out.append(eye)
+	if skipped > 0:
+		print("camera tool: %d of %d spawns have the eye in solid even after the game's lift; not flown" % [skipped, _map_now().spawns.size()])
 	return out
 
 
