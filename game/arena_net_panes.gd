@@ -1,15 +1,32 @@
 extends "arena_net_toys.gd"
 ## Glass panes of a converted map: the server decides when one breaks and tells every client, which only follows.
 
+## Panes only change with a map, so a tick costs O(1) reads: the group's size and the dirty flag a
+## map change sets. The pane scan itself runs only when either moved.
+var _panes_seen := -1
+var _panes_dirty := true
+var _panes_game_hooked: Object = null
+
+
 ## Server, every tick: hooks each pane not yet followed (a map change builds new ones).
 func _watch_panes() -> void:
 	if net == null or not net.is_server or game == null or not is_inside_tree():
 		return
-	var props := get_tree().get_first_node_in_group(&"arena_props")
+	if _panes_game_hooked != game:
+		_panes_game_hooked = game
+		if game.has_signal(&"map_changed"):
+			game.connect(&"map_changed", func(_m: Variant) -> void: _panes_dirty = true)
+	var tree := get_tree()
+	var props := tree.get_first_node_in_group(&"arena_props")
 	if props != null and not props.has_meta(&"arena_watched"):
 		props.set_meta(&"arena_watched", true)
 		props.connect(&"prop_broke", _on_prop_broke)
-	for pane: Node in get_tree().get_nodes_in_group(&"dot_map_glass"):
+	var count := tree.get_node_count_in_group(&"dot_map_glass")
+	if count == _panes_seen and not _panes_dirty:
+		return
+	_panes_seen = count
+	_panes_dirty = false
+	for pane: Node in tree.get_nodes_in_group(&"dot_map_glass"):
 		if pane.has_meta(&"arena_watched"):
 			continue
 		pane.set_meta(&"arena_watched", true)
