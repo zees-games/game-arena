@@ -29,18 +29,12 @@ var team_menu: RefCounted = null
 ## `ArenaPlayer.arena_tunables()` already says, so a server that sets none of them plays
 ## exactly as before; a change reaches every player now and later and, through RULES,
 ## every client, so a client never predicts a slide the server does not make.
-const MOVEMENT_CVARS := {
+const _OTHER_MOVEMENT_CVARS := {
 	"arena_speed_scale": ["speed_scale", "Multiplier on every ground speed, 1 as set (a server-wide slowdown or speed-up)"],
 	"arena_run_speed": ["max_speed", "Running speed, m/s"],
 	"arena_walk_scale": ["walk_speed_scale", "Walk speed as a fraction of run"],
 	"arena_sprint_scale": ["sprint_speed_scale", "Sprint speed as a fraction of run"],
 	"arena_crouch_scale": ["crouch_speed_scale", "Crouch speed as a fraction of run"],
-	"arena_slide": ["slide_enabled", "Crouch at a run slides (1) or only crouches (0)"],
-	"arena_slide_boost": ["slide_boost", "Speed a slide adds when it starts, m/s (0 for none)"],
-	"arena_slide_min_speed": ["slide_min_speed", "Speed needed to slide, m/s"],
-	"arena_slide_duration": ["slide_duration", "Longest a slide lasts, seconds"],
-	"arena_slide_friction": ["slide_friction", "Friction while sliding (lower carries further)"],
-	"arena_slide_cooldown": ["slide_cooldown", "Seconds between slides"],
 	"arena_launch": ["launch_enabled", "E throws the player into the air (1) or does nothing (0, the default)"],
 	"arena_launch_velocity": ["launch_velocity", "Upward speed of a launch, m/s"],
 	"arena_launch_forward": ["launch_forward", "Forward speed a launch adds, m/s"],
@@ -86,6 +80,9 @@ const MOVEMENT_CVARS := {
 	"arena_crit_scale": ["", "Extra damage multiplier on a critical hit (1 for none)"],
 	"arena_crit_chance": ["", "Chance any hit is a critical, 0 to 1 (headshots always are)"],
 }
+
+## [constant _OTHER_MOVEMENT_CVARS] plus the slide's, whose names and words dot-player-controller writes once.
+static var MOVEMENT_CVARS: Dictionary = _OTHER_MOVEMENT_CVARS.merged(DotFpsSlidePreset.cvar_table("arena_slide"))
 
 
 func _add_movement_cvars() -> void:
