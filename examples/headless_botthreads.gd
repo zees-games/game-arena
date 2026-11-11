@@ -7,15 +7,16 @@ const ArenaMap := preload("../maps/arena_map.gd")
 
 ## `bot_threads`: the bots' brains on worker threads play exactly what they play on one. The same
 ## 24 bots on dm_box play a deathmatch at threads 0, 0 again, 1, 4 and 8; every bot's position,
-## view, health and commands, hashed every few ticks, are identical in all of them.
+## view, health and commands, hashed every few ticks, are identical in all of them. The whole match's hash is
+## printed per run ("match digest"), to compare one build with another.
 
 const TICK_RATE := 33
 const BOTS := 24
 const SECONDS := 20.0
 const THREADS := [0, 0, 1, 4, 8]
 
-const SECTIONS := 3
-const CHECKS := 13
+const SECTIONS := 4
+const CHECKS := 15
 
 ## An imported map, whose sight is the physics space's (dm_box's is analytic) and whose routes come from a baked mesh.
 const IMPORTED_MAP := &"dm-morpheus"
@@ -34,6 +35,7 @@ func _ready() -> void:
 func _run() -> void:
 	print("game-arena: bot_threads plays the same match")
 	# 24 bots and no person would coast on think tiers, leaving fewer thinkers a tick than the pool starts for.
+	var tiers_above := ArenaBots.tiers.above
 	ArenaBots.tiers.above = -1
 	_section("the same match at every thread count")
 	var digests: Array[PackedStringArray] = []
@@ -50,6 +52,21 @@ func _run() -> void:
 		_check(digests[i] == digests[0], "bot_threads %d plays the match thread 0 plays (%d kills)" % [THREADS[i], kills[i]])
 	_check(parallel[2] > 100 and parallel[3] > 100 and parallel[4] > 100, "the brains really ran through the parallel path (%d, %d, %d ticks)" % [parallel[2], parallel[3], parallel[4]])
 	_check(parallel[0] == 0, "and bot_threads 0 never did")
+	_done()
+
+	_section("think tiers on: coasting bots and the tier's tallies on the worker threads")
+	# Every other tick, so about half the bots think a tick: enough for the pool, the rest coast on the workers.
+	var tier_every := [ArenaBots.tiers.near_every, ArenaBots.tiers.far_every]
+	ArenaBots.tiers.above = tiers_above
+	ArenaBots.tiers.near_every = 2
+	ArenaBots.tiers.far_every = 2
+	var tier_off := await _play(0)
+	var tier_on := await _play(4)
+	ArenaBots.tiers.above = -1
+	ArenaBots.tiers.near_every = tier_every[0]
+	ArenaBots.tiers.far_every = tier_every[1]
+	_check(tier_off[0] == tier_on[0] and tier_off[0].size() > 10, "bot_threads 4 plays the tiered match thread 0 plays (%d, %d kills)" % [tier_off[1], tier_on[1]])
+	_check(tier_on[2] > 20 and tier_off[2] == 0, "through the parallel path (%d ticks)" % tier_on[2])
 	_done()
 
 	_section("an imported map, sight through the physics space")
@@ -171,6 +188,7 @@ func _play(count: int, map_id: StringName = &"") -> Array:
 		if tick_index % 8 == 0:
 			await get_tree().process_frame
 	var parallel := ArenaBotThreads.par_ticks
+	print("match digest threads %d tiers %d %s: %s (%d kills)" % [count, ArenaBots.tiers.above, map_id, "".join(digests).md5_text(), kills[0]])
 	remove_child(game)
 	game.queue_free()
 	await get_tree().process_frame

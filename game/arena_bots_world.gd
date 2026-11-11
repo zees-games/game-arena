@@ -86,6 +86,8 @@ class Mind:
 	var t_me: DotBotContact = null
 	var t_world: Object = null
 	var t_intent: DotBotIntent = null
+	## The bot's [move, fire] when its brain's worker thread made them (see ArenaBotThreads), taken back on the main thread.
+	var t_out: Array = []
 
 
 ## Ticks between rebuilds of a contact's loadout (see [method World._loadout_of]).

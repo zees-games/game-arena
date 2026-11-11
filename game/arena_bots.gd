@@ -68,23 +68,49 @@ static func think(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_ra
 
 ## The part of [method think] before the brain runs, on the main thread: the commands of a tick the bot coasts (or
 ## of no game), else an empty array with [member Mind.t_me] and [member Mind.t_world] set for the brain.
+## [method ArenaBotThreads.think_all] runs the same steps, each once over all bots: [method tick_setup],
+## [method coasts_now] / [method coast_commands], [method refresh_world], [method ready_brain].
 static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_rate: float) -> Array:
 	if game == null or bot == null:
 		return [DotFpsCommand.new(), DotWeaponCommand.new()]
+	var world := tick_setup(game)
+	if coasts_now(mind, tick, world, bot.player_id):
+		return coast_commands(bot, mind, tick, tick_rate)
+	refresh_world(world, tick, tick_rate)
+	ready_brain(game, bot, mind, world)
+	return []
 
+
+## The tick's stagger and tier switches from the player count, and the world on [param game].
+static func tick_setup(game: Object) -> World:
 	var players: int = game.player_ids().size()
 	_every = think_every if think_every > 0 else (2 if players > AUTO_STAGGER_ABOVE else 1)
 	_tier_on = tiers.applies(players)
-	var world := world_for(game)
-	if (_every > 1 or _tier_on) and _coasts(mind, tick, world, bot.player_id):
-		return _recoil_comp(bot, mind, _coast(mind, tick), tick, tick_rate)
+	return world_for(game)
 
+
+## Whether the bot of [param mind] repeats its last commands this tick rather than think (after [method tick_setup]).
+static func coasts_now(mind: Mind, tick: int, world: World, id: int) -> bool:
+	return (_every > 1 or _tier_on) and _coasts(mind, tick, world, id)
+
+
+## The commands of a coasted tick. Touches only the bot's own mind and reads its arsenal: safe on a worker thread.
+static func coast_commands(bot: ArenaPlayer, mind: Mind, tick: int, tick_rate: float) -> Array:
+	return _recoil_comp(bot, mind, _coast(mind, tick), tick, tick_rate)
+
+
+## The world's contacts for this tick (once a tick, however many bots ask).
+static func refresh_world(world: World, tick: int, tick_rate: float) -> void:
 	var t_refresh := Time.get_ticks_usec()
 	world.near_reach = think_near
 	world.tiers = tiers
 	world.refresh(tick, tick_rate)
 	ArenaFrameProbe.add(&"bot_refresh", t_refresh)
 
+
+## The bot's brain (made the first time) and its contact, set on [param mind] for the brain, on the main thread after
+## [method refresh_world]. Writes the bot's contact (the view it meant), so every bot's runs before any brain reads it.
+static func ready_brain(game: Object, bot: ArenaPlayer, mind: Mind, world: World) -> void:
 	if mind.brain == null:
 		mind.brain = ArenaBotBrain.new(mind.seed if mind.seed != 0 else bot.player_id, DotBotSettings.of(game))
 		# The bot's trick gates follow the motor: 1.18 times the minimum, as the old 6.5 was of 5.5.
@@ -108,11 +134,13 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	mind.last_position = me.position
 	mind.t_me = me
 	mind.t_world = world
-	return []
 
 
-## The part of [method think] after the brain ran, on the main thread: the bot's commands from [member Mind.t_intent].
-static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_rate: float) -> Array:
+## The part of [method think] after the brain ran: the bot's commands from [member Mind.t_intent]. On the main thread,
+## or with [param world_lock] (the world's [code]_par_lock[/code]) on a brain's worker thread, off surf maps only (the
+## surf steer picks from rides every bot shares): then it records no probe, takes the lock for the tier's tallies and
+## leaves the bot in [member World.woken] for the caller to clear after the join.
+static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int, tick_rate: float, world_lock: Mutex = null) -> Array:
 	var move := DotFpsCommand.new()
 	var fire := DotWeaponCommand.new()
 	var world: World = mind.t_world
@@ -121,29 +149,40 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 	mind.t_me = null
 	mind.t_world = null
 	mind.t_intent = null
-	var t_after := Time.get_ticks_usec()
-	var t_lap := ArenaFrameProbe.lap_start()
-	var surf := world.surf_for_map()
+	var main := world_lock == null
+	var t_after := Time.get_ticks_usec() if main else 0
+	var t_lap := ArenaFrameProbe.lap_start() if main else 0
+	var surf: RefCounted = world.surf_for_map() if main else null
 	if surf != null:
 		surf.call(&"steer", bot, mind, intent, tick, tick_rate)
 	elif mind.ride != null:
 		mind.ride = null
-	t_lap = ArenaFrameProbe.lap(&"ba_surf", t_lap)
+	if main:
+		t_lap = ArenaFrameProbe.lap(&"ba_surf", t_lap)
 	intent.write_move(move, "BUTTON_USER_0")
 	intent.write_fire(fire)
-	t_lap = ArenaFrameProbe.lap(&"ba_write", t_lap)
+	if main:
+		t_lap = ArenaFrameProbe.lap(&"ba_write", t_lap)
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)
-	t_lap = ArenaFrameProbe.lap(&"ba_throw", t_lap)
+	if main:
+		t_lap = ArenaFrameProbe.lap(&"ba_throw", t_lap)
 	move.sanitise()
 	fire.sanitise()
-	ArenaFrameProbe.lap(&"ba_sanitise", t_lap)
-	ArenaFrameProbe.add(&"bot_after", t_after)
-	world.woken.erase(bot.player_id)
+	if main:
+		ArenaFrameProbe.lap(&"ba_sanitise", t_lap)
+		ArenaFrameProbe.add(&"bot_after", t_after)
+		world.woken.erase(bot.player_id)
 	if _tier_on and tiers.is_on():
 		mind.far = false
 		var engaged := intent.target_id >= 0 and not world.brains.has(intent.target_id)
+		# The period's reason tallies are shared by every bot: counted under the lock on a worker.
+		if not main:
+			world_lock.lock()
+		var period := tiers.period(bot.player_id, me.position, engaged)
+		if not main:
+			world_lock.unlock()
 		# every here is the coast's length: to the bot's next beat at its tier's period.
-		mind.every = DotBotThinkTier.until_beat(tick, mind.seed, maxi(tiers.period(bot.player_id, me.position, engaged), think_floor_engaged if engaged else think_floor))
+		mind.every = DotBotThinkTier.until_beat(tick, mind.seed, maxi(period, think_floor_engaged if engaged else think_floor))
 		mind.coasting = mind.every > 1 and _tier_coastable(mind, intent)
 	else:
 		mind.far = _every > 1 and _nobody_near(me, world)
