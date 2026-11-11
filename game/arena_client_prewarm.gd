@@ -48,8 +48,7 @@ func _prewarm_tick() -> void:
 			while _warm.next < arts.size() and Time.get_ticks_msec() < until:
 				if not is_instance_valid(_warm.spare):
 					break
-				(_warm.spare as AwViewModel).prewarm(arts[_warm.next] as AwWeaponVisual)
-				_warm.next += 1
+				_prewarm_view_step(_warm.spare as AwViewModel, arts)
 			if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
 				if is_instance_valid(_warm.spare):
 					(_warm.spare as Node).queue_free()
@@ -57,7 +56,9 @@ func _prewarm_tick() -> void:
 				gate.warm_up(AwViewModel.prepared_materials())
 				gate.warm_up(AwShotFx.warm())
 				_warm.phase = 1
-				ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000])
+				ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms, longest tick %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000, maxi(int(_warm.get("worst0", 0)), Time.get_ticks_usec() - tick_start) / 1000])
+			else:
+				_warm.worst0 = maxi(int(_warm.get("worst0", 0)), Time.get_ticks_usec() - tick_start)
 		1:
 			if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
 				var rig: Node3D = DotMuzzleFlash.prewarm(body.camera)
@@ -203,6 +204,16 @@ func _prewarm_end() -> void:
 	ArenaLoadTimeline.mark("prewarm end")
 	if gate != null:
 		gate.release(&"weapons")
+
+## The next piece of the weapon views' warm-up: a weapon's model load, or one stage of its equip, so the
+## slice budget is checked between stages (a whole cold equip was 220-440 ms in one go).
+func _prewarm_view_step(spare: AwViewModel, arts: Array) -> void:
+	if bool(_warm.get("stepping", false)):
+		_warm.stepping = spare.prewarm_step()
+	else:
+		_warm.stepping = spare.prewarm_begin(arts[_warm.next] as AwWeaponVisual)
+	if not _warm.stepping:
+		_warm.next += 1
 
 ## Builds every weapon's first-person view once on a spare view model, under the loading cover.
 func _prewarm_weapons(body: ArenaPlayer) -> void:
