@@ -653,13 +653,9 @@ class AbilityBar extends Control:
 		var _w := Ink.keycap(self, Vector2(rect.get_center().x - cap_w * 0.5, rect.end.y + 2.0), key, 12)
 
 
-## A portrait per player: their avatar's head, rendered once into a small viewport of its
-## own and drawn in the ranked row. Re-rendered only when what they wear changes.
-##
-## [b]Rendered, not drawn[/b], so the face in the row is the face on the body: a player who
-## changes their avatar on the site sees it here too. Each viewport renders once
-## (`UPDATE_ONCE`), so ten of them cost ten small draws when somebody joins, not ten a
-## frame. Nothing is built with no display (every suite): the row draws initials instead.
+## A portrait per player: their avatar's head, rendered once (`UPDATE_ONCE`) into a small viewport and
+## drawn in the ranked row; re-rendered only when what they wear changes. Nothing is built with no
+## display (every suite): the row draws initials instead.
 class PortraitCache extends Node:
 	const ArenaAvatars := preload("arena_avatars.gd")
 	const SIDE := 96

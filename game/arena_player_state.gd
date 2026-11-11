@@ -405,12 +405,9 @@ var _figure_hold_kind: int = -1
 ## How a stair tread's rise reaches the eye: the time constant of an exponential, seconds.
 ## The step is the simulation's at once; only the view eases.
 ##
-## [b]The camera stepped up each tread in one tick.[/b] A grounded tick that climbs a 0.36 m
-## tread moves the player 0.36 m up, and the eye between that tick and the last rose with it,
-## 16 cm in one frame at 144 Hz, ten times a second up dm_box's stair at a run, where a ramp
-## of the same height is a steady 2.5 cm a frame. dot-player-controller's own camera
-## (`DotFpsView.smooth_step_up`) has always eased it; this game writes its camera itself
-## (`present`) and had none of it. `headless_feel` measures a run up the stair.
+## Without it the eye rose a whole tread (0.36 m) in one tick, as `DotFpsView.smooth_step_up` eases in
+## dot-player-controller's camera; this game writes its camera itself (`present`).
+## `headless_feel` measures a run up the stair.
 var step_smooth_time: float = 0.05
 
 ## The part of recent stair steps not yet shown, metres: subtracted from the eye, easing to 0.

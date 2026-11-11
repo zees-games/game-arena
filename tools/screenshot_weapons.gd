@@ -310,35 +310,7 @@ func _run() -> void:
 			carry = arg.trim_prefix("--carry=")
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--fp="):
-			var me: Node = client.get("player")
-			if carry == "wall":
-				_face_wall(me)
-			# --tilt= and --retract= scale the wall response (cl_vm_wall_tilt, cl_vm_wall), to find a pose that reads right.
-			var rules = me.weapons.view_model().feel_rules
-			for a in OS.get_cmdline_user_args():
-				if a.begins_with("--tilt="):
-					rules.wall_tilt = float(a.trim_prefix("--tilt="))
-				if a.begins_with("--retract="):
-					rules.wall_retract = float(a.trim_prefix("--retract="))
-			var dists: Array = [0.0]
-			if carry == "box":
-				dists = [1.0, 0.6, 0.3]
-			if carry == "sprint" or carry == "sprint_old":
-				process_frame.connect(_force_sprint)
-			for id in arg.trim_prefix("--fp=").split(",", false):
-				var _given: DotResult = me.arsenal.give(StringName(id))
-				me.arsenal.equip(me.arsenal.catalogue.get_def(StringName(id)).slot)
-				await _wait(0.5)
-				if carry == "sprint_old":
-					_use_old_carry()
-				await _wait(1.5)
-				for d in dists:
-					if carry == "box":
-						_put_wall(me, d)
-						await _wait(1.0)
-						var vm = me.weapons.view_model()
-						print("box %.1f m: wall amount %.3f lean %s" % [d, vm.wall_amount(), vm.wall_lean()])
-					await _shot("fp_%s%s" % [id, "" if carry.is_empty() else "_" + carry + ("_%dcm" % roundi(d * 100.0) if carry == "box" else "")])
+			await _first_person_guns(arg.trim_prefix("--fp=").split(",", false), carry)
 			quit()
 			return
 
@@ -357,17 +329,58 @@ func _run() -> void:
 		if arg.begins_with("--guns="):
 			guns = arg.trim_prefix("--guns=")
 	if guns != "":
-		for id in guns.split(",", false):
-			var given: DotResult = _subject.arsenal.give(StringName(id))
-			var slot: int = _subject.arsenal.catalogue.get_def(StringName(id)).slot
-			_subject.hold(slot)
-			print("gun %s given ok=%s slot %d" % [id, given.ok, slot])
-			await _wait(2.0)
-			print("held now: %s" % _subject.arsenal.current().def.id)
-			await _shot("gun_%s" % id)
+		await _third_person_guns(guns.split(",", false))
 		quit()
 		return
 
+	await _fire_and_throw()
+	quit()
+
+
+func _first_person_guns(ids: PackedStringArray, carry: String) -> void:
+	var me: Node = client.get("player")
+	if carry == "wall":
+		_face_wall(me)
+	# --tilt= and --retract= scale the wall response (cl_vm_wall_tilt, cl_vm_wall), to find a pose that reads right.
+	var rules = me.weapons.view_model().feel_rules
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--tilt="):
+			rules.wall_tilt = float(a.trim_prefix("--tilt="))
+		if a.begins_with("--retract="):
+			rules.wall_retract = float(a.trim_prefix("--retract="))
+	var dists: Array = [0.0]
+	if carry == "box":
+		dists = [1.0, 0.6, 0.3]
+	if carry == "sprint" or carry == "sprint_old":
+		process_frame.connect(_force_sprint)
+	for id in ids:
+		var _given: DotResult = me.arsenal.give(StringName(id))
+		me.arsenal.equip(me.arsenal.catalogue.get_def(StringName(id)).slot)
+		await _wait(0.5)
+		if carry == "sprint_old":
+			_use_old_carry()
+		await _wait(1.5)
+		for d in dists:
+			if carry == "box":
+				_put_wall(me, d)
+				await _wait(1.0)
+				var vm = me.weapons.view_model()
+				print("box %.1f m: wall amount %.3f lean %s" % [d, vm.wall_amount(), vm.wall_lean()])
+			await _shot("fp_%s%s" % [id, "" if carry.is_empty() else "_" + carry + ("_%dcm" % roundi(d * 100.0) if carry == "box" else "")])
+
+
+func _third_person_guns(ids: PackedStringArray) -> void:
+	for id in ids:
+		var given: DotResult = _subject.arsenal.give(StringName(id))
+		var slot: int = _subject.arsenal.catalogue.get_def(StringName(id)).slot
+		_subject.hold(slot)
+		print("gun %s given ok=%s slot %d" % [id, given.ok, slot])
+		await _wait(2.0)
+		print("held now: %s" % _subject.arsenal.current().def.id)
+		await _shot("gun_%s" % id)
+
+
+func _fire_and_throw() -> void:
 	# The trigger at full speed until the rig counts a use, THEN the clock slowed: a
 	# tick at a tenth of the speed is 0.16 s of real time, so pressing and photographing
 	# at once photographs a frame from before anything fired.
@@ -405,5 +418,3 @@ func _run() -> void:
 	for i in range(3):
 		await _shot("7_explosion_%d" % i)
 		await _wait(0.15)
-
-	quit()
