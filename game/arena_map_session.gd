@@ -83,7 +83,7 @@ func change_to_map(map: DotMapDef) -> DotResult:
 		current = map
 		rotation.note_played(map.id)
 		time_limit.start(float(map.expected_seconds) * 3.0 if map.expected_seconds > 0 else -1.0)
-		DotLog.debug(LOG_CHANNEL, "the announced map is the one this client was set up on", {
+		DotLog.info(LOG_CHANNEL, "the announced map is the one this client was set up on", {
 			"map": String(map.id),
 		})
 		changed_world()

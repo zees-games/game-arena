@@ -52,7 +52,7 @@ var SNAPSHOT_RATE: int:
 const RUN_TICKS := 96
 const LOSS_EVERY := 5
 
-const CHECKS := 298
+const CHECKS := 299
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
 ## many checks that adds. Without fc-surf-dm-maps linked they are skipped and said so, and

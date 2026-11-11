@@ -98,6 +98,7 @@ func _run() -> void:
 	var net: Object = _client.get("net")
 	var synced := await _until(func() -> bool: return net != null and net.get("clock") != null and bool(net.get("clock").call("is_synced")), 20.0)
 	_check(synced, "the clock is synced to the server")
+	await _first_map_checks(game)
 	_check(OS.is_process_running(pid), "the server process is running")
 	await _menu_checks(host)
 	_board_checks()
@@ -110,6 +111,18 @@ func _run() -> void:
 	var gone := await _until(func() -> bool: return not OS.is_process_running(pid), 20.0)
 	_check(gone, "the server process ends with the client")
 	_end()
+
+
+## The client is built on the server's map, so its announcement keeps that world instead of rebuilding it.
+func _first_map_checks(game: Object) -> void:
+	var session: Object = (_client.get("extras") as Object).get("maps").get("session")
+	var announced := await _until(func() -> bool: return session.get("current") != null and not bool(_client.get("_level_busy")), 30.0)
+	var builds := 0
+	for m: Array in (load("res://game/arena_load_timeline.gd") as Script).get("_marks"):
+		builds += 1 if str(m[2]) == "map_scene_built" else 0
+	var drawn: Object = _client.get("_level_map")
+	_check(announced and builds == 1, "the announced boot map keeps the level the client was set up on",
+		"%d builds; drawn %s, game %s, movers %s" % [builds, drawn.get("id") if drawn != null else "none", game.get("map").get("id"), game.get("map_io") != null])
 
 
 func _ask(line: String) -> DotResult:

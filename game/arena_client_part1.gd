@@ -135,9 +135,9 @@ func _on_map_changed(map: DotMapDef) -> void:
 			"map": String(map.id),
 		})
 
-	if _level_map != null and _level_map == game.map and game.map_io != null:
-		# The game was not rebuilt (ArenaMapSession: the client was set up on this map), so the drawn
-		# level, the movers and the drop pool are still this map's.
+	if _level_map != null and _level_map == game.map:
+		# The game was not rebuilt (ArenaMapSession: the client was set up on this map; a rebuild makes a
+		# new ArenaMap), so the drawn level and the drop pool are still this map's. A map with no movers has no map_io.
 		gate.release(&"map")
 	else:
 		# The rebuilt game's drop layer is empty; fill it before the cover lifts (the hold must precede the map's release).
