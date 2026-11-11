@@ -5,7 +5,7 @@ const ArenaNetLink := preload("arena_net_link.gd")
 
 ## The four remote calls this game needs, on one node that exists on both ends.
 ##
-## Copied from game-g2gfast's, which was copied from game-hungario's — deliberately,
+## Copied from game-airdrift's, which was copied from game-hungario's — deliberately,
 ## per the family rule that games copy what they need rather than sharing a helper —
 ## because it encodes the one thing that cost this family a day:
 ##

@@ -736,7 +736,7 @@ func _adopt_tick_rate(rate: int, snapshot_rate: int = 0) -> void:
 	if game.spectate != null:
 		game.spectate.retime()
 	# dot-net API 7 has DotNetClock.adopt_tick_rate(), which also raises the engine's step cap to a quarter second of ticks (a client under 16 fps ran fewer ticks than the server at 128 Hz).
-	# A shell built before it gets the same rule here, as game-g2gfast does; remove this branch when the oldest shell is API 7.
+	# A shell built before it gets the same rule here, as game-airdrift does; remove this branch when the oldest shell is API 7.
 	if DotAddonApi.build_level("dot_net") >= 7:
 		DotNetClock.adopt_tick_rate(rate)
 	else:

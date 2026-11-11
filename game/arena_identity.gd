@@ -6,7 +6,7 @@ const ArenaAvatars := preload("arena_avatars.gd")
 ##
 ## [b]The chain is dot-platform's [DotPlatformIdentity], and this is only what is arena's
 ## about it[/b]: the schema a capsule is dressed from, and the stock avatar a guest gets.
-## This file was 262 lines before the layer was extracted, and game-g2gfast's was 215 —
+## This file was 262 lines before the layer was extracted, and game-airdrift's was 215 —
 ## the same chain with the class names changed.
 ##
 ## [codeblock]

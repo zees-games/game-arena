@@ -1,6 +1,6 @@
 extends RefCounted
 
-## Arena's weapon pictures: weapon id (arena-weapons') to sprite tag; the rest is dot-ui's [DotWeaponIconStyle].
+## Arena's weapon pictures: weapon id (fc-weapons') to sprite tag; the rest is dot-ui's [DotWeaponIconStyle].
 
 const TAGS := {
 	&"battle_rifle": &"battle_rifle", &"beamer": &"energy_rifle", &"bullpup": &"bullpup",

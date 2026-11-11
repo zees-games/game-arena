@@ -105,7 +105,7 @@ func _on_map_changed(_map: ArenaMap) -> void:
 func _rules() -> DotEffectRules:
 	var rules := DotEffectRules.new()
 	# No incapacitation in a deathmatch: a player at zero health respawns in two
-	# seconds and being down instead would be a different game. game-playground's
+	# seconds and being down instead would be a different game. game-playlot's
 	# co-operative wave mode is where that belongs.
 	rules.downed_enabled = false
 	rules.temp_decay_per_tick = 0.15
@@ -311,7 +311,7 @@ func _on_damaged(entity: int, amount: float, type: StringName, source: int) -> v
 	# `damage.tick` is set explicitly, and it is not decoration: DotHealth refuses
 	# anything at or before invulnerable_until_tick, and a DotDamage starts at tick 0 —
 	# so an unstamped event is refused on every player for ever, silently. This family
-	# found that one in game-playground's arena on its very first hit.
+	# found that one in game-playlot's arena on its very first hit.
 	var damage := DotDamage.make(source, entity, amount, damage_type)
 	damage.tick = game.current_tick()
 	var applied := health.apply(damage)

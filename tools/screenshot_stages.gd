@@ -480,7 +480,7 @@ func _stage_fx(map: ArenaMap, id: StringName, eye: Vector3, aim_at: Vector3) -> 
 	_shots.append_array(_fx_grenade_shots(presentation, id, eye, aim, side))
 
 
-## arena-weapons' smoke and fire clouds, then the blind flash, as the GRENADE_FX event draws them.
+## fc-weapons' smoke and fire clouds, then the blind flash, as the GRENADE_FX event draws them.
 func _fx_grenade_shots(presentation: ArenaPresentation, id: StringName, eye: Vector3, aim: Vector3, side: Vector3) -> Array:
 	var cloud_at := eye + aim * 5.0
 	var cases := [

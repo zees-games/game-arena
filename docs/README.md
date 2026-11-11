@@ -11,7 +11,7 @@ The detail behind [CLAUDE.md](../CLAUDE.md). Fatal Contact plays free-for-all, t
 | [maps.md](maps.md) | changing a built-in map, the map catalogue or versions, `change_map`, the map director and sync, which maps host which modes, or the survey |
 | [imported-maps.md](imported-maps.md) | touching the combat surf maps: the loader, the solid, settled spawns, pits, the surf air control, the rotation, delivered maps, or the maps' mechanics |
 | [horde.md](horde.md) | touching monsters (ids, wiring, tactics, heat, figures) or the props tools |
-| [weapons.md](weapons.md) | touching arena-weapons' wiring, the rig, projectiles, or loadout slots |
+| [weapons.md](weapons.md) | touching fc-weapons' wiring, the rig, projectiles, or loadout slots |
 | [services.md](services.md) | touching progression, chat and its commands, moderation, voice, the website relay, the admin tools, the map vote, the server browser, or private matches |
 | [sim-thread.md](sim-thread.md) | touching `--sim_host`, the solo server process, or planning what may leave the main thread |
 | [testing.md](testing.md) | adding a check, or believing a green run |

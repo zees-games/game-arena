@@ -202,7 +202,7 @@ func _sync_award_config() -> void:
 ##
 ## The direction is the shot's; a death with none (a fall, a slay) is pushed by nothing. The
 ## killing weapon's def is what lets the sniper and the launcher throw a body
-## (arena-weapons' `params.death_reaction`).
+## (fc-weapons' `params.death_reaction`).
 func decide_death(entity_id: int, damage: DotDamage) -> DotPlayerDeath:
 	if _weapon_defs.is_empty():
 		_weapon_defs = ArenaContent.weapon_table()

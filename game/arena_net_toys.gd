@@ -79,7 +79,7 @@ func _toy_entity(toy: DotPropBody, parent: Node, net_id: int) -> ArenaToyNet:
 
 ## Every toy entity out of the registry and out of the tree at once: a new identity on the same
 ## toy collects every behaviour under it in its `_ready`, and a freed one found there broke the
-## next snapshot (game-playground found it). The server's, on a map change or a new set.
+## next snapshot (game-playlot found it). The server's, on a map change or a new set.
 func _release_toys() -> void:
 	for behaviour: ArenaToyNet in _toy_nets:
 		if not is_instance_valid(behaviour):

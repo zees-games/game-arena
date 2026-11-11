@@ -26,7 +26,7 @@ const BAD_DOC := &"fixture_bad"
 const BAD_ID := &"fixture_wrong_id"
 const NO_SPAWN := &"fixture_no_spawn"
 const DIR := "user://workshop_fixture/"
-## An imported-map document as arena-dm-maps publishes one: the entry id has an underscore and
+## An imported-map document as fc-dm-maps publishes one: the entry id has an underscore and
 ## the document (and its files) a dash.
 const IMPORTED_ENTRY := &"fixture_morpheus"
 const IMPORTED_DOC := &"fixture-morpheus"
@@ -251,7 +251,7 @@ func _test_bad() -> void:
 	_completed += 1
 
 
-## The shape of dm-morpheus.json (arena-dm-maps), shrunk: kind, bounds, `spawns` as {origin,yaw},
+## The shape of dm-morpheus.json (fc-dm-maps), shrunk: kind, bounds, `spawns` as {origin,yaw},
 ## the mesh named in `bin`. The mesh file is a stand-in, so nothing here may read it.
 func _write_imported() -> void:
 	DirAccess.make_dir_recursive_absolute(DIR + "imported/")

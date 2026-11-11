@@ -1,6 +1,6 @@
 # game-fatal-contact
 
-The reference game: a 3D deathmatch in six kinds of mode on three built-in maps and arena-surf-dm-maps' combat surf maps (delivered, not shipped), with bots and arena-weapons, over dot-net, as a signed dot-cloud pack: the only test of the joins between the addons.
+The reference game: a 3D deathmatch in six kinds of mode on three built-in maps and fc-surf-dm-maps' combat surf maps (delivered, not shipped), with bots and fc-weapons, over dot-net, as a signed dot-cloud pack: the only test of the joins between the addons.
 
 The game is **Zee's Fatal Contact** (it was Arena; the repository was game-arena). **Wire and storage ids keep the old name on purpose**: the pack id `gamemann/game-arena` and publish id `game-arena`, the cfg game id `game-arena` (`cfg/game/game-arena/`), `config/name` in project.godot (the `app_userdata/game-arena` user dir), the site app slug `arena` until the owner runs website-city's slug migration, the dot-server-deploy former id `arena` (the pack is `fatalcontact` there now; `arena` still answers `--game` and `sv_game`), the `Arena` node names, the `Arena*` class and `arena_*` file names, `arena_*` cvars and commands, `arena-player-%08d` keys and suite names. Change one only together with dot-server-deploy, website-city and dot-cloud.
 
@@ -15,7 +15,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | [docs/client.md](docs/client.md) | the client, keys, camera, menus, HUD, chat box, render tools |
 | [docs/modes.md](docs/modes.md) | movement, modes, spawning, criticals, streaks |
 | [docs/maps.md](docs/maps.md), [docs/imported-maps.md](docs/imported-maps.md) | a built-in map or the catalogue; the combat surf maps |
-| [docs/horde.md](docs/horde.md), [docs/weapons.md](docs/weapons.md) | monsters and props tools; arena-weapons, projectiles |
+| [docs/horde.md](docs/horde.md), [docs/weapons.md](docs/weapons.md) | monsters and props tools; fc-weapons, projectiles |
 | [docs/services.md](docs/services.md) | progression, chat, moderation, voice, admin tools, the vote |
 | [docs/testing.md](docs/testing.md) | adding a check, or believing a green run |
 | [docs/history.md](docs/history.md), [docs/not-yet.md](docs/not-yet.md) | a bug that "cannot be happening"; planning what is not built yet |
@@ -25,7 +25,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | Path | What |
 | --- | --- |
 | `game/` | everything that runs, flat; the client half is never loaded by a dedicated server. File by file: [architecture](docs/architecture.md#where-the-code-is) |
-| `maps/` | the built-in maps as box lists (survey, paint, lighting); the combat surf maps' loader; `maps/imported` links arena-surf-dm-maps |
+| `maps/` | the built-in maps as box lists (survey, paint, lighting); the combat surf maps' loader; `maps/imported` links fc-surf-dm-maps |
 | `npcs/`, `props/`, `avatars/`, `scenes/fx/`, `assets/` | monsters, props, avatar parts, effects, vendored base weapon art, Kenney's grid and medal icons |
 | `examples/` | the nine suites; `wall_route_driver.gd` drives a map's wall routes |
 | `tools/` | render tools (`screenshot.sh --glance`), avatar and icon builders, `audio_probe.sh`, `loudness_pilot.gd`. [client](docs/client.md#looking-at-it) |

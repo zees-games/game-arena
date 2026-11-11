@@ -1,6 +1,6 @@
 # Imported maps: models that do not resolve
 
-Measured 2026-11-02 over 76 converted worlds (arena-dm-maps 17, arena-surf-dm-maps 39 and the rest) with `bsp.py standins` and a scan of each manifest's props against its model store. Regenerate the first with `python3 -I ~/godot/dot-map-convert/bsp.py standins --tiers placeholder --top 30 <worlds dirs>`.
+Measured 2026-11-02 over 76 converted worlds (fc-dm-maps 17, fc-surf-dm-maps 39 and the rest) with `bsp.py standins` and a scan of each manifest's props against its model store. Regenerate the first with `python3 -I ~/godot/dot-map-convert/bsp.py standins --tiers placeholder --top 30 <worlds dirs>`.
 
 ## Why a player saw an empty street
 

@@ -84,7 +84,7 @@ signal player_spawned(player: ArenaPlayer)
 ##
 ## That is this family's commonest shape with the ends swapped — a value consumed by a
 ## client and produced by nobody on the client's path — and it is the same bug
-## game-g2gfast shipped, one signal over.
+## game-airdrift shipped, one signal over.
 signal player_added(player: ArenaPlayer)
 
 signal match_state_changed(from: DotMatch.State, to: DotMatch.State)
@@ -593,12 +593,12 @@ var noblock: DotGameNoblock = null
 ## Whether a module has bound [member noblock]'s cvars and commands (they cannot be bound twice).
 var noblock_bound := false
 
-## The view model's motion amounts: arena-weapons' `mp_vm_*` cvars. Bound by the module
+## The view model's motion amounts: fc-weapons' `mp_vm_*` cvars. Bound by the module
 ## (REPLICATED) and followed by the client, which is the end that draws the hands. The
 ## client's view model is handed this object, so one cvar change reaches the sway.
 var feel_rules: AwViewFeel = AwViewFeel.new()
 
-## Aim-down-sights and hip-size numbers (`aw_ads_rules`, REPLICATED): the server's cfg over arena-weapons' defaults. One per game, shared by every rig and the view model.
+## Aim-down-sights and hip-size numbers (`aw_ads_rules`, REPLICATED): the server's cfg over fc-weapons' defaults. One per game, shared by every rig and the view model.
 var ads_rules: AwAdsRules = AwAdsRules.load_config()
 
 ## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first

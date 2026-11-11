@@ -55,7 +55,7 @@ const LOSS_EVERY := 5
 const CHECKS := 298
 
 ## The imported combat surf map the map-sync section also follows a client onto, and how
-## many checks that adds. Without arena-surf-dm-maps linked they are skipped and said so, and
+## many checks that adds. Without fc-surf-dm-maps linked they are skipped and said so, and
 ## the total expected drops by exactly that many: a skip is allowed, a silent one is not.
 const IMPORTED_MAP := &"surf_10x_reloaded_fixed"
 const IMPORTED_CHECKS := 9

@@ -9,7 +9,7 @@ extends RefCounted
 ## machine gets and the shape of the sun's shadow map. The
 ## reasoning for each is in docs/maps.md, "Colour and light".
 ##
-## [b]An imported map is lit from its manifest's `lighting` block[/b], as game-g2gfast
+## [b]An imported map is lit from its manifest's `lighting` block[/b], as game-airdrift
 ## lights it: the same [DotLightRig] over the sun, ambient, fog and sky the importer read
 ## out of the compiled map, plus three decisions copied from g2gfast's `G2GLighting` and
 ## `G2GBspMap` (duplicated on purpose; a game cannot name another game's script): a white

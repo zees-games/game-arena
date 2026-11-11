@@ -2,7 +2,7 @@ extends RefCounted
 
 const ArenaPaths := preload("../game/arena_paths.gd")
 
-## A map imported from a compiled `.bsp` by game-g2gfast's importer, built here from the
+## A map imported from a compiled `.bsp` by game-airdrift's importer, built here from the
 ## manifest it wrote: the drawn mesh, the baked lightmap, the brushes as convex hulls, the
 ## map's own spawn points and the teleport volumes that catch a player who falls.
 ##
@@ -643,14 +643,14 @@ static var _grid: Texture2D = null
 
 
 ## Whether a material name is water: its file name says `water` and it is not a
-## waterfall. game-g2gfast's G2GBspMap.is_water_material; keep the two in step.
+## waterfall. game-airdrift's G2GBspMap.is_water_material; keep the two in step.
 static func is_water_material(material: String) -> bool:
 	var last := material.to_lower().get_file()
 	return last.contains("water") and not last.contains("waterfall")
 
 
 ## Water in the map's own colour where it measured one that is not grey, else the shader's
-## teal. See game-g2gfast's G2GBspMap._water_material.
+## teal. See game-airdrift's G2GBspMap._water_material.
 static func _water_material(s: Dictionary, lightmap: Texture2D) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(ArenaPaths.rebase("res://maps/arena_bsp_water.gdshader"))
@@ -703,7 +703,7 @@ static func _material_for(s: Dictionary, dir: String, lightmap: Texture2D) -> Sh
 
 			return mat
 
-	# [b]Water draws as water[/b] (game-g2gfast's rule, see arena_bsp_water.gdshader): the
+	# [b]Water draws as water[/b] (game-airdrift's rule, see arena_bsp_water.gdshader): the
 	# source game's water was never in a map, so a pool was an opaque grid floor a player
 	# sank through. A map that shipped its water texture keeps it, above.
 	if is_water_material(str(s.get("material", ""))):

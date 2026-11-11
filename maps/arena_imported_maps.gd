@@ -4,7 +4,7 @@ const ArenaPaths := preload("../game/arena_paths.gd")
 const ArenaBspMap := preload("arena_bsp_map.gd")
 
 ## The imported maps this game plays: every manifest under the roots below whose
-## `"kind"` is `"arena"` — the combat surf maps game-g2gfast keeps out of its own rotation
+## `"kind"` is `"arena"` — the combat surf maps game-airdrift keeps out of its own rotation
 ## because they are built to fight on rather than to time.
 ##
 ## [b]Discovered, never listed.[/b] A second list of map ids is the bug this family has
@@ -14,7 +14,7 @@ const ArenaBspMap := preload("arena_bsp_map.gd")
 ##
 ## [b]The format is g2gfast's.[/b] `<root>/<id>/<id>.json` beside `<id>.bin`, a lightmap
 ## and `textures/`, read by [ArenaBspMap]. The roots are `res://maps/imported` (the
-## arena-surf-dm-maps repository, linked in by dot-bootstrap at the path its `.import`
+## fc-surf-dm-maps repository, linked in by dot-bootstrap at the path its `.import`
 ## markers were written against) and `user://maps`, where a
 ## map that arrived at runtime would be; the first root that has an id wins, so a map in
 ## the build is never silently replaced by one dropped in beside it.
@@ -27,7 +27,7 @@ const ArenaBspMap := preload("arena_bsp_map.gd")
 ## dot-cloud pack, mounted at `res://dot_cloud/<owner>/<id>/<version>/` with `<id>.json`
 ## and `<id>.bin` directly inside — the directory is named for the version, the files for
 ## the map, so a scan of `<root>/<name>/<name>.json` pointed at a mount silently finds
-## nothing (game-g2gfast found the same thing and wrote `G2GMapCatalogue.at_directory`).
+## nothing (game-airdrift found the same thing and wrote `G2GMapCatalogue.at_directory`).
 ## [method add_mounted] takes the id and the directory, which the caller already has
 ## because it is the key it fetched. A mounted map is not in [method ids] — the catalogue
 ## offers it as delivered content, under its pack version, not as a local import — and it
@@ -62,7 +62,7 @@ static var _versions: Dictionary = {}
 static var _mounted: Dictionary = {}
 
 
-## The deathmatch and gun game maps (the arena-dm-maps repository, linked by dot-bootstrap).
+## The deathmatch and gun game maps (the fc-dm-maps repository, linked by dot-bootstrap).
 const DM_ROOT := "res://maps/imported_dm"
 
 

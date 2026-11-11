@@ -10,7 +10,7 @@ const ArenaDrops := preload("../game/arena_drops.gd")
 const ArenaEvents := preload("../game/arena_events.gd")
 const ArenaJail := preload("../maps/arena_jail.gd")
 
-## The combat surf maps game-g2gfast imported, played as an arena deathmatch. [codeblock] godot
+## The combat surf maps game-airdrift imported, played as an arena deathmatch. [codeblock] godot
 ## --headless --path .
 
 

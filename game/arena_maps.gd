@@ -143,7 +143,7 @@ static func mounted_versions(content: DotContentIndex) -> Dictionary:
 ## [b]Built from the key alone[/b], because nothing else is on the disk yet: these packs are
 ## a megabyte to five each and a server that fetched every one at boot would sit
 ## unreachable while it did, so a pack is fetched when the map is changed to
-## (`ArenaMapSession`), as game-g2gfast fetches its own. So the def says what the key says
+## (`ArenaMapSession`), as game-airdrift fetches its own. So the def says what the key says
 ## — id, content id, version — and nothing measured: no spawn count, no size, untagged, so
 ## the team modes are refused by the existing rule and the box-built modes by `imported`.
 ##

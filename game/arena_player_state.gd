@@ -65,7 +65,7 @@ var arsenal: DotWeaponArsenal = null
 ## Run as the player dies, while the arsenal still gives up its weapon; the game sets it.
 var before_death: Callable = Callable()
 
-## arena-weapons' rig over [member arsenal]: the bash, the view model, the shot effects
+## fc-weapons' rig over [member arsenal]: the bash, the view model, the shot effects
 ## and the replication counter. See [method _build_rig].
 var weapons: AwWeaponRig = null
 

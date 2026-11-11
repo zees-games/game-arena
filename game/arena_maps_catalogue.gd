@@ -321,7 +321,7 @@ static func apply_rotation(catalogue: DotMapCatalogue) -> void:
 			def.enabled = in_rotation(def.id)
 
 
-## An imported map as dot-map content. [b]Local, not delivered[/b] (no `content_id`): on every machine that has it the map is files in this build's tree (the linked arena-surf-dm-maps) that `ArenaMap.by_id` builds, like a built-in.
+## An imported map as dot-map content. [b]Local, not delivered[/b] (no `content_id`): on every machine that has it the map is files in this build's tree (the linked fc-surf-dm-maps) that `ArenaMap.by_id` builds, like a built-in.
 ## The version is its manifest's hash (`ArenaImportedMaps.version_of`), so a server and a client holding different imports of one map disagree at the announce instead of colliding against different brushes.
 static func _imported_def_for(id: StringName, map: ArenaMap) -> DotMapDef:
 	var def := DotMapDef.new()

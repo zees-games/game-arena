@@ -5,7 +5,7 @@ const ArenaBspMap := preload("arena_bsp_map.gd")
 ## Climbing a ladder the way the competitive shooters these maps were built for climb one,
 ## on the ladder volumes an imported map carries (world brushes with ladder contents).
 ##
-## [b]A copy of game-g2gfast's `G2GLadderMode`, in metres[/b], for the reason
+## [b]A copy of game-airdrift's `G2GLadderMode`, in metres[/b], for the reason
 ## `arena_map_mechanics.gd` gives: a game cannot name another game's script, and a
 ## delivered pack cannot resolve a `class_name`. Not in dot-player-controller either,
 ## deliberately: a ladder the way this genre climbs one is the genre's.

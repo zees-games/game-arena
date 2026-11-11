@@ -1,6 +1,6 @@
 shader_type spatial;
 // An imported map's surface, lit by the lighting its own map compiler baked and by
-// nothing else. Ported from game-g2gfast's `g2g_bsp_lightmapped.gdshader`, without the
+// nothing else. Ported from game-airdrift's `g2g_bsp_lightmapped.gdshader`, without the
 // flashlight and the pixel-art stand-ins, which are that game's.
 //
 // `unshaded` on purpose: the lightmap IS the lighting, and running it through Godot's

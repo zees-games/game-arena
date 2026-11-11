@@ -640,7 +640,7 @@ func tick(current_tick: int) -> void:
 ## respawns everybody, and nothing orders this node's handler before the respawn. When it
 ## lost that race the director still held the previous map's points and answered — with a
 ## real site, a real transform and a successful `DotResult` — a coordinate from a map
-## nobody was standing in. game-g2gfast hit exactly this and its surf section found it as
+## nobody was standing in. game-airdrift hit exactly this and its surf section found it as
 ## a bot that never left the ground; the only reason it is not already a bug here is that
 ## `_on_respawn_due` had never asked the director at all.
 func _ensure_sites_current() -> void:

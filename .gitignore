@@ -42,7 +42,7 @@
 /addons/dot_voice
 /addons/dot_weapon
 
-# The combat surf maps: the arena-surf-dm-maps repository, linked here by dot-bootstrap off
+# The combat surf maps: the fc-surf-dm-maps repository, linked here by dot-bootstrap off
 # the comment line below (copied, on Windows), at the path the `.import` markers in it were
 # written against. Arena plays the ones whose manifest says
 # "kind": "arena" (combat surf maps); a checkout without the link plays the three built-in
@@ -81,7 +81,7 @@ Thumbs.db
 /addons/dot_team
 /addons/dot_lighting
 /addons/dot_flashlight
-# arena-weapons: the game's whole weapon set (definitions and models), required.
+# fc-weapons: the game's whole weapon set (definitions and models), required.
 /addons/arena_weapons
 /addons/dot_game
 # dot-sim: optional native library (movement motor, bot senses, snapshot codec); without its built library the GDScript twins run.
@@ -95,7 +95,7 @@ Thumbs.db
 __pycache__/
 /tests/golden/*.import
 
-# Converted worlds (dot-map regen) of the combat surf maps, and the art stores they name: a link to arena-surf-dm-maps.
+# Converted worlds (dot-map regen) of the combat surf maps, and the art stores they name: a link to fc-surf-dm-maps.
 # bootstrap-link: arena-surf-dm-maps/worlds
 /worlds
 
@@ -103,7 +103,7 @@ __pycache__/
 # bootstrap-link: arena-dm-maps/worlds
 /worlds_dm
 
-# The deathmatch and gun game maps: the arena-dm-maps repository, linked here beside the surf maps.
+# The deathmatch and gun game maps: the fc-dm-maps repository, linked here beside the surf maps.
 # bootstrap-link: arena-dm-maps/maps
 /maps/imported_dm
 

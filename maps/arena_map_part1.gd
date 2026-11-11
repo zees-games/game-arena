@@ -39,7 +39,7 @@ static func climb_limit() -> float:
 ## writes down is the time to fall back to the height you jumped FROM, and it is the
 ## wrong number for any route that climbs: at this game's numbers a player is airborne
 ## for 0.67 s flat and 0.40 s onto a step 1.2 m up, which is 6.1 m of reach against
-## 3.6. `game-playground` sized a jump course with the first number, was 30% out, and
+## 3.6. `game-playlot` sized a jump course with the first number, was 30% out, and
 ## was unfinishable past platform three from the day it was built — see `[reach-1]` in
 ## `nightly-todo.md`. `DotFpsTunables.jump_reach` is that arithmetic; this asks it of
 ## this game's movement.

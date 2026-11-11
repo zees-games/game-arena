@@ -5,7 +5,7 @@ func _ready() -> void:
 	if ArenaSimHost.is_server_child():
 		_become_sim_server()
 		return
-	# arena-weapons' art is this game's copy of it, wherever this game is mounted. A
+	# fc-weapons' art is this game's copy of it, wherever this game is mounted. A
 	# delivered pack sits under `res://dot_cloud/<id>/<version>/`, and the pack's art table
 	# names `res://assets/...` — so without this every gun loads invisible, one WARN each.
 	AwModelCache.set_asset_root(ArenaPaths.root())

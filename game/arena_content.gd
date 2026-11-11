@@ -14,7 +14,7 @@ const GAME_ID := "game-arena"
 ## that. What a *reference* game wants is the opposite: one file you can read top to
 ## bottom and see the whole content set, with the reasoning next to the numbers.
 ##
-## [b]The weapons are arena-weapons', and none of them is defined here.[/b] The pack
+## [b]The weapons are fc-weapons', and none of them is defined here.[/b] The pack
 ## defines and draws them; what is left for the game is which of them a loadout may name
 ## and what each costs, which is below.
 

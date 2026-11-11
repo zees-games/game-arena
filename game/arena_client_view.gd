@@ -201,7 +201,7 @@ func weapon_previews() -> AwWeaponPreview:
 	return _previews
 
 
-## A card's picture (the HUD's rendered weapon silhouettes) and numbers (arena-weapons' cards).
+## A card's picture (the HUD's rendered weapon silhouettes) and numbers (fc-weapons' cards).
 func decorate_loadout_choice(_slot_id: String, choice: Dictionary) -> Dictionary:
 	var id := StringName(str(choice.get("id", "")))
 	var out: Dictionary = {}

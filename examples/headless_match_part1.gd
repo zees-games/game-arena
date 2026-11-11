@@ -342,7 +342,7 @@ func _switch_to(game: ArenaGame, id: int, slot: int) -> void:
 	_hold(game, id, 0, slot)
 	_settle(game, id, TICK_RATE)
 
-# --- arena-weapons ---------------------------------------------------------
+# --- fc-weapons ---------------------------------------------------------
 
 ## The weapons pack in a real game: the rig drives the arsenal, a spawn holds the right thing, a
 ## shot leaves the eye, the bash works, and projectiles behave as defined.

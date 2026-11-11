@@ -284,7 +284,7 @@ func attach_body_mesh(colour: Color, avatar: DotAvatar = null) -> void:
 
 	# A nose, so which way somebody is facing is visible from across the arena. Two
 	# overlapping shapes need the smaller one OUTSIDE the larger or the silhouette is
-	# one blob — game-playground drew every NPC icon as a coloured bar that way.
+	# one blob — game-playlot drew every NPC icon as a coloured bar that way.
 	var nose := MeshInstance3D.new()
 	var box := BoxMesh.new()
 	box.size = Vector3(0.16, 0.16, 0.35)
@@ -488,7 +488,7 @@ func tick_post(tick: int, delta: float, combat_command: DotWeaponCommand) -> Dot
 	# builds its own posture then, so the context below (a dozen writes and an extra dictionary) is skipped.
 	var t_wp := Time.get_ticks_usec()
 	var out: DotWeaponOutcome
-	# (Proper home: AwWeaponRig.would_idle(command) in arena-weapons; until it exists, ask the arsenal directly.)
+	# (Proper home: AwWeaponRig.would_idle(command) in fc-weapons; until it exists, ask the arsenal directly.)
 	# The posture feeds the spread (running, air, slide and crouch change the cone): the arsenal asks
 	# [method _idle_posture] for the same fields the context below gets, so a moving player takes this path too.
 	_posture_tick = tick

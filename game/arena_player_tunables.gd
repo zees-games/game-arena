@@ -158,7 +158,7 @@ static func apply_class_attributes(def: Object, tunables: Object) -> int:
 ## against a wish speed capped at `max_air_wish_speed`: the arena's own pair (140 against
 ## a 1.2 m/s cap) is a floaty deathmatch, and on a ramp it is a player who cannot hold the
 ## line the mapper drew. The numbers are the genre's, converted at 0.01905 m a unit:
-## `sv_airaccelerate 150` (what game-g2gfast runs these maps at, and `arena_surf_airaccelerate`
+## `sv_airaccelerate 150` (what game-airdrift runs these maps at, and `arena_surf_airaccelerate`
 ## changes it), a 30 u/s wish cap, 800 u/s² of gravity, a 57-unit jump and the 3500 u/s
 ## speed limit. Gravity and the jump travel together because the gaps between ramps were
 ## sized for that arc — at the arena's 22 m/s² a jump off a ramp lands 30% short.

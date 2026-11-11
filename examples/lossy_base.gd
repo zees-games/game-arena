@@ -476,7 +476,7 @@ func _test_ambient_cvars_reach_the_client() -> void:
 	_done()
 
 
-## arena-weapons' `mp_vm_*` and the map's packs on a client: the server's sway, tilt, bob,
+## fc-weapons' `mp_vm_*` and the map's packs on a client: the server's sway, tilt, bob,
 ## landing and aim steadiness reach it at the join and live, and a late joiner is told the packs out.
 func _test_view_feel_and_packs_reach_the_client() -> void:
 	_section("the server's mp_vm_* and the map's packs reach a client")

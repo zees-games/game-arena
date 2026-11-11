@@ -2,9 +2,9 @@ extends RefCounted
 
 ## Which weapon fills each of this game's roles, and which weapon packs add weapons. The game names a role (melee,
 ## secondary, primary, heavy, thrown), never a pack: any addon with `spawn_provider.gd` and a static `weapon_defs()`
-## can fill them, so a zz pack can drive the arena and, the other way, arena-weapons can drive Zombie Zone.
+## can fill them, so a zz pack can drive the arena and, the other way, fc-weapons can drive Zombie Zone.
 ##
-## `weapons.own` (arena-weapons) is the game's whole gun set under plain ids and is always registered first; `weapons.packs`
+## `weapons.own` (fc-weapons) is the game's whole gun set under plain ids and is always registered first; `weapons.packs`
 ## names the packs that join after it, prefixed. A missing own pack is an error: the arena then has no weapons. Tuned in
 ## `cfg/addons/game_arena_weapons/*.yml` (dot-core's DotAddonConfig, so an operator's cfg/server tier wins).
 
@@ -46,7 +46,7 @@ const ROLE_DEFAULT := {
 }
 
 const AW_PREFIX := "aw_"
-## Weapons the arena carried before arena-weapons owned the set, to what replaces them.
+## Weapons the arena carried before fc-weapons owned the set, to what replaces them.
 const RETIRED := {
 	&"fists": &"knife", &"shiv": &"knife", &"hatchet": &"knife", &"mallet": &"knife", &"pickaxe": &"knife", &"spade": &"knife",
 }

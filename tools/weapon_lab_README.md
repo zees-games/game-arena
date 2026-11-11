@@ -20,12 +20,12 @@ One weapon alone, on one box: `gpu.sh shot proj tools/weapon_lab.sh --out DIR --
 
 - `fp_<anim>.mp4` and `fp_<anim>_strip.png` (8 evenly spaced frames) for idle, draw, holster, fire, ads (in and out), reload_empty
   (magazine 0), reload_tactical (one round short of full), melee (bash), sprint. 960x540, 30 fps fixed-step.
-- `inspect` is reported `n/a` in `manifest.json`: arena-weapons has no inspect animation yet.
+- `inspect` is reported `n/a` in `manifest.json`: fc-weapons has no inspect animation yet.
 - `tp_turntable.mp4`, `tp_orbit_strip.png` / `tp_orbit_<yaw>.jpg` (8 yaws, 12 degree elevation), `tp_closeup_{top,under,muzzle,rear,side_r,side_l}.jpg`
   and `tp_closeup_mag_{90,270,0}.jpg` (the magazine model in place on the weapon) for texture and mag work.
 - `manifest.json`: per animation status (ok / n/a with reason), frame counts.
 
 ## Notes
 
-- Weapons are the arena catalogue (`AwWeaponCatalogue`, the arena-weapons pack). zee-dot-weapons is not loaded by arena.
+- Weapons are the arena catalogue (`AwWeaponCatalogue`, the fc-weapons pack). zee-dot-weapons is not loaded by arena.
 - The boxes need nothing but godot, xvfb-run and ffmpeg (they have all three). The JPEG frames are deleted after encoding.

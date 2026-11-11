@@ -67,7 +67,7 @@ var net_fire_mode: int = 0
 var net_magazine: int = 0
 var net_reserve: int = 0
 
-# --- arena-weapons' four, from AwWeaponNet.specs() ---
+# --- fc-weapons' four, from AwWeaponNet.specs() ---
 var net_fire_seq: int = 0
 var net_fire_kind: int = 0
 var net_reloading: bool = false

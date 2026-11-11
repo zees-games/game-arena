@@ -1,5 +1,5 @@
 shader_type spatial;
-// A copy of game-g2gfast's g2g_bsp_water.gdshader: keep the two in step.
+// A copy of game-airdrift's g2g_bsp_water.gdshader: keep the two in step.
 // Water an imported map did not ship a texture for: translucent, moving, lit by the map.
 //
 // The source game's water materials live in its own archives, never in a map, so every

@@ -4,7 +4,7 @@ extends "arena_game_part2a.gd"
 ## Deals an imported map's hurt volumes (`trigger_hurt`) to everybody standing in one, as
 ## world damage through dot-combat.
 ##
-## [b]Real damage, where game-g2gfast's is "100 or more is a death, the rest ignored"[/b],
+## [b]Real damage, where game-airdrift's is "100 or more is a death, the rest ignored"[/b],
 ## because a timer run has no health and this game does. The engine these maps come from
 ## reads the volume's `damage` as per second and deals it every half second, the first
 ## pulse on entering; this does the same, through [method DotCombatManager.apply_damage]

@@ -1,4 +1,4 @@
-# Arena: bullpup recoil. Only the keys changed from the arena-weapons pack; delete a key to fall back to it.
+# Arena: bullpup recoil. Only the keys changed from the fc-weapons pack; delete a key to fall back to it.
 # pitch/yaw: degrees per shot (yaw alternates and drifts); build: extra kick per shot of a burst, capped at build_max;
 # recovery: how fast the kick settles per second; aim: multiplier while aiming down sights (-1 = sv_recoil_mult_aim).
 extra:

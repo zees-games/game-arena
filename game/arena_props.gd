@@ -29,7 +29,7 @@ const ArenaStats := preload("arena_stats.gd")
 ## props.spawn_for(session_id, ArenaProps.CRATE, in_front_of_player)
 ## [/codeblock]
 ##
-## [b]Why an arena has props at all.[/b] Not as a sandbox — game-playground is the
+## [b]Why an arena has props at all.[/b] Not as a sandbox — game-playlot is the
 ## sandbox and this is not trying to be one. A crate you can shoot into a doorway is
 ## cover you made, a barrel you punt is a weapon you improvised, and both are things
 ## the geometry cannot give you because the geometry does not move. It is also the only

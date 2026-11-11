@@ -84,7 +84,7 @@ func _bind_rule_cvars() -> void:
 
 	# mp_teamblock, mp_enemyblock, !block / !noblock: dot-game's module builds DotGameNoblock after this load.
 
-	# mp_vm_sway* and friends: arena-weapons' view model feel, drawn on each client.
+	# mp_vm_sway* and friends: fc-weapons' view model feel, drawn on each client.
 	var _feel_cvars := game.feel_rules.bind_cvars(add_cvar, replicated)
 
 	# Aim down sights: spread and pace while aimed are predicted, so they cross as one JSON cvar.

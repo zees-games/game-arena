@@ -69,7 +69,7 @@ func _ready() -> void:
 
 	# A snout, so which way it is facing is visible from across the arena. The smaller
 	# shape has to sit OUTSIDE the larger one or the silhouette is a single blob —
-	# game-playground drew every NPC icon as a coloured bar that way, and it took a
+	# game-playlot drew every NPC icon as a coloured bar that way, and it took a
 	# screenshot rather than an assertion to see it.
 	var snout := MeshInstance3D.new()
 	snout.name = "Snout"

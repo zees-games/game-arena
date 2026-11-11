@@ -30,7 +30,7 @@ const ArenaPaths := preload("arena_paths.gd")
 ## Where a map's rides are kept.
 const CACHE := "res://maps/surf/%s.surf.json"
 
-## Metres per unit in the cache file: the genre unit, as game-g2gfast's caches.
+## Metres per unit in the cache file: the genre unit, as game-airdrift's caches.
 const UNITS := 0.01905
 
 ## Ride ids are edge indices; a teleport link's id is this plus the pit's index.

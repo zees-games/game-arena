@@ -1,5 +1,5 @@
 shader_type sky;
-// A copy of game-g2gfast's g2g_sky.gdshader: keep the two in step.
+// A copy of game-airdrift's g2g_sky.gdshader: keep the two in step.
 // An imported map's own 2D sky: six faces from its pakfile, in the map format's face layout.
 //
 // Faces rt, lf, bk, ft, up, dn are +X, -X, +Y, -Y, +Z and -Z in the map's own axes, and

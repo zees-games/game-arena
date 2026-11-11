@@ -13,7 +13,7 @@ const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 
-## cp-orange-x3 (arena-dm-maps), a large control point map: its team spawns are red and blue, the
+## cp-orange-x3 (fc-dm-maps), a large control point map: its team spawns are red and blue, the
 ## manifest lists the modes it hosts, and CTF puts the flags where `flag_spawns` says. Skips
 ## (exit 0, says so) when the map is not linked at maps/imported_dm.
 

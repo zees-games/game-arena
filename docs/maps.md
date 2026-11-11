@@ -44,7 +44,7 @@ On the client:
 - `ArenaMapSession` refuses on `_mode_after(map)`: the map's own mode if its def names one, otherwise the one already playing.
 - `ArenaMapDirector.restrict_rotation` narrows `DotMapRotation.order` to what the current mode can host before every ask, because the mode changes under a running server. It never empties the order: a mode no map can host is a configuration mistake, and "the map did not change" says so.
 
-A map can also list the modes it hosts. An imported map's manifest `modes` (written from `zones/<id>.json` by the importer, see arena-dm-maps) is carried as `DotMapDef.meta["modes"]` and `supports_mode` answers from it first: `["ffa", "gungame", "tdm", "ctf"]` offers exactly those, a team mode still needing tagged spawns. Spawns tagged `red` and `blue` come from the manifest's per-spawn `team`. `flag_spawns` in the manifest set `ArenaMap.flag_homes`, which `ArenaObjectives.build` uses for the `ctf` layout instead of the ends of the longest axis. **CTF-capable maps** are the ones that list `ctf`: two bases at least about 60 m apart, each with its own spawn block. The stock `dm_` maps are too small; `cp-orange-x3` qualifies.
+A map can also list the modes it hosts. An imported map's manifest `modes` (written from `zones/<id>.json` by the importer, see fc-dm-maps) is carried as `DotMapDef.meta["modes"]` and `supports_mode` answers from it first: `["ffa", "gungame", "tdm", "ctf"]` offers exactly those, a team mode still needing tagged spawns. Spawns tagged `red` and `blue` come from the manifest's per-spawn `team`. `flag_spawns` in the manifest set `ArenaMap.flag_homes`, which `ArenaObjectives.build` uses for the `ctf` layout instead of the ends of the longest axis. **CTF-capable maps** are the ones that list `ctf`: two bases at least about 60 m apart, each with its own spawn block. The stock `dm_` maps are too small; `cp-orange-x3` qualifies.
 
 ## Every map is surveyed
 
@@ -122,7 +122,7 @@ A subscribed pack's map (map kind `arena`, solo only; `provides.json` says so) i
 
 ## Suggested map packs
 
-`game.yml` lists `arena-dm-maps` (group `dm`) and `arena-surf-dm-maps` (group `surf`) as `suggested:`. The game runs without them; the Workshop mounts them by default and `--no-suggested`, `--suggested=none` or `--no-suggested-surf` turns them off. Players can still pick single maps in the Workshop list. **A server offers them too**: dot-server-deploy adds the `suggested:` packs to the map list at the newest version every start, so a fresh server's vote has the DM and surf maps with no `overrides.yml`; `suggested_maps: none` (or `surf`, to keep one group), `sv_suggested_maps` or `--no-suggested` on the server turns that off (dot-server-deploy `docs/configuration.md`). Online clients only ever get the server's list.
+`game.yml` lists `fc-dm-maps` (group `dm`) and `fc-surf-dm-maps` (group `surf`) as `suggested:`. The game runs without them; the Workshop mounts them by default and `--no-suggested`, `--suggested=none` or `--no-suggested-surf` turns them off. Players can still pick single maps in the Workshop list. **A server offers them too**: dot-server-deploy adds the `suggested:` packs to the map list at the newest version every start, so a fresh server's vote has the DM and surf maps with no `overrides.yml`; `suggested_maps: none` (or `surf`, to keep one group), `sv_suggested_maps` or `--no-suggested` on the server turns that off (dot-server-deploy `docs/configuration.md`). Online clients only ever get the server's list.
 
 ### Solo with no link
 

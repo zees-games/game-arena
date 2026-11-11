@@ -5,7 +5,7 @@ const ArenaBspMap := preload("arena_bsp_map.gd")
 ## What an imported combat surf map's brush entities DO to a player: its pushes, gravity
 ## volumes, conveyors, water, ladders and hurt volumes.
 ##
-## [b]A copy of game-g2gfast's `G2GMapMechanics`, not a dependency.[/b] A game cannot name
+## [b]A copy of game-airdrift's `G2GMapMechanics`, not a dependency.[/b] A game cannot name
 ## another game's script and a delivered pack cannot resolve a `class_name`, so this is the
 ## half arena needs, preloaded by path, in metres (the manifest's units through
 ## [constant ArenaBspMap.METRES_PER_UNIT], as the rest of the loader converts). The

@@ -6,7 +6,7 @@ Every addon passes its own suite, and every one of those suites runs one addon w
 
 ```
 the fight        dot-player-controller  dot-combat  dot-weapon  dot-loadout  dot-match
-                 arena-weapons (the weapons, and everything about them anybody sees)
+                 fc-weapons (the weapons, and everything about them anybody sees)
 what you keep    dot-stats  dot-achievements  dot-leaderboard
 the world        dot-map  dot-props  dot-npc  dot-npc-ai  dot-npc-ai-director  dot-entity
 what plays next  dot-vote
@@ -110,4 +110,4 @@ Everything is flat under `game/` and `maps/`, grouped here by what it is for.
 | `game/arena_stats_store.gd`, `arena_award_store.gd` | the stats file and the achievement files written once per save, off the frame (the addons' file stores write per player in the saving frame; `ArenaProgress._exit_tree` calls `finish()`) |
 | `game/arena_paths.gd` | `rebase` for every `res://` path (pack delivery) |
 | `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
-| `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the arena-surf-dm-maps link |
+| `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the fc-surf-dm-maps link |

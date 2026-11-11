@@ -6,7 +6,7 @@ const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaModes := preload("../game/arena_modes.gd")
 
-## The deathmatch and gun game maps (arena-dm-maps, linked at maps/imported_dm): each in maps.json
+## The deathmatch and gun game maps (fc-dm-maps, linked at maps/imported_dm): each in maps.json
 ## is discovered, answers to ArenaMap.by_id with its author's credit and spawns, and is walked,
 ## not surfed. Skips (exit 0, says so) without the link, a supported state.
 ##

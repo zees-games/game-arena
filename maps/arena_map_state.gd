@@ -129,7 +129,7 @@ const DAYLIGHT := {
 # --- An imported map -------------------------------------------------------
 #
 # [b]The one place this class is not a list of boxes.[/b] A combat surf map imported by
-# game-g2gfast is a compiled level of a few thousand convex brushes, and its collision is
+# game-airdrift is a compiled level of a few thousand convex brushes, and its collision is
 # the brushes themselves in Godot's physics space (`ArenaBspMap.build_collision`) — there
 # is no list of boxes it could be reduced to without losing the ramps, which are the
 # whole map. So an imported map has no `boxes`; [method movement_body] and

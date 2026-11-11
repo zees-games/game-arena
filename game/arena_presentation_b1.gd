@@ -243,7 +243,7 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 			on_fired(weapon_id, muzzle, true)
 
 		# Impacts are a list because a shotgun is one shot with several of them, and one impact sound for eight pellets sounds like a rifle. Each faces along the aim, not along its own pellet (the pellet directions are not kept per impact).
-		# [b]With the weapon drawing its own shot, only the hole is this layer's:[/b] arena-weapons' `AwShotFx` draws the flash, tracer, spark and report.
+		# [b]With the weapon drawing its own shot, only the hole is this layer's:[/b] fc-weapons' `AwShotFx` draws the flash, tracer, spark and report.
 		# An impact on a sky brush is open sky to the player: no hole, spark or sound (cp-orange-x3's specks in the clouds). Hit results are untouched.
 		var space := _space()
 		for at in shot.impacts:

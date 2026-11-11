@@ -10,7 +10,7 @@ const ArenaProjectiles := preload("arena_projectiles.gd")
 ## reads the same list the simulation advances, once a frame, and moves one node per
 ## entry; it writes nothing back, so dropping it changes no outcome.
 ##
-## A grenade is its own model from arena-weapons' art table, turned and scaled the way
+## A grenade is its own model from fc-weapons' art table, turned and scaled the way
 ## the pack draws it in a hand. The launcher's round has no model in the kit worth the
 ## name at this size, so it is a small hot sphere with a light, which is also what reads
 ## at forty metres. On a networked client the list is the copies the server's LAUNCH

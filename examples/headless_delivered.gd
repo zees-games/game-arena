@@ -20,7 +20,7 @@ const ArenaMapDirector := preload("../game/arena_map_director.gd")
 ## files into a fake mount: the pack here is made by [DotCloudPublisher] from the real map
 ## folder (textures, lightmap and their imported outputs), the fetch is dot-cloud's own
 ## (verified against the suite's key), and the map is checked to read nothing from the
-## `maps/imported` link. A client without the arena-surf-dm-maps link has only this path.
+## `maps/imported` link. A client without the fc-surf-dm-maps link has only this path.
 ##
 ## [b]Not here[/b]: a networked announce (`headless_imported` accepts one) and the published
 ## packs on the site's origin, which need a tag and the owner's permission to publish.

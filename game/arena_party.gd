@@ -13,8 +13,8 @@ extends Node
 ## [/codeblock]
 ##
 ## A host who can cheat and a leaderboard are not two features. They are one exploit, and
-## the only honest answers are a dedicated server or a sandbox. game-g2gfast
-## refuses to host a ranked run outright, and game-playground hosts authoritatively because
+## the only honest answers are a dedicated server or a sandbox. game-airdrift
+## refuses to host a ranked run outright, and game-playlot hosts authoritatively because
 ## nothing it builds is ranked: three games, three answers, one addon.
 ##
 ## [method reporting_allowed] is what the rest of the game asks before it files anything.
