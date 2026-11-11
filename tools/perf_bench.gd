@@ -9,7 +9,7 @@ const ArenaNetContext := preload("../game/arena_net_context.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client. Windowed on a GPU box (tools/perf_bench.sh) or headless through hv: `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
-## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots).
+## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, noanim, noheld).
 
 var _pilot := true
 var _motor_us := false
@@ -247,5 +247,10 @@ func _apply_ablate() -> void:
 				for p: Object in client.get("game").call("players"):
 					if p.get("camera") == null:
 						p.visible = false
+			# Remote bodies drawn without their animation, or without their held gun (ArenaPlayer.present_ablate).
+			"noanim":
+				preload("../game/arena_player.gd").present_ablate |= 1
+			"noheld":
+				preload("../game/arena_player.gd").present_ablate |= 6
 	if not _ablate.is_empty():
 		say("ablate %s" % ",".join(_ablate))
