@@ -25,7 +25,8 @@ const ArenaMapDirector := preload("../game/arena_map_director.gd")
 ## [b]Not here[/b]: a networked announce (`headless_imported` accepts one) and the published
 ## packs on the site's origin, which need a tag and the owner's permission to publish.
 ##
-## Skips, saying so, without the link. `-- --shot <path>` saves a frame (needs a renderer).
+## Skips, saying so, without the link, after the one section that needs none: the game pack
+## leaves every map link out (`tools/publish.sh` MAP_LINKS). `-- --shot <path>` saves a frame (needs a renderer).
 
 const MAP := &"surf_10x_reloaded_fixed"
 const OWNER := "gamemann"
@@ -34,9 +35,11 @@ const ROOT := "user://arena_delivered_check"
 ## Inside the project, so the publisher finds the imported outputs the markers name; under
 ## `.godot`, which git ignores.
 const STAGE := "res://.godot/arena_delivered_stage"
-const SECTIONS := 5
+## Where the game-pack section stages its stand-in tree.
+const PACK_ROOT := "user://arena_pack_maps_check"
+const SECTIONS := 6
 ## Without a frame; two more with `--shot`.
-const CHECKS := 22
+const CHECKS := 26
 
 var _entered := 0
 var _completed := 0
@@ -62,11 +65,12 @@ func _ready() -> void:
 
 func _run() -> void:
 	_line("arena — a combat surf map delivered as a signed pack")
+	_test_game_pack_leaves_maps_out()
 	var source_manifest := ArenaImportedMaps.manifest_path(MAP)
 
 	if source_manifest.is_empty():
 		_line("no %s under %s — nothing to publish (link arena-surf-dm-maps)" % [MAP, ArenaImportedMaps.roots()[0]])
-		get_tree().quit(0)
+		get_tree().quit(1 if _failed > 0 else 0)
 		return
 
 	DotPaths.remove_tree(ROOT)
@@ -81,6 +85,70 @@ func _run() -> void:
 
 	_test_surf_keys()
 	_finish()
+
+
+## The game's own pack carries no maps: they are their own packs (docs/imported-maps.md), and
+## the links to them were 547 of its 583 MiB until tools/publish.sh named them. Every
+## `# bootstrap-link:` path in .gitignore must be in publish.sh's MAP_LINKS, and the publisher,
+## given those as `--exclude-dir`, must drop a stand-in map tree and keep the game beside it.
+func _test_game_pack_leaves_maps_out() -> void:
+	_section("the game pack leaves every map link out (tools/publish.sh MAP_LINKS)")
+	var links := _gitignore_links(FileAccess.get_file_as_string("res://.gitignore"))
+	_check(links.size() >= 4, "the .gitignore names the map links (%s)" % ", ".join(links))
+	var script := FileAccess.get_file_as_string("res://tools/publish.sh")
+	var listed := PackedStringArray()
+	var passed := false
+
+	for line in script.split("\n"):
+		if line.begins_with("MAP_LINKS=(") and line.ends_with(")"):
+			listed = line.trim_prefix("MAP_LINKS=(").trim_suffix(")").split(" ", false)
+		elif line.begins_with("X=(); for d in ") and line.contains("\"${MAP_LINKS[@]}\""):
+			passed = true
+
+	var missing := PackedStringArray()
+
+	for link in links:
+		if not listed.has(link):
+			missing.append(link)
+
+	_check(missing.is_empty(), "every link is in MAP_LINKS (missing: %s)" % ", ".join(missing))
+	_check(passed, "publish.sh hands MAP_LINKS to the publisher as --exclude-dir")
+	DotPaths.remove_tree(PACK_ROOT)
+	var kept := PackedStringArray(["game/arena_game.gd", "maps/arena_map.gd", "maps/surf/x.surf.json"])
+	var files := kept.duplicate()
+
+	for link in listed:
+		files.append(link.path_join("m").path_join("m.json"))
+
+	for rel in files:
+		DotPaths.ensure_parent_dir(PACK_ROOT.path_join(rel))
+		DotPaths.write_text(PACK_ROOT.path_join(rel), "{}")
+
+	var publisher := DotCloudPublisher.new()
+	publisher.exclude_dirs.append_array(listed)
+	var got := publisher._collect(PACK_ROOT)
+	got.sort()
+	kept.sort()
+	_check(got == kept, "the publisher keeps the game and drops the maps (%s)" % ", ".join(got))
+	DotPaths.remove_tree(PACK_ROOT)
+	_done()
+
+
+## The paths dot-bootstrap links (the pattern under each `# bootstrap-link:` line), without slashes.
+static func _gitignore_links(text: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var armed := false
+
+	for raw in text.split("\n"):
+		var line := raw.strip_edges()
+
+		if line.begins_with("# bootstrap-link:"):
+			armed = true
+		elif armed and not line.is_empty() and not line.begins_with("#"):
+			out.append(line.trim_prefix("/").trim_suffix("/"))
+			armed = false
+
+	return out
 
 
 ## The signed pack, made from the real folder.
