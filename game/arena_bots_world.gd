@@ -159,8 +159,19 @@ class World:
 	var _waypoints_tick: int = -1
 	var _waypoints_held := PackedVector3Array()
 	var _contacts: Array = []
+	## The contacts by id, kept from tick to tick and rewritten whole by [method refresh] (a brain keeps ids, never a contact).
 	var _by_id: Dictionary = {}
 	var _players: Dictionary = {}
+	## Weapon ratings (def -> [method DotBotArms.rate]) of this tick: every loadout and drop list rates the same few definitions.
+	var _rated: Dictionary = {}
+	## The drop list of [member _drops_tick]: drops lie still while the brains of a tick think, and every brain asks.
+	var _drops_held: Array = []
+	var _drops_tick: int = -1
+	## The tick [method player_count] counted on, and its count.
+	var _count_tick: int = -1
+	var _count: int = 0
+	## [method DotBotArms.rate] once a tick per definition (over [member _rated]), for every loadout and drop list here.
+	var _rater: Callable = Callable()
 	## The graph bots walk on and the map it was built for: the horde's when it has one,
 	## built here on a built-in map when it does not, none on an imported map.
 	var _graph: DotNpcNavGraph = null
@@ -256,7 +267,21 @@ class World:
 		walkable_fn = _walkable_near
 		# The lambdas hold the box, not self: a lambda on self in a field of self is a reference cycle.
 		var box := _par_arsenal
-		DotBotArms.wire(self, func() -> Variant: return p_game.get("weapon_drops"), func() -> Object: return box[0] if box[0] != null else _any_arsenal(p_game))
+		var rated := _rated
+		_rater = func(def: Object) -> float:
+			var held: Variant = rated.get(def)
+			if held == null:
+				held = DotBotArms.rate(def)
+				rated[def] = held
+			return held
+		DotBotArms.wire(self, func() -> Variant: return p_game.get("weapon_drops"), func() -> Object: return box[0] if box[0] != null else _any_arsenal(p_game), _rater)
+
+	## Players in the game on [param tick], counted once a tick however many bots ask.
+	func player_count(tick: int) -> int:
+		if tick != _count_tick or tick < 0:
+			_count_tick = tick
+			_count = (game.call(&"player_ids") as Array).size()
+		return _count
 
 	## Rebuilds the contacts once a tick, however many bots ask.
 	func refresh(tick: int, rate: float) -> void:
@@ -266,32 +291,49 @@ class World:
 		_tick = tick
 		contacts_version = tick
 		_contacts.clear()
-		_by_id.clear()
 		_players.clear()
+		_rated.clear()
 		_tunables = null
 		var t_lap := ArenaFrameProbe.lap_start()
 		var teams := _team_mode()
+		var eye := ArenaPlayer.eye_height()
+		var aim := CHEST * ArenaPlayer.stand_height() / 1.8
 		for p: ArenaPlayer in game.call("players"):
-			var c := DotBotContact.new()
-			c.id = p.player_id
-			c.eye_height = ArenaPlayer.eye_height()
-			c.aim_height = CHEST * ArenaPlayer.stand_height() / 1.8
+			# Last tick's contact, every field written again: as a fresh one, without a new object per player per tick.
+			var c: DotBotContact = _by_id.get(p.player_id)
+			if c == null:
+				c = DotBotContact.new()
+				c.id = p.player_id
+				_by_id[c.id] = c
+			c.eye_height = eye
+			c.aim_height = aim
 			c.alive = p.is_alive()
 			c.team = p.team if teams else 0
 			if p.controller != null:
-				c.position = p.controller.state.position
-				c.velocity = p.controller.state.velocity
-				c.view_yaw = p.controller.state.yaw
-				c.view_pitch = p.controller.state.pitch
-				_motion_of(c, p.controller.state)
+				var state := p.controller.state
+				c.position = state.position
+				c.velocity = state.velocity
+				c.view_yaw = state.yaw
+				c.view_pitch = state.pitch
+				_motion_of(c, state)
 			else:
 				c.position = p.global_position
-			if p.health != null and p.health.max_health > 0.0:
-				c.health = p.health.health / p.health.max_health
+				c.velocity = Vector3.ZERO
+				c.view_yaw = NAN
+				c.view_pitch = NAN
+				c.grounded = true
+				c.sliding = false
+				c.wall_running = false
+				c.air_jump_ready = false
+			c.health = p.health.health / p.health.max_health if p.health != null and p.health.max_health > 0.0 else 1.0
 			c.loadout = _loadout_of(p, tick)
 			_contacts.append(c)
-			_by_id[c.id] = c
 			_players[c.id] = p
+		if _by_id.size() != _contacts.size():
+			# Someone left: only this tick's players have a contact.
+			_by_id.clear()
+			for c: DotBotContact in _contacts:
+				_by_id[c.id] = c
 		_objective_refresh(teams)
 		t_lap = ArenaFrameProbe.lap(&"br_contacts", t_lap)
 		if tiers != null and tiers.applies(_contacts.size()):
@@ -380,7 +422,7 @@ class World:
 		var held: Variant = _loadouts.get(p.player_id)
 		if held is Array and (tick + p.player_id) % LOADOUT_EVERY != 0 and tick >= (held as Array)[0] and tick - (held as Array)[0] < LOADOUT_EVERY:
 			return (held as Array)[1]
-		var made := DotBotArms.loadout_of(p.arsenal)
+		var made := DotBotArms.loadout_of(p.arsenal, _rater)
 		_loadouts[p.player_id] = [tick, made]
 		return made
 
@@ -787,13 +829,20 @@ class World:
 	func drops() -> Array:
 		if par:
 			_par_lock.lock()
-			var held := super()
+			var held := _drops_now()
 			_par_lock.unlock()
 			return held
 		var t_lap := ArenaFrameProbe.lap_start()
-		var lying := super()
+		var lying := _drops_now()
 		ArenaFrameProbe.lap(&"bot_drops", t_lap)
 		return lying
+
+	## The drop list, built once a tick: nothing moves a drop while the brains of a tick think (the callers only read it).
+	func _drops_now() -> Array:
+		if _tick < 0 or _drops_tick != _tick:
+			_drops_held = super.drops()
+			_drops_tick = _tick
+		return _drops_held
 
 	func ladder(ride_id: int) -> Dictionary:
 		if par:
