@@ -44,8 +44,16 @@ var _seconds := 15.0
 var _burn_ms := 0.0
 var _port := PORT
 var _map := "dm_box"
+var _startup_s := 6.0
 var _mode := "ffa"
+const WALL_DRIVER := preload("res://examples/wall_route_driver.gd")
+
 var _play := false
+## `--wallrun` (needs a map with wall routes, dm_atrium): the server puts the client's player at
+## the start of the first wall route every few seconds and the client's pilot drives the route
+## (the run, the slide, the jump onto the wall) instead of wandering, so the mismatch check
+## covers a predicted wall run. The 2026-11-10 "0 mismatches" ran on dm_box, which has none.
+var _wallrun := false
 ## The server game's tick rate. 60 is dot-server's default `sv_tickrate`; 64 is ArenaGame's.
 var _tick := 60
 
@@ -73,7 +81,9 @@ func _ready() -> void:
 			"--map": _map = args[i + 1]
 			"--mode": _mode = args[i + 1]
 			"--tick": _tick = int(args[i + 1])
+			"--startup": _startup_s = float(args[i + 1])
 	_play = "--play" in args
+	_wallrun = "--wallrun" in args
 	_json = "--json" in args
 	DotLog.set_level(DotLog.Level.ERROR)
 	var _scratch := ArenaPresentation.use_scratch_settings("client_bench_" + _role)
@@ -115,8 +125,26 @@ func _serve() -> void:
 		quota.empty_cvar.force_set("1")
 	for i in _bots:
 		var _id: int = module.bridge.add_bot("Bot %d" % (i + 1))
+	if _wallrun:
+		_feed_wall_routes(game, module)
 	print("client_bench server: ready on %d (enet %d) with %d bots" % [_port, config.effective_enet_port(), _bots])
 	_report_server(module.net)
+
+
+## `--wallrun`, server side: every 7 s sends each human player to the start of the map's first
+## wall route, facing along it.
+func _feed_wall_routes(game: ArenaGame, module: Object) -> void:
+	if game.map.wall_routes.is_empty():
+		printerr("client_bench: --wallrun needs a map with wall routes (dm_atrium)")
+		return
+	var driver = WALL_DRIVER.new(game.map.wall_routes[0], &"walls")
+	while true:
+		await get_tree().create_timer(7.0).timeout
+		# The bridge's peer table holds the humans only; the bots have no peer.
+		for id in module.bridge.get("_players_by_peer").values():
+			var player = game._players.get(id)
+			if player != null:
+				player.controller.teleport(driver.start, driver.yaw, 0.0)
 
 
 ## Every 5 s: the server's real tick rate against its declared one, what a tick costs
@@ -196,17 +224,59 @@ class Pilot extends Node:
 				Input.parse_input_event(wheel)
 
 
+## `--wallrun`, client side: drives the route the server keeps putting the player at, through
+## the real input actions and the look sampler, so the prediction runs it as a player's would.
+class WallPilot extends Node:
+	var _client: Node
+	var _driver: Variant
+	var _route: Dictionary
+	var _far := true
+
+	func _init(client: Node, route: Dictionary) -> void:
+		_client = client
+		_route = route
+		_driver = WALL_DRIVER.new(route, &"walls")
+
+	func _process(delta: float) -> void:
+		var player = _client.get("player")
+		var sampler = _client.get("_sampler")
+		if player == null or sampler == null or player.controller == null:
+			return
+		var c: DotFpsController = player.controller
+		var at: Vector3 = c.state.position
+		var d := Vector2(at.x - _driver.start.x, at.z - _driver.start.z).length()
+		if d > 2.0:
+			_far = true
+		elif d < 0.6 and _far:
+			_far = false
+			_driver = WALL_DRIVER.new(_route, &"walls")
+		sampler.look_at_angles(_driver.yaw, 0.0)
+		var cmd: DotFpsCommand = _driver.next(c.state)
+		_press(&"dot_fps_forward", cmd.move.y > 0.0)
+		_press(&"dot_fps_jump", cmd.buttons & DotFpsCommand.BUTTON_JUMP != 0)
+		_press(&"dot_fps_crouch", cmd.buttons & DotFpsCommand.BUTTON_CROUCH != 0)
+		_press(&"dot_fps_sprint", cmd.buttons & DotFpsCommand.BUTTON_SPRINT != 0)
+
+	func _press(action: StringName, on: bool) -> void:
+		if on:
+			Input.action_press(action)
+		else:
+			Input.action_release(action)
+
+
 ## Starts the server process and gives it time to load; false (and quits) when it cannot start.
 func _start_server() -> bool:
 	var args := PackedStringArray(["--headless", "--path", ProjectSettings.globalize_path("res://"),
 		"res://tools/client_bench.tscn", "--", "--role", "server", "--port", str(_port),
 		"--bots", str(_bots), "--map", _map, "--mode", _mode, "--tick", str(_tick)])
+	if _wallrun:
+		args.append("--wallrun")
 	_server_pid = OS.create_process(OS.get_executable_path(), args)
 	if _server_pid <= 0:
 		printerr("client_bench: could not start the server")
 		get_tree().quit(1)
 		return false
-	await get_tree().create_timer(6.0).timeout
+	await get_tree().create_timer(_startup_s).timeout
 	return true
 
 
@@ -286,10 +356,18 @@ func _run() -> void:
 	if "--raw-input" in OS.get_cmdline_user_args() and client_net != null and "predict_wire_input" in client_net.config:
 		client_net.config.predict_wire_input = false
 	# After the client, whose bindings register the actions the pilot presses.
-	if _play:
+	if _wallrun:
+		var wall_map := ArenaMap.by_id(StringName(_map))
+		if wall_map == null or wall_map.wall_routes.is_empty():
+			return _fail("--wallrun needs a map with wall routes, e.g. --map dm_atrium")
+		var wall_pilot := WallPilot.new(_client, wall_map.wall_routes[0])
+		wall_pilot.process_priority = -999
+		add_child(wall_pilot)
+	elif _play:
 		var pilot := Pilot.new()
 		pilot.process_priority = -999
 		add_child(pilot)
+	_watch_wall_runs()
 	# Settle: the first seconds are loading and the clock finding its lead.
 	await get_tree().create_timer(3.0).timeout
 	Engine.max_fps = 0
@@ -379,7 +457,23 @@ func _note_mismatch(last: Dictionary) -> void:
 	_mm_rows.append([_mm_seen, String(last["property"]), d, p != null and p.is_alive(), a, b])
 
 
+## Counts the pilot's wall-run entries and the frames it was running in, so a mismatch result
+## says whether the run was ever exercised. Printed with the mismatches.
+var _wall_entries := 0
+var _wall_frames := 0
+
+
+func _watch_wall_runs() -> void:
+	var p = _client.get("player")
+	if p == null or p.get("controller") == null:
+		return
+	p.controller.wall_run_changed.connect(func(on: bool) -> void:
+		if on:
+			_wall_entries += 1)
+
+
 func _print_mismatches() -> void:
+	print("  wall-run entries %d, frames running %d" % [_wall_entries, _wall_frames])
 	var buckets := {"<2cm": 0, "2-10cm": 0, "10cm-1m": 0, ">1m": 0, "other": 0}
 	var by_prop := {}
 	for r in _mm_rows:
@@ -434,6 +528,9 @@ func _measure() -> void:
 				int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))])
 			line_perf = pc
 			line_mm = mm
+		var wp = _client.get("player")
+		if wp != null and wp.get("controller") != null and wp.controller.state.is_wall_running():
+			_wall_frames += 1
 		if net != null and "--mismatches" in OS.get_cmdline_user_args():
 			_note_mismatch(net.predictor.describe().get("last_mismatch", {}))
 		var now := Time.get_ticks_usec()
