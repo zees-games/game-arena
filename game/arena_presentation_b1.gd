@@ -1,5 +1,7 @@
 extends "arena_presentation_b0.gd"
 
+const ArenaScopePrefs := preload("arena_scope_prefs.gd")
+
 func _local_commands() -> DotConsoleLocal:
 	var local := DotConsoleLocal.new()
 

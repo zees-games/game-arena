@@ -2,6 +2,7 @@
 extends "arena_player_part1.gd"
 
 const ArenaFlagCarry := preload("arena_flag_carry.gd")
+const ArenaScopePrefs := preload("arena_scope_prefs.gd")
 
 ## Breaks this player's body apart on a death: [param rules] decides how much. Client
 ## side, drawing only. [param direction] is the way the killing hit travelled; the seed
