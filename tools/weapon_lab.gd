@@ -197,90 +197,90 @@ func _first_person(id: StringName, def: DotWeaponDef, wdir: String, anims: Packe
 			other_slot = (table[k] as DotWeaponDef).slot
 			break
 	for a in anims:
-		var res := await _fp_animation(a, me, id, def, wdir, other_slot)
+		var res: Dictionary = await _fp_animation(a, me, id, def, wdir, other_slot)
 		(_manifest["fp"] as Dictionary)[a] = res
 		await _wait(0.3)
 	await _equip_slot(me, other_slot)
 
 
 func _fp_animation(a: String, me, id: StringName, def: DotWeaponDef, wdir: String, other_slot: int) -> Dictionary:
-var key := "fp_" + a
-var res := {"status": "ok"}
-match a:
-	"idle":
-		await _ensure_in_hand(me, id, def)
-		await _clip(wdir, key, 36, func(_i: int) -> void: pass, res)
-	"draw":
-		await _equip_slot(me, other_slot)
-		await _wait(0.8)
-		await _clip(wdir, key, 36, func(i: int) -> void:
-			if i == 2:
-				me.arsenal.equip(def.slot), res)
-	"holster":
-		await _ensure_in_hand(me, id, def)
-		await _clip(wdir, key, 30, func(i: int) -> void:
-			if i == 3:
-				_equip_slot_now(me, other_slot), res)
-	"fire":
-		await _ensure_in_hand(me, id, def)
-		_refill(me, def)
-		await _clip(wdir, key, 66, func(i: int) -> void:
-			if i == 2:
-				Input.action_press(&"arena_fire")
-			elif i == 22:
-				Input.action_release(&"arena_fire")
-			elif i >= 32 and i < 56 and (i - 32) % 8 == 0:
-				Input.action_press(&"arena_fire")
-			elif i >= 32 and i < 56 and (i - 32) % 8 == 3:
-				Input.action_release(&"arena_fire"), res)
-		Input.action_release(&"arena_fire")
-	"ads":
-		await _ensure_in_hand(me, id, def)
-		if not _art_can_aim(id):
-			res = {"status": "n/a", "why": "weapon has no aim-down-sights"}
-		else:
-			await _clip(wdir, key, 70, func(i: int) -> void:
-				if i == 3:
-					Input.action_press(&"arena_aim")
-				elif i == 36:
-					Input.action_release(&"arena_aim"), res)
-			Input.action_release(&"arena_aim")
-	"reload_empty", "reload_tactical":
-		if not def.uses_magazine():
-			res = {"status": "n/a", "why": "no magazine"}
-		else:
+	var key := "fp_" + a
+	var res := {"status": "ok"}
+	match a:
+		"idle":
 			await _ensure_in_hand(me, id, def)
-			var left := 0 if a == "reload_empty" else maxi(def.magazine - 1, 1)
-			if a == "reload_tactical" and def.magazine <= 1:
-				res = {"status": "n/a", "why": "single-shot magazine"}
+			await _clip(wdir, key, 36, func(_i: int) -> void: pass, res)
+		"draw":
+			await _equip_slot(me, other_slot)
+			await _wait(0.8)
+			await _clip(wdir, key, 36, func(i: int) -> void:
+				if i == 2:
+					me.arsenal.equip(def.slot), res)
+		"holster":
+			await _ensure_in_hand(me, id, def)
+			await _clip(wdir, key, 30, func(i: int) -> void:
+				if i == 3:
+					_equip_slot_now(me, other_slot), res)
+		"fire":
+			await _ensure_in_hand(me, id, def)
+			_refill(me, def)
+			await _clip(wdir, key, 66, func(i: int) -> void:
+				if i == 2:
+					Input.action_press(&"arena_fire")
+				elif i == 22:
+					Input.action_release(&"arena_fire")
+				elif i >= 32 and i < 56 and (i - 32) % 8 == 0:
+					Input.action_press(&"arena_fire")
+				elif i >= 32 and i < 56 and (i - 32) % 8 == 3:
+					Input.action_release(&"arena_fire"), res)
+			Input.action_release(&"arena_fire")
+		"ads":
+			await _ensure_in_hand(me, id, def)
+			if not _art_can_aim(id):
+				res = {"status": "n/a", "why": "weapon has no aim-down-sights"}
 			else:
-				me.arsenal.current().magazine = clampi(left, 0, def.magazine - 1)
-				res = await _reload_clip(me, wdir, key)
-				res["rounds_left"] = left
-	"melee":
-		await _ensure_in_hand(me, id, def)
-		await _clip(wdir, key, 40, func(i: int) -> void:
-			if i == 3:
-				Input.action_press(&"arena_bash")
-			elif i == 6:
-				Input.action_release(&"arena_bash"), res)
-		Input.action_release(&"arena_bash")
-	"sprint":
-		await _ensure_in_hand(me, id, def)
-		var view := _view_model(me)
-		if view == null:
-			res = {"status": "n/a", "why": "no view model"}
-		else:
-			await _clip(wdir, key, 48, func(i: int) -> void:
-				if i == 4:
-					view.set_sprinting(true)
-				elif i == 40:
-					view.set_sprinting(false), res)
-			view.set_sprinting(false)
-	"inspect":
-		res = {"status": "n/a", "why": "no inspect animation exists in arena-weapons yet"}
-	_:
-		res = {"status": "n/a", "why": "unknown animation"}
+				await _clip(wdir, key, 70, func(i: int) -> void:
+					if i == 3:
+						Input.action_press(&"arena_aim")
+					elif i == 36:
+						Input.action_release(&"arena_aim"), res)
+				Input.action_release(&"arena_aim")
+		"reload_empty", "reload_tactical":
+			if not def.uses_magazine():
+				res = {"status": "n/a", "why": "no magazine"}
+			else:
+				await _ensure_in_hand(me, id, def)
+				var left := 0 if a == "reload_empty" else maxi(def.magazine - 1, 1)
+				if a == "reload_tactical" and def.magazine <= 1:
+					res = {"status": "n/a", "why": "single-shot magazine"}
+				else:
+					me.arsenal.current().magazine = clampi(left, 0, def.magazine - 1)
+					res = await _reload_clip(me, wdir, key)
+					res["rounds_left"] = left
+		"melee":
+			await _ensure_in_hand(me, id, def)
+			await _clip(wdir, key, 40, func(i: int) -> void:
+				if i == 3:
+					Input.action_press(&"arena_bash")
+				elif i == 6:
+					Input.action_release(&"arena_bash"), res)
+			Input.action_release(&"arena_bash")
+		"sprint":
+			await _ensure_in_hand(me, id, def)
+			var view := _view_model(me)
+			if view == null:
+				res = {"status": "n/a", "why": "no view model"}
+			else:
+				await _clip(wdir, key, 48, func(i: int) -> void:
+					if i == 4:
+						view.set_sprinting(true)
+					elif i == 40:
+						view.set_sprinting(false), res)
+				view.set_sprinting(false)
+		"inspect":
+			res = {"status": "n/a", "why": "no inspect animation exists in arena-weapons yet"}
+		_:
+			res = {"status": "n/a", "why": "unknown animation"}
 	return res
 
 
