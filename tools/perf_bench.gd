@@ -241,8 +241,15 @@ func _apply_ablate() -> void:
 				say("nofx: %d environments" % envs.size())
 			"nohud":
 				var hud: Variant = client.get("hud")
+				# Not `hud.visible = false`: the client's _restore_hud_if_orphaned shows a hidden HUD again at once, so the
+				# ablation never held. The HUD stays visible; what it draws (its children) is hidden.
 				if hud != null:
-					hud.visible = false
+					var hidden := 0
+					for c in (hud as Node).get_children():
+						if c.get("visible") != null:
+							c.set("visible", false)
+							hidden += 1
+					say("nohud: %d HUD children hidden" % hidden)
 			"nobots":
 				for p: Object in client.get("game").call("players"):
 					if p.get("camera") == null:
