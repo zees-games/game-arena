@@ -69,7 +69,7 @@ Relayed commands are off by default and audited either way: a line typed on a we
 
 `ArenaParty` is dot-peer-to-peer at `Trust.SANDBOXED`. This game reports to dot-stats, dot-achievements and dot-leaderboard, and a peer-to-peer host is a player's own machine that can lie about all of it: a host who can cheat and a leaderboard are one exploit. `reporting_allowed()` is asked in one place rather than by four reporters, because the one forgotten is the one that files a host's score to a real board. **Migration is off**: the host holds the match clock, the score and every hitbox, and a private match whose host left has ended.
 
-`headless_presentation` meets over a real HTTP rendezvous (`RendezvousStub`, on ports 38800-38860 so it can run beside game-playground's), awaited end to end, because the loopback signaller answers inside the call and a missing `await` would pass against it.
+`headless_presentation` meets over a real HTTP rendezvous (`RendezvousStub`, on ports 38800-38860 so it can run beside game-playlot's), awaited end to end, because the loopback signaller answers inside the call and a missing `await` would pass against it.
 
 ## Configuration and the workbench
 
