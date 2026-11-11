@@ -249,6 +249,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaBots.think_every = maxi(0, int(new_value.to_float())))
+	add_cvar("bot_personas", ArenaBots.personas_mode,
+		"Bot characters (cfg/game/game-arena/bot/*.yml): empty deals every persona by its weight, 'id:weight,...' only those, 'off' one shared bot_difficulty",
+		DotConVar.FLAG_ARCHIVE).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.personas_mode = new_value.strip_edges())
 	add_cvar("bot_think_near", str(ArenaBots.think_near),
 		"Metres: a bot with an enemy closer than this thinks every tick",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(

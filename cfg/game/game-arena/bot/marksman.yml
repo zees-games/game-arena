@@ -1,0 +1,17 @@
+# Holds a long line: slow to react, very precise once settled, stands to shoot.
+name: Marksman
+weight: 1
+hunt: 3
+loot: 0
+hold: 5
+support: 1
+scout: 0
+spread: 0.15
+scale:
+  reaction: 1.25
+  aim_floor: 0.7
+  aim_settle: 0.8
+  stop_to_shoot: 1.6
+  strafe: 0.6
+  jump: 0.3
+  hesitate: 1.3

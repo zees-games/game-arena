@@ -1,0 +1,16 @@
+# Holds its own flag: patient, steady aim, rarely chases or jumps.
+name: Warden
+weight: 2
+hunt: 1
+loot: 1
+hold: 8
+support: 2
+scout: 0
+spread: 0.15
+scale:
+  aggression: 0.6
+  jump: 0.4
+  trick_chain: 0.5
+  peek: 1.2
+  stop_to_shoot: 1.3
+  aim_settle: 0.9

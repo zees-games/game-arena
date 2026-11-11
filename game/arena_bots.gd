@@ -85,19 +85,32 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	world.refresh(tick, tick_rate)
 	ArenaFrameProbe.add(&"bot_refresh", t_refresh)
 
+	var pool := world.personas_for(personas_mode)
+	# A brain a caller made itself (persona_epoch -1) is never replaced.
+	if mind.brain != null and mind.persona_epoch >= 0 and mind.persona_epoch != world.persona_epoch:
+		mind.brain = null
 	if mind.brain == null:
-		mind.brain = ArenaBotBrain.new(mind.seed if mind.seed != 0 else bot.player_id, DotBotSettings.of(game))
+		var bot_seed := mind.seed if mind.seed != 0 else bot.player_id
+		var base := DotBotSettings.of(game)
+		mind.persona = world.deal_persona(pool, bot.player_id) if pool != null else null
+		mind.settings = DotBotSettings.derived(base, mind.persona, bot_seed) if mind.persona != null else null
+		mind.persona_bias = mind.persona.role_bias() if mind.persona != null else Vector3.ZERO
+		mind.persona_epoch = world.persona_epoch
+		mind.brain = ArenaBotBrain.new(bot_seed, mind.settings if mind.settings != null else base)
 		# The bot's trick gates follow the motor: 1.18 times the minimum, as the old 6.5 was of 5.5.
 		var body_tunables: Variant = bot.controller.get("tunables") if bot.controller != null else null
 		if body_tunables is DotFpsTunables:
 			mind.brain.tricks.slide_speed = body_tunables.slide_min_speed * 1.18
 			mind.brain.tricks.wall_run_speed = body_tunables.wall_run_min_speed * 1.17
 	world.brains[bot.player_id] = mind.brain
+	if mind.settings != null:
+		var _resynced := mind.settings.sync()
 
 	var me := world.contact(bot.player_id)
-	# A team job in a flag mode, kept until the bot changes team (assign is a lookup after the first).
+	# A team job in a flag mode, kept until the bot changes team (assign is a lookup after the first); the
+	# persona's lean puts holders on defence and hunters on attack.
 	if world.objective != null and world.objective.active and me.team > 0:
-		var _role := world.objective.assign(bot.player_id, me.team, mind.brain.settings.profile)
+		var _role := world.objective.assign(bot.player_id, me.team, mind.brain.settings.profile, mind.persona_bias)
 	# The body's view carries last tick's recoil correction; the brain steers from the view it meant, or it would walk
 	# the correction back out (smoothing and the turn limit) and the bullets drift off again.
 	if mind.recoil_comp != Vector2.ZERO and bot.controller != null:
@@ -372,3 +385,5 @@ static func forget(game: Object, id: int) -> void:
 			(held as World).woken.erase(id)
 			if (held as World).objective != null:
 				(held as World).objective.release(id)
+			if (held as World)._personas != null:
+				(held as World)._personas.release(StringName(str(id)))

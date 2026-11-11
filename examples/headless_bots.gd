@@ -101,6 +101,8 @@ func _run() -> void:
 	# are in every check below: the turn-rate contract has to hold with them.
 	ArenaBots.think_every = 2
 	ArenaBots.think_near = 0.0
+	# The K/D bands are per bot_difficulty: one shared preset, no persona's scale or spread on top.
+	ArenaBots.personas_mode = ArenaBots.PERSONAS_OFF
 
 	var args := OS.get_cmdline_user_args()
 	var merge := args.find("--merge")

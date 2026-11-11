@@ -1,0 +1,13 @@
+# Sticks with the carrier and the team: average aim, careful, backs out when hurt.
+name: Escort
+weight: 1.5
+hunt: 2
+loot: 1
+hold: 1
+support: 7
+scout: 0
+spread: 0.15
+scale:
+  cover: 1.4
+  aggression: 0.8
+  jump: 0.6

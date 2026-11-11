@@ -141,7 +141,10 @@ bot_quota 4                    // players to fill the server to; people take a b
 bot_quota_mode fill            // fill, fixed, per_player or off
 bot_difficulty medium          // easy, medium, hard or nightmare
 bot_reaction 0.3               // any single setting of the preset, e.g. seconds before a bot fires on somebody new
+bot_personas ""                // each bot dealt a character by weight; "warden:2,raider:1" only those; "off" one shared preset
 ```
+
+Each bot gets its own character from `cfg/game/game-arena/bot/*.yml` (warden, raider, escort, marksman, runner, balanced): a lean to defend, attack or support that steers its CTF job, `scale` multipliers on the server's `bot_*` values (so it still follows `bot_difficulty`), and a seeded per-bot `spread` so no two bots of one character aim alike. A persona never turns faster than `bot_turn_rate`.
 
 `bot_difficulty` sets about thirty `bot_*` settings at once (reaction time, aim error and how fast it settles, turn speed, view cone, hearing, strafing, peeking, preferred range, bursts and more). Change any one of them after choosing a preset and it stays changed; `bot_settings` lists them all and `bot_settings_reset` goes back to the preset. dot-bot's README has the full table. Solo, the same names work in the console (the key under Escape), `bot_quota` counts you as one of the players, and `./game.sh -- --bot_difficulty hard --bots 5` sets both at launch.
 

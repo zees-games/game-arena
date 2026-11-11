@@ -1,0 +1,14 @@
+# Scouts and flanks: wide-ranging, twitchy, sloppier first shot.
+name: Runner
+weight: 1
+hunt: 3
+loot: 2
+hold: 0
+support: 0
+scout: 6
+spread: 0.25
+scale:
+  aim_error: 1.25
+  reaction: 0.95
+  overshoot: 1.2
+  trick_chain: 1.2

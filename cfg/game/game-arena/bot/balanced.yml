@@ -1,0 +1,9 @@
+# The server's difficulty as it stands, with only a bot's own small variance.
+name: Balanced
+weight: 1.5
+hunt: 2
+loot: 1
+hold: 2
+support: 2
+scout: 1
+spread: 0.15

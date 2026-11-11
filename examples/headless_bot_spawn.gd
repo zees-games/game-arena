@@ -17,6 +17,8 @@ func _default_maps() -> Array[StringName]:
 
 
 func _one(id: StringName) -> void:
+	# This checks the walk out of spawn on one shared preset: a patient persona may hold a sight line from its spawn and fight there.
+	ArenaBots.personas_mode = ArenaBots.PERSONAS_OFF
 	var game := await _boot_map(id, BOTS)
 	if game == null:
 		return

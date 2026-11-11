@@ -28,6 +28,8 @@ var _results: Dictionary = {}
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
+	# The counts below are per bot_difficulty preset: no persona's scale or spread on top.
+	ArenaBots.personas_mode = ArenaBots.PERSONAS_OFF
 	_run.call_deferred()
 
 

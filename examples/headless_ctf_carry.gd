@@ -6,8 +6,8 @@ extends "headless_ctf.gd"
 const ArenaFlagCarry := preload("../game/arena_flag_carry.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 
-const SECTIONS_CARRY := 6
-const CHECKS_CARRY := 43
+const SECTIONS_CARRY := 7
+const CHECKS_CARRY := 50
 
 
 func _run() -> void:
@@ -20,6 +20,7 @@ func _run() -> void:
 	await _test_carry_wire()
 	await _test_bot_carrier()
 	await _test_bot_roles()
+	await _test_bot_personas()
 
 	_report_sections(_entered, _completed, SECTIONS_CARRY, CHECKS_CARRY)
 
@@ -229,6 +230,8 @@ func _test_bot_roles() -> void:
 		return
 	var game: ArenaGame = got[0]
 	var thief: int = got[1]
+	# The shares alone decide here; _test_bot_personas has the leans.
+	ArenaBots.personas_mode = ArenaBots.PERSONAS_OFF
 	var minds := {}
 	for id in game.player_ids():
 		minds[id] = ArenaBots.Mind.new()
@@ -252,5 +255,51 @@ func _test_bot_roles() -> void:
 	_check(goal.kind == &"capture" and goal.urgent, "the carrier's job is to run it home", "%s %s" % [goal.kind, goal.urgent])
 	ArenaBots.forget(game, thief)
 	_check(objective.role_of(thief) == DotBotObjective.ROAM, "a bot that left gives its job up")
+	ArenaBots.personas_mode = ""
+	await _free(game)
+	_done()
+
+
+func _test_bot_personas() -> void:
+	_section("ctf carry: every bot is dealt its own character, and bot_personas off shares one")
+	var game := _ctf_game()
+	if game == null:
+		return
+	ArenaBots.personas_mode = ""
+	var minds := {}
+	for id in game.player_ids():
+		minds[id] = ArenaBots.Mind.new()
+	var think_all := func() -> void:
+		for i in 3:
+			var cmds := {}
+			for id: int in minds:
+				cmds[id] = ArenaBots.think(game, game.player_for(id), minds[id], game.current_tick() + 1, float(TICK_RATE))
+			game.tick(cmds)
+	think_all.call()
+	var base := DotBotSettings.of(game)
+	var ids := {}
+	var own := true
+	var no_faster := true
+	var aims := {}
+	for id: int in minds:
+		var mind: ArenaBots.Mind = minds[id]
+		if mind.persona == null or mind.settings == null or mind.brain.settings != mind.settings:
+			own = false
+			continue
+		ids[mind.persona.id] = true
+		aims[snappedf(mind.settings.profile.aim_error, 0.001)] = true
+		no_faster = no_faster and mind.settings.profile.turn_rate <= base.profile.turn_rate
+	_check(own, "each bot thinks with settings of its own")
+	_check(ids.size() == minds.size(), "%d bots get %d different personas" % [minds.size(), ids.size()], str(ids.keys()))
+	_check(aims.size() == minds.size(), "and aim differently", str(aims.keys()))
+	_check(no_faster, "none turns faster than bot_turn_rate")
+	var _hard := base.set_difficulty("hard")
+	think_all.call()
+	var first: ArenaBots.Mind = minds[minds.keys()[0]]
+	_check(first.settings.profile.preset_name == "hard", "a bot_difficulty change reaches every persona", first.settings.profile.preset_name)
+	ArenaBots.personas_mode = ArenaBots.PERSONAS_OFF
+	think_all.call()
+	_check(first.persona == null and first.brain.settings == base, "bot_personas off: the brain is made again on the shared settings")
+	ArenaBots.personas_mode = ""
 	await _free(game)
 	_done()

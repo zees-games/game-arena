@@ -57,6 +57,12 @@ class Mind:
 	## The throw in hand: 0 none, then [constant THROW_DRAW], [constant THROW_COOK],
 	## [constant THROW_RELEASE], [constant THROW_BACK].
 	var throw_stage: int = 0
+	## The character dealt to this bot and its own settings derived from the game's, or null with `bot_personas off`.
+	var persona: DotBotPersona = null
+	var settings: DotBotSettings = null
+	var persona_bias: Vector3 = Vector3.ZERO
+	## [member World.persona_epoch] when the brain was made: a `bot_personas` change deals again.
+	var persona_epoch: int = -1
 	var throw_view: Vector2 = Vector2.ZERO
 	var throw_back: int = 0
 	var throw_at: int = 0
@@ -119,6 +125,12 @@ static var think_floor: int = 1
 static var think_floor_engaged: int = 1
 
 
+## Bot characters (cvar `bot_personas`): "" deals every persona in `cfg/game/game-arena/bot/` by weight, so each bot
+## gets its own aim and lean to defend, attack or support; "id:weight,..." only those; "off" one shared bot_difficulty.
+static var personas_mode: String = ""
+const PERSONAS_OFF := "off"
+
+
 ## Whether tiers decide this tick (else the `bot_think_every` stagger does).
 static var _tier_on: bool = false
 const _COAST_FIRE := DotWeaponCommand.BUTTON_ATTACK | DotWeaponCommand.BUTTON_AIM
@@ -174,6 +186,12 @@ class World:
 	var woken: Dictionary = {}
 	## [member ArenaBots.tiers], set by the thinking bot before [method refresh].
 	var tiers: DotBotThinkTier = null
+	## The personas bots are dealt from ([method personas_for]), the `bot_personas` text it was set for, and a count
+	## bumped when that changes so every bot is dealt again.
+	var _personas: DotBotPersonaPool = null
+	var _personas_text: String = ""
+	var persona_epoch: int = 0
+	var _persona_rng := RandomNumberGenerator.new()
 
 	## Parallel think (cvar `bot_threads`, ArenaBotThreads): while true, brains on worker threads ask this world, whose
 	## sight and wall rays then use queries of their own on [member _par_space] and whose other answers take [member _par_lock].
@@ -199,6 +217,29 @@ class World:
 			_par_lock.lock()
 			_par_job[OS.get_thread_caller_id()] = job
 			_par_lock.unlock()
+
+	## The pool for `bot_personas` [param mode], or null for "off". Loaded once from the `bot` profiles; a changed
+	## mode sets the override, forgets who had what and bumps [member persona_epoch].
+	func personas_for(mode: String) -> DotBotPersonaPool:
+		if mode != _personas_text:
+			_personas_text = mode
+			persona_epoch += 1
+			if _personas != null:
+				_personas.set_override(mode if mode != PERSONAS_OFF else "")
+				_personas.reset_assignments()
+		if mode == PERSONAS_OFF:
+			return null
+		if _personas == null:
+			_personas = DotBotPersonaPool.new()
+			_persona_rng.seed = 0x5eed
+			var n := _personas.load_from(DotProfileSet.create("dot-bot", "game-arena", DotBotPersona.KIND, DotBotPersona.schema()))
+			_personas.set_override(mode)
+			DotLog.info(CHANNEL, "bot personas loaded", {"personas": n, "override": mode})
+		return _personas
+
+	## The persona [param id] is dealt from [param pool].
+	func deal_persona(pool: DotBotPersonaPool, id: int) -> DotBotPersona:
+		return pool.deal(StringName(str(id)), _persona_rng)
 
 	func _init(p_game: Object) -> void:
 		game = p_game
