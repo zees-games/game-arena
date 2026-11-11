@@ -156,7 +156,7 @@ func _menu_checks(host: ArenaSimHost) -> void:
 	_check(refused[0] == 0, "eight presses of B are not refused as too quick", "%d refusals" % refused[0])
 
 
-## Owner batch 2026-11-10 item 4: solo CTF drew one column on Tab; a team mode gets the team board in solo too.
+## Solo CTF drew one column on Tab; a team mode gets the team board in solo too.
 func _board_checks() -> void:
 	var board: Object = _client.get("board")
 	_check(board != null, "the client has a Tab board")
@@ -174,7 +174,7 @@ func _board_checks() -> void:
 	_check(teamed > 0, "and its rows carry their team", "%d of %d" % [teamed, rows.size()])
 
 
-## Owner batch 2026-11-10 item 9: every kill was said again in chat; the feed top-right is the only place for it.
+## Every kill was said again in chat; the feed top-right is the only place for it.
 func _kill_feed_checks(host: ArenaSimHost, game: Object) -> void:
 	var chat: Array[String] = []
 	var kills: Array[String] = []
