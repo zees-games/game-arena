@@ -11,7 +11,7 @@
 /addons/dot_entity
 # dot-net: native snapshot codec; without its library for this platform the GDScript path runs ("native snapshots unavailable").
 # bootstrap fetches the release zip into addons/dot_net/native/bin and export copies it beside the exe (dot-bootstrap: bootstrap-natives).
-# bootstrap-natives: dot-net v0.1.29 native/bin
+# bootstrap-natives: dot-net v0.1.30 native/bin
 /addons/dot_net
 /addons/dot_server
 /addons/dot_server_query
