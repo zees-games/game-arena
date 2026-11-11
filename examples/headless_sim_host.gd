@@ -100,6 +100,8 @@ func _run() -> void:
 	_check(synced, "the clock is synced to the server")
 	_check(OS.is_process_running(pid), "the server process is running")
 	await _menu_checks(host)
+	_board_checks()
+	await _kill_feed_checks(host, game)
 	await _owner_checks(game)
 	_check(OS.is_process_running(pid), "the server process outlived all of that")
 
@@ -152,6 +154,64 @@ func _menu_checks(host: ArenaSimHost) -> void:
 	_check(teams != null and teams.get(&"link") == host.link, "the team screen asks the server process too")
 	await get_tree().create_timer(0.5).timeout
 	_check(refused[0] == 0, "eight presses of B are not refused as too quick", "%d refusals" % refused[0])
+
+
+## Owner batch 2026-11-10 item 4: solo CTF drew one column on Tab; a team mode gets the team board in solo too.
+func _board_checks() -> void:
+	var board: Object = _client.get("board")
+	_check(board != null, "the client has a Tab board")
+	if board == null:
+		return
+	var snap := {}
+	board.call(&"_rows_from_match", snap)
+	var sides: Array = snap.get("teams", [])
+	var rows: Array = snap.get("players", [])
+	var teamed := 0
+	for row: Dictionary in rows:
+		if int(row.get("team", 0)) > 0:
+			teamed += 1
+	_check(sides.size() == 2, "solo CTF's Tab board has both teams", str(sides))
+	_check(teamed > 0, "and its rows carry their team", "%d of %d" % [teamed, rows.size()])
+
+
+## Owner batch 2026-11-10 item 9: every kill was said again in chat; the feed top-right is the only place for it.
+func _kill_feed_checks(host: ArenaSimHost, game: Object) -> void:
+	var chat: Array[String] = []
+	var kills: Array[String] = []
+	var heard := func(payload: Dictionary) -> void: chat.append(str(payload))
+	# A connected client hears a kill as the bridge's KILL, and its feed is built from that;
+	# the server said it again in chat as `DotKillFeed.Entry`'s line, "<killer> [<cause>] <victim>".
+	var killed := func(info: Dictionary) -> void:
+		var victim: Object = game.call(&"player_for", int(info["victim_id"]))
+		kills.append("[%s" % info["weapon"] if int(info["killer_id"]) != 0 else "died (%s)" % info["weapon"])
+		if victim != null:
+			kills.append("] %s" % victim.get(&"display_name"))
+	var bridge: Object = _client.get("bridge")
+	host.link.chat_received.connect(heard)
+	bridge.connect(&"kill_received", killed)
+	var bound := await _until(func() -> bool:
+		var console: Node = _client.get("host_console")
+		return console != null and (console.get("source") as DotConsoleRemote).names().has("bot_quota"), 20.0)
+	var slay := ""
+	if bound:
+		for name: String in (_client.get("host_console").get("source") as DotConsoleRemote).names():
+			if name.ends_with("slay"):
+				slay = name
+	var said := "no slay command"
+	if slay != "":
+		var slain: DotResult = await _ask("%s @alive" % slay)
+		said = "ok" if slain.ok else slain.error.message
+	var seen := await _until(func() -> bool: return kills.size() > 0, 10.0)
+	await get_tree().create_timer(1.0).timeout
+	_check(seen, "a slay reaches the client's kill feed", "%s: %s, %d kills" % [slay, said, kills.size()])
+	var repeated: Array[String] = []
+	for line in chat:
+		for kill in kills:
+			if line.contains(kill):
+				repeated.append(line)
+	_check(repeated.is_empty(), "no kill is said again in chat", str(repeated))
+	host.link.chat_received.disconnect(heard)
+	bridge.disconnect(&"kill_received", killed)
 
 
 ## What solo does in its own process, asked of the server process: bots, difficulty, cheats, pause, map and mode.
