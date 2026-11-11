@@ -34,6 +34,10 @@ var net_crouch: float = 0.0
 var net_flags: int = 0
 var net_modifiers: int = 0
 
+## Slide, slide cooldown and wall-run timers in 1/7680 s, to the owner alone: above 66 Hz the coarse
+## net_flags fields round a rewind half a code off ([method DotFpsNetSync.rewind_specs2], API 24).
+var net_timers2: int = 0
+
 ## The owner's own movement exactly: position, velocity and crouch as float32, to the
 ## owning client alone ([method _write_exact]).
 ##
@@ -156,6 +160,10 @@ func _register_net_vars() -> void:
 			# would encode a value the property cannot hold. Six bits over the real range is the ~1.5% the spec's
 			# comment claims; over the default range it would be 3%.
 			declaration.range_of(0.0, 1.0)
+
+	# Owner-only exact slide / wall-run timers: DotFpsNetSync.pull writes and push prefers it when declared.
+	for spec in DotFpsNetSync.rewind_specs2():
+		replicate(spec["property"], DotNetVar.Type[spec["type"]]).bits(int(spec["bits"])).to_owner_only()
 
 	# The pack's `all_specs()` is dot-weapon's three plus its own four, and is the one call
 	# its README asks a game to make: concatenating the halves by hand is how a game forgets
