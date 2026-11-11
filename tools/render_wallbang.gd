@@ -10,6 +10,8 @@ const OUT_DIR := "res://screenshots/wallbang"
 
 var client: Node = null
 var _map := "dm_atrium"
+## Frame sequence after each close-up still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
 
 
 func _initialize() -> void:
@@ -71,7 +73,9 @@ func _closeup(me, decal: Node3D, at: Vector3, normal: Vector3, name: String) -> 
 	client.get("_sampler").look_at_angles(rad_to_deg(yaw), 0.0)
 	await _wait(0.4)
 	var with_decal := _frame()
-	with_decal.save_png(ProjectSettings.globalize_path("%s/%s_%s.png" % [OUT_DIR, _map, name]))
+	var still := ProjectSettings.globalize_path("%s/%s_%s.png" % [OUT_DIR, _map, name])
+	with_decal.save_png(still)
+	await _seq.record(self, still)
 	decal.visible = false
 	await _wait(0.3)
 	var bare := _frame()

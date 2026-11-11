@@ -63,8 +63,7 @@ func _run() -> void:
 		cam.look_at(at, Vector3.UP)
 		cam.fov = 40.0
 		cam.make_current()
-		await _wait(0.5)
-		vp.get_texture().get_image().save_png("screenshots/equipped_bot.png")
+		await _grab("screenshots/equipped_bot.png")
 		break
 	quit()
 

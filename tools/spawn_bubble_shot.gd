@@ -4,6 +4,8 @@ extends SceneTree
 ## xvfb-run -a godot --path . --resolution 1280x720 --script res://tools/spawn_bubble_shot.gd -- [out.png]
 
 var _ticks := 0
+## Frame sequence after the still (DOT_SHOT_FRAMES): the bubble animates. See DotShotSeq.
+var _clip := DotShotSeq.new()
 var _out := "screenshots/spawn_bubble.png"
 
 
@@ -57,10 +59,17 @@ func _initialize() -> void:
 
 
 func _process(_delta: float) -> bool:
+	if _clip.follow(root):
+		return false
+	if _ticks >= 60:  # the still is saved and the clip (if any) is done
+		quit()
+		return false
 	_ticks += 1
 	if _ticks == 60:
 		DirAccess.make_dir_recursive_absolute(_out.get_base_dir() if _out.get_base_dir() != "" else ".")
 		var _e := root.get_viewport().get_texture().get_image().save_png(_out)
 		print("saved ", _out)
+		if _clip.start_follow(_out):
+			return false
 		quit()
 	return false

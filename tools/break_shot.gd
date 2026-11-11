@@ -8,6 +8,8 @@ const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 
 var _cam: Camera3D
+## Frame sequence after the "after" still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
 
 
 func _initialize() -> void:
@@ -61,7 +63,9 @@ func _run(body: Node, fx: DotFxBreak, id: String) -> void:
 		var _b := fx.burst(String(pane.get(&"kind")), box.get_center(), n, 1.0)
 		for _i in 7:
 			await process_frame
-		_save("screenshots/%s_break_%s_after.png" % [id, want])
+		var after := "screenshots/%s_break_%s_after.png" % [id, want]
+		_save(after)
+		await _seq.record(self, after)
 		print("kind ", pane.get(&"kind"), " health left ", pane.get(&"health"), " broken ", pane.call(&"is_broken"))
 	quit()
 
