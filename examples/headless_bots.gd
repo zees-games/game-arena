@@ -337,7 +337,37 @@ func _test_order() -> void:
 		"reaction quickens easy to medium to hard")
 	_check(_results["medium"]["kd"] < 1.8, "the default (medium) is not the bot that killed a person twelve times in ninety seconds")
 	_check(DotBotSettings.new().difficulty() == "medium", "and medium is the default")
+	_check_typed_write()
 	_done()
+
+
+## ArenaBots' typed command writer gives exactly what dot-bot's generic write_move/write_fire give.
+func _check_typed_write() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 0xb07
+	var same := 0
+	for i in 64:
+		var intent := DotBotIntent.new()
+		intent.yaw = rng.randf_range(-400.0, 400.0)
+		intent.pitch = rng.randf_range(-95.0, 95.0)
+		intent.move = Vector2(rng.randf_range(-2.0, 2.0), rng.randf_range(-2.0, 2.0))
+		intent.crouch = rng.randi() % 2 == 0
+		intent.jump = rng.randi() % 2 == 0
+		intent.walk = rng.randi() % 2 == 0
+		intent.air_jump = rng.randi() % 2 == 0
+		intent.use = rng.randi() % 2 == 0
+		intent.fire = rng.randi() % 2 == 0
+		var move_a := DotFpsCommand.new()
+		var fire_a := DotWeaponCommand.new()
+		intent.write_move(move_a, "BUTTON_USER_0")
+		intent.write_fire(fire_a)
+		var move_b := DotFpsCommand.new()
+		var fire_b := DotWeaponCommand.new()
+		ArenaBots._write(intent, move_b, fire_b)
+		if move_a.yaw == move_b.yaw and move_a.pitch == move_b.pitch and move_a.move == move_b.move and move_a.buttons == move_b.buttons \
+				and fire_a.yaw == fire_b.yaw and fire_a.pitch == fire_b.pitch and fire_a.buttons == fire_b.buttons and fire_a.slot == fire_b.slot:
+			same += 1
+	_check(same == 64, "the bots' typed command writer matches dot-bot's write_move/write_fire", "%d of 64 the same" % same)
 
 
 func _sighted(trace: DotTrace, bot: Node3D, target: Node3D) -> bool:

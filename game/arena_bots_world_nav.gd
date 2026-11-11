@@ -30,6 +30,8 @@ class NavWorld:
 	## a surf cache; and whether that was looked for on this mesh.
 	var _surf: RefCounted = null
 	var _surf_looked: bool = false
+	var _surf_tick: int = -1
+	var _surf_now: RefCounted = null
 	## The map's ladders joined into [member _nav] as climb edges, and how many got one.
 	var _ladders: DotBotLinks = null
 	## The drop and hop edges found on the mesh (kept so they are not collected).
@@ -150,6 +152,13 @@ class NavWorld:
 		rides.resize(points.size())
 		rides.fill(-1)
 		return {"points": points, "rides": rides}
+
+	## [method surf_for_map] as it was at the first ask of [param tick]: the map and nav checks once a tick, not per bot.
+	func surf_at(tick: int) -> RefCounted:
+		if tick != _surf_tick or tick < 0:
+			_surf_tick = tick
+			_surf_now = surf_for_map()
+		return _surf_now
 
 	## The map's ride edges, linked into its mesh: null on a built-in map, before the mesh lands,
 	## on a map with no surf cache, and on a shell without dot-bot 4 or dot-player-controller 3.

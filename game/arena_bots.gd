@@ -72,10 +72,11 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	if game == null or bot == null:
 		return [DotFpsCommand.new(), DotWeaponCommand.new()]
 
-	var players: int = game.player_ids().size()
+	var world := world_for(game)
+	# Counted once a tick for every bot (player_ids is a new array each call).
+	var players := world.player_count(tick)
 	_every = think_every if think_every > 0 else (2 if players > AUTO_STAGGER_ABOVE else 1)
 	_tier_on = tiers.applies(players)
-	var world := world_for(game)
 	if (_every > 1 or _tier_on) and _coasts(mind, tick, world, bot.player_id):
 		return _recoil_comp(bot, mind, _coast(mind, tick), tick, tick_rate)
 
@@ -139,14 +140,13 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 	mind.t_intent = null
 	var t_after := Time.get_ticks_usec()
 	var t_lap := ArenaFrameProbe.lap_start()
-	var surf := world.surf_for_map()
+	var surf := world.surf_at(tick)
 	if surf != null:
 		surf.call(&"steer", bot, mind, intent, tick, tick_rate)
 	elif mind.ride != null:
 		mind.ride = null
 	t_lap = ArenaFrameProbe.lap(&"ba_surf", t_lap)
-	intent.write_move(move, "BUTTON_USER_0")
-	intent.write_fire(fire)
+	_write(intent, move, fire)
 	t_lap = ArenaFrameProbe.lap(&"ba_write", t_lap)
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)
 	t_lap = ArenaFrameProbe.lap(&"ba_throw", t_lap)
@@ -190,6 +190,23 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 		mind.last_move.buttons &= _COAST_MOVE if intent.state != &"dead" else 0
 		mind.last_fire.buttons &= _COAST_FIRE if intent.state != &"dead" else 0
 	return _recoil_comp(bot, mind, [move, fire], tick, tick_rate)
+
+
+## [method DotBotIntent.write_move] (air jump on BUTTON_USER_0) and [method DotBotIntent.write_fire] for this game's
+## own command classes, typed: the generic writers find each button's constant by name on the command's script, six
+## dynamic lookups and calls per bot per tick (ba_write, half of bot_after). headless_bots checks both write the same.
+static func _write(intent: DotBotIntent, move: DotFpsCommand, fire: DotWeaponCommand) -> void:
+	move.yaw = intent.yaw
+	move.pitch = intent.pitch
+	move.move = intent.move.limit_length(1.0)
+	move.set_button(DotFpsCommand.BUTTON_CROUCH, intent.crouch)
+	move.set_button(DotFpsCommand.BUTTON_JUMP, intent.jump)
+	move.set_button(DotFpsCommand.BUTTON_WALK, intent.walk)
+	move.set_button(DotFpsCommand.BUTTON_USER_0, intent.air_jump)
+	fire.yaw = intent.yaw
+	fire.pitch = intent.pitch
+	fire.set_button(DotWeaponCommand.BUTTON_USE, intent.use)
+	fire.set_button(DotWeaponCommand.BUTTON_ATTACK, intent.fire)
 
 
 ## Off only for tests that measure the bots without the correction (headless_bot_hitreg).
