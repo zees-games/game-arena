@@ -32,7 +32,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena headless bot tricks")
+	print("game-fatal-contact headless bot tricks")
 	for map_id in MAPS:
 		for preset in ["easy", "nightmare"]:
 			await _play(map_id, preset, true)

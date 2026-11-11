@@ -16,7 +16,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena spawn spread")
+	print("game-fatal-contact spawn spread")
 	var maps: Array[StringName] = []
 	for a in OS.get_cmdline_user_args():
 		maps.append(StringName(a))

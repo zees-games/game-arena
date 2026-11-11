@@ -18,7 +18,7 @@ var _cam: Camera3D = null
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
-	print("game-arena: remote players out of sight are thinned, in sight are not")
+	print("game-fatal-contact: remote players out of sight are thinned, in sight are not")
 	_run.call_deferred()
 
 

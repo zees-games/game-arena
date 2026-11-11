@@ -48,7 +48,7 @@ static func build(host: Node, presentation: Node, browser: ArenaBrowser = null) 
 	menu.settings = settings
 	menu.bindings = presentation.bindings if presentation != null else ArenaBindings.make()
 	var config := DotMenuConfig.new()
-	config.brand_name = "Arena"
+	config.brand_name = "Zee's Fatal Contact"
 	# The kill feed owns the top right, where the touch Menu button defaults. By name: older
 	# dot-menu has no such property, and assigning it would stop this function.
 	if &"menu_button_corner" in config:
@@ -267,7 +267,7 @@ class Board extends RefCounted:
 		_records = records
 		_game = p_game
 		_teams = teams
-		board.title_text = "Arena"
+		board.title_text = "Zee's Fatal Contact"
 		board.columns = [
 			{"key": &"name", "title": "Player", "width": 3.0},
 			{"key": &"kills", "title": "K", "kind": DotMenuScoreboard.KIND_NUMBER},
@@ -351,7 +351,7 @@ class Board extends RefCounted:
 				listed.append({"id": side.id, "name": side.display_name, "color": side.colour, "score": score})
 			snap["teams"] = listed
 		if not snap.has("server"):
-			snap["server"] = {"name": "Arena"}
+			snap["server"] = {"name": "Fatal Contact"}
 
 	## A client's records carry no side; the game's own map (the server's TEAM event) does.
 	func _team_of(record: DotPlayerScore) -> int:

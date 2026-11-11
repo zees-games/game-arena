@@ -91,7 +91,7 @@ func _build() -> void:
 	# Written by hand because nothing answers a query in a render tool; what this frame is
 	# for is the page's layout.
 	var fixtures := [
-		["play.example.com:27015", "Arena  |  deathmatch all day", "dm_atrium", 9, 16, 34],
+		["play.example.com:27015", "Fatal Contact  |  deathmatch all day", "dm_atrium", 9, 16, 34],
 		["eu.example.net:27016", "a server with a long name that has to fit on one line", "dm_box", 2, 12, 88],
 	]
 	for f in fixtures:

@@ -43,7 +43,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena — Workshop maps")
+	print("game-fatal-contact — Workshop maps")
 	_write_fixtures()
 	_test_accepts()
 	_test_solo()

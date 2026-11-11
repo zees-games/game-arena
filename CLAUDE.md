@@ -1,6 +1,8 @@
-# game-arena
+# game-fatal-contact
 
 The reference game: a 3D deathmatch in six kinds of mode on three built-in maps and arena-surf-dm-maps' combat surf maps (delivered, not shipped), with bots and arena-weapons, over dot-net, as a signed dot-cloud pack: the only test of the joins between the addons.
+
+The game is **Zee's Fatal Contact** (it was Arena; the repository was game-arena). **Wire and storage ids keep the old name on purpose**: the pack id `gamemann/game-arena` and publish id `game-arena`, the cfg game id `game-arena` (`cfg/game/game-arena/`), `config/name` in project.godot (the `app_userdata/game-arena` user dir), the site app slug `arena` until the owner runs website-city's slug migration, the dot-server-deploy former id `arena` (the pack is `fatalcontact` there now; `arena` still answers `--game` and `sv_game`), the `Arena` node names, the `Arena*` class and `arena_*` file names, `arena_*` cvars and commands, `arena-player-%08d` keys and suite names. Change one only together with dot-server-deploy, website-city and dot-cloud.
 
 Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is specific to this game. **The detail is in [docs/](docs/README.md)**.
 
@@ -130,7 +132,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - Ride edges are planned by `tools/surf_rides.tscn`, never at load; `arena_surf.gd` loads by path only with dot-bot 4, dot-player-controller 3. [imported](docs/imported-maps.md#bots-ride-the-ramps)
 - Map mechanics run inside the simulated tick on both ends; pushes are stateless; swim and ladder modes are registered on every map. [imported](docs/imported-maps.md#the-maps-own-mechanics)
 - A Workshop map (solo only, `provides.json` `accepts`) is a JSON box-list document whose id is its entry's id; a bad one is refused and unlisted, the game's ids win. [maps](docs/maps.md#workshop-maps)
-- Arena needs a shell with dot-player-controller v0.1.5+, the wall moves and `DotFpsViewMotion`. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
+- Fatal Contact needs a shell with dot-player-controller v0.1.5+, the wall moves and `DotFpsViewMotion`. [imported](docs/imported-maps.md#the-solid-is-the-games-on-every-machine)
 
 **Horde, weapons, services**
 

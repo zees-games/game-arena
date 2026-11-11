@@ -48,7 +48,7 @@ func _merge() -> void:
 
 
 func _run() -> void:
-	print("game-arena headless bot hit registration")
+	print("game-fatal-contact headless bot hit registration")
 	if ShardArgs.is_merge():
 		_merge()
 		return

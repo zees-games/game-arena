@@ -26,7 +26,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena bot ladders")
+	print("game-fatal-contact bot ladders")
 	var game := ArenaGame.new()
 	game.tick_rate = TICK_RATE
 	game.score_limit = 100000

@@ -32,7 +32,7 @@ A surface with a texture draws it; anything else draws `ArenaMap.dev_texture`, o
 
 `ArenaGame._build_world_collision` adds `ArenaMap.to_collision()` (the brushes) as `WorldCollision` before the combat manager and before any player is built or re-bodied, on setup and on every `change_map`, and frees it with `free()`, not `queue_free()`, when the map goes. `ArenaMap.movement_body()` and `shot_trace()` bind to it (`DotFpsPhysicsBody`, `DotTracePhysics`); a built-in map still gets `to_fps_body()` and `to_trace()`. `to_scene()` of an imported map is the drawn mesh only, so a client never has two copies of a brush. Both ends query the same convex hulls through the same solver, which is the condition the prediction rule is about ([netcode](netcode.md#the-client-predicts-with-the-servers-collision)); the body is still a shape query from a plain `Node3D`.
 
-**Arena needs dot-player-controller v0.1.5 or later** (in client shell 20261009-1627 and after): `DotFpsFlatBody.rest_contact` used to push a player out of a box along its deepest axis, and with the 512 m extent's quantisation a client slid 2.8 m along a wall during a launch the server made straight up.
+**Fatal Contact needs dot-player-controller v0.1.5 or later** (in client shell 20261009-1627 and after): `DotFpsFlatBody.rest_contact` used to push a player out of a box along its deepest axis, and with the 512 m extent's quantisation a client slid 2.8 m along a wall during a launch the server made straight up.
 
 ## Bots route over a mesh baked from the brushes
 

@@ -550,7 +550,7 @@ func _register_game() -> void:
 
 	var descriptor := DotGameDescriptor.new()
 	descriptor.game_id = "arena"
-	descriptor.display_name = "Arena"
+	descriptor.display_name = "Zee's Fatal Contact"
 	descriptor.scene = ArenaPaths.rebase(ArenaPaths.rebase("res://scenes/arena_server.tscn"))
 
 	# [b]`metadata["module"]`, not `descriptor.module`: there is no such property.[/b] Godot refuses a dynamic property on a Resource, so setting it pushed an error on every registration and the descriptor named no module at all,

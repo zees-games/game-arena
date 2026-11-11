@@ -34,7 +34,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: cl_latency_baseline over real ENet, against a real server")
+	print("game-fatal-contact: cl_latency_baseline over real ENet, against a real server")
 	DotPaths.remove_tree(DATA)
 	Engine.physics_ticks_per_second = TICK_RATE
 	if await _boot() and await _connect_one():

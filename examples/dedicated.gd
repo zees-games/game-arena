@@ -11,7 +11,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena dedicated server")
+	print("game-fatal-contact dedicated server")
 	print("")
 
 	var probe: Array = []

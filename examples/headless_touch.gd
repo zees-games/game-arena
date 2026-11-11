@@ -14,7 +14,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: touch buttons")
+	print("game-fatal-contact: touch buttons")
 	var sets: Dictionary = {"arena": ArenaTouch.LAYOUT}
 	for label: String in sets:
 		var layout: Array[Dictionary] = sets[label]

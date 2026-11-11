@@ -65,7 +65,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: what a player sees, frame by frame")
+	print("game-fatal-contact: what a player sees, frame by frame")
 	DotPaths.remove_tree(DATA)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(DATA))
 

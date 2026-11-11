@@ -47,7 +47,7 @@ static func _uncompiled() -> PackedStringArray:
 
 
 func _run() -> void:
-	print("game-arena: fire, Tab and the console key reach their handlers")
+	print("game-fatal-contact: fire, Tab and the console key reach their handlers")
 
 	var bad := _uncompiled()
 	_check(bad.is_empty(), "the client, the presentation and its halves, the menus and the bindings compile", ", ".join(bad))

@@ -39,7 +39,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena headless hit zones and bot fairness")
+	print("game-fatal-contact headless hit zones and bot fairness")
 	ArenaBots.think_every = 1
 	ArenaBots.think_near = 0.0
 	await _boot()

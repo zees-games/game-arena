@@ -33,14 +33,14 @@ const ArenaPresentation := preload("arena_presentation.gd")
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 const ArenaSpriteWeapon := preload("arena_sprite_weapon.gd")
 
-## A playable game-arena: one local player, a camera, a HUD, menus and the keys.
+## A playable game-fatal-contact: one local player, a camera, a HUD, menus and the keys.
 ##
 ## [b]Separate from [ArenaGame], which is the simulation and runs headless.[/b] A
 ## dedicated server never loads this. That split is the reason `headless_match` can play
 ## a whole deathmatch with no renderer and no window, and it is the reason this file is
 ## the only one in the project that mentions a `Camera3D` or an `InputEvent`.
 ##
-## Until this existed, game-arena was the reference game with nothing to sit down at:
+## Until this existed, game-fatal-contact was the reference game with nothing to sit down at:
 ## `ArenaNetBridge` ran, `headless_net` drove it, and there was no camera rig, no input
 ## sampling, no renderer and no sound. Everything here is modelled on `G2GClient`,
 ## which is the one in this family proven over a real socket and in a browser.

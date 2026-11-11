@@ -56,7 +56,7 @@ func _merge() -> void:
 
 
 func _run() -> void:
-	print("game-arena: the first-person arms hold every weapon where it is drawn")
+	print("game-fatal-contact: the first-person arms hold every weapon where it is drawn")
 	if not await _until(func() -> bool: return _client.get("player") != null and _client.get("view_arms") != null, 30.0):
 		_check(false, "the offline client arms its player")
 		_report_sections(0, 0, 1)

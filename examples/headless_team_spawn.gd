@@ -18,7 +18,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena team spawn")
+	print("game-fatal-contact team spawn")
 	var ids: Array[StringName] = [&"dm_box", &"dm_atrium", &"dm_pit"]
 	var extra: Array[StringName] = []
 	for a in OS.get_cmdline_user_args():

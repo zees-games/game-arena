@@ -7,7 +7,7 @@ const ArenaLinkRtt := preload("arena_link_rtt.gd")
 const ArenaNpcs := preload("arena_npcs.gd")
 const ArenaRequest := preload("arena_request.gd")
 
-## Joins [ArenaGame] to a [DotNetManager]. The netcode seam, and the only file in game-arena that
+## Joins [ArenaGame] to a [DotNetManager]. The netcode seam, and the only file in game-fatal-contact that
 ## names both.
 
 

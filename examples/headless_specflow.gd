@@ -27,7 +27,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: Spectate and Play from the team menu on a dedicated server")
+	print("game-fatal-contact: Spectate and Play from the team menu on a dedicated server")
 	DotPaths.remove_tree(SERVER_DIR)
 	if await _build():
 		await _test_spectate_and_back()

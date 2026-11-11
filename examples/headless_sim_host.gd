@@ -43,7 +43,7 @@ func _players() -> int:
 
 
 func _run() -> void:
-	print("game-arena: the solo game hosted beside the client")
+	print("game-fatal-contact: the solo game hosted beside the client")
 	_check(not ArenaSimHost.wanted(), "a suite's or a tool's client stays in this process")
 	_check(ArenaSimHost.wanted(true), "the launched game is hosted")
 	_check(ArenaSimHost.wanted_for(PackedStringArray(["--offline", "+bot_quota", "8"]), true), "a launcher's --offline is still hosted")

@@ -25,7 +25,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: bot_quota spawns exactly N bots")
+	print("game-fatal-contact: bot_quota spawns exactly N bots")
 	DotPaths.remove_tree(SERVER_DIR)
 	if await _build():
 		await _test_counts()

@@ -11,7 +11,7 @@ const CHECKS_CARRY := 50
 
 
 func _run() -> void:
-	print("game-arena headless ctf carry")
+	print("game-fatal-contact headless ctf carry")
 	print("")
 
 	await _test_one_hand()

@@ -95,7 +95,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena headless bots")
+	print("game-fatal-contact headless bots")
 
 	# The think-rate stagger on, and every bot counted as far (think_near 0), so the coast and the think after it
 	# are in every check below: the turn-rate contract has to hold with them.

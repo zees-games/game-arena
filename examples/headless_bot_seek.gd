@@ -10,7 +10,7 @@ const PLAYER := 100
 
 
 func _title() -> String:
-	return "game-arena bots find a player"
+	return "game-fatal-contact bots find a player"
 
 
 func _default_maps() -> Array[StringName]:

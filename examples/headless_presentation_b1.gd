@@ -264,7 +264,7 @@ func _test_the_escape_menu() -> void:
 	h.keycode = KEY_H
 	h.pressed = true
 	_check(menu.handle_event(h) and menu.help.is_open(), "H opens the help screen")
-	_check(menu.help.about != "" and menu.help.heading() == "How to play Arena" and int(menu.help.describe()["sections"]) >= 2,
+	_check(menu.help.about != "" and menu.help.heading() == "How to play Zee's Fatal Contact" and int(menu.help.describe()["sections"]) >= 2,
 		"which says what the game is and lists the modes before the keys")
 	menu.help.close()
 	menu.open()

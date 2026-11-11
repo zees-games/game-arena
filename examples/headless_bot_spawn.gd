@@ -9,7 +9,7 @@ const MIN_MOVE := 3.0
 
 
 func _title() -> String:
-	return "game-arena bots leave their spawns"
+	return "game-fatal-contact bots leave their spawns"
 
 
 func _default_maps() -> Array[StringName]:

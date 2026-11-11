@@ -26,7 +26,7 @@ func _merge() -> void:
 
 
 func _run() -> void:
-	print("game-arena: a real server and real ENet clients through real packet loss")
+	print("game-fatal-contact: a real server and real ENet clients through real packet loss")
 	if ShardArgs.is_merge():
 		_merge()
 		return

@@ -9,7 +9,7 @@ func _run() -> void:
 	var errors := EngineErrors.new()
 	OS.add_logger(errors)
 
-	print("game-arena — netcode over two clients")
+	print("game-fatal-contact — netcode over two clients")
 	print("  tick rate %d Hz, snapshot rate %d Hz" % [TICK_RATE, SNAPSHOT_RATE])
 
 	_build_server()

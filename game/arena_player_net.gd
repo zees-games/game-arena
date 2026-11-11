@@ -13,7 +13,7 @@ const ArenaPlayer := preload("arena_player.gd")
 ## alone. What each addon ships instead is a [code]*NetSync[/code] class describing
 ## what to replicate as data — property names, and type names as strings. Resolving
 ## those strings against [code]DotNetVar.Type[/code] is this file's job, and it is the
-## only place in game-arena where the two halves meet.
+## only place in game-fatal-contact where the two halves meet.
 ##
 ## One behaviour rather than two, because one entity is one player: a second behaviour
 ## would mean a second set of per-peer baselines and a second declaration block on the

@@ -82,7 +82,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: arena_motor_batch plays the same match")
+	print("game-fatal-contact: arena_motor_batch plays the same match")
 	ArenaBots.tiers.above = -1
 	var was := ArenaHullGrid.batch
 	if not DotFpsMotorBatch.available() or not ClassDB.class_exists(&"DotSimHullWorld"):

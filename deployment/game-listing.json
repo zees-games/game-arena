@@ -2,7 +2,7 @@
   "format": "tmc-game-listing",
   "version": 1,
   "listing": {
-    "name": "Arena",
+    "name": "Zee's Fatal Contact",
     "description": "Players engage in an arena with different objectives, such as deathmatch, free-for-all, gungame, and more.",
     "tags": ["3D", "Multiplayer"],
     "platforms": ["PLATFORM_WEB"],

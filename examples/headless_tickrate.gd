@@ -25,7 +25,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: the tick rate is a setting")
+	print("game-fatal-contact: the tick rate is a setting")
 	_test_snapshot_rate()
 	_test_prediction()
 	_test_wall_cap()

@@ -16,7 +16,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: the presentation layer")
+	print("game-fatal-contact: the presentation layer")
 
 	_test_schema()
 	_test_the_weapon_art_is_vendored()

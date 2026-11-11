@@ -50,7 +50,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena — an administrator's live tools on a dedicated server")
+	print("game-fatal-contact — an administrator's live tools on a dedicated server")
 
 	DotPaths.remove_tree(SERVER_DIR)
 

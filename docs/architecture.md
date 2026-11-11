@@ -2,7 +2,7 @@
 
 ## Why this project exists
 
-Every addon passes its own suite, and every one of those suites runs one addon with the others absent. A code path only one deployment shape reaches is a code path nothing has run. game-arena is the shape where most of the family is present at once: it is a game, and it is also the only test of the joins between the addons.
+Every addon passes its own suite, and every one of those suites runs one addon with the others absent. A code path only one deployment shape reaches is a code path nothing has run. game-fatal-contact is the shape where most of the family is present at once: it is a game, and it is also the only test of the joins between the addons.
 
 ```
 the fight        dot-player-controller  dot-combat  dot-weapon  dot-loadout  dot-match

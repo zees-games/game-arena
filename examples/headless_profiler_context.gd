@@ -23,7 +23,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: the profiler's context")
+	print("game-fatal-contact: the profiler's context")
 	_test_natives()
 	await _test_report()
 	_test_degrades()

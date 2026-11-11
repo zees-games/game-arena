@@ -13,7 +13,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena headless ctf")
+	print("game-fatal-contact headless ctf")
 	print("")
 
 	await _test_flow()

@@ -16,7 +16,7 @@ var _completed := 0
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
-	print("game-arena: solo ticks keep wall-clock time")
+	print("game-fatal-contact: solo ticks keep wall-clock time")
 	await _run()
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 

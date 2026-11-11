@@ -14,7 +14,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: a lone player is not left dead")
+	print("game-fatal-contact: a lone player is not left dead")
 	var game := ArenaGame.new()
 	game.tick_rate = TICK_RATE
 	game.headless = true

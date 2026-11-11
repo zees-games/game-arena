@@ -1,7 +1,7 @@
 extends "headless_match_part11.gd"
 
 func _run() -> void:
-	print("game-arena headless match")
+	print("game-fatal-contact headless match")
 	print("")
 
 	_test_content()

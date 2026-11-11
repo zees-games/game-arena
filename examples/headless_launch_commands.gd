@@ -14,7 +14,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: +name value launch commands")
+	print("game-fatal-contact: +name value launch commands")
 	var none := ArenaLaunchCommands.parse(PackedStringArray(["--offline", "--bots", "4", "--map", "dm_atrium"]))
 	_check(none.is_empty(), "plain -- options are not commands (%s)" % [none])
 

@@ -37,8 +37,8 @@
 # PACK is the game's id in dot-server-deploy (empty if it has no server), EXTRA_PACKS
 # are other packs it needs as id:repository pairs, and SUITES are the scenes in
 # examples/ that test it.
-GAME_NAME="Arena"
-PACK="arena"
+GAME_NAME="Fatal Contact"
+PACK="fatalcontact"
 EXTRA_PACKS=""
 # headless_lossy plays real ENet through real loss. It was left out while it failed about
 # one run in four; since 2026-10-09 it passed 20 of 20 (see docs/testing.md "headless_lossy").

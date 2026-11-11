@@ -36,7 +36,7 @@ func _ready() -> void:
 
 
 func _run() -> void:
-	print("game-arena: a module reload leaves one live link")
+	print("game-fatal-contact: a module reload leaves one live link")
 	DotPaths.remove_tree(DATA)
 	Engine.physics_ticks_per_second = TICK_RATE
 	if await _boot():

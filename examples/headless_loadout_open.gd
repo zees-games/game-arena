@@ -63,7 +63,7 @@ func _art_ids() -> Array:
 
 
 func _run() -> void:
-	print("game-arena: B costs no allocation after the prewarm")
+	print("game-fatal-contact: B costs no allocation after the prewarm")
 	if not await _until(func() -> bool: return _client.get("player") != null and _client.get("loadout_menu") != null, 30.0):
 		_check(false, "the offline client has its player and loadout menu")
 		get_tree().quit(1)
