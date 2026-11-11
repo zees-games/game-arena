@@ -516,6 +516,10 @@ func _test_loadout_command() -> void:
 	_check(not bool(locked.get("ok", true)) and (spawned.value as DotLoadout).item_in(&"primary") == &"sniper",
 		"locked by the owner, nobody chooses and everybody spawns with the fixed slot", str(locked))
 
+	await _test_loadout_command_part2(cmd, say)
+
+
+func _test_loadout_command_part2(cmd: Object, say: Callable) -> void:
 	var _a := _server.console.set_cvar("mp_loadout_menu", "1")
 	var _b := _server.console.set_cvar("mp_loadout_fixed", "")
 	var _c := _server.console.set_cvar("mp_loadout_allow", "")

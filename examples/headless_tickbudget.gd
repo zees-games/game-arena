@@ -110,6 +110,10 @@ func _run() -> void:
 	_done()
 	Engine.max_physics_steps_per_frame = 8
 
+	await _run_part2(hitched)
+
+
+func _run_part2(hitched) -> void:
 	# Behind: frames run their whole cap and are still owed ticks (the owner's profile: every frame caught up,
 	# 1876 ticks dropped). The budget then asks for cosmetic work to be shed, and gives it back afterwards.
 	_section("a game that stays behind sheds cosmetic work")

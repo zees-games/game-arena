@@ -223,6 +223,10 @@ func _test_voice_wire() -> void:
 			"and the bytes are unchanged"
 		)
 
+	await _test_voice_wire_part2(relayed, heard, server_link, client_entry, client_bridge, client_link, frame)
+
+
+func _test_voice_wire_part2(relayed: Array[Dictionary], heard: Array[PackedByteArray], server_link: ArenaNetLink, client_entry: Dictionary, client_bridge: ArenaNetBridge, client_link: ArenaNetLink, frame: PackedByteArray) -> void:
 	_check(heard.size() == 1, "and the relay reaches a listener")
 
 	# Never a broadcast. `send(bytes, 0)` is how this family last delivered a private
@@ -262,6 +266,10 @@ func _test_voice_wire() -> void:
 	_check(voice != null and voice.frames_sent > 0 and relayed.size() == voice.frames_sent,
 		"holding it sends the player's speech to the server (%d sent, %d relayed)" % [voice.frames_sent if voice != null else 0, relayed.size()])
 
+	await _test_voice_wire_part3(server_link, client_bridge, client_link, frame, held_link, extras, voice)
+
+
+func _test_voice_wire_part3(server_link: ArenaNetLink, client_bridge: ArenaNetBridge, client_link: ArenaNetLink, frame: PackedByteArray, held_link: ArenaNetLink, extras: ArenaClientExtras, voice: DotVoiceManager) -> void:
 	# [b]The player's block list (sm) reaches arena's voice.[/b] dot-chat's DotChatSelfMute
 	# binds whatever is published as dot_voice_client; arena's manager did not publish, so
 	# `sm` muted a player's lines here and never their voice.
@@ -362,6 +370,10 @@ func _test_event_wire() -> void:
 	var older := ArenaEvents.read_kill(DotNetReader.new(old.to_bytes()))
 	_check(bool(older["ok"]) and not bool(older["critical"]), "and an older server's kill reads as no critical")
 
+	_test_event_wire_part2(older)
+
+
+func _test_event_wire_part2(older: Dictionary) -> void:
 	var rules := ArenaEvents.read_rules(DotNetReader.new(ArenaEvents.write_rules(
 		{"slide_boost": 2.5, "fp_body": 1.0, "break_mode": 2.0, "nametags": 6.0, "hpbars": 10.0}
 	)))
@@ -421,6 +433,10 @@ func _test_event_wire() -> void:
 		"and the score limit an extend raised, only when it is sent"
 	)
 
+	_test_event_wire_part3(older)
+
+
+func _test_event_wire_part3(older: Dictionary) -> void:
 	var leave := ArenaEvents.read_leave(DotNetReader.new(ArenaEvents.write_leave(99)))
 	_check(bool(leave["ok"]) and int(leave["session_id"]) == 99, "a LEAVE round-trips")
 
@@ -478,6 +494,10 @@ func _test_event_wire() -> void:
 		"and both were appended after TAKEN, so no older kind moved"
 	)
 
+	_test_event_wire_part4()
+
+
+func _test_event_wire_part4() -> void:
 	var score_rows: Array[Dictionary] = [
 		{"session_id": 11, "kills": 7, "deaths": 3, "assists": 1, "score": -2, "objectives": 2},
 		{"session_id": 12, "kills": 0, "deaths": 9, "assists": 0, "score": 0, "objectives": 0},

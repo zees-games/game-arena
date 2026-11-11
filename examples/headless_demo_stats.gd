@@ -134,6 +134,10 @@ func _run() -> void:
 	_check(not stats.recorder.is_recording(Vector2i(3, 0)) and not stats.recorder.is_recording(Vector2i(3, 1)), "a bot is never a subject")
 	await stats.recorder.flush_all()
 
+	await _run_part2(store, stats, victim, a, aim, hits)
+
+
+func _run_part2(store: DotBotDemoStoreMemory, stats: RefCounted, victim, a, aim, hits: Array) -> void:
 	var places := _episodes(store, "place")
 	var engages := _episodes(store, "engage")
 	_check(places.size() >= 2, "standing about makes place episodes cut at the span", str(places.size()))
@@ -194,6 +198,10 @@ func _run() -> void:
 			at_busy += 1
 	_check(weighted.size() > plain.size() and at_busy > 1 and weighted.count(empty) == 1, "roaming repeats the busy point and leaves the empty one once", "%d busy of %d" % [at_busy, weighted.size()])
 
+	await _run_part3(store, stats, victim, a)
+
+
+func _run_part3(store: DotBotDemoStoreMemory, stats: RefCounted, victim, a) -> void:
 	# Engage detection against synthetic placements of the enemy: the cone (45 degrees), the range (60 m) and the grace out of view (0.5 s).
 	var spot := Transform3D(Basis(), Vector3(-30.0, 0.05, -20.0))
 	victim.spawn(spot, _game.current_tick())

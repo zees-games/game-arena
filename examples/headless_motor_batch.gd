@@ -142,6 +142,10 @@ func _run() -> void:
 	_check(ran == 0 or rows > 0, "through the batch (%d rows)" % rows)
 	_done()
 
+	await _run_part2(was, off, on, rows, kept, kept_streams)
+
+
+func _run_part2(was, off, on, rows, kept: StringName, kept_streams: Array) -> void:
 	_section("lag compensation: shots judged against the past, lagged movers colliding with it")
 	if kept == &"":
 		for i in 4:

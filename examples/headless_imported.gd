@@ -96,6 +96,10 @@ func _run() -> void:
 		_finish()
 		return
 
+	await _run_part2()
+
+
+func _run_part2() -> void:
 	# `-- --rides`: only the recorded rides, for working on them (the suite's own totals then do not hold);
 	# `-- --record-edge=N` records surf_ski_2's edge N instead of RECORD_EDGES, `-- --ride-rate=N` rides at N Hz.
 	if OS.get_cmdline_user_args().has("--rides"):

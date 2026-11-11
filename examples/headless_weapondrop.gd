@@ -122,6 +122,10 @@ func _run() -> void:
 	player.give_default_loadout()
 	game.tick({})
 
+	await _run_part2(game, drops, player, rules)
+
+
+func _run_part2(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, rules: DotWeaponDropRules) -> void:
 	var held_id: StringName = player.arsenal.current().id()
 	rules.auto_pickup = true
 	await _step(game, 21, true, 1)

@@ -80,6 +80,10 @@ func _run() -> void:
 		quit(1)
 		return
 
+	await _run_part2(game, me, view, mine, enemy, f_mine, f_enemy, carrier)
+
+
+func _run_part2(game, me, view, mine: int, enemy, f_mine: DotObjectiveFlag, f_enemy: DotObjectiveFlag, carrier) -> void:
 	# 1. A bot carrier, seen by somebody else: its gun in the right hand, my flag in its left, against the body.
 	var take := _toward(game, f_mine.at, f_enemy.at, 0.2)
 	for i in 60:
@@ -110,6 +114,10 @@ func _run() -> void:
 	await _shot("carrier_right_side")
 	var _home := f_mine.send_home("")
 
+	await _run_part3(game, me, view, enemy, f_mine, f_enemy, carrier, take, right)
+
+
+func _run_part3(game, me, view, enemy, f_mine: DotObjectiveFlag, f_enemy: DotObjectiveFlag, carrier, take, right: Vector3) -> void:
 	# 2. Me carrying: the flag at my left shoulder looking that way, then the right one with cl_lefthand.
 	carrier.controller.teleport(_ground(game, f_mine.at.lerp(f_enemy.at, 0.5)) + Vector3(0, 0.05, 30), 0.0, 0.0)
 	var enemy_spot := _toward(game, f_enemy.at, f_mine.at, 0.2)

@@ -552,6 +552,10 @@ func _test_fallout_all() -> void:
 	var report: Array[String] = []
 	var player := _fresh(2)
 
+	_test_fallout_all_part2(sealed, report, player)
+
+
+func _test_fallout_all_part2(sealed: Array[String], report: Array[String], player: ArenaPlayer) -> void:
 	for id in ArenaMap.imported_ids():
 		if _fallout_only != "" and String(id) != _fallout_only:
 			continue

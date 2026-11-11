@@ -463,6 +463,10 @@ func _test_look_and_crosshair() -> void:
 		"and `cross` puts the arms back at the length they were built with"
 	)
 
+	_test_look_and_crosshair_part2(p, crosshair)
+
+
+func _test_look_and_crosshair_part2(p, crosshair: DotCrosshair) -> void:
 	# The camera motion: binding pushes the saved scales, each slider moves its own cue, 0 is off.
 	var player := ArenaPlayer.new()
 	player.setup(ArenaPlayer.Mode.HEADLESS, ArenaMap.dm_box(), 31, "Mover")

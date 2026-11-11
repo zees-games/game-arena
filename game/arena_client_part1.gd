@@ -541,6 +541,10 @@ func _build_interface() -> void:
 	game_menu.overlays_changed.connect(func(_open: bool) -> void:
 		_apply_mouse())
 
+	_build_interface_part2()
+
+
+func _build_interface_part2() -> void:
 	board = ArenaMenus.Board.new(
 		game_menu.scoreboard, game.match_node.scoreboard,
 		link if not _offline else null, game.match_node.teams, game

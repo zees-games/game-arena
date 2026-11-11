@@ -98,6 +98,10 @@ func present(delta: float) -> void:
 		_present_health_tag(delta)
 		ArenaFrameProbe.add(&"r_tag", t_tag)
 
+	present_part2(delta, drawn)
+
+
+func present_part2(delta: float, drawn) -> void:
 	var t_anim := Time.get_ticks_usec()
 	_animate_figure(drawn, delta)
 	ArenaFrameProbe.add(&"r_anim", t_anim)

@@ -78,6 +78,10 @@ func _run() -> void:
 	_check(Vector2(fr.x - plate_red.x, fr.z - plate_red.z).length() < 0.5 and Vector2(fb.x - plate_blue.x, fb.z - plate_blue.z).length() < 0.5,
 		"each flag stands on its capture plate (within 0.5 m of the plate centre)")
 
+	await _run_part2(map, red, blue)
+
+
+func _run_part2(map: ArenaMap, red: int, blue: int) -> void:
 	print("-- spawns stand on a floor")
 	var space := get_viewport().world_3d.direct_space_state
 	_game = _new_game(ArenaMode.team_deathmatch(5))
@@ -145,6 +149,10 @@ func _run() -> void:
 	_check(up_sky > 0 and marked_sky == 0, "every such hit reads as sky, so it gets no decal (%d missed)" % marked_sky)
 	_check(grounds > 0, "some ground under the sky does not read as sky (%d)" % grounds)
 
+	await _run_part3(red, blue)
+
+
+func _run_part3(red: int, blue: int) -> void:
 	print("-- the modes it hosts are the listed ones")
 	var def := ArenaMaps.catalogue().get_map(MAP)
 	_check(def != null and ArenaMaps.supports_mode(def, ArenaModes.by_id(&"tdm")) and ArenaMaps.supports_mode(def, ArenaModes.by_id(&"ctf")) \
@@ -183,6 +191,10 @@ func _run() -> void:
 	_check(sides.size() == 2, "the bots fall on two sides")
 	_check(right == BOTS, "each bot stands on a spawn of its own side's tag (%d of %d)" % [right, BOTS])
 
+	await _run_part4(red, blue)
+
+
+func _run_part4(red: int, blue: int) -> void:
 	print("-- bots route between the two bases over the baked mesh")
 	var world := ArenaBots.world_for(_game)
 	var a := Vector3.ZERO
@@ -243,6 +255,10 @@ func _run() -> void:
 	_game.queue_free()
 	await get_tree().process_frame
 
+	await _run_part5(red, blue, a)
+
+
+func _run_part5(red: int, blue: int, a: Vector3) -> void:
 	print("-- capture the flag puts each flag at its side's home")
 	_game = _new_game(ArenaMode.capture_the_flag(3))
 	_check(_game != null and _game.objectives != null, "capture the flag sets up with objectives")

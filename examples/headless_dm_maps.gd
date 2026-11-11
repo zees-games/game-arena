@@ -137,6 +137,10 @@ func _test_solo() -> void:
 	_check(only.asked == PackedStringArray(["gamemann/crackhouse@9.9.9"]), "the pick asks for the mounted version (%s)" % ", ".join(only.asked))
 	_check(got.ok or not got.error.message.contains("could not fetch"), "and the fetch is not what fails")
 
+	await _test_solo_part2(solo, only)
+
+
+func _test_solo_part2(solo: DotMapCatalogue, only: _OnlyVersion) -> void:
 	print("-- solo: a pinned pack that 404s falls back to its latest; online (no allow_latest) keeps the exact version")
 	ArenaMaps.clear_dead()
 	var lat := _Latest.new()
