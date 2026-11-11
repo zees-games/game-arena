@@ -204,6 +204,7 @@ func _build_netcode() -> DotResult:
 	var started := net.setup()
 	if not started.ok:
 		return started
+	ArenaLoadTimeline.mark("netcode: manager set up")
 
 	bridge = ArenaNetBridge.new()
 	bridge.name = "Bridge"
@@ -212,6 +213,7 @@ func _build_netcode() -> DotResult:
 	var attached := bridge.attach(game, net)
 	if not attached.ok:
 		return attached
+	ArenaLoadTimeline.mark("netcode: bridge attached")
 
 	# Under the link, and NAMED the same as the server's — the name is the routing.
 	bridge.open_link(link)
@@ -222,6 +224,7 @@ func _build_netcode() -> DotResult:
 	_profile_runtime = DotProfileRuntime.new()
 	_profile_link = DotNetProfileLink.attach(net, _profile_runtime)
 	net.messages.seal()
+	ArenaLoadTimeline.mark("netcode: messages sealed")
 
 	# The client halves, built here because each needs the bridge.
 	extras = ArenaClientExtras.new()
@@ -230,6 +233,7 @@ func _build_netcode() -> DotResult:
 
 	var extra := extras.attach(bridge, game)
 	DotLog.result(CHANNEL, "the client's chat, voice and map layers", extra)
+	ArenaLoadTimeline.mark("netcode: extras attached")
 	_install_profiler_context()
 	platform.look_voice = extras.voice
 	platform.look_chat = extras.chat
@@ -273,6 +277,7 @@ func _build_netcode() -> DotResult:
 	elif link != null and link.has_signal("spawned"):
 		link.connect("spawned", _announce, CONNECT_ONE_SHOT)
 
+	ArenaLoadTimeline.mark("netcode: wired")
 	return net.start()
 
 
