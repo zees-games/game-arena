@@ -12,7 +12,8 @@ extends "arena_map_part2.gd"
 ## monster navigation, the objective layout and the scattered props are built from them
 ## and from `boxes`, which an imported map does not have, so `ArenaMaps.supports_mode`
 ## keeps those modes off it rather than letting them build a layout out of nothing.
-static func imported(map_id: StringName) -> ArenaMap:
+## [param light] stops after what a listing reads (name, author, bounds, spawns and their tags, the modes, the movement): no pits, jail or mechanics, which a catalogue of sixty maps would build and discard (about a third of the time a cold catalogue takes).
+static func imported(map_id: StringName, light: bool = false) -> ArenaMap:
 	var manifest := ArenaImportedMaps.manifest(map_id)
 
 	if manifest.is_empty():
@@ -43,6 +44,9 @@ static func imported(map_id: StringName) -> ArenaMap:
 
 	map.flag_homes = ArenaBspMap.flag_homes_of(manifest)
 	map.modes = PackedStringArray(manifest.get("modes", []))
+
+	if light:
+		return map
 
 	map.pits = ArenaBspMap.pits_of(manifest)
 	map.jail = ArenaJail.detect(map.pits)
@@ -78,6 +82,12 @@ static func _by_id_bare(id: StringName) -> ArenaMap:
 
 	# Not one of ours: an imported map, if one by that id was found, else nothing.
 	return imported(id)
+
+## [method by_id] for a listing: an imported map comes without its pits, jail and mechanics (see [method imported]). Not for playing.
+static func listing_by_id(id: StringName) -> ArenaMap:
+	if id in ids():
+		return by_id(id)
+	return imported(id, true)
 
 ## The ids [method by_id] answers to, in rotation order.
 ##

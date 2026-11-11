@@ -13,6 +13,8 @@ const SERVER_LOG := "user://logs/sim_server.log"
 const ANCHOR := "ArenaSimServer"
 const BOOT_LIMIT_SEC := 60.0
 const JOIN_LIMIT_SEC := 30.0
+## How often the boot and the join are looked at: a coarser step is the average of half of it added to the load, twice.
+const POLL_SEC := 0.02
 
 ## Set by a tool before the client loads: 1 on, 0 off, -1 the command line decides.
 static var forced := -1
@@ -97,8 +99,8 @@ func start(bots: int) -> DotResult:
 			var why := _exit_reason(log_path)
 			_pid = -1
 			return DotResult.fail(DotError.CODE_INVALID, "the server process exited while booting (%s)" % why)
-		await get_tree().create_timer(0.1).timeout
-		t += 0.1
+		await get_tree().create_timer(POLL_SEC).timeout
+		t += POLL_SEC
 	if not FileAccess.file_exists(_ready_path):
 		stop()
 		return DotResult.fail(DotError.CODE_INVALID, "the server did not come up in time")
@@ -117,8 +119,8 @@ func start(bots: int) -> DotResult:
 		return asked
 	t = 0.0
 	while not link.is_playing() and t < JOIN_LIMIT_SEC:
-		await get_tree().create_timer(0.1).timeout
-		t += 0.1
+		await get_tree().create_timer(POLL_SEC).timeout
+		t += POLL_SEC
 	if not link.is_playing():
 		stop()
 		return DotResult.fail(DotError.CODE_INVALID, "never joined the local server")

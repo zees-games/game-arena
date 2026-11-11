@@ -54,7 +54,7 @@ static func catalogue(content: DotContentIndex = null) -> DotMapCatalogue:
 	# The built-ins, then every imported combat surf map that was found — discovered by
 	# `ArenaImportedMaps` off each manifest's own `kind`, not listed here either.
 	for id in ArenaMap.ids() + ArenaMap.imported_ids():
-		var map := ArenaMap.by_id(id)
+		var map := ArenaMap.listing_by_id(id)
 
 		if map == null:
 			continue
