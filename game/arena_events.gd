@@ -130,9 +130,7 @@ enum Kind {
 }
 
 enum Ask {
-	## I have loaded my scene and can receive. Tell me everything.
-	##
-	## [b]Nothing may be sent to a peer before this arrives.[/b] dot-server's signon
+	## I have loaded my scene and can receive. Tell me everything. [b]Nothing may be sent to a peer before this arrives.[/b] dot-server's signon
 	## finishes and *then* the client builds its scene; everything sent in between
 	## lands on a node that does not exist and is lost, one "Node not found" per call.
 	READY,
@@ -182,15 +180,12 @@ const MAP_BYTES := 64
 const TEXT_BYTES := 256
 ## Rows (players, or teams) one SCORE event may carry: the scoreboard's own record limit.
 const MAX_SCORE_ROWS := 512
-
 ## Bits a weapon name occupies in a KILL. Short because it is a label, not an id.
 const WEAPON_BYTES := 32
-
 
 static func kind_name(kind: int) -> String:
 	var names := Kind.keys()
 	return String(names[kind]) if kind >= 0 and kind < names.size() else "?"
-
 
 static func ask_name(ask: int) -> String:
 	var names := Ask.keys()

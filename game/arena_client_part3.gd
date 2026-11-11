@@ -38,19 +38,7 @@ func _ready() -> void:
 		_load_solo_config()
 	add_child(game)
 
-	# Connected here, before anything can create a player, rather than inside `_watch`.
-	game.player_added.connect(_on_player_added)
-	# The flag's sounds: from what the flag view draws, so a dedicated server's client hears them too.
-	game.ctf_seen.connect(func(what: StringName, team: int, by: int) -> void:
-		if presentation != null:
-			presentation.on_flag_event(what, team, player != null and by == player.player_id, game.team_of(player.player_id) if player != null else 0)
-	)
-	# The mode's banner, the moment a client learns it: "Gun Game: every kill gives you a
-	# different gun", the way the genre says it when you spawn into one.
-	game.mode_shown.connect(func(shown: ArenaMode) -> void:
-		if hud != null:
-			hud.notice("%s  -  %s" % [shown.display_name, shown.description])
-	)
+	_connect_game_signals()
 
 	# Offline, `-- --map <id>` picks the map, as it does for a dedicated server; a
 	# connected client is told the server's map and rebuilds on it.
@@ -72,13 +60,7 @@ func _ready() -> void:
 	_build_ragdolls()
 	_build_killcam()
 	_build_killview()
-	if _offline:
-		# Solo, the world is this process's and there is no KILL message: the death the game
-		# decided is on the kill's entry.
-		game.player_killed.connect(_on_solo_kill)
-		game.loadout_rolled.connect(func(id: int, text: String) -> void:
-			if player != null and id == player.player_id and hud != null:
-				hud.notice(text))
+	_connect_solo_signals()
 
 	_sampler = make_sampler()
 	# C slides as well as Duck: added once the key table has been applied, in
@@ -123,6 +105,35 @@ func _ready() -> void:
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
 	_suspend_input(platform.is_input_blocked())
+
+## What the game tells the client: a player joined, a flag event, the mode's banner.
+func _connect_game_signals() -> void:
+	# Connected here, before anything can create a player, rather than inside `_watch`.
+	game.player_added.connect(_on_player_added)
+	# The flag's sounds: from what the flag view draws, so a dedicated server's client hears them too.
+	game.ctf_seen.connect(func(what: StringName, team: int, by: int) -> void:
+		if presentation != null:
+			presentation.on_flag_event(what, team, player != null and by == player.player_id, game.team_of(player.player_id) if player != null else 0)
+	)
+	# The mode's banner, the moment a client learns it: "Gun Game: every kill gives you a
+	# different gun", the way the genre says it when you spawn into one.
+	game.mode_shown.connect(func(shown: ArenaMode) -> void:
+		if hud != null:
+			hud.notice("%s  -  %s" % [shown.display_name, shown.description])
+	)
+
+
+## Solo only: a kill the game decided, and the loadout a roll gave.
+func _connect_solo_signals() -> void:
+	if not _offline:
+		return
+	# Solo, the world is this process's and there is no KILL message: the death the game
+	# decided is on the kill's entry.
+	game.player_killed.connect(_on_solo_kill)
+	game.loadout_rolled.connect(func(id: int, text: String) -> void:
+		if player != null and id == player.player_id and hud != null:
+			hud.notice(text))
+
 
 ## The view key: the other view if the server's `mp_forceview` allows it, a line if not.
 ## dot-game's render quality follows `platform.settings`, which arena leaves unset, so the menu's

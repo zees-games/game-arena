@@ -1,6 +1,7 @@
 extends DotGameCheckSuite
 
 const ArenaTestToys := preload("arena_test_toys.gd")
+const HeadlessNetSteps := preload("headless_net_steps.gd")
 
 const ArenaClientExtras := preload("../game/arena_client_extras.gd")
 const ArenaConfig := preload("../game/arena_config.gd")
@@ -376,15 +377,7 @@ func _run_ticks() -> void:
 
 		_server_bridge.server_tick(tick)
 
-		for entry_down in _downstream:
-			var peer: int = entry_down["peer"]
-			var targets: Array = _clients.keys() if peer == 0 else [peer]
-
-			for target in targets:
-				if _clients.has(target):
-					_clients[target]["bridge"].receive_snapshot(entry_down["bytes"])
-
-		_downstream.clear()
+		HeadlessNetSteps.deliver_downstream(_clients, _downstream)
 
 		for peer_id in _clients:
 			var entry: Dictionary = _clients[peer_id]
@@ -698,6 +691,20 @@ static func _open_sky(map: ArenaMap) -> Vector3:
 	return map.spawns[0].origin + Vector3(0.0, 0.1, 0.0)
 
 
+## A tick whose packet was lost: the server repeated the last command. How far the lag it resolves
+## this tick's shots and contacts with is from the lag the client's lost command carried, or -1 when
+## [param peer] is nobody or this tick was not a repeat.
+func _lag_repeat_gap(peer: int, tick: int) -> float:
+	if peer == 0:
+		return -1.0
+	var lag_session := int(_clients[peer]["session"])
+	var sent: ArenaPlayerNet = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(lag_session)
+	var held: ArenaPlayerNet = _server_bridge.behaviour_for(lag_session)
+	if held.last_view_tick >= 0 and held.last_view_tick < tick and sent.last_view_lag >= 0.0:
+		return absf(held.last_view_lag - sent.last_view_lag)
+	return -1.0
+
+
 ## Runs [param ticks] more ticks with [param peer] holding [param buttons] and nothing else
 ## (0 for nobody), and reports how far that peer's prediction of itself strayed from the
 ## server's simulation of it: `{worst_gap, grounded_ticks}`, the second counting ticks the
@@ -740,20 +747,10 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 		return made
 
 	var commands: Dictionary = send.call(first)
-
 	var lag_repeats := 0
 	var lag_worst := 0.0
 	for tick in range(first, first + ticks):
-		# The receive timeline walks with the clock (`DotNetClock.advance` does it in the game);
-		# ticks set by hand skip that, and the view lag would then grow by one on every tick
-		# without a snapshot, which no client's does. dot-net has no public step for this.
-		for peer_id in _clients:
-			var walked: DotNetClock = _clients[peer_id]["net"].clock
-			walked._received_tick = maxi(walked._received_tick, tick - 1)
-		for peer_id in _clients:
-			var pair2: Array = commands[peer_id]
-			_clients[peer_id]["net"].clock.tick = tick
-			_clients[peer_id]["bridge"].client_tick(tick, pair2[0], pair2[1])
+		HeadlessNetSteps.client_step(_clients, commands, tick)
 
 		# Not past the last tick: that command would sit ahead of the next window's own.
 		if tick < first + ticks - 1:
@@ -762,15 +759,10 @@ func _flight_window(peer: int, ticks: int, buttons: int, moves: Dictionary = {})
 		var apart := server_a.controller.state.position - server_b.controller.state.position
 		closest = minf(closest, Vector2(apart.x, apart.z).length())
 
-		# A tick whose packet was lost: the server repeated the last command. The lag it resolves
-		# this tick's shots and contacts with, against the lag the client's lost command carried.
-		if peer != 0:
-			var lag_session := int(_clients[peer]["session"])
-			var sent: ArenaPlayerNet = (_clients[peer]["bridge"] as ArenaNetBridge).behaviour_for(lag_session)
-			var held: ArenaPlayerNet = _server_bridge.behaviour_for(lag_session)
-			if held.last_view_tick >= 0 and held.last_view_tick < tick and sent.last_view_lag >= 0.0:
-				lag_repeats += 1
-				lag_worst = maxf(lag_worst, absf(held.last_view_lag - sent.last_view_lag))
+		var repeat_gap := _lag_repeat_gap(peer, tick)
+		if repeat_gap >= 0.0:
+			lag_repeats += 1
+			lag_worst = maxf(lag_worst, repeat_gap)
 
 		# Both ends ran this tick: the prediction against the server, before the snapshot replaces it.
 		var measure := peer != 0 and int(_clients[peer]["net"].stats.packets_received) != heard_before

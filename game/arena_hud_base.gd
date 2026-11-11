@@ -695,3 +695,35 @@ func _make_label(
 	label.add_theme_constant_override(&"outline_size", 6)
 	add_child(label)
 	return label
+
+
+## The blind and the hurt vignette, first so every widget added after them draws over them.
+func _build_overlays() -> void:
+	# First, so every widget added below draws over it. See [member blind_overlay].
+	blind_overlay = ColorRect.new()
+	blind_overlay.name = "Blind"
+	blind_overlay.color = BLIND_COLOUR
+	# Not anchored to this HUD's rect: `DotHud` insets itself by the safe area, and a blind the size
+	# of the HUD left a 16-pixel frame of the world visible round the edge of the first rendered.
+	blind_overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	blind_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	blind_overlay.modulate.a = 0.0
+	blind_overlay.visible = false
+	add_child(blind_overlay)
+
+	hurt_overlay = ColorRect.new()
+	hurt_overlay.name = "Hurt"
+	# Clear over the middle, so it reads as the edge of vision closing in rather than as a
+	# red filter over the screen (the first render was the second).
+	var shader := Shader.new()
+	shader.code = HURT_SHADER
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	hurt_overlay.material = material
+	hurt_overlay.color = Color.WHITE
+	# Top-left anchored and sized to the viewport in `present_body`, like the blind: full-rect
+	# anchors with a size written every frame drew an engine warning per write.
+	hurt_overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	hurt_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hurt_overlay.modulate.a = 0.0
+	add_child(hurt_overlay)

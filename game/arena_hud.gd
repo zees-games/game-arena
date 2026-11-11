@@ -7,55 +7,13 @@ const ArenaFlagView := preload("arena_flag_view.gd")
 func build(p_game: ArenaGame) -> void:
 	game = p_game
 
-	# First, so every widget added below draws over it. See [member blind_overlay].
-	blind_overlay = ColorRect.new()
-	blind_overlay.name = "Blind"
-	blind_overlay.color = BLIND_COLOUR
-	# Not anchored to this HUD's rect: `DotHud` insets itself by the safe area, and a blind the size
-	# of the HUD left a 16-pixel frame of the world visible round the edge of the first rendered.
-	blind_overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	blind_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	blind_overlay.modulate.a = 0.0
-	blind_overlay.visible = false
-	add_child(blind_overlay)
-
-	hurt_overlay = ColorRect.new()
-	hurt_overlay.name = "Hurt"
-	# Clear over the middle, so it reads as the edge of vision closing in rather than as a
-	# red filter over the screen (the first render was the second).
-	var shader := Shader.new()
-	shader.code = HURT_SHADER
-	var material := ShaderMaterial.new()
-	material.shader = shader
-	hurt_overlay.material = material
-	hurt_overlay.color = Color.WHITE
-	# Top-left anchored and sized to the viewport in `present_body`, like the blind: full-rect
-	# anchors with a size written every frame drew an engine warning per write.
-	hurt_overlay.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	hurt_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hurt_overlay.modulate.a = 0.0
-	add_child(hurt_overlay)
+	_build_overlays()
 
 	scope = AwScopeOverlay.new()
 	scope.name = "Scope"
 	add_child(scope)
 
-	crosshair = DotCrosshair.new()
-	crosshair.name = "Crosshair"
-	crosshair.set_anchors_preset(Control.PRESET_FULL_RECT)
-	crosshair.fov_degrees = 75.0
-	crosshair.length = 7.0
-	crosshair.base_gap = 3.0
-	crosshair.thickness = 2.0
-	# Bound to the weapon's actual spread, so the crosshair opening means something.
-	# A crosshair that opens by an arbitrary factor tells the player something
-	# confident and wrong about where their shots will go.
-	crosshair.bind(func() -> Variant:
-		return player.spread_degrees() if _live() else 0.0
-	)
-	if _crosshair_hides:
-		crosshair.set(&"alive_source", func() -> bool: return _live() and player.is_alive())
-	add_child(crosshair)
+	_build_crosshair()
 
 	# Bottom left: health as a thick bar with its number at the end, armour as a thin one
 	# under it when there is any. The bars ease and the numbers do not (`DotVitals`).
@@ -124,6 +82,26 @@ func build(p_game: ArenaGame) -> void:
 
 	if game != null:
 		game.player_killed.connect(_on_kill)
+
+
+## The crosshair, bound to the weapon's spread.
+func _build_crosshair() -> void:
+	crosshair = DotCrosshair.new()
+	crosshair.name = "Crosshair"
+	crosshair.set_anchors_preset(Control.PRESET_FULL_RECT)
+	crosshair.fov_degrees = 75.0
+	crosshair.length = 7.0
+	crosshair.base_gap = 3.0
+	crosshair.thickness = 2.0
+	# Bound to the weapon's actual spread, so the crosshair opening means something.
+	# A crosshair that opens by an arbitrary factor tells the player something
+	# confident and wrong about where their shots will go.
+	crosshair.bind(func() -> Variant:
+		return player.spread_degrees() if _live() else 0.0
+	)
+	if _crosshair_hides:
+		crosshair.set(&"alive_source", func() -> bool: return _live() and player.is_alive())
+	add_child(crosshair)
 
 
 ## Adds [param piece] with [param preset]'s anchors and [param rect] as its offsets from
@@ -579,18 +557,7 @@ func present_body() -> void:
 	var tunables: DotFpsTunables = player.controller.tunables if live else null
 	present_abilities(state, tunables)
 
-	# What can be done right now, as the genre prompts it.
-	if slide_label != null:
-		if state != null and state.is_sliding():
-			slide_label.show_prompt("Cancel slide", _key_label(&"slide"))
-		elif live and player.is_alive() and _needs_reload():
-			slide_label.show_prompt("Reload", _key_label(&"reload"))
-		elif live and player.is_alive() and use_hint != "":
-			slide_label.show_prompt(use_hint, _key_label(&"use"))
-		elif roam_hint != "" and player != null and not player.is_alive():
-			slide_label.show_prompt(roam_hint, _key_label(&"roam"))
-		else:
-			slide_label.show_prompt("", "")
+	_present_prompt(state, live)
 
 	_build_feedback()
 	if death_label == null:
@@ -610,6 +577,28 @@ func present_body() -> void:
 	death_label.visible = player != null and not player.is_alive() and _death_text != ""
 	death_label.text = _death_text
 
+	_present_points(live)
+
+	_advance_popups(get_process_delta_time())
+
+
+## What can be done right now, as the genre prompts it.
+func _present_prompt(state: DotFpsState, live: bool) -> void:
+	if slide_label != null:
+		if state != null and state.is_sliding():
+			slide_label.show_prompt("Cancel slide", _key_label(&"slide"))
+		elif live and player.is_alive() and _needs_reload():
+			slide_label.show_prompt("Reload", _key_label(&"reload"))
+		elif live and player.is_alive() and use_hint != "":
+			slide_label.show_prompt(use_hint, _key_label(&"use"))
+		elif roam_hint != "" and player != null and not player.is_alive():
+			slide_label.show_prompt(roam_hint, _key_label(&"roam"))
+		else:
+			slide_label.show_prompt("", "")
+
+
+## The points count, top left, and the popup when it grows.
+func _present_points(live: bool) -> void:
 	if points_label == null:
 		# Top left: a count, not something to watch.
 		points_label = _make_label("Points", Control.PRESET_TOP_LEFT, Vector2(0.0, 8.0))
@@ -626,8 +615,6 @@ func present_body() -> void:
 	if _points_seen >= 0 and count > _points_seen:
 		popup("".join(["+", points_text(count - _points_seen)]), Color(1.0, 0.82, 0.25))
 	_points_seen = count
-
-	_advance_popups(get_process_delta_time())
 
 
 ## Covers the whole viewport, like the blind: the HUD's own size leaves the safe-area strip showing.

@@ -5,9 +5,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 
 const CHANNEL := "arena.stack"
-
 const SERVICE := &"arena_player_stack"
-
 ## The loadout the arena's one class names.
 const LOADOUT_STANDARD := &"arena_standard"
 
@@ -800,6 +798,3 @@ func describe() -> Dictionary:
 		"viewers": spectate.viewers().size(),
 		"physics": physics.describe() if physics != null else "not applied",
 	}
-
-
-# --- The callables the addons are given -------------------------------------

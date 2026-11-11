@@ -42,19 +42,7 @@ func _present_frame(delta: float) -> void:
 		var t_walk := Time.get_ticks_usec()
 		presentation.keep_walkers(game.players())
 		ArenaFrameProbe.add(&"c_walkers", t_walk)
-		var stack_now := game.player_stack
-		if stack_now != null and stack_now.physics != null and stack_now.physics.layout != null:
-			if _roof_layout != stack_now.physics.layout:
-				_roof_layout = stack_now.physics.layout
-				_roof_mask = _roof_layout.mask_of([&"world"])
-				_tag_mask = _roof_layout.mask_of([&"world", &"prop"])
-			sync_name_tags(_tag_mask)
-			presentation.follow_roof(delta, eye, get_viewport().world_3d.direct_space_state, _roof_mask)
-			var shot_rig: Object = player.weapons if player != null else null
-			if shot_rig != null and is_instance_valid(shot_rig) and shot_rig.has_method(&"shot_fx"):
-				var shot_fx: Object = shot_rig.call(&"shot_fx")
-				if shot_fx != null:
-					shot_fx.set(&"roof", presentation.shot_roof)
+		_present_roof(delta, eye)
 
 	# A position report once a second: the only way to see where a browser client thinks it is.
 	_report_timer += delta
@@ -93,6 +81,23 @@ func _present_frame(delta: float) -> void:
 	var t_rest := Time.get_ticks_usec()
 	_present_frame_rest()
 	ArenaFrameProbe.add(&"c_rest", t_rest)
+
+## The roof the world's physics layout names, for the name tags, the roof sounds and the shot effects.
+func _present_roof(delta: float, eye: Vector3) -> void:
+	var stack_now := game.player_stack
+	if stack_now != null and stack_now.physics != null and stack_now.physics.layout != null:
+		if _roof_layout != stack_now.physics.layout:
+			_roof_layout = stack_now.physics.layout
+			_roof_mask = _roof_layout.mask_of([&"world"])
+			_tag_mask = _roof_layout.mask_of([&"world", &"prop"])
+		sync_name_tags(_tag_mask)
+		presentation.follow_roof(delta, eye, get_viewport().world_3d.direct_space_state, _roof_mask)
+		var shot_rig: Object = player.weapons if player != null else null
+		if shot_rig != null and is_instance_valid(shot_rig) and shot_rig.has_method(&"shot_fx"):
+			var shot_fx: Object = shot_rig.call(&"shot_fx")
+			if shot_fx != null:
+				shot_fx.set(&"roof", presentation.shot_roof)
+
 
 func _process(delta: float) -> void:
 	var t := Time.get_ticks_usec()
@@ -265,6 +270,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_pressed():
 		return
 
+	_press_action(event)
+
+## A key or button press read through its action in `ArenaBindings`: the prop tool, the lamp, the views and the slots.
+func _press_action(event: InputEvent) -> void:
 	# In a mode where players use props the Launch key is the prop tool's grab and the Bash
 	# key its freeze (the launch moves to its own key, `launch_action`).
 	if props_on_e() and _is(event, ArenaBindings.LAUNCH):
@@ -310,6 +319,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _is(event, ArenaBindings.WEAPON_LAST):
 		# The last weapon, which is the switch players make most.
 		_wanted_slot = _last_slot
+
 
 ## Where this client thinks it is, as one line. What the console's `where` prints.
 func describe_position() -> PackedStringArray:

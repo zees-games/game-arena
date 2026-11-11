@@ -198,21 +198,7 @@ func _build_netcode() -> DotResult:
 	net.auto_tick = false
 	net.config_file = ""
 
-	var config := DotNetConfig.new()
-	config.tick_rate = game.tick_rate
-	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
-	config.interpolation_buffer = ArenaGame.client_interp_buffer(config.snapshot_rate)
-	config.enable_prediction = true
-	config.enable_lag_compensation = false  # rewinding is a server's job
-	config.max_entities_per_snapshot = 0
-	# From the game: a quantised position decoded against the wrong range is a different position.
-	config.world_extent = ArenaGame.NET_WORLD_EXTENT
-	# By name, as a pack runs on whatever dot-net its shell carries (docs/netcode.md, "A frame's cost").
-	if &"reconcile_once_per_frame" in config:
-		config.set(&"reconcile_once_per_frame", ArenaFrameProbe.launch_value("cl_reconcile_per_snapshot") != "1")
-	# And no replay when the snapshot matches the prediction; `cl_replay_always 1` replays every one.
-	if &"skip_matching_replays" in config:
-		config.set(&"skip_matching_replays", ArenaFrameProbe.launch_value("cl_replay_always") != "1")
+	var config := _client_net_config()
 	net.config = config
 	add_child(net)
 	var started := net.setup()
@@ -275,16 +261,7 @@ func _build_netcode() -> DotResult:
 	extras.map_changing.connect(_on_map_changing)
 	extras.map_changed.connect(_on_map_changed)
 
-	bridge.hello_received.connect(_on_hello)
-	bridge.notice_received.connect(_on_notice)
-	bridge.vote_received.connect(_on_vote)
-	bridge.kill_received.connect(_on_kill)
-	bridge.hit_received.connect(_on_hit)
-	bridge.killview_received.connect(_on_killview)
-	bridge.award_received.connect(_on_award)
-	bridge.stomp_received.connect(_on_stomp)
-	bridge.grenade_fx_received.connect(_on_grenade_fx)
-	bridge.match_received.connect(_on_match)
+	_connect_bridge_events()
 
 	# The one thing that writes an RTT sample: without it the input lead omits flight time
 	# and past ~30 ms every command arrives late.
@@ -297,6 +274,40 @@ func _build_netcode() -> DotResult:
 		link.connect("spawned", _announce, CONNECT_ONE_SHOT)
 
 	return net.start()
+
+
+## The client's netcode settings: the server's rates, prediction on, rewinding left to the server.
+func _client_net_config() -> DotNetConfig:
+	var config := DotNetConfig.new()
+	config.tick_rate = game.tick_rate
+	config.snapshot_rate = ArenaGame.snapshot_rate_for(game.tick_rate)
+	config.interpolation_buffer = ArenaGame.client_interp_buffer(config.snapshot_rate)
+	config.enable_prediction = true
+	config.enable_lag_compensation = false  # rewinding is a server's job
+	config.max_entities_per_snapshot = 0
+	# From the game: a quantised position decoded against the wrong range is a different position.
+	config.world_extent = ArenaGame.NET_WORLD_EXTENT
+	# By name, as a pack runs on whatever dot-net its shell carries (docs/netcode.md, "A frame's cost").
+	if &"reconcile_once_per_frame" in config:
+		config.set(&"reconcile_once_per_frame", ArenaFrameProbe.launch_value("cl_reconcile_per_snapshot") != "1")
+	# And no replay when the snapshot matches the prediction; `cl_replay_always 1` replays every one.
+	if &"skip_matching_replays" in config:
+		config.set(&"skip_matching_replays", ArenaFrameProbe.launch_value("cl_replay_always") != "1")
+	return config
+
+
+## What the bridge relays from the wire, onto the handlers that draw it.
+func _connect_bridge_events() -> void:
+	bridge.hello_received.connect(_on_hello)
+	bridge.notice_received.connect(_on_notice)
+	bridge.vote_received.connect(_on_vote)
+	bridge.kill_received.connect(_on_kill)
+	bridge.hit_received.connect(_on_hit)
+	bridge.killview_received.connect(_on_killview)
+	bridge.award_received.connect(_on_award)
+	bridge.stomp_received.connect(_on_stomp)
+	bridge.grenade_fx_received.connect(_on_grenade_fx)
+	bridge.match_received.connect(_on_match)
 
 
 ## READY, and the field of view setting the kill view of a victim of mine draws through.
