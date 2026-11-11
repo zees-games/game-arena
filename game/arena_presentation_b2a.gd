@@ -22,7 +22,8 @@ const RECORDED := {
 	&"wall_run": [&"stock", "footsteps/footstep_concrete", 5, -4.0, 1.1, 1.2],
 	&"wall_jump": [&"stock", "landing/landing_light", 1, -4.0, 1.12, 1.2],
 	# A short tick for a hit and a two-note chime for a kill: information, not a noise in the world.
-	&"hit_marker": [&"stock", "interface/tick", 3, 0.0, 0.97, 1.03],
+	# The tick is pitched down to about 0.8 (the recording sounded high and thin to the owner).
+	&"hit_marker": [&"stock", "interface/tick", 3, 0.0, 0.78, 0.84],
 	&"kill_confirmed": [&"stock", "interface/confirm", 2, 0.0, 0.98, 1.02],
 	# The medals are spoken: a word says which medal, where a pitched sweep only said "good".
 	&"medal_first_blood": [&"stock", "announcer/target_eliminated", 1, 0.0, 1.0, 1.0],
