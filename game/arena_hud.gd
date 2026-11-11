@@ -298,11 +298,13 @@ func _present(delta: float) -> void:
 	present_gear()
 	make_room()
 
-	if game == null or strip == null:
-		return
 
+## Everything the strip, the portrait row and the text lines show, off the frame path ([constant SLOW_PERIOD]).
+func _present_slow() -> void:
+	if Engine.is_editor_hint() or game == null or strip == null:
+		return
 	present_scores()
-	_portraits_in -= delta
+	_portraits_in -= SLOW_PERIOD
 	if _portraits_in <= 0.0:
 		_portraits_in = 0.25
 		present_portraits()

@@ -54,14 +54,28 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_waited += delta
-	_run_ready()
-	if _pending.is_empty():
+	if _any_claimed():
 		set_process(false)
+		_run_ready.call_deferred()
 	elif _waited >= WAIT_SECONDS:
-		for line: String in _pending:
-			DotLog.warn(CHANNEL, "launch command '+%s' names nothing the console knows; dropped" % line)
-		_pending.clear()
 		set_process(false)
+		_give_up.call_deferred()
+
+
+## Whether the console claims any waiting line yet; the frame's whole cost until one does.
+func _any_claimed() -> bool:
+	if console == null or not is_instance_valid(console):
+		return false
+	for line: String in _pending:
+		if bool(console.call(&"claims", line.get_slice(" ", 0))):
+			return true
+	return false
+
+
+func _give_up() -> void:
+	for line: String in _pending:
+		DotLog.warn(CHANNEL, "launch command '+%s' names nothing the console knows; dropped" % line)
+	_pending.clear()
 
 
 ## Lines still waiting for their name.
@@ -84,3 +98,4 @@ func _run_ready() -> void:
 		else:
 			DotLog.warn(CHANNEL, "launch command '%s' failed: %s" % [line, result.error if result != null else "no result"])
 	_pending = left
+	set_process(not _pending.is_empty() and _waited < WAIT_SECONDS)

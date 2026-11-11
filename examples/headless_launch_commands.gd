@@ -52,6 +52,7 @@ func _run() -> void:
 	_check(late[0] == 3, "a name bound later runs on a following frame (late_one %d)" % late[0])
 	_check(runner.pending().size() == 1, "the unknown name is still waiting (%s)" % [runner.pending()])
 	runner._process(ArenaLaunchCommands.WAIT_SECONDS)
+	await get_tree().process_frame
 	_check(runner.pending().is_empty() and not runner.is_processing(), "and is given up on after the wait")
 
 	_report(CHECKS)

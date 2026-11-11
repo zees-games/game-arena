@@ -622,6 +622,21 @@ func _init() -> void:
 	# Before `_ready`, which is where `DotHud` decides between anchoring and fitting, and
 	# follows the viewport's size from then on.
 	fit_design = DESIGN_FRAME
+	# The strip, the portraits and the text lines change a few times a second, not per frame: a timer, so the work (strings, rows) is off the frame path.
+	var slow := Timer.new()
+	slow.wait_time = SLOW_PERIOD
+	slow.autostart = true
+	slow.timeout.connect(_present_slow)
+	add_child(slow, false, Node.INTERNAL_MODE_BACK)
+
+
+## Seconds between the slow HUD parts (clock, scores, portraits, objective and flag lines).
+const SLOW_PERIOD := 0.1
+
+
+## The slow parts; `ArenaHud` fills it in.
+func _present_slow() -> void:
+	pass
 
 
 ## Arena's own colour over whichever theme the player picked: gold for "yours" (your ring, row, slot and streak). Everything else (plates, words, ink, key caps) is the theme's,

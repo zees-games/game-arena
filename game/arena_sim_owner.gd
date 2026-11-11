@@ -33,7 +33,7 @@ func _process(_delta: float) -> void:
 	set_process(false)
 	var quota: DotBotQuota = module.get("_bot_quota")
 	if quota != null and quota.mode_cvar != null:
-		quota.quota_cvar.force_set(str(quota.quota_cvar.get_int() + 1))
+		quota.quota_cvar.force_set(String.num_int64(quota.quota_cvar.get_int() + 1))
 		quota.mode_cvar.force_set("fill")
 
 

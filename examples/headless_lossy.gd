@@ -147,7 +147,7 @@ func _physics_rest(server_tick: int) -> void:
 		var applied := int(predictor.get("_corrections_applied"))
 		var input_tick := (_clients["A"]["net"] as DotNetManager).clock.input_tick()
 		if _hop_clock_seen >= 0 and input_tick != _hop_clock_seen + 1:
-			_hop_steps.append("%d:%+d" % [server_tick - _hop_from, input_tick - _hop_clock_seen - 1])
+			_hop_steps.append(Vector2i(server_tick - _hop_from, input_tick - _hop_clock_seen - 1))
 		_hop_clock_seen = input_tick
 		if applied != _hop_fix_seen:
 			_hop_fixes.append([server_tick, float(predictor.get("_worst_error")), applied - _hop_fix_seen, int(predictor.get("_last_replay_ticks")), input_tick])
@@ -813,7 +813,7 @@ func _hop_section(title: String, pilot: bool, seconds: float) -> void:
 	corrections -= excused
 	if corrections > 0:
 		print("      corrections [server tick, metres, count, ticks replayed, input tick] %s from %d; holes %s; all starved %s; clock steps %s" % [
-			_hop_fixes, hop_from, holes, _hop_starved.filter(func(t: int) -> bool: return t >= hop_from - 3), _hop_steps])
+			_hop_fixes, hop_from, holes, _hop_starved.filter(func(t: int) -> bool: return t >= hop_from - 3), _hop_steps.map(func(v: Vector2i) -> String: return "%d:%+d" % [v.x, v.y])])
 	_hop_steps.clear()
 	_hop_clock_seen = -1
 

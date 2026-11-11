@@ -237,9 +237,18 @@ func _local_commands(move: DotFpsCommand) -> Dictionary:
 
 	return out
 
+## The followed player's id as the string key spectate wants, rebuilt only when the id changes.
+var _roam_id := -1
+var _roam_key := ""
+
+
 func is_roaming() -> bool:
-	return game != null and game.spectate != null and player != null \
-		and game.spectate.is_roaming(str(player.player_id))
+	if game == null or game.spectate == null or player == null:
+		return false
+	if _roam_id != player.player_id:
+		_roam_id = player.player_id
+		_roam_key = String.num_int64(_roam_id)
+	return game.spectate.is_roaming(_roam_key)
 
 func _touch_held(id: StringName) -> bool:
 	return _touch != null and bool(_touch.call(&"is_held", id))

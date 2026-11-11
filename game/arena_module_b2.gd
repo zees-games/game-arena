@@ -436,9 +436,7 @@ func _keep_bots() -> void:
 	var bots := bridge.bot_ids()
 
 	# Named from dot-bot's pool, never a person's name and never "Bot 3".
-	var taken: Array = []
-	for p in game.players():
-		taken.append(p.display_name)
+	var taken: Array = game.players().map(func(p) -> String: return p.display_name)
 	var _kept := _bot_roster.keep(wanted, bots,
 		func(bot_name: String) -> int: return bridge.add_bot(bot_name),
 		func(id: int) -> void: bridge.remove_bot(id),

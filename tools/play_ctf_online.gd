@@ -113,10 +113,10 @@ func _process(_delta: float) -> void:
 		return
 	var hud = _client.get("hud")
 	if hud != null:
-		var line := str(hud.carrying_flag_text())
+		var line: String = hud.carrying_flag_text()
 		if line != "":
 			_carry_line = line
-			_shot("carrying")
+			_shot.call_deferred("carrying")
 
 
 func _shot(name: String) -> void:

@@ -23,8 +23,18 @@ var ctf: DotObjectiveCtf = null
 
 var _views := {}
 static var _icon_texture: ImageTexture = null
-## What each flag was last seen doing: {team: [state, carrier]}, to raise [signal ArenaGameState.ctf_seen] on a change.
-var _last := {}
+## What each flag was last seen doing ({team: state} and {team: carrier}), to raise [signal ArenaGameState.ctf_seen] on a change.
+var _last_state := {}
+var _last_carrier := {}
+## Each flag's parts looked up once at build: {team: [plate, icon, dist]}, so a frame does no node lookup.
+var _parts := {}
+## The distance label's last shown tenth of a metre per team, so the text is rebuilt only when it changes.
+var _dist_tenth := {}
+## Teams seen this refresh; kept and cleared so a frame allocates nothing.
+var _seen := {}
+## Formats the distance; held as a callable because it runs only when the shown tenth changes.
+var _format_distance: Callable = distance_text
+const NODE_NAMES := {1: &"Flag1", 2: &"Flag2", 3: &"Flag3", 4: &"Flag4"}
 ## Who held each flag last frame: {team: player}, to let go of their arm.
 var _holders := {}
 ## How fast a flag in flight is eased toward the position the server last sent.
@@ -58,7 +68,8 @@ func view_position(team: int) -> Vector3:
 func refresh() -> void:
 	if ctf == null or not is_instance_valid(ctf) or ctf.manager == null:
 		return
-	var seen := {}
+	var seen := _seen
+	seen.clear()
 	for flag in ctf.flags():
 		var team := flag.home_team()
 		seen[team] = true
@@ -74,9 +85,10 @@ func refresh() -> void:
 		_see(flag)
 		var carried := flag.state == DotObjectiveFlag.State.CARRIED
 		view.basis = Basis.from_scale(Vector3.ONE * (CARRIED_SCALE if carried else 1.0))
-		(view.get_node("Plate") as Node3D).visible = not carried
+		var parts: Array = _parts[team]
+		(parts[0] as Node3D).visible = not carried
 		view.visible = true
-		_mark(view)
+		_mark(team, parts[1], parts[2])
 		var c := _carrier_of(flag) if carried else null
 		if c != null:
 			ArenaFlagCarry.pose_view(view, c, get_viewport().get_camera_3d() if is_inside_tree() else null, CARRIED_SCALE)
@@ -88,6 +100,8 @@ func refresh() -> void:
 		if not seen.has(team):
 			(_views[team] as Node3D).queue_free()
 			_views.erase(team)
+			_parts.erase(team)
+			_dist_tenth.erase(team)
 
 
 ## The indicator settings the server sent (`ArenaGameState.ctf_view`); both on without a game.
@@ -100,9 +114,7 @@ func see_through() -> bool:
 
 
 ## The marker over [param view]: shown or not, through walls or not, and the distance from the eye in metres ("19.4m").
-func _mark(view: Node3D) -> void:
-	var icon := view.get_node("Icon") as Sprite3D
-	var dist := view.get_node("Dist") as Label3D
+func _mark(team: int, icon: Sprite3D, dist: Label3D) -> void:
 	var on := indicator_on()
 	var through := see_through()
 	icon.visible = on
@@ -113,9 +125,14 @@ func _mark(view: Node3D) -> void:
 		return
 	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if cam == null:
-		dist.text = ""
+		if _dist_tenth.get(team, -1) != -1:
+			dist.text = ""
+			_dist_tenth[team] = -1
 		return
-	dist.text = distance_text(cam.global_position.distance_to(icon.global_position))
+	var tenth := int(roundf(maxf(cam.global_position.distance_to(icon.global_position), 0.0) * 10.0))
+	if _dist_tenth.get(team, -1) != tenth:
+		_dist_tenth[team] = tenth
+		dist.text = _format_distance.call(tenth * 0.1)
 
 
 ## "19.4m": one decimal, metres (a Godot unit is a metre).
@@ -154,11 +171,14 @@ static func icon_texture() -> ImageTexture:
 ## Raise [signal ArenaGameState.ctf_seen] when [param flag] changed state since the last frame (not for the first sight of it).
 func _see(flag: DotObjectiveFlag) -> void:
 	var team := flag.home_team()
-	var was: Array = _last.get(team, [])
-	_last[team] = [flag.state, flag.carrier]
-	if was.is_empty() or was[0] == flag.state or game == null:
+	var known: bool = _last_state.has(team)
+	var was_state: int = _last_state.get(team, -1)
+	var was_carrier: String = _last_carrier.get(team, "")
+	_last_state[team] = flag.state
+	_last_carrier[team] = flag.carrier
+	if not known or was_state == flag.state or game == null:
 		return
-	var by := int(was[1]) if str(was[1]).is_valid_int() else 0
+	var by := int(was_carrier) if was_carrier.is_valid_int() else 0
 	var what := &""
 	match flag.state:
 		DotObjectiveFlag.State.CARRIED:
@@ -167,7 +187,7 @@ func _see(flag: DotObjectiveFlag) -> void:
 		DotObjectiveFlag.State.DROPPED:
 			what = &"dropped"
 		DotObjectiveFlag.State.HOME:
-			what = &"captured" if was[0] == DotObjectiveFlag.State.CARRIED else &"returned"
+			what = &"captured" if was_state == DotObjectiveFlag.State.CARRIED else &"returned"
 	if what != &"":
 		game.ctf_seen.emit(what, team, by)
 
@@ -211,7 +231,7 @@ func _build(team: int) -> Node3D:
 	pole_mat.albedo_color = Color(0.85, 0.85, 0.88)
 
 	var root := Node3D.new()
-	root.name = "Flag%d" % team
+	root.name = NODE_NAMES.get(team, &"Flag")
 	add_child(root)
 
 	var pole := MeshInstance3D.new()
@@ -283,4 +303,5 @@ func _build(team: int) -> Node3D:
 	light.light_energy = 0.8
 	light.position = Vector3(0.0, 1.5, 0.0)
 	root.add_child(light)
+	_parts[team] = [plate, icon, dist]
 	return root

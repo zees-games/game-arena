@@ -155,7 +155,7 @@ var _hop_starved_seen := 0
 ## Per frame of a hop section that corrected A: [server tick, the worst error, corrections].
 var _hop_fixes: Array = []
 var _hop_fix_seen := 0
-var _hop_steps := PackedStringArray()
+var _hop_steps: Array[Vector2i] = []
 var _hop_clock_seen := -1
 
 ## A's input tick its sprint pattern starts on (-1 off), and whether the wall script holds sprint.
