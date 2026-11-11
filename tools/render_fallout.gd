@@ -103,6 +103,11 @@ func _photograph(game, me, id: String, rank: int) -> void:
 		await process_frame
 		var path := ProjectSettings.globalize_path("%s/fallout_%s_%d_%d.png" % [OUT_DIR, id, rank, n])
 		root.get_texture().get_image().save_png(path)
+		await _seq.record(self, path)
+
+
+## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
 
 
 func _wait(sec: float) -> void:
