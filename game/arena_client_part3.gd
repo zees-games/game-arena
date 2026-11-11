@@ -57,6 +57,7 @@ func _ready() -> void:
 	game.defer_map_io = true
 	var built := game.setup(_startup_map() if _offline else ArenaMap.dm_box())
 
+	ArenaLoadTimeline.mark("setup: game built")
 	if not built.ok:
 		DotLog.result(CHANNEL, "the arena could not be built", built)
 		return
@@ -72,6 +73,7 @@ func _ready() -> void:
 	_build_ragdolls()
 	_build_killcam()
 	_build_killview()
+	ArenaLoadTimeline.mark("setup: projectiles, ragdolls, killcam, kill view")
 	if _offline:
 		# Solo, the world is this process's and there is no KILL message: the death the game
 		# decided is on the kill's entry.
@@ -88,7 +90,9 @@ func _ready() -> void:
 	# settings document and a screen built first would have laid itself out from the
 	# defaults.
 	_build_presentation()
+	ArenaLoadTimeline.mark("setup: presentation")
 	_build_interface()
+	ArenaLoadTimeline.mark("setup: interface")
 
 	# The player's look and crosshair settings, onto the two things they shape. After both
 	# exist, and pushed rather than waited for: a value loaded from disk has not changed,
@@ -109,6 +113,7 @@ func _ready() -> void:
 			_start_remote_workbench()
 		if netted.ok and _sim_host != null:
 			_bind_host_console()
+	ArenaLoadTimeline.mark("setup: netcode built")
 
 	# The server's arena_ambient* (a link tells them) drive the quiet layer; the player's sliders multiply on top.
 	if presentation != null and presentation.ambient != null:
@@ -123,6 +128,7 @@ func _ready() -> void:
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
 	_suspend_input(platform.is_input_blocked())
+	ArenaLoadTimeline.mark("setup: platform")
 
 ## The view key: the other view if the server's `mp_forceview` allows it, a line if not.
 ## dot-game's render quality follows `platform.settings`, which arena leaves unset, so the menu's

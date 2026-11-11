@@ -626,6 +626,7 @@ func _arm(body: ArenaPlayer) -> void:
 	if body == null or body.camera == null or view_model != null:
 		return
 
+	ArenaLoadTimeline.mark("arming")
 	view_model = AwViewModel.new()
 	view_model.name = "Hands"
 	view_model.feel_rules = game.feel_rules
@@ -634,6 +635,7 @@ func _arm(body: ArenaPlayer) -> void:
 	body.camera.add_child(view_model)
 	view_arms = ArenaViewArms.mount(self, view_model, body, ArenaAvatars.look_of(body.avatar, StringName("arena-player-%08d" % body.player_id)), game)
 	body.arm_first_person(view_model, _offline)
+	ArenaLoadTimeline.mark("hands armed")
 	_prewarm_weapons.call_deferred(body)
 	_prewarm_models.call_deferred()
 
