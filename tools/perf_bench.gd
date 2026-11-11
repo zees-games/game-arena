@@ -9,7 +9,7 @@ const ArenaNetContext := preload("../game/arena_net_context.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client. Windowed on a GPU box (tools/perf_bench.sh) or headless through hv: `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
-## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots).
+## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
 
 var _pilot := true
 var _motor_us := false
@@ -27,6 +27,8 @@ var _max_steps := -1
 var _fine := true
 var _ablate := PackedStringArray()
 var _sim_host := false
+var _sched0 := {}
+var _sched := {}
 
 
 func _configure() -> void:
@@ -125,7 +127,65 @@ func _add_counters(game: Object) -> void:
 		profiler.call(&"add_counter", "bots", func() -> int: return maxi((game.call("players") as Array).size() - 1, 0), "arena.bot")
 
 
+## Per thread of this process and of the sim host: run time, run-queue wait, slices and context switches (Linux /proc).
+func _sched_snapshot() -> Dictionary:
+	var out := {}
+	if OS.get_name() != "Linux":
+		return out
+	var pids := {"client": OS.get_process_id()}
+	var host: Variant = client.get("_sim_host") if client != null else null
+	if host != null and int(host.get("_pid")) > 0:
+		pids["server"] = int(host.get("_pid"))
+	for who: String in pids:
+		var base := "/proc/%d/task" % pids[who]
+		var threads := {}
+		for tid: String in DirAccess.get_directories_at(base):
+			var st := _proc_read(base + "/" + tid + "/schedstat").split(" ", false)
+			if st.size() < 3:
+				continue
+			var cs := {"voluntary_ctxt_switches": 0, "nonvoluntary_ctxt_switches": 0}
+			for l in _proc_read(base + "/" + tid + "/status").split("\n", false):
+				var kv := l.split(":", false, 1)
+				if kv.size() == 2 and cs.has(kv[0]):
+					cs[kv[0]] = int(kv[1].strip_edges())
+			threads[tid] = {"run": int(st[0]), "wait": int(st[1]), "slices": int(st[2]), "vcs": cs.voluntary_ctxt_switches, "nvcs": cs.nonvoluntary_ctxt_switches,
+				"comm": _proc_read(base + "/" + tid + "/comm").strip_edges(), "main": int(tid) == pids[who]}
+		out[who] = threads
+	return out
+
+
+## /proc files report size 0, so read them line by line rather than by length.
+func _proc_read(path: String) -> String:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	var s := ""
+	while not f.eof_reached():
+		s += f.get_line() + "\n"
+	return s
+
+
+## Wall time split per thread over the recording, ms per frame: running and waiting for a CPU (the rest is sleeping or blocked); context switches per frame.
+func _sched_report(a: Dictionary, b: Dictionary) -> Dictionary:
+	var n := maxf(frames_recorded(), 1.0)
+	var res := {}
+	for who: String in b:
+		var rows := []
+		for tid: String in b[who]:
+			var t1: Dictionary = b[who][tid]
+			var t0: Dictionary = (a.get(who, {}) as Dictionary).get(tid, {"run": 0, "wait": 0, "slices": 0, "vcs": 0, "nvcs": 0})
+			var run: float = (int(t1.run) - int(t0.run)) / 1e6 / n
+			if run < 0.05 and not t1.main:
+				continue
+			rows.append({"tid": tid, "comm": t1.comm, "main": t1.main, "run_ms": snappedf(run, 0.01),
+				"rq_wait_ms": snappedf((t1.wait - t0.wait) / 1e6 / n, 0.01), "vcs": snappedf((t1.vcs - t0.vcs) / n, 0.01), "nvcs": snappedf((t1.nvcs - t0.nvcs) / n, 0.01)})
+		rows.sort_custom(func(x: Dictionary, y: Dictionary) -> bool: return float(x.run_ms) > float(y.run_ms))
+		res[who] = rows
+	return res
+
+
 func _record_begin() -> void:
+	_sched0 = _sched_snapshot()
 	ArenaFrameProbe.fine = _fine
 	_apply_ablate()
 	DotFpsPhysicsBody.profile = _queries
@@ -150,6 +210,10 @@ func _record_begin() -> void:
 
 
 func _record_end() -> void:
+	_sched = _sched_report(_sched0, _sched_snapshot())
+	for who: String in _sched:
+		for r: Dictionary in _sched[who]:
+			say("sched %s %s%s run %.2f rq %.2f vcs %.2f nvcs %.2f ms|n/frame" % [who, r.comm, " (main)" if r.main else "", r.run_ms, r.rq_wait_ms, r.vcs, r.nvcs])
 	ArenaFrameProbe.fine = false
 	DotFpsPhysicsBody.profile = false
 	DotFpsMotor.profile = false
@@ -215,7 +279,7 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		hulls["batch"] = ArenaHullGrid.batch
 		hulls["batch_rows"] = ArenaHullGrid.batch_rows
 		hulls["batch_faults"] = ArenaHullGrid.batch_faults
-	return {"phases_ms_per_frame": phases, "weapon_us_per_call": weapon, "native": native, "hulls": hulls, "sim_host": _sim_host and client.get("_sim_host") != null, "net": ArenaNetContext.describe(client.get("bridge")), "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
+	return {"phases_ms_per_frame": phases, "weapon_us_per_call": weapon, "native": native, "hulls": hulls, "sim_host": _sim_host and client.get("_sim_host") != null, "sched": _sched, "net": ArenaNetContext.describe(client.get("bridge")), "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries}
 
 
 func _apply_ablate() -> void:
@@ -254,5 +318,11 @@ func _apply_ablate() -> void:
 				for p: Object in client.get("game").call("players"):
 					if p.get("camera") == null:
 						p.visible = false
+			# Splits the engine's render phase: no3d keeps the canvas and the present (swapchain, the Xvfb copy) but draws no
+			# 3D scene; norender skips RenderingServer.draw altogether, leaving physics and scripts.
+			"no3d":
+				get_viewport().disable_3d = true
+			"norender":
+				RenderingServer.render_loop_enabled = false
 	if not _ablate.is_empty():
 		say("ablate %s" % ",".join(_ablate))
