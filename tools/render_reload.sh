@@ -4,6 +4,8 @@
 # Run it on a GPU box: ../gpu.sh shot game-arena tools/render_reload.sh
 #   tools/render_reload.sh [--frames 12 --left 1 --only grenade_launcher,revolver]
 set -euo pipefail
+# A short frame sequence beside each still (DotShotSeq), so Nightly -> Review can play and scrub it.
+export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-8} DOT_SHOT_SECS=${DOT_SHOT_SECS:-1}
 cd "$(dirname "$0")/.."
 # A short frame sequence beside each still (DotShotSeq), so Nightly -> Review can play it.
 export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-8} DOT_SHOT_SECS=${DOT_SHOT_SECS:-1}

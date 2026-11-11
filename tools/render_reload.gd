@@ -469,6 +469,7 @@ func _shot_vp(sv: SubViewport, file: String) -> void:
 	await process_frame
 	await RenderingServer.frame_post_draw
 	var _saved := sv.get_texture().get_image().save_png("%s/%s.png" % [OUT_DIR, file])
+	await _seq.record(self, "%s/%s.png" % [OUT_DIR, file], sv)
 
 
 func _render() -> Image:
