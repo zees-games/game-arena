@@ -8,7 +8,9 @@ const ArenaSimOwner := preload("arena_sim_owner.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
-## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N`. It writes PATH once it accepts players, and quits a few seconds after its player left.
+## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_sections 1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
+
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
 const CHANNEL := "arena.sim_server"
 const REPORT_SEC := 5.0
@@ -31,6 +33,10 @@ func _ready() -> void:
 		return
 	# The brains on worker threads: the same match as one thread (headless_botthreads), less of each tick.
 	ArenaBotThreads.threads = maxi(0, int(_arg("--bot_threads", str(default_bot_threads()))))
+	# Where a tick goes: the [ArenaFrameProbe] sections the server's tick records (srv_*, tick_*, p_*, bot_*, w_*),
+	# printed per tick beside each SIM_HOST line. Off by default: each section costs two clock reads.
+	if _arg("--sim_sections", "0") == "1":
+		ArenaFrameProbe.set_interval(1.0e9)
 	var data := "user://sim_host"
 	var _made := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data))
 
@@ -150,8 +156,25 @@ func _report(net: DotNetManager) -> void:
 			ticks / secs, Engine.physics_ticks_per_second,
 			(int(now[&"server_sim_usec"]) - int(last[&"server_sim_usec"])) / 1000.0 / ticks,
 			(int(now[&"server_send_usec"]) - int(last[&"server_send_usec"])) / 1000.0 / ticks])
+		if ArenaFrameProbe.on():
+			print(sections_line(ArenaFrameProbe._sections, ticks))
+			ArenaFrameProbe._reset()
 		last = now
 		t0 = Time.get_ticks_usec()
+
+
+## `SIM_HOST_SECTIONS name ms/tick xcalls/tick, ...`, costliest first. Sections nest (srv_game holds tick_players,
+## which holds p_weapons), so the lines do not add up to the sim time.
+static func sections_line(sections: Dictionary, ticks: int) -> String:
+	var rows: Array = []
+	for key: StringName in sections:
+		var row: PackedInt64Array = sections[key]
+		rows.append([row[0] / 1000.0 / ticks, String(key), float(row[1]) / ticks])
+	rows.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	var parts := PackedStringArray()
+	for r: Array in rows:
+		parts.append("%s %.3f x%.1f" % [r[1], r[0], r[2]])
+	return "SIM_HOST_SECTIONS ms/tick | " + ", ".join(parts)
 
 
 func _die(why: String) -> void:
