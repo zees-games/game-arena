@@ -92,6 +92,11 @@ static func add(section: StringName, since_usec: int) -> void:
 	_sections[section] = row
 
 
+## Charges [param usec] already measured elsewhere (a counter difference) to [param section], as [method add] would.
+static func charge(section: StringName, usec: int) -> void:
+	add(section, Time.get_ticks_usec() - usec)
+
+
 ## The clock a run of [method lap]s starts from; 0 while [member fine] is off.
 static func lap_start() -> int:
 	return Time.get_ticks_usec() if fine else 0

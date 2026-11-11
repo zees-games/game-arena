@@ -1,5 +1,7 @@
 extends "arena_client_part2.gd"
 
+const ArenaProcessStamps := preload("arena_process_stamps.gd")
+
 func _ready() -> void:
 	# The server a hosted game started runs this same main scene: an export takes no scene path.
 	if ArenaSimHost.is_server_child():
@@ -12,6 +14,7 @@ func _ready() -> void:
 	# Before anything reads the art table: the first read caches it.
 	ArenaWeaponSkins.apply()
 	ArenaFrameProbe.from_launch()
+	ArenaProcessStamps.bracket(self)
 
 	if ArenaSimHost.wanted(get_tree().current_scene == self):
 		await _start_sim_host()

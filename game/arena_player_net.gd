@@ -1,6 +1,7 @@
 extends DotNetBehaviour
 
 const ArenaContent := preload("arena_content.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 const ArenaNetBridge := preload("arena_net_bridge.gd")
 const ArenaNetCommand := preload("arena_net_command.gd")
 const ArenaPlayer := preload("arena_player.gd")
@@ -252,7 +253,9 @@ func _net_simulate(tick: int, delta: float) -> void:
 	else:
 		_predict(tick, delta)
 
+	var t_pull := Time.get_ticks_usec()
 	pull()
+	ArenaFrameProbe.add(&"net_pull", t_pull)
 
 
 ## One predicted tick, which may be a replay.

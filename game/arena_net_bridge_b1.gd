@@ -251,10 +251,18 @@ func server_tick(tick: int) -> void:
 	_send_teams(0, tick)
 	_send_scores(0, tick)
 
+	# While the sections are on, dot-net's own counters split srv_net: srv_n_sim is its
+	# behaviour loop (the game tick and every pull run inside it), srv_n_send the history and
+	# snapshots, and what is left of srv_net is the input it handed out.
+	var counted: Dictionary = net.perf_counters() if net != null and ArenaFrameProbe.on() else {}
 	var t_net := Time.get_ticks_usec()
 	if net != null:
 		net.server_tick(tick)
 	ArenaFrameProbe.add(&"srv_net", t_net)
+	if not counted.is_empty():
+		var now: Dictionary = net.perf_counters()
+		ArenaFrameProbe.charge(&"srv_n_sim", int(now[&"server_sim_usec"]) - int(counted[&"server_sim_usec"]))
+		ArenaFrameProbe.charge(&"srv_n_send", int(now[&"server_send_usec"]) - int(counted[&"server_send_usec"]))
 
 	ensure_game_ticked(tick)
 	var t_hits := Time.get_ticks_usec()
@@ -274,12 +282,16 @@ func ensure_game_ticked(tick: int) -> void:
 	var t_game := Time.get_ticks_usec()
 	game.tick(cmds)
 	ArenaFrameProbe.add(&"srv_game", t_game)
+	var t_view := Time.get_ticks_usec()
 	_tick_killview()
+	ArenaFrameProbe.add(&"srv_killview", t_view)
 
 	# The toys where the physics left them, before the snapshot: a toy's own `_net_simulate`
 	# can run before the player whose turns this tick.
+	var t_toys := Time.get_ticks_usec()
 	for behaviour: ArenaToyNet in _toy_nets:
 		behaviour.pull()
+	ArenaFrameProbe.add(&"srv_toypull", t_toys)
 
 
 ## The command table [method ArenaGame.tick] takes, built from what each peer sent.
