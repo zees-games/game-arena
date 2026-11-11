@@ -42,9 +42,10 @@ func _ready() -> void:
 	_connect_game_signals()
 
 	# Offline, `-- --map <id>` picks the map, as it does for a dedicated server; a
-	# connected client is told the server's map and rebuilds on it.
+	# connected client is told the server's map and rebuilds on it, unless it was built on that map
+	# already: a sim host's map is known before the join, so the level is built once (_first_map).
 	game.defer_map_io = true
-	var built := game.setup(_startup_map() if _offline else ArenaMap.dm_box())
+	var built := game.setup(_first_map())
 
 	ArenaLoadTimeline.mark("setup: game built")
 	if not built.ok:
@@ -137,6 +138,15 @@ func _setup_frame() -> void:
 	tree.multiplayer_poll = false
 	await tree.process_frame
 	tree.multiplayer_poll = polling
+
+## The map the game is first built on: offline the command line's, under a sim host the one its server was
+## started on (so the announcement finds the level already built), and otherwise the dm_box placeholder.
+func _first_map() -> ArenaMap:
+	if _offline:
+		return _startup_map()
+	var asked := ArenaSimHost.asked_map_id() if _sim_host != null else ""
+	var map := ArenaMap.by_id(StringName(asked)) if asked != "" else null
+	return map if map != null else ArenaMap.dm_box()
 
 ## What the game tells the client: a player joined, a flag event, the mode's banner.
 func _connect_game_signals() -> void:

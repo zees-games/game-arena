@@ -74,7 +74,7 @@ func start(bots: int) -> DotResult:
 		args.append_array(["--path", project])
 	args.append_array(["--", SERVER_FLAG, "1", "--port", str(port), "--bots", str(bots),
 		"--ready", _ready_path])
-	var map := ask_map if ask_map != "" else _arg("--map")
+	var map := asked_map_id()
 	var mode := ask_mode if ask_mode != "" else _arg("--mode")
 	if map != "":
 		args.append_array(["--map", map])
@@ -187,6 +187,11 @@ static func _free_port() -> int:
 		if bound:
 			return port
 	return 0
+
+
+## The map the server child is started on: the tool's ask, else `--map`; "" leaves it to the server.
+static func asked_map_id() -> String:
+	return ask_map if ask_map != "" else _arg("--map")
 
 
 static func _arg(flag: String) -> String:

@@ -208,6 +208,8 @@ var _next_bot_id: int = 100
 
 ## The meshes of the map currently drawn. Replaced on a map change.
 var _level: Node3D = null
+## The map [member _level] was drawn from, so an announcement of the same map need not draw it again.
+var _level_map: ArenaMap = null
 var _level_busy := false
 
 ## The map's sun and environment (`ArenaMapLighting.build`), replaced with the level.

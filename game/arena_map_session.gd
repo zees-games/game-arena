@@ -78,6 +78,17 @@ func change_to_map(map: DotMapDef) -> DotResult:
 			String(map.id)
 		)
 
+	if _built_on_already(map):
+		# The teardown and rebuild of an identical world was the longest frame of a sim host's join.
+		current = map
+		rotation.note_played(map.id)
+		time_limit.start(float(map.expected_seconds) * 3.0 if map.expected_seconds > 0 else -1.0)
+		DotLog.debug(LOG_CHANNEL, "the announced map is the one this client was set up on", {
+			"map": String(map.id),
+		})
+		changed_world()
+		return DotResult.success(world)
+
 	if changing_now:
 		return DotResult.fail(
 			DotError.CODE_STATE,
@@ -163,6 +174,15 @@ func change_to_map(map: DotMapDef) -> DotResult:
 	changed_world()
 
 	return DotResult.success(world)
+
+
+## A client's first announcement naming the local map its game was set up on, with no mode of its own:
+## nothing changes. Delivered maps are excluded, since the pack can be a different version of the id.
+func _built_on_already(map: DotMapDef) -> bool:
+	return (
+		current == null and not game.is_authority and map.is_local()
+		and game.map != null and game.map.id == map.id and _mode_for(map) == null
+	)
 
 
 ## Fetches a delivered map's pack, if it is not mounted yet, and gives `ArenaImportedMaps`

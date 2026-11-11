@@ -89,6 +89,7 @@ func _enter_level(release: bool) -> void:
 	var slice := DotFrameSlice.new()
 	await game.build_map_io_async(slice)
 	ArenaLoadTimeline.mark("map_io_built")
+	var drawn := game.map
 	var made: Node3D = await game.map.to_scene_async(slice)
 	ArenaLoadTimeline.mark("map_scene_built")
 	if _level != null and is_instance_valid(_level):
@@ -96,6 +97,7 @@ func _enter_level(release: bool) -> void:
 		# free(), not queue_free(): a deferred free leaves two levels drawn for a frame.
 		_level.free()
 	_level = made
+	_level_map = drawn
 	_classify_level()
 	add_child(_level)
 	_light()
@@ -133,9 +135,14 @@ func _on_map_changed(map: DotMapDef) -> void:
 			"map": String(map.id),
 		})
 
-	# The rebuilt game's drop layer is empty; fill it before the cover lifts (the hold must precede the map's release).
-	_repool_drops()
-	await _enter_level(true)
+	if _level_map != null and _level_map == game.map and game.map_io != null:
+		# The game was not rebuilt (ArenaMapSession: the client was set up on this map), so the drawn
+		# level, the movers and the drop pool are still this map's.
+		gate.release(&"map")
+	else:
+		# The rebuilt game's drop layer is empty; fill it before the cover lifts (the hold must precede the map's release).
+		_repool_drops()
+		await _enter_level(true)
 
 	# A mirroring client's combat manager is never rebuilt — `change_map` is the server's —
 	# and its trace is what the copies of every rocket and grenade bounce off. Left alone,
