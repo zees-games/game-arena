@@ -34,6 +34,21 @@ func _fill_fx_pool(budget_msec: float) -> bool:
 	var _drawn := fx_pool.fill_flashes()
 	return full
 
+## arena_weapons level that splits one weapon's view prewarm into stages run under a frame budget.
+const STAGED_PREWARM_LEVEL := 14
+
+## Warms [param art] on [param spare] for at most about [param budget_msec] (a stage overruns it, a whole weapon
+## cost 300-600 ms in one frame). True when the weapon is done. An older arena_weapons warms it whole.
+func _prewarm_in_stages(spare: AwViewModel, art: AwWeaponVisual, budget_msec: float) -> bool:
+	if DotAddonApi.build_level("arena_weapons") < STAGED_PREWARM_LEVEL:
+		spare.prewarm(art)
+		return true
+	if bool(_warm.get("stepping", false)):
+		_warm.stepping = spare.call(&"prewarm_step", budget_msec)
+	else:
+		_warm.stepping = spare.call(&"prewarm_begin", art)
+	return not bool(_warm.stepping)
+
 func _prewarm_tick() -> void:
 	var body: Variant = _warm.get("body")
 	if not is_instance_valid(body) or body.camera == null:
@@ -44,12 +59,13 @@ func _prewarm_tick() -> void:
 	match phase_now:
 		0:
 			var arts: Array = _warm.arts
-			var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
-			while _warm.next < arts.size() and Time.get_ticks_msec() < until:
-				if not is_instance_valid(_warm.spare):
-					break
-				(_warm.spare as AwViewModel).prewarm(arts[_warm.next] as AwWeaponVisual)
-				_warm.next += 1
+			var slice := int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8
+			var until := Time.get_ticks_usec() + slice * 1000
+			while _warm.next < arts.size() and Time.get_ticks_usec() < until and is_instance_valid(_warm.spare):
+				var step_start := Time.get_ticks_usec()
+				if _prewarm_in_stages(_warm.spare as AwViewModel, arts[_warm.next] as AwWeaponVisual, float(until - step_start) / 1000.0):
+					_warm.next += 1
+				_warm.worst_step = maxi(int(_warm.get("worst_step", 0)), Time.get_ticks_usec() - step_start)
 			if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
 				if is_instance_valid(_warm.spare):
 					(_warm.spare as Node).queue_free()
@@ -57,7 +73,7 @@ func _prewarm_tick() -> void:
 				gate.warm_up(AwViewModel.prepared_materials())
 				gate.warm_up(AwShotFx.warm())
 				_warm.phase = 1
-				ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000])
+				ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms, longest step %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000, int(_warm.get("worst_step", 0)) / 1000])
 		1:
 			if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
 				var rig: Node3D = DotMuzzleFlash.prewarm(body.camera)
