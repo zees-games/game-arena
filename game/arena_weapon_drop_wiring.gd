@@ -99,6 +99,7 @@ static func teardown(game) -> void:
 		game.weapon_drops = null
 	game.drop_held.clear()
 	game.use_held.clear()
+	game.remove_meta(&"drop_keys_idle")
 
 
 ## The drop key's rising edge throws the weapon in hand along the aim; the use key's takes the
@@ -134,12 +135,26 @@ static func input(game, id: int, player, pair: Array) -> void:
 			and (not auto_pickup or game.weapon_drops.count() == 0):
 		return
 	var def := class_def_of(game, id)
-	var velocity: Vector3 = player.controller.state.velocity
-	var _thrown: int = _drop_key(game, id).step(game.weapon_drops, player.arsenal, player.muzzle_position(),
-		player.aim_direction(), id, held and not swallowed.has(id), game.get_physics_process_delta_time(), def, velocity)
+	var drop_pressed: bool = held and not swallowed.has(id)
+	# Bit 1: the drop key's last step was unpressed; bit 2: the use key's. A key stepped unpressed is idle (no hold, not
+	# down), so stepping it unpressed again does nothing and returns 0 / false; skipped, it saves a rules resolve and the
+	# use key's prompt query per player per tick while a drop lies on the floor. A missing entry steps the key.
+	var idle: Dictionary = game.get_meta(&"drop_keys_idle", {})
+	game.set_meta(&"drop_keys_idle", idle)
+	var settled: int = idle.get(id, 0)
+	if drop_pressed or (settled & 1) == 0:
+		var velocity: Vector3 = player.controller.state.velocity
+		var _thrown: int = _drop_key(game, id).step(game.weapon_drops, player.arsenal, player.muzzle_position(),
+			player.aim_direction(), id, drop_pressed, game.get_physics_process_delta_time(), def, velocity)
+		settled = (settled & ~1) if drop_pressed else (settled | 1)
+		idle[id] = settled
 	if held and not was:
 		return
-	if _use_hold(game, id, player, def, use_now):
+	var use_busy := false
+	if use_now or (settled & 2) == 0:
+		use_busy = _use_hold(game, id, player, def, use_now)
+		idle[id] = (settled & ~2) if use_now else (settled | 2)
+	if use_busy:
 		pass
 	elif auto_pickup and game.weapon_drops.count() > 0:
 		var _taken: int = game.weapon_drops.take_for(player.arsenal, player.controller.state.position + Vector3.UP * 0.5, id, def)

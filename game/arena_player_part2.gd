@@ -440,7 +440,12 @@ func tick_pre(tick: int, movement_command: DotFpsCommand) -> void:
 	_tick_start = controller.state.position
 	_yaw_before_tick = controller.state.yaw
 	# The previous state's position before this tick replaces it: two ticks back after it.
-	_position_two_back = controller.render_state(0.0).position
+	# Read by [method _render_state] alone, which only a drawn player calls (`present`): the read copies the
+	# whole state, ~10 us a player a tick on a server that draws nobody. Unset, the drawing holds at the tick.
+	if camera != null or interpolate_body:
+		_position_two_back = controller.render_state(0.0).position
+	elif _position_two_back.is_finite():
+		_position_two_back = Vector3(NAN, NAN, NAN)
 	ladder.now = tick
 	var view := DotFpsMotor._view_basis(controller.state.yaw, 0.0)
 	var intent: Vector3 = view.right * movement_command.move.x + view.forward * movement_command.move.y
