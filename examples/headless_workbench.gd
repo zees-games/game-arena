@@ -41,7 +41,7 @@ func _run() -> void:
 	var files: Dictionary = wb.exporter.call("collect")
 	var text: String = files.get("cfg/game/game-arena/config_horde/game.yml", "")
 	_check(text == "horde_cap: 12\n", "the export holds just the changed field in the cfg layout")
-	var root := "user://cfgtest_arena_export"
+	var root := "user://cfgtest_arena_export_%d" % OS.get_process_id()
 	var dir := root.path_join("game/game-arena/config_horde")
 	DirAccess.make_dir_recursive_absolute(dir)
 	var out := FileAccess.open(dir.path_join("game.yml"), FileAccess.WRITE)

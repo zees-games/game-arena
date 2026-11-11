@@ -11,7 +11,10 @@ const ArenaHorde := preload("../game/arena_horde.gd")
 const ArenaAmbience := preload("../game/arena_ambience.gd")
 const ArenaConfig := preload("../game/arena_config.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
-const ROOT := "user://arena_cfgtest"
+## One directory per suite process (the probe child is handed its parent's): user:// is shared by
+## every copy of this project on a box, and two suites at once wrote and deleted each other's cfg files.
+const ROOT_ARG := "--cfgroot="
+var ROOT := _root()
 const GAME := "game-arena"
 const SECTIONS := 5
 const CHECKS := 43
@@ -23,6 +26,13 @@ var _finished := 0
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.FATAL)
 	_run.call_deferred()
+
+
+func _root() -> String:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with(ROOT_ARG):
+			return a.substr(ROOT_ARG.length())
+	return "user://arena_cfgtest_%d" % OS.get_process_id()
 
 
 func _run() -> void:
@@ -166,7 +176,7 @@ func _write(rel: String, text: String) -> void:
 func _child() -> String:
 	var out: Array = []
 	OS.execute(OS.get_executable_path(), ["--headless", "--path", ProjectSettings.globalize_path("res://"),
-		"res://examples/headless_config.tscn", "--", "--probe", "--arena-respawn-delay-sec=4.5", "--arena-award-nemesis-at=6"], out, true)
+		"res://examples/headless_config.tscn", "--", "--probe", ROOT_ARG + ROOT, "--arena-respawn-delay-sec=4.5", "--arena-award-nemesis-at=6"], out, true)
 	return "".join(PackedStringArray(out))
 
 
