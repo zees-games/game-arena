@@ -8,6 +8,8 @@ extends DotCameraTool
 
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMapLighting := preload("../maps/arena_map_lighting.gd")
+const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
+const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 
 var _map: ArenaMap = null
@@ -23,7 +25,17 @@ func _map_now() -> ArenaMap:
 
 
 func _build_level() -> Node3D:
-	return _map_now().to_scene()
+	var level := _map_now().to_scene()
+
+	# An imported map's to_scene() is the drawn world only (its solid is the game's, see
+	# ArenaMap.movement_body), so the cameras flew through every wall and the check read
+	# "unprotected camera in or behind the level on 0 frames" as an unarmed FAIL. Give the level
+	# the convex-hull solid the game collides with.
+	if _map_now().is_imported():
+		var manifest := ArenaImportedMaps.manifest(_map_now().id)
+		level.add_child(ArenaBspMap.build_collision(manifest, _map_now().manifest_path.get_base_dir()))
+
+	return level
 
 
 func _build_lighting() -> Node3D:
