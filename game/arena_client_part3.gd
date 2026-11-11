@@ -23,6 +23,7 @@ func _ready() -> void:
 	timeline.name = "LoadTimeline"
 	timeline.gate = gate
 	add_child(timeline)
+	await _setup_frame()
 
 	game = ArenaGame.new()
 	game.name = "Game"
@@ -48,11 +49,13 @@ func _ready() -> void:
 	ArenaLoadTimeline.mark("setup: game built")
 	if not built.ok:
 		DotLog.result(CHANNEL, "the arena could not be built", built)
+		_set_client_processing(true)
 		return
 
 	# The world, which the server does not need and a player cannot do without. Held, because a map
 	# change has to take it away again — see `_on_map_changed`.
 	_enter_level.call(_offline)
+	await _setup_frame()
 
 	projectile_view = ArenaProjectileView.new()
 	projectile_view.name = "Projectiles"
@@ -83,6 +86,7 @@ func _ready() -> void:
 		presentation.bind_look(_sampler.tunables)
 		if hud != null:
 			presentation.bind_crosshair(hud.crosshair)
+	await _setup_frame()
 
 	if _offline:
 		_start_offline()
@@ -111,6 +115,28 @@ func _ready() -> void:
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
 	_suspend_input(platform.is_input_blocked())
 	ArenaLoadTimeline.mark("setup: platform")
+	if not DotPlatform.is_headless():
+		_set_client_processing(true)
+		# The first draw of the built level and HUD compiles their pipelines (672 ms on staging02): marked, so it is not mistaken for setup.
+		RenderingServer.frame_pre_draw.connect(func() -> void: ArenaLoadTimeline.mark("level draw begins"), CONNECT_ONE_SHOT)
+		RenderingServer.frame_post_draw.connect(func() -> void: ArenaLoadTimeline.mark("level draw done"), CONNECT_ONE_SHOT)
+
+## A frame boundary between setup steps, under the cover, in a client that draws. The build was one
+## 2.7 s frame on staging02 (setup 1012 ms, then the first draw 672 ms, the 32 players 320 ms and the
+## arming): a window that stops drawing that long reads as hung. The client's own frame and tick stay off
+## until setup ends, and the tree's multiplayer is not polled across the boundary: a link can already be
+## joined (the sim host, a shell's server) and its messages would reach the game's net node before the
+## netcode builds it, and be dropped. They wait in the peer instead, as they did behind the one long frame.
+## Headless (suites, servers) builds in one go, as before.
+func _setup_frame() -> void:
+	if DotPlatform.is_headless() or not is_inside_tree():
+		return
+	_set_client_processing(false)
+	var tree := get_tree()
+	var polling := tree.multiplayer_poll
+	tree.multiplayer_poll = false
+	await tree.process_frame
+	tree.multiplayer_poll = polling
 
 ## What the game tells the client: a player joined, a flag event, the mode's banner.
 func _connect_game_signals() -> void:

@@ -613,10 +613,7 @@ func _start_solo_workbench() -> void:
 ## `--sim_host 1`: the solo game in its own process, joined over loopback. Nothing of this client exists
 ## yet, so its callbacks stay off until the server answers; a failure plays the stock solo game.
 func _start_sim_host() -> void:
-	set_process(false)
-	set_physics_process(false)
-	set_process_input(false)
-	set_process_unhandled_input(false)
+	_set_client_processing(false)
 	var host := ArenaSimHost.new()
 	host.name = "SimHost"
 	add_child(host)
@@ -626,10 +623,14 @@ func _start_sim_host() -> void:
 		_sim_host = host
 	else:
 		host.queue_free()
-	set_process(true)
-	set_physics_process(true)
-	set_process_input(true)
-	set_process_unhandled_input(true)
+	_set_client_processing(true)
+
+## The client's own frame, tick and keys, off while `_ready` waits part-built (the sim host's boot, `_setup_frame`).
+func _set_client_processing(on: bool) -> void:
+	set_process(on)
+	set_physics_process(on)
+	set_process_input(on)
+	set_process_unhandled_input(on)
 
 
 func _start_offline() -> void:

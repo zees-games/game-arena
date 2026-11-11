@@ -70,9 +70,10 @@ func _find_spot(game) -> Dictionary:
 
 func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT_DIR))
-	var game = client.get("game")
+	var game = null
 	for i in range(80):
 		await _wait(0.25)
+		game = client.get("game")  # Set part-way through a windowed client's `_ready`, which spans frames.
 		if game != null and game.map != null and client.get("player") != null:
 			break
 	var changed = game.change_map(load("res://maps/arena_map.gd").by_id(StringName(_map)))
