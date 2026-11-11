@@ -39,14 +39,20 @@ func _frames(n: int) -> void:
 ## The client's own warm-up for flashes (ArenaClient._prewarm_tick, phase 1), without the gate.
 func _warm(cam: Camera3D, host: AwShotFx) -> void:
 	DotMuzzleFlash.pin_scenes(1 << 30)
+	# Wait on the pools being built, not on the clock: the game's 4 s give-up (and a frame cap, which runs out in
+	# milliseconds of wall time on a headless box) opened this gate on a loaded machine with the pools unbuilt, and
+	# every flash after it then built nodes.
+	var old_timeout := DotWeaponMuzzle.warm_timeout_msec
+	DotWeaponMuzzle.warm_timeout_msec = 120000
 	var rig: Node3D = DotMuzzleFlash.prewarm(cam)
 	for category in ["pistol", "smg", "rifle", "shotgun"]:
 		for fp in [true, false]:
 			DotWeaponMuzzle.warm(host, category, null, fp)
-	var waited := 0
-	while not DotWeaponMuzzle.warm_done() and waited < 600:
+	var deadline := Time.get_ticks_msec() + 120000
+	while not DotWeaponMuzzle.warm_done() and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
-		waited += 1
+	_check(DotWeaponMuzzle.warm_done(), "the flash pools were built before the shots")
+	DotWeaponMuzzle.warm_timeout_msec = old_timeout
 	await _frames(4)
 	if rig != null:
 		rig.queue_free()
