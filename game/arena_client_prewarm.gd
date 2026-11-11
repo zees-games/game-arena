@@ -244,14 +244,35 @@ func _prewarm_models() -> void:
 		if art is AwWeaponVisual and (art as AwWeaponVisual).has_model():
 			_model_paths.append((art as AwWeaponVisual).model_path)
 	_model_paths_next = 0
+	# The reads run on the loader's own threads: a big model read inline held one frame for seconds
+	# (7455 ms on a slow disk), and the tick below only takes a file once it has landed.
+	for path: Variant in _model_paths:
+		var real := AwModelCache.resolve(str(path))
+		if ResourceLoader.exists(real):
+			ResourceLoader.load_threaded_request(real)
 	ArenaLoadTimeline.mark("model reads start: %d files" % _model_paths.size())
 	gate.hold(&"weapon_models", "Preparing weapon models")
 	get_tree().process_frame.connect(_prewarm_models_tick)
 
+## A client freed mid-read takes what the loader holds for it, or those scenes outlive the run.
+func _drain_model_reads() -> void:
+	while _model_paths_next >= 0 and _model_paths_next < _model_paths.size():
+		var real := AwModelCache.resolve(str(_model_paths[_model_paths_next]))
+		if ResourceLoader.load_threaded_get_status(real) != ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			var _dropped := ResourceLoader.load_threaded_get(real)
+		_model_paths_next += 1
+
 func _prewarm_models_tick() -> void:
 	var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate != null and gate.has_method(&"slice_msec") else 8)
 	while _model_paths_next < _model_paths.size() and Time.get_ticks_msec() < until:
+		var real := AwModelCache.resolve(str(_model_paths[_model_paths_next]))
+		if ResourceLoader.load_threaded_get_status(real) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			break
+		# Landed (or never requested). Taking it from the loader frees the loader's hold on it; kept in
+		# `landed` while the cache loads it, that load is a cache hit, a few ms at most.
+		var landed: Resource = ResourceLoader.load_threaded_get(real) if ResourceLoader.load_threaded_get_status(real) != ResourceLoader.THREAD_LOAD_INVALID_RESOURCE else null
 		AwModelCache.warm([_model_paths[_model_paths_next]])
+		landed = null
 		_model_paths_next += 1
 	if _model_paths_next >= _model_paths.size():
 		if get_tree().process_frame.is_connected(_prewarm_models_tick):

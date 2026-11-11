@@ -152,6 +152,7 @@ func touch_next_weapon() -> void:
 ## back and ask for a click on return, which also re-arms browser pointer lock.
 func _exit_tree() -> void:
 	super()
+	_drain_model_reads()
 	ArenaTickBudget.shed_now = 0.0
 	if _local_team_menu != null:
 		_local_team_menu.release()
