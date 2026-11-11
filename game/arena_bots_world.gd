@@ -19,6 +19,8 @@ const PROJECTILE_BEHAVIOUR := "dot_weapon_projectile.gd"
 
 ## How long a bot cooks a grenade before letting go, seconds. Well inside the frag's 3 s fuse.
 const COOK_SEC := 0.3
+## The KOTH layout's hill (ArenaObjectives.build), the point the bots' team jobs gather round.
+const HILL := &"hill"
 
 
 ## How long a throw may take from the switch to the switch back before it is given up, seconds.
@@ -154,6 +156,8 @@ class World:
 	var brains: Dictionary = {}
 	var _loadouts: Dictionary = {}
 	var _tick: int = -1
+	var _waypoints_tick: int = -1
+	var _waypoints_held := PackedVector3Array()
 	var _contacts: Array = []
 	var _by_id: Dictionary = {}
 	var _players: Dictionary = {}
@@ -309,13 +313,18 @@ class World:
 						(cell as Array).append(c)
 		ArenaFrameProbe.lap(&"br_near", t_lap)
 
-	## The flags as the HUD shows them, into [member DotBotWorld.objective], for the bots' team jobs (defend, attack,
-	## support). Outside a flag mode the objective has no flags and every bot roams as in a free-for-all.
+	## The flags as the HUD shows them, or the hill, into [member DotBotWorld.objective], for the bots' team jobs (defend,
+	## attack, support). Outside those modes the objective is empty and every bot roams as in a free-for-all.
 	func _objective_refresh(teams: bool) -> void:
 		var objectives: Variant = game.get("objectives") if teams else null
 		var ctf: Variant = objectives.get("ctf") if objectives is Object else null
 		if not (ctf is DotObjectiveCtf):
-			if objective != null:
+			var hill := _hill_of(objectives)
+			if hill != null:
+				if objective == null:
+					objective = DotBotObjective.new()
+				objective.set_point(hill.def.area.centre, hill.def.area.radius, hill.owner_team)
+			elif objective != null:
 				objective.clear_flags()
 			return
 		if objective == null:
@@ -336,6 +345,14 @@ class World:
 			if flag.state == DotObjectiveFlag.State.CARRIED and flag.carrier.is_valid_int():
 				carrier = flag.carrier.to_int()
 			objective.set_flag(team, flag.def.area.centre, flag.position(), carrier, int(flag.state), capture)
+
+	## The hill of a hill mode, or null.
+	func _hill_of(objectives: Variant) -> DotObjective:
+		var manager: Variant = objectives.get("manager") if objectives is Object else null
+		if not (manager is DotObjectiveManager):
+			return null
+		var hill := (manager as DotObjectiveManager).objective(HILL)
+		return hill if hill != null and hill.def != null and hill.def.area != null else null
 
 	## Hands the tiers the live people's eyes and views and the bots' positions (a person is a contact with no brain).
 	func _tier_begin() -> void:
@@ -571,6 +588,14 @@ class World:
 		return points
 
 	func _waypoints() -> PackedVector3Array:
+		# Every replan asks (DotBotGoal's spots too); spawns and landings are gathered once per tick, the weighting keeps its own cache.
+		if _waypoints_tick != _tick or _tick < 0:
+			_waypoints_held = _places()
+			_waypoints_tick = _tick
+		var stats: Variant = game.get("demo_stats")
+		return (stats as Object).call(&"weight_waypoints", _waypoints_held) if stats is Object else _waypoints_held
+
+	func _places() -> PackedVector3Array:
 		var out := PackedVector3Array()
 		var map: Variant = game.get("map")
 		var spawns: Array = (map as Object).get("spawns") if map is Object else []
@@ -583,8 +608,7 @@ class World:
 			out.append(spawn.origin)
 		if surf != null:
 			out.append_array(surf.call(&"landing_points"))
-		var stats: Variant = game.get("demo_stats")
-		return (stats as Object).call(&"weight_waypoints", out) if stats is Object else out
+		return out
 
 	## A route that may ride a ramp or walk through a teleport: the mesh's own answer once the
 	## map's ride edges are linked into it, the walked corners otherwise.

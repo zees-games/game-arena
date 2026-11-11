@@ -17,11 +17,11 @@ func _default_maps() -> Array[StringName]:
 
 
 func _one(id: StringName) -> void:
-	# This checks the walk out of spawn on one shared preset: a patient persona may hold a sight line from its spawn and fight there.
-	ArenaBots.personas_mode = ArenaBots.PERSONAS_OFF
 	var game := await _boot_map(id, BOTS)
 	if game == null:
 		return
+	# Every bot with its own persona, whatever an archived bot_personas says.
+	ArenaBots.personas_mode = ""
 	var world := _world
 	var minds := _make_minds(BOTS)
 	var start := {}
@@ -54,8 +54,10 @@ func _one(id: StringName) -> void:
 			for o in BOTS:
 				if o != b and nav != null and nav.joined(sp, start[o + 1]):
 					linked += 1
-			var brain: DotBotBrain = (minds[b + 1] as ArenaBots.Mind).brain
+			var mind: ArenaBots.Mind = minds[b + 1]
+			var brain: DotBotBrain = mind.brain
 			var tag := " %s unstick %d" % [str(brain.last.state), brain._unstick.total] if brain != null else ""
+			tag += " persona %s" % (mind.persona.id if mind.persona != null else &"none")
 			detail.append("%.1f,%.1f,%.1f(nav %.1f, joined to %d of %d others%s)" % [sp.x, sp.y, sp.z, off, linked, BOTS - 1, tag])
 	print("MAP %s: stuck %d of %d (moved < %.0f m in %.0f s); nav ready=%s; %s" % [id, stuck, BOTS, MIN_MOVE, SECONDS,
 		str(nav != null and nav.is_ready()), " ".join(detail)])
