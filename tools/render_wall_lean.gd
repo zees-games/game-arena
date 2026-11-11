@@ -19,6 +19,8 @@ var _settle := 0
 var _armed := false
 var _tick := 1
 var _look := Vector2(180.0, 0.0)
+var _clip := DotShotSeq.new()  # DOT_SHOT_FRAMES: a clip of each view, the case held until it is done
+var _clipped := false
 
 
 func _initialize() -> void:
@@ -74,10 +76,18 @@ func _process(delta: float) -> bool:
 		return _cases.is_empty() and _armed and _tick > 3
 	_player.view_now = null
 	_player.present(delta)
+	if _clip.follow(root):
+		return false
+	if _clipped:
+		_clipped = false
+		_case = {}
+		return false
 	if _settle > 0:
 		_settle -= 1
 		return false
 	root.get_texture().get_image().save_png(OUT_DIR.path_join(_case["file"]))
 	print("wrote ", _case["name"])
-	_case = {}
+	_clipped = _clip.start_follow(OUT_DIR.path_join(_case["file"]))
+	if not _clipped:
+		_case = {}
 	return false

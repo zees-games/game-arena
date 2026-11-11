@@ -23,6 +23,8 @@ var _frames := 0
 var _move := Vector2.ZERO
 var _buttons := 0
 var _attack := false
+var _clip := DotShotSeq.new()  # DOT_SHOT_FRAMES: a clip of each posture, held while the scene keeps running
+var _after_clip := false
 
 
 func _initialize() -> void:
@@ -68,12 +70,24 @@ func _physics_process(_delta: float) -> bool:
 func _process(delta: float) -> bool:
 	_player.present(delta)
 	_feel.drive(_cross, _player.arsenal, _player.camera.fov)
+	if _clip.follow(root):
+		return false
+	if _after_clip:
+		return _next_phase()
 	_frames += 1
 	if _frames < SETTLE[_phase]:
 		return false
 	var spread: float = _player.arsenal.spread_now()
 	root.get_texture().get_image().save_png(OUT_DIR.path_join(FILES[_phase]))
 	print(NAMES[_phase], " (", _player.arsenal.current().def.id, "): cone ", snappedf(spread, 0.01), " degrees, crosshair spread ", snappedf(float(_cross.get("_spread_degrees")), 0.01))
+	if _clip.start_follow(OUT_DIR.path_join(FILES[_phase])):
+		_after_clip = true
+		return false
+	return _next_phase()
+
+
+func _next_phase() -> bool:
+	_after_clip = false
 	_phase += 1
 	_frames = 0
 	if _phase >= NAMES.size():

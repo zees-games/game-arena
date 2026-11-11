@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Renders the view model against a wall (see tools/render_wall_lean.gd) to screenshots/wall_lean/, and a contact sheet if PIL is there.
 set -euo pipefail
+# A short frame sequence beside each still (DotShotSeq), so Nightly -> Review can play and scrub it.
+export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-8} DOT_SHOT_SECS=${DOT_SHOT_SECS:-1}
 cd "$(dirname "$0")/.."
 rm -f screenshots/wall_lean/*.png
 timeout 500 xvfb-run -a godot --path . --resolution 480x270 --script res://tools/render_wall_lean.gd -- "$@"
