@@ -103,23 +103,7 @@ func _run() -> void:
 	var kv: Node = _client.get("killview")
 	var kh: Node = _client.get("killcam")
 	_aim_at(killer, me)
-	var t_death := 0.0
-	var attacker: int = killer.player_id
-	var type: StringName = ArenaContent.DAMAGE_BULLET
-	if _scenario == "world":
-		attacker = 0
-		type = ArenaContent.DAMAGE_WORLD
-	elif _scenario == "fall":
-		attacker = 0
-		type = ArenaContent.DAMAGE_FALL
-	elif _scenario == "killer_left":
-		_client.call("_remove_offline_bot", killer.player_id)
-	for i in 60:
-		_hit(gm, attacker, me, type)
-		if not me.is_alive():
-			break
-		await _wait(1.0)
-	_check(not me.is_alive(), "the player died")
+	var attacker: int = await _kill_player(gm, killer, me)
 	var first_active := -1.0
 	var first_play := -1.0
 	var done := -1.0
@@ -170,6 +154,12 @@ func _run() -> void:
 			await _wait(0.3)
 			_shot("f_respawned")
 			break
+	_judge(kv, first_active, first_play, done, respawn, cam_in_view)
+	print("FAILS ", _fails)
+	quit(1 if _fails > 0 else 0)
+
+
+func _judge(kv: Node, first_active: float, first_play: float, done: float, respawn: float, cam_in_view: bool) -> void:
 	print("TIMES active=%.1f first_frame=%.1f ended=%.1f respawn=%.1f" % [first_active, first_play, done, respawn])
 	if _scenario in ["world", "fall", "killer_left"]:
 		_check(first_play < 0.0, "no killer replay plays for a death with no live killer")
@@ -180,8 +170,26 @@ func _run() -> void:
 	_check(respawn > 0.0, "the player respawned")
 	_check(_client.get("hud").visible, "the HUD is back")
 	_check(not (kv.camera != null and kv.camera.current) or not kv.is_active(), "the replay camera is not left current")
-	print("FAILS ", _fails)
-	quit(1 if _fails > 0 else 0)
+
+
+func _kill_player(gm: Object, killer: Object, me: Object) -> int:
+	var attacker: int = killer.player_id
+	var type: StringName = ArenaContent.DAMAGE_BULLET
+	if _scenario == "world":
+		attacker = 0
+		type = ArenaContent.DAMAGE_WORLD
+	elif _scenario == "fall":
+		attacker = 0
+		type = ArenaContent.DAMAGE_FALL
+	elif _scenario == "killer_left":
+		_client.call("_remove_offline_bot", killer.player_id)
+	for i in 60:
+		_hit(gm, attacker, me, type)
+		if not me.is_alive():
+			break
+		await _wait(1.0)
+	_check(not me.is_alive(), "the player died")
+	return attacker
 
 
 ## Every visible body near the replay lens this frame, with what it is: the killer, the victim, or a bystander.

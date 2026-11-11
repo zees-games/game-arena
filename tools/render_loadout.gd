@@ -71,6 +71,27 @@ func _run() -> void:
 		await _wait(0.3)
 		await _shot("arena_loadout_locked")
 	_check(screen.costs_shown() == _costed, "costs are shown only when the server prices something (%s)" % suffix)
+	await _costed_or_free(screen, menu, suffix)
+	screen.show_slot(3)
+	await _shot("arena_loadout_grenades")
+	screen.show_slot(0)
+	for i in screen.choices().size():
+		if str((screen.choices()[i] as Dictionary)["id"]) == "battle_rifle":
+			var _p := screen.pick(i)
+	screen.close()
+	await _wait(0.6)
+	_check(me.arsenal.carries(&"battle_rifle"), "closing sends it, and in warmup it is in the player's hands")
+	await _shot("arena_loadout_equipped")
+
+	# The crosshair: at the hip, then down the sights with the aim key held.
+	me.arsenal.select(AwWeaponIds.SLOT_PRIMARY, client.get("game").current_tick())
+	await _wait(1.0)
+	await _shot("arena_ads_hip")
+	var hud = client.get("hud")
+	await _run_rest(me, hud)
+
+
+func _costed_or_free(screen: Variant, menu: DotMenu, suffix: String) -> void:
 	if _costed:
 		for i in screen.choices().size():
 			if str((screen.choices()[i] as Dictionary)["id"]) == "minigun":
@@ -103,23 +124,6 @@ func _run() -> void:
 		screen.show_slot(0)
 		await _wait(0.3)
 		await _shot("arena_loadout_every_spawn_off")
-	screen.show_slot(3)
-	await _shot("arena_loadout_grenades")
-	screen.show_slot(0)
-	for i in screen.choices().size():
-		if str((screen.choices()[i] as Dictionary)["id"]) == "battle_rifle":
-			var _p := screen.pick(i)
-	screen.close()
-	await _wait(0.6)
-	_check(me.arsenal.carries(&"battle_rifle"), "closing sends it, and in warmup it is in the player's hands")
-	await _shot("arena_loadout_equipped")
-
-	# The crosshair: at the hip, then down the sights with the aim key held.
-	me.arsenal.select(AwWeaponIds.SLOT_PRIMARY, client.get("game").current_tick())
-	await _wait(1.0)
-	await _shot("arena_ads_hip")
-	var hud = client.get("hud")
-	await _run_rest(me, hud)
 
 
 func _run_rest(me, hud) -> void:

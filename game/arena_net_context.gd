@@ -1,10 +1,8 @@
 extends RefCounted
 
-## What a profile or a bench needs to say about where the simulation ran: whether solo play was hosted in a
-## second process (ArenaSimHost), the machine's threads, the server's own last per-second line (ticks/s,
-## sim and send ms/tick, read from its log), and this client's clock and prediction (round trip, input lead,
-## snaps, how many input-lead reports came back late, the server pace the clock follows, reconciles and the
-## ticks they replayed). Read at a recording's start and end, never per frame.
+## What a profile or a bench says about where the simulation ran: sim host or not, threads, the server's
+## last per-second line, and this client's clock and prediction (round trip, input lead and late reports,
+## snaps, server pace, reconciles and replayed ticks). Read at a recording's start and end.
 
 const ArenaSimHost := preload("arena_sim_host.gd")
 

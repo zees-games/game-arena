@@ -100,6 +100,11 @@ func _run() -> void:
 			_n += 1
 			if t > _seconds:
 				break
+	_report()
+	get_tree().quit(0)
+
+
+func _report() -> void:
 	var sorted := _frames.duplicate()
 	sorted.sort()
 	var n := sorted.size()
@@ -139,7 +144,6 @@ func _run() -> void:
 		print("  motor phases us/tick: %s" % ", ".join(parts))
 		print("  native slides %.2f, native tick halves %.2f per player tick" % [float(DotFpsPhysicsBody.native_slides) / maxf(measured, 1.0), float(DotFpsPhysicsBody.native_ticks) / maxf(measured, 1.0)])
 	print("  physics3d active %d islands %d pairs %d" % [Performance.get_monitor(Performance.PHYSICS_3D_ACTIVE_OBJECTS), Performance.get_monitor(Performance.PHYSICS_3D_ISLAND_COUNT), Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)])
-	get_tree().quit(0)
 
 
 var _q0 := 0
