@@ -82,27 +82,7 @@ func _local_commands() -> DotConsoleLocal:
 		func(v: Variant) -> Variant:
 			return DotResult.success(1 if _addon_static(AwViewArms, &"albedo_cache", false, str(v).strip_edges() != "0") else 0)
 	)
-	local.add_var(&"cl_remote_lod", "1 draws remote players nobody can see (off screen, far away) less often; 0 presents every remote player every frame.",
-		func() -> Variant: return 1 if ArenaPlayer.present_lod_enabled else 0,
-		func(v: Variant) -> Variant:
-			ArenaPlayer.present_lod_enabled = str(v).strip_edges() != "0"
-			return DotResult.success(1 if ArenaPlayer.present_lod_enabled else 0)
-	)
-	local.add_var(&"cl_remote_lod_frustum", "1 judges a remote player out of sight by the camera's real view frustum, 0 by a wide cone round the view axis.",
-		func() -> Variant: return 1 if ArenaPlayer.lod_frustum else 0,
-		func(v: Variant) -> Variant:
-			ArenaPlayer.lod_frustum = str(v).strip_edges() != "0"
-			return DotResult.success(1 if ArenaPlayer.lod_frustum else 0)
-	)
-	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default).",
-		func() -> Variant: return ArenaPlayer.lod_off_every,
-		func(v: Variant) -> Variant:
-			var text := str(v).strip_edges()
-			if not text.is_valid_int():
-				return DotResult.fail(DotError.CODE_INVALID, "cl_remote_lod_every takes a whole number of frames")
-			ArenaPlayer.lod_off_every = clampi(text.to_int(), 1, 16)
-			return DotResult.success(ArenaPlayer.lod_off_every)
-	)
+	_add_remote_vars(local)
 	local.add_var(&"cl_killcam_hz", "Most times a second the kill-cam records every body while no replay plays (0: every frame; 60 is the default).",
 		func() -> Variant: return ArenaKillcamBodies.record_hz,
 		func(v: Variant) -> Variant:
@@ -148,6 +128,37 @@ func _local_commands() -> DotConsoleLocal:
 	)
 
 	return local
+
+
+## The remote-body thinning variables (ArenaPlayer.present_lod).
+func _add_remote_vars(local: DotConsoleLocal) -> void:
+	local.add_var(&"cl_remote_lod", "1 draws remote players nobody can see (off screen, far away) less often; 0 presents every remote player every frame.",
+		func() -> Variant: return 1 if ArenaPlayer.present_lod_enabled else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.present_lod_enabled = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.present_lod_enabled else 0)
+	)
+	local.add_var(&"cl_remote_lod_frustum", "1 judges a remote player out of sight by the camera's real view frustum, 0 by a wide cone round the view axis.",
+		func() -> Variant: return 1 if ArenaPlayer.lod_frustum else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.lod_frustum = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.lod_frustum else 0)
+	)
+	local.add_var(&"cl_remote_anim_gate", "1 also thins remote bodies by game time (clip at most 60 Hz past 15 m, off-sight at most 30 Hz); matters above ~100 fps.",
+		func() -> Variant: return 1 if ArenaPlayer.anim_gate_enabled else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.anim_gate_enabled = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.anim_gate_enabled else 0)
+	)
+	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default).",
+		func() -> Variant: return ArenaPlayer.lod_off_every,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_int():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_remote_lod_every takes a whole number of frames")
+			ArenaPlayer.lod_off_every = clampi(text.to_int(), 1, 16)
+			return DotResult.success(ArenaPlayer.lod_off_every)
+	)
 
 
 ## The first-person arm tuning variables.

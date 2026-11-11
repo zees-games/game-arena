@@ -7,8 +7,8 @@ const ArenaKillcamBodies := preload("../game/arena_killcam_bodies.gd")
 ## A bare ArenaPlayer has no controller, so `present` returns at once and the counters in `present_lod` are the whole
 ## story. Run: [code]godot --headless --path . res://examples/headless_remote_lod.tscn[/code]
 
-const SECTIONS := 5
-const CHECKS := 18
+const SECTIONS := 6
+const CHECKS := 22
 
 var _entered := 0
 var _completed := 0
@@ -145,5 +145,37 @@ func _run() -> void:
 	_check(ArenaKillcamBodies.record_hz > 0.0 and 1.0e6 / ArenaKillcamBodies.record_hz < 20000.0, "a gap under 20 ms: a replay at 60 fps loses no frame")
 	_done()
 
+	_test_anim_gate()
 	_root.queue_free()
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
+
+
+func _test_anim_gate() -> void:
+	_section("thinning is a rate, not only a frame count")
+	ArenaPlayer.anim_gate_enabled = true
+	var fast_behind := _body(Vector3(0, 0, 20))
+	var fast_n := 0
+	var fast_frustum := _cam.get_frustum()
+	for _i in 36:  # 36 frames of 4 ms (250 fps): a frame count of 4 alone would be 9 presents; 30 Hz makes it 4
+		var b4 := fast_behind.get("_lod_frames") as int
+		fast_behind.present_lod(0.004, _cam.global_position, -_cam.global_basis.z, fast_frustum)
+		if (fast_behind.get("_lod_frames") as int) <= b4:
+			fast_n += 1
+	_check(fast_n >= 3 and fast_n <= 5, "out of sight at 250 fps: about 30 presents a second (4 of 36 frames)", "%d" % fast_n)
+	ArenaPlayer.anim_gate_enabled = false
+	var ungated := _body(Vector3(0, 0, 20))
+	var ungated_n := 0
+	for _i in 36:
+		var b5 := ungated.get("_lod_frames") as int
+		ungated.present_lod(0.004, _cam.global_position, -_cam.global_basis.z, fast_frustum)
+		if (ungated.get("_lod_frames") as int) <= b5:
+			ungated_n += 1
+	_check(ungated_n == 9, "cl_remote_anim_gate 0: back to every fourth frame (9 of 36)", "%d" % ungated_n)
+	ArenaPlayer.anim_gate_enabled = true
+	var mid := _body(Vector3(0, 0, -30))
+	var _m := _passes(mid, 1)
+	_check(is_equal_approx(mid.get("_anim_min_dt") as float, ArenaPlayer.ANIM_GATE_DT), "in view past 15 m: the clip is stepped at 60 Hz at most")
+	var close := _body(Vector3(0, 0, -8))
+	var _c := _passes(close, 1)
+	_check((close.get("_anim_min_dt") as float) == 0.0, "in view within 15 m: the clip is stepped every frame")
+	_done()
