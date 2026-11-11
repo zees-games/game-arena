@@ -20,7 +20,7 @@ const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 ## [b]Readable over a pale map[/b]: every number is bold with a dark outline, and every
 ## group sits on a dark translucent plate. The first HUD drew thin regular-weight text
 ## straight over white prototype tiles, and health, ammunition and the key hints all but
-## disappeared (`screenshots/dm_box_feel_kill_compat.png` before 2026-10-10).
+## disappeared (`screenshots/dm_box_feel_kill_compat.png`).
 ##
 ## [b]Only arena's own pieces are here[/b]: the ranked portraits, the kill feed with its
 ## weapon silhouettes, the carried weapons, the ability bar. Health, ammunition, the scores
@@ -65,10 +65,9 @@ class Ink:
 			_fonts[italic] = f
 		return _fonts[italic]
 
-	## A HUD colour by dot-ui's name for it (`plate`, `plate_edge`, `text`, `dim`, `highlight`,
-	## `ink`, `keycap`, ...): the theme's on [constant DotHudPiece.THEME_TYPE] as
-	## [param canvas] sees it (the menu sets one on the HUD, see `ArenaClient`), else dot-ui's
-	## default. Read when drawing, so a theme change is followed on the next frame.
+	## A HUD colour by dot-ui's name for it (`plate`, `text`, `dim`, `keycap`, ...): the theme's on
+	## [constant DotHudPiece.THEME_TYPE] as [param canvas] sees it (the menu sets one on the HUD),
+	## else dot-ui's default. Read when drawing, so a theme change shows next frame.
 	static func c(canvas: CanvasItem, key: StringName) -> Color:
 		var control := canvas as Control
 		if control != null and control.has_theme_color(key, &"DotHudPiece"):

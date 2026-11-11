@@ -427,7 +427,7 @@ func _on_client_disconnected(session: DotClientSession, _reason: String) -> void
 
 func _on_player_killed(entry: DotKillFeed.Entry) -> void:
 	# The server log, not chat: every client draws the kill feed top-right, so a chat
-	# line repeated it (owner 2026-11-10). A headless operator still reads kills here.
+	# line repeated it. A headless operator still reads kills here.
 	log_info("kill", {"line": str(entry)})
 
 

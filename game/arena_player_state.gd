@@ -158,7 +158,7 @@ var _severed: bool = false
 var _fell: bool = false
 ## When the body last went down, and whether this client has since seen the player dead: a mirror's
 ## death arrives by snapshot, often after the KILL, and mending on the stale alive flag stood the
-## figure back up to play its own death fall, a second body (owner batch 2026-11-10).
+## figure back up to play its own death fall, a second body.
 var _down_at_ms: int = 0
 var _down_seen_dead: bool = true
 const DOWN_GRACE_MS := 1500

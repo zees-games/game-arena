@@ -125,7 +125,6 @@ game/arena_horde.gd::history	2
 game/arena_horde.gd::long_block	22
 game/arena_hud.gd::history	1
 game/arena_hud.gd::long_block	8
-game/arena_hud_glance.gd::history	1
 game/arena_hud_glance.gd::long_block	5
 game/arena_identity.gd::long_block	1
 game/arena_jail_view.gd::long_block	1

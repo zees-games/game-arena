@@ -95,7 +95,7 @@ func _costed_or_free(screen: Variant, menu: DotMenu, suffix: String) -> void:
 	if _costed:
 		for i in screen.choices().size():
 			if str((screen.choices()[i] as Dictionary)["id"]) == "minigun":
-				var _over := screen.pick(i)
+				screen.pick(i)
 		screen.show_slot(1)
 		var refused := true
 		for i in screen.choices().size():

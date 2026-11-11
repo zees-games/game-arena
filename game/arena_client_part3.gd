@@ -125,9 +125,8 @@ func _ready() -> void:
 	_suspend_input(platform.is_input_blocked())
 
 ## The view key: the other view if the server's `mp_forceview` allows it, a line if not.
-## dot-game's render quality follows `platform.settings`, which arena leaves unset (it keeps its own),
-## so the menu's Texture detail, Anisotropic filtering, AA and sharpness rows did nothing (nightly 1722).
-## The operator's `--render-*` cvars are read again after, as dot-game orders them.
+## dot-game's render quality follows `platform.settings`, which arena leaves unset, so the menu's
+## quality rows did nothing; the operator's `--render-*` cvars are read again after, as dot-game orders.
 func _follow_render_quality() -> void:
 	var quality := platform.render_quality
 	if quality == null or presentation == null or not quality.has_method(&"follow"):

@@ -548,7 +548,7 @@ func _test_bodies_fall_rest(g: ArenaGame, floor_body: StaticBody3D, yard: DotPla
 	_check(client.ragdolls.rules == g.ragdoll_rules, "and it draws under the game's (the server's) rules")
 
 	# Connected, the KILL often lands before the snapshot that says the victim is dead: the stale
-	# alive flag must not stand the figure up again to play a second, standing death (owner batch 2026-11-10).
+	# alive flag must not stand the figure up again to play a second, standing death.
 	yard.rules.style = DotPlayerRagdollRules.Style.RAGDOLL
 	yard.rules.enabled = true
 	player.health.alive = true

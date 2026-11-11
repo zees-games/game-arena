@@ -21,12 +21,9 @@ static var settings_directory: String = PLAYER_SETTINGS
 
 const SOUND_DIR := "res://audio"
 
-## The ids that play recorded files from the family's addons rather than a synthesised stand-in:
-## id -> [folder, file stem, how many, gain dB, pitch low, pitch high]. The folder is
-## &"weapons" (dot-audio's `stock/weapons`), &"stock" (the rest of dot-audio's `stock/`) or
-## &"toys" (dot-props' toy sounds), each found from its addon's script so a mounted pack still
-## finds them. Several files per id and a pitch spread, so twelve shots are not one sample twelve
-## times. The recipes in [method sound_recipes] stay: they answer a build that lacks the files.
+## Ids that play recorded files from the addons: id -> [folder, file stem, how many, gain dB, pitch
+## low, pitch high]. Folder: &"weapons", &"stock" (dot-audio `stock/`) or &"toys" (dot-props). The
+## recipes in [method sound_recipes] stay for a build that lacks the files.
 const RECORDED := {
 	&"fire_rifle": [&"weapons", "rifle_fire", 5, 0.0, 0.95, 1.05],
 	&"fire_shotgun": [&"weapons", "shotgun_fire", 5, 0.0, 0.95, 1.04],

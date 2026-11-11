@@ -212,11 +212,9 @@ func _run() -> void:
 	print("  from the last red spawn, %d of %d spawns are reached in full" % [reached, all_spawns.size()])
 
 	print("-- a player walks up each staircase to the top of the wall beside it")
-	# The two portable stairs (prop_dynamic, solid) against the side walls are the sniper way up, 249 units: the
-	# converter's ramp hull under each (dot-map-convert stair_hulls) is what the body climbs. Hammer (x, y, z) is (x, z, -y)
-	# here. Forward held toward the top landing, no jump: standing (grounded) at wall-top height within 1.5 m of the
-	# landing is on the stairs' top, as the floor round them is 4.7 m lower. (A bot's route stops short: the mesh has no
-	# ramp yet.)
+	# The two portable stairs are the sniper way up: the converter's ramp hull under each is what the body
+	# climbs. Hammer (x, y, z) is (x, z, -y) here. Forward held, no jump: grounded at wall-top height within
+	# 1.5 m of the landing is on the stairs' top (the floor round them is 4.7 m lower).
 	var climber: ArenaPlayer = _game.player_for(1)
 	# The first tick of the match moves the body to its spawn; only after it does a teleport hold.
 	_game.tick({})

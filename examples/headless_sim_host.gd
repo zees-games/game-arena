@@ -90,7 +90,7 @@ func _run() -> void:
 		var p: Object = _client.get("player")
 		return p != null and bool(p.call("is_alive")), 40.0)
 	_check(alive, "the local player is alive on the server")
-	# Owner batch 2026-11-10 item 11: the boot map's match sat IDLE until the first map change.
+	# The boot map's match must start running without waiting for a map change.
 	var running := await _until(func() -> bool:
 		var match_node: Object = game.get("match_node")
 		return match_node != null and int(match_node.get("state")) != DotMatch.State.IDLE, 15.0)
@@ -127,8 +127,8 @@ func _row(prefix: String) -> String:
 	return ""
 
 
-## B and the team screen ask the server process over its link, as a connected client's do (owner batch
-## 2026-11-10: B opened nothing, and asking again was refused as "sending messages too quickly").
+## B and the team screen ask the server process over its link, as a connected client's do; the
+## server must answer and not refuse them as "sending messages too quickly".
 func _menu_checks(host: ArenaSimHost) -> void:
 	var refused := [0]
 	host.link.chat_received.connect(func(payload: Dictionary) -> void:
