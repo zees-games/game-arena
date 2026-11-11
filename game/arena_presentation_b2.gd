@@ -724,6 +724,11 @@ func _build_audio() -> DotResult:
 	if not res.ok:
 		return res.wrap("the arena's audio")
 
+	voice = DotVoiceQueue.new()
+	voice.name = "Voice"
+	voice.setup(audio)
+	add_child(voice)
+
 	steps = DotAudioFootsteps.new()
 	steps.name = "Footsteps"
 	steps.manager = audio
