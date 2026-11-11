@@ -446,9 +446,14 @@ func _arg(args: PackedStringArray, key: String, fallback: String) -> String:
 	return args[i + 1] if i >= 0 and i + 1 < args.size() else fallback
 
 
+## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+
+
 func _shot(file: String) -> Image:
 	var image: Image = await _render()
 	var _saved := image.save_png("%s/%s.png" % [OUT_DIR, file])
+	await _seq.record(self, "%s/%s.png" % [OUT_DIR, file])
 	return image
 
 

@@ -5,6 +5,8 @@
 #   tools/render_reload.sh [--frames 12 --left 1 --only grenade_launcher,revolver]
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# A short frame sequence beside each still (DotShotSeq), so Nightly -> Review can play it.
+export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-8} DOT_SHOT_SECS=${DOT_SHOT_SECS:-1}
 out=screenshots/reload
 args=("$@")
 for i in "${!args[@]}"; do [ "${args[$i]}" = "--out" ] && out="${args[$((i+1))]}"; done

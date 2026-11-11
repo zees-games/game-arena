@@ -48,12 +48,17 @@ func _check(ok: bool, what: String) -> void:
 		_failed += 1
 
 
+## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+
+
 func _shot(file: String) -> void:
 	await process_frame
 	await process_frame
 	await RenderingServer.frame_post_draw
 	var path := ProjectSettings.globalize_path("%s/%s_%s.png" % [_out_dir, _tag, file])
 	var _s := root.get_viewport().get_texture().get_image().save_png(path)
+	await _seq.record(self, path)
 	print("  wrote %s" % path)
 
 

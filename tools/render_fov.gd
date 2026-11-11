@@ -48,6 +48,7 @@ func _run() -> void:
 			await process_frame
 			await RenderingServer.frame_post_draw
 			var _saved := root.get_viewport().get_texture().get_image().save_png(path)
+			await _seq.record(self, path)
 			print("wrote %s (camera fov %.1f, hands scale %.2f)" % [path, me.camera.fov, me.weapons.view_model().scale.x])
 	quit(0)
 
@@ -61,6 +62,10 @@ func _weapons() -> Array:
 				ids.append(StringName(part))
 			return ids
 	return [&"sniper", &"rifle"]
+
+
+## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
 
 
 func _wait(sec: float) -> void:

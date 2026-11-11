@@ -69,6 +69,11 @@ func _run() -> void:
 	quit()
 
 
+## Frame sequence after each still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+
+
 func _grab(path: String) -> void:
 	await _wait(0.5)
 	root.get_texture().get_image().save_png(path)
+	await _seq.record(self, path)
