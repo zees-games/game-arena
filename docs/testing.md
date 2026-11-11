@@ -35,6 +35,10 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 
 `headless_match` asserts what did not happen as well as what did: nobody fell through the floor, nobody left the room, and the geometry blocks shots, because if the trace ignored the map every other check would still pass.
 
+## The whole list takes too long for one `game.sh test`
+
+A bare `./game.sh test` runs about 60 suites in a row and hit a 3000 s limit on the build VM before reaching `headless_ctf`, `headless_touch` and the rest. Run the full list sharded: `hv <worktree> shard --no-parse` (one job per suite, one per shard for `suite_shards` suites, one merged report). On 2026-11-11 it finished all 86 jobs in 22 minutes of wall time. Known noise: `headless_shotfx_hitch` compares timings and can fail on a loaded box (rerun it alone); a `.merge` job can report a missing shard log when the shard ran on another box and its log was not copied back, so read the shard's own line first.
+
 ## headless_lossy: real ENet through real loss
 
 Servers listen on ENet as well as WebSocket, and over WebSocket "unreliable" is TCP. `headless_net`'s loss is its own loopback dropping packets in order and instantly. `examples/headless_lossy` puts dot-net's lossy UDP relay (`res://addons/dot_net/testing/dot_net_udp_relay.gd`, by path; see [dot-net's testing.md](../../dot-net/docs/testing.md)) between a real `DotClientLink` on ENet and a real dual-stack `DotServer` running `ArenaModule`. Client A goes through the relay and runs, strafes and turns every tick; client B connects straight and runs a circle, the smooth reference A's drawing is held to; a dummy is slain every 1.2 s for the kill feed. Each end has its own `MultiplayerAPI` (`SceneTree.set_multiplayer`), so one process holds all three.
