@@ -79,6 +79,7 @@ const MOVEMENT_CVARS := {
 	"arena_break_limbs": ["break_limbs", "How many limbs come off when arena_break is 1"],
 	"arena_break_criticals": ["break_criticals_only", "Only a critical (a headshot) breaks a body (1), or any kill (0)"],
 	"arena_fp_body": ["fp_body", "Players see their own body when they look down (1)"],
+	"arena_fp_arms": ["fp_arms", "First-person arms everybody sees, own and the killer's in a kill view: 0 each player's own look, N one stock arm set"],
 	"arena_surf": ["surf", "A combat surf map plays with the genre's air control (1) or the arena's own (0)"],
 	"arena_surf_airaccelerate": ["surf_air_accelerate", "Air acceleration on a combat surf map (the genre's sv_airaccelerate)"],
 	"mp_killcam_time": ["killcam", "Seconds the final killcam plays at a match's end, added to the end's wait (0 for none)"],

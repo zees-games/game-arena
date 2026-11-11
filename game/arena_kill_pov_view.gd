@@ -8,6 +8,7 @@ const ArenaViewArms := preload("arena_view_arms.gd")
 const ArenaKillPovRecoil := preload("arena_kill_pov_recoil.gd")
 const ArenaRecoilView := preload("arena_recoil_view.gd")
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
+const ArenaAvatars := preload("arena_avatars.gd")
 const AMMO_FONT := 22
 ## Metres per second the lens may slide out of a wall.
 const EASE_SPEED := 6.0
@@ -23,6 +24,15 @@ var flashes: AwShotFx = null
 var arms: DotPlayerViewArms = null
 
 var _grip: DotViewGrip = null
+## Returns [key, look] of the killer now playing; unset draws a stock person.
+var killer_look_fn: Callable = Callable()
+## The game whose `fp_arms` rule may put one arm set on everybody (see ArenaViewArms.arm_set_look).
+var rules: Object = null
+var _arm_set: Array = []
+var _boxes: Dictionary = {}
+## Whose look [member arms] and [member _spare_arms] were built with, so a kill by the same person reuses the rig.
+var _arms_key := ""
+var _spare_key := ""
 var crosshair: DotCrosshair = null
 var label: Label = null
 
@@ -217,13 +227,49 @@ func _exit_tree() -> void:
 	_spare_arms = null
 
 
-## The killer's arm rig, built; [method _mount_arms] puts it under the replay camera.
-func _new_arms() -> DotPlayerViewArms:
+## An arm rig built with [param look], drawn as the server's arm set while one is on; [method _mount_arms] puts it under the replay camera.
+func _new_arms(look: DotHumanoidLook) -> DotPlayerViewArms:
 	var rig := DotPlayerViewArms.new()
+	if rig.has_method(&"set_look_override"):
+		rig.set_look_override(ArenaViewArms.arm_set_look(rules, _arm_set))
 	add_child(rig)
-	rig.build(DotHumanoidLook.stock(1), 1.8)
+	rig.build(look, 1.8)
 	remove_child(rig)
 	return rig
+
+
+## The killer's [key, look]: their avatar's person, or a stock one when nobody is known.
+func _killer_look() -> Array:
+	var got: Variant = killer_look_fn.call() if killer_look_fn.is_valid() else null
+	if got is Array and (got as Array).size() == 2 and got[1] is DotHumanoidLook:
+		return got
+	return ["", DotHumanoidLook.stock(1)]
+
+
+## The kill's killer, read from the kill view (its describe) or the final killcam (its last kill); 0 when neither says.
+static func killer_of(target: Object) -> int:
+	if target == null:
+		return 0
+	if target.has_method(&"describe"):
+		var said: Variant = target.call(&"describe")
+		if said is Dictionary and (said as Dictionary).has("killer"):
+			return int(said["killer"])
+	var buffer: Variant = target.get(&"buffer")
+	if buffer is Object and (buffer as Object).has_method(&"last_event"):
+		var kill: Variant = (buffer as Object).call(&"last_event", &"kill")
+		if kill is Dictionary and (kill as Dictionary).has("data"):
+			var data: Variant = kill["data"]
+			if data is Dictionary:
+				return int((data as Dictionary).get("killer", 0))
+	return 0
+
+
+## [key, look] for player [param id] of [param game], keyed like the live view's own arms.
+static func look_for(game: Object, id: int) -> Array:
+	var key := StringName("arena-player-%08d" % id)
+	var player: Variant = game.call(&"player_for", id) if id != 0 and game != null and game.has_method(&"player_for") else null
+	var avatar: DotAvatar = (player as Object).get(&"avatar") as DotAvatar if player is Object else null
+	return [String(key), ArenaAvatars.look_of(avatar, key)]
 
 
 func _prepare_spare() -> void:
@@ -237,7 +283,8 @@ func _prepare_spare() -> void:
 		add_child(rig)
 		_park_rig(rig)
 	if not _live(_spare_arms) and _shares_arms(_rigs[0]):
-		_spare_arms = _new_arms()
+		_spare_arms = _new_arms(DotHumanoidLook.stock(1))
+		_spare_key = ""
 	if not _live(_spare_fx) and flashes == null:
 		# In the tree once, so its light and mesh pools are built here and not under the kill's camera.
 		_spare_fx = _new_fx()
@@ -340,8 +387,19 @@ func _shares_arms(model: AwViewModel = null) -> bool:
 func _mount_arms(cam: Camera3D) -> void:
 	if not _shares_arms():
 		return
-	arms = _spare_arms if _live(_spare_arms) else _new_arms()
+	var who := _killer_look()
+	if _live(_spare_arms):
+		arms = _spare_arms
+		if arms.has_method(&"set_look_override"):
+			arms.set_look_override(ArenaViewArms.arm_set_look(rules, _arm_set))
+		# The parked rig is the last killer's; another killer's arms cost a rebuild, not a new rig.
+		if _spare_key != String(who[0]):
+			arms.build(who[1], 1.8)
+	else:
+		arms = _new_arms(who[1])
+	_arms_key = String(who[0])
 	_spare_arms = null
+	_spare_key = ""
 	arms.name = "KillerArms"
 	arms.visible = true
 	if arms.get_parent() != null:
@@ -361,6 +419,7 @@ func _on_hands(anchor: Node3D, grip: Vector3, fore: Vector3, pose: StringName) -
 	_grip.grip = grip
 	if not one:
 		_grip.support = fore
+	_grip.bounds = ArenaViewArms.weapon_bounds(hands, _boxes)
 
 
 func _move_hands(aux: PackedFloat32Array, cam: Camera3D) -> void:
@@ -416,7 +475,9 @@ func _end() -> void:
 		else:
 			arms.visible = false
 			_spare_arms = arms
+			_spare_key = _arms_key
 	arms = null
+	_arms_key = ""
 	_grip = null
 	_push = Vector3.ZERO
 	if _live(flashes):
@@ -458,6 +519,8 @@ static func mount(parent: Node, game: Object, target: Object, label: String) -> 
 	if stack != null and stack.physics != null and stack.physics.layout != null:
 		var layers: Array[StringName] = [&"world", &"prop"]
 		view.world_mask = stack.physics.layout.mask_of(layers)
+	view.rules = game
+	view.killer_look_fn = func() -> Array: return look_for(game, killer_of(target))
 	parent.add_child(view)
 	target.set(&"present_fn", view.present)
 	# The first kill view found its 30-odd view-model nodes unbuilt (KillerHands, 125 ms); build the spare now, off the kill's frame.

@@ -10,9 +10,6 @@ const ONE_HAND: Array[StringName] = [&"melee", &"thrown", &"fists"]
 const HANDS_MIN_DISTANCE := 0.3
 ## DotPlayerViewArms' own hand size, for a weapon whose profile does not say.
 const DEFAULT_HAND_SCALE := 0.5
-## Where the middle knuckle sits from the grip point (arms' frame: x out, y up, -z forward). dot-player-char's
-## default seats it 8 cm below and behind, so the drawn hand missed the grip; this keeps it on the grip's side.
-const PALM_OFFSET := Vector3(0.015, -0.01, 0.02)
 
 ## cl_pose_debug: draws the grip sockets, hand targets and arm bones over the view.
 static var debug_pose := false
@@ -29,6 +26,10 @@ var arms: DotPlayerViewArms = null
 var body: Node3D = null
 var _grip: DotViewGrip = null
 var _own_lean := 0.4
+## The game whose `fp_arms` rule (arena_fp_arms) may put one arm set on everybody; null keeps the player's own.
+var rules: Object = null
+var _arm_set: Array = []
+var _boxes: Dictionary = {}
 
 
 static func available() -> bool:
@@ -36,20 +37,20 @@ static func available() -> bool:
 
 
 ## Puts a view model's hands on [param body]'s camera: AwViewModel's own when there is no API, else these arms under [param parent].
-static func mount(parent: Node, model: AwViewModel, body: Node3D, look: DotHumanoidLook) -> Node3D:
+static func mount(parent: Node, model: AwViewModel, body: Node3D, look: DotHumanoidLook, p_rules: Object = null) -> Node3D:
 	if not available() or not model.has_signal(&"hands_reached"):
 		return null
 	model.show_arms = false
 	var mounted := new()
 	mounted.name = "ViewArms"
 	mounted.body = body
+	mounted.rules = p_rules
 	parent.add_child(mounted)
 	mounted.arms = DotPlayerViewArms.new()
 	mounted.arms.name = "ViewArms"
 	mounted.add_child(mounted.arms)
 	mounted.arms.build(look, 1.8)
 	mounted._own_lean = mounted.arms.max_lean
-	mounted.arms.palm_offset = PALM_OFFSET
 	if &"hands_scale" in model:
 		model.hands_scale = mounted.arms.held_scale
 		model.hands_min_distance = HANDS_MIN_DISTANCE
@@ -65,6 +66,42 @@ func _on_hands(anchor: Node3D, grip: Vector3, fore: Vector3, pose: StringName) -
 	_grip.grip = grip
 	if not one:
 		_grip.support = fore
+	var model: AwViewModel = body.weapons.view_model() if body != null and body.weapons != null else null
+	_grip.bounds = weapon_bounds(model, _boxes)
+
+
+## The drawn weapon's box in the frame [signal AwViewModel.hands_reached] gives its points in, which the arms keep
+## their elbows out of. That frame is often a bare marker (HandsFrame) with no mesh for dot-player-char to measure,
+## but its points are the animated node's, so the weapon is measured there. [param boxes] keeps each weapon's own box.
+static func weapon_bounds(model: AwViewModel, boxes: Dictionary) -> AABB:
+	var weapon: Node3D = model.weapon_node() if model != null else null
+	if weapon == null or not weapon.is_inside_tree():
+		return AABB()
+	var animated: Node3D = weapon
+	while animated.get_parent() != model and animated.get_parent() is Node3D:
+		animated = animated.get_parent() as Node3D
+	if animated.get_parent() != model:
+		return AABB()
+	var key := weapon.get_instance_id()
+	if not boxes.has(key):
+		if boxes.size() > 32:
+			boxes.clear()
+		boxes[key] = DotViewGrip.one_hand(weapon, Vector3.ZERO).bounds_local()
+	var box: AABB = boxes[key]
+	if not box.has_volume():
+		return AABB()
+	return (animated.global_transform.affine_inverse() * weapon.global_transform) * box
+
+
+## The look the server's `fp_arms` rule draws on every player's arms (a stock set, seeded by its value); null for
+## each player's own. [param memo] keeps it one object, since the rig rebuilds whenever the drawn look is a new one.
+static func arm_set_look(p_rules: Object, memo: Array) -> DotHumanoidLook:
+	var set_id := int(p_rules.call(&"rule", "fp_arms")) if p_rules != null and p_rules.has_method(&"rule") else 0
+	if set_id <= 0:
+		return null
+	if memo.size() != 2 or int(memo[0]) != set_id:
+		memo.assign([set_id, DotHumanoidLook.stock(set_id)])
+	return memo[1] as DotHumanoidLook
 
 
 ## Holding, follows the whole look like the drawn weapon, so pitch never takes the grip out of reach; empty-handed
@@ -87,6 +124,8 @@ func _process(delta: float) -> void:
 		model.scope_arms_hide_override = scope_arms_hide_override
 		var lean: float = model.call(&"art_max_lean") if model.has_method(&"art_max_lean") else -1.0
 		arms.max_lean = max_lean_override if max_lean_override >= 0.0 else (lean if lean >= 0.0 else _own_lean)
+	if arms.has_method(&"set_look_override"):
+		arms.set_look_override(arm_set_look(rules, _arm_set))
 	if &"debug_pose" in arms and arms.debug_pose != debug_pose:
 		arms.debug_pose = debug_pose
 	var v: Vector3 = body.controller.state.velocity
