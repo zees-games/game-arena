@@ -44,38 +44,67 @@ const RECORDED := {
 	# first step is not heard as somebody else's footstep.
 	&"wall_run": [&"stock", "footsteps/footstep_concrete", 5, -4.0, 1.1, 1.2],
 	&"wall_jump": [&"stock", "landing/landing_light", 1, -4.0, 1.12, 1.2],
+	# A short tick for a hit and a two-note chime for a kill: information, not a noise in the world.
+	&"hit_marker": [&"stock", "interface/tick", 3, 0.0, 0.97, 1.03],
+	&"kill_confirmed": [&"stock", "interface/confirm", 2, 0.0, 0.98, 1.02],
+	# The medals are spoken: a word says which medal, where a pitched sweep only said "good".
+	&"medal_first_blood": [&"stock", "announcer/target_eliminated", 1, 0.0, 1.0, 1.0],
+	&"medal_headshot": [&"stock", "announcer/perfect", 1, 0.0, 1.0, 1.0],
+	&"medal_double_kill": [&"stock", "announcer/combo", 1, 0.0, 1.0, 1.0],
+	&"medal_triple_kill": [&"stock", "announcer/multikill", 1, 0.0, 1.0, 1.0],
+	&"medal_multi_kill": [&"stock", "announcer/godlike", 1, 0.0, 1.0, 1.0],
+	&"medal_revenge": [&"stock", "announcer/eliminated", 1, 0.0, 1.0, 1.0],
+	&"medal_shutdown": [&"stock", "announcer/combo_breaker", 1, 0.0, 1.0, 1.0],
+	&"medal_point_blank": [&"stock", "announcer/target_destroyed", 1, 0.0, 1.0, 1.0],
+	&"medal_no_scope": [&"stock", "announcer/fantastic", 1, 0.0, 1.0, 1.0],
+	&"medal_long_shot": [&"stock", "announcer/sniper", 1, 0.0, 1.0, 1.0],
+	&"medal_nemesis": [&"stock", "announcer/untouchable", 1, 0.0, 1.0, 1.0],
+	# Spoken where a flag changed hands for a team, a plain cue for a drop or a return.
+	&"flag_taken_by_me": [&"stock", "announcer/lets_go", 1, 0.0, 1.0, 1.0],
+	&"flag_taken": [&"stock", "announcer/go_go_go", 1, 0.0, 1.0, 1.0],
+	&"flag_lost": [&"stock", "announcer/enemy_captured", 1, 0.0, 1.0, 1.0],
+	&"flag_lost_back": [&"stock", "announcer/target_lost", 1, 0.0, 1.0, 1.0],
+	&"flag_dropped": [&"stock", "interface/drop", 1, 0.0, 1.0, 1.0],
+	&"flag_returned": [&"stock", "interface/confirm_bright", 1, 0.0, 1.0, 1.0],
+	&"flag_captured": [&"stock", "announcer/point_captured", 1, 0.0, 1.0, 1.0],
+	&"vote_start": [&"stock", "interface/question", 1, 0.0, 1.0, 1.0],
+	&"vote_end": [&"stock", "interface/confirm_long", 1, 0.0, 1.0, 1.0],
+	&"vote_warning": [&"stock", "interface/bong", 1, 0.0, 1.0, 1.0],
+	&"vote_count": [&"stock", "interface/pluck", 1, 0.0, 1.0, 1.0],
+	# Kenney's phase jump peaks near -15 dBFS, well under the rest of the set.
+	&"spawned": [&"stock", "interface/phase_jump", 3, 9.0, 0.98, 1.02],
+	&"hurt": [&"stock", "body/punch", 5, -3.0, 0.95, 1.08],
+	&"died": [&"stock", "body/punch_heavy", 5, 0.0, 0.85, 0.92],
 }
 
 
-## Each medal's stand-in: a voice and a pitch, so eleven medals are eleven sounds until real
-## recordings land. Up is good news, so most are the upward sweep at a pitch that climbs with how
-## rare the medal is; Nemesis is the low one.
 const STOMP_SOUND := &"stomp"
 
 
-## Capture the flag's cues: what the flag view saw (see on_flag_event).
+## Capture the flag's cues (see on_flag_event) and the medals, with the synthesised voice each
+## falls back to in a build without dot-audio's stock files; their recordings are in RECORDED.
 const FLAG_VOICES := {
-	&"flag_taken_by_me": [DotAudioSynth.Voice.PICKUP, 0.7],
-	&"flag_taken": [DotAudioSynth.Voice.PICKUP, 1.0],
-	&"flag_lost": [DotAudioSynth.Voice.DENY, 0.6],
-	&"flag_lost_back": [DotAudioSynth.Voice.DENY, 0.9],
-	&"flag_dropped": [DotAudioSynth.Voice.BLIP, 0.8],
-	&"flag_returned": [DotAudioSynth.Voice.PICKUP, 1.3],
-	&"flag_captured": [DotAudioSynth.Voice.SPAWN, 1.5],
+	&"flag_taken_by_me": DotAudioSynth.Voice.PICKUP,
+	&"flag_taken": DotAudioSynth.Voice.PICKUP,
+	&"flag_lost": DotAudioSynth.Voice.DENY,
+	&"flag_lost_back": DotAudioSynth.Voice.DENY,
+	&"flag_dropped": DotAudioSynth.Voice.BLIP,
+	&"flag_returned": DotAudioSynth.Voice.PICKUP,
+	&"flag_captured": DotAudioSynth.Voice.SPAWN,
 }
 
 const MEDAL_VOICES := {
-	&"medal_first_blood": [DotAudioSynth.Voice.SPAWN, 0.8],
-	&"medal_headshot": [DotAudioSynth.Voice.PICKUP, 1.25],
-	&"medal_double_kill": [DotAudioSynth.Voice.SPAWN, 1.0],
-	&"medal_triple_kill": [DotAudioSynth.Voice.SPAWN, 1.2],
-	&"medal_multi_kill": [DotAudioSynth.Voice.SPAWN, 1.45],
-	&"medal_revenge": [DotAudioSynth.Voice.PICKUP, 0.8],
-	&"medal_shutdown": [DotAudioSynth.Voice.PICKUP, 0.65],
-	&"medal_point_blank": [DotAudioSynth.Voice.IMPACT, 1.2],
-	&"medal_no_scope": [DotAudioSynth.Voice.SHOT_TIGHT, 1.3],
-	&"medal_long_shot": [DotAudioSynth.Voice.SHOT_TIGHT, 0.85],
-	&"medal_nemesis": [DotAudioSynth.Voice.DENY, 0.7],
+	&"medal_first_blood": DotAudioSynth.Voice.SPAWN,
+	&"medal_headshot": DotAudioSynth.Voice.PICKUP,
+	&"medal_double_kill": DotAudioSynth.Voice.SPAWN,
+	&"medal_triple_kill": DotAudioSynth.Voice.SPAWN,
+	&"medal_multi_kill": DotAudioSynth.Voice.SPAWN,
+	&"medal_revenge": DotAudioSynth.Voice.PICKUP,
+	&"medal_shutdown": DotAudioSynth.Voice.PICKUP,
+	&"medal_point_blank": DotAudioSynth.Voice.IMPACT,
+	&"medal_no_scope": DotAudioSynth.Voice.SHOT_TIGHT,
+	&"medal_long_shot": DotAudioSynth.Voice.SHOT_TIGHT,
+	&"medal_nemesis": DotAudioSynth.Voice.DENY,
 }
 
 
@@ -446,47 +475,37 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	# Flat, not positional: a hit marker is about your own shot and must not fade with distance.
 	var hit := DotAudioDef.new()
 	hit.id = &"hit_marker"
-	hit.path = "%s/hit.ogg" % SOUND_DIR
 	hit.bus = &"UI"
 	hit.cooldown_ms = 60
 	hit.max_concurrent = 2
 	hit.priority = 95
-	c.add(hit)
+	c.add(recorded(hit))
 
-	# A hit that killed: the same flat information, lower and longer than the tick.
+	# A hit that killed: the same flat information, longer than the tick.
 	var killed := DotAudioDef.new()
 	killed.id = KILL_CONFIRMED
-	killed.path = "%s/kill_confirmed.ogg" % SOUND_DIR
 	killed.bus = &"UI"
 	killed.max_concurrent = 1
 	killed.priority = 96
-	killed.pitch_min = 0.62
-	killed.pitch_max = 0.62
-	c.add(killed)
+	c.add(recorded(killed))
 
 	# The medals: flat, on the interface bus, one at a time each. Information about your
 	# own kill, like the hit marker; louder than the world so a medal is never lost in it.
 	for id in MEDAL_VOICES:
 		var medal := DotAudioDef.new()
 		medal.id = id
-		medal.path = "%s/%s.ogg" % [SOUND_DIR, String(id)]
 		medal.bus = &"UI"
 		medal.max_concurrent = 1
 		medal.priority = 92
-		medal.pitch_min = float(MEDAL_VOICES[id][1])
-		medal.pitch_max = float(MEDAL_VOICES[id][1])
-		c.add(medal)
+		c.add(recorded(medal))
 
 	for id in FLAG_VOICES:
 		var cue := DotAudioDef.new()
 		cue.id = id
-		cue.path = "%s/%s.ogg" % [SOUND_DIR, String(id)]
 		cue.bus = &"UI"
 		cue.max_concurrent = 2
 		cue.priority = 93
-		cue.pitch_min = float(FLAG_VOICES[id][1])
-		cue.pitch_max = float(FLAG_VOICES[id][1])
-		c.add(cue)
+		c.add(recorded(cue))
 
 	var stomp := DotAudioDef.new()
 	stomp.id = STOMP_SOUND
@@ -497,26 +516,23 @@ static func sound_catalogue() -> DotAudioCatalogue:
 
 	var hurt := DotAudioDef.new()
 	hurt.id = &"hurt"
-	hurt.path = "%s/hurt.ogg" % SOUND_DIR
 	hurt.bus = &"SFX"
 	hurt.cooldown_ms = 180
 	hurt.max_concurrent = 1
 	hurt.priority = 90
-	c.add(hurt)
+	c.add(recorded(hurt))
 
 	var died := DotAudioDef.new()
 	died.id = &"died"
-	died.path = "%s/died.ogg" % SOUND_DIR
 	died.bus = &"SFX"
 	died.priority = 100
-	c.add(died)
+	c.add(recorded(died))
 
 	var spawn := DotAudioDef.new()
 	spawn.id = &"spawned"
-	spawn.path = "%s/spawn.ogg" % SOUND_DIR
 	spawn.bus = &"UI"
 	spawn.priority = 60
-	c.add(spawn)
+	c.add(recorded(spawn))
 
 	# The map vote's cues. Flat and on the interface bus: a ballot is about the server, not about a
 	# place in the world, and a countdown that got quieter the further you stood from the origin
@@ -524,11 +540,10 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	for vote_id in [ArenaVote.CUE_START, ArenaVote.CUE_END, ArenaVote.CUE_WARNING, ArenaVote.CUE_COUNT]:
 		var cue := DotAudioDef.new()
 		cue.id = vote_id
-		cue.path = "%s/%s.ogg" % [SOUND_DIR, String(vote_id)]
 		cue.bus = &"UI"
 		cue.max_concurrent = 1
 		cue.priority = 70
-		c.add(cue)
+		c.add(recorded(cue))
 
 	# An administrator's beacon: a ping once a second from the beaconed player, heard by everybody.
 	# Positional, because the beacon's whole job is to say WHERE somebody is and a flat ping would
@@ -630,17 +645,16 @@ static func recorded_directory(folder: StringName) -> String:
 	return DotAudioStock.directory()
 
 
-## Which synthesised voice stands in for each id until real audio is dropped into [constant
-## SOUND_DIR]. Which noise belongs to which id is this game's decision, not an addon's guess from an
-## id like `fire_rail`.
+## Which synthesised voice stands in for each id in a build that lacks its file. Which noise belongs
+## to which id is this game's decision, not an addon's guess from an id like `fire_rail`.
 static func sound_recipes() -> Dictionary:
 	var out := _base_recipes()
 	out[KILL_CONFIRMED] = DotAudioSynth.Voice.BLIP
 	out[STOMP_SOUND] = DotAudioSynth.Voice.IMPACT
 	for id in MEDAL_VOICES:
-		out[id] = MEDAL_VOICES[id][0]
+		out[id] = MEDAL_VOICES[id]
 	for id in FLAG_VOICES:
-		out[id] = FLAG_VOICES[id][0]
+		out[id] = FLAG_VOICES[id]
 	return out
 
 

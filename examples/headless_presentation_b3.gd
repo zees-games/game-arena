@@ -162,8 +162,8 @@ func _test_audio_is_a_firefight() -> void:
 		"the bank answers under both the id and the path the def names"
 	)
 
-	# Item 1722: the shots, blast, impacts and moves were synthesised stand-ins because their files
-	# were looked for in a res://audio nobody filled. They name the addons' recorded files now.
+	# Item 1722: every game sound was a synthesised stand-in because its file was looked for in a
+	# res://audio nobody filled. They name the addons' recorded files now.
 	var unrecorded: Array[String] = []
 	for id: StringName in ArenaPresentation.RECORDED:
 		var def := cat.find(id)
@@ -180,7 +180,12 @@ func _test_audio_is_a_firefight() -> void:
 			if not ResourceLoader.exists(f):
 				unrecorded.append(f)
 	_check(unrecorded.is_empty() and rifle.variants.size() == 5,
-		"the weapon, blast, impact and move sounds play the addons' recorded files, several each (wrong: %s)" % str(unrecorded))
+		"the recorded sounds play the addons' files, several each where several are named (wrong: %s)" % str(unrecorded))
+	var unfilled: Array[String] = []
+	for id: StringName in cat.ids():
+		if cat.find(id).path.begins_with(ArenaPresentation.SOUND_DIR):
+			unfilled.append(String(id))
+	_check(unfilled.is_empty(), "and no sound still looks in the empty res://audio (%s)" % str(unfilled))
 	_check(
 		(
 			(bank[&"fire_rail"] as AudioStreamWAV).data
