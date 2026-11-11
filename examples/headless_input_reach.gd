@@ -12,7 +12,7 @@ extends Node
 ## presentation the client's `_is`/`_held` guards ([code]InputMap.has_action[/code]) quietly
 ## dropped every arena key.
 ##
-## So the scripts are loaded here with [code]load()[/code], not [code]preload[/code]: a
+## So the client chain is loaded here with [code]load()[/code], not [code]preload[/code]: a
 ## presentation that does not compile is a FAIL line in this suite, not a suite that never
 ## starts. The other suites preload the client and simply do not run when it breaks, which
 ## a suite list read on a machine with newer, unpushed addons never shows.
@@ -45,25 +45,32 @@ func _finish() -> void:
 	get_tree().quit(0 if ok else 1)
 
 
-## Every script under res://game that does not compile. The client extends the client state,
-## which preloads the presentation, which extends its two halves: one class missing anywhere
-## fails them all, and the game still starts, with half its keys dead.
-static func _uncompiled(dir: String) -> PackedStringArray:
+## The client chain's roots that do not compile. The client extends the client state, which
+## preloads the presentation, which extends its two halves: one class missing anywhere in that
+## graph fails the root, and the game still starts, with half its keys dead. Only the roots are
+## loaded: loading every script in res://game at once keeps ~1300 scripts alive past exit
+## (graphs the game never loads together), which game.sh rightly fails as a leak.
+const CLIENT_ROOTS: Array[String] = [
+	"res://game/arena_client.gd", "res://game/arena_presentation.gd",
+	"res://game/arena_presentation_b1.gd", "res://game/arena_presentation_b2.gd",
+	"res://game/arena_menus.gd", "res://game/arena_bindings.gd",
+]
+
+
+static func _uncompiled() -> PackedStringArray:
 	var bad := PackedStringArray()
-	for file in DirAccess.get_files_at(dir):
-		if not file.ends_with(".gd"):
-			continue
-		var script := load(dir.path_join(file)) as GDScript
+	for path in CLIENT_ROOTS:
+		var script := load(path) as GDScript
 		if script == null or not script.can_instantiate():
-			bad.append(file)
+			bad.append(path.get_file())
 	return bad
 
 
 func _run() -> void:
 	print("game-arena: fire, Tab and the console key reach their handlers")
 
-	var bad := _uncompiled("res://game")
-	_check(bad.is_empty(), "every script in res://game compiles", ", ".join(bad))
+	var bad := _uncompiled()
+	_check(bad.is_empty(), "the client, the presentation and its halves, the menus and the bindings compile", ", ".join(bad))
 	if not bad.is_empty():
 		_finish()
 		return
@@ -78,8 +85,9 @@ func _run() -> void:
 	p.name = "P"
 	add_child(p)
 	p.call(&"setup")
-	var _console: Variant = p.call(&"build_console")
 
+	# ArenaMenus.build builds the console over the menu (build_console(menu)), as the client
+	# does; a second, menu-less build_console here would orphan one console and leak it.
 	var client: Node = client_script.new()
 	client.set(&"presentation", p)
 	var menu: Node = menus_script.call(&"build", self, p)
