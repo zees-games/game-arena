@@ -1,5 +1,8 @@
 extends SceneTree
 
+## Frame sequence after the still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+
 ## Renders the loadout screen over three saved loadouts, saved through the arena's own store.
 ##
 ##   xvfb-run -a godot --path . --resolution 1600x900 --script tools/loadout_shot.gd
@@ -44,6 +47,7 @@ func _run() -> void:
 		await process_frame
 	DirAccess.make_dir_recursive_absolute("screenshots")
 	root.get_texture().get_image().save_png("screenshots/loadout_saved.png")
+	await _seq.record(self, "screenshots/loadout_saved.png")
 	print("saved: ", game.loadouts.saved_list(KEY).size())
 	DotPaths.remove_tree(DIR)
 	quit(0)

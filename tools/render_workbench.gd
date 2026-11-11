@@ -1,5 +1,8 @@
 extends SceneTree
 
+## Frame sequence after the still (DOT_SHOT_FRAMES); see DotShotSeq.
+var _seq := DotShotSeq.new()
+
 ## Renders the solo client with the lazy workbench opened (the toggle_action key): screenshots/workbench/open.png. Use the compatibility renderer (Forward+ on llvmpipe segfaults in Mesa):
 ## `xvfb-run -a godot --path . --rendering-method gl_compatibility --rendering-driver opengl3 --resolution 1280x720 --script tools/render_workbench.gd`
 
@@ -46,4 +49,5 @@ func _run(client: Node) -> void:
 	print("open after toggle: %s" % wb.call("is_open"))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://screenshots/workbench"))
 	root.get_texture().get_image().save_png(ProjectSettings.globalize_path(OUT))
+	await _seq.record(self, ProjectSettings.globalize_path(OUT))
 	quit(0 if wb.call("is_open") else 1)
