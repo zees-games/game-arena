@@ -26,6 +26,7 @@ const ArenaStats := preload("arena_stats.gd")
 
 
 const ArenaVote := preload("arena_vote.gd")
+const ArenaContentGroups := preload("arena_content_groups.gd")
 
 ## Binds an [ArenaGame] to a [DotServer].
 
@@ -557,7 +558,13 @@ func _attach_visibility(map) -> void:
 ## Tells dot-server which map this is, so A2S and DQP print it in their map field (and
 ## the backbone report does too) rather than this game's content id.
 func _report_map(map_id: String) -> void:
-	if server != null and server.games != null:
+	if server == null or server.games == null:
+		return
+	# dot-server 19 sends the map's download group to joining clients with the pack's own groups.
+	# By name, so a build with an older dot-server still parses this file.
+	if DotAddonApi.build_level("dot_server") >= 19:
+		server.games.call(&"set_current_map", map_id, ArenaContentGroups.groups_for(StringName(map_id)))
+	else:
 		server.games.set_current_map(map_id)
 
 

@@ -1,5 +1,7 @@
 extends "arena_client_prewarm.gd"
 
+const ArenaContentGroups := preload("arena_content_groups.gd")
+
 ## Whether E is the prop tool's key here: only in a mode where players use props. Anywhere
 ## else E is the launch, which is what most of the arena's modes want it for.
 func props_on_e() -> bool:
@@ -107,6 +109,8 @@ func _on_map_changed(map: DotMapDef) -> void:
 	gate.hold(&"map", "Loading the map")
 	while _level_busy:
 		await get_tree().process_frame
+	# The new map's own files (its bake, its rides) are a download group of their own; fetch them first.
+	var _topped: DotResult = await ArenaContentGroups.top_up(map.id)
 	# **The client has to ADOPT the map it was handed, and this is where that was missing.**
 	# `ArenaGame.map` is assigned in exactly three places — `setup`, the module's mode change, and
 	# `change_map` — and every one of them runs on the SERVER.

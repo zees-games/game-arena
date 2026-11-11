@@ -7,6 +7,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
+const ArenaContentGroups := preload("../game/arena_content_groups.gd")
 
 ## An arena map delivered the way a player gets it: published as a signed pack, fetched by a
 ## real [DotCloudClient], mounted, and built from the mount alone.
@@ -37,9 +38,15 @@ const ROOT := "user://arena_delivered_check"
 const STAGE := "res://.godot/arena_delivered_stage"
 ## Where the game-pack section stages its stand-in tree.
 const PACK_ROOT := "user://arena_pack_maps_check"
-const SECTIONS := 6
+## Where the per-map groups section publishes and mounts its stand-in pack.
+const GROUPS_ROOT := "user://arena_map_groups_check"
+const SECTIONS := 7
 ## Without a frame; two more with `--shot`.
-const CHECKS := 26
+const CHECKS := 33
+## The groups section's mount checks, skipped (and not expected) on a dot-cloud before API 22.
+const GROUP_MOUNT_CHECKS := 5
+
+var _skipped := 0
 
 var _entered := 0
 var _completed := 0
@@ -70,6 +77,7 @@ func _run() -> void:
 
 	if source_manifest.is_empty():
 		_line("no %s under %s — nothing to publish (link arena-surf-dm-maps)" % [MAP, ArenaImportedMaps.roots()[0]])
+		await _test_map_groups()
 		get_tree().quit(1 if _failed > 0 else 0)
 		return
 
@@ -84,6 +92,8 @@ func _run() -> void:
 		_cleanup(game)
 
 	_test_surf_keys()
+	# Last: mounting a pack makes res:// pack-backed, so staging above must come first.
+	await _test_map_groups()
 	_finish()
 
 
@@ -131,6 +141,74 @@ func _test_game_pack_leaves_maps_out() -> void:
 	kept.sort()
 	_check(got == kept, "the publisher keeps the game and drops the maps (%s)" % ", ".join(got))
 	DotPaths.remove_tree(PACK_ROOT)
+	_done()
+
+
+## Each map's own files (its bake, its bot rides) are the download group `map-<id>` (groups.json), so a
+## client fetches only the map it plays: a stand-in pack of those paths is published with the real
+## groups.json, mounted with one map's group, and topped up with another's as a map change does.
+func _test_map_groups() -> void:
+	_section("each map's own files are a download group (groups.json)")
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://groups.json"))
+	var groups: Dictionary = parsed if parsed is Dictionary else {}
+	var files := PackedStringArray()
+	for dir in ["lightmaps", "maps/surf"]:
+		for rel in DotPaths.list_files_recursive("res://" + dir):
+			if rel.ends_with(".res") or rel.ends_with(".surf.json"):
+				files.append(dir.path_join(rel))
+	var loose := PackedStringArray()
+	for rel in files:
+		var listed: Array = groups.get(ArenaContentGroups.group_for(StringName(rel.get_file().get_slice(".", 0))), [])
+		if not listed.has(rel):
+			loose.append(rel)
+	_check(files.size() >= 8 and loose.is_empty(), "every bake and ride file is in its map's group (%d files; loose: %s)" % [files.size(), ", ".join(loose)])
+
+	DotPaths.remove_tree(GROUPS_ROOT)
+	var src := GROUPS_ROOT.path_join("src")
+	for rel in files + PackedStringArray(["game/arena_game.gd"]):
+		DotPaths.ensure_parent_dir(src.path_join(rel))
+		DotPaths.write_text(src.path_join(rel), rel)
+	DirAccess.copy_absolute(ProjectSettings.globalize_path("res://groups.json"), ProjectSettings.globalize_path(src.path_join("groups.json")))
+	var pair := DotCloudSignature.generate_keypair()
+	var publisher := DotCloudPublisher.new()
+	publisher.content_id = "%s/arena-groups-check" % OWNER
+	publisher.version = VERSION
+	publisher.signing_key_pem = str(pair.value["private"]) if pair.ok else ""
+	publisher.signing_key_id = "arena_groups"
+	var published := publisher.publish(src, GROUPS_ROOT.path_join("dist").path_join(publisher.content_id))
+	_check(published.ok, "the publisher accepts groups.json (no pattern matches nothing)%s" % ("" if published.ok else ": " + str(published.error)))
+
+	if not published.ok or DotAddonApi.build_level("dot_cloud") < 22:
+		_skipped = GROUP_MOUNT_CHECKS
+		_line("dot-cloud %d has no top-up (needs 22); the mount checks are skipped" % DotAddonApi.build_level("dot_cloud"))
+		DotPaths.remove_tree(GROUPS_ROOT)
+		_done()
+		return
+
+	var config := DotCloudConfig.new()
+	config.side = "both"
+	config.cache_dir = GROUPS_ROOT.path_join("cache")
+	config.require_signed_manifests = true
+	config.trusted_keys = {"arena_groups": str(pair.value["public"])}
+	var cloud := DotCloudClient.new()
+	cloud.name = "GroupsCloud"
+	cloud.config = config
+	cloud.config_file = ""
+	cloud.register_service = false
+	cloud.local_search_dirs = PackedStringArray([GROUPS_ROOT.path_join("dist")])
+	cloud.manifest_url_template = "{base}/{id}/manifest.json"
+	add_child(cloud)
+	var prefix := DotCloudClient.mount_prefix_for(StringName(publisher.content_id), VERSION).trim_suffix("/")
+	var first: DotResult = await cloud.ensure(StringName(publisher.content_id), VERSION, ArenaContentGroups.groups_for(&"dm_box"))
+	_check(first.ok and FileAccess.file_exists(prefix.path_join("game/arena_game.gd")), "a join on dm_box mounts the pack's code%s" % ("" if first.ok else ": " + str(first.error)))
+	_check(FileAccess.file_exists(prefix.path_join("lightmaps/dm_box.res")), "and dm_box's bake")
+	_check(not FileAccess.file_exists(prefix.path_join("lightmaps/dm_pit.res")) and not FileAccess.file_exists(prefix.path_join("maps/surf/surf_ski_2.surf.json")), "and no other map's files")
+	var topped: DotResult = await cloud.call(&"ensure_groups_at", prefix.path_join("game"), ArenaContentGroups.groups_for(&"dm_pit"))
+	_check(topped.ok and str(topped.value) == prefix and FileAccess.file_exists(prefix.path_join("lightmaps/dm_pit.res")), "a change to dm_pit tops up its bake%s" % ("" if topped.ok else ": " + str(topped.error)))
+	_check(not FileAccess.file_exists(prefix.path_join("lightmaps/dm_atrium.res")), "and still not the maps nobody played")
+	cloud.queue_free()
+	await get_tree().process_frame
+	DotPaths.remove_tree(GROUPS_ROOT)
 	_done()
 
 
@@ -383,7 +461,7 @@ func _cleanup(game: ArenaGame) -> void:
 
 
 func _finish() -> void:
-	var expected := CHECKS + (2 if OS.get_cmdline_user_args().has("--shot") and DisplayServer.get_name() != "headless" else 0)
+	var expected := CHECKS - _skipped + (2 if OS.get_cmdline_user_args().has("--shot") and DisplayServer.get_name() != "headless" else 0)
 	_report_sections(_entered, _completed, SECTIONS, expected)
 
 

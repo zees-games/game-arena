@@ -1,0 +1,10 @@
+{
+    "map-dm_atrium": ["lightmaps/dm_atrium.res"],
+    "map-dm_box": ["lightmaps/dm_box.res"],
+    "map-dm_pit": ["lightmaps/dm_pit.res"],
+    "map-surf_10x_reloaded_fixed": ["maps/surf/surf_10x_reloaded_fixed.surf.json"],
+    "map-surf_grave_reloaded": ["maps/surf/surf_grave_reloaded.surf.json"],
+    "map-surf_ski_2": ["maps/surf/surf_ski_2.surf.json"],
+    "map-surf_snipers_island": ["maps/surf/surf_snipers_island.surf.json"],
+    "map-surf_the_flow": ["maps/surf/surf_the_flow.surf.json"]
+}
