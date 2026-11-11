@@ -651,6 +651,15 @@ func _test_map_sync_wire() -> void:
 
 	# One argument. `DotMapSyncClient.changed` carries the map and nothing else, unlike
 	# `DotMapSession.changed`, which carries the world as well.
+	# A client set up on the map the server then announces first (a sim host's) keeps the world it built.
+	var combat_before := client_game.combat
+	var same: DotResult = await follower_session.change_to_map(catalogue.get_map(client_game.map.id))
+	_check(
+		same.ok and follower_session.current != null and client_game.combat == combat_before,
+		"a first announcement of the client's own map keeps the world it was set up with",
+		str(same.error) if not same.ok else String(client_game.map.id)
+	)
+
 	var loads: Array[StringName] = []
 	follower.changed.connect(func(map: DotMapDef) -> void: loads.append(map.id))
 

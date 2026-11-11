@@ -107,6 +107,8 @@ func _ready() -> void:
 		presentation.ambient.follow_settings(presentation.settings, game.ambient_rules)
 	if presentation != null:
 		presentation.use_shot_rules(game.shot_rules)
+	# The first draw's pipeline compile and the netcode share the frame above; the platform gets its own.
+	await _setup_frame()
 
 	_grab_mouse()
 	platform.slide_settings = presentation.settings
