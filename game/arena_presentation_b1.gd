@@ -49,10 +49,6 @@ const WALL_JUMP_SOUND := &"wall_jump"
 
 ## Seconds between one kill's medal sounds; the HUD's `MedalRow.STAGGER_SEC`.
 const MEDAL_STAGGER_SEC := 0.14
-## Voice-queue priorities: a medal is the least urgent, a flag call outranks it, a capture cuts in on a medal.
-const VOICE_MEDAL := 40
-const VOICE_FLAG := 55
-const VOICE_FLAG_CAPTURE := 80
 
 
 ## How far an explosion shakes the camera, and how hard at its centre.
@@ -67,7 +63,6 @@ const MUZZLE_OFFSET := Vector3(0.12, -0.14, -0.55)
 var settings: DotSettingsManager = null
 
 
-var voice: DotVoiceQueue = null
 var audio: DotAudioManager = null
 
 
@@ -613,21 +608,18 @@ func on_body_hit(victim: int, point: Vector3, eye: Vector3) -> void:
 	var _splat := blood.on_body_hit(victim, point, eye)
 
 
-## A kill's medals, each its own sound, one after the other through the voice queue (so they never talk over a
-## flag call); the HUD staggers their popups on its own.
+## A kill's medals, each its own sound, staggered as the HUD staggers their popups.
 func on_medals(medals: Array) -> void:
 	if audio == null:
 		return
-	for medal in medals:
-		_say(ArenaAwards.medal_sound(int(medal)), VOICE_MEDAL)
-
-
-## One announcer line through the queue; without one (a bare presentation) it plays at once.
-func _say(id: StringName, priority: int) -> void:
-	if voice != null:
-		var _outcome := voice.say(id, priority)
-	elif audio != null:
-		var _v := audio.play(id)
+	for i in range(medals.size()):
+		var id := ArenaAwards.medal_sound(int(medals[i]))
+		if i == 0 or not is_inside_tree():
+			var _v := audio.play(id)
+		else:
+			get_tree().create_timer(MEDAL_STAGGER_SEC * float(i)).timeout.connect(
+				func() -> void: if audio != null: audio.play(id)
+			)
 
 
 ## A head stomp at [param at]: the configured sound and effect, heard and seen by everybody.
@@ -659,7 +651,7 @@ func on_flag_event(what: StringName, flag_team: int, by_me: bool, my_team: int) 
 		&"captured":
 			id = &"flag_captured"
 	if id != &"":
-		_say(id, VOICE_FLAG_CAPTURE if what == &"captured" else VOICE_FLAG)
+		var _v := audio.play(id)
 
 
 ## The grunt scales with the damage (a graze is quieter and higher than a heavy hit) and is left to
