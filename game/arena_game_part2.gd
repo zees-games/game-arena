@@ -255,8 +255,15 @@ func _tick_players_batched(commands: Dictionary, delta: float, hull_world: Objec
 		player.tick_pre(_tick, move)
 		var controller := player.controller
 		var t_ctl := Time.get_ticks_usec()
-		# -2: the controller does not tick (not started); the rest of the player's tick still runs.
-		_batch_rows[i] = _motor_batch.add(controller.motor, controller.state, controller.current_command) if controller.begin_tick(_tick, delta) else -2
+		if ArenaFrameProbe.ctl_split:
+			var began := controller.begin_tick(_tick, delta)
+			ArenaFrameProbe.add(&"pc_begin", t_ctl)
+			var t_add := Time.get_ticks_usec()
+			_batch_rows[i] = _motor_batch.add(controller.motor, controller.state, controller.current_command) if began else -2
+			ArenaFrameProbe.add(&"pc_add", t_add)
+		else:
+			# -2: the controller does not tick (not started); the rest of the player's tick still runs.
+			_batch_rows[i] = _motor_batch.add(controller.motor, controller.state, controller.current_command) if controller.begin_tick(_tick, delta) else -2
 		player.ctl_usec = Time.get_ticks_usec() - t_ctl
 		if fine:
 			ArenaFrameProbe.add(&"pl_sim", t_fine)
@@ -283,7 +290,13 @@ func _tick_players_batched(commands: Dictionary, delta: float, hull_world: Objec
 			if controller.has_external_velocity():
 				ArenaHullGrid.batch_faults += 1
 			told = _motor_batch.finish(row)
-			controller.end_tick(_tick, delta)
+			if ArenaFrameProbe.ctl_split:
+				ArenaFrameProbe.add(&"pc_finish", t_ctl)
+				var t_end := Time.get_ticks_usec()
+				controller.end_tick(_tick, delta)
+				ArenaFrameProbe.add(&"pc_end", t_end)
+			else:
+				controller.end_tick(_tick, delta)
 		var rested := controller.state.position
 		ArenaFrameProbe.add(&"p_controller", t_ctl - player.ctl_usec)
 		var outcome := player.tick_post(_tick, delta, fire)

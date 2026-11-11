@@ -43,6 +43,8 @@ static var _profiled_names: Dictionary = {}
 ## The sub-spans inside a section (`p_pre`, `p_hitbox`, `p_wctx`, `w_props`, `s_resolve`, `br_contacts`, ...): off
 ## outside a recording, since each costs a clock read; a profiler recording turns them on ([member fine_on_record]).
 static var fine: bool = false
+## `p_controller` split into `pc_begin`, `pc_add`, `pc_finish`, `pc_end` (the sim host's `--sim_sections 1`).
+static var ctl_split: bool = false
 ## Whether a profiler recording turns [member fine] on for its length (`profiler_fine 0` or the bench's `--fine 0` say no).
 static var fine_on_record: bool = true
 

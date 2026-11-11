@@ -8,9 +8,11 @@ const ArenaSimOwner := preload("arena_sim_owner.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
-## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
+## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1 --sim_snap_memo 0`. It writes PATH once it accepts players, and quits a few seconds after its player left.
 
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
+const ArenaHullGrid := preload("arena_hull_grid.gd")
+const ArenaGameState := preload("arena_game_state.gd")
 
 const CHANNEL := "arena.sim_server"
 const REPORT_SEC := 5.0
@@ -42,6 +44,14 @@ func _ready() -> void:
 	# printed per tick beside each SIM_HOST line. Off by default: each section costs two clock reads.
 	if _arg("--sim_sections", "0") == "1":
 		ArenaFrameProbe.set_interval(1.0e9)
+		# Inside p_controller: the controller's phases and the native motor's engine queries.
+		DotFpsController.phase_timers = true
+		ArenaFrameProbe.ctl_split = true
+		if ClassDB.class_exists(&"DotSimFpsBody"):
+			ClassDB.class_call_static(&"DotSimFpsBody", &"set_profile", true)
+	# `--sim_snap_memo 0`: snap the unlag history on every call (`unlag_position_between`), for an A/B of the memo.
+	if _arg("--sim_snap_memo", "1") == "0":
+		ArenaGameState.snap_memo = false
 	var data := "user://sim_host"
 	var _made := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data))
 
@@ -176,6 +186,7 @@ func _report(net: DotNetManager) -> void:
 		if ArenaFrameProbe.on():
 			print(sections_line(ArenaFrameProbe._sections, ticks))
 			ArenaFrameProbe._reset()
+			print(phases_line(ticks))
 		last = now
 		t0 = Time.get_ticks_usec()
 
@@ -192,6 +203,28 @@ static func sections_line(sections: Dictionary, ticks: int) -> String:
 	for r: Array in rows:
 		parts.append("%s %.3f x%.1f" % [r[1], r[0], r[2]])
 	return "SIM_HOST_SECTIONS ms/tick | " + ", ".join(parts)
+
+
+static var _last_rows := 0
+static var _last_faults := 0
+
+## `SIM_HOST_PHASES`: [member DotFpsController.phase_us] and the native body's query counters, ms/tick, then reset.
+static func phases_line(ticks: int) -> String:
+	var names := ["pre", "consume", "motor", "publish", "report", "signals_stats", "post", "pub_pos"]
+	var parts := PackedStringArray()
+	for i in DotFpsController.phase_us.size():
+		parts.append("%s %.3f" % [names[i], DotFpsController.phase_us[i] / 1000.0 / ticks])
+	DotFpsController.phase_us = PackedInt64Array([0, 0, 0, 0, 0, 0, 0, 0])
+	if ClassDB.class_exists(&"DotSimFpsBody"):
+		var c: PackedInt64Array = ClassDB.class_call_static(&"DotSimFpsBody", &"profile_counters")
+		var qn := ["cast", "rest", "overlap", "ray", "native_tick"]
+		for i in mini(qn.size(), c.size() / 2):
+			parts.append("n_%s %.3f x%.1f" % [qn[i], c[2 * i + 1] / 1000.0 / ticks, float(c[2 * i]) / ticks])
+		ClassDB.class_call_static(&"DotSimFpsBody", &"reset_profile")
+	parts.append("batch_rows x%.1f faults x%.2f" % [float(ArenaHullGrid.batch_rows - _last_rows) / ticks, float(ArenaHullGrid.batch_faults - _last_faults) / ticks])
+	_last_rows = ArenaHullGrid.batch_rows
+	_last_faults = ArenaHullGrid.batch_faults
+	return "SIM_HOST_PHASES ms/tick | " + ", ".join(parts)
 
 
 func _die(why: String) -> void:

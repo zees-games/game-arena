@@ -87,6 +87,9 @@ func start(bots: int) -> DotResult:
 	var sim_sections := _arg("--sim_sections")
 	if sim_sections != "":
 		args.append_array(["--sim_sections", sim_sections])
+	var snap_memo := _arg("--sim_snap_memo")
+	if snap_memo != "":
+		args.append_array(["--sim_snap_memo", snap_memo])
 	_pid = OS.create_process(OS.get_executable_path(), args)
 	if _pid <= 0:
 		return DotResult.fail(DotError.CODE_INVALID, "the server process did not start")

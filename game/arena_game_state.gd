@@ -491,6 +491,11 @@ const TELEPORT_CUT := 10.0
 
 ## id -> [PackedVector3Array positions, PackedInt32Array ticks], a ring per player.
 var _unlag: Dictionary = {}
+## id -> [PackedInt32Array ticks, PackedVector3Array recorded, PackedVector3Array snapped, Callable snap]: each recorded
+## tick's position as the wire carries it, for `unlag_position_between` (`_snapped`).
+var _unlag_snaps: Dictionary = {}
+## Whether `unlag_position_between` keeps those snapped positions; off snaps on every call (cvar-free switch for A/B and checks).
+static var snap_memo := true
 ## id -> the position a rewind moved a player from, until it is restored.
 var _unlag_moved: Dictionary = {}
 ## The shooter, whom a rewind leaves where they are.

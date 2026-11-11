@@ -115,10 +115,18 @@ func _add_hull(out: Array, i: int, id: int, me_at: Vector3, near: bool, coarse: 
 	var feet := ctl.state.position
 	if near and feet.distance_squared_to(me_at) > coarse:
 		return
+	var t_p := Time.get_ticks_usec() if ArenaFrameProbe.ctl_split else 0
 	if not body_rules.blocks(id, other_id) or not other.is_alive():
+		if t_p != 0:
+			ArenaFrameProbe.add(&"ph_pair", t_p)
 		return
+	if t_p != 0:
+		ArenaFrameProbe.add(&"ph_pair", t_p)
 	if remote:
+		var t_f := Time.get_ticks_usec() if ArenaFrameProbe.ctl_split else 0
 		var at: Variant = remote_feet_fn.call(other_id, id, tick)
+		if t_f != 0:
+			ArenaFrameProbe.add(&"ph_feet", t_f)
 		if at is Vector3:
 			feet = at
 		if near and feet.distance_squared_to(me_at) > HULL_REACH_SQ:
@@ -299,11 +307,54 @@ func unlag_position_between(id: int, older: int, newer: int, at: float, snap := 
 	if a == null or b == null:
 		return null
 	if snap.is_valid():
-		a = snap.call(a)
-		b = snap.call(b)
+		if snap_memo:
+			a = _snapped(id, older, a, snap)
+			b = _snapped(id, newer, b, snap)
+		else:
+			a = snap.call(a)
+			b = snap.call(b)
 	if newer <= older:
 		return a
 	return (a as Vector3).lerp(b, clampf((at - float(older)) / float(newer - older), 0.0, 1.0))
+
+
+
+## [param snap] of [param raw], player [param id]'s position at recorded tick [param tick]. A lag-compensated mover asks it
+## of every neighbour twice a tick, and dot-net's `wire_value` (a write and a read through a buffer) was about 20 us a call:
+## 1 ms a tick per human in a crowd. The answer is kept per tick and used again only for the same snap and the same
+## recorded position to the bit, so it is the call's answer whatever rewrote the ring since.
+func _snapped(id: int, tick: int, raw: Variant, snap: Callable) -> Variant:
+	if not raw is Vector3:
+		return snap.call(raw)
+	var size := unlag_history()
+	var memo: Array = _unlag_snaps.get(id, [])
+	if memo.is_empty() or (memo[0] as PackedInt32Array).size() != size or memo[3] != snap:
+		var tags := PackedInt32Array()
+		tags.resize(size)
+		tags.fill(-1)
+		var recorded := PackedVector3Array()
+		recorded.resize(size)
+		var snapped := PackedVector3Array()
+		snapped.resize(size)
+		memo = [tags, recorded, snapped, snap]
+		_unlag_snaps[id] = memo
+	var slot := tick % size
+	var tags: PackedInt32Array = memo[0]
+	var recorded: PackedVector3Array = memo[1]
+	if tags[slot] == tick and recorded[slot] == raw:
+		return (memo[2] as PackedVector3Array)[slot]
+	var out: Variant = snap.call(raw)
+	if not out is Vector3:
+		return out
+	# Packed arrays are values: written and put back.
+	var snapped: PackedVector3Array = memo[2]
+	tags[slot] = tick
+	recorded[slot] = raw
+	snapped[slot] = out
+	memo[0] = tags
+	memo[1] = recorded
+	memo[2] = snapped
+	return out
 
 ## A mover's view lag in ticks as both ends collide with it: -1 (the present) when none was sent
 ## or compensation is off, else at most `max_unlag_ms` and [constant COLLISION_LAG_MAX_SEC].
