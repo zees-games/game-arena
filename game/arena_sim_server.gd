@@ -40,8 +40,11 @@ func _ready() -> void:
 	set_physics_process(_load_us > 0)
 	# Where a tick goes: the [ArenaFrameProbe] sections the server's tick records (srv_*, tick_*, p_*, bot_*, w_*),
 	# printed per tick beside each SIM_HOST line. Off by default: each section costs two clock reads.
-	if _arg("--sim_sections", "0") == "1":
+	# 2 adds the fine rows (pl_pre/pl_sim/pl_post, ArenaFrameProbe.fine).
+	var sections := _arg("--sim_sections", "0")
+	if sections == "1" or sections == "2":
 		ArenaFrameProbe.set_interval(1.0e9)
+		ArenaFrameProbe.fine = sections == "2"
 	var data := "user://sim_host"
 	var _made := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data))
 
