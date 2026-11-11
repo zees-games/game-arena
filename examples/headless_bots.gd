@@ -76,10 +76,10 @@ const REFERENCE_PROFILE := {
 }
 
 ## 46 + the setup pair repeated for each of the 2 extra seeds in each of 4 presets.
-const CHECKS := 62
+const CHECKS := 63
 const SECTIONS := 5
-## The same, split for the shards (`--shard PRESET`) and the merge (`--merge LOG...`): the order checks are six, the presets share the rest.
-const ORDER_CHECKS := 6
+## The same, split for the shards (`--shard PRESET`) and the merge (`--merge LOG...`): the order checks are seven, the presets share the rest.
+const ORDER_CHECKS := 7
 const PRESET_CHECKS := (CHECKS - ORDER_CHECKS) / 4
 
 var _entered := 0
