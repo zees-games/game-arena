@@ -158,9 +158,29 @@ func _test_audio_is_a_firefight() -> void:
 	# headless run can tell "the game would make a noise" from "the game has a table".
 	var bank := DotAudioSynth.bank(cat, recipes)
 	_check(
-		bank.has(&"fire_rifle") and bank.has("res://audio/fire_rifle.ogg"),
+		bank.has(&"fire_rifle") and bank.has(rifle.path),
 		"the bank answers under both the id and the path the def names"
 	)
+
+	# Item 1722: the shots, blast, impacts and moves were synthesised stand-ins because their files
+	# were looked for in a res://audio nobody filled. They name the addons' recorded files now.
+	var unrecorded: Array[String] = []
+	for id: StringName in ArenaPresentation.RECORDED:
+		var def := cat.find(id)
+		if def == null:
+			unrecorded.append(String(id))
+			continue
+		var files: Array[String] = [def.path]
+		for v in def.variants:
+			files.append(String(v))
+		if def.path.begins_with(ArenaPresentation.SOUND_DIR) or (def.variants.size() < 2 and int(ArenaPresentation.RECORDED[id][2]) > 1):
+			unrecorded.append(String(id))
+			continue
+		for f in files:
+			if not ResourceLoader.exists(f):
+				unrecorded.append(f)
+	_check(unrecorded.is_empty() and rifle.variants.size() == 5,
+		"the weapon, blast, impact and move sounds play the addons' recorded files, several each (wrong: %s)" % str(unrecorded))
 	_check(
 		(
 			(bank[&"fire_rail"] as AudioStreamWAV).data

@@ -21,12 +21,36 @@ static var settings_directory: String = PLAYER_SETTINGS
 
 const SOUND_DIR := "res://audio"
 
+## The ids that play recorded files from the family's addons rather than a synthesised stand-in:
+## id -> [folder, file stem, how many, gain dB, pitch low, pitch high]. The folder is
+## &"weapons" (dot-audio's `stock/weapons`), &"stock" (the rest of dot-audio's `stock/`) or
+## &"toys" (dot-props' toy sounds), each found from its addon's script so a mounted pack still
+## finds them. Several files per id and a pitch spread, so twelve shots are not one sample twelve
+## times. The recipes in [method sound_recipes] stay: they answer a build that lacks the files.
+const RECORDED := {
+	&"fire_rifle": [&"weapons", "rifle_fire", 5, 0.0, 0.95, 1.05],
+	&"fire_shotgun": [&"weapons", "shotgun_fire", 5, 0.0, 0.95, 1.04],
+	# Recorded a few dB hotter on average than the rifle, at a lower peak: level with it here.
+	&"fire_rail": [&"weapons", "rail_fire", 4, -3.0, 0.97, 1.03],
+	&"explosion": [&"weapons", "explosion", 5, 0.0, 0.9, 1.06],
+	&"impact": [&"weapons", "impact", 5, -2.0, 0.9, 1.1],
+	# A boot on a head: a meaty smack, not a sweep.
+	&"stomp": [&"weapons", "melee_flesh", 5, 2.0, 0.85, 0.95],
+	# Recorded about 10 dB under a shot; a pickup is meant to be heard over your own steps.
+	&"pickup": [&"weapons", "equip", 3, 6.0, 0.95, 1.08],
+	# A bell for the beacon: a ping that says where, and nothing like a hit marker.
+	&"beacon": [&"toys", "bell", 2, 0.0, 0.97, 1.03],
+	# The wall moves on the stock concrete step and light landing, pitched up a little so a run's
+	# first step is not heard as somebody else's footstep.
+	&"wall_run": [&"stock", "footsteps/footstep_concrete", 5, -4.0, 1.1, 1.2],
+	&"wall_jump": [&"stock", "landing/landing_light", 1, -4.0, 1.12, 1.2],
+}
+
 
 ## Each medal's stand-in: a voice and a pitch, so eleven medals are eleven sounds until real
 ## recordings land. Up is good news, so most are the upward sweep at a pitch that climbs with how
 ## rare the medal is; Nemesis is the low one.
 const STOMP_SOUND := &"stomp"
-const STOMP_PITCH := 1.9
 
 
 ## Capture the flag's cues: what the flag view saw (see on_flag_event).
@@ -387,7 +411,6 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	for id in [&"rifle", &"shotgun", &"rail"]:
 		var fire := DotAudioDef.new()
 		fire.id = StringName("fire_%s" % id)
-		fire.path = "%s/fire_%s.ogg" % [SOUND_DIR, id]
 		fire.kind = DotAudioDef.Kind.POSITIONAL_3D
 		fire.bus = &"SFX"
 		fire.unit_size = 14.0
@@ -396,38 +419,29 @@ static func sound_catalogue() -> DotAudioCatalogue:
 		# Twelve rifles in one tick is one gunshot, twelve times as loud. Three sounds like a firefight.
 		fire.max_concurrent = 3
 		fire.priority = 80
-		fire.pitch_min = 0.96
-		fire.pitch_max = 1.04
 		fire.tags = [&"weapon"]
-		c.add(fire)
+		c.add(recorded(fire))
 
 	# A blast: positional and carrying far, few at once.
 	var blast := DotAudioDef.new()
 	blast.id = EXPLOSION
-	blast.path = "%s/explosion.ogg" % SOUND_DIR
 	blast.kind = DotAudioDef.Kind.POSITIONAL_3D
 	blast.bus = &"SFX"
 	blast.unit_size = 22.0
 	blast.max_distance = 140.0
 	blast.max_concurrent = 3
 	blast.priority = 85
-	# The lowest thing the synthesiser makes reads as a blast rather than a gun.
-	blast.pitch_min = 0.42
-	blast.pitch_max = 0.5
 	blast.tags = [&"weapon"]
-	c.add(blast)
+	c.add(recorded(blast))
 
 	var impact := DotAudioDef.new()
 	impact.id = &"impact"
-	impact.path = "%s/impact.ogg" % SOUND_DIR
 	impact.kind = DotAudioDef.Kind.POSITIONAL_3D
 	impact.bus = &"SFX"
 	impact.max_distance = 40.0
 	impact.max_concurrent = 4
 	impact.priority = 40
-	impact.pitch_min = 0.9
-	impact.pitch_max = 1.1
-	c.add(impact)
+	c.add(recorded(impact))
 
 	# Flat, not positional: a hit marker is about your own shot and must not fade with distance.
 	var hit := DotAudioDef.new()
@@ -476,13 +490,10 @@ static func sound_catalogue() -> DotAudioCatalogue:
 
 	var stomp := DotAudioDef.new()
 	stomp.id = STOMP_SOUND
-	stomp.path = "%s/%s.ogg" % [SOUND_DIR, String(STOMP_SOUND)]
 	stomp.bus = &"SFX"
 	stomp.max_concurrent = 3
 	stomp.priority = 88
-	stomp.pitch_min = STOMP_PITCH * 0.95
-	stomp.pitch_max = STOMP_PITCH * 1.05
-	c.add(stomp)
+	c.add(recorded(stomp))
 
 	var hurt := DotAudioDef.new()
 	hurt.id = &"hurt"
@@ -524,40 +535,32 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	# say only that somebody somewhere is beaconed.
 	var ping := DotAudioDef.new()
 	ping.id = BEACON_SOUND
-	ping.path = "%s/beacon.ogg" % SOUND_DIR
 	ping.kind = DotAudioDef.Kind.POSITIONAL_3D
 	ping.bus = &"SFX"
 	ping.unit_size = 20.0
 	ping.max_distance = 160.0
 	ping.max_concurrent = 4
 	ping.priority = 45
-	ping.pitch_min = 0.5
-	ping.pitch_max = 0.5
-	c.add(ping)
+	c.add(recorded(ping))
 
-	# The wall moves. Pitched up from the voices they borrow, so a wall jump is never heard
-	# as an impact and a run's first step never as somebody else's footstep.
-	for wall in [[WALL_RUN_SOUND, 1.35, 120], [WALL_JUMP_SOUND, 1.5, 90]]:
+	# The wall moves: files and pitch in RECORDED; a cooldown each so a run is a step, not a buzz.
+	for wall in [[WALL_RUN_SOUND, 120], [WALL_JUMP_SOUND, 90]]:
 		var move := DotAudioDef.new()
 		move.id = wall[0]
-		move.path = "%s/%s.ogg" % [SOUND_DIR, String(wall[0])]
 		move.bus = &"SFX"
-		move.cooldown_ms = wall[2]
+		move.cooldown_ms = wall[1]
 		move.max_concurrent = 1
 		move.priority = 55
-		move.pitch_min = float(wall[1])
-		move.pitch_max = float(wall[1])
-		c.add(move)
+		c.add(recorded(move))
 
 	var pickup := DotAudioDef.new()
 	pickup.id = &"pickup"
-	pickup.path = "%s/pickup.ogg" % SOUND_DIR
 	pickup.kind = DotAudioDef.Kind.POSITIONAL_3D
 	pickup.bus = &"SFX"
 	pickup.max_distance = 30.0
 	pickup.max_concurrent = 3
 	pickup.priority = 50
-	c.add(pickup)
+	c.add(recorded(pickup))
 
 	# A body landing: dot-player-char's stock death sounds (Kenney, CC0), the thud, the face
 	# plant's smack, a crumple's slump and a launch's whoosh. Positional, because they say
@@ -600,13 +603,40 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	return c
 
 
+## [param def] with its [constant RECORDED] files, gain and pitch spread; unchanged for an id that has none.
+static func recorded(def: DotAudioDef) -> DotAudioDef:
+	var row: Array = RECORDED.get(def.id, [])
+	if row.is_empty():
+		return def
+	var dir := recorded_directory(row[0])
+	var variants := PackedStringArray()
+	for i in range(int(row[2])):
+		variants.append(dir.path_join("%s_%d.ogg" % [row[1], i]) if int(row[2]) > 1 else dir.path_join("%s.ogg" % row[1]))
+	def.path = variants[0]
+	def.variants = variants if variants.size() > 1 else PackedStringArray()
+	def.gain_db = float(row[3])
+	def.pitch_min = float(row[4])
+	def.pitch_max = float(row[5])
+	return def
+
+
+## Where a [constant RECORDED] folder is in this build.
+static func recorded_directory(folder: StringName) -> String:
+	match folder:
+		&"weapons":
+			return DotAudioWeaponStock.directory()
+		&"toys":
+			return DotPropBodySounds.directory()
+	return DotAudioStock.directory()
+
+
 ## Which synthesised voice stands in for each id until real audio is dropped into [constant
 ## SOUND_DIR]. Which noise belongs to which id is this game's decision, not an addon's guess from an
 ## id like `fire_rail`.
 static func sound_recipes() -> Dictionary:
 	var out := _base_recipes()
 	out[KILL_CONFIRMED] = DotAudioSynth.Voice.BLIP
-	out[STOMP_SOUND] = DotAudioSynth.Voice.SPAWN
+	out[STOMP_SOUND] = DotAudioSynth.Voice.IMPACT
 	for id in MEDAL_VOICES:
 		out[id] = MEDAL_VOICES[id][0]
 	for id in FLAG_VOICES:
@@ -620,7 +650,7 @@ static func _base_recipes() -> Dictionary:
 		&"fire_shotgun": DotAudioSynth.Voice.SHOT_HEAVY,
 		&"fire_rail": DotAudioSynth.Voice.SHOT_TIGHT,
 		&"impact": DotAudioSynth.Voice.IMPACT,
-		EXPLOSION: DotAudioSynth.Voice.SHOT_HEAVY,
+		EXPLOSION: DotAudioSynth.Voice.BOOM,
 		&"hit_marker": DotAudioSynth.Voice.BLIP,
 		&"hurt": DotAudioSynth.Voice.HURT,
 		&"died": DotAudioSynth.Voice.DIE,
@@ -730,7 +760,7 @@ func _build_audio() -> DotResult:
 		_bake_hold(true)
 		DotLog.info(
 			CHANNEL,
-			"no audio files; synthesised stand-ins are in use",
+			"synthesised stand-ins baked for ids whose files this build lacks",
 			{"ids": _bake_ids.size(), "dir": SOUND_DIR}
 		)
 
