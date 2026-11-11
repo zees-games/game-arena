@@ -11,6 +11,7 @@ const ArenaModes := preload("../game/arena_modes.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
+const ArenaPlayer := preload("../game/arena_player.gd")
 
 ## cp-orange-x3 (arena-dm-maps), a large control point map: its team spawns are red and blue, the
 ## manifest lists the modes it hosts, and CTF puts the flags where `flag_spawns` says. Skips
@@ -209,6 +210,38 @@ func _run() -> void:
 		if way.size() >= 2 and way[way.size() - 1].distance_to(spawn.origin) < 1.5:
 			reached += 1
 	print("  from the last red spawn, %d of %d spawns are reached in full" % [reached, all_spawns.size()])
+
+	print("-- a player walks up each staircase to the top of the wall beside it")
+	# The two portable stairs (prop_dynamic, solid) against the side walls are the sniper way up, 249 units: the
+	# converter's ramp hull under each (dot-map-convert stair_hulls) is what the body climbs. Hammer (x, y, z) is (x, z, -y)
+	# here. Forward held toward the top landing, no jump: standing (grounded) at wall-top height within 1.5 m of the
+	# landing is on the stairs' top, as the floor round them is 4.7 m lower. (A bot's route stops short: the mesh has no
+	# ramp yet.)
+	var climber: ArenaPlayer = _game.player_for(1)
+	# The first tick of the match moves the body to its spawn; only after it does a teleport hold.
+	_game.tick({})
+	for stair in [[Vector3(760, -2053, -5316), Vector3(330, -1804, -5316)], [Vector3(-2275, -2053, -1808), Vector3(-1845, -1804, -1808)]]:
+		var foot: Vector3 = stair[0] * 0.01905
+		var top: Vector3 = stair[1] * 0.01905
+		# teleport and not state.position: the controller's body keeps its old place otherwise.
+		climber.controller.teleport(foot, rad_to_deg(atan2(foot.x - top.x, foot.z - top.z)), 0.0)
+		var stood := Vector3.INF
+		var highest := foot
+		for i in 8 * 64:
+			var feet: Vector3 = climber.controller.state.position
+			var move := DotFpsCommand.new()
+			move.move = Vector2(0.0, 1.0)
+			move.yaw = rad_to_deg(atan2(feet.x - top.x, feet.z - top.z))
+			_game.tick({1: [move, DotWeaponCommand.new()]})
+			feet = climber.controller.state.position
+			highest = feet if feet.y > highest.y else highest
+			if climber.controller.state.is_grounded() and feet.y > top.y - 0.2 and Vector2(feet.x - top.x, feet.z - top.z).length() < 1.5:
+				stood = feet
+				break
+			if i % 16 == 0:
+				await get_tree().physics_frame
+		_check(stood.is_finite(), "from %s a player walks up %.2f m and stands at the top" % [foot, highest.y - foot.y],
+			"highest %s, ended %s" % [highest, climber.controller.state.position])
 	_game.queue_free()
 	await get_tree().process_frame
 
