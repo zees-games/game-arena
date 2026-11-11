@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/headless_input_reach.gd" id="1_reach"]
+
+[node name="HeadlessInputReach" type="Node"]
+script = ExtResource("1_reach")
