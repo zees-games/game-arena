@@ -1,25 +1,8 @@
 extends Node
 
-## Fire, Tab and the console key reach their handlers, through the real input pipeline.
-##
-## [b]Why this suite exists.[/b] On 2026-11-10 a player could run but not shoot, Tab showed no
-## scoreboard, the console key did nothing and the settings pages were empty. Movement and
-## the Escape and map menus register their own actions (dot-player-controller's sampler,
-## dot-menu, the built-in `ui_cancel`); fire, the scoreboard key and the console all come
-## from the presentation layer ([code]ArenaPresentation[/code], its bindings table and its
-## console). The presentation did not compile: it named an addon class
-## ([code]DotVoiceQueue[/code]) that the published addon did not have yet. With no
-## presentation the client's `_is`/`_held` guards ([code]InputMap.has_action[/code]) quietly
-## dropped every arena key.
-##
-## So the client chain is loaded here with [code]load()[/code], not [code]preload[/code]: a
-## presentation that does not compile is a FAIL line in this suite, not a suite that never
-## starts. The other suites preload the client and simply do not run when it breaks, which
-## a suite list read on a machine with newer, unpushed addons never shows.
-##
-## [codeblock]
-## godot --headless --path . res://examples/headless_input_reach.tscn
-## [/codeblock]
+## Fire, Tab and the console key reach their handlers through the real input path. They all come
+## from the presentation; if it fails to compile (an addon class the published addon lacks), the
+## client's InputMap.has_action guards drop every arena key, so the chain is load()ed, not preloaded.
 
 const EXPECTED_CHECKS := 7
 
@@ -45,11 +28,8 @@ func _finish() -> void:
 	get_tree().quit(0 if ok else 1)
 
 
-## The client chain's roots that do not compile. The client extends the client state, which
-## preloads the presentation, which extends its two halves: one class missing anywhere in that
-## graph fails the root, and the game still starts, with half its keys dead. Only the roots are
-## loaded: loading every script in res://game at once keeps ~1300 scripts alive past exit
-## (graphs the game never loads together), which game.sh rightly fails as a leak.
+## Client-chain roots that fail to compile: a class missing anywhere in their graph fails the root.
+## Only the roots: load()ing all of res://game keeps ~1300 scripts alive past exit (a leak in game.sh).
 const CLIENT_ROOTS: Array[String] = [
 	"res://game/arena_client.gd", "res://game/arena_presentation.gd",
 	"res://game/arena_presentation_b1.gd", "res://game/arena_presentation_b2.gd",
