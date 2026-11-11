@@ -18,6 +18,7 @@ const ArenaHud := preload("arena_hud.gd")
 
 const ArenaWeaponIcons := preload("arena_weapon_icons.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
+const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaKillcamBodies := preload("arena_killcam_bodies.gd")
 
@@ -525,7 +526,11 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 		# Impacts are a list because a shotgun is one shot with several of them, and one impact sound for eight pellets sounds like a rifle. Each faces along the aim, not along its own pellet (the pellet directions are not kept per impact).
 		# [b]With the weapon drawing its own shot, only the hole is this layer's.[/b] arena-weapons' `AwShotFx` puts the flash at the real muzzle, a tracer, a spark and a report per weapon;
 		# drawing this layer's as well was two flashes, two sparks and a stand-in rifle report under the real one.
+		# An impact on a sky brush is open sky to the player: no hole, spark or sound (cp-orange-x3's specks in the clouds). Hit results are untouched.
+		var space := _space()
 		for at in shot.impacts:
+			if ArenaBspMap.on_sky(space, at, shot.direction):
+				continue
 			if weapon_draws:
 				fx.spawn_decal(&"bullet_hole", facing(at, shot.direction))
 			else:
@@ -537,6 +542,14 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 		# No hit marker here. `shot.damages` is this client's PREDICTION of what its shot
 		# did, and the server may refuse it (a lag-compensated miss, a protected spawn);
 		# the marker and its sound wait for the server's HIT ([method on_hit_confirmed]).
+
+
+## The physics this presentation's world answers queries from, or null outside the tree.
+func _space() -> PhysicsDirectSpaceState3D:
+	if not is_inside_tree():
+		return null
+	var world := get_viewport().find_world_3d()
+	return world.direct_space_state if world != null else null
 
 
 func on_fired(weapon_id: StringName, muzzle: Transform3D, mine: bool) -> void:

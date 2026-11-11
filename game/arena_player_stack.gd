@@ -2,6 +2,7 @@ extends "arena_player_stack_calls.gd"
 
 const ArenaContent := preload("arena_content.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 
 const CHANNEL := "arena.stack"
 
@@ -198,8 +199,8 @@ func classify_tree(root: Node, layer_id: StringName) -> int:
 
 	var done := 0
 
-	# Importer hull bodies (clip, fence, glass) keep their layers, or shots and sight could not tell them from a wall.
-	if DotMapGlassSight.is_exempt(root):
+	# Importer hull bodies (clip, fence, glass) and the sky mark keep their layers, or shots and sight could not tell them from a wall.
+	if DotMapGlassSight.is_exempt(root) or root.is_in_group(ArenaBspMap.SKY_GROUP):
 		return 0
 
 	if root is CollisionObject3D or root is CollisionObject2D:

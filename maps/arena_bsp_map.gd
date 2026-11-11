@@ -194,6 +194,80 @@ const GLASS_BIT := 1 << 20
 const GLASS_META := &"glass_sight"
 
 
+## Group of the area marking a map's sky brushes ([method _mark_sky]): a shot ending on one drew a hole or a spark in the open sky.
+const SKY_GROUP := &"arena_sky"
+## Collision layer of that area, which only [method on_sky] asks for. Areas are not in the bots' nav bake, and shots do not see them.
+const SKY_BIT := 1 << 21
+
+
+## Marks the sky hulls with meta hull_kind "sky" and copies their shapes into an Area3D in [constant SKY_GROUP] on [constant SKY_BIT]: the
+## world body is not changed, so shots, bodies and the nav bake are as before. hull_kinds in [param info] names them by hull index; a
+## manifest from before hull_kinds is matched by box against the converted world, as the fences are.
+static func _mark_sky(body: StaticBody3D, id: String, dir: String, info: Dictionary) -> void:
+	var hulls := body.get_children()
+	var sky: Array[CollisionShape3D] = []
+	var kinds: Variant = info.get("hull_kinds")
+	if kinds is Dictionary:
+		for n: Variant in (kinds as Dictionary).get("sky", []):
+			var shape := hulls[int(n)] as CollisionShape3D if int(n) >= 0 and int(n) < hulls.size() else null
+			if shape != null:
+				sky.append(shape)
+	else:
+		var prefix := world_prefix(id, dir)
+		var got: DotMapBspMesh = DotMapBspMesh.load_prefix(prefix).value if not prefix.is_empty() else null
+		if got == null:
+			return
+		# Matched on a scratch body of the same shapes: re-adding a hull to the world body would reorder its shape
+		# owners, and the bots' nav bake depends on that order.
+		var scratch := StaticBody3D.new()
+		var by_shape := {}
+		for hull: Node in hulls:
+			if hull is CollisionShape3D:
+				by_shape[(hull as CollisionShape3D).shape] = hull
+				var copy := CollisionShape3D.new()
+				copy.shape = (hull as CollisionShape3D).shape
+				copy.transform = (hull as CollisionShape3D).transform
+				scratch.add_child(copy)
+		var _moved := got.split_legacy_hulls(scratch, {"sky": SKY_BIT})
+		var split := scratch.find_child("ImportedSky", false, false)
+		for copy: Node in (split.get_children() if split != null else []):
+			sky.append(by_shape[(copy as CollisionShape3D).shape])
+		scratch.free()
+	if sky.is_empty():
+		return
+	var area := Area3D.new()
+	area.name = "ImportedSky"
+	area.collision_layer = SKY_BIT
+	area.collision_mask = 0
+	area.monitoring = false
+	area.set_meta(&"hull_kind", "sky")
+	area.add_to_group(SKY_GROUP, true)
+	for shape in sky:
+		shape.set_meta(&"hull_kind", "sky")
+		var mark := CollisionShape3D.new()
+		mark.shape = shape.shape
+		mark.transform = shape.transform
+		area.add_child(mark)
+	body.add_child(area)
+	DotLog.debug("arena.maps", "sky hulls marked for the effects", {"map": id, "hulls": sky.size(), "by_index": kinds is Dictionary})
+
+
+## Whether a shot along [param direction] that ended at [param at] ended on a sky brush: no hole, spark or mark belongs there.
+static func on_sky(space: PhysicsDirectSpaceState3D, at: Vector3, direction: Vector3) -> bool:
+	if space == null or not at.is_finite():
+		return false
+	var query := PhysicsPointQueryParameters3D.new()
+	query.position = at + direction.normalized() * 0.05
+	query.collision_mask = SKY_BIT
+	query.collide_with_bodies = false
+	query.collide_with_areas = true
+	for hit: Dictionary in space.intersect_point(query, 4):
+		var node := hit.get("collider") as Node
+		if node != null and node.is_in_group(SKY_GROUP):
+			return true
+	return false
+
+
 ## Moves the legacy player-clip, fence, grate, vent and glass hulls off the shot layer: they still stop a body, and a shot passes.
 ## Glass goes on [constant GLASS_BIT] as well, and a jail cell gets a `DotMapGlassSight` stored as [constant GLASS_META] on [param body].
 static func _split_fences(body: StaticBody3D, id: String, dir: String) -> void:
@@ -470,6 +544,7 @@ static func build_collision(manifest: Dictionary, dir: String) -> StaticBody3D:
 		shape.shape = hull
 		body.add_child(shape)
 
+	_mark_sky(body, id, dir, info)
 	_swap_glass(body, id, dir)
 	_split_fences(body, id, dir)
 

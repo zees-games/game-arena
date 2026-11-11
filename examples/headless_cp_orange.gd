@@ -10,6 +10,7 @@ const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaModes := preload("../game/arena_modes.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
+const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 
 ## cp-orange-x3 (arena-dm-maps), a large control point map: its team spawns are red and blue, the
 ## manifest lists the modes it hosts, and CTF puts the flags where `flag_spawns` says. Skips
@@ -87,6 +88,61 @@ func _run() -> void:
 		if hit.is_empty():
 			print("  no ground under %s" % spawn.origin)
 	_check(floored == _game.map.spawns.size(), "every spawn has ground within 1.5 m below (%d of %d)" % [floored, _game.map.spawns.size()])
+
+	print("-- the sky stops shots as before but takes no marks")
+	var skies := get_tree().get_nodes_in_group(ArenaBspMap.SKY_GROUP)
+	_check(not skies.is_empty(), "the sky brushes are marked by their own area (%d)" % skies.size())
+	var sky_area := (skies[0] if not skies.is_empty() else null) as Area3D
+	var world_body := (sky_area.get_parent() if sky_area != null else null) as StaticBody3D
+	_check(sky_area != null and world_body != null and sky_area.collision_layer == ArenaBspMap.SKY_BIT \
+		and world_body.collision_layer & ArenaBspMap.SKY_BIT == 0, "on a layer of its own, beside the world body")
+	_check(sky_area != null and str(sky_area.get_meta(&"hull_kind", "")) == "sky", "tagged hull_kind sky, which the weapon effects skip")
+	var world_shapes := {}
+	for shape: Node in (world_body.get_children() if world_body != null else []):
+		if shape is CollisionShape3D:
+			world_shapes[(shape as CollisionShape3D).shape] = true
+	var kept := 0
+	for shape: Node in (sky_area.get_children() if sky_area != null else []):
+		kept += 1 if world_shapes.has((shape as CollisionShape3D).shape) else 0
+	_check(sky_area != null and kept > 0 and kept == sky_area.get_child_count(),
+		"the world body still holds every sky hull (hit results and the nav bake unchanged)")
+	# The spawn rooms are roofed, so the shots go up from open ground: a grid of points dropped from under the sky's top
+	# brush. A drop that lands on the sky's bottom brush is outside the playable map and is skipped; a shot up counts once
+	# it reaches the underside of the top sky brush (roof).
+	var corners := PackedVector3Array()
+	var roof := -INF
+	for shape: Node in (sky_area.get_children() if sky_area != null else []):
+		var points := ((shape as CollisionShape3D).shape as ConvexPolygonShape3D).points
+		corners.append_array(points)
+		var low := INF
+		for p in points:
+			low = minf(low, p.y)
+		roof = maxf(roof, low)
+	var sky_box := AABB(corners[0], Vector3.ZERO) if not corners.is_empty() else AABB()
+	for p in corners:
+		sky_box = sky_box.expand(p)
+	var up_sky := 0
+	var marked_sky := 0
+	var grounds := 0
+	for gx in 16:
+		for gz in 16:
+			var top := Vector3(sky_box.position.x + sky_box.size.x * (gx + 0.5) / 16.0, sky_box.end.y - 3.0,
+				sky_box.position.z + sky_box.size.z * (gz + 0.5) / 16.0)
+			var down := space.intersect_ray(PhysicsRayQueryParameters3D.create(top, Vector3(top.x, sky_box.position.y - 1.0, top.z)))
+			if down.is_empty() or ArenaBspMap.on_sky(space, down.position, Vector3.DOWN):
+				continue
+			grounds += 1
+			var from: Vector3 = down.position + Vector3.UP * 1.0
+			var up := space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + Vector3.UP * 4000.0))
+			if up.is_empty() or up.collider != world_body:
+				continue
+			if up.position.y < roof - 0.1:
+				continue
+			up_sky += 1
+			marked_sky += 0 if ArenaBspMap.on_sky(space, up.position, Vector3.UP) else 1
+	_check(up_sky > 0, "a shot straight up from open ground still stops on the sky (%d of %d grounds)" % [up_sky, grounds])
+	_check(up_sky > 0 and marked_sky == 0, "every such hit reads as sky, so it gets no decal (%d missed)" % marked_sky)
+	_check(grounds > 0, "some ground under the sky does not read as sky (%d)" % grounds)
 
 	print("-- the modes it hosts are the listed ones")
 	var def := ArenaMaps.catalogue().get_map(MAP)

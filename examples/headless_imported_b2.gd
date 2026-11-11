@@ -316,10 +316,12 @@ func _test_loads() -> bool:
 		1 if int(info.get("displacement_index_count", 0)) > 0 else 0
 	)
 	var solid := _game.map.collision_root
-	# Clip and fence hulls sit in their own bodies (shots pass them), so count the shapes below the root.
+	# Clip and fence hulls sit in their own bodies (shots pass them), so count the shapes below the root; the sky mark only copies hulls.
 	var shapes := -1
 	if solid != null:
-		shapes = solid.find_children("*", "CollisionShape3D", true, false).size()
+		shapes = 0
+		for shape: Node in solid.find_children("*", "CollisionShape3D", true, false):
+			shapes += 0 if shape.get_parent().is_in_group(ArenaBspMap.SKY_GROUP) else 1
 	_check(solid != null and solid.is_inside_tree() and shapes == expected,
 		"one shape per brush is in the tree (%d of %d)" % [shapes, expected])
 	_check(_game.combat.trace is DotTracePhysics,
