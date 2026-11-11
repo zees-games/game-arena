@@ -1,6 +1,7 @@
 extends "arena_client_prewarm.gd"
 
 const ArenaContentGroups := preload("arena_content_groups.gd")
+const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 
 ## Whether E is the prop tool's key here: only in a mode where players use props. Anywhere
 ## else E is the launch, which is what most of the arena's modes want it for.
@@ -87,8 +88,13 @@ func _classify_level() -> void:
 func _enter_level(release: bool) -> void:
 	_level_busy = true
 	var slice := DotFrameSlice.new()
+	var world := _read_world()
+	if world:
+		await _level_frame()
 	await game.build_map_io_async(slice)
 	ArenaLoadTimeline.mark("map_io_built")
+	if world:
+		await _level_frame()
 	var made: Node3D = await game.map.to_scene_async(slice)
 	ArenaLoadTimeline.mark("map_scene_built")
 	if _level != null and is_instance_valid(_level):
@@ -103,12 +109,35 @@ func _enter_level(release: bool) -> void:
 	if release:
 		gate.release(&"map")
 
+## Reads the current map's converted world into dot-map's mesh cache, which the movers and the level then share.
+## True when there was one, so the read and the movers each get a frame; a built-in map builds as before.
+func _read_world() -> bool:
+	var map: ArenaMap = game.map
+	if map == null or not map.is_imported() or not ArenaMap.use_worlds or DotPlatform.is_headless():
+		return false
+	var prefix := ArenaBspMap.world_prefix(String(map.id), map.manifest_path.get_base_dir())
+	if prefix.is_empty():
+		return false
+	var _read := DotMapBspMesh.load_prefix(prefix)
+	ArenaLoadTimeline.mark("map world read")
+	return true
+
+## A frame boundary between the steps of a level switch, which is already under the map hold's cover.
+## The cp-orange-x3 switch was one 1.2 s frame on staging02. Headless (suites, servers) runs straight on.
+func _level_frame() -> void:
+	if DotPlatform.is_headless() or not is_inside_tree():
+		return
+	await get_tree().process_frame
+
 ## The world was replaced under this client.
 func _on_map_changed(map: DotMapDef) -> void:
 	# Cover and stop the frozen body until the new level is in (released below).
 	gate.hold(&"map", "Loading the map")
 	while _level_busy:
 		await get_tree().process_frame
+	# Busy from here, so a second announcement waits for this whole switch, not only its level build.
+	_level_busy = true
+	await _level_frame()
 	# The new map's own files (its bake, its rides) are a download group of their own; fetch them first.
 	var _topped: DotResult = await ArenaContentGroups.top_up(map.id)
 	# **The client has to ADOPT the map it was handed, and this is where that was missing.**
@@ -117,6 +146,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 	var adopted := (
 		game.map if game.map != null and game.map.id == map.id else ArenaMap.by_id(map.id)
 	)
+	ArenaLoadTimeline.mark("map adopted")
 
 	if adopted != null:
 		game.map = adopted
@@ -134,7 +164,10 @@ func _on_map_changed(map: DotMapDef) -> void:
 		})
 
 	# The rebuilt game's drop layer is empty; fill it before the cover lifts (the hold must precede the map's release).
+	ArenaLoadTimeline.mark("players moved to the map")
 	_repool_drops()
+	ArenaLoadTimeline.mark("drops repooled")
+	await _level_frame()
 	await _enter_level(true)
 
 	# A mirroring client's combat manager is never rebuilt — `change_map` is the server's —
