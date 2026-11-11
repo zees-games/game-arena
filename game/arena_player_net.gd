@@ -177,6 +177,11 @@ func _register_net_vars() -> void:
 			# when to push. Data never sent cannot be read out of a client.
 			declaration.to_owner_only()
 
+		# Watcher-only picture: the owner draws its own rig, and comparing them made every
+		# snapshot replay once the owner's shot counter drifted (reconcile-weapon-fields-1).
+		if spec["property"] in [&"net_fire_seq", &"net_fire_kind", &"net_charge"]:
+			declaration.server_driven()
+
 	# The owner's exact movement, to rewind from (see [member net_exact]).
 	replicate(&"net_exact", DotNetVar.Type.CUSTOM).codec(_write_exact, _read_exact).to_owner_only()
 
