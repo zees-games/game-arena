@@ -8,7 +8,7 @@ const ArenaSimOwner := preload("arena_sim_owner.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
-## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N`. It writes PATH once it accepts players, and quits a few seconds after its player left.
+## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N`. It writes PATH once it accepts players, and quits a few seconds after its player left.
 
 const CHANNEL := "arena.sim_server"
 const REPORT_SEC := 5.0
@@ -21,6 +21,9 @@ var _server: DotServer = null
 var _joined := false
 var _alone_sec := 0.0
 var _since_check := 0.0
+## `--sim_load_us N`, a bench knob: N microseconds of busy wait on every physics tick, to stand in for a
+## slower machine's tick (the owner's 12-14 ms) on a fast bench box. 0, the default, adds nothing.
+var _load_us := 0
 
 
 func _ready() -> void:
@@ -31,6 +34,8 @@ func _ready() -> void:
 		return
 	# The brains on worker threads: the same match as one thread (headless_botthreads), less of each tick.
 	ArenaBotThreads.threads = maxi(0, int(_arg("--bot_threads", str(default_bot_threads()))))
+	_load_us = maxi(0, int(_arg("--sim_load_us", "0")))
+	set_physics_process(_load_us > 0)
 	var data := "user://sim_host"
 	var _made := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data))
 
@@ -127,6 +132,12 @@ func _process(delta: float) -> void:
 	_joined = _joined or _alone_sec == 0.0
 	if _alone_sec >= (GONE_SEC if _joined else NEVER_SEC):
 		get_tree().quit(0)
+
+
+func _physics_process(_delta: float) -> void:
+	var until := Time.get_ticks_usec() + _load_us
+	while Time.get_ticks_usec() < until:
+		pass
 
 
 func _remote_players() -> int:
