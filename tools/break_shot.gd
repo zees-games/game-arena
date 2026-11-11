@@ -1,5 +1,5 @@
 extends SceneTree
-## Renders a real breakable of an imported map before and after it breaks, with dot-fx's break effect: one glass pane and one wood breakable.
+## Renders a real breakable of an imported map before and after a hitscan shot (dot-combat's pellet trace) breaks it, with dot-fx's break effect: one glass pane and one wood breakable.
 ## xvfb-run godot --path . --script tools/break_shot.gd -- <map id> [<legacy map dir>]  ->  screenshots/<id>_break_<kind>_{before,after}.png
 
 const Bsp := preload("res://maps/arena_bsp_map.gd")
@@ -10,6 +10,8 @@ const ArenaPresentation := preload("../game/arena_presentation.gd")
 var _cam: Camera3D
 ## Frame sequence after the "after" still (DOT_SHOT_FRAMES); see DotShotSeq.
 var _seq := DotShotSeq.new()
+var _combat := DotCombatManager.new()
+var _trace := DotTracePhysics.new()
 
 
 func _initialize() -> void:
@@ -22,6 +24,8 @@ func _initialize() -> void:
 	root.add_child(ArenaMapLighting.build(map))
 	var body := Bsp.build_collision(Bsp.read_manifest(dir.path_join("%s.json" % id)), dir)
 	root.add_child(body)
+	_combat.trace = _trace
+	root.add_child(_combat)
 	var fx := DotFxBreak.new()
 	fx.add_to_group(&"arena_break_fx")
 	root.add_child(fx)
@@ -34,6 +38,7 @@ func _initialize() -> void:
 func _run(body: Node, fx: DotFxBreak, id: String) -> void:
 	for _i in 4:
 		await process_frame
+	_trace.bind_from_node(body)
 	DirAccess.make_dir_recursive_absolute("screenshots")
 	for want in ["glass", "wood"]:
 		var pane: Node3D = null
@@ -59,7 +64,15 @@ func _run(body: Node, fx: DotFxBreak, id: String) -> void:
 		for _i in 6:
 			await process_frame
 		_save("screenshots/%s_break_%s_before.png" % [id, want])
-		pane.call(&"hurt", 1000.0, box.get_center(), &"bullet")
+		var shot := DotShot.new()
+		shot.origin = eye
+		shot.direction = (box.get_center() - eye).normalized()
+		shot.pellets = [shot.direction]
+		shot.damage = 1000.0
+		shot.max_range = eye.distance_to(box.get_center()) + 2.0
+		var _r := _combat.resolve_shot(shot)
+		if not bool(pane.call(&"is_broken")):
+			print("FAIL the shot did not break ", pane.name, " impacts ", shot.impacts)
 		var _b := fx.burst(String(pane.get(&"kind")), box.get_center(), n, 1.0)
 		for _i in 7:
 			await process_frame
