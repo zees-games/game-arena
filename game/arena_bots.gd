@@ -159,7 +159,9 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 		mind.far = false
 		var engaged := intent.target_id >= 0 and not world.brains.has(intent.target_id)
 		# every here is the coast's length: to the bot's next beat at its tier's period.
-		mind.every = DotBotThinkTier.until_beat(tick, mind.seed, maxi(tiers.period(bot.player_id, me.position, engaged), think_floor_engaged if engaged else think_floor))
+		# Idle: no target, or dead (a bot fighting a bot is neither); a seen idle bot thins to tiers.idle_view_every.
+		var idle := intent.target_id < 0
+		mind.every = DotBotThinkTier.until_beat(tick, mind.seed, maxi(tiers.period(bot.player_id, me.position, engaged, idle), think_floor_engaged if engaged else think_floor))
 		mind.coasting = mind.every > 1 and _tier_coastable(mind, intent)
 	else:
 		mind.far = _every > 1 and _nobody_near(me, world)

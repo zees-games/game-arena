@@ -9,6 +9,7 @@ const ArenaNetContext := preload("../game/arena_net_context.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client. Windowed on a GPU box (tools/perf_bench.sh) or headless through hv: `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
+## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
 ## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
 
 var _pilot := true
@@ -58,6 +59,8 @@ func _ready() -> void:
 		get_window().size = Vector2i(int(wh[0]), int(wh[1]))
 	if args.has("killcam-hz"):
 		preload("../game/arena_killcam_bodies.gd").record_hz = float(args["killcam-hz"])
+	if args.has("tier-idle-seen"):
+		preload("../game/arena_bots.gd").tiers.idle_view_every = int(args["tier-idle-seen"])
 	if int(args.get("batch", 1)) == 0:
 		ArenaHullGrid.batch = false
 	ArenaHullGrid.min_players = int(args.get("hull-min", ArenaHullGrid.MIN_PLAYERS))

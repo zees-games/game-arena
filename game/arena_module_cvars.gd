@@ -267,6 +267,7 @@ func _add_bot_think_cvars() -> void:
 	_add_bot_tier_cvar("bot_tier_close", "tiers.close_range", "Metres: a bot this close to a person thinks every tick whatever the person faces", 0.0)
 	_add_bot_tier_cvar("bot_tier_nearest", "tiers.nearest", "This many bots nearest each person think every tick", 0.0)
 	_add_bot_tier_cvar("bot_tier_every_engaged", "tiers.engaged_far_every", "Ticks between thinks of a bot fighting a person beyond bot_tier_engaged_range and out of view (1: every tick)", 1.0)
+	_add_bot_tier_cvar("bot_tier_every_idle_seen", "tiers.idle_view_every", "Ticks between thinks of a bot with no target (or dead) inside a person's view cone but not close or nearest (1: every tick)", 1.0)
 	_add_bot_tier_cvar("bot_tier_engaged_range", "tiers.engaged_range", "Metres: a bot fighting a person this close thinks every tick", 0.0)
 	_add_bot_tier_cvar("bot_tier_view", "tiers.view_range", "Metres: a bot inside a person's view cone within this thinks every tick", 0.0)
 	add_cvar("bot_tier_floor", str(ArenaBots.think_floor),
