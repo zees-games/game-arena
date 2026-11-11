@@ -112,6 +112,9 @@ static func schema() -> DotStatsSchema:
 	DotStatsPenetration.declare(schema)
 	DotStatsPenetration.declare_walls(schema)
 	DotStatsHitzones.declare(schema)
+	# The shared accuracy pair (`shots`, `hits`): published, so the site derives Accuracy. The unpublished
+	# arena.shots_* below stay for the achievement rules; DotStatsDamage.report_shot_outcome fills these.
+	DotStatsShots.declare(schema)
 	_counter(schema, SHOTS_FIRED, "Shots fired", "shots", false)
 	_counter(schema, SHOTS_HIT, "Shots landed", "shots", false)
 

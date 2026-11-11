@@ -610,6 +610,7 @@ func _on_shot_resolved(shot: DotShot) -> void:
 
 	if shot.hit_anyone():
 		record(shot.attacker, ArenaStats.SHOTS_HIT)
+	var _filed := DotStatsDamage.report_shot_outcome(_kill_feed, shot)
 
 	# Walls the round crossed, for the site's Penetration cost panel; the shape is dot-stats'.
 	if _kill_feed != null:
