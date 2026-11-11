@@ -23,8 +23,11 @@ const FIREARMS: PackedStringArray = [
 const NO_ONE_SHOT: PackedStringArray = ["machine_pistol", "smg", "carbine", "rifle", "bullpup", "burst_rifle", "lmg", "minigun", "pistol"]
 const BOT_SECONDS := 12.0
 const BOT_RANGE := 12.0
+## Bots aim at the chest, so a head hit only comes of recoil and spread: more than this share of a bot's hits in the
+## head (measured 0 to 21%) would be the one-shot headshots owners report.
+const BOT_MAX_HEAD_SHARE := 0.30
 
-const CHECKS := 4
+const CHECKS := 5
 const SECTIONS := 3
 
 var _entered := 0
@@ -200,6 +203,7 @@ func _bots() -> void:
 	var shares := PackedFloat32Array()
 	for preset: String in DotBotProfile.PRESETS:
 		shares.append(float(ArenaBots.RECOIL_CONTROL.get(preset, -1.0)))
+	var worst_head := 0.0
 	var rising := true
 	for i in range(1, shares.size()):
 		rising = rising and shares[i] > shares[i - 1] and shares[i] < 1.0
@@ -231,8 +235,11 @@ func _bots() -> void:
 				if d.is_headshot():
 					heads += 1
 			var fired := maxi(int(t["fired"]), 1)
+			if _hits.size() >= 8:
+				worst_head = maxf(worst_head, float(heads) / _hits.size())
 			print("    %-9s %-9s fired %4d landed %5.1f%% head %5.1f%% of hits, raw %.0f/s" % [
 				preset, "strafing" if strafing else "still", fired, 100.0 * _hits.size() / fired,
 				100.0 * heads / maxf(_hits.size(), 1.0), dealt / BOT_SECONDS])
+	_check(worst_head <= BOT_MAX_HEAD_SHARE, "no bot difficulty lands more than %.0f%% of its hits in the head" % (100.0 * BOT_MAX_HEAD_SHARE), "worst %.1f%%" % (100.0 * worst_head))
 	var _back := settings.set_difficulty(DotBotProfile.DEFAULT_PRESET)
 	_completed += 1

@@ -69,3 +69,11 @@ Measured by `examples/headless_hitzones.tscn` (one round of every firearm on eac
 - **Bots held recoil perfectly.** A bot's aim is its command, so it used to pull against the full recoil of the next shot: a laser at every difficulty, which is what put two rifle rounds on one head. Now it pulls against a share by difficulty: easy 0.3, medium 0.55, hard 0.75, nightmare 0.9 (`ArenaBots.RECOIL_CONTROL`). Server cvar `bot_recoil_control` (-1..1, default -1 = by difficulty) sets one share for every bot.
 - **Hit zone multipliers** are server cvars (archived, notified): `arena_head_mult` (default 4), `arena_neck_mult` (2), `arena_stomach_mult` (1.25), `arena_leg_mult` (0.75). Chest is 1, arms 0.75, hands and feet 0.5.
 - **Bot accuracy by difficulty** (rifle, 12 m, 12 s): landed share against a still target goes from about a quarter on easy, medium and hard to about three quarters on nightmare; against a strafing target, about 10 to 15% up to under half. Head share of hits stays near 10 to 15%, since bots aim at the chest. Easy, medium and hard differ more in reaction and tracking (dot-bot's presets) than in a still target's hit share.
+
+## Bullets and bodies (pass-through decision)
+
+Arena ships no `ammo` profiles, so every round has penetration power 0: a bullet stops at the first player it
+hits and never passes through to one behind. The velocity-based pass lives in dot-combat (`DotPenetration.speed` /
+`reference_speed`) and dot-weapon (ammo profile `speed`, `reference_speed`); it stays off here until a mode wants
+it, and then it is switched on by adding an ammo profile, with no game code. `headless_hitzones` bounds the
+bot head share (at most 30% of a bot's hits, chest-aimed) so bots cannot out-headshot people.
