@@ -10,7 +10,7 @@ const ArenaNetContext := preload("../game/arena_net_context.gd")
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client. Windowed on a GPU box (tools/perf_bench.sh) or headless through hv: `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
 ## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
-## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
+## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
 
 var _pilot := true
 var _motor_us := false
@@ -66,6 +66,8 @@ func _ready() -> void:
 	ArenaHullGrid.min_players = int(args.get("hull-min", ArenaHullGrid.MIN_PLAYERS))
 	if int(args.get("lod", 1)) == 0:
 		preload("../game/arena_player.gd").present_lod_enabled = false
+	if int(args.get("anim-gate", 1)) == 0:
+		preload("../game/arena_player.gd").anim_gate_enabled = false
 	if int(args.get("target-first", 1)) == 0:
 		# By name: the bench also runs against a dot-bot older than the switch.
 		(DotBotBrain as Script).set(&"target_first", false)
