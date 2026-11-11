@@ -103,6 +103,11 @@ func _run() -> void:
 		for arg in OS.get_cmdline_user_args():
 			if arg.begins_with("--record-edge="):
 				only = [int(arg.trim_prefix("--record-edge="))]
+		# `-- --prior=a,b`: those sections run first, to find which one leaves state behind for the rides.
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--prior="):
+				for name in arg.trim_prefix("--prior=").split(","):
+					await call("_test_" + name)
 		for record_edge: int in only:
 			await _test_recorded_rides(record_edge)
 		get_tree().quit(1 if _failed > 0 else 0)

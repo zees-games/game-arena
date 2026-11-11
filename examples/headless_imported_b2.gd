@@ -24,9 +24,9 @@ const PLAY_SECONDS := 40.0
 const SCORE_LIMIT := 4
 
 
-const SECTIONS := 25
+const SECTIONS := 26
 ## Fixed checks, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 153
+const CHECKS_FIXED := 167
 
 
 func _finish() -> void:

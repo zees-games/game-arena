@@ -71,8 +71,8 @@ const RIDE_STARTS := 3
 const RIDE_LANDING := 2
 ## The edges the recorded-ride check records, each its own section: ones whose live rides
 ## land from the lip at rest, never "the first linked", which moves on every replan. Edges 0,
-## 1, 3 and 7 miss or fall and want a replan; edge 4 alone is not stable after the rest shard.
-const RECORD_EDGES := [6]
+## 1, 3 and 7 miss or fall and want a replan.
+const RECORD_EDGES := [6, 4]
 ## The rate the ride caches were planned at (ArenaContent.TICK_RATE, the game's default), which the
 ## recorded rides are ridden at: a cache stepped at another rate drifts off its line and the ride dies.
 const RIDE_CACHE_RATE := 66
@@ -212,7 +212,7 @@ func _test_recorded_rides(record_edge: int) -> void:
 		_game.player_for(rider_id).controller.tunables.wall_run_on_jump = false
 	var aside: Vector3 = edge.to + Vector3(30.0, 0.0, 0.0)
 	for other in _game.players():
-		if other.player_id != human_id and other.player_id != 5 and other.is_alive():
+		if other.player_id != human_id and other.player_id != 5:
 			other.controller.teleport(aside + Vector3(float(other.player_id), 0.0, 0.0), 0.0, 0.0)
 	var tick := 40000
 	tick = await _ride_as_player(human, edge, surf, tick, 1)
@@ -303,6 +303,27 @@ func _bot_rides(bot: ArenaPlayer, surf: ArenaSurf, edge: ArenaSurf.Edge, landed_
 	return {"tick": tick, "source": source, "ridden": ridden}
 
 
+## Everyone but the rider steps aside: players are solid to each other and a respawned one stands on the lip.
+func _park_others(rider: ArenaPlayer, edge: ArenaSurf.Edge) -> void:
+	var aside: Vector3 = edge.to + Vector3(30.0, 0.0, 0.0)
+	for other in _game.players():
+		if other != rider:
+			other.controller.teleport(aside + Vector3(float(other.player_id), 0.0, 0.0), 0.0, 0.0)
+
+
+## A teleport keeps the motor's wall-jump and wall-run counters, so a ride started after another ride, or after bots played on the
+## same player, began with a spent wall budget and missed the lip's jump. A person's ride starts on the ground with a fresh one.
+func _clear_wall_state(state: DotFpsState) -> void:
+	state.wall_jump_count = 0
+	state.wall_jumps_in_air = 0
+	state.wall_jump_heading = 0
+	state.wall_run_spent = false
+	state.wall_run_time = -1.0
+	state.wall_run_cooldown_left = 0.0
+	state.time_since_jump = 1000.0
+	state.time_since_jump_pressed = 1000.0
+
+
 ## [param player] rides [param edge] [param count] times on the planned cache, from the lip or (with [param spread]) from perturbed starts, as a person's commands would be.
 func _ride_as_player(player: ArenaPlayer, edge: ArenaSurf.Edge, surf: ArenaSurf, tick: int, count: int, spread: bool = false) -> int:
 	var rng := RandomNumberGenerator.new()
@@ -318,6 +339,8 @@ func _ride_as_player(player: ArenaPlayer, edge: ArenaSurf.Edge, surf: ArenaSurf,
 			velocity = DotFpsMotor.forward_for(edge.course.reference_yaw() + rng.randf_range(-60.0, 60.0)) * rng.randf_range(2.0, 8.0)
 		player.controller.teleport(at, edge.course.reference_yaw(), 0.0)
 		player.controller.state.velocity = velocity
+		_clear_wall_state(player.controller.state)
+		_park_others(player, edge)
 		var mind := ArenaBots.Mind.new()
 		mind.seed = 300 + k
 		var outcome := [surf.landed, surf.fell, surf.timed_out]
