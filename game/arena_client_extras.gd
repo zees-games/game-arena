@@ -1,6 +1,7 @@
 extends Node
 
 const ArenaGame := preload("arena_game.gd")
+const ArenaLoadTimeline := preload("arena_load_timeline.gd")
 const ArenaMapSession := preload("arena_map_session.gd")
 const ArenaMaps := preload("arena_maps.gd")
 const ArenaNetBridge := preload("arena_net_bridge.gd")
@@ -80,10 +81,13 @@ func attach(p_bridge: ArenaNetBridge, p_game: ArenaGame) -> DotResult:
 	game = p_game
 
 	_build_chat()
+	ArenaLoadTimeline.mark("extras: chat")
 	_build_maps()
+	ArenaLoadTimeline.mark("extras: maps")
 
 	if voice_enabled:
 		_build_voice()
+		ArenaLoadTimeline.mark("extras: voice")
 
 	return DotResult.success(self)
 
