@@ -247,6 +247,7 @@ class World:
 			_contacts.append(c)
 			_by_id[c.id] = c
 			_players[c.id] = p
+		_objective_refresh(teams)
 		t_lap = ArenaFrameProbe.lap(&"br_contacts", t_lap)
 		if tiers != null and tiers.applies(_contacts.size()):
 			_tier_begin()
@@ -266,6 +267,34 @@ class World:
 					else:
 						(cell as Array).append(c)
 		ArenaFrameProbe.lap(&"br_near", t_lap)
+
+	## The flags as the HUD shows them, into [member DotBotWorld.objective], for the bots' team jobs (defend, attack,
+	## support). Outside a flag mode the objective has no flags and every bot roams as in a free-for-all.
+	func _objective_refresh(teams: bool) -> void:
+		var objectives: Variant = game.get("objectives") if teams else null
+		var ctf: Variant = objectives.get("ctf") if objectives is Object else null
+		if not (ctf is DotObjectiveCtf):
+			if objective != null:
+				objective.clear_flags()
+			return
+		if objective == null:
+			objective = DotBotObjective.new()
+		var flags: Array[DotObjectiveFlag] = (ctf as DotObjectiveCtf).flags()
+		for flag in flags:
+			if flag == null or flag.def == null or flag.def.area == null:
+				continue
+			var team := flag.home_team()
+			var capture := Vector3.INF
+			for other in flags:
+				if other != null and other != flag and other.home_team() != team:
+					var area := other.capture_area_for(team, flags)
+					if area != null:
+						capture = area.centre
+					break
+			var carrier := -1
+			if flag.state == DotObjectiveFlag.State.CARRIED and flag.carrier.is_valid_int():
+				carrier = flag.carrier.to_int()
+			objective.set_flag(team, flag.def.area.centre, flag.position(), carrier, int(flag.state), capture)
 
 	## Hands the tiers the live people's eyes and views and the bots' positions (a person is a contact with no brain).
 	func _tier_begin() -> void:

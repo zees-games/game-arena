@@ -6,8 +6,8 @@ extends "headless_ctf.gd"
 const ArenaFlagCarry := preload("../game/arena_flag_carry.gd")
 const ArenaBots := preload("../game/arena_bots.gd")
 
-const SECTIONS_CARRY := 5
-const CHECKS_CARRY := 35
+const SECTIONS_CARRY := 6
+const CHECKS_CARRY := 43
 
 
 func _run() -> void:
@@ -19,6 +19,7 @@ func _run() -> void:
 	await _test_carry_cvars()
 	await _test_carry_wire()
 	await _test_bot_carrier()
+	await _test_bot_roles()
 
 	_report_sections(_entered, _completed, SECTIONS_CARRY, CHECKS_CARRY)
 
@@ -217,5 +218,39 @@ func _test_bot_carrier() -> void:
 	_check(not slots.is_empty() and slots.keys().all(func(s: int) -> bool: return allowed.has(s)),
 		"a thinking bot holding the flag only ever holds one-handed items", str(slots.keys()))
 	_check(_flag(game, 2).carrier == str(thief), "and still carries it", str(_flag(game, 2).state))
+	await _free(game)
+	_done()
+
+
+func _test_bot_roles() -> void:
+	_section("ctf carry: thinking bots know the flags and take team jobs")
+	var got := _carrying()
+	if got.is_empty():
+		return
+	var game: ArenaGame = got[0]
+	var thief: int = got[1]
+	var minds := {}
+	for id in game.player_ids():
+		minds[id] = ArenaBots.Mind.new()
+	for i in TICK_RATE:
+		var cmds := {}
+		for id: int in minds:
+			cmds[id] = ArenaBots.think(game, game.player_for(id), minds[id], game.current_tick() + 1, float(TICK_RATE))
+		game.tick(cmds)
+	var objective := ArenaBots.world_for(game).objective
+	_check(objective != null and objective.active and objective.has_flag(1) and objective.has_flag(2), "the bots' world holds both flags")
+	if objective == null:
+		await _free(game)
+		return
+	_check(objective.carrier_of(2) == thief and objective.state_of(2) == DotBotObjective.CARRIED, "and who carries one", str(objective.carrier_of(2)))
+	_check(objective.capture_for(1).distance_to(_stand_of(game, 1)) < 0.01, "a carrier scores on its own stand", str(objective.capture_for(1)))
+	var red := objective.roles_in(1)
+	var blue := objective.roles_in(2)
+	_check(red[DotBotObjective.ATTACK] == 1 and red[DotBotObjective.DEFEND] == 1, "two bots on a side: one attacks, one defends", str(red))
+	_check(blue[DotBotObjective.ATTACK] == 1 and blue[DotBotObjective.DEFEND] == 1, "on both sides", str(blue))
+	var goal: DotBotGoal = (minds[thief] as ArenaBots.Mind).brain.goal
+	_check(goal.kind == &"capture" and goal.urgent, "the carrier's job is to run it home", "%s %s" % [goal.kind, goal.urgent])
+	ArenaBots.forget(game, thief)
+	_check(objective.role_of(thief) == DotBotObjective.ROAM, "a bot that left gives its job up")
 	await _free(game)
 	_done()

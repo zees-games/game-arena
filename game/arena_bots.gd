@@ -95,6 +95,9 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	world.brains[bot.player_id] = mind.brain
 
 	var me := world.contact(bot.player_id)
+	# A team job in a flag mode, kept until the bot changes team (assign is a lookup after the first).
+	if world.objective != null and world.objective.active and me.team > 0:
+		var _role := world.objective.assign(bot.player_id, me.team, mind.brain.settings.profile)
 	# The body's view carries last tick's recoil correction; the brain steers from the view it meant, or it would walk
 	# the correction back out (smoothing and the turn limit) and the bullets drift off again.
 	if mind.recoil_comp != Vector2.ZERO and bot.controller != null:
@@ -367,3 +370,5 @@ static func forget(game: Object, id: int) -> void:
 			(held as World).brains.erase(id)
 			(held as World)._loadouts.erase(id)
 			(held as World).woken.erase(id)
+			if (held as World).objective != null:
+				(held as World).objective.release(id)
