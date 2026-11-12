@@ -172,8 +172,11 @@ func _play(count: int, map_id: StringName = &"") -> Array:
 		if tick_index % 10 == 9:
 			digests.append(" ".join(window).md5_text())
 			window.clear()
+		# Exactly one physics step every 8 ticks, never "a frame": a frame runs as many steps as the wall clock owes, so a loaded
+		# box stepped the dead bots' weapon drops a different number of times and the space's queries with them; off vs off and
+		# off vs on then differed on dm-morpheus about 1 run in 6 on PH (headless_motor_batch had the same, 5601704).
 		if tick_index % 8 == 0:
-			await get_tree().process_frame
+			await get_tree().physics_frame
 	var parallel := ArenaBotThreads.par_ticks
 	remove_child(game)
 	game.queue_free()
