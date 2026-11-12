@@ -142,6 +142,7 @@ func _course(course: String, world: Node3D, ids: Array, spots: Array, velocity: 
 	var deepest := -INF
 	var deepest_id := &""
 	var lost := 0
+	var lost_names: PackedStringArray = []
 	var jitter := 0.0
 	var shape_gap := 0.0
 	var unrested := 0
@@ -150,6 +151,7 @@ func _course(course: String, world: Node3D, ids: Array, spots: Array, velocity: 
 		var sb: RigidBody3D = server._entries[id]["body"]
 		if cb.global_position.y < -50.0:
 			lost += 1
+			lost_names.append("%s@%s from %s" % [sent[id], cb.global_position.snapped(Vector3.ONE * 0.01), spots[ids.find(sent[id]) % spots.size()]])
 			continue
 		if not bool(server._entries[id]["rest"]):
 			unrested += 1
@@ -162,7 +164,7 @@ func _course(course: String, world: Node3D, ids: Array, spots: Array, velocity: 
 	var detail := "deepest %s %.3f m" % [deepest_id, deepest]
 	_worst[course] = deepest
 	print("  %-22s deepest=%+.3f (%s) jitter=%.4f shape_gap=%.3f unrested=%d lost=%d" % [course, deepest, deepest_id, jitter, shape_gap, unrested, lost])
-	_check(lost == 0, "%s: no drop fell out of the world" % course, str(lost))
+	_check(lost == 0, "%s: no drop fell out of the world" % course, ", ".join(lost_names))
 	_check(deepest <= TOLERANCE, "%s: client mesh not below the surface at 10 s" % course, detail)
 	_check(jitter <= 0.003, "%s: resting drops do not jitter" % course, "%.4f" % jitter)
 	_check(shape_gap <= 0.01, "%s: client and server collision boxes agree" % course, "%.3f" % shape_gap)
