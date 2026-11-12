@@ -56,7 +56,9 @@ func _prewarm_tick() -> void:
 				var stage_now := int(_warm.get("stage", 0)) if bool(_warm.get("stepping", false)) else 0
 				_warm.stage = stage_now + 1
 				var step_of := "view %d stage %d" % [int(_warm.next), stage_now]
-				# One weapon's equip split into stages (a cold sight fit, cuts and red dot are 220-440 ms in one go), one stage a frame.
+				# One weapon's equip split into stages (a cold sight fit, cuts and red dot are 220-440 ms in one go). As many
+				# stages a frame as fit the slice: one a frame was ~250 frames for 27 weapons, most stages well under the
+				# slice, and every load frame also runs the match's ticks (11.6 s of a 21 s cover on staging02).
 				if bool(_warm.get("stepping", false)):
 					if not spare.prewarm_step():
 						_warm.stepping = false
@@ -66,8 +68,6 @@ func _prewarm_tick() -> void:
 					if not _warm.stepping:
 						_warm.next += 1
 				_step_mark(step_of, step_began)
-				if bool(_warm.get("stepping", false)):
-					break  # the next frame continues this weapon
 			if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
 				if is_instance_valid(_warm.spare):
 					(_warm.spare as Node).queue_free()
@@ -77,12 +77,15 @@ func _prewarm_tick() -> void:
 				_warm.phase = 1
 				ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000])
 		1:
-			# One item a frame: built together these were one 410-650 ms frame on staging02.
-			if _prewarm_one_step(body, int(_warm.get("step", 0))):
+			# Items while the slice lasts: built together these were one 410-650 ms frame on staging02, one a frame 14 frames.
+			var items_until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
+			while int(_warm.get("step", 0)) < PHASE1_STEPS and Time.get_ticks_msec() < items_until:
+				if not _prewarm_one_step(body, int(_warm.get("step", 0))):
+					break
 				_warm.step = int(_warm.get("step", 0)) + 1
-				if int(_warm.step) >= PHASE1_STEPS:
-					_warm.phase = 2
-					ArenaLoadTimeline.mark("prewarm 1 done: flash scenes, muzzle pools, explosion, own work %d ms" % (int(_warm_work_usec.get(1, 0) + Time.get_ticks_usec() - tick_start) / 1000))
+			if int(_warm.get("step", 0)) >= PHASE1_STEPS:
+				_warm.phase = 2
+				ArenaLoadTimeline.mark("prewarm 1 done: flash scenes, muzzle pools, explosion, own work %d ms" % (int(_warm_work_usec.get(1, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 		2:
 			# Drop bodies for the first throw (a death drops one), a slice a frame like the views.
 			var ids: Array = _warm.get("drop_ids", ArenaWeaponDropWiring.prewarm_ids())

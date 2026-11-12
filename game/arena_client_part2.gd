@@ -3,6 +3,8 @@ extends "arena_client_part1.gd"
 const ArenaProfilerContext := preload("arena_profiler_context.gd")
 ## The load gate's give-up time in a browser (DotLoadGate's default is 20 s); see setup's use.
 const WEB_GATE_TIMEOUT_SEC := 60.0
+## The cover's render warm-up: milliseconds a round's frame may cost, the bare load frame included; see setup's use.
+const GATE_WARM_BUDGET_MSEC := 150.0
 ## A drawing client's share of a frame for the server's events; the join backlog spreads over frames.
 const EVENT_BUDGET_USEC := 8000
 
@@ -595,6 +597,11 @@ func _build_platform() -> void:
 	# "weapons" hold, progressing all along, ended 19.9 s after the gate closed, past the 20 s default.
 	if DotPlatform.is_web():
 		gate.timeout_sec = maxf(gate.timeout_sec, WEB_GATE_TIMEOUT_SEC)
+	# The warm-up sizes its rounds by what is left of this budget after a bare frame, and a load frame
+	# here (the match's ticks and the view) is 56-100 ms on staging02: at dot-core's 40 nothing is
+	# left, every round is 4 items over 2 frames, and the warm-up took 9-11 s of the cover.
+	if &"warm_budget_msec" in gate:
+		gate.set(&"warm_budget_msec", maxf(float(gate.get(&"warm_budget_msec")), GATE_WARM_BUDGET_MSEC))
 	link = platform.link as Node
 	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
 	gate.hold(&"map", "Loading the map")
