@@ -618,6 +618,9 @@ func _change_mode(old_value: String, new_value: String) -> void:
 			_revert_mode(old_value)
 			return
 
+		if maps != null and maps.session != null and maps.session.has_method(&"forget_profile_mode"):
+			maps.session.forget_profile_mode()
+
 		log_info("the mode changed", {
 			"mode": new_value,
 			"map": String(game.map.id),
@@ -631,6 +634,15 @@ func _revert_mode(value: String) -> void:
 	_reverting_mode = true
 	var _res := server.console.set_cvar("arena_mode", value)
 	_reverting_mode = false
+
+
+## After a rotation profile changed the mode (or put the server's back), the cvar says so, without a second rebuild.
+func _follow_mode() -> void:
+	if game == null or game.mode == null or server == null or server.console == null:
+		return
+	var cv := server.console.find_cvar("arena_mode")
+	if cv != null and cv.get_string() != String(game.mode.id):
+		_revert_mode(String(game.mode.id))
 
 
 func _cmd_modes(ctx: DotCmdContext) -> void:

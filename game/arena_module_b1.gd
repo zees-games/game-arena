@@ -57,6 +57,8 @@ var maps: ArenaMapDirector = null
 
 ## The per-map cvars a map's `cfg/.../dot_map/map/<name>.yml` sets, put back on the next map.
 var map_config: DotGameMapConfig = null
+## The active rotation entry's profile cvars (`DotMapDef.profile.values`), put back on the next map.
+var profile_config: Object = null
 
 
 ## What plays next, decided by the players.
@@ -241,6 +243,10 @@ func _module_unload() -> void:
 	if loading != null:
 		loading.clear()
 		loading = null
+
+	if profile_config != null:
+		profile_config.call(&"restore")
+		profile_config = null
 
 	if map_config != null:
 		map_config.restore()
@@ -516,10 +522,18 @@ func _reply_chat(peer: int, text: String) -> void:
 ## `DotVoteDirector.begin_on_apply` is off so this signal is the only source: it fires for an operator's `arena_map` as well as a voted change,
 ## and both firing means two play-history entries for one play, a "not in the last five" cooldown that is quietly two or three.
 func _on_map_changed(map: DotMapDef) -> void:
+	# The profile's cvars went on last, so they come off first: a key both set gets the file's value back right.
+	if profile_config == null and console != null:
+		profile_config = ArenaMapConfig.build_profile(console)
+	if profile_config != null:
+		profile_config.call(&"restore")
 	if map_config == null and console != null:
 		map_config = ArenaMapConfig.build(console)
 	if map_config != null:
 		map_config.apply(String(map.id))
+	if profile_config != null:
+		ArenaMapConfig.apply_profile(profile_config, console, map)
+	_follow_mode()
 
 	# Every client covers for the new map and says so when it lifts; until it does nobody is
 	# harmed, and one that never re-covers is released after the roster's grace.
@@ -541,6 +555,11 @@ func _on_map_changed(map: DotMapDef) -> void:
 	_attach_visibility(map)
 
 	log_info("map changed", {"map": String(map.id)})
+
+
+## The `arena_mode` cvar shows what is played after a rotation profile changed the mode; overridden where the cvar lives.
+func _follow_mode() -> void:
+	pass
 
 
 ## The converted world's PVS as the snapshot visibility (cvar net_visibility); a built-in map clears it.

@@ -25,6 +25,36 @@ What survives a change:
 
 `cfg/maps.yml` (or the `--config` directory's, or `sv_map_rotation_file`) says which installed maps the rotation, the next map, the vote's ballot and nominations may choose: dot-map's `DotMapRotationFile`, the `defaults:` / `games: game-arena:` shape with named rotations, plain `maps:` lists, `owner/collection/*` and name globs. `ArenaMapDirector.load_rotation` reads it and `apply_rotation` sets `DotMapDef.in_rotation`; a map outside the active rotation stays installed (`arena_map <id>`, listed "not in rotation") but is never chosen. `arena_imported_rotation` is a separate gate (`enabled`); a map must pass both. `sv_map_rotation <name>` switches the rotation, `maps_rotations` lists them, and the file's `commands:` block renames the map and vote commands. No file: every map rotates, as before. The mode filter (`restrict_rotation`) narrows the file's own list and never widens it.
 
+### Per-map profiles: any map in any mode it can host
+
+An entry, a rotation or the section may carry `mode:` (or its alias `cfg:`); dot-map resolves it onto `DotMapDef.profile` (its `docs/rotation.md`, "Per-map profiles"):
+
+```yaml
+defaults:
+  rotations:
+    main:
+      mode: cycle
+      cfg: tdm               # every entry below plays tdm unless it says otherwise
+      maps:
+        - map: dm_box
+          mode: ctf          # cfg/server/addon/dot_map/cfg/ctf.yml when present, its cvars for this map
+        - dm_atrium:
+            cfg: night/fast.yml
+        - owner/coll/*:
+            mode: ffa        # every map of the collection
+        - dm_pit             # plain: the rotation's tdm, which dm_pit cannot host (see below)
+```
+
+A value with no `/` and no `.yml` is a mode id; a relative path is under `cfg/server/addon/dot_map/cfg/` (the same `--config` rules as maps.yml); an absolute path is used as is. A missing file is one WARN and the map still plays. Flow mappings (`- {map: x, mode: ctf}`) are not read yet: the family YAML reader refuses inline mappings, so write them as blocks.
+
+What the game does with it, on the authority only:
+
+- **The mode.** `ArenaMapSession._mode_for` plays the profile's mode when `ArenaMaps.supports_mode` says the map can host it; otherwise it WARNs once per map and mode and the current mode stays. The next map that names no mode gets the server's mode back (the one running before the first profile map); an operator's `arena_mode` in between is the server's mode from then on (`forget_profile_mode`). The `arena_mode` cvar follows what is played (`_follow_mode`), so with `FLAG_ARCHIVE` a server saved while a profile mode runs boots in that mode.
+- **The cvars.** The profile file's `cvars:` (or its top-level scalars) are set for that map through dot-map's `DotMapConfig.apply_values` and put back on the next map (`ArenaMapConfig.build_profile` / `apply_profile`), after the per-map `map/<name>.yml` files. Any existing cvar except `arena_mode` and protected ones; a cheat or startup-only cvar is refused by the console as usual.
+- **The filter.** `restrict_rotation` keeps an entry whose profile names a mode the map can host, even when the running mode would drop it (`ArenaMapSession.mode_after`).
+
+`headless_rotation_profile` covers all three.
+
 ## Reaching the players
 
 `ArenaMapDirector` is a catalogue, a rotation with a cooldown, a map clock with warnings and rtv, and `DotMapSyncHost`: announce, wait for every peer, swap, tell them to load. Without the sync a change is a change in one process and every client plays a world that no longer exists. With the vote loaded, the vote's clock is the one advanced and the director's is the fallback ([services](services.md#the-map-vote)).
