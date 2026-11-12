@@ -286,6 +286,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY).with_min(-1.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaBots.recoil_control = clampf(new_value.to_float(), -1.0, 1.0))
+	_add_bot_engine_cvars()
+
+
+## The native/threaded switches of the bot and motor engines, and the hull grid.
+func _add_bot_engine_cvars() -> void:
 	add_cvar("bot_fast_sense", "1" if ArenaBotBrain.fast_sense else "0",
 		"1: bots scan candidates by squared distance and cone cosine (same result, cheaper); 0: dot-bot's stock scan",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(

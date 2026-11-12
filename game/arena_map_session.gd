@@ -85,15 +85,7 @@ func change_to_map(map: DotMapDef) -> DotResult:
 		)
 
 	if _built_on_already(map):
-		# The teardown and rebuild of an identical world was the longest frame of a sim host's join.
-		current = map
-		rotation.note_played(map.id)
-		time_limit.start(float(map.expected_seconds) * 3.0 if map.expected_seconds > 0 else -1.0)
-		DotLog.info(LOG_CHANNEL, "the announced map is the one this client was set up on", {
-			"map": String(map.id),
-		})
-		changed_world()
-		return DotResult.success(world)
+		return _adopt_built_world(map)
 
 	# The swap respawns everybody, and the map sync's last peer report lands in the idle frame:
 	# on a server the swap itself waits for the next tick (dot_tick_gate.gd).
@@ -134,6 +126,23 @@ func change_to_map(map: DotMapDef) -> DotResult:
 			"%s / %s" % [String(map.id), String(playing.id)]
 		)
 
+	return _swap_to(map, built, wanted)
+
+
+func _adopt_built_world(map: DotMapDef) -> DotResult:
+	# The teardown and rebuild of an identical world was the longest frame of a sim host's join.
+	current = map
+	rotation.note_played(map.id)
+	time_limit.start(float(map.expected_seconds) * 3.0 if map.expected_seconds > 0 else -1.0)
+	DotLog.info(LOG_CHANNEL, "the announced map is the one this client was set up on", {
+		"map": String(map.id),
+	})
+	changed_world()
+	return DotResult.success(world)
+
+
+## Tears the old world down and builds the new one; the checks have all passed by here.
+func _swap_to(map: DotMapDef, built: ArenaMap, wanted: ArenaMode) -> DotResult:
 	changing_now = true
 
 	var previous := current

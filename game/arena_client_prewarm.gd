@@ -46,99 +46,13 @@ func _prewarm_tick() -> void:
 	var phase_now := int(_warm.phase)
 	match phase_now:
 		0:
-			var arts: Array = _warm.arts
-			var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
-			while _warm.next < arts.size() and Time.get_ticks_msec() < until:
-				if not is_instance_valid(_warm.spare):
-					break
-				var spare := _warm.spare as AwViewModel
-				# One weapon's equip split into stages (a cold sight fit, cuts and red dot are 220-440 ms in one go), one stage a frame.
-				if bool(_warm.get("stepping", false)):
-					if not spare.prewarm_step():
-						_warm.stepping = false
-						_warm.next += 1
-				else:
-					_warm.stepping = spare.prewarm_begin(arts[_warm.next] as AwWeaponVisual)
-					if not _warm.stepping:
-						_warm.next += 1
-				if bool(_warm.get("stepping", false)):
-					break  # the next frame continues this weapon
-			if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
-				if is_instance_valid(_warm.spare):
-					(_warm.spare as Node).queue_free()
-				_warm.erase("spare")
-				gate.warm_up(AwViewModel.prepared_materials())
-				gate.warm_up(AwShotFx.warm())
-				_warm.phase = 1
-				ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000])
+			_prewarm_phase0(tick_start)
 		1:
-			if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
-				var rig: Node3D = DotMuzzleFlash.prewarm(body.camera)
-				if rig != null:
-					rig.position = Vector3(0.0, 0.0, -1.5)
-				_warm.rig = rig
-				# One pool per size and view, built a node a frame, for the first real shot to take.
-				var host: Node = player.weapons.call(&"shot_fx") if weapon_draws_shots() else self
-				for category in ["pistol", "smg", "rifle", "shotgun"]:
-					for fp in [true, false]:
-						DotWeaponMuzzle.warm(host, category, null, fp)
-				# The first layered shot builds dot-audio's manager, room and player (65 ms on the first knife swing): now, under the cover.
-				if host != self and host.has_method(&"prewarm_layers"):
-					var _layered: Variant = host.call(&"prewarm_layers")
-				# The launcher's round: its glowing sphere compiled on the first launcher shot.
-				if projectile_view != null:
-					gate.warm_up(projectile_view.warm())
-				# The first death builds bodies, joints and shapes the physics server has never made (32 ms in a web build): make and drop one now.
-				if ragdolls != null:
-					ragdolls.prewarm()
-				if presentation != null and presentation.fx != null:
-					var cam: Transform3D = body.camera.global_transform
-					var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
-					presentation.fx.warm([ArenaPresentation.EXPLOSION, &"impact_spark"], at)
-				_warm.phase = 2
-				ArenaLoadTimeline.mark("prewarm 1 done: flash scenes, muzzle pools, explosion, own work %d ms" % (int(_warm_work_usec.get(1, 0) + Time.get_ticks_usec() - tick_start) / 1000))
+			_prewarm_phase1(body, tick_start)
 		2:
-			# Drop bodies for the first throw (a death drops one), a slice a frame like the views.
-			var ids: Array = _warm.get("drop_ids", ArenaWeaponDropWiring.prewarm_ids())
-			_warm.drop_ids = ids
-			var slice := int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8
-			var drops_until := Time.get_ticks_msec() + slice
-			_warm.drop_next = ArenaWeaponDropWiring.prewarm_step(game, ids, int(_warm.get("drop_next", 0)), drops_until)
-			# Their shaders too: a parked body is outside the tree and a carried weapon is built at its carrier's
-			# spawn, so the cover drew neither (first drop 163 ms, first held weapon 360 ms in the owner's profile).
-			if _warm.drop_next >= ids.size() and int(_warm.get("look_next", 0)) < ids.size():
-				var looks: Array = []
-				_warm.look_next = ArenaWeaponDropWiring.warm_looks(ids, int(_warm.get("look_next", 0)), drops_until, looks)
-				gate.warm_up(looks)
-			elif _warm.drop_next >= ids.size() and int(_warm.get("screens", 0)) < KILL_SCREENS.size():
-				# The killer's screen: view models holding the starting weapons, arms, flash pool, crosshair. One screen a frame.
-				_warm_kill_screen(int(_warm.get("screens", 0)))
-				_warm.screens = int(_warm.get("screens", 0)) + 1
-			elif _warm.drop_next >= ids.size() and _warm_kill_meshes(drops_until):
-				pass
-			elif _warm.drop_next >= ids.size() and not _fill_fx_pool(float(slice)):
-				pass
-			elif _warm.drop_next >= ids.size():
-				ArenaLoadTimeline.mark("prewarm: fx pool holds %d shot effects, %d charge balls, %d flashes" % [fx_pool.spare_shots(), fx_pool.spare_charges(), fx_pool.flash_count()])
-				_warm.phase = 3
-				ArenaLoadTimeline.mark("prewarm 2 done: weapon drop bodies, own work %d ms" % (int(_warm_work_usec.get(2, 0) + Time.get_ticks_usec() - tick_start) / 1000))
+			_prewarm_phase2(tick_start)
 		3:
-			# What the first bot, the first hit and the first kill would otherwise load mid-match:
-			# a few people's figures (rig, art, materials), the health bar's mesh and the hit sounds.
-			ArenaPlayer.warm_health_tag()
-			var slice_end := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
-			while int(_warm.get("figures", 0)) < PREWARM_FIGURES and Time.get_ticks_msec() < slice_end:
-				var key := StringName("prewarm-%d" % int(_warm.get("figures", 0)))
-				var host := Node3D.new()
-				add_child(host)
-				var person := DotHumanoidFigure.new()
-				host.add_child(person)
-				person.build(ArenaAvatars.look_of(ArenaAvatars.stock_avatar(key), key), 1.8)
-				host.queue_free()
-				_warm.figures = int(_warm.get("figures", 0)) + 1
-			if int(_warm.get("figures", 0)) >= PREWARM_FIGURES:
-				_warm.phase = 4
-				ArenaLoadTimeline.mark("prewarm 3 done: figures, own work %d ms" % (int(_warm_work_usec.get(3, 0) + Time.get_ticks_usec() - tick_start) / 1000))
+			_prewarm_phase3(tick_start)
 		_:
 			_warm.frames += 1
 			# The shared flashes build a node a frame; a renderer that never finishes one must not hold the cover.
@@ -147,6 +61,112 @@ func _prewarm_tick() -> void:
 				_prewarm_end()
 	# CPU time this phase spent in its own ticks (a slow frame with little of it is the renderer).
 	_warm_work_usec[phase_now] = int(_warm_work_usec.get(phase_now, 0)) + Time.get_ticks_usec() - tick_start
+
+## Phase 3: the figures, the health bar and the hit sounds.
+func _prewarm_phase3(tick_start: int) -> void:
+	# What the first bot, the first hit and the first kill would otherwise load mid-match:
+	# a few people's figures (rig, art, materials), the health bar's mesh and the hit sounds.
+	ArenaPlayer.warm_health_tag()
+	var slice_end := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
+	while int(_warm.get("figures", 0)) < PREWARM_FIGURES and Time.get_ticks_msec() < slice_end:
+		var key := StringName("prewarm-%d" % int(_warm.get("figures", 0)))
+		var host := Node3D.new()
+		add_child(host)
+		var person := DotHumanoidFigure.new()
+		host.add_child(person)
+		person.build(ArenaAvatars.look_of(ArenaAvatars.stock_avatar(key), key), 1.8)
+		host.queue_free()
+		_warm.figures = int(_warm.get("figures", 0)) + 1
+	if int(_warm.get("figures", 0)) >= PREWARM_FIGURES:
+		_warm.phase = 4
+		ArenaLoadTimeline.mark("prewarm 3 done: figures, own work %d ms" % (int(_warm_work_usec.get(3, 0) + Time.get_ticks_usec() - tick_start) / 1000))
+
+
+## Phase 2: weapon drop bodies, their shaders, the kill screens, the effect pool.
+func _prewarm_phase2(tick_start: int) -> void:
+	# Drop bodies for the first throw (a death drops one), a slice a frame like the views.
+	var ids: Array = _warm.get("drop_ids", ArenaWeaponDropWiring.prewarm_ids())
+	_warm.drop_ids = ids
+	var slice := int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8
+	var drops_until := Time.get_ticks_msec() + slice
+	_warm.drop_next = ArenaWeaponDropWiring.prewarm_step(game, ids, int(_warm.get("drop_next", 0)), drops_until)
+	# Their shaders too: a parked body is outside the tree and a carried weapon is built at its carrier's
+	# spawn, so the cover drew neither (first drop 163 ms, first held weapon 360 ms in the owner's profile).
+	if _warm.drop_next >= ids.size() and int(_warm.get("look_next", 0)) < ids.size():
+		var looks: Array = []
+		_warm.look_next = ArenaWeaponDropWiring.warm_looks(ids, int(_warm.get("look_next", 0)), drops_until, looks)
+		gate.warm_up(looks)
+	elif _warm.drop_next >= ids.size() and int(_warm.get("screens", 0)) < KILL_SCREENS.size():
+		# The killer's screen: view models holding the starting weapons, arms, flash pool, crosshair. One screen a frame.
+		_warm_kill_screen(int(_warm.get("screens", 0)))
+		_warm.screens = int(_warm.get("screens", 0)) + 1
+	elif _warm.drop_next >= ids.size() and _warm_kill_meshes(drops_until):
+		pass
+	elif _warm.drop_next >= ids.size() and not _fill_fx_pool(float(slice)):
+		pass
+	elif _warm.drop_next >= ids.size():
+		ArenaLoadTimeline.mark("prewarm: fx pool holds %d shot effects, %d charge balls, %d flashes" % [fx_pool.spare_shots(), fx_pool.spare_charges(), fx_pool.flash_count()])
+		_warm.phase = 3
+		ArenaLoadTimeline.mark("prewarm 2 done: weapon drop bodies, own work %d ms" % (int(_warm_work_usec.get(2, 0) + Time.get_ticks_usec() - tick_start) / 1000))
+
+
+## Phase 1: the muzzle flash scenes, the shot pools, the first explosion.
+func _prewarm_phase1(body: Variant, tick_start: int) -> void:
+	if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
+		var rig: Node3D = DotMuzzleFlash.prewarm(body.camera)
+		if rig != null:
+			rig.position = Vector3(0.0, 0.0, -1.5)
+		_warm.rig = rig
+		# One pool per size and view, built a node a frame, for the first real shot to take.
+		var host: Node = player.weapons.call(&"shot_fx") if weapon_draws_shots() else self
+		for category in ["pistol", "smg", "rifle", "shotgun"]:
+			for fp in [true, false]:
+				DotWeaponMuzzle.warm(host, category, null, fp)
+		# The first layered shot builds dot-audio's manager, room and player (65 ms on the first knife swing): now, under the cover.
+		if host != self and host.has_method(&"prewarm_layers"):
+			var _layered: Variant = host.call(&"prewarm_layers")
+		# The launcher's round: its glowing sphere compiled on the first launcher shot.
+		if projectile_view != null:
+			gate.warm_up(projectile_view.warm())
+		# The first death builds bodies, joints and shapes the physics server has never made (32 ms in a web build): make and drop one now.
+		if ragdolls != null:
+			ragdolls.prewarm()
+		if presentation != null and presentation.fx != null:
+			var cam: Transform3D = body.camera.global_transform
+			var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
+			presentation.fx.warm([ArenaPresentation.EXPLOSION, &"impact_spark"], at)
+		_warm.phase = 2
+		ArenaLoadTimeline.mark("prewarm 1 done: flash scenes, muzzle pools, explosion, own work %d ms" % (int(_warm_work_usec.get(1, 0) + Time.get_ticks_usec() - tick_start) / 1000))
+
+
+## Phase 0: the view models of every weapon art, a slice a frame.
+func _prewarm_phase0(tick_start: int) -> void:
+	var arts: Array = _warm.arts
+	var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
+	while _warm.next < arts.size() and Time.get_ticks_msec() < until:
+		if not is_instance_valid(_warm.spare):
+			break
+		var spare := _warm.spare as AwViewModel
+		# One weapon's equip split into stages (a cold sight fit, cuts and red dot are 220-440 ms in one go), one stage a frame.
+		if bool(_warm.get("stepping", false)):
+			if not spare.prewarm_step():
+				_warm.stepping = false
+				_warm.next += 1
+		else:
+			_warm.stepping = spare.prewarm_begin(arts[_warm.next] as AwWeaponVisual)
+			if not _warm.stepping:
+				_warm.next += 1
+		if bool(_warm.get("stepping", false)):
+			break  # the next frame continues this weapon
+	if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
+		if is_instance_valid(_warm.spare):
+			(_warm.spare as Node).queue_free()
+		_warm.erase("spare")
+		gate.warm_up(AwViewModel.prepared_materials())
+		gate.warm_up(AwShotFx.warm())
+		_warm.phase = 1
+		ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000])
+
 
 ## The two screens that draw a killer's view: the kill view's and the final killcam's.
 const KILL_SCREENS: Array[String] = ["KillViewScreen", "KillcamScreen"]

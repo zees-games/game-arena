@@ -93,33 +93,9 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 		if def == null:
 			continue
 		var me = client.get("player")
-		me.health.invulnerable = true
-		# The previous weapon's reload must be over, or this one's press is swallowed or reads the old view model.
-		for _w in 120:
-			if not me.arsenal.is_reloading():
-				break
-			await process_frame
-		# Carry weight refuses a heavy gun on top of the earlier ones, which read as "not in hand".
-		if me.arsenal.carry != null:
-			me.arsenal.carry.enabled = false
-		var given: DotResult = me.arsenal.give(id)
-		if not given.ok:
-			print("%s: give failed: %s" % [id, given.message])
-		me.arsenal.equip(def.slot)
-		await _wait(2.5)
-		var slot: DotWeaponSlot = me.arsenal.current()
-		if slot == null or slot.def.id != id:
-			print("%s: not in hand, skipped" % id)
+		var seconds: float = await _arm_reload(me, id, def, left)
+		if seconds < 0.0:
 			continue
-		slot.magazine = clampi(left, 0, def.magazine - 1)
-		var seconds := _reload_seconds(me.arsenal, def)
-		for _try in 6:
-			Input.action_press(&"arena_reload")
-			await _wait(0.15)
-			Input.action_release(&"arena_reload")
-			if me.arsenal.is_reloading():
-				break
-			await _wait(0.2)
 		var started: bool = me.arsenal.is_reloading()
 		var worst := 0
 		var least := 99
@@ -128,30 +104,9 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 		var frames_taken := 0
 		var last_seen := 0.0
 		var slow_captures := 0
-		var view := _view_model(me)
-		if view != null and not view.has_method(&"reload_sequence"):
-			view = null
-		# The view model builds its sequence a frame or two after the arsenal starts the reload.
-		for _w in 30:
-			if view == null or view.call(&"reload_sequence") != null or not me.arsenal.is_reloading():
-				break
-			await process_frame
-		if view != null:
-			print("%s: %s" % [id, view.call(&"reload_sequence").describe() if view.call(&"reload_sequence") != null else "no sequence"])
+		var view := await _reload_view(me, id)
 		if tp:
-			# The watcher's model of the gun: frames on the clock, the magazines under the held model counted.
-			var held: Node = me.get("held")
-			var tp_tiles: Array[Image] = []
-			for f in frames:
-				await _wait(seconds / float(frames))
-				tp_tiles.append(await _shot("%s%s_%02d" % [tag, id, f]))
-				var seen := 0
-				if held != null:
-					for m in held.find_children("Magazine*", "MeshInstance3D", true, false):
-						seen += 1 if (m as Node3D).is_visible_in_tree() else 0
-				print("%s tp frame %d: %d carved magazines shown, held %s" % [id, f, seen, held != null])
-			_save_sheet(tag + id, tp_tiles)
-			await _wait(0.8)
+			await _tp_frames(me, id, tag, frames, seconds)
 			continue
 		var tiles: Array[Image] = []
 		var due_at := ReloadShots.fractions(frames)
@@ -201,45 +156,101 @@ func _run_rest(frames: int, left: int, ids: Array, tp: bool = false) -> void:
 				ids.append(id)
 				print("%s: rendering it again" % id)
 				continue
-		if frames_taken == 0:
-			print("%s: no frame captured, arm sets not counted" % id)
-		elif worst != 1 or least != 1:
-			_arm_failed += 1
-		# Exactly one magazine in sight per frame bar the instant the hand fetches the next: never two.
-		if mags_most > 1 or not started:
-			_failed += 1
-			print("%s: FAILED, %d magazines in sight at once" % [id, mags_most])
+		_judge(id, frames_taken, worst, least, mags_most, started)
+	_summarise()
+
+
+## Prints the totals and quits with the one-magazine verdict.
+func _summarise() -> void:
 	print("render_reload: %d weapons with two arm sets (or none) at some frame (not fatal)" % _arm_failed)
 	print("render_reload: %d weapons failed the one-magazine check" % _failed)
 	quit(1 if _failed > 0 else 0)
+
+
+## Counts the weapon against the arm-set and one-magazine checks.
+func _judge(id: StringName, frames_taken: int, worst: int, least: int, mags_most: int, started: bool) -> void:
+	if frames_taken == 0:
+		print("%s: no frame captured, arm sets not counted" % id)
+	elif worst != 1 or least != 1:
+		_arm_failed += 1
+	# Exactly one magazine in sight per frame bar the instant the hand fetches the next: never two.
+	if mags_most > 1 or not started:
+		_failed += 1
+		print("%s: FAILED, %d magazines in sight at once" % [id, mags_most])
+
+
+## The view model once it has built its reload sequence, or null when there is none to read.
+func _reload_view(me: Variant, id: StringName) -> Node:
+	var view := _view_model(me)
+	if view != null and not view.has_method(&"reload_sequence"):
+		view = null
+	# The view model builds its sequence a frame or two after the arsenal starts the reload.
+	for _w in 30:
+		if view == null or view.call(&"reload_sequence") != null or not me.arsenal.is_reloading():
+			break
+		await process_frame
+	if view != null:
+		print("%s: %s" % [id, view.call(&"reload_sequence").describe() if view.call(&"reload_sequence") != null else "no sequence"])
+	return view
+
+
+## Gives and equips [param id], waits out the previous reload and presses reload; the reload's length in seconds, or -1 when it never reached the hand.
+func _arm_reload(me: Variant, id: StringName, def: DotWeaponDef, left: int) -> float:
+	me.health.invulnerable = true
+	# The previous weapon's reload must be over, or this one's press is swallowed or reads the old view model.
+	for _w in 120:
+		if not me.arsenal.is_reloading():
+			break
+		await process_frame
+	# Carry weight refuses a heavy gun on top of the earlier ones, which read as "not in hand".
+	if me.arsenal.carry != null:
+		me.arsenal.carry.enabled = false
+	var given: DotResult = me.arsenal.give(id)
+	if not given.ok:
+		print("%s: give failed: %s" % [id, given.message])
+	me.arsenal.equip(def.slot)
+	await _wait(2.5)
+	var slot: DotWeaponSlot = me.arsenal.current()
+	if slot == null or slot.def.id != id:
+		print("%s: not in hand, skipped" % id)
+		return -1.0
+	slot.magazine = clampi(left, 0, def.magazine - 1)
+	var seconds := _reload_seconds(me.arsenal, def)
+	for _try in 6:
+		Input.action_press(&"arena_reload")
+		await _wait(0.15)
+		Input.action_release(&"arena_reload")
+		if me.arsenal.is_reloading():
+			break
+		await _wait(0.2)
+	return seconds
+
+
+## The watcher's model of the gun: [param frames] captures spread over the reload.
+func _tp_frames(me: Variant, id: StringName, tag: String, frames: int, seconds: float) -> void:
+	# The watcher's model of the gun: frames on the clock, the magazines under the held model counted.
+	var held: Node = me.get("held")
+	var tp_tiles: Array[Image] = []
+	for f in frames:
+		await _wait(seconds / float(frames))
+		tp_tiles.append(await _shot("%s%s_%02d" % [tag, id, f]))
+		var seen := 0
+		if held != null:
+			for m in held.find_children("Magazine*", "MeshInstance3D", true, false):
+				seen += 1 if (m as Node3D).is_visible_in_tree() else 0
+		print("%s tp frame %d: %d carved magazines shown, held %s" % [id, f, seen, held != null])
+	_save_sheet(tag + id, tp_tiles)
+	await _wait(0.8)
 
 
 ## `--probe`: each magazine weapon's model from the side and from behind with the box the magazine is carved from drawn red
 ## (in the model's own space, where the view model measured it): <id>_probe_side.png and <id>_probe_back.png.
 func _probe(ids: Array) -> void:
 	var carve: Script = load("res://addons/arena_weapons/view/aw_mag_carve.gd")
-	var stage := Node3D.new()
-	stage.position = Vector3(5000.0, 0.0, 0.0)
-	# Its own world in its own viewport: the client's camera keeps taking the main window back.
-	var sv := SubViewport.new()
-	sv.size = Vector2i(960, 540)
-	sv.own_world_3d = true
-	sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	root.add_child(sv)
-	sv.add_child(stage)
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-40.0, 30.0, 0.0)
-	stage.add_child(light)
-	var cam := Camera3D.new()
-	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	stage.add_child(cam)
-	var env := WorldEnvironment.new()
-	env.environment = Environment.new()
-	env.environment.background_mode = Environment.BG_COLOR
-	env.environment.background_color = Color(0.85, 0.88, 0.95)
-	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.environment.ambient_light_color = Color(0.9, 0.9, 0.9)
-	stage.add_child(env)
+	var rig := _probe_rig()
+	var sv: SubViewport = rig[0]
+	var stage: Node3D = rig[1]
+	var cam: Camera3D = rig[2]
 	for id_s in ids:
 		var id := StringName(id_s)
 		var def: DotWeaponDef = AwWeaponCatalogue.table().get(id)
@@ -298,29 +309,65 @@ func _probe(ids: Array) -> void:
 		cam.look_at(centre, Vector3.FORWARD)
 		await _shot_vp(sv, "%s_probe_top" % id)
 		print("%s: model %s, box %s, whole %s" % [id, path, box, whole])
-		# The split itself: a fresh copy carved by the real code, the magazine drawn lower so the cut edges show.
 		marker.visible = false
 		model.queue_free()
-		var split := AwModelCache.instantiate(path)
-		split.transform = seat
-		stage.add_child(split)
-		var mag: Node3D = carve.call(&"carve", split, stage, Transform3D.IDENTITY, box, "probe|%s|%s" % [path, box])
-		if mag == null:
-			print("%s: carve found nothing in the box" % id)
-		else:
-			var mb := (mag as MeshInstance3D).mesh.get_aabb()
-			print("%s: magazine %d surfaces, aabb %s" % [id, (mag as MeshInstance3D).mesh.get_surface_count(), mb])
-			mag.position += Vector3(0.0, -mb.size.y * 0.9, 0.0)
-		for vw in ["side", "back"]:
-			cam.global_position = centre + (Vector3(3.0, 0.0, 0.0) if vw == "side" else Vector3(0.0, 0.0, 3.0))
-			cam.look_at(centre, Vector3.UP)
-			cam.size = span * 1.1
-			await _shot_vp(sv, "%s_split_%s" % [id, vw])
-		split.queue_free()
+		await _probe_split(rig, id, path, seat, box, centre, span)
 		marker.queue_free()
 		cam.current = false
 		me.camera.current = true
 	quit(0)
+
+
+## The probe's own stage: a viewport world with a light, a background and an orthographic camera. Returns [viewport, stage, camera].
+func _probe_rig() -> Array:
+	var stage := Node3D.new()
+	stage.position = Vector3(5000.0, 0.0, 0.0)
+	# Its own world in its own viewport: the client's camera keeps taking the main window back.
+	var sv := SubViewport.new()
+	sv.size = Vector2i(960, 540)
+	sv.own_world_3d = true
+	sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(sv)
+	sv.add_child(stage)
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-40.0, 30.0, 0.0)
+	stage.add_child(light)
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	stage.add_child(cam)
+	var env := WorldEnvironment.new()
+	env.environment = Environment.new()
+	env.environment.background_mode = Environment.BG_COLOR
+	env.environment.background_color = Color(0.85, 0.88, 0.95)
+	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.environment.ambient_light_color = Color(0.9, 0.9, 0.9)
+	stage.add_child(env)
+	return [sv, stage, cam]
+
+
+## The split itself, drawn from the side and from behind.
+func _probe_split(rig: Array, id: StringName, path: String, seat: Transform3D, box: AABB, centre: Vector3, span: float) -> void:
+	var sv: SubViewport = rig[0]
+	var stage: Node3D = rig[1]
+	var cam: Camera3D = rig[2]
+	var carve: Script = load("res://addons/arena_weapons/view/aw_mag_carve.gd")
+	# The split itself: a fresh copy carved by the real code, the magazine drawn lower so the cut edges show.
+	var split := AwModelCache.instantiate(path)
+	split.transform = seat
+	stage.add_child(split)
+	var mag: Node3D = carve.call(&"carve", split, stage, Transform3D.IDENTITY, box, "probe|%s|%s" % [path, box])
+	if mag == null:
+		print("%s: carve found nothing in the box" % id)
+	else:
+		var mb := (mag as MeshInstance3D).mesh.get_aabb()
+		print("%s: magazine %d surfaces, aabb %s" % [id, (mag as MeshInstance3D).mesh.get_surface_count(), mb])
+		mag.position += Vector3(0.0, -mb.size.y * 0.9, 0.0)
+	for vw in ["side", "back"]:
+		cam.global_position = centre + (Vector3(3.0, 0.0, 0.0) if vw == "side" else Vector3(0.0, 0.0, 3.0))
+		cam.look_at(centre, Vector3.UP)
+		cam.size = span * 1.1
+		await _shot_vp(sv, "%s_split_%s" % [id, vw])
+	split.queue_free()
 
 
 ## `--holds`: every weapon in the catalogue (or `--only`) at the hip and down the sights, the hands' reach to each grip printed.

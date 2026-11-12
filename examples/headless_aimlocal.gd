@@ -132,67 +132,7 @@ func _run() -> void:
 	for d in DISTANCES:
 		for crouch in [false, true]:
 			for ads in [false, true]:
-				var tag := "%.0f m %s %s" % [d, "crouched" if crouch else "standing", "ADS" if ads else "hip"]
-				var fired := 0
-				var landed := 0
-				var gaps: Array = []
-				var pitch_gaps: Array = []
-				var origins: Array = []
-				var extra: Array = []
-				var skipped := false
-				for burst in BURSTS:
-					var space := me.get_world_3d().direct_space_state
-					var spot := _spot_at(space, bot.global_position, d)
-					if spot == Vector3.INF:
-						skipped = true
-						break
-					me.spawn(Transform3D(Basis(), spot), g.current_tick())
-					g.combat.health_of(bot.player_id).health = 100000.0
-					if crouch:
-						Input.action_press(ArenaBindings.DUCK)
-					if ads:
-						Input.action_press(ArenaBindings.AIM)
-					var a := Vector2.ZERO
-					for _i in 140:
-						await get_tree().process_frame
-						a = angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, bot.eye_height() * 0.8, 0.0))
-						sampler.look_at_angles(a.x, a.y)
-					_shots.clear()
-					hits.clear()
-					Input.action_press(ArenaBindings.FIRE)
-					var pf := Engine.get_physics_frames()
-					for _i in 24:
-						await get_tree().process_frame
-						sampler.look_at_angles(a.x, a.y)
-						_frames += 1
-						_frames_ticked += 1 if Engine.get_physics_frames() > pf else 0
-						pf = Engine.get_physics_frames()
-					Input.action_release(ArenaBindings.FIRE)
-					for _i in 20:
-						await get_tree().process_frame
-					fired += _shots.size()
-					landed += hits.size()
-					for s in _shots:
-						gaps.append(s.gap)
-						pitch_gaps.append(s.pitch_gap)
-						origins.append(s.origin)
-						extra.append(float(s.gap))
-					Input.action_release(ArenaBindings.AIM)
-					Input.action_release(ArenaBindings.DUCK)
-					for _i in 100:
-						await get_tree().process_frame
-				if skipped:
-					print("  %s: no clear line, skipped" % tag)
-					continue
-				fired_total += fired
-				all_origin.append_array(origins)
-				all_extra.append_array(extra)
-				for e in extra:
-					if float(e) > _worst_gap:
-						_worst_gap = float(e)
-						_worst_tag = tag
-				print("  %s: %d/%d hit | camera-vs-bullet deg %s | pitch gap (bullet-camera) %s | camera-muzzle m %s | raw gap %s" % [
-					tag, landed, fired, _stat(gaps), _stat(pitch_gaps), _stat(origins), _stat(extra)])
+				fired_total += await _measure_cell(g, me, bot, sampler, hits, d, crouch, ads, all_origin, all_extra)
 	var worst := 0.0
 	for e in all_extra:
 		worst = maxf(worst, float(e))
@@ -211,3 +151,68 @@ func _run() -> void:
 	var ok := _failed == 0
 	print("%d checks, %d failed" % [_checks, _failed])
 	get_tree().quit(0 if ok else 1)
+
+## Fires the bursts for one distance and stance; returns how many shots it measured (0 if there was no clear line).
+func _measure_cell(g: ArenaGame, me: ArenaPlayer, bot: ArenaPlayer, sampler, hits: Array, d: float, crouch: bool, ads: bool, all_origin: Array, all_extra: Array) -> int:
+	var tag := "%.0f m %s %s" % [d, "crouched" if crouch else "standing", "ADS" if ads else "hip"]
+	var fired := 0
+	var landed := 0
+	var gaps: Array = []
+	var pitch_gaps: Array = []
+	var origins: Array = []
+	var extra: Array = []
+	var skipped := false
+	for burst in BURSTS:
+		var space := me.get_world_3d().direct_space_state
+		var spot := _spot_at(space, bot.global_position, d)
+		if spot == Vector3.INF:
+			skipped = true
+			break
+		me.spawn(Transform3D(Basis(), spot), g.current_tick())
+		g.combat.health_of(bot.player_id).health = 100000.0
+		if crouch:
+			Input.action_press(ArenaBindings.DUCK)
+		if ads:
+			Input.action_press(ArenaBindings.AIM)
+		var a := Vector2.ZERO
+		for _i in 140:
+			await get_tree().process_frame
+			a = angles_to(me.muzzle_position(), bot.global_position + Vector3(0.0, bot.eye_height() * 0.8, 0.0))
+			sampler.look_at_angles(a.x, a.y)
+		_shots.clear()
+		hits.clear()
+		Input.action_press(ArenaBindings.FIRE)
+		var pf := Engine.get_physics_frames()
+		for _i in 24:
+			await get_tree().process_frame
+			sampler.look_at_angles(a.x, a.y)
+			_frames += 1
+			_frames_ticked += 1 if Engine.get_physics_frames() > pf else 0
+			pf = Engine.get_physics_frames()
+		Input.action_release(ArenaBindings.FIRE)
+		for _i in 20:
+			await get_tree().process_frame
+		fired += _shots.size()
+		landed += hits.size()
+		for s in _shots:
+			gaps.append(s.gap)
+			pitch_gaps.append(s.pitch_gap)
+			origins.append(s.origin)
+			extra.append(float(s.gap))
+		Input.action_release(ArenaBindings.AIM)
+		Input.action_release(ArenaBindings.DUCK)
+		for _i in 100:
+			await get_tree().process_frame
+	if skipped:
+		print("  %s: no clear line, skipped" % tag)
+		return 0
+	all_origin.append_array(origins)
+	all_extra.append_array(extra)
+	for e in extra:
+		if float(e) > _worst_gap:
+			_worst_gap = float(e)
+			_worst_tag = tag
+	print("  %s: %d/%d hit | camera-vs-bullet deg %s | pitch gap (bullet-camera) %s | camera-muzzle m %s | raw gap %s" % [
+		tag, landed, fired, _stat(gaps), _stat(pitch_gaps), _stat(origins), _stat(extra)])
+	return fired
+

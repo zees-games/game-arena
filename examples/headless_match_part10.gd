@@ -392,16 +392,7 @@ func _test_siege() -> void:
 	_check(valid.ok, "and it validates", str(valid.error))
 	_check(mode.horde and mode.player_props, "and it asks for monsters and props")
 
-	var game := ArenaGame.new()
-	game.name = "Siege"
-	game.tick_rate = TICK_RATE
-	game.score_limit = 3
-	game.time_limit_sec = 0.0
-	game.headless = true
-	game.is_authority = true
-	game.register_service = false
-	game.mode_id = &"siege"
-	add_child(game)
+	var game := _new_siege_game()
 
 	var ready := game.setup(ArenaMap.dm_box())
 
@@ -435,70 +426,28 @@ func _test_siege() -> void:
 	game.tick({})
 	await get_tree().process_frame
 
-	# --- Playing it ------------------------------------------------------
+	await _siege_play(game, mode)
 
-	var monsters_seen := 0
+	_siege_props(game)
 
-	for tick in range(TICK_RATE * 6):
-		game.tick(_commands_for(game, tick))
-		monsters_seen = maxi(monsters_seen, game.horde.count())
+	await _siege_tools(game)
 
-		if tick % 64 == 0:
-			await get_tree().process_frame
+	_check_space_query_audit()
+	_check_tick_gate()
 
+	# --- Leaving ---------------------------------------------------------
+
+	game.remove_player(1)
 	_check(
-		monsters_seen > 0,
-		"monsters arrive while the match is played",
-		"%d at most" % monsters_seen
+		game.props.spawner.player_count(&"1") == 0,
+		"and a player who leaves takes their props with them"
 	)
 
-	# The one thing a mode with both halves can get wrong that neither half can: a
-	# monster is a combat entity, and if it were on the scoreboard the score limit
-	# would be reached by something nobody killed.
-	var rows := game.match_node.scoreboard.players().size()
-	_check(
-		rows <= 2,
-		"and none of them is on the scoreboard",
-		"%d rows for 2 players" % rows
-	)
+	game.queue_free()
+	remove_child(game)
+	_done()
 
-	# --- Props a player spawns -------------------------------------------
-
-	var before := game.props.count()
-	var made := game.props.spawn_for(
-		1, ArenaProps.CRATE, Vector3(0.0, game.map.floor_y + 2.0, 4.0)
-	)
-
-	_check(made != null, "a player can spawn a prop in this mode")
-	_check(game.props.count() == before + 1, "and it is in the world")
-
-	if made != null:
-		# The catalogue's mass, on the body.
-		var body := made.body()
-		_check(
-			body != null and absf(body.mass - ArenaProps.catalogue().get_prop(
-				ArenaProps.CRATE
-			).mass) < 0.01,
-			"with the catalogue's mass rather than the scene's",
-			"%.1f kg" % (body.mass if body != null else -1.0)
-		)
-
-	# The budget. Twelve is the per-player limit and the interval is three quarters of a second, so
-	# this asks for far more than either allows and checks that neither gave way — a budget nothing
-	# enforces is the shape this family's own sweep for "settings nothing reads" was built to find.
-	for attempt in range(40):
-		game.props.tick(1.0)
-		game.props.spawn_for(1, ArenaProps.CRATE, Vector3(2.0, 3.0, 2.0))
-
-	var mine := game.props.spawner.player_count(&"1")
-	_check(
-		mine <= 12,
-		"and the per-player budget holds",
-		"%d props for one player" % mine
-	)
-
-	_check(game.props.undo(1), "undo takes one back")
-
+func _siege_tools(game: ArenaGame) -> void:
 	# --- The tools, which is what makes dot-props reachable ---------------  [b]A physics gun
 	# nothing can call is a physics gun that does not exist.[/b] `phys_gun()` and `grav_gun()` were
 	# built, documented and called by nobody until the family's own detector.
@@ -559,20 +508,88 @@ func _test_siege() -> void:
 		"and a player with nothing in front of them grabs nothing"
 	)
 
-	_check_space_query_audit()
-	_check_tick_gate()
 
-	# --- Leaving ---------------------------------------------------------
+func _siege_props(game: ArenaGame) -> void:
+	# --- Props a player spawns -------------------------------------------
 
-	game.remove_player(1)
-	_check(
-		game.props.spawner.player_count(&"1") == 0,
-		"and a player who leaves takes their props with them"
+	var before := game.props.count()
+	var made := game.props.spawn_for(
+		1, ArenaProps.CRATE, Vector3(0.0, game.map.floor_y + 2.0, 4.0)
 	)
 
-	game.queue_free()
-	remove_child(game)
-	_done()
+	_check(made != null, "a player can spawn a prop in this mode")
+	_check(game.props.count() == before + 1, "and it is in the world")
+
+	if made != null:
+		# The catalogue's mass, on the body.
+		var body := made.body()
+		_check(
+			body != null and absf(body.mass - ArenaProps.catalogue().get_prop(
+				ArenaProps.CRATE
+			).mass) < 0.01,
+			"with the catalogue's mass rather than the scene's",
+			"%.1f kg" % (body.mass if body != null else -1.0)
+		)
+
+	# The budget. Twelve is the per-player limit and the interval is three quarters of a second, so
+	# this asks for far more than either allows and checks that neither gave way — a budget nothing
+	# enforces is the shape this family's own sweep for "settings nothing reads" was built to find.
+	for attempt in range(40):
+		game.props.tick(1.0)
+		game.props.spawn_for(1, ArenaProps.CRATE, Vector3(2.0, 3.0, 2.0))
+
+	var mine := game.props.spawner.player_count(&"1")
+	_check(
+		mine <= 12,
+		"and the per-player budget holds",
+		"%d props for one player" % mine
+	)
+
+	_check(game.props.undo(1), "undo takes one back")
+
+
+func _siege_play(game: ArenaGame, mode: ArenaMode) -> void:
+	# --- Playing it ------------------------------------------------------
+
+	var monsters_seen := 0
+
+	for tick in range(TICK_RATE * 6):
+		game.tick(_commands_for(game, tick))
+		monsters_seen = maxi(monsters_seen, game.horde.count())
+
+		if tick % 64 == 0:
+			await get_tree().process_frame
+
+	_check(
+		monsters_seen > 0,
+		"monsters arrive while the match is played",
+		"%d at most" % monsters_seen
+	)
+
+	# The one thing a mode with both halves can get wrong that neither half can: a
+	# monster is a combat entity, and if it were on the scoreboard the score limit
+	# would be reached by something nobody killed.
+	var rows := game.match_node.scoreboard.players().size()
+	_check(
+		rows <= 2,
+		"and none of them is on the scoreboard",
+		"%d rows for 2 players" % rows
+	)
+
+
+func _new_siege_game() -> ArenaGame:
+	var game := ArenaGame.new()
+	game.name = "Siege"
+	game.tick_rate = TICK_RATE
+	game.score_limit = 3
+	game.time_limit_sec = 0.0
+	game.headless = true
+	game.is_authority = true
+	game.register_service = false
+	game.mode_id = &"siege"
+	add_child(game)
+	return game
+
 
 func _test_geometry_held() -> void:
 	_section("the world held")

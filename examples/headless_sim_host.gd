@@ -47,12 +47,7 @@ func _run() -> void:
 	print("game-fatal-contact: the solo game hosted beside the client")
 	_errors = RouteErrors.new()
 	OS.add_logger(_errors)
-	_check(not ArenaSimHost.wanted(), "a suite's or a tool's client stays in this process")
-	_check(ArenaSimHost.wanted(true), "the launched game is hosted")
-	_check(ArenaSimHost.wanted_for(PackedStringArray(["--offline", "+bot_quota", "8"]), true), "a launcher's --offline is still hosted")
-	_check(not ArenaSimHost.wanted_for(PackedStringArray(["--offline", "--sim_host", "0"]), true), "--sim_host 0 opts out under --offline")
-	ArenaSimHost.forced = 0
-	_check(not ArenaSimHost.wanted(true), "and can be told not to be")
+	_check_wanted_rules()
 
 	ArenaSimHost.forced = 1
 	ArenaSimHost.ask_map = "dm_box"
@@ -121,6 +116,15 @@ func _run() -> void:
 	var gone := await _until(func() -> bool: return not OS.is_process_running(pid), 20.0)
 	_check(gone, "the server process ends with the client")
 	_end()
+
+
+func _check_wanted_rules() -> void:
+	_check(not ArenaSimHost.wanted(), "a suite's or a tool's client stays in this process")
+	_check(ArenaSimHost.wanted(true), "the launched game is hosted")
+	_check(ArenaSimHost.wanted_for(PackedStringArray(["--offline", "+bot_quota", "8"]), true), "a launcher's --offline is still hosted")
+	_check(not ArenaSimHost.wanted_for(PackedStringArray(["--offline", "--sim_host", "0"]), true), "--sim_host 0 opts out under --offline")
+	ArenaSimHost.forced = 0
+	_check(not ArenaSimHost.wanted(true), "and can be told not to be")
 
 
 ## The client is built on the server's map, so its announcement keeps that world instead of rebuilding it.

@@ -1,4 +1,4 @@
-extends "headless_net_b2.gd"
+extends "headless_net_b2b.gd"
 
 
 func _ready() -> void:

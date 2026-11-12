@@ -264,6 +264,21 @@ func _build(team: int) -> Node3D:
 	plate.name = "Plate"
 	root.add_child(plate)
 
+	var marker := _build_marker(root, colour)
+	var icon: Sprite3D = marker[0]
+	var dist: Label3D = marker[1]
+
+	var light := OmniLight3D.new()
+	light.light_color = colour
+	light.omni_range = 5.0
+	light.light_energy = 0.8
+	light.position = Vector3(0.0, 1.5, 0.0)
+	root.add_child(light)
+	_parts[team] = [plate, icon, dist]
+	return root
+
+## The marker over the pole: [icon, distance label].
+func _build_marker(root: Node3D, colour: Color) -> Array:
 	# The marker, over the pole and (by default) through walls: a small see-through flag icon in the team's colour, and its distance beside it in small text.
 	var icon := Sprite3D.new()
 	icon.name = "Icon"
@@ -296,12 +311,5 @@ func _build(team: int) -> Node3D:
 	dist.render_priority = 10
 	dist.position = icon.position
 	root.add_child(dist)
+	return [icon, dist]
 
-	var light := OmniLight3D.new()
-	light.light_color = colour
-	light.omni_range = 5.0
-	light.light_energy = 0.8
-	light.position = Vector3(0.0, 1.5, 0.0)
-	root.add_child(light)
-	_parts[team] = [plate, icon, dist]
-	return root

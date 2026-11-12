@@ -87,6 +87,12 @@ var _completed := 0
 
 ## preset -> {kd, kills, deaths, reaction, first_error, blind_shots, fastest_turn}
 var _results: Dictionary = {}
+# The running tally of the preset being played (reset by _play).
+var _reactions: Array[float] = []
+var _first_errors: Array[float] = []
+var _blind_shots := 0
+var _shots := 0
+var _fastest := 0.0
 
 
 func _ready() -> void:
@@ -156,12 +162,12 @@ func _play(preset: String) -> void:
 	_section("%s against the reference player" % preset)
 
 	var kills: Array[int] = [0, 0]
-	var reactions: Array[float] = []
-	var first_errors: Array[float] = []
-	var blind_shots := 0
-	var shots := 0
+	_reactions = []
+	_first_errors = []
+	_blind_shots = 0
+	_shots = 0
 	var thrown: Array[int] = [0]
-	var fastest := 0.0
+	_fastest = 0.0
 	var per_seed := []
 	var game: ArenaGame
 	var settings: DotBotSettings
@@ -172,19 +178,7 @@ func _play(preset: String) -> void:
 			game.queue_free()
 			await get_tree().process_frame
 		var before := kills.duplicate()
-		game = ArenaGame.new()
-		game.name = "Arena_%s" % preset
-		game.tick_rate = TICK_RATE
-		game.score_limit = 100000
-		game.time_limit_sec = 0.0
-		game.headless = true
-		game.is_authority = true
-		game.register_service = false
-		add_child(game)
-		_check(game.setup(ArenaMap.dm_box()).ok, "the game sets up")
-		game.match_node.rules.warmup_sec = 0.0
-		game.match_node.rules.countdown_sec = 0.0
-		game.match_node.rules.respawn_delay_sec = 1.0
+		game = _new_game(preset)
 
 		settings = DotBotSettings.of(game)
 		trace = game.combat.trace
@@ -212,8 +206,6 @@ func _play(preset: String) -> void:
 		var ref_mind := ArenaBots.Mind.new()
 		ref_mind.brain = DotBotBrain.new(int(seed_pair[1]), reference)
 
-		var last_first_shot := NAN
-		var last_seen_tick := {}
 		# Grenades the bot let go of: a throw is not a shot (a frag lobbed at where a target went
 		# behind cover is meant to be blind), so it is counted here and not judged by sight.
 		game.player_for(BOT).used.connect(func(outcome: DotWeaponOutcome) -> void:
@@ -221,72 +213,19 @@ func _play(preset: String) -> void:
 				thrown[0] += 1
 		)
 
-		var ticks := int(SECONDS * TICK_RATE)
-		for i in range(ticks):
-			var tick := game.current_tick()
-			var bot := game.player_for(BOT)
-			var ref := game.player_for(REFERENCE)
-			var comp_before: Vector2 = bot_mind.recoil_comp
-			var commands := {
-				BOT: ArenaBots.think(game, bot, bot_mind, tick, float(TICK_RATE)),
-				REFERENCE: ArenaBots.think(game, ref, ref_mind, tick, float(TICK_RATE)),
-			}
-
-			# What the bot did this tick, judged from outside the brain.
-			var brain := bot_mind.brain
-			var fire: DotWeaponCommand = commands[BOT][1]
-			var move: DotFpsCommand = commands[BOT][0]
-			# Sight is sampled every tick, not only on shots: the brain's cached answer can be up to SIGHT_REUSE old when it fires.
-			if bot.is_alive() and ref.is_alive() and _sighted(trace, bot, ref):
-				last_seen_tick[REFERENCE] = tick
-			if bot.is_alive():
-				# Against the view the bot had going into the tick, never the last command: a
-				# spawn turns the view too, and that is the map's doing, not the bot's.
-				# The brain's own turn: the view it steers from and aims at both carry the recoil correction, which is not a turn of its choosing.
-				fastest = maxf(fastest, absf(wrapf((move.yaw + bot_mind.recoil_comp.x) - (bot.controller.state.yaw + comp_before.x), -180.0, 180.0)) * TICK_RATE)
-				if fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK) and bot_mind.throw_stage == 0:
-					shots += 1
-					var target := game.player_for(brain.last.target_id) if brain.last.target_id >= 0 else null
-					# Sight as the brain judges it (its eye to the target's chest or head) or from the muzzle: a corner can block one and not the other.
-					var chest := target.global_position + Vector3.UP * ArenaBots.chest_height() if target != null else Vector3.ZERO
-					var seen := _sighted(trace, bot, target)
-					# The brain reuses a sight answer for DotBotBrain.SIGHT_REUSE, so a shot within it of the target leaving sight is still sighted.
-					var stale_ticks := int(ceil(DotBotBrain.SIGHT_REUSE * TICK_RATE)) + 1
-					if not seen and (target == null or tick - int(last_seen_tick.get(brain.last.target_id, -1000)) > stale_ticks):
-						blind_shots += 1
-
-			var e := brain.engagement()
-			var first := float(e["first_shot_at"])
-			if not is_nan(first) and first != last_first_shot:
-				last_first_shot = first
-				reactions.append(first - float(e["seen_at"]))
-				first_errors.append(float(e["first_shot_error_deg"]))
-
-			game.tick(commands)
-			if i % 4 == 0:
-				await get_tree().process_frame
+		await _play_ticks(game, trace, bot_mind, ref_mind)
 
 		per_seed.append("%d/%d" % [kills[0] - before[0], kills[1] - before[1]])
 	var p := settings.profile
 	var kd := float(kills[0]) / float(maxi(kills[1], 1))
-	var reaction := _mean(reactions)
-	var first_error := _mean(first_errors)
+	var reaction := _mean(_reactions)
+	var first_error := _mean(_first_errors)
 	_results[preset] = {"kd": kd, "kills": kills[0], "deaths": kills[1], "reaction": reaction, "first_error": first_error}
 	print("PRESET_JSON " + JSON.stringify({"preset": preset, "result": _results[preset]}))
-	print("       %-9s %2d kills %2d deaths  K/D %.2f  reaction %.3f s (bot_reaction %.2f, %d engagements)  first shot %.2f deg off  turn %.0f deg/s  %d of %d shots blind  %d grenades  per seed %s" % [
-		preset, kills[0], kills[1], kd, reaction, p.reaction, reactions.size(), first_error, fastest, blind_shots, shots, thrown[0], per_seed])
+	print("       %-9s %2d kills %2d deaths  K/D %.2f  reaction %.3f s (bot_reaction %.2f, %d engagements)  first shot %.2f deg off  turn %.0f deg/s  %d of %d _shots blind  %d grenades  per seed %s" % [
+		preset, kills[0], kills[1], kd, reaction, p.reaction, _reactions.size(), first_error, _fastest, _blind_shots, _shots, thrown[0], per_seed])
 
-	var band: Array = KD_BANDS[preset]
-	_check(kills[0] + kills[1] >= 4, "%s: the two actually fight (%d deaths in %d s)" % [preset, kills[0] + kills[1], int(SECONDS)])
-	_check(kd >= float(band[0]) and kd <= float(band[1]), "%s: K/D %.2f inside %.2f..%.2f" % [preset, kd, band[0], band[1]])
-	_check(blind_shots == 0, "%s: never fires at somebody it cannot see" % preset, "%d blind of %d" % [blind_shots, shots])
-	if p.grenades > 0.0:
-		_check(thrown[0] > 0, "%s: throws grenades (bot_grenades %.1f) through the throwable slot" % [preset, p.grenades], "%d thrown" % thrown[0])
-	else:
-		_check(thrown[0] == 0, "%s: throws no grenade (bot_grenades 0)" % preset, "%d thrown" % thrown[0])
-	_check(fastest <= p.turn_rate * 1.02, "%s: never turns faster than bot_turn_rate (%.0f deg/s)" % [preset, p.turn_rate], "%.0f" % fastest)
-	_check(reactions.size() > 0 and reaction >= p.reaction * 0.5 and reaction <= p.reaction + p.notice * 2.0 + 0.3,
-		"%s: first shot about bot_reaction after first sight" % preset, "%.3f over %d" % [reaction, reactions.size()])
+	_judge_preset(preset, kills, thrown, p, kd, reaction)
 
 	# The world walks bots round the boxes: a route between the two spawns furthest apart, each
 	# leg clear at knee height (the horde's graph, built for this map).
@@ -300,6 +239,87 @@ func _play(preset: String) -> void:
 	var route := world.route(a, b)
 	var clear := route.size() >= 2
 	await _play_rest(preset, game, trace, world, a, b, route, clear)
+
+
+func _new_game(preset: String) -> ArenaGame:
+	var game := ArenaGame.new()
+	game.name = "Arena_%s" % preset
+	game.tick_rate = TICK_RATE
+	game.score_limit = 100000
+	game.time_limit_sec = 0.0
+	game.headless = true
+	game.is_authority = true
+	game.register_service = false
+	add_child(game)
+	_check(game.setup(ArenaMap.dm_box()).ok, "the game sets up")
+	game.match_node.rules.warmup_sec = 0.0
+	game.match_node.rules.countdown_sec = 0.0
+	game.match_node.rules.respawn_delay_sec = 1.0
+	return game
+
+
+func _judge_preset(preset: String, kills: Array[int], thrown: Array[int], p: DotBotProfile, kd: float, reaction: float) -> void:
+	var band: Array = KD_BANDS[preset]
+	_check(kills[0] + kills[1] >= 4, "%s: the two actually fight (%d deaths in %d s)" % [preset, kills[0] + kills[1], int(SECONDS)])
+	_check(kd >= float(band[0]) and kd <= float(band[1]), "%s: K/D %.2f inside %.2f..%.2f" % [preset, kd, band[0], band[1]])
+	_check(_blind_shots == 0, "%s: never fires at somebody it cannot see" % preset, "%d blind of %d" % [_blind_shots, _shots])
+	if p.grenades > 0.0:
+		_check(thrown[0] > 0, "%s: throws grenades (bot_grenades %.1f) through the throwable slot" % [preset, p.grenades], "%d thrown" % thrown[0])
+	else:
+		_check(thrown[0] == 0, "%s: throws no grenade (bot_grenades 0)" % preset, "%d thrown" % thrown[0])
+	_check(_fastest <= p.turn_rate * 1.02, "%s: never turns faster than bot_turn_rate (%.0f deg/s)" % [preset, p.turn_rate], "%.0f" % _fastest)
+	_check(_reactions.size() > 0 and reaction >= p.reaction * 0.5 and reaction <= p.reaction + p.notice * 2.0 + 0.3,
+		"%s: first shot about bot_reaction after first sight" % preset, "%.3f over %d" % [reaction, _reactions.size()])
+
+
+## Plays one seed's match tick by tick, judging the bot from outside its brain.
+func _play_ticks(game: ArenaGame, trace: DotTrace, bot_mind: ArenaBots.Mind, ref_mind: ArenaBots.Mind) -> void:
+	var last_first_shot := NAN
+	var last_seen_tick := {}
+	var ticks := int(SECONDS * TICK_RATE)
+	for i in range(ticks):
+		var tick := game.current_tick()
+		var bot := game.player_for(BOT)
+		var ref := game.player_for(REFERENCE)
+		var comp_before: Vector2 = bot_mind.recoil_comp
+		var commands := {
+			BOT: ArenaBots.think(game, bot, bot_mind, tick, float(TICK_RATE)),
+			REFERENCE: ArenaBots.think(game, ref, ref_mind, tick, float(TICK_RATE)),
+		}
+
+		# What the bot did this tick, judged from outside the brain.
+		var brain := bot_mind.brain
+		var fire: DotWeaponCommand = commands[BOT][1]
+		var move: DotFpsCommand = commands[BOT][0]
+		# Sight is sampled every tick, not only on shots: the brain's cached answer can be up to SIGHT_REUSE old when it fires.
+		if bot.is_alive() and ref.is_alive() and _sighted(trace, bot, ref):
+			last_seen_tick[REFERENCE] = tick
+		if bot.is_alive():
+			# Against the view the bot had going into the tick, never the last command: a
+			# spawn turns the view too, and that is the map's doing, not the bot's.
+			# The brain's own turn: the view it steers from and aims at both carry the recoil correction, which is not a turn of its choosing.
+			_fastest = maxf(_fastest, absf(wrapf((move.yaw + bot_mind.recoil_comp.x) - (bot.controller.state.yaw + comp_before.x), -180.0, 180.0)) * TICK_RATE)
+			if fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK) and bot_mind.throw_stage == 0:
+				_shots += 1
+				var target := game.player_for(brain.last.target_id) if brain.last.target_id >= 0 else null
+				# Sight as the brain judges it (its eye to the target's chest or head) or from the muzzle: a corner can block one and not the other.
+				var chest := target.global_position + Vector3.UP * ArenaBots.chest_height() if target != null else Vector3.ZERO
+				var seen := _sighted(trace, bot, target)
+				# The brain reuses a sight answer for DotBotBrain.SIGHT_REUSE, so a shot within it of the target leaving sight is still sighted.
+				var stale_ticks := int(ceil(DotBotBrain.SIGHT_REUSE * TICK_RATE)) + 1
+				if not seen and (target == null or tick - int(last_seen_tick.get(brain.last.target_id, -1000)) > stale_ticks):
+					_blind_shots += 1
+
+		var e := brain.engagement()
+		var first := float(e["first_shot_at"])
+		if not is_nan(first) and first != last_first_shot:
+			last_first_shot = first
+			_reactions.append(first - float(e["seen_at"]))
+			_first_errors.append(float(e["first_shot_error_deg"]))
+
+		game.tick(commands)
+		if i % 4 == 0:
+			await get_tree().process_frame
 
 
 func _play_rest(preset: String, game: ArenaGame, trace: DotTrace, world: ArenaBots.World, a: Vector3, b: Vector3, route: PackedVector3Array, clear: bool) -> void:

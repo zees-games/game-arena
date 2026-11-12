@@ -1,6 +1,5 @@
 extends "arena_client_part1.gd"
 
-const ArenaProfilerContext := preload("arena_profiler_context.gd")
 ## The load gate's give-up time in a browser (DotLoadGate's default is 20 s); see setup's use.
 const WEB_GATE_TIMEOUT_SEC := 60.0
 ## A drawing client's share of a frame for the server's events; the join backlog spreads over frames.
@@ -763,45 +762,6 @@ func _start_offline() -> void:
 	_bind_bot_console()
 	await _launch_offline_bots(_launch_bots())
 	_run_launch_commands()
-
-func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
-	if presentation != null and presentation.audio != null:
-		var _played := presentation.audio.play_at(id, at, clampf(volume, 0.3, 1.0))
-
-## The dead bodies' yard: the game's ragdoll rules, the world's collision layers, and the
-## presentation's sound. Built once; cleared on a map change.
-func _build_ragdolls() -> void:
-	ragdolls = DotPlayerRagdolls.new()
-	ragdolls.name = "Ragdolls"
-	ragdolls.rules = game.ragdoll_rules
-	var stack := game.player_stack
-	if stack != null and stack.physics != null and stack.physics.layout != null:
-		# The level is classified onto `world` (see `_classify_level`); props are on `prop`.
-		game.ragdoll_rules.collision_mask = stack.physics.layout.mask_of([&"world", &"prop"])
-	ragdolls.sound_fn = _ragdoll_sound
-	add_child(ragdolls)
-	# The map's toys are heard the same way: a bounce, a knock, a barrel's roll.
-	if not game.toy_sound.is_connected(_ragdoll_sound):
-		var _toys := game.toy_sound.connect(_ragdoll_sound)
-
-
-## The profiler's game context and native timers, now if it is up and when it arrives if not.
-func _install_profiler_context() -> void:
-	var prof: Object = DotRegistry.get_service(&"dot_profiler")
-	if prof != null:
-		ArenaProfilerContext.install(prof, game, _bot_host(), presentation)
-		return
-	# Not one-shot: that would spend the connection on whichever service registers next, usually not the profiler.
-	if not DotRegistry.signals().service_registered.is_connected(_on_profiler_registered):
-		var _c := DotRegistry.signals().service_registered.connect(_on_profiler_registered)
-
-
-func _on_profiler_registered(svc_name: StringName, inst: Object) -> void:
-	if svc_name != &"dot_profiler":
-		return
-	DotRegistry.signals().service_registered.disconnect(_on_profiler_registered)
-	ArenaProfilerContext.install(inst, game, _bot_host(), presentation)
-
 
 ## A solo launch's bots: all at once headless, a few a frame in a client that draws, where 31 bots
 ## with their bodies were ~130 ms of one frame.

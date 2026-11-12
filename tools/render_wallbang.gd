@@ -126,19 +126,7 @@ func _run() -> void:
 	var size := Vector3(4.0, 3.0, 0.2) if absf(dir.z) > 0.5 else Vector3(0.2, 3.0, 4.0)
 	var center: Vector3 = spot["me"] + dir * 3.0 + Vector3.UP * 1.5
 	game.combat.trace.add_box(AABB(center - size * 0.5, size), &"concrete")
-	var wall := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	wall.mesh = mesh
-	var body := StaticBody3D.new()
-	var col := CollisionShape3D.new()
-	var box_shape := BoxShape3D.new()
-	box_shape.size = size
-	col.shape = box_shape
-	body.add_child(col)
-	wall.add_child(body)
-	root.add_child(wall)
-	wall.global_position = center
+	_build_wall(size, center)
 	await _wait(0.3)
 
 	var round_of = me.arsenal.round_for(&"rifle")
@@ -175,6 +163,22 @@ func _run() -> void:
 	skim.penetration = round_of.make_penetration()
 	skim.penetration.ricochet_materials = PackedStringArray(["concrete"])
 	await _run_rest(game, me, size, shot, pres, decals, skim_from, skim)
+
+
+func _build_wall(size: Vector3, center: Vector3) -> void:
+	var wall := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	wall.mesh = mesh
+	var body := StaticBody3D.new()
+	var col := CollisionShape3D.new()
+	var box_shape := BoxShape3D.new()
+	box_shape.size = size
+	col.shape = box_shape
+	body.add_child(col)
+	wall.add_child(body)
+	root.add_child(wall)
+	wall.global_position = center
 
 
 func _run_rest(game, me, size: Vector3, shot, pres, decals: Array[Node3D], skim_from, skim) -> void:

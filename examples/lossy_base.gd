@@ -628,30 +628,8 @@ func _connect_everyone() -> bool:
 
 	print("    A's ENet packet throttle: %d/32" % _throttle_of("A"))
 
-	# Before anything is judged: is this box a place to measure at all? A burst of load gets three more
-	# tries; a box that is simply too slow fails this one check and the run stops here, in half a minute,
-	# instead of playing every window against a network it has made twice as slow.
-	var pace := _pace(int(first["ticks"]), int(first["usec"]))
-	var paces := "%d%%" % roundi(pace * 100.0)
-	for attempt in range(1, PACE_TRIES):
-		if pace >= PACE_MIN:
-			break
-		await get_tree().create_timer(2.0).timeout
-		var from_tick := _game.current_tick()
-		var from_usec := Time.get_ticks_usec()
-		await _wait_game(2.0)
-		pace = _pace(_game.current_tick() - from_tick, from_usec)
-		paces += ", %d%%" % roundi(pace * 100.0)
-	if not _check(pace >= PACE_MIN,
-			"this box runs the server and both clients in real time (%d%% at least), so what follows measures the netcode" % roundi(PACE_MIN * 100.0),
-			"it ran at %s of %d ticks a second: NOT A MEASUREMENT, the box is too slow or too loaded; run this suite on another" % [paces, TICK_RATE]):
-		_done()
+	if not await _check_box_pace(first, a, first_in_time):
 		return false
-	_check(first_in_time >= FIRST_IN_TIME,
-		"in A's first %d seconds the server had its command for %.1f%% of %d ticks, %d late" % [
-			int(FIRST_SECONDS), first_in_time * 100.0, int(first["ticks"]), int(first["late"])],
-		"its clock's round trip %d ms; longest stall %d ms (limit %d), physics gaps as (tick, ms) %s" % [
-			int((a["net"] as DotNetManager).clock.rtt_ms()), int(first["stalled"]), _stall_limit_ms(), first["gaps"]])
 
 	var a_game: ArenaGame = a["game"]
 	_listen_as_a(a)
@@ -680,3 +658,32 @@ func _connect_everyone() -> bool:
 
 	_done()
 	return true
+
+## False after `_done`: the box is too slow to measure on.
+func _check_box_pace(first: Dictionary, a: Dictionary, first_in_time: float) -> bool:
+	# Before anything is judged: is this box a place to measure at all? A burst of load gets three more
+	# tries; a box that is simply too slow fails this one check and the run stops here, in half a minute,
+	# instead of playing every window against a network it has made twice as slow.
+	var pace := _pace(int(first["ticks"]), int(first["usec"]))
+	var paces := "%d%%" % roundi(pace * 100.0)
+	for attempt in range(1, PACE_TRIES):
+		if pace >= PACE_MIN:
+			break
+		await get_tree().create_timer(2.0).timeout
+		var from_tick := _game.current_tick()
+		var from_usec := Time.get_ticks_usec()
+		await _wait_game(2.0)
+		pace = _pace(_game.current_tick() - from_tick, from_usec)
+		paces += ", %d%%" % roundi(pace * 100.0)
+	if not _check(pace >= PACE_MIN,
+			"this box runs the server and both clients in real time (%d%% at least), so what follows measures the netcode" % roundi(PACE_MIN * 100.0),
+			"it ran at %s of %d ticks a second: NOT A MEASUREMENT, the box is too slow or too loaded; run this suite on another" % [paces, TICK_RATE]):
+		_done()
+		return false
+	_check(first_in_time >= FIRST_IN_TIME,
+		"in A's first %d seconds the server had its command for %.1f%% of %d ticks, %d late" % [
+			int(FIRST_SECONDS), first_in_time * 100.0, int(first["ticks"]), int(first["late"])],
+		"its clock's round trip %d ms; longest stall %d ms (limit %d), physics gaps as (tick, ms) %s" % [
+			int((a["net"] as DotNetManager).clock.rtt_ms()), int(first["stalled"]), _stall_limit_ms(), first["gaps"]])
+	return true
+

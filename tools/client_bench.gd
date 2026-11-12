@@ -355,18 +355,8 @@ func _run() -> void:
 	var client_net = _client.get("net")
 	if "--raw-input" in OS.get_cmdline_user_args() and client_net != null and "predict_wire_input" in client_net.config:
 		client_net.config.predict_wire_input = false
-	# After the client, whose bindings register the actions the pilot presses.
-	if _wallrun:
-		var wall_map := ArenaMap.by_id(StringName(_map))
-		if wall_map == null or wall_map.wall_routes.is_empty():
-			return _fail("--wallrun needs a map with wall routes, e.g. --map dm_atrium")
-		var wall_pilot := WallPilot.new(_client, wall_map.wall_routes[0])
-		wall_pilot.process_priority = -999
-		add_child(wall_pilot)
-	elif _play:
-		var pilot := Pilot.new()
-		pilot.process_priority = -999
-		add_child(pilot)
+	if not _start_pilot():
+		return
 	_watch_wall_runs()
 	# Settle: the first seconds are loading and the clock finding its lead.
 	await get_tree().create_timer(3.0).timeout
@@ -374,13 +364,35 @@ func _run() -> void:
 	_switch_off()
 	_hide()
 	await _measure()
+	await _record_seq()
+	_run_rest(link)
+
+
+## False after `_fail`: `--wallrun` on a map without wall routes.
+func _start_pilot() -> bool:
+	# After the client, whose bindings register the actions the pilot presses.
+	if _wallrun:
+		var wall_map := ArenaMap.by_id(StringName(_map))
+		if wall_map == null or wall_map.wall_routes.is_empty():
+			_fail("--wallrun needs a map with wall routes, e.g. --map dm_atrium")
+			return false
+		var wall_pilot := WallPilot.new(_client, wall_map.wall_routes[0])
+		wall_pilot.process_priority = -999
+		add_child(wall_pilot)
+	elif _play:
+		var pilot := Pilot.new()
+		pilot.process_priority = -999
+		add_child(pilot)
+	return true
+
+
+func _record_seq() -> void:
 	# `--seq PATH`: after the numbers, 16 frames of the play into "PATH" (a "<case>.seq" dir) for the QA post's clip.
 	var seq_at := OS.get_cmdline_user_args().find("--seq")
 	if seq_at >= 0 and seq_at + 1 < OS.get_cmdline_user_args().size():
 		OS.set_environment("DOT_SHOT_FRAMES", "16")
 		var seq_dir := ProjectSettings.globalize_path("res://").path_join(OS.get_cmdline_user_args()[seq_at + 1])
 		await DotShotSeq.new().record(get_tree(), seq_dir.trim_suffix(".seq") + ".png")
-	_run_rest(link)
 
 
 func _run_rest(link: DotClientLink) -> void:
@@ -511,23 +523,9 @@ func _measure() -> void:
 		await get_tree().process_frame
 		if "--timeline" in OS.get_cmdline_user_args() and Time.get_ticks_usec() >= next_line and net != null:
 			next_line += 2000000
-			var pc: Dictionary = net.perf_counters()
-			var mm: Dictionary = net.predictor.describe().get("mismatches", {})
-			var diff := {}
-			for k in mm:
-				var dv := int(mm[k]) - int(line_mm.get(k, 0))
-				if dv > 0:
-					diff[k] = dv
-			var p = _client.get("player")
-			print("  t=%4.1f alive %s replays %d skipped %d ticks %d steps %d %s" % [(Time.get_ticks_usec() - start) / 1e6,
-				p != null and p.is_alive(), int(pc[&"reconciles"]) - int(line_perf[&"reconciles"]) - (int(pc[&"skipped"]) - int(line_perf[&"skipped"])),
-				int(pc[&"skipped"]) - int(line_perf[&"skipped"]), int(pc[&"replayed_ticks"]) - int(line_perf[&"replayed_ticks"]),
-				int(pc[&"client_ticks"]) - int(line_perf[&"client_ticks"]), diff])
-			print("      last ", net.predictor.describe().get("last_mismatch", {}), " | draws %d objects %d" % [
-				int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
-				int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))])
-			line_perf = pc
-			line_mm = mm
+			var line := _timeline_line(net, start, line_perf, line_mm)
+			line_perf = line[0]
+			line_mm = line[1]
 		var wp = _client.get("player")
 		if wp != null and wp.get("controller") != null and wp.controller.state.is_wall_running():
 			_wall_frames += 1
@@ -567,17 +565,7 @@ func _measure() -> void:
 	print("  physics %.2f ms/frame (%.2f ms/step) | script %.2f | render %.2f | wait %.2f | steps %.2f/frame (max %d) | draw calls %.0f objects %.0f" % [
 		fs["physics_ms"], float(fs["physics_ms"]) / maxf(0.01, float(fs["steps"])), fs["script_ms"], fs["render_ms"], fs["wait_ms"],
 		float(step_sum) / n, step_max, calls / n, objs / n])
-	if not perf0.is_empty():
-		var p1: Dictionary = net.perf_counters()
-		var d := func(k: StringName) -> float: return float(int(p1[k]) - int(perf0[k]))
-		print("  net: snapshots %.1f/frame %.3f ms | reconciles %.0f (skipped %.0f) %.3f ms/frame | replayed %.2f ticks/frame | predict %.3f ms/frame" % [
-			d.call(&"snapshots") / n, d.call(&"snapshot_usec") / n / 1000.0, d.call(&"reconciles"), d.call(&"skipped"),
-			d.call(&"reconcile_usec") / n / 1000.0, d.call(&"replayed_ticks") / n, d.call(&"predict_usec") / n / 1000.0])
-	if net != null and net.predictor != null:
-		print("  predictor %s | predicted identities %d" % [net.predictor.describe(), net.registry.predicted().size()])
-	var clock: Dictionary = net.clock.describe() if net != null else {}
-	print("  input lead %.1f ticks avg | clock rtt %s ms, jitter %s, snaps %s, catch-ups %s" % [lead_sum / n,
-		clock.get("rtt_ms"), clock.get("jitter_ms"), clock.get("snaps"), clock.get("catch_ups")])
+	_print_net(net, perf0, n, lead_sum)
 	for key: StringName in ArenaFrameProbe._sections:
 		var row: PackedInt64Array = ArenaFrameProbe._sections[key]
 		if String(key).ends_with("_n"):
@@ -590,6 +578,40 @@ func _measure() -> void:
 		int(Performance.get_monitor(Performance.PHYSICS_3D_COLLISION_PAIRS)),
 		int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))])
 	_measure_rest()
+
+
+## One `--timeline` row and the two readings it differs from next time: [counters, mismatches].
+func _timeline_line(net: DotNetManager, start: int, line_perf: Dictionary, line_mm: Dictionary) -> Array:
+	var pc: Dictionary = net.perf_counters()
+	var mm: Dictionary = net.predictor.describe().get("mismatches", {})
+	var diff := {}
+	for k in mm:
+		var dv := int(mm[k]) - int(line_mm.get(k, 0))
+		if dv > 0:
+			diff[k] = dv
+	var p = _client.get("player")
+	print("  t=%4.1f alive %s replays %d skipped %d ticks %d steps %d %s" % [(Time.get_ticks_usec() - start) / 1e6,
+		p != null and p.is_alive(), int(pc[&"reconciles"]) - int(line_perf[&"reconciles"]) - (int(pc[&"skipped"]) - int(line_perf[&"skipped"])),
+		int(pc[&"skipped"]) - int(line_perf[&"skipped"]), int(pc[&"replayed_ticks"]) - int(line_perf[&"replayed_ticks"]),
+		int(pc[&"client_ticks"]) - int(line_perf[&"client_ticks"]), diff])
+	print("      last ", net.predictor.describe().get("last_mismatch", {}), " | draws %d objects %d" % [
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))])
+	return [pc, mm]
+
+
+func _print_net(net: DotNetManager, perf0: Dictionary, n: int, lead_sum: float) -> void:
+	if not perf0.is_empty():
+		var p1: Dictionary = net.perf_counters()
+		var d := func(k: StringName) -> float: return float(int(p1[k]) - int(perf0[k]))
+		print("  net: snapshots %.1f/frame %.3f ms | reconciles %.0f (skipped %.0f) %.3f ms/frame | replayed %.2f ticks/frame | predict %.3f ms/frame" % [
+			d.call(&"snapshots") / n, d.call(&"snapshot_usec") / n / 1000.0, d.call(&"reconciles"), d.call(&"skipped"),
+			d.call(&"reconcile_usec") / n / 1000.0, d.call(&"replayed_ticks") / n, d.call(&"predict_usec") / n / 1000.0])
+	if net != null and net.predictor != null:
+		print("  predictor %s | predicted identities %d" % [net.predictor.describe(), net.registry.predicted().size()])
+	var clock: Dictionary = net.clock.describe() if net != null else {}
+	print("  input lead %.1f ticks avg | clock rtt %s ms, jitter %s, snaps %s, catch-ups %s" % [lead_sum / n,
+		clock.get("rtt_ms"), clock.get("jitter_ms"), clock.get("snaps"), clock.get("catch_ups")])
 
 
 func _measure_rest() -> void:

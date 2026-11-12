@@ -2,7 +2,6 @@ extends "arena_player_stack_calls.gd"
 
 const ArenaContent := preload("arena_content.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
-const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 
 const CHANNEL := "arena.stack"
 const SERVICE := &"arena_player_stack"
@@ -189,40 +188,6 @@ func _build_physics() -> DotResult:
 		physics_applied.emit(physics.profile)
 
 	return res.wrap("The arena's physics profile")
-
-
-## Puts [param node] on the layout's [param layer_id] layer, with that layer's mask.
-func classify(node: Node, layer_id: StringName) -> DotResult:
-	if physics == null or physics.layout == null:
-		return DotResult.fail(DotError.CODE_STATE, "No collision layout.")
-
-	return physics.classify(node, layer_id)
-
-
-## Puts every collision object under [param root] on [param layer_id].
-##
-## For a level: one call rather than a call per box, because the geometry is built by
-## `ArenaMap` and a loop there would put a physics decision inside a description of
-## boxes. Nodes that are not collision objects are skipped, so handing it a whole scene
-## is safe. Returns how many were classified.
-func classify_tree(root: Node, layer_id: StringName) -> int:
-	if root == null or physics == null or physics.layout == null:
-		return 0
-
-	var done := 0
-
-	# Importer hull bodies (clip, fence, glass) and the sky mark keep their layers, or shots and sight could not tell them from a wall.
-	if DotMapGlassSight.is_exempt(root) or root.is_in_group(ArenaBspMap.SKY_GROUP):
-		return 0
-
-	if root is CollisionObject3D or root is CollisionObject2D:
-		if classify(root, layer_id).ok:
-			done += 1
-
-	for child in root.get_children():
-		done += classify_tree(child, layer_id)
-
-	return done
 
 
 ## The mask a player's movement sweeps against, out of the layout.

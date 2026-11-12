@@ -3,6 +3,7 @@ extends "dedicated_b1.gd"
 const ArenaAvatars := preload("../game/arena_avatars.gd")
 const ArenaServer := preload("../game/arena_server.gd")
 const ArenaServices := preload("../game/arena_services.gd")
+const ArenaMapDirector := preload("../game/arena_map_director.gd")
 
 
 const SERVER_DIR := "user://arena_dedicated"
@@ -406,19 +407,7 @@ func _test_map_rotation_file() -> void:
 	_check(not catalogue.available().has(pit) and catalogue.available().has(box),
 		"available() leaves it out")
 
-	# next-map: the pool and a hundred draws never show it, and it cannot be forced.
-	var drew_pit := false
-	for i in 100:
-		var chosen := maps.session.rotation.choose(0)
-		if chosen != null and chosen.id == &"dm_pit":
-			drew_pit = true
-	_check(not drew_pit, "100 draws of the next map never choose a map outside the rotation")
-	maps.restrict_rotation()
-	_check(not maps.session.rotation.order.has(&"dm_pit"),
-		"restrict_rotation does not widen the file's list again")
-	_check(not maps.set_next(&"dm_pit"), "and it cannot be forced as the next map")
-	_check(maps.set_next(&"dm_box"), "while one in the rotation can")
-	maps.session.rotation.clear_next()
+	_check_rotation_draws(maps)
 
 	# the ballot and nominations
 	var ids := module.vote.source.choices().map(func(c: DotVoteChoice) -> StringName: return c.id)
@@ -442,6 +431,20 @@ func _test_map_rotation_file() -> void:
 	_check(not ids.has(&"map:dm_box"), "and the ballot follows it")
 	_check(not maps.rotation_file.switch(maps.session.rotation, "nope").ok, "an unknown rotation is refused")
 
+	_check_renamed_rtv(module)
+
+	# No file again: everything back in, as before maps.yml.
+	maps.rotation_file = null
+	maps.apply_rotation()
+	var all_in := true
+	for def in catalogue.maps:
+		all_in = all_in and def.in_rotation
+	_check(all_in, "with no file every map is in rotation again")
+	_check(module._rotation_commands.call().is_empty(), "and no command is renamed")
+	_end()
+
+
+func _check_renamed_rtv(module: ArenaModule) -> void:
 	# a renamed command
 	var rtv := DotVoteCommands.new()
 	rtv.director = module.vote.director
@@ -461,15 +464,21 @@ func _test_map_rotation_file() -> void:
 		_server.console.execute("rockthevote", ctx)
 		_check(not replies.is_empty(), "and answers", " ".join(replies))
 
-	# No file again: everything back in, as before maps.yml.
-	maps.rotation_file = null
-	maps.apply_rotation()
-	var all_in := true
-	for def in catalogue.maps:
-		all_in = all_in and def.in_rotation
-	_check(all_in, "with no file every map is in rotation again")
-	_check(module._rotation_commands.call().is_empty(), "and no command is renamed")
-	_end()
+
+func _check_rotation_draws(maps: ArenaMapDirector) -> void:
+	# next-map: the pool and a hundred draws never show it, and it cannot be forced.
+	var drew_pit := false
+	for i in 100:
+		var chosen := maps.session.rotation.choose(0)
+		if chosen != null and chosen.id == &"dm_pit":
+			drew_pit = true
+	_check(not drew_pit, "100 draws of the next map never choose a map outside the rotation")
+	maps.restrict_rotation()
+	_check(not maps.session.rotation.order.has(&"dm_pit"),
+		"restrict_rotation does not widen the file's list again")
+	_check(not maps.set_next(&"dm_pit"), "and it cannot be forced as the next map")
+	_check(maps.set_next(&"dm_box"), "while one in the rotation can")
+	maps.session.rotation.clear_next()
 
 
 ## B's server half: the `loadout` command and the owner's mp_loadout_* cvars, enforced HERE,

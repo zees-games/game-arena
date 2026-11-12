@@ -157,6 +157,34 @@ func _play_window(window: Array) -> void:
 	var got_kills_from := _got_kills.size()
 	var got_a_chat_from := _got_a_chat.size()
 
+	await _pump_window(seconds)
+
+	# Everything sent in the window gets RELIABLE_SECONDS to land; the wait ends the moment
+	# it has. A drop fails "still connected" above. Twenty failed one run in twenty
+	# (2026-10-09). ENet doubles a reliable command's resend timeout every time it goes
+	# unacknowledged, and a resend fails if the data OR its acknowledgement is lost: 36% a try at 20% each
+	# way, not 20%. Five failures in a row, about one command in a hundred and seventy (a
+	# window sends a few hundred), is 31 resend timeouts of ~230 ms, seven seconds; everything
+	# behind it on the channel waits too, because ENet delivers a channel in order. Six
+	# seconds was written for 20% a try and failed a run in eight on exactly that (2026-10-09).
+	# Late is allowed; lost, duplicated or reordered is not, and that is what is checked.
+	await _until(func() -> bool:
+		return _got_notices.size() - got_notices_from >= _sent_notices.size() - notices_from \
+			and _got_kills.size() - got_kills_from >= _sent_kills.size() - kills_from \
+			and _got_chat.size() - got_chat_from >= _sent_chat.size() - chat_from \
+			and _got_a_chat.size() - got_a_chat_from >= _sent_a_chat.size() - a_chat_from,
+		RELIABLE_SECONDS)
+
+	_measure_window(title, loss,
+		_sent_notices.slice(notices_from), _got_notices.slice(got_notices_from),
+		_sent_kills.slice(kills_from), _got_kills.slice(got_kills_from),
+		_sent_chat.slice(chat_from), _got_chat.slice(got_chat_from),
+		_sent_a_chat.slice(a_chat_from), _got_a_chat.slice(got_a_chat_from))
+	_w = {}
+	_done()
+
+
+func _pump_window(seconds: float) -> void:
 	# The window is `seconds` of GAME time (physics frames), and the pacing of what the server sends is on that
 	# clock too: a runner that starves the process then still gets the window's full count of ticks and sends,
 	# rather than a wall-clock window holding a fraction of them.
@@ -196,30 +224,6 @@ func _play_window(window: Array) -> void:
 				_game.respawn_player(DUMMY_ID)
 				next_slay += 300
 		await get_tree().process_frame
-
-	# Everything sent in the window gets RELIABLE_SECONDS to land; the wait ends the moment
-	# it has. A drop fails "still connected" above. Twenty failed one run in twenty
-	# (2026-10-09). ENet doubles a reliable command's resend timeout every time it goes
-	# unacknowledged, and a resend fails if the data OR its acknowledgement is lost: 36% a try at 20% each
-	# way, not 20%. Five failures in a row, about one command in a hundred and seventy (a
-	# window sends a few hundred), is 31 resend timeouts of ~230 ms, seven seconds; everything
-	# behind it on the channel waits too, because ENet delivers a channel in order. Six
-	# seconds was written for 20% a try and failed a run in eight on exactly that (2026-10-09).
-	# Late is allowed; lost, duplicated or reordered is not, and that is what is checked.
-	await _until(func() -> bool:
-		return _got_notices.size() - got_notices_from >= _sent_notices.size() - notices_from \
-			and _got_kills.size() - got_kills_from >= _sent_kills.size() - kills_from \
-			and _got_chat.size() - got_chat_from >= _sent_chat.size() - chat_from \
-			and _got_a_chat.size() - got_a_chat_from >= _sent_a_chat.size() - a_chat_from,
-		RELIABLE_SECONDS)
-
-	_measure_window(title, loss,
-		_sent_notices.slice(notices_from), _got_notices.slice(got_notices_from),
-		_sent_kills.slice(kills_from), _got_kills.slice(got_kills_from),
-		_sent_chat.slice(chat_from), _got_chat.slice(got_chat_from),
-		_sent_a_chat.slice(a_chat_from), _got_a_chat.slice(got_a_chat_from))
-	_w = {}
-	_done()
 
 
 func _measure_window(

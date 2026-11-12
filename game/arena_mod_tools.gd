@@ -38,7 +38,7 @@ const MAX_HEALTH := 2000.0
 
 ## The handler table, `{ability: Callable}`.
 static func handlers(game: ArenaGame) -> Dictionary:
-	return {
+	var table := {
 		DotModTools.ACTION_NOCLIP: func(id: StringName, args: Dictionary) -> DotResult:
 			var player := _player(game, id)
 			if player == null:
@@ -103,7 +103,14 @@ static func handlers(game: ArenaGame) -> Dictionary:
 			if player == null:
 				return _absent(id)
 			return DotFpsAdminModifiers.set_gravity(player.controller, float(args["scale"])),
+	}
+	table.merge(_item_handlers(game))
+	return table
 
+
+## The give, strip, rename, burn, blind and beacon handlers.
+static func _item_handlers(game: ArenaGame) -> Dictionary:
+	return {
 		DotModTools.ACTION_GIVE: func(id: StringName, args: Dictionary) -> DotResult:
 			var player := _player(game, id)
 			if player == null:

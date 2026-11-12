@@ -237,19 +237,7 @@ func _play(batched: bool, map_id: StringName, bots: int, seconds: float, streams
 	ArenaHullGrid.batch = batched
 	ArenaHullGrid.batch_rows = 0
 	ArenaHullGrid.batch_faults = 0
-	var game := ArenaGame.new()
-	game.name = "Arena_%d_%d" % [int(batched), int(think)]
-	game.tick_rate = TICK_RATE
-	game.score_limit = 100000
-	game.time_limit_sec = 0.0
-	game.headless = true
-	game.is_authority = true
-	game.register_service = false
-	add_child(game)
-	var _setup := game.setup(ArenaMap.dm_box() if map_id == &"" else ArenaMap.by_id(map_id))
-	game.match_node.rules.warmup_sec = 0.0
-	game.match_node.rules.countdown_sec = 0.0
-	game.match_node.rules.respawn_delay_sec = 1.0
+	var game := _new_game(batched, think, map_id)
 	var kills := [0]
 	game.player_killed.connect(func(_entry: DotKillFeed.Entry) -> void: kills[0] += 1)
 	var hits: Array = []
@@ -284,54 +272,16 @@ func _play(batched: bool, map_id: StringName, bots: int, seconds: float, streams
 	for _i in 3:
 		await get_tree().physics_frame
 	if think and map_id != &"" and map_id != &"dm_pit":
-		# The routes start when the mesh bake lands; start every run from there.
-		var world := ArenaBots.world_for(game)
-		var _first := world.route(Vector3.ZERO, Vector3.ONE)
-		var frames := 0
-		while world.is_route_pending() and frames < 3000:
-			await get_tree().process_frame
-			frames += 1
-		var _warm := world.warm()
+		await _warm_routes(game)
 	var digests := PackedStringArray()
 	var window := PackedByteArray()
 	for tick_index in int(seconds * TICK_RATE):
-		var commands := {}
-		if think:
-			var recorded := {}
-			var tick := game.current_tick()
-			for i in players.size():
-				var pair: Array = ArenaBots.think(game, players[i], minds[i], tick, float(TICK_RATE))
-				var move: DotFpsCommand = pair[0]
-				var fire: DotWeaponCommand = pair[1]
-				commands[players[i].player_id] = pair
-				recorded[players[i].player_id] = [move.duplicate_command(), fire.duplicate_command(), players[i].body_every]
-			streams.append(recorded)
-		else:
-			var recorded: Dictionary = streams[tick_index]
-			for id: int in recorded:
-				var move: DotFpsCommand = recorded[id][0]
-				var fire: DotWeaponCommand = recorded[id][1]
-				commands[id] = [move.duplicate_command(), fire.duplicate_command()]
-				# The motor period the bot's think chose (body tiers); 1 when it was not recorded.
-				var body: Object = game.player_for(id)
-				if body != null:
-					body.body_every = recorded[id][2] if recorded[id].size() > 2 else 1
-				if lagging and _lag_of(id) > 0.0:
-					commands[id].append(_lag_of(id))
+		var commands := _commands_for(game, players, minds, streams, tick_index, think, lagging)
 		var now := game.current_tick()
 		game.tick(commands)
 		if meddler != null:
 			meddler.between(now)
-		for player: Object in players:
-			var state: DotFpsState = player.controller.state if player.controller != null else null
-			if state != null:
-				window.append_array(var_to_bytes([state.position, state.velocity, state.mode, state.move_flags(), state.ground_id != 0,
-					state.yaw, state.pitch, player.health.health, player.health.alive]))
-			if lagging:
-				var then: Variant = game.unlag_position_at(player.player_id, float(now) - _lag_of(player.player_id))
-				window.append_array(var_to_bytes(then))
-				if then is Vector3 and state != null and not (then as Vector3).is_equal_approx(state.position):
-					counts[1] += 1
+		window.append_array(_players_chunk(game, players, lagging, now, counts))
 		window.append_array(var_to_bytes(hits))
 		hits.clear()
 		if tick_index % 10 == 9:
@@ -353,6 +303,78 @@ func _play(batched: bool, map_id: StringName, bots: int, seconds: float, streams
 	game.queue_free()
 	await get_tree().process_frame
 	return out
+
+
+func _new_game(batched: bool, think: bool, map_id: StringName) -> ArenaGame:
+	var game := ArenaGame.new()
+	game.name = "Arena_%d_%d" % [int(batched), int(think)]
+	game.tick_rate = TICK_RATE
+	game.score_limit = 100000
+	game.time_limit_sec = 0.0
+	game.headless = true
+	game.is_authority = true
+	game.register_service = false
+	add_child(game)
+	var _setup := game.setup(ArenaMap.dm_box() if map_id == &"" else ArenaMap.by_id(map_id))
+	game.match_node.rules.warmup_sec = 0.0
+	game.match_node.rules.countdown_sec = 0.0
+	game.match_node.rules.respawn_delay_sec = 1.0
+	return game
+
+
+func _warm_routes(game: ArenaGame) -> void:
+	# The routes start when the mesh bake lands; start every run from there.
+	var world := ArenaBots.world_for(game)
+	var _first := world.route(Vector3.ZERO, Vector3.ONE)
+	var frames := 0
+	while world.is_route_pending() and frames < 3000:
+		await get_tree().process_frame
+		frames += 1
+	var _warm := world.warm()
+
+
+## This tick's commands: the bots' own thinking (recorded into `streams`) or the recorded stream replayed.
+func _commands_for(game: ArenaGame, players: Array, minds: Array, streams: Array, tick_index: int, think: bool, lagging: bool) -> Dictionary:
+	var commands := {}
+	if think:
+		var recorded := {}
+		var tick := game.current_tick()
+		for i in players.size():
+			var pair: Array = ArenaBots.think(game, players[i], minds[i], tick, float(TICK_RATE))
+			var move: DotFpsCommand = pair[0]
+			var fire: DotWeaponCommand = pair[1]
+			commands[players[i].player_id] = pair
+			recorded[players[i].player_id] = [move.duplicate_command(), fire.duplicate_command(), players[i].body_every]
+		streams.append(recorded)
+	else:
+		var recorded: Dictionary = streams[tick_index]
+		for id: int in recorded:
+			var move: DotFpsCommand = recorded[id][0]
+			var fire: DotWeaponCommand = recorded[id][1]
+			commands[id] = [move.duplicate_command(), fire.duplicate_command()]
+			# The motor period the bot's think chose (body tiers); 1 when it was not recorded.
+			var body: Object = game.player_for(id)
+			if body != null:
+				body.body_every = recorded[id][2] if recorded[id].size() > 2 else 1
+			if lagging and _lag_of(id) > 0.0:
+				commands[id].append(_lag_of(id))
+	return commands
+
+
+## The bytes one tick adds to the run's window: every player's state, and where a lagged viewer saw them.
+func _players_chunk(game: ArenaGame, players: Array, lagging: bool, now: int, counts: Array) -> PackedByteArray:
+	var chunk := PackedByteArray()
+	for player: Object in players:
+		var state: DotFpsState = player.controller.state if player.controller != null else null
+		if state != null:
+			chunk.append_array(var_to_bytes([state.position, state.velocity, state.mode, state.move_flags(), state.ground_id != 0,
+				state.yaw, state.pitch, player.health.health, player.health.alive]))
+		if lagging:
+			var then: Variant = game.unlag_position_at(player.player_id, float(now) - _lag_of(player.player_id))
+			chunk.append_array(var_to_bytes(then))
+			if then is Vector3 and state != null and not (then as Vector3).is_equal_approx(state.position):
+				counts[1] += 1
+	return chunk
 
 
 ## The view lag, in ticks, of the player's commands in a lagged run: none for one player in four, as a bot has none.
