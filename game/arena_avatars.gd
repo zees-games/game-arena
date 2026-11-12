@@ -113,7 +113,18 @@ static func catalogue() -> DotAvatarCatalogue:
 	return out
 
 
+## The head a stock avatar never gets: Kenney's skin n is pure white (`ffffff`), and its
+## first-person arms, bare to the elbow, filled a quarter of the screen as flat white (the
+## solo player on the web drew it from their key). Chosen on the site, it is still worn.
+const STOCK_SKIPS_HEAD := &"arena_head_kenney_n"
+
+## What a stock avatar wears in its place: a skin-toned face (the next one, o, is teal).
+const STOCK_INSTEAD_HEAD := &"arena_head_kenney_p"
+
+
 ## An avatar for a player who has none. Deterministic in the id.
+##
+## [b]Never [constant STOCK_SKIPS_HEAD][/b]: a pick that lands on it wears [constant STOCK_INSTEAD_HEAD].
 ##
 ## [b]Each slot chooses from its own mix of the seed[/b] ([method _pick]). The key's
 ## string hash moves by only a little from one id to the next, and a server's ids are
@@ -125,7 +136,8 @@ static func stock_avatar(player_key: StringName) -> DotAvatar:
 	var avatar := DotAvatar.make(SCHEMA_ID)
 
 	avatar.set_part(SLOT_BODY, BODIES[_pick(seed_value, 1, BODIES.size())])
-	avatar.set_part(SLOT_HEAD, HEADS[_pick(seed_value, 2, HEADS.size())])
+	var head := HEADS[_pick(seed_value, 2, HEADS.size())]
+	avatar.set_part(SLOT_HEAD, STOCK_INSTEAD_HEAD if head == STOCK_SKIPS_HEAD else head)
 
 	if _pick(seed_value, 3, 3) == 0:
 		avatar.set_part(SLOT_CREST, CRESTS[_pick(seed_value, 4, CRESTS.size())])
