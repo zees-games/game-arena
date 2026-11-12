@@ -7,9 +7,12 @@ const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 const ArenaSimHost := preload("../game/arena_sim_host.gd")
 const ArenaNetContext := preload("../game/arena_net_context.gd")
 const ProcSplit := preload("proc_split.gd")
+# Loaded with this script, so its _static_init (native brain off) runs before --brain-native.
+const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client. Windowed on a GPU box (tools/perf_bench.sh) or headless through hv: `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
+## `--brain-native 0|1`: dot-bot's native mind (DotSimBotMind: aim, fight step, perception) off or on; without the dot-sim library it is script either way (the sidecar's `brain_native` says which ran).
 ## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
 ## `--tier-body-near N`, `--tier-body-far N`: ticks between motor ticks of a coasting bot nobody sees (bot_tier_body_every_near/far; 1, the default, every tick).
 ## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
@@ -78,6 +81,9 @@ func _ready() -> void:
 		preload("../game/arena_player.gd").present_lod_enabled = false
 	if int(args.get("anim-gate", 1)) == 0:
 		preload("../game/arena_player.gd").anim_gate_enabled = false
+	if args.has("brain-native"):
+		ArenaPlayerStack.set_brain_native(int(args["brain-native"]) != 0)
+	say("brain: %s" % ("native" if ArenaPlayerStack.brain_native() else "script"))
 	if int(args.get("target-first", 1)) == 0:
 		# By name: the bench also runs against a dot-bot older than the switch.
 		(DotBotBrain as Script).set(&"target_first", false)
@@ -340,7 +346,7 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 		hulls["batch"] = ArenaHullGrid.batch
 		hulls["batch_rows"] = ArenaHullGrid.batch_rows
 		hulls["batch_faults"] = ArenaHullGrid.batch_faults
-	return {"phases_ms_per_frame": phases, "weapon_us_per_call": weapon, "native": native, "hulls": hulls, "sim_host": _sim_host and client.get("_sim_host") != null, "sched": _sched, "net": ArenaNetContext.describe(client.get("bridge")), "pilot": _pilot, "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries, "body_skipped": preload("../game/arena_player.gd").body_skipped, "tiers": preload("../game/arena_bots.gd").tiers.describe()}
+	return {"phases_ms_per_frame": phases, "weapon_us_per_call": weapon, "native": native, "hulls": hulls, "sim_host": _sim_host and client.get("_sim_host") != null, "sched": _sched, "net": ArenaNetContext.describe(client.get("bridge")), "pilot": _pilot, "brain_native": ArenaPlayerStack.brain_native(), "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries, "body_skipped": preload("../game/arena_player.gd").body_skipped, "tiers": preload("../game/arena_bots.gd").tiers.describe()}
 
 
 func _apply_ablate() -> void:

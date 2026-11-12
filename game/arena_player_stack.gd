@@ -88,8 +88,22 @@ static var _dot_sim_status_printed: bool = false
 
 # The addon's default is off. On at script load, so a solo client and a listen host run it too
 # (motor_native_tick exists only where ArenaModule loads), and that cvar can still turn it off.
+# dot-bot's native mind (DotSimBotMind) the other way: off, as bot_native_brain's default says.
 static func _static_init() -> void:
 	DotFpsMotor.native_tick = true
+	set_brain_native(false)
+
+
+## dot-bot's native mind (DotSimBotMind: aim, fight step, perception) on or off for brains made
+## from now on. By name: an older dot-bot has no such switches, and the set is then a no-op.
+static func set_brain_native(on: bool) -> void:
+	(DotBotAim as Script).set(&"native_enabled", on)
+	(DotBotBrain as Script).set(&"native_perceive", on)
+
+
+## Whether new bot brains think in dot-sim (the switch is on and the library has DotSimBotMind).
+static func brain_native() -> bool:
+	return (DotBotAim as Script).get(&"native_enabled") == true and ClassDB.class_exists(&"DotSimBotMind")
 
 
 ## One line per process saying whether dot-sim's library loaded and what runs in it, so a

@@ -4,6 +4,8 @@ const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ClientBench := preload("client_bench.gd")
+# Loaded with this script, so its _static_init (native brain off) runs before --brain-native.
+const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 
 ## Solo (offline) client with N bots on `--map`: `godot --path . res://tools/offline_cost.tscn -- --map blackhawkdown --bots 10 --seconds 25`. Prints fps, frame p50/p95/max, the engine's monitors and physics steps per frame.
 ## `--native 0` keeps the bots' sight scan in script, `--brain-native 0` their aim, fight step and perception (DotSimBotMind), `--motor-native 0` the movement queries; `--motor-tick 1|0` toggles [member DotFpsMotor.native_tick] (needs a dot-sim with the motor tick).
@@ -49,10 +51,7 @@ func _ready() -> void:
 			"--tier-body-far": preload("../game/arena_bots.gd").tiers.body_far_every = int(args[i + 1])
 			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
 			"--native": DotBotWorld.native_enabled = int(args[i + 1]) != 0
-			"--brain-native":
-				# Through Script.set: the switches exist only on a dot-bot with the native mind.
-				(DotBotAim as Script).set(&"native_enabled", int(args[i + 1]) != 0)
-				(DotBotBrain as Script).set(&"native_perceive", int(args[i + 1]) != 0)
+			"--brain-native": ArenaPlayerStack.set_brain_native(int(args[i + 1]) != 0)
 			"--motor-native": DotFpsPhysicsBody.native_enabled = int(args[i + 1]) != 0
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
 			"--motor-tick": DotFpsMotor.native_tick = int(args[i + 1]) != 0

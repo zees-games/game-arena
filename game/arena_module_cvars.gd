@@ -6,6 +6,7 @@ const ArenaNetAoi := preload("arena_net_aoi.gd")
 const ArenaBots := preload("arena_bots.gd")
 const ArenaBotBrain := preload("arena_bot_brain.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
+const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaHullGrid := preload("arena_hull_grid.gd")
 const ArenaTickBudget := preload("arena_tick_budget.gd")
 const TagRules := preload("arena_name_tag_rules.gd")
@@ -240,7 +241,7 @@ func _add_fire_buffer_cvar() -> void:
 			log_info("fire buffer changed", {"seconds": game.fire_buffer_seconds}))
 
 
-## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]); `bot_native`: dot-sim's sight scan; `motor_native`: dot-sim's movement collision queries and collide-and-slide; `motor_native_tick`: a plain ground or air tick's start and end in dot-sim; `motor_native_full`: the whole tick there.
+## `bot_think_every`, `bot_think_near`: bot think-rate staggering (see [member ArenaBots.think_every]); `bot_native`: dot-sim's sight scan; `bot_native_brain`: dot-bot's native mind (off); `motor_native`: dot-sim's movement collision queries and collide-and-slide; `motor_native_tick`: a plain ground or air tick's start and end in dot-sim; `motor_native_full`: the whole tick there.
 func _add_bot_think_cvars() -> void:
 	add_cvar("bot_think_every", str(ArenaBots.think_every),
 		"A bot far from every enemy runs its brain one tick in this many (1 = every tick, 0 = 2 above 16 players)",
@@ -299,6 +300,13 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			DotBotWorld.native_enabled = new_value.to_float() >= 0.5)
+	# Off by default (ArenaPlayerStack._static_init): a windowed 31-bot A/B on staging02 showed no
+	# frame gain (nightly arena-perf-leftovers-1), and a native brain thinks only on the main thread.
+	add_cvar("bot_native_brain", "0",
+		"1: the bots' aim, fight step and perception run in dot-sim when its library has the bot mind (no frame gain measured, and those bots leave bot_threads); 0: in script. Takes effect for bots added after the change",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaPlayerStack.set_brain_native(new_value.to_float() >= 0.5))
 	add_cvar("motor_native", "1" if DotFpsPhysicsBody.native_enabled else "0",
 		"1: the players' movement collision queries (sweep, rest contact, overlap) run in dot-sim when its library is installed (bit-identical to the script, so web and native clients still agree; cheaper); 0: in script. Without the library it is script either way",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
