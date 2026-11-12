@@ -14,6 +14,15 @@ const ArenaModes := preload("../game/arena_modes.gd")
 ## godot --headless --path . res://examples/headless_dm_maps.tscn
 ## [/codeblock]
 
+## Checks _test_solo makes (with _test_dead_maps and part 2), the same on every machine. Both
+## report paths add to this one number, so a new solo check is counted once, in one place.
+const SOLO_CHECKS := 39
+## Checks per present map: four in "every listed map loads" and one in the picker section.
+const PER_MAP_CHECKS := 5
+## Checks of the linked path that do not depend on the map count: "at least one present" and
+## "deathmatch before surf".
+const LINKED_FIXED_CHECKS := 2
+
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
@@ -29,7 +38,7 @@ func _run() -> void:
 
 	if resolved.is_empty() or not FileAccess.file_exists(json_path):
 		print("no maps/imported_dm link — nothing more to check (link arena-dm-maps)")
-		_report_sections(2, 2, 2, 39)
+		_report_sections(2, 2, 2, SOLO_CHECKS)
 		return
 
 	var listed: Array = JSON.parse_string(FileAccess.get_file_as_string(json_path)).get("maps", [])
@@ -76,7 +85,9 @@ func _run() -> void:
 		if ArenaImportedMaps.has(StringName(str(want.id))):
 			_check(names.has(wid) and names[wid] != "Combat surf map", "%s is in the picker, not labelled a surf map" % wid)
 	_check(last_dm < first_surf, "deathmatch and gun game maps come before the surf maps")
-	_report_sections(entered + 2, entered + 2, 4, 40 + 5 * found)
+	# found is the listed maps present here (maps.json filtered by ArenaImportedMaps.has), so the
+	# total follows the linked map list instead of a count fixed when it had a given size.
+	_report_sections(entered + 2, entered + 2, 4, SOLO_CHECKS + LINKED_FIXED_CHECKS + PER_MAP_CHECKS * found)
 
 
 ## Solo play with no server: the published maps, their labels and pickability.
