@@ -172,9 +172,8 @@ func _say(speaker: DotClientSession, line: String) -> PackedStringArray:
 
 	# The handlers are coroutines — a punishment store may be a remote one — so the reply
 	# can arrive a frame after the command returned. And a respawn or restart is held for the
-	# next server tick (arena_tick_gate.gd): two physics frames are past its top.
-	await get_tree().physics_frame
-	await get_tree().physics_frame
+	# next server tick (arena_tick_gate.gd), whose top this suite, driving the ticks, stands in for.
+	_game.tick_gate.open()
 	await get_tree().process_frame
 	await get_tree().process_frame
 	return _replies.duplicate()

@@ -671,7 +671,8 @@ func _check_space_query_audit() -> void:
 ## (arena_tick_gate.gd; docs/sim-thread.md "Physics space queries"). A file that stops using it fails here.
 const TICK_GATED_FILES := {
 	"game/arena_module.gd": "arena_restart",
-	"game/arena_module_b2.gd": "arena_mode, and the gate opened at the top of the tick",
+	"game/arena_module_b2.gd": "arena_mode",
+	"game/arena_net_bridge_b1.gd": "the gate opened at the top of server_tick",
 	"game/arena_map_session.gd": "every map change: arena_map, the vote, the rotation, host_change",
 	"game/arena_mod_tools.gd": "an admin respawn",
 	"game/arena_team_menu.gd": "a team menu choice that brings a player back",
@@ -693,10 +694,8 @@ func _check_tick_gate() -> void:
 	gate.run(func() -> void: ran.append(1))
 	_check(ran == [1] and gate.pending() == 0, "an unarmed tick gate (solo, a client) runs at once", str(ran))
 
-	if Engine.is_in_physics_frame():
-		return
-
 	gate.armed = true
+	gate.in_step = func() -> bool: return false
 	gate.run(func() -> void: ran.append(2))
 	gate.run(func() -> void: ran.append(3))
 	_check(ran == [1] and gate.pending() == 2, "an armed one holds what it hears between ticks", str(ran))

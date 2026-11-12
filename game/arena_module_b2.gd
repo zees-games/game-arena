@@ -452,9 +452,6 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_tick += 1
-	# What a console line, a chat command or an admin heard since the last tick: a restart, a mode
-	# change, a respawn, a map change's swap. Here, in the physics step, before the bridge.
-	game.tick_gate.open()
 	if loading != null:
 		loading.poll_loading()
 	bridge.server_tick(_tick)
