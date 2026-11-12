@@ -6,11 +6,13 @@ const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
 const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 const ArenaSimHost := preload("../game/arena_sim_host.gd")
 const ArenaNetContext := preload("../game/arena_net_context.gd")
+const ProcSplit := preload("proc_split.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client. Windowed on a GPU box (tools/perf_bench.sh) or headless through hv: `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
 ## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
 ## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
 ## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
+## `--proc-split 1`: the process phase split by wall clock and a census of what processes (tools/proc_split.gd); `--present-ablate N` (ArenaPlayer.present_ablate bits: 1 no figure animation, 2 no held, 4 held not processing, 8 no pose).
 
 var _pilot := true
 var _motor_us := false
@@ -30,6 +32,7 @@ var _ablate := PackedStringArray()
 var _sim_host := false
 var _sched0 := {}
 var _sched := {}
+var _proc_split: ProcSplit = null
 
 
 func _configure() -> void:
@@ -72,6 +75,7 @@ func _ready() -> void:
 		# By name: the bench also runs against a dot-bot older than the switch.
 		(DotBotBrain as Script).set(&"target_first", false)
 	_ablate = String(args.get("ablate", "")).split(",", false)
+	preload("../game/arena_player.gd").present_ablate = int(args.get("present-ablate", 0))
 
 
 func _setup_client(c: Node) -> void:
@@ -193,6 +197,10 @@ func _record_begin() -> void:
 	_sched0 = _sched_snapshot()
 	ArenaFrameProbe.fine = _fine
 	_apply_ablate()
+	if int(args.get("proc-split", 0)) != 0:
+		say("proc census %s" % JSON.stringify(ProcSplit.census(get_tree().root)))
+		_proc_split = ProcSplit.new()
+		add_child(_proc_split)
 	DotFpsPhysicsBody.profile = _queries
 	DotFpsPhysicsBody.prof.fill(0)
 	# --ctl-us 1: the controller's phases alone, on whichever motor path runs (--motor-us forces the script one).
@@ -216,6 +224,10 @@ func _record_begin() -> void:
 
 func _record_end() -> void:
 	_sched = _sched_report(_sched0, _sched_snapshot())
+	if _proc_split != null:
+		say("proc split ms/frame %s" % JSON.stringify(_proc_split.report()))
+		_proc_split.queue_free()
+		_proc_split = null
 	for who: String in _sched:
 		for r: Dictionary in _sched[who]:
 			say("sched %s %s%s run %.2f rq %.2f vcs %.2f nvcs %.2f ms|n/frame" % [who, r.comm, " (main)" if r.main else "", r.run_ms, r.rq_wait_ms, r.vcs, r.nvcs])
