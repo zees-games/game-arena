@@ -51,7 +51,7 @@ func _ready() -> void:
 	# connected client is told the server's map and rebuilds on it, unless it was built on that map
 	# already: a sim host's map is known before the join, so the level is built once (_first_map).
 	game.defer_map_io = true
-	var built := game.setup(first)
+	var built := await _setup_game(first)
 
 	ArenaLoadTimeline.mark("setup: game built")
 	if not built.ok:
@@ -147,6 +147,24 @@ func _ready() -> void:
 		# The first draw of the built level and HUD compiles their pipelines (672 ms on staging02): marked, so it is not mistaken for setup.
 		RenderingServer.frame_pre_draw.connect(func() -> void: ArenaLoadTimeline.mark("level draw begins"), CONNECT_ONE_SHOT)
 		RenderingServer.frame_post_draw.connect(func() -> void: ArenaLoadTimeline.mark("level draw done"), CONNECT_ONE_SHOT)
+
+## [method ArenaGame.setup], one step a frame in a client that draws (the steps shared one 222 ms frame on
+## staging02; combat and loadouts were most of it). The game does not process between steps, so nothing
+## of it runs half built. Headless (suites, servers) builds in one go.
+func _setup_game(first: ArenaMap) -> DotResult:
+	if not _builds_in_frames():
+		return game.setup(first)
+	var built := game.setup_begin(first)
+	var was := game.process_mode
+	game.process_mode = Node.PROCESS_MODE_DISABLED
+	while built.ok and not game.setup_done():
+		await _setup_frame()
+		var step := game.setup_next_step()
+		var started := Time.get_ticks_usec()
+		built = game.setup_step()
+		ArenaLoadTimeline.mark("setup: game %s, %d ms" % [step, (Time.get_ticks_usec() - started) / 1000])
+	game.process_mode = was
+	return built
 
 ## A frame boundary between setup steps, under the cover, in a client that draws. The build was one
 ## 2.7 s frame on staging02 (setup 1012 ms, then the first draw 672 ms, the 32 players 320 ms and the

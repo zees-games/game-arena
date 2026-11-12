@@ -225,8 +225,24 @@ func _build_toys() -> void:
 
 	toys_built.emit()
 
-## Builds everything. Call after adding to the tree.
+## Builds everything. Call after adding to the tree. One go: [method setup_begin] and every
+## [method setup_step]; a client that draws runs the steps a frame apart (ArenaClient).
 func setup(p_map: ArenaMap = null) -> DotResult:
+	var built := setup_begin(p_map)
+	while built.ok and not setup_done():
+		built = setup_step()
+	return built
+
+## The parts of [method setup] after the mode and the map, in order, one [method setup_step] each. Split
+## because together they were one 222 ms frame on a drawing client (staging02, cp-orange-x3).
+const SETUP_STEPS: Array[StringName] = [&"collision", &"combat", &"match", &"loadouts", &"progress", &"layers", &"stack", &"toys"]
+
+## The next [constant SETUP_STEPS] index; [code]SETUP_STEPS.size()[/code] once set up.
+var _setup_step := 0
+
+## The mode and the map; then [method setup_step] until [method setup_done]. Not re-entrant, like setup.
+func setup_begin(p_map: ArenaMap = null) -> DotResult:
+	_setup_step = 0
 	# The mode first: the map default, the damage rules and the match rules all come
 	# out of it, so resolving it after any of them would build them from the old one.
 	if mode == null:
@@ -236,6 +252,7 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 	var mode_res := mode.validate()
 
 	if not mode_res.ok:
+		_setup_step = SETUP_STEPS.size()
 		return mode_res
 
 	map = (
@@ -259,54 +276,55 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 			"a team mode on a map with no tagged spawns; both sides share one pool",
 			{"mode": str(mode.id), "map": map.display_name}
 		)
-
-	# Before the combat manager and before any player: both bind to it.
-	_build_world_collision()
-
-	var combat_result := _build_combat()
-
-	if not combat_result.ok:
-		return combat_result
-
-	var match_result := _build_match()
-
-	if not match_result.ok:
-		return match_result
-
-	var loadout_result := _build_loadouts()
-
-	if not loadout_result.ok:
-		return loadout_result
-
-	var progress_result := _build_progress()
-
-	if not progress_result.ok:
-		return progress_result
-
-	# Last, and after the combat manager: a monster is a combat entity and a prop is a rigid body
-	# that has to land on the map.
-	_reconcile_world_layers()
-
-	var stack_result := _build_player_stack()
-
-	if not stack_result.ok:
-		return stack_result
-
-	# The stack is what knows the collision layout, and it is built last.
-	_classify_world_collision()
-	_build_toys()
-
-	if register_service:
-		_registered_name = (
-			DotRegistry.scoped_name(SERVICE, service_scope)
-			if service_scope != &""
-			else SERVICE
-		)
-		DotRegistry.register(_registered_name, self)
-
-	_announce_mode()
-
 	return DotResult.success(null)
+
+func setup_done() -> bool:
+	return _setup_step >= SETUP_STEPS.size()
+
+## The step [method setup_step] runs next (for a load timeline), or &"" once set up.
+func setup_next_step() -> StringName:
+	return SETUP_STEPS[_setup_step] if not setup_done() else &""
+
+## Runs the next of [constant SETUP_STEPS]. A failed step ends the setup, as it did in one go.
+func setup_step() -> DotResult:
+	if setup_done():
+		return DotResult.success(null)
+	var step := SETUP_STEPS[_setup_step]
+	_setup_step += 1
+	var result := DotResult.success(null)
+	match step:
+		&"collision":
+			# Before the combat manager and before any player: both bind to it.
+			_build_world_collision()
+		&"combat":
+			result = _build_combat()
+		&"match":
+			result = _build_match()
+		&"loadouts":
+			result = _build_loadouts()
+		&"progress":
+			result = _build_progress()
+		&"layers":
+			# Last, and after the combat manager: a monster is a combat entity and a prop is a rigid body
+			# that has to land on the map.
+			_reconcile_world_layers()
+		&"stack":
+			result = _build_player_stack()
+		&"toys":
+			# The stack is what knows the collision layout, and it is built last.
+			_classify_world_collision()
+			_build_toys()
+			if register_service:
+				_registered_name = (
+					DotRegistry.scoped_name(SERVICE, service_scope)
+					if service_scope != &""
+					else SERVICE
+				)
+				DotRegistry.register(_registered_name, self)
+			_announce_mode()
+	if not result.ok:
+		_setup_step = SETUP_STEPS.size()
+	return result
 
 ## Keeps this world's combat manager on the server's replicated cvars (dot-combat's
 ## `mp_teammate_passthrough`), as [param source] reports them: the client's `DotClientLink`.

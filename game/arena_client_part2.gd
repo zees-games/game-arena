@@ -391,18 +391,61 @@ func _on_player_added(added: ArenaPlayer) -> void:
 	if added != player:
 		added.interpolate_body = _offline
 
-	if added != player and added.body_mesh == null:
-		# A stock avatar until the server says otherwise.
-		added.attach_body_mesh(
-			Color.from_hsv(fmod(float(added.player_id) * 0.37, 1.0), 0.55, 0.85),
-			added.avatar if added.avatar != null else ArenaAvatars.stock_avatar(
-				StringName(ArenaGame.storage_key(added.player_id))
-			)
-		)
+	if added == player:
+		return
+	if added.body_mesh == null and _builds_in_frames():
+		_queue_body(added)
+		return
+	if added.body_mesh == null:
+		_attach_stock_body(added)
+	_share_shots_of(added)
 
-	# Their guns' reports go through the presentation's one shot player, not one built per shooter.
-	if added != player and presentation != null and added.held != null:
+## Their guns' reports go through the presentation's one shot player, not one built per shooter.
+func _share_shots_of(added: ArenaPlayer) -> void:
+	if presentation != null and added.held != null:
 		presentation.share_shots(added.held)
+
+## The players whose stock bodies are not built yet, oldest first (see [method _queue_body]).
+var _bodies_due: Array[ArenaPlayer] = []
+
+## Builds [param added]'s stock body in a later frame. A body is about 4 ms on staging02 and a sim host's
+## 31 bots all arrive in one frame (130 ms of bodies on top of arming), so they are built a budget a frame
+## instead, behind a `bodies` hold while the gate is still closed.
+func _queue_body(added: ArenaPlayer) -> void:
+	_bodies_due.append(added)
+	if _bodies_due.size() > 1:
+		return
+	if gate != null and not gate.is_open():
+		gate.hold(&"bodies", "Dressing the players")
+	_build_due_bodies()
+
+## Drains [member _bodies_due], at most [constant BODY_BUDGET_MS] of bodies a frame.
+func _build_due_bodies() -> void:
+	var slice := DotFrameSlice.new(BODY_BUDGET_MS)
+	await slice.pause()
+	while not _bodies_due.is_empty():
+		var next: ArenaPlayer = _bodies_due.pop_front()
+		if not is_instance_valid(next) or next == player:
+			continue
+		if next.body_mesh == null:
+			_attach_stock_body(next)
+		_share_shots_of(next)
+		if slice.due() and not _bodies_due.is_empty():
+			await slice.pause()
+	if gate != null and gate.is_holding(&"bodies"):
+		gate.release(&"bodies")
+
+## Milliseconds of stock bodies a frame (see [method _queue_body]).
+const BODY_BUDGET_MS := 12
+
+## A stock avatar until the server says otherwise.
+func _attach_stock_body(added: ArenaPlayer) -> void:
+	added.attach_body_mesh(
+		Color.from_hsv(fmod(float(added.player_id) * 0.37, 1.0), 0.55, 0.85),
+		added.avatar if added.avatar != null else ArenaAvatars.stock_avatar(
+			StringName(ArenaGame.storage_key(added.player_id))
+		)
+	)
 
 # --- Networked -------------------------------------------------------------
 
