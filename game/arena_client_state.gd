@@ -211,6 +211,8 @@ var _level: Node3D = null
 ## The map [member _level] was drawn from, so an announcement of the same map need not draw it again.
 var _level_map: ArenaMap = null
 var _level_busy := false
+## A menu map change is under way ([method change_from_menu]): one physics tick a frame until it is done.
+var _changing := false
 ## The killer's screens whose spares setup still has to build, one a frame (`KillPovView.mount`).
 var _pov_spares: Array[Node] = []
 ## The stock figure models read on loader threads from the start of setup (`_request_figures`).

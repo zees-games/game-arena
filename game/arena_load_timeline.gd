@@ -7,6 +7,9 @@ extends Node
 const CHANNEL := "arena.load"
 
 static var _marks: Array = []
+## True while [method trace_frames] runs: an [ArenaFrameProbe] section of [const SLOW_SECTION_USEC] or more is stamped.
+static var tracing := false
+const SLOW_SECTION_USEC := 20000
 
 var gate: DotLoadGate = null
 var _holds: Array = []
@@ -18,6 +21,8 @@ var _trace_left := 0
 var _ticks := 0
 var _tick_usec := 0
 var _tick_started := 0
+var _pass_start: PassStart = null
+var _pass_end: PassStart = null
 
 
 const STATE_NAMES: Array[String] = ["closed", "warming", "open"]
@@ -62,12 +67,36 @@ func rearm(title: String) -> void:
 ## frame into catch-up ticks, setup continuations and the draw.
 func trace_frames(frames: int) -> void:
 	_trace_left = maxi(_trace_left, frames)
+	tracing = true
 	var tree := get_tree()
 	if not tree.physics_frame.is_connected(_on_tick):
 		tree.physics_frame.connect(_on_tick)
 		tree.process_frame.connect(_on_frame)
 		RenderingServer.frame_post_draw.connect(_on_drawn)
 	set_physics_process(true)
+	if _pass_start == null:
+		_pass_start = PassStart.new()
+		_pass_start.on_process = func() -> void: mark("process pass")
+		_pass_start.process_priority = -(1 << 30)
+		_pass_start.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(_pass_start)
+	_pass_start.set_process(true)
+	if _pass_end == null:
+		_pass_end = PassStart.new()
+		_pass_end.on_process = func() -> void: mark("process end")
+		_pass_end.process_priority = 1 << 30
+		_pass_end.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(_pass_end)
+	_pass_end.set_process(true)
+
+
+## First of every node's _process while a trace runs: splits the awaits resumed on the tree's process signal
+## (a load step) from the nodes' own _process pass.
+class PassStart extends Node:
+	var on_process: Callable
+
+	func _process(_delta: float) -> void:
+		on_process.call()
 
 
 func _on_tick() -> void:
@@ -89,6 +118,9 @@ func _on_frame() -> void:
 		get_tree().process_frame.disconnect(_on_frame)
 		RenderingServer.frame_post_draw.disconnect(_on_drawn)
 		set_physics_process(false)
+		_pass_start.set_process(false)
+		_pass_end.set_process(false)
+		tracing = false
 
 
 func _on_drawn() -> void:

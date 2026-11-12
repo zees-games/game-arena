@@ -54,26 +54,47 @@ static func catalogue(content: DotContentIndex = null) -> DotMapCatalogue:
 	# The built-ins, then every imported combat surf map that was found — discovered by
 	# `ArenaImportedMaps` off each manifest's own `kind`, not listed here either.
 	for id in ArenaMap.ids() + ArenaMap.imported_ids():
-		var map := ArenaMap.listing_by_id(id)
+		_list(out, id)
 
-		if map == null:
-			continue
+	_follow_content(out, content)
+	return out
 
-		if map.id != id:
-			# `ids()` is kept beside `by_id` deliberately: a map in one and not the other cannot be listed or cannot be loaded, and this is the third statement of that id.
-			# A mismatch means a catalogue entry addressed by a name the builder does not answer to, which fails at the change rather than at the boot.
-			DotLog.warn(CHANNEL, "a map's own id disagrees with the one it is listed under", {
-				"listed": String(id), "built": String(map.id)
-			})
-			continue
 
-		var added := out.add(_def_for(id, map))
+## [method catalogue] a few maps a frame: reading 100-odd manifests at once was a 156 ms frame on staging02.
+static func catalogue_async(slice: DotFrameSlice, content: DotContentIndex = null) -> DotMapCatalogue:
+	var out := DotMapCatalogue.new()
+	out.meta = {"game": "arena"}
+	for id in ArenaMap.ids() + ArenaMap.imported_ids():
+		if slice.due():
+			await slice.pause()
+		_list(out, id)
+	_follow_content(out, content)
+	return out
 
-		if not added.ok:
-			DotLog.warn(CHANNEL, "a map could not be catalogued", {
-				"map": String(id), "why": added.error.message
-			})
 
+static func _list(out: DotMapCatalogue, id: StringName) -> void:
+	var map := ArenaMap.listing_by_id(id)
+
+	if map == null:
+		return
+
+	if map.id != id:
+		# `ids()` is kept beside `by_id` deliberately: a map in one and not the other cannot be listed or cannot be loaded, and this is the third statement of that id.
+		# A mismatch means a catalogue entry addressed by a name the builder does not answer to, which fails at the change rather than at the boot.
+		DotLog.warn(CHANNEL, "a map's own id disagrees with the one it is listed under", {
+			"listed": String(id), "built": String(map.id)
+		})
+		return
+
+	var added := out.add(_def_for(id, map))
+
+	if not added.ok:
+		DotLog.warn(CHANNEL, "a map could not be catalogued", {
+			"map": String(id), "why": added.error.message
+		})
+
+
+static func _follow_content(out: DotMapCatalogue, content: DotContentIndex) -> void:
 	# The Workshop's maps, after the game's own so that an id of ours always wins. The index
 	# is solo or online as its host set it, so an online session lists none of them; the
 	# catalogue is built the same way on a server, which is what keeps that one rule.
@@ -85,8 +106,6 @@ static func catalogue(content: DotContentIndex = null) -> DotMapCatalogue:
 	for def in out.maps.duplicate():
 		if is_workshop(def) and not build_workshop(def).ok:
 			var _removed := out.remove(def.id)
-
-	return out
 
 
 ## The file a game pack states what it takes from subscriptions in (dot-cloud's

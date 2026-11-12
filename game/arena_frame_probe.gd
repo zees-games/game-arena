@@ -1,5 +1,7 @@
 extends RefCounted
 
+const ArenaLoadTimeline := preload("arena_load_timeline.gd")
+
 ## Where a connected client's frame goes, reported every few seconds: frame times, the
 ## engine's own process and physics times, the client's sections (prediction, snapshots
 ## and the replays inside them, interpolation, the HUD), and the clock's round trip and
@@ -78,11 +80,13 @@ static func set_interval(seconds: float) -> void:
 ## Adds the time since [param since_usec] to [param section]: `var t := Time.get_ticks_usec()` before the work, `ArenaFrameProbe.add(&"name", t)` after.
 ## While the dot profiler records ([member DotFrameCost.enabled]) the time is also charged to [DotFrameCost] as `arena.<section>`, so a recorded profile's hitches name the section (`r_held`, `bot_after`, ...) instead of a bare `engine.script`.
 static func add(section: StringName, since_usec: int) -> void:
+	var spent := Time.get_ticks_usec() - since_usec
+	if spent >= ArenaLoadTimeline.SLOW_SECTION_USEC and ArenaLoadTimeline.tracing:
+		ArenaLoadTimeline.mark("section %s %d ms" % [section, spent / 1000])
 	if interval <= 0.0:
 		if DotFrameCost.enabled:
-			DotFrameCost.add_usec(_profiled(section), Time.get_ticks_usec() - since_usec)
+			DotFrameCost.add_usec(_profiled(section), spent)
 		return
-	var spent := Time.get_ticks_usec() - since_usec
 	if DotFrameCost.enabled:
 		DotFrameCost.add_usec(_profiled(section), spent)
 	var row: PackedInt64Array = _sections.get(section, PackedInt64Array([0, 0, 0]))

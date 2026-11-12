@@ -109,6 +109,9 @@ func _present_view_model(drawn: DotFpsState) -> Vector2:
 	var punch: Vector2 = weapons.call(&"view_punch")
 	return punch if punch.is_finite() else Vector2.ZERO
 
+## The process frame the last [DotSpawnBubble3D] was made on: [method _present_bubble] makes one a frame.
+static var _bubble_made_frame := -1
+
 ## Draws [member protected_view] as a bubble round the body. Not on your own camera (inside it you would
 ## see nothing but its inner edge), and only while alive.
 func _present_bubble(at: Vector3) -> void:
@@ -118,6 +121,11 @@ func _present_bubble(at: Vector3) -> void:
 			protection_bubble.sync(false)
 		return
 	if protection_bubble == null:
+		# A new bubble compiles its own shader, 26 ms on staging02: a map change respawning 31
+		# bodies at once made 300-400 ms frames. One a frame; the rest show over the next few.
+		if Engine.get_process_frames() == _bubble_made_frame:
+			return
+		_bubble_made_frame = Engine.get_process_frames()
 		protection_bubble = DotSpawnBubble3D.new()
 		protection_bubble.name = "SpawnBubble"
 		protection_bubble.top_level = true

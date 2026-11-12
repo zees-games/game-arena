@@ -235,15 +235,41 @@ func _restore_loadout() -> void:
 
 ## Built once: making the catalogue builds every map, the imported ones included.
 var _menu_catalogue: DotMapCatalogue = null
+var _catalogue_building := false
+const CATALOGUE_SLICE_MS := 8
 
 
 ## The menu's catalogue. Solo, the suggested packs this machine has no link for are listed too
 ## (fetched when picked, [method _fetch_picked]), as a server lists the ones it names.
 func _catalogue() -> DotMapCatalogue:
 	if _menu_catalogue == null:
-		_menu_catalogue = ArenaMaps.catalogue()
-		if _offline or _sim_host != null:
-			var _adopted := ArenaMaps.adopt_delivered(_menu_catalogue, ArenaMaps.standalone_keys(_menu_catalogue))
+		_adopt_catalogue(ArenaMaps.catalogue())
+	return _menu_catalogue
+
+
+func _adopt_catalogue(built: DotMapCatalogue) -> void:
+	_menu_catalogue = built
+	if _offline or _sim_host != null:
+		var _adopted := ArenaMaps.adopt_delivered(_menu_catalogue, ArenaMaps.standalone_keys(_menu_catalogue))
+
+
+## Builds [method _catalogue] a few maps a frame once the cover lifts, so neither M nor a map change pays the 156 ms
+## (staging02) in one frame. A [method _catalogue] call meanwhile builds it at once, and this one's result is dropped.
+func _prebuild_catalogue() -> void:
+	if _menu_catalogue != null or _catalogue_building:
+		return
+	_catalogue_building = true
+	var built := await ArenaMaps.catalogue_async(DotFrameSlice.new(CATALOGUE_SLICE_MS))
+	_catalogue_building = false
+	if _menu_catalogue == null:
+		_adopt_catalogue(built)
+
+
+## [method _catalogue] without the one-frame build: awaits [method _prebuild_catalogue], starting it if need be.
+func _catalogue_sliced() -> DotMapCatalogue:
+	_prebuild_catalogue()
+	while _menu_catalogue == null:
+		await get_tree().process_frame
 	return _menu_catalogue
 
 

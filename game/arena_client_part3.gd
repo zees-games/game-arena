@@ -577,6 +577,10 @@ func _physics_process(delta: float) -> void:
 		_tick_budget.note_tick()
 		# Catch up with wall-clock time as far as ticks are cheap enough to (ArenaTickBudget).
 		Engine.max_physics_steps_per_frame = _tick_budget.steps_for((Time.get_ticks_usec() - t) / 1000000.0)
+		if _changing:
+			# Behind a map change's cover one tick a frame: the new map's first ticks cost 30-80 ms each (staging02) and
+			# catching up 3-4 of them made 200-500 ms frames. The ticks are the same; the dropped wall time is the cover's.
+			Engine.max_physics_steps_per_frame = 1
 		# Ticks dearer than their length cannot keep real time: the thinning bots think less often (ArenaBots.tiers).
 		ArenaBots.tiers.load_scale = _tick_budget.load_scale(1.0 / maxf(float(Engine.physics_ticks_per_second), 1.0))
 
