@@ -3,7 +3,7 @@ extends CanvasLayer
 ## The killer's own screen over a replay camera: their viewmodel, crosshair and ammo, from the recorded aux.
 
 const KillPov := preload("arena_kill_pov.gd")
-const ArenaContent := preload("arena_content.gd")
+const ArenaPlayer := preload("arena_player.gd")
 const ArenaViewArms := preload("arena_view_arms.gd")
 const ArenaKillPovRecoil := preload("arena_kill_pov_recoil.gd")
 const ArenaRecoilView := preload("arena_recoil_view.gd")
@@ -186,7 +186,7 @@ func _park_rig(rig: AwViewModel) -> void:
 func _new_fx() -> AwShotFx:
 	var fx := AwShotFx.new()
 	fx.name = "KillerShotFx"
-	fx.catalogue = ArenaContent.weapon_catalogue()
+	fx.catalogue = ArenaPlayer.weapon_catalogue()
 	return fx
 
 
@@ -517,7 +517,7 @@ static func mount(parent: Node, game: Object, target: Object, label: String, def
 	var feel: Variant = game.get(&"combat_feel")
 	if feel != null:
 		view.recoil.rules = feel.get(&"recoil") as DotWeaponRecoilRules
-	view.recoil.catalogue = ArenaContent.weapon_catalogue()
+	view.recoil.catalogue = ArenaPlayer.weapon_catalogue()
 	var rate: Variant = game.get(&"tick_rate")
 	if rate != null:
 		view.recoil.tick_rate = int(rate)
