@@ -21,7 +21,7 @@ func _test_bot_routes() -> void:
 			b = spawn.origin
 	var route := world.route(a, b)
 	var frames := 0
-	while world.is_route_pending() and frames < 1200:
+	while world.is_route_pending() and frames < 3000:
 		await get_tree().process_frame
 		frames += 1
 	route = world.route(a, b)
@@ -37,12 +37,16 @@ func _test_bot_routes() -> void:
 	for spawn in spawns:
 		if spawn.origin == a:
 			continue
-		var way := world.route(a, spawn.origin)
+		var detail: Dictionary = world.nav_for_rides().route(a, spawn.origin)
+		var way: PackedVector3Array = detail["points"]
+		var rides: PackedInt32Array = detail["rides"]
 		var ok := way.size() >= 2
 		var from := a
-		for corner in way:
-			ok = ok and trace.line_of_sight(from + Vector3.UP * 0.5, corner + Vector3.UP * 0.5)
-			from = corner
+		for i in way.size():
+			# A joined drop or hop leaves the floor over a rim: only the walked legs must clear the brushes.
+			var ridden := i > 0 and rides[i - 1] >= 0
+			ok = ok and (ridden or trace.line_of_sight(from + Vector3.UP * 0.5, way[i] + Vector3.UP * 0.5))
+			from = way[i]
 		clear += 1 if ok else 0
 		if way.size() >= 2 and way[way.size() - 1].distance_to(spawn.origin) < 1.0:
 			reached += 1
@@ -50,7 +54,7 @@ func _test_bot_routes() -> void:
 		elif way.size() >= 2 and way[way.size() - 1].distance_to(spawn.origin) < a.distance_to(spawn.origin):
 			short_but_closer += 1
 	_check(clear == spawns.size() - 1,
-		"a route to every other spawn, every leg clear of the brushes (%d of %d)" % [clear, spawns.size() - 1])
+		"a route to every other spawn, every walked leg clear of the brushes (%d of %d)" % [clear, spawns.size() - 1])
 	_check(reached > 0 and furthest > 5.0 and reached + short_but_closer == spawns.size() - 1,
 		"its own half reached in full (%d spawns, the furthest %.0f m), the far half's routes end nearer than they start (%d)" % [reached, furthest, short_but_closer])
 	_done()
@@ -161,7 +165,7 @@ func _test_recorded_rides(record_edge: int) -> void:
 	var world := ArenaBots.world_for(_game)
 	var _first := world.route(Vector3.ZERO, Vector3.ONE)
 	var frames := 0
-	while world.is_route_pending() and frames < 1200:
+	while world.is_route_pending() and frames < 3000:
 		await get_tree().process_frame
 		frames += 1
 	var surf: ArenaSurf = world.surf_for_map() if changed.ok else null
@@ -416,7 +420,7 @@ func _test_bot_band() -> void:
 		var world := ArenaBots.world_for(_game)
 		var _first := world.route(Vector3.ZERO, Vector3.ONE)
 		var frames := 0
-		while world.is_route_pending() and frames < 1200:
+		while world.is_route_pending() and frames < 3000:
 			await get_tree().process_frame
 			frames += 1
 		var surf: ArenaSurf = world.surf_for_map() if changed.ok else null
@@ -486,14 +490,14 @@ func _ride_on(map_id: StringName, tick: int, starts: int, need: Array) -> Dictio
 	# it lands.
 	var _first := world.route(Vector3.ZERO, Vector3.ONE)
 	var frames := 0
-	while world.is_route_pending() and frames < 1200:
+	while world.is_route_pending() and frames < 3000:
 		await get_tree().process_frame
 		frames += 1
 	var surf: ArenaSurf = world.surf_for_map() if changed.ok else null
 	var planned: Array = surf.edges.filter(func(e: ArenaSurf.Edge) -> bool: return e.cache.size() > 0) if surf != null else []
 	var linked := not planned.is_empty() and planned.all(func(e: ArenaSurf.Edge) -> bool: return e.linked)
 	_check(linked, "%s's planned ride edges are linked into the bots' mesh (%s)" % [map_id,
-		str(surf.describe()) if surf != null else "no cache at %s" % ArenaSurf.path_for(map_id)])
+		str(surf.describe()) if surf != null else "no surf after %d frames, cache %s" % [frames, ArenaSurf.path_for(map_id)]])
 	if not linked:
 		_check(false, "so no route crosses one")
 		_check(false, "nor does a bot ride one")

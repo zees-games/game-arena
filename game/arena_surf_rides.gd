@@ -190,7 +190,8 @@ func _sync() -> void:
 		return
 	if mesh != nav or current != map:
 		set_map(current, mesh)
-	if mesh.is_ready() and not _attached:
+	# warm() is false while the edge search is still sliced, when the surf is not loaded yet.
+	if mesh.is_ready() and not _attached and world.warm():
 		_attached = true
 		var surf := world.surf_for_map()
 		if surf != null:

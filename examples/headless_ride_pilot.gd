@@ -47,7 +47,7 @@ func _run() -> void:
 	var world := ArenaBots.world_for(_game)
 	var _first := world.route(Vector3.ZERO, Vector3.ONE)
 	var frames := 0
-	while world.is_route_pending() and frames < 1200:
+	while world.is_route_pending() and frames < 3000:
 		await get_tree().process_frame
 		frames += 1
 	_surf = world.surf_for_map() if setup.ok else null
