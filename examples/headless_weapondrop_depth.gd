@@ -134,6 +134,8 @@ func _course(course: String, world: Node3D, ids: Array, spots: Array, velocity: 
 		await get_tree().physics_frame
 		if t >= RUN_TICKS - JITTER_TICKS:
 			for id: int in sent:
+				if not client._entries.has(id):
+					continue
 				var b: RigidBody3D = client._entries[id]["body"]
 				var tr: Array = trail.get(id, [b.global_position, b.global_position])
 				tr[0] = (tr[0] as Vector3).min(b.global_position)
@@ -147,6 +149,10 @@ func _course(course: String, world: Node3D, ids: Array, spots: Array, velocity: 
 	var shape_gap := 0.0
 	var unrested := 0
 	for id: int in sent:
+		if not server._entries.has(id) or not client._entries.has(id):
+			lost += 1
+			lost_names.append("%s removed (server %s, client %s)" % [sent[id], server._entries.has(id), client._entries.has(id)])
+			continue
 		var cb: RigidBody3D = client._entries[id]["body"]
 		var sb: RigidBody3D = server._entries[id]["body"]
 		if cb.global_position.y < -50.0:
@@ -182,6 +188,8 @@ func _grid(origin: Vector3, count: int, cols: int = 10, pitch: float = 1.5) -> A
 
 func _run() -> void:
 	ArenaWeaponRoles.ensure()
+	# The engine is named so a run under override.cfg's Jolt is told apart from the default's.
+	print("weapondrop_depth: physics %s" % ProjectSettings.get_setting("physics/3d/physics_engine", "DEFAULT"))
 	var ids: Array = AwWeaponArtTable.table().keys()
 	ids.sort()
 	_check(ids.size() > 10, "the art table has weapons", str(ids.size()))
