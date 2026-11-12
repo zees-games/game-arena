@@ -6,6 +6,10 @@ const WEB_GATE_TIMEOUT_SEC := 60.0
 ## A drawing client's share of a frame for the server's events; the join backlog spreads over frames.
 const EVENT_BUDGET_USEC := 8000
 
+## Set by an offline start that builds in frames: [method _adopt] leaves the arming (and the loadout
+## restore, which equips into the armed rig) to it, so the arming gets frames of its own.
+var _arm_after_adopt := false
+
 func _adopt(candidate: ArenaPlayer) -> void:
 	if candidate == null or player != null:
 		return
@@ -19,7 +23,8 @@ func _adopt(candidate: ArenaPlayer) -> void:
 	_guard_camera(player)
 	if presentation != null:
 		presentation.bind_camera_motion(player)
-	_arm(player)
+	if not _arm_after_adopt:
+		_arm(player)
 
 	if hud != null:
 		hud.follow(player)
@@ -41,7 +46,8 @@ func _adopt(candidate: ArenaPlayer) -> void:
 		)
 
 	_hear_the_local_player()
-	_restore_loadout.call_deferred()
+	if not _arm_after_adopt:
+		_restore_loadout.call_deferred()
 	gate.freeze(player)
 
 	# Logged because this is the moment everything a person can see comes into existence — the
@@ -439,6 +445,8 @@ func _build_due_bodies() -> void:
 
 ## Milliseconds of stock bodies a frame (see [method _queue_body]).
 const BODY_BUDGET_MS := 12
+## Milliseconds of offline bots added a frame at a solo start (each is ~4 ms with its body).
+const OFFLINE_BOT_BUDGET_MS := 8
 
 ## A stock avatar until the server says otherwise.
 func _attach_stock_body(added: ArenaPlayer) -> void:
@@ -681,19 +689,12 @@ func _start_sim_host() -> void:
 		host.queue_free()
 	_set_client_processing(true)
 
-## The client's own frame, tick and keys, off while `_ready` waits part-built (the sim host's boot, `_setup_frame`).
-func _set_client_processing(on: bool) -> void:
-	set_process(on)
-	set_physics_process(on)
-	set_process_input(on)
-	set_process_unhandled_input(on)
-
-
 func _start_offline() -> void:
 	# Offline catches up with wall-clock time only as far as a tick is cheap enough to
 	# (`_physics_process` adjusts this from the measured cost, ArenaTickBudget); a flat
 	# cap of 2 ran the whole simulation at half speed whenever a frame took over 30 ms.
 	Engine.max_physics_steps_per_frame = ArenaTickBudget.MAX_STEPS
+	var started := Time.get_ticks_usec()
 	game.start(0)
 	_start_solo_workbench()
 
@@ -740,14 +741,27 @@ func _start_offline() -> void:
 	# slab across the bottom of every offline frame. A networked client never had it,
 	# because HELLO names the session before JOIN creates it.
 	_watch_id = 1
+	ArenaLoadTimeline.mark("offline: match started, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
+	await _setup_frame()
 
+	# In a client that draws, the match start, the player, its arming and the bots were one 460 ms
+	# frame on staging02 (perf-bench 20261112-065900): each now gets frames of its own.
+	_arm_after_adopt = _builds_in_frames()
+	started = Time.get_ticks_usec()
 	var added := game.add_player(1, "Player")
 
 	if added.ok:
 		_adopt(added.value as ArenaPlayer)
+	ArenaLoadTimeline.mark("offline: player added, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
+	if _arm_after_adopt:
+		_arm_after_adopt = false
+		await _setup_frame()
+		await _arm_stepped(player)
+		_restore_loadout.call_deferred()
+		await _setup_frame()
 
 	_bind_bot_console()
-	_keep_offline_bots(_launch_bots())
+	await _launch_offline_bots(_launch_bots())
 	_run_launch_commands()
 
 func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
@@ -787,3 +801,27 @@ func _on_profiler_registered(svc_name: StringName, inst: Object) -> void:
 		return
 	DotRegistry.signals().service_registered.disconnect(_on_profiler_registered)
 	ArenaProfilerContext.install(inst, game, _bot_host(), presentation)
+
+
+## A solo launch's bots: all at once headless, a few a frame in a client that draws, where 31 bots
+## with their bodies were ~130 ms of one frame.
+func _launch_offline_bots(count: int) -> void:
+	if not _builds_in_frames():
+		_keep_offline_bots(count)
+		return
+	var started := Time.get_ticks_usec()
+	var frames := 0
+	var slice := DotFrameSlice.new(OFFLINE_BOT_BUDGET_MS)
+	for wanted in range(1, count + 1):
+		var before := _bots.size()
+		_keep_offline_bots(wanted)
+		if _bots.size() <= before:
+			break
+		if slice.due() and wanted < count:
+			await _setup_frame()
+			frames += 1
+			slice = DotFrameSlice.new(OFFLINE_BOT_BUDGET_MS)
+	ArenaLoadTimeline.mark(
+		"offline: %d bots, %d ms over %d frames"
+		% [_bots.size(), (Time.get_ticks_usec() - started) / 1000, frames + 1]
+	)

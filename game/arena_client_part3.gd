@@ -128,7 +128,7 @@ func _ready() -> void:
 	await _setup_frame()
 
 	if _offline:
-		_start_offline()
+		await _start_offline()
 		# The netcode build installs it for a connected client; an offline one never builds netcode.
 		_install_profiler_context()
 	else:
@@ -198,23 +198,6 @@ func _warm_weapon_table() -> void:
 			going = ArenaPlayer.warm_catalogue_step(step, held)
 			step += 1
 		ArenaLoadTimeline.mark("setup: weapon table %d-%d, %d ms" % [first, step - 1, (Time.get_ticks_usec() - started) / 1000])
-
-## A frame boundary between setup steps, under the cover, in a client that draws. The build was one
-## 2.7 s frame on staging02 (setup 1012 ms, then the first draw 672 ms, the 32 players 320 ms and the
-## arming): a window that stops drawing that long reads as hung. The client's own frame and tick stay off
-## until setup ends, and the tree's multiplayer is not polled across the boundary: a link can already be
-## joined (the sim host, a shell's server) and its messages would reach the game's net node before the
-## netcode builds it, and be dropped. They wait in the peer instead, as they did behind the one long frame.
-## Headless (suites, servers) builds in one go, as before.
-func _setup_frame() -> void:
-	if not _builds_in_frames():
-		return
-	_set_client_processing(false)
-	var tree := get_tree()
-	var polling := tree.multiplayer_poll
-	tree.multiplayer_poll = false
-	await tree.process_frame
-	tree.multiplayer_poll = polling
 
 ## The first figure built paid for the stock body models and the clip set (249 ms, in the killcam's spare
 ## arms on staging02). The models start loading on the loader's threads here, at the start of setup.

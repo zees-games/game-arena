@@ -383,18 +383,48 @@ func _guard_camera(p: ArenaPlayer) -> void:
 
 ## The hands under the camera, and the player's rig rebuilt to draw them.
 func _arm(body: ArenaPlayer) -> void:
-	if body == null or body.camera == null or view_model != null:
+	if not _arm_begin(body):
 		return
+	_arm_mount(body)
+	_arm_rig(body)
+	_arm_end(body)
 
+## [method _arm] with a frame between its three parts (an offline start's arming was 123 ms of one
+## 460 ms frame on staging02), for a client that builds in frames; headless the frames are nothing.
+func _arm_stepped(body: ArenaPlayer) -> void:
+	if not _arm_begin(body):
+		return
+	await _setup_frame()
+	_arm_mount(body)
+	await _setup_frame()
+	_arm_rig(body)
+	_arm_end(body)
+
+func _arm_begin(body: ArenaPlayer) -> bool:
+	if body == null or body.camera == null or view_model != null:
+		return false
 	ArenaLoadTimeline.mark("arming")
+	var started := Time.get_ticks_usec()
 	view_model = AwViewModel.new()
 	view_model.name = "Hands"
 	view_model.feel_rules = game.feel_rules
 	body.ads_rules = game.ads_rules
 	view_model.ads_rules = game.ads_rules
 	body.camera.add_child(view_model)
+	ArenaLoadTimeline.mark("arming: view model, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
+	return true
+
+func _arm_mount(body: ArenaPlayer) -> void:
+	var started := Time.get_ticks_usec()
 	view_arms = ArenaViewArms.mount(self, view_model, body, ArenaAvatars.look_of(body.avatar, StringName("arena-player-%08d" % body.player_id)), game)
+	ArenaLoadTimeline.mark("arming: arms mounted, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
+
+func _arm_rig(body: ArenaPlayer) -> void:
+	var started := Time.get_ticks_usec()
 	body.arm_first_person(view_model, _offline)
+	ArenaLoadTimeline.mark("arming: first-person rig, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
+
+func _arm_end(body: ArenaPlayer) -> void:
 	ArenaLoadTimeline.mark("hands armed")
 	if _builds_in_frames():
 		# Each in a frame of its own: the arming and both starts shared one frame with the joins.
@@ -402,6 +432,30 @@ func _arm(body: ArenaPlayer) -> void:
 	else:
 		_prewarm_weapons.call_deferred(body)
 		_prewarm_models.call_deferred()
+
+## A frame boundary between setup steps, under the cover, in a client that draws. The build was one
+## 2.7 s frame on staging02 (setup 1012 ms, then the first draw 672 ms, the 32 players 320 ms and the
+## arming): a window that stops drawing that long reads as hung. The client's own frame and tick stay off
+## until setup ends, and the tree's multiplayer is not polled across the boundary: a link can already be
+## joined (the sim host, a shell's server) and its messages would reach the game's net node before the
+## netcode builds it, and be dropped. They wait in the peer instead, as they did behind the one long frame.
+## Headless (suites, servers) builds in one go, as before.
+func _setup_frame() -> void:
+	if not _builds_in_frames():
+		return
+	_set_client_processing(false)
+	var tree := get_tree()
+	var polling := tree.multiplayer_poll
+	tree.multiplayer_poll = false
+	await tree.process_frame
+	tree.multiplayer_poll = polling
+
+## The client's own frame, tick and keys, off while `_ready` waits part-built (the sim host's boot, `_setup_frame`).
+func _set_client_processing(on: bool) -> void:
+	set_process(on)
+	set_physics_process(on)
+	set_process_input(on)
+	set_process_unhandled_input(on)
 
 ## Whether setup is spread over frames: in a client that draws, and not headless (see `_setup_frame`).
 func _builds_in_frames() -> bool:
