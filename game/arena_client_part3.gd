@@ -136,7 +136,8 @@ func _ready() -> void:
 
 	_grab_mouse()
 	platform.slide_settings = presentation.settings
-	DotLog.result(CHANNEL, "the platform", platform.setup())
+	var platform_up: DotResult = await _setup_platform()
+	DotLog.result(CHANNEL, "the platform", platform_up)
 	_follow_render_quality()
 	# The starter set: the equipped list needs a credential the client does not hold (the server reads it).
 	DotLog.result(CHANNEL, "avatar actions", platform.add_avatar_actions(net, _avatar_figure))
@@ -164,6 +165,24 @@ func _setup_frame() -> void:
 	tree.multiplayer_poll = false
 	await tree.process_frame
 	tree.multiplayer_poll = polling
+
+## The platform's setup one piece a frame in a client that draws (all of it was one ~200 ms frame on staging02).
+## By name: a linked dot-game older than API 57 has no setup_stepped, and sets up in one go, as headless does.
+func _setup_platform() -> DotResult:
+	if not _builds_in_frames() or not platform.has_method(&"setup_stepped"):
+		return platform.setup()
+	var between := func(piece: StringName) -> void:
+		_mark_platform_piece(piece)
+		await _setup_frame()
+	var stepped: DotResult = await platform.call(&"setup_stepped", between)
+	var usec: Dictionary = platform.get(&"setup_usec")
+	if not usec.is_empty():
+		_mark_platform_piece(usec.keys().back())
+	return stepped
+
+func _mark_platform_piece(piece: StringName) -> void:
+	var usec: Dictionary = platform.get(&"setup_usec")
+	ArenaLoadTimeline.mark("platform: %s, %d ms" % [piece, int(usec.get(piece, 0)) / 1000])
 
 ## The map the game is first built on: offline the command line's, under a sim host the one its server was
 ## started on (so the announcement finds the level already built), and otherwise the dm_box placeholder,
