@@ -1,5 +1,7 @@
 extends "arena_map_part3.gd"
 
+const ArenaLoadTimeline := preload("../game/arena_load_timeline.gd")
+
 ## One box as a static body, with a mesh when there is a material to draw it with.
 ##
 ## A null material means collision only. Not a separate function, because two functions
@@ -62,23 +64,9 @@ func to_scene() -> Node3D:
 	# `arena_map_paint.gd`.
 	var painter := ArenaMapPaint.Painter.new()
 
-	root.add_child(_make_box(
-		AABB(
-			Vector3(-extent - 2.0, floor_y - 1.0, -extent - 2.0),
-			Vector3(extent * 2.0 + 4.0, 1.0, extent * 2.0 + 4.0)
-		),
-		painter.photo_ground(),
-		"Floor",
-		bake_floor
-	))
-
+	root.add_child(_level_floor(painter, bake_floor))
 	for index in range(boxes.size()):
-		root.add_child(_make_box(
-			boxes[index],
-			painter.role_box(ArenaMapPaint.role_of(boxes[index], extent), ArenaMapPaint.colour_of(self, index)),
-			"Box%02d" % index,
-			bake_floor
-		))
+		root.add_child(_level_box(painter, index, bake_floor))
 
 	_add_contact_shade(root)
 
@@ -87,15 +75,83 @@ func to_scene() -> Node3D:
 
 	return root
 
-## [method to_scene] built in slices behind a loading cover; only an imported map with a world is sliced.
+func _level_floor(painter: ArenaMapPaint.Painter, bake_floor: float) -> StaticBody3D:
+	return _make_box(
+		AABB(
+			Vector3(-extent - 2.0, floor_y - 1.0, -extent - 2.0),
+			Vector3(extent * 2.0 + 4.0, 1.0, extent * 2.0 + 4.0)
+		),
+		painter.photo_ground(),
+		"Floor",
+		bake_floor
+	)
+
+func _level_box(painter: ArenaMapPaint.Painter, index: int, bake_floor: float) -> StaticBody3D:
+	return _make_box(
+		boxes[index],
+		painter.role_box(ArenaMapPaint.role_of(boxes[index], extent), ArenaMapPaint.colour_of(self, index)),
+		"Box%02d" % index,
+		bake_floor
+	)
+
+## [method to_scene] built in slices behind a loading cover. A headless process keeps the one-shot build.
 func to_scene_async(slice: DotFrameSlice) -> Node3D:
-	if is_imported() and ArenaMap.use_worlds:
-		var bare := Node3D.new()
-		bare.name = "Level"
-		if await ArenaBspMap.draw_world_async(bare, String(id), manifest_path.get_base_dir(), slice):
-			return bare
-		bare.free()
-	return to_scene()
+	if is_imported():
+		if ArenaMap.use_worlds:
+			var bare := Node3D.new()
+			bare.name = "Level"
+			if await ArenaBspMap.draw_world_async(bare, String(id), manifest_path.get_base_dir(), slice):
+				return bare
+			bare.free()
+		return to_scene()
+	if DotPlatform.is_headless():
+		return to_scene()
+
+	# The photographs and the bake read on loader threads first: read in-frame, they were
+	# most of a 420 ms startup frame on the bench. Held here so the Painter's load() hits the cache.
+	var bake_floor := floor_y if can_bake() else INF
+	var paths := ArenaMapPaint.texture_paths()
+	if bake_floor != INF and use_bakes:
+		paths.append(ArenaPaths.rebase(BAKE_PATH % id))
+	var held := await _read_threaded(paths, slice)
+	ArenaLoadTimeline.mark("level: %d textures read" % held.size())
+
+	var root := Node3D.new()
+	root.name = "Level"
+	var painter := ArenaMapPaint.Painter.new()
+	root.add_child(_level_floor(painter, bake_floor))
+	for index in range(boxes.size()):
+		if slice.due():
+			await slice.pause()
+		root.add_child(_level_box(painter, index, bake_floor))
+	ArenaLoadTimeline.mark("level: boxes built")
+
+	await slice.pause()
+	_add_contact_shade(root)
+	if bake_floor != INF and use_bakes:
+		await slice.pause()
+		_attach_bake(root)
+	ArenaLoadTimeline.mark("level: bake attached")
+	held.clear()
+	return root
+
+## Reads [param paths] on loader threads, a frame at a time, and returns what loaded. Missing paths are skipped.
+static func _read_threaded(paths: PackedStringArray, slice: DotFrameSlice) -> Array[Resource]:
+	var held: Array[Resource] = []
+	if not DotPlatform.has_threads():
+		return held
+	var asked: PackedStringArray = []
+	for path in paths:
+		if ResourceLoader.exists(path) and ResourceLoader.load_threaded_request(path) == OK:
+			asked.append(path)
+	for path in asked:
+		while ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			await slice.pause()
+		if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_LOADED:
+			var got := ResourceLoader.load_threaded_get(path)
+			if got != null:
+				held.append(got)
+	return held
 
 ## The level as collision only: static bodies, no meshes, no material.
 ##

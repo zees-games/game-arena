@@ -162,6 +162,16 @@ static func colour_of(map: Object, index: int) -> Color:
 			return zone
 
 
+## Every texture a [Painter] may load, so a sliced build can read them on a loader thread first.
+static func texture_paths() -> PackedStringArray:
+	var out := PackedStringArray([ArenaPaths.rebase(GRID_PATH), ArenaPaths.rebase(TILES_PATH)])
+	var root := ArenaPaths.rebase(SURFACES_ROOT)
+	for kind: StringName in KIND_OF_ROLE.values() + [KIND_GROUND]:
+		for part in ["albedo", "normal", "roughness"]:
+			out.append("%s/%s/%s.jpg" % [root, kind, part])
+	return out
+
+
 ## Builds the materials for a map: one per colour, shared by every box of that colour.
 ##
 ## [b]Shared, because the browser build draws with the Compatibility renderer[/b], where a
