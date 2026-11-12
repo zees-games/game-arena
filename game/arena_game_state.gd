@@ -552,6 +552,17 @@ var ragdoll_rules: DotPlayerRagdollRules = DotPlayerRagdollRules.new()
 ## by the module (REPLICATED) and followed by the client, which is the end with a camera.
 var view_rules: DotPlayerViewRules = DotPlayerViewRules.new()
 
+## dot-mobile's touch, aim assist and auto-fire cvars (`sv_mobile_*`, `sv_aim_assist*`, `sv_autofire*`): bound by the
+## module (REPLICATED), followed by the client's overlay. Auto-fire is allowed here, so a touch player starts with it.
+var mobile_rules: DotMobileRules = _make_mobile_rules()
+
+
+static func _make_mobile_rules() -> DotMobileRules:
+	var rules := DotMobileRules.new()
+	rules.autofire = DotMobileRules.ALLOWED
+	return rules
+
+
 ## The ambience cvars (`arena_ambient*`): bound by the module (REPLICATED), followed by a client through its link.
 var ambient_rules: DotAmbienceRules = ArenaAmbience.make_rules()
 

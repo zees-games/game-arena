@@ -107,6 +107,8 @@ func _process(delta: float) -> void:
 	else:
 		ArenaTickBudget.shed_now = 0.0
 	_frame_at_usec = t
+	if _touch != null:
+		_touch.call(&"sync", _menu_open() or presentation != null and presentation.swallows_input(), _gun_in_hand())
 	if game != null and game.knives != null:
 		game.knives.bind_view(ragdolls, presentation.blood if presentation != null else null)
 	_present_frame(delta)
@@ -147,6 +149,13 @@ func _cycled_slot(step: int) -> int:
 ## The touch NEXT button: the carried slot after the one in hand.
 func touch_next_weapon() -> void:
 	_wanted_slot = _cycled_slot(1)
+
+## Whether auto-fire and aim assist may act: alive, playing, and the pointer is the aim.
+func touch_live() -> bool:
+	return player != null and player.is_alive() and mouse_drives_view() and not is_roaming() and not _watching_other()
+
+func _gun_in_hand() -> DotWeaponDef:
+	return player.arsenal.current_def() if player != null and player.arsenal != null else null
 
 ## Alt-tabbing away leaves a captured pointer on a window nobody is looking at; give the cursor
 ## back and ask for a click on return, which also re-arms browser pointer lock.
@@ -227,13 +236,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if player == null:
 		return
 
+	# dot-mobile's overlay forwards every touch to the sampler itself; with the overlay off, a touch moves nothing.
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
-		if _sampler != null and _touch != null:
-			_sampler.handle_event(event)
 		return
 
 	if event is InputEventMouseMotion:
-		if mouse_drives_view() and (_touch == null or event.device != InputEvent.DEVICE_ID_EMULATION):
+		if mouse_drives_view() and (_touch == null or not bool(_touch.call(&"takes", event))):
 			if is_roaming():
 				# The free camera turns on the mouse, and the dead body's view stays put.
 				_roam_look += (event as InputEventMouseMotion).relative

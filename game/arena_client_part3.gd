@@ -333,6 +333,10 @@ func is_roaming() -> bool:
 func _touch_held(id: StringName) -> bool:
 	return _touch != null and bool(_touch.call(&"is_held", id))
 
+## The overlay is up. Godot then turns every touch into a left click too, which must not read as the Fire key.
+func _touch_on() -> bool:
+	return _touch != null and bool(_touch.call(&"active"))
+
 
 ## Remembers the slot before the one in hand, for Q.
 func _note_held_slot() -> void:
@@ -357,7 +361,7 @@ func mouse_drives_view() -> bool:
 ## a set of booleans.[/b] `set_button` is the accessor; assigning `.attack` creates nothing and
 ## errors at runtime with "Invalid assignment of property or key 'attack'".
 func _read_fire(move: DotFpsCommand) -> void:
-	var firing := mouse_drives_view() and (_held(ArenaBindings.FIRE) or _touch_held(&"fire"))
+	var firing := mouse_drives_view() and ((_held(ArenaBindings.FIRE) and not _touch_on()) or _touch_held(&"fire"))
 
 	_fire.set_button(DotWeaponCommand.BUTTON_ATTACK, firing)
 	# The Aim key (right mouse) aims down the sights, by default; the Bash key (X) is the pack's
