@@ -141,13 +141,7 @@ func _run() -> void:
 	_place(game, ids, {thrower: Vector3(lying.x, floor_y, lying.z) + Vector3(0.4, 0.0, 0.0)})
 	_check(game.player_for(thrower).arsenal.carries(&"knife") and game.knives.count() == 0, "walking over the knife on the floor picks it up")
 
-	# Disabled: the aim key does not throw.
-	game.knife_rules["enabled"] = false
-	_place(game, ids, {thrower: here})
-	var _again := _knife_in_hand(game, thrower)
-	_press_aim(game, thrower, 0.0, -35.0)
-	_check(game.knives.count() == 0 and game.player_for(thrower).arsenal.carries(&"knife"), "arena_knife_throw 0 keeps the knife in hand")
-	game.knife_rules["enabled"] = true
+	_check_throw_disabled(game, ids, thrower, here)
 
 	# At an enemy 6 m ahead: dead outright, the knife stays in them.
 	var target := here + Vector3(0.0, 0.0, -6.0)
@@ -169,6 +163,28 @@ func _run() -> void:
 		game.tick({})
 	_check(game.knives.count() == 1, "the embedded knife stays while nobody comes for it")
 
+	_check_pickup_rule(game, ids, thrower, stuck, target, floor_y, events)
+
+	_throw_at_mate_and_slow(game, ids, thrower, mate, here, floor_y, pitch)
+	_finished += 1
+
+	print("%d sections entered, %d finished" % [_entered, _finished])
+	var ok := _failed == 0 and _entered == EXPECTED_SECTIONS and _finished == EXPECTED_SECTIONS and _checks == EXPECTED_CHECKS
+	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
+	get_tree().quit(0 if ok else 1)
+
+
+func _check_throw_disabled(game: ArenaGame, ids: Array, thrower: int, here: Vector3) -> void:
+	# Disabled: the aim key does not throw.
+	game.knife_rules["enabled"] = false
+	_place(game, ids, {thrower: here})
+	var _again := _knife_in_hand(game, thrower)
+	_press_aim(game, thrower, 0.0, -35.0)
+	_check(game.knives.count() == 0 and game.player_for(thrower).arsenal.carries(&"knife"), "arena_knife_throw 0 keeps the knife in hand")
+	game.knife_rules["enabled"] = true
+
+
+func _check_pickup_rule(game: ArenaGame, ids: Array, thrower: int, stuck: DotWeaponKnives.Knife, target: Vector3, floor_y: float, events: Array) -> void:
 	# Pickup off for the moment: walking over the body leaves it there.
 	game.knife_rules["pickup"] = 0.0
 	var body: Vector3 = stuck.at if stuck != null else target
@@ -179,6 +195,8 @@ func _run() -> void:
 	_check(game.knives.count() == 0 and game.player_for(thrower).arsenal.carries(&"knife"), "walking over the body takes the knife out of it")
 	_check(events.any(func(e: Array) -> bool: return int(e[1]) == DotWeaponKnives.Phase.GONE), "and the layer said it went")
 
+
+func _throw_at_mate_and_slow(game: ArenaGame, ids: Array, thrower: int, mate: int, here: Vector3, floor_y: float, pitch: float) -> void:
 	# A team-mate: friendly fire is off, so the knife bounces off and they live.
 	var mate_at := here + Vector3(0.0, 0.0, -6.0)
 	_place(game, ids, {thrower: here, mate: mate_at})
@@ -198,12 +216,6 @@ func _run() -> void:
 	var slow: DotWeaponKnives.Knife = game.knives.entries()[0] if game.knives.count() == 1 else null
 	_check(slow != null and absf(slow.velocity.length() - 10.0) < 1.0, "arena_knife_throw_speed sets the throw speed", str(slow.velocity.length() if slow != null else -1.0))
 	game.knife_rules["speed"] = 40.0
-	_finished += 1
-
-	print("%d sections entered, %d finished" % [_entered, _finished])
-	var ok := _failed == 0 and _entered == EXPECTED_SECTIONS and _finished == EXPECTED_SECTIONS and _checks == EXPECTED_CHECKS
-	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
-	get_tree().quit(0 if ok else 1)
 
 
 func _test_wire() -> void:

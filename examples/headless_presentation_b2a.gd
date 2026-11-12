@@ -98,6 +98,16 @@ func _test_the_loadout_menu() -> void:
 		await get_tree().process_frame
 	_check(me.arsenal.carries(&"carbine") and me.arsenal.carries(&"sticky"), "and the next spawn carries it")
 
+	await _check_loadout_rules(client, me, game)
+
+	await _check_crosshair_sights(client, me, game)
+	remove_child(client)
+	client.free()
+	await get_tree().process_frame
+	_done()
+
+
+func _check_loadout_rules(client: ArenaClient, me, game: ArenaGame) -> void:
 	var snipers: DotResult = game.loadout_command.call(&"apply_strings", true, "primary=tag:scoped", "")
 	var limited: Dictionary = await client.loadout_offer()
 	var primaries: Array = ((limited["slots"] as Array)[0]["choices"] as Array).map(func(c: Dictionary) -> String: return str(c["id"]))
@@ -120,12 +130,6 @@ func _test_the_loadout_menu() -> void:
 	_check(closed["choose"] == false and str(closed["note"]).contains("hands out the weapons"),
 		"a mode that hands out the weapons says so, and lets nothing be picked", str(closed.get("note", "")))
 	game.mode = was_mode
-
-	await _check_crosshair_sights(client, me, game)
-	remove_child(client)
-	client.free()
-	await get_tree().process_frame
-	_done()
 
 
 ## Christian's first play test: a darker HUD by default, which follows the menu's theme so a player
@@ -279,34 +283,7 @@ func _test_hud_fits_the_frame() -> void:
 	hud.set_process(false)
 	hud._build_feedback()
 
-	hud.strip.visible = true
-	hud.strip.show_scores(4, 4, "YOU", "2ND  GAMEMANN", Color.BLUE, Color.RED)
-	hud.strip.show_clock("9:37", false, "First to 25", "Free-For-All")
-	hud.portraits.visible = true
-	var faces: Array[Dictionary] = []
-	for i in range(8):
-		faces.append({"name": "P%d" % i, "rank": i + 1, "kills": 8 - i, "me": i == 0})
-	hud.portraits.show_players(faces)
-	hud.feed.add_kill("gamemann", Color.WHITE, &"launcher", "launcher", "Rocket", Color.WHITE)
-	hud.feed.add_kill("You", Color.WHITE, &"marksman", "marksman", "quiet_one", Color.WHITE, false, true)
-	hud.feed.add_kill("a_very_long_display_name", Color.WHITE, &"sniper", "sniper", "Viper", Color.WHITE, true)
-	hud.vitals.show_vitals(64.0, 100.0, 35.0)
-	hud.ammo.show_ammo("Marksman rifle", 3, 240, false)
-	var carried: Array[Dictionary] = []
-	for slot in range(1, 6):
-		carried.append({"slot": slot, "id": &"rifle", "name": "Rifle", "key": str(slot)})
-	hud.slots.show_slots(carried, 3)
-	var buttons: Array[Dictionary] = []
-	for b in [["slide", "C"], ["launch", "E"], ["dash", "Shift"], ["walljump", "Space"]]:
-		buttons.append({"id": StringName(b[0]), "label": b[0], "icon": null, "key": b[1],
-			"left": 0.0, "total": 1.0, "active": false, "pips": 2, "pips_max": 3 if b[0] == "walljump" else 0})
-	hud.abilities.show_buttons(buttons)
-	hud.hints.show_hints([["Scoreboard", "Tab"], ["Menu", "Esc"], ["Chat", "Y"], ["Slide", "C"]])
-	hud.slide_label.show_prompt("Cancel slide", "C")
-	hud.vitals.show_streak(3, ArenaHud.STREAK_FULL)
-	hud.medal_row.add(ArenaAwards.Medal.HEADSHOT, "Headshot")
-	hud.medal_row.add(ArenaAwards.Medal.DOUBLE_KILL, "Double Kill")
-	hud.medal_row.advance(1.0)
+	_fill_hud(hud)
 
 	# The chat box, scaled with the HUD as ArenaPresentation scales it: unscaled, a full log
 	# at 854x480 reached the killstreak meter and the key hints.
@@ -365,6 +342,12 @@ func _test_hud_fits_the_frame() -> void:
 			and hud.fit_design == ArenaHud.DESIGN_FRAME and hud.fit_min == 0.5,
 		"below it, it is scaled by the short side's share of 1280x720, never under half")
 
+	await _check_crowded_frames(hud)
+
+	hud.queue_free()
+	_done()
+
+func _check_crowded_frames(hud: ArenaHud) -> void:
 	# Four sides' plates and a capture-ranked row with two stats a card still fit, the row
 	# dropping players where the frame is too narrow.
 	var sides: Array[Dictionary] = []
@@ -403,5 +386,35 @@ func _test_hud_fits_the_frame() -> void:
 			and DotScoreStrip.clock_text(0.0) == "0:00" and DotScoreStrip.clock_text(600.0) == "10:00",
 		"the clock rounds the seconds left up (%s, %s)" % [DotScoreStrip.clock_text(577.4), DotScoreStrip.clock_text(0.3)])
 
-	hud.queue_free()
-	_done()
+
+## Every piece of the HUD at its busiest.
+func _fill_hud(hud: ArenaHud) -> void:
+	hud.strip.visible = true
+	hud.strip.show_scores(4, 4, "YOU", "2ND  GAMEMANN", Color.BLUE, Color.RED)
+	hud.strip.show_clock("9:37", false, "First to 25", "Free-For-All")
+	hud.portraits.visible = true
+	var faces: Array[Dictionary] = []
+	for i in range(8):
+		faces.append({"name": "P%d" % i, "rank": i + 1, "kills": 8 - i, "me": i == 0})
+	hud.portraits.show_players(faces)
+	hud.feed.add_kill("gamemann", Color.WHITE, &"launcher", "launcher", "Rocket", Color.WHITE)
+	hud.feed.add_kill("You", Color.WHITE, &"marksman", "marksman", "quiet_one", Color.WHITE, false, true)
+	hud.feed.add_kill("a_very_long_display_name", Color.WHITE, &"sniper", "sniper", "Viper", Color.WHITE, true)
+	hud.vitals.show_vitals(64.0, 100.0, 35.0)
+	hud.ammo.show_ammo("Marksman rifle", 3, 240, false)
+	var carried: Array[Dictionary] = []
+	for slot in range(1, 6):
+		carried.append({"slot": slot, "id": &"rifle", "name": "Rifle", "key": str(slot)})
+	hud.slots.show_slots(carried, 3)
+	var buttons: Array[Dictionary] = []
+	for b in [["slide", "C"], ["launch", "E"], ["dash", "Shift"], ["walljump", "Space"]]:
+		buttons.append({"id": StringName(b[0]), "label": b[0], "icon": null, "key": b[1],
+			"left": 0.0, "total": 1.0, "active": false, "pips": 2, "pips_max": 3 if b[0] == "walljump" else 0})
+	hud.abilities.show_buttons(buttons)
+	hud.hints.show_hints([["Scoreboard", "Tab"], ["Menu", "Esc"], ["Chat", "Y"], ["Slide", "C"]])
+	hud.slide_label.show_prompt("Cancel slide", "C")
+	hud.vitals.show_streak(3, ArenaHud.STREAK_FULL)
+	hud.medal_row.add(ArenaAwards.Medal.HEADSHOT, "Headshot")
+	hud.medal_row.add(ArenaAwards.Medal.DOUBLE_KILL, "Double Kill")
+	hud.medal_row.advance(1.0)
+

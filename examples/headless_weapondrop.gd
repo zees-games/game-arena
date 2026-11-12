@@ -253,17 +253,100 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 	var mine_at: Vector3 = player.muzzle_position()
 	_check(Vector2(old_at.x - mine_at.x, old_at.z - mine_at.z).length() < 0.4, "and it dropped where the player stands, not where the taken gun lay", str(old_at, mine_at, aim_at))
 
-	# The railgun is primary-only: no catalogue path may put it anywhere else.
-	var rail: DotWeaponDef = ArenaContent.weapon_table().get(AwWeaponIds.CHARGE_RIFLE)
-	_check(rail != null and rail.slot == AwWeaponIds.SLOT_PRIMARY, "the railgun is defined in the primary slot", str(rail.slot if rail != null else -1))
-	_check(ArenaContent.weapon_catalogue().get_def(AwWeaponIds.CHARGE_RIFLE).slot == AwWeaponIds.SLOT_PRIMARY, "and the validated catalogue agrees")
-	for def in ArenaContent.weapons():
-		if def.id == AwWeaponIds.CHARGE_RIFLE:
-			_check(def.slot == AwWeaponIds.SLOT_PRIMARY, "and the weapon list agrees")
-	_check(ArenaContent.loadout_slot_for(rail.slot) == &"primary", "and its loadout slot is primary")
-	for role in [&"melee", &"secondary", &"primary", &"heavy", &"thrown"]:
-		_check(role == &"primary" or ArenaRoles.resolve(role) != AwWeaponIds.CHARGE_RIFLE, "the %s role never resolves to the railgun" % role)
+	_check_railgun_slot()
 
+	_check_pickup_panel(game, drops, player, rules, snap)
+
+	# A splash is stopped by a wall: find a blocked and an open spot round one centre in the real level.
+	drops.clear()
+	_check(drops.can_see.is_valid(), "the arena gives the drop layer its sight check")
+	var trace: DotTrace = game.combat.trace
+	var centre := Vector3.ZERO
+	var wall_spot := Vector3.INF
+	var open_spot := Vector3.INF
+	for cx in range(-20, 21, 4):
+		for cz in range(-20, 21, 4):
+			var c := Vector3(cx, 1.5, cz)
+			var w := Vector3.INF
+			var o := Vector3.INF
+			for k in 24:
+				var dir := Vector3.RIGHT.rotated(Vector3.UP, TAU * k / 24.0)
+				var spot: Vector3 = c + dir * 4.0
+				if trace.line_of_sight(c, spot):
+					o = spot if o == Vector3.INF else o
+				else:
+					w = spot if w == Vector3.INF else w
+			if w != Vector3.INF and o != Vector3.INF and wall_spot == Vector3.INF:
+				centre = c
+				wall_spot = w
+				open_spot = o
+	_check(wall_spot != Vector3.INF and open_spot != Vector3.INF, "the level has a wall and an open line near the centre", "%s %s" % [wall_spot, open_spot])
+	drops.rules.blast_scale = 1.0
+	var behind := drops.spawn(snap["state"], wall_spot, Vector3.ZERO, 22)
+	var open_id := drops.spawn(snap["state"], open_spot, Vector3.ZERO, 22)
+	await get_tree().physics_frame
+	var hidden_body: RigidBody3D = drops._entries[behind]["body"]
+	var open_body: RigidBody3D = drops._entries[open_id]["body"]
+	hidden_body.linear_velocity = Vector3.ZERO
+	open_body.linear_velocity = Vector3.ZERO
+	var _pushed_n := drops.blast(centre, 6.0, 10.0)
+	_check(hidden_body.linear_velocity.length() < 0.001 and open_body.linear_velocity.length() > 0.5, "a blast pushes the drop in the open and leaves the one behind a wall", "%s %s" % [hidden_body.linear_velocity, open_body.linear_velocity])
+
+	_check_prewarm(game, drops, snap, open_spot)
+
+	await _check_shot_pools()
+
+	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
+	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
+	get_tree().quit(0 if ok else 1)
+
+func _check_shot_pools() -> void:
+	var shot := AwShotFx.new()
+	add_child(shot)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(shot._lights.built() > 0 and shot._meshes.built() > 0, "a shot effect has its light and quad pools built before the first shot", "%d lights %d quads" % [shot._lights.built(), shot._meshes.built()])
+	shot.queue_free()
+
+
+func _check_prewarm(game: ArenaGame, drops: DotWeaponDrops, snap: Dictionary, open_spot: Vector3) -> void:
+	# Pre-warm: bodies are parked under the loading cover, so the first throw builds no model.
+	var builds := [0]
+	var inner: Callable = drops.look_of
+	drops.look_of = func(w: StringName) -> Node3D:
+		builds[0] += 1
+		return inner.call(w)
+	drops.draws = true
+	var ids: Array = ArenaWeaponDropWiring.prewarm_ids()
+	_check(ids.size() > 3, "the pre-warm walks every weapon with art", str(ids.size()))
+	var orphans_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	# A weapon a player starts with is parked POOL_DEPTH deep, any other once.
+	var starters := 0
+	var single: StringName = &""
+	for id: StringName in ids:
+		if id in ArenaContent.default_loadout():
+			starters += 1
+		elif single == &"":
+			single = id
+	# The server's own background warm-up and earlier drops of this suite may have parked spares of it; the control counts only the one the pre-warm adds.
+	for spare: Array in drops._parked.get(single, []):
+		(spare[0] as Node).free()
+	drops._parked.erase(single)
+	var want: int = ids.size() + starters * (ArenaWeaponDropWiring.POOL_DEPTH - 1)
+	var next := ArenaWeaponDropWiring.prewarm_step(game, ids, 0, Time.get_ticks_msec() + 60000)
+	_check(next == ids.size() and builds[0] == want and single != &"", "one body is built per weapon under the cover, a starting weapon's pool deep", "%d of %d, %d builds, want %d" % [next, ids.size(), builds[0], want])
+	_check(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) - orphans_before >= ids.size(), "the bodies wait out of the tree")
+	var built_warm: int = builds[0]
+	var warmed: StringName = single
+	var warm_state: Dictionary = (snap["state"] as Dictionary).duplicate()
+	warm_state["id"] = warmed
+	var _w := drops.spawn(warm_state, open_spot, Vector3.ZERO, 22)
+	_check(builds[0] == built_warm, "the first drop of a pre-warmed weapon builds no model", "%d builds" % (builds[0] - built_warm))
+	var _w2 := drops.spawn(warm_state, open_spot, Vector3.ZERO, 22)
+	_check(builds[0] == built_warm + 1, "a second drop beyond the parked body builds one (control)", "%d builds" % (builds[0] - built_warm))
+
+
+func _check_pickup_panel(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, rules: DotWeaponDropRules, snap: Dictionary) -> void:
 	# The world panel: shown for a drop the player looks at, hidden out of reach.
 	drops.clear()
 	drops.rules.pickup_delay = 0.0
@@ -304,83 +387,16 @@ func _run_second(game: ArenaGame, drops: DotWeaponDrops, player: ArenaPlayer, ru
 	player.camera = null
 	cam.queue_free()
 
-	# A splash is stopped by a wall: find a blocked and an open spot round one centre in the real level.
-	drops.clear()
-	_check(drops.can_see.is_valid(), "the arena gives the drop layer its sight check")
-	var trace: DotTrace = game.combat.trace
-	var centre := Vector3.ZERO
-	var wall_spot := Vector3.INF
-	var open_spot := Vector3.INF
-	for cx in range(-20, 21, 4):
-		for cz in range(-20, 21, 4):
-			var c := Vector3(cx, 1.5, cz)
-			var w := Vector3.INF
-			var o := Vector3.INF
-			for k in 24:
-				var dir := Vector3.RIGHT.rotated(Vector3.UP, TAU * k / 24.0)
-				var spot: Vector3 = c + dir * 4.0
-				if trace.line_of_sight(c, spot):
-					o = spot if o == Vector3.INF else o
-				else:
-					w = spot if w == Vector3.INF else w
-			if w != Vector3.INF and o != Vector3.INF and wall_spot == Vector3.INF:
-				centre = c
-				wall_spot = w
-				open_spot = o
-	_check(wall_spot != Vector3.INF and open_spot != Vector3.INF, "the level has a wall and an open line near the centre", "%s %s" % [wall_spot, open_spot])
-	drops.rules.blast_scale = 1.0
-	var behind := drops.spawn(snap["state"], wall_spot, Vector3.ZERO, 22)
-	var open_id := drops.spawn(snap["state"], open_spot, Vector3.ZERO, 22)
-	await get_tree().physics_frame
-	var hidden_body: RigidBody3D = drops._entries[behind]["body"]
-	var open_body: RigidBody3D = drops._entries[open_id]["body"]
-	hidden_body.linear_velocity = Vector3.ZERO
-	open_body.linear_velocity = Vector3.ZERO
-	var _pushed_n := drops.blast(centre, 6.0, 10.0)
-	_check(hidden_body.linear_velocity.length() < 0.001 and open_body.linear_velocity.length() > 0.5, "a blast pushes the drop in the open and leaves the one behind a wall", "%s %s" % [hidden_body.linear_velocity, open_body.linear_velocity])
 
-	# Pre-warm: bodies are parked under the loading cover, so the first throw builds no model.
-	var builds := [0]
-	var inner: Callable = drops.look_of
-	drops.look_of = func(w: StringName) -> Node3D:
-		builds[0] += 1
-		return inner.call(w)
-	drops.draws = true
-	var ids: Array = ArenaWeaponDropWiring.prewarm_ids()
-	_check(ids.size() > 3, "the pre-warm walks every weapon with art", str(ids.size()))
-	var orphans_before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
-	# A weapon a player starts with is parked POOL_DEPTH deep, any other once.
-	var starters := 0
-	var single: StringName = &""
-	for id: StringName in ids:
-		if id in ArenaContent.default_loadout():
-			starters += 1
-		elif single == &"":
-			single = id
-	# The server's own background warm-up and earlier drops of this suite may have parked spares of it; the control counts only the one the pre-warm adds.
-	for spare: Array in drops._parked.get(single, []):
-		(spare[0] as Node).free()
-	drops._parked.erase(single)
-	var want: int = ids.size() + starters * (ArenaWeaponDropWiring.POOL_DEPTH - 1)
-	var next := ArenaWeaponDropWiring.prewarm_step(game, ids, 0, Time.get_ticks_msec() + 60000)
-	_check(next == ids.size() and builds[0] == want and single != &"", "one body is built per weapon under the cover, a starting weapon's pool deep", "%d of %d, %d builds, want %d" % [next, ids.size(), builds[0], want])
-	_check(int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)) - orphans_before >= ids.size(), "the bodies wait out of the tree")
-	var built_warm: int = builds[0]
-	var warmed: StringName = single
-	var warm_state: Dictionary = (snap["state"] as Dictionary).duplicate()
-	warm_state["id"] = warmed
-	var _w := drops.spawn(warm_state, open_spot, Vector3.ZERO, 22)
-	_check(builds[0] == built_warm, "the first drop of a pre-warmed weapon builds no model", "%d builds" % (builds[0] - built_warm))
-	var _w2 := drops.spawn(warm_state, open_spot, Vector3.ZERO, 22)
-	_check(builds[0] == built_warm + 1, "a second drop beyond the parked body builds one (control)", "%d builds" % (builds[0] - built_warm))
+func _check_railgun_slot() -> void:
+	# The railgun is primary-only: no catalogue path may put it anywhere else.
+	var rail: DotWeaponDef = ArenaContent.weapon_table().get(AwWeaponIds.CHARGE_RIFLE)
+	_check(rail != null and rail.slot == AwWeaponIds.SLOT_PRIMARY, "the railgun is defined in the primary slot", str(rail.slot if rail != null else -1))
+	_check(ArenaContent.weapon_catalogue().get_def(AwWeaponIds.CHARGE_RIFLE).slot == AwWeaponIds.SLOT_PRIMARY, "and the validated catalogue agrees")
+	for def in ArenaContent.weapons():
+		if def.id == AwWeaponIds.CHARGE_RIFLE:
+			_check(def.slot == AwWeaponIds.SLOT_PRIMARY, "and the weapon list agrees")
+	_check(ArenaContent.loadout_slot_for(rail.slot) == &"primary", "and its loadout slot is primary")
+	for role in [&"melee", &"secondary", &"primary", &"heavy", &"thrown"]:
+		_check(role == &"primary" or ArenaRoles.resolve(role) != AwWeaponIds.CHARGE_RIFLE, "the %s role never resolves to the railgun" % role)
 
-	var shot := AwShotFx.new()
-	add_child(shot)
-	await get_tree().process_frame
-	await get_tree().process_frame
-	_check(shot._lights.built() > 0 and shot._meshes.built() > 0, "a shot effect has its light and quad pools built before the first shot", "%d lights %d quads" % [shot._lights.built(), shot._meshes.built()])
-	shot.queue_free()
-
-	var ok := _failed == 0 and _checks == EXPECTED_CHECKS
-	print("%d checks, %d failed (expected %d)" % [_checks, _failed, EXPECTED_CHECKS])
-	get_tree().quit(0 if ok else 1)

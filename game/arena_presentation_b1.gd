@@ -28,6 +28,49 @@ func _local_commands() -> DotConsoleLocal:
 			var _set := settings.set_value(&"respawn_jump_gate", str(v).strip_edges() != "0")
 			return DotResult.success(1 if settings.get_bool(&"respawn_jump_gate", true) else 0)
 	)
+	_add_perf_vars(local)
+	local.add_var(&"cl_def_cache", "1 keeps one weapon catalogue for watched hands' lookups; 0 builds it again on each (a reload start, a fitted code).",
+		func() -> Variant: return 1 if _addon_static(AwWeaponCatalogue, &"def_cache", false) else 0,
+		func(v: Variant) -> Variant:
+			return DotResult.success(1 if _addon_static(AwWeaponCatalogue, &"def_cache", false, str(v).strip_edges() != "0") else 0))
+	local.add_var(&"cl_glove_cache", "1 remembers each gun texture's colour for the first-person glove contrast; 0 reads it back on every equip.",
+		func() -> Variant: return 1 if _addon_static(AwViewArms, &"albedo_cache", false) else 0,
+		func(v: Variant) -> Variant:
+			return DotResult.success(1 if _addon_static(AwViewArms, &"albedo_cache", false, str(v).strip_edges() != "0") else 0)
+	)
+	_add_remote_vars(local)
+	local.add_var(&"cl_killcam_hz", "Most times a second the kill-cam records every body while no replay plays (0: every frame; 60 is the default).",
+		func() -> Variant: return ArenaKillcamBodies.record_hz,
+		func(v: Variant) -> Variant:
+			var text := str(v).strip_edges()
+			if not text.is_valid_float():
+				return DotResult.fail(DotError.CODE_INVALID, "cl_killcam_hz takes a number")
+			ArenaKillcamBodies.record_hz = maxf(text.to_float(), 0.0)
+			return DotResult.success(ArenaKillcamBodies.record_hz)
+	)
+	local.add_var(&"cl_pose_debug", "1 draws the held weapon's grip sockets, the hand targets and the arm bones over the view.",
+		func() -> Variant: return 1 if ArenaViewArms.debug_pose else 0,
+		func(v: Variant) -> Variant:
+			ArenaViewArms.debug_pose = str(v).strip_edges() == "1"
+			return DotResult.success(1 if ArenaViewArms.debug_pose else 0)
+	)
+	_add_arm_vars(local)
+	ArenaFlagCarry.bind_console(local, settings)
+	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
+	_add_view_vars(local)
+	local.add_command(&"where", "Where this client thinks it is", func(_a: PackedStringArray) -> Variant:
+		# The one thing no assertion and no screenshot can give you, and the reason ArenaClient
+		# already logs a position once a second: when a browser client draws sky in every direction.
+		if client == null or not client.has_method("describe_position"):
+			return "no client"
+		return client.call("describe_position")
+	)
+
+	return local
+
+
+## Frame-report and per-frame build limits.
+func _add_perf_vars(local: DotConsoleLocal) -> void:
 	local.add_var(&"cl_perf", "Seconds between frame reports in the log (arena.perf); 0 is off.",
 		func() -> Variant: return ArenaFrameProbe.interval,
 		func(v: Variant) -> Variant:
@@ -73,34 +116,10 @@ func _local_commands() -> DotConsoleLocal:
 			fx_pool_idle = clampi(text.to_int(), -1, 256)
 			return DotResult.success(_addon_static(DotFxMeshPool, &"max_idle", -1, fx_pool_idle))
 	)
-	local.add_var(&"cl_def_cache", "1 keeps one weapon catalogue for watched hands' lookups; 0 builds it again on each (a reload start, a fitted code).",
-		func() -> Variant: return 1 if _addon_static(AwWeaponCatalogue, &"def_cache", false) else 0,
-		func(v: Variant) -> Variant:
-			return DotResult.success(1 if _addon_static(AwWeaponCatalogue, &"def_cache", false, str(v).strip_edges() != "0") else 0))
-	local.add_var(&"cl_glove_cache", "1 remembers each gun texture's colour for the first-person glove contrast; 0 reads it back on every equip.",
-		func() -> Variant: return 1 if _addon_static(AwViewArms, &"albedo_cache", false) else 0,
-		func(v: Variant) -> Variant:
-			return DotResult.success(1 if _addon_static(AwViewArms, &"albedo_cache", false, str(v).strip_edges() != "0") else 0)
-	)
-	_add_remote_vars(local)
-	local.add_var(&"cl_killcam_hz", "Most times a second the kill-cam records every body while no replay plays (0: every frame; 60 is the default).",
-		func() -> Variant: return ArenaKillcamBodies.record_hz,
-		func(v: Variant) -> Variant:
-			var text := str(v).strip_edges()
-			if not text.is_valid_float():
-				return DotResult.fail(DotError.CODE_INVALID, "cl_killcam_hz takes a number")
-			ArenaKillcamBodies.record_hz = maxf(text.to_float(), 0.0)
-			return DotResult.success(ArenaKillcamBodies.record_hz)
-	)
-	local.add_var(&"cl_pose_debug", "1 draws the held weapon's grip sockets, the hand targets and the arm bones over the view.",
-		func() -> Variant: return 1 if ArenaViewArms.debug_pose else 0,
-		func(v: Variant) -> Variant:
-			ArenaViewArms.debug_pose = str(v).strip_edges() == "1"
-			return DotResult.success(1 if ArenaViewArms.debug_pose else 0)
-	)
-	_add_arm_vars(local)
-	ArenaFlagCarry.bind_console(local, settings)
-	var _icons_bound := ArenaWeaponIcons.shared.bind_console(local)
+
+
+## How far recoil turns the views, and the weapon sprite switch.
+func _add_view_vars(local: DotConsoleLocal) -> void:
 	local.add_var(&"cl_recoil_view", "How far each shot's recoil turns your view: 0 keeps the crosshair still (bullets still climb), 1 as tuned, up to 5.",
 		func() -> Variant: return ArenaRecoilView.scale,
 		func(v: Variant) -> Variant:
@@ -119,15 +138,6 @@ func _local_commands() -> DotConsoleLocal:
 			ArenaWeaponIcons.shared.sprites = str(v).strip_edges() == "1"
 			return DotResult.success(1 if ArenaWeaponIcons.shared.sprites else 0)
 	)
-	local.add_command(&"where", "Where this client thinks it is", func(_a: PackedStringArray) -> Variant:
-		# The one thing no assertion and no screenshot can give you, and the reason ArenaClient
-		# already logs a position once a second: when a browser client draws sky in every direction.
-		if client == null or not client.has_method("describe_position"):
-			return "no client"
-		return client.call("describe_position")
-	)
-
-	return local
 
 
 ## The remote-body thinning variables (ArenaPlayer.present_lod).

@@ -414,3 +414,43 @@ func describe() -> Dictionary:
 		"inputs_from": inputs_from,
 		"events_waiting": _events_waiting.size(),
 	}
+
+
+func behaviour_for(session_id: int) -> ArenaPlayerNet:
+	return _behaviours.get(session_id)
+
+
+## Adds a server-side bot called [param display_name]. Its session id, or 0 if the game
+## refused it.
+func add_bot(display_name: String) -> int:
+	if net == null or not net.is_server:
+		return 0
+
+	_next_bot += 1
+	var session_id := BOT_SESSION_BASE + _next_bot
+	var added := game.add_player(session_id, display_name)
+
+	if not added.ok:
+		return 0
+
+	var player := added.value as ArenaPlayer
+	player.set_meta(&"bot", true)
+
+	# Owned by the server (peer 0): nobody predicts it, every client mirrors it.
+	var identity := _build_identity(player, 0)
+	var registered := net.registry.register(identity, 0, net.clock.tick, net.config)
+
+	if not registered.ok:
+		_behaviours.erase(session_id)
+		game.remove_player(session_id)
+		return 0
+
+	var mind := ArenaBots.Mind.new()
+	mind.seed = session_id
+	_bot_minds[session_id] = mind
+	ArenaBots.world_for(game).warm()
+
+	var payload := join_payload(session_id)
+	player_announced.emit(payload)
+	send_event(0, ArenaEvents.Kind.JOIN, payload)
+	return session_id

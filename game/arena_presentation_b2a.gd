@@ -126,6 +126,34 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	impact.priority = 40
 	c.add(recorded(impact))
 
+	_add_interface_sounds(c)
+
+	# The wall moves: files and pitch in RECORDED; a cooldown each so a run is a step, not a buzz.
+	for wall in [[WALL_RUN_SOUND, 120], [WALL_JUMP_SOUND, 90]]:
+		var move := DotAudioDef.new()
+		move.id = wall[0]
+		move.bus = &"SFX"
+		move.cooldown_ms = wall[1]
+		move.max_concurrent = 1
+		move.priority = 55
+		c.add(recorded(move))
+
+	var pickup := DotAudioDef.new()
+	pickup.id = &"pickup"
+	pickup.kind = DotAudioDef.Kind.POSITIONAL_3D
+	pickup.bus = &"SFX"
+	pickup.max_distance = 30.0
+	pickup.max_concurrent = 3
+	pickup.priority = 50
+	c.add(recorded(pickup))
+
+	_add_body_sounds(c)
+
+	return c
+
+
+## Hit, kill, medal, flag, vote, beacon and body-state cues: flat on the interface bus unless noted.
+static func _add_interface_sounds(c: DotAudioCatalogue) -> void:
 	# Flat, not positional: a hit marker is about your own shot and must not fade with distance.
 	var hit := DotAudioDef.new()
 	hit.id = &"hit_marker"
@@ -187,7 +215,11 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	spawn.bus = &"UI"
 	spawn.priority = 60
 	c.add(recorded(spawn))
+	_add_vote_sounds(c)
 
+
+## The map vote's cues and the administrator's beacon ping.
+static func _add_vote_sounds(c: DotAudioCatalogue) -> void:
 	# The map vote's cues. Flat and on the interface bus: a ballot is about the server, not about a
 	# place in the world, and a countdown that got quieter the further you stood from the origin
 	# would be a countdown some players never heard.
@@ -212,25 +244,9 @@ static func sound_catalogue() -> DotAudioCatalogue:
 	ping.priority = 45
 	c.add(recorded(ping))
 
-	# The wall moves: files and pitch in RECORDED; a cooldown each so a run is a step, not a buzz.
-	for wall in [[WALL_RUN_SOUND, 120], [WALL_JUMP_SOUND, 90]]:
-		var move := DotAudioDef.new()
-		move.id = wall[0]
-		move.bus = &"SFX"
-		move.cooldown_ms = wall[1]
-		move.max_concurrent = 1
-		move.priority = 55
-		c.add(recorded(move))
 
-	var pickup := DotAudioDef.new()
-	pickup.id = &"pickup"
-	pickup.kind = DotAudioDef.Kind.POSITIONAL_3D
-	pickup.bus = &"SFX"
-	pickup.max_distance = 30.0
-	pickup.max_concurrent = 3
-	pickup.priority = 50
-	c.add(recorded(pickup))
-
+## The addon-shipped fall and toy sounds.
+static func _add_body_sounds(c: DotAudioCatalogue) -> void:
 	# A body landing: dot-player-char's stock death sounds (Kenney, CC0), the thud, the face
 	# plant's smack, a crumple's slump and a launch's whoosh. Positional, because they say
 	# where somebody went down; the files ship in the addon, so the paths are its own.
@@ -268,8 +284,6 @@ static func sound_catalogue() -> DotAudioCatalogue:
 		toy.max_concurrent = 3
 		toy.priority = 30
 		c.add(toy)
-
-	return c
 
 
 ## [param def] with its [constant RECORDED] files, gain and pitch spread; unchanged for an id that has none.

@@ -81,6 +81,82 @@ func _module_load() -> DotResult:
 	# respawn, restart or map change heard between ticks waits for it (dot_tick_gate.gd).
 	game.tick_gate.armed = true
 
+	_bind_commands_and_cvars()
+
+	_bind_npc_and_rule_cvars()
+
+	# A real server keeps what its monsters learn of each map across restarts. Here and
+	# not in ArenaGame, because every suite builds an ArenaGame and only a server loads this.
+	game.persist_npc_heat = true
+
+	if game.horde != null and game.horde.spawner != null:
+		game.horde.heat.persist = game.horde.persist_heat
+		# The horde was built before this module loaded, with saving off — so it adopted
+		# the map without reading what earlier runs learned. Read it now.
+		game.horde.heat.adopt(
+			game.map.id if game.map != null else &"", game.horde.spawner.now(), game.horde.spawner
+		)
+
+	# [b]How many players before a round starts, and it has to be an operator's choice.[/b] The
+	# default is 2, which is right for a deathmatch and makes a public demonstration server look
+	# broken: one person connects, the match sits in WARMUP for ever, nobody spawns.
+	_bot_quota = DotBotQuota.install(self, game.config.bot_quota)
+
+	# [b]How the bots play[/b]: dot-bot's `bot_difficulty` (easy, medium, hard, nightmare; medium by
+	# default) and every `bot_*` setting it bundles, each overridable.
+	var _bot_cvars := DotBotSettings.of(game).bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY, add_command)
+
+	# Through `game.min_players` like the other match cvars (`_add_match_cvars`): written to
+	# the live match alone, it was back to the mode's 2 after the first map change, and a
+	# one-player server sat in warmup from then on.
+	_bind_mode_cvars()
+
+	server.client_disconnected.connect(_on_client_disconnected)
+	game.player_killed.connect(_on_player_killed)
+
+	_build_loading()
+
+	var netted := _build_netcode()
+
+	if not netted.ok:
+		return netted.wrap("The arena netcode could not start")
+
+	# Everything below this line is optional in the sense that the game runs without it. None of it
+	# is optional in the sense that matters: a server with no chat, no rotation and no vote is a
+	# server nobody stays on.
+	var identified: DotResult = await _build_identity()
+	DotLog.result(CHANNEL, "the identity layer", identified)
+
+	var serviced: DotResult = await _build_services()
+	DotLog.result(CHANNEL, "chat, voice and moderation", serviced)
+
+	if serviced.ok:
+		_build_mod_commands()
+
+	var mapped := _build_maps()
+	DotLog.result(CHANNEL, "the map director", mapped)
+
+	if mapped.ok:
+		var voted := _build_vote()
+		DotLog.result(CHANNEL, "the vote", voted)
+
+	_follow_hibernation()
+
+	_add_extra_commands()
+	_build_query_provider()
+	_register_game()
+
+	if game.map != null:
+		_report_map(String(game.map.id))
+		# The boot map never fires map_changed, so its PVS is attached here.
+		_attach_visibility(game.map)
+
+	log_info("arena loaded", {"map": game.map.display_name})
+	return DotResult.success(null)
+
+
+## The hook, the commands and the match, rule and rate cvars.
+func _bind_commands_and_cvars() -> void:
 	hook_post("client_spawn", _on_client_spawn)
 
 	add_command(
@@ -137,6 +213,11 @@ func _module_load() -> DotResult:
 		game.flashlight_binder.bind_commands(add_command)
 	var _rides := game.start_ride_recording(add_cvar)
 
+	_bind_streak_and_loadout_signals()
+
+
+## The streak reward cvar and the loadout and streak notices.
+func _bind_streak_and_loadout_signals() -> void:
 	add_cvar(
 		"arena_streak_rewards", "3:heal,5:haste,7:empowered",
 		"Kill streak rewards, as streak:reward pairs (heal, armour, haste, empowered); empty for none",
@@ -161,6 +242,9 @@ func _module_load() -> DotResult:
 				)
 	)
 
+
+## The npc, combat and team-menu cvars.
+func _bind_npc_and_rule_cvars() -> void:
 	# npc_skill, npc_reaction_scale, npc_reaction_min. Registered whether or not this mode has
 	# monsters, so a config that sets them does not fail on a deathmatch map and then not apply when
 	# the rotation reaches a horde one.
@@ -186,30 +270,9 @@ func _module_load() -> DotResult:
 
 	_start_workbench()
 
-	# A real server keeps what its monsters learn of each map across restarts. Here and
-	# not in ArenaGame, because every suite builds an ArenaGame and only a server loads this.
-	game.persist_npc_heat = true
 
-	if game.horde != null and game.horde.spawner != null:
-		game.horde.heat.persist = game.horde.persist_heat
-		# The horde was built before this module loaded, with saving off — so it adopted
-		# the map without reading what earlier runs learned. Read it now.
-		game.horde.heat.adopt(
-			game.map.id if game.map != null else &"", game.horde.spawner.now(), game.horde.spawner
-		)
-
-	# [b]How many players before a round starts, and it has to be an operator's choice.[/b] The
-	# default is 2, which is right for a deathmatch and makes a public demonstration server look
-	# broken: one person connects, the match sits in WARMUP for ever, nobody spawns.
-	_bot_quota = DotBotQuota.install(self, game.config.bot_quota)
-
-	# [b]How the bots play[/b]: dot-bot's `bot_difficulty` (easy, medium, hard, nightmare; medium by
-	# default) and every `bot_*` setting it bundles, each overridable.
-	var _bot_cvars := DotBotSettings.of(game).bind_cvars(add_cvar, DotConVar.FLAG_NOTIFY, add_command)
-
-	# Through `game.min_players` like the other match cvars (`_add_match_cvars`): written to
-	# the live match alone, it was back to the mode's 2 after the first map change, and a
-	# one-player server sat in warmup from then on.
+## The minimum-players and mode cvars and their commands.
+func _bind_mode_cvars() -> void:
 	add_cvar(
 		"arena_minplayers",
 		str(game.match_node.rules.min_players),
@@ -244,49 +307,6 @@ func _module_load() -> DotResult:
 	add_command(
 		"arena_net", _cmd_net, "Show the netcode's state", ""
 	)
-
-	server.client_disconnected.connect(_on_client_disconnected)
-	game.player_killed.connect(_on_player_killed)
-
-	_build_loading()
-
-	var netted := _build_netcode()
-
-	if not netted.ok:
-		return netted.wrap("The arena netcode could not start")
-
-	# Everything below this line is optional in the sense that the game runs without it. None of it
-	# is optional in the sense that matters: a server with no chat, no rotation and no vote is a
-	# server nobody stays on.
-	var identified: DotResult = await _build_identity()
-	DotLog.result(CHANNEL, "the identity layer", identified)
-
-	var serviced: DotResult = await _build_services()
-	DotLog.result(CHANNEL, "chat, voice and moderation", serviced)
-
-	if serviced.ok:
-		_build_mod_commands()
-
-	var mapped := _build_maps()
-	DotLog.result(CHANNEL, "the map director", mapped)
-
-	if mapped.ok:
-		var voted := _build_vote()
-		DotLog.result(CHANNEL, "the vote", voted)
-
-	_follow_hibernation()
-
-	_add_extra_commands()
-	_build_query_provider()
-	_register_game()
-
-	if game.map != null:
-		_report_map(String(game.map.id))
-		# The boot map never fires map_changed, so its PVS is attached here.
-		_attach_visibility(game.map)
-
-	log_info("arena loaded", {"map": game.map.display_name})
-	return DotResult.success(null)
 
 
 # --- Commands --------------------------------------------------------------

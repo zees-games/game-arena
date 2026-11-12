@@ -137,6 +137,25 @@ func _test_audio_is_a_firefight() -> void:
 	# Every id has a noise, and every noise has an id: an id with no recipe stays silent for ever,
 	# and a recipe naming no id reaches nothing; neither errors, so check both directions.
 	var recipes := ArenaPresentation.sound_recipes()
+	_check_recipes_cover_ids(cat, recipes)
+
+	# The bank is what the real sink would be given. Baking it here is the only place a
+	# headless run can tell "the game would make a noise" from "the game has a table".
+	var bank := DotAudioSynth.bank(cat, recipes)
+	_check(
+		bank.has(&"fire_rifle") and bank.has(rifle.path),
+		"the bank answers under both the id and the path the def names"
+	)
+
+	_check_recorded_sounds(cat, rifle, bank)
+
+	_check_sliced_bank(cat, recipes, bank)
+
+	p.queue_free()
+	_audio_firefight_rest()
+
+
+func _check_recipes_cover_ids(cat: DotAudioCatalogue, recipes: Dictionary) -> void:
 	var uncovered: Array[String] = []
 	for id in cat.ids():
 		# dot-audio's stock footsteps and beds are files the addon ships: no stand-in needed.
@@ -154,14 +173,31 @@ func _test_audio_is_a_firefight() -> void:
 			stray.append(String(id))
 	_check(stray.is_empty(), "and no recipe names an id that is not there (%s)" % str(stray))
 
-	# The bank is what the real sink would be given. Baking it here is the only place a
-	# headless run can tell "the game would make a noise" from "the game has a table".
-	var bank := DotAudioSynth.bank(cat, recipes)
-	_check(
-		bank.has(&"fire_rifle") and bank.has(rifle.path),
-		"the bank answers under both the id and the path the def names"
-	)
 
+func _check_sliced_bank(cat: DotAudioCatalogue, recipes: Dictionary, bank: Dictionary) -> void:
+	# Baked a few recipes a frame under the loading cover, never as one 0.7 s frame: the
+	# sliced bank must hold exactly what the one-shot bank does, in many short calls.
+	var sliced := {}
+	var queue: Array = recipes.keys()
+	var calls := 0
+	var longest := 0
+	var total := 0
+	while not queue.is_empty() and calls < 10000:
+		var t0 := Time.get_ticks_msec()
+		ArenaPresentation.bake_into(sliced, cat, recipes, queue, 1)
+		var took := Time.get_ticks_msec() - t0
+		longest = maxi(longest, took)
+		total += took
+		calls += 1
+	_check(sliced.keys().size() == bank.keys().size() and sliced.has(&"fire_rifle"),
+		"the sound bank baked in slices holds what the one-shot bank does (%d of %d)" % [sliced.size(), bank.size()])
+	# A slice is short in itself (under 250 ms) or small beside the whole bake (a scheduler stall on a loaded box
+	# inflates one call, not the bake): what this guards is the one 0.7 s frame, where one call is the whole bake.
+	_check(calls > 4 and (longest < 250 or longest * 4 < total),
+		"and it took %d calls, none over 250 ms or a quarter of the bake (longest %d ms of %d)" % [calls, longest, total])
+
+
+func _check_recorded_sounds(cat: DotAudioCatalogue, rifle: DotAudioDef, bank: Dictionary) -> void:
 	# Item 1722: every game sound was a synthesised stand-in because its file was looked for in a
 	# res://audio nobody filled. They name the addons' recorded files now.
 	var unrecorded: Array[String] = []
@@ -193,30 +229,6 @@ func _test_audio_is_a_firefight() -> void:
 		),
 		"and a rail is a different noise from a rifle, not a quieter one"
 	)
-
-	# Baked a few recipes a frame under the loading cover, never as one 0.7 s frame: the
-	# sliced bank must hold exactly what the one-shot bank does, in many short calls.
-	var sliced := {}
-	var queue: Array = recipes.keys()
-	var calls := 0
-	var longest := 0
-	var total := 0
-	while not queue.is_empty() and calls < 10000:
-		var t0 := Time.get_ticks_msec()
-		ArenaPresentation.bake_into(sliced, cat, recipes, queue, 1)
-		var took := Time.get_ticks_msec() - t0
-		longest = maxi(longest, took)
-		total += took
-		calls += 1
-	_check(sliced.keys().size() == bank.keys().size() and sliced.has(&"fire_rifle"),
-		"the sound bank baked in slices holds what the one-shot bank does (%d of %d)" % [sliced.size(), bank.size()])
-	# A slice is short in itself (under 250 ms) or small beside the whole bake (a scheduler stall on a loaded box
-	# inflates one call, not the bake): what this guards is the one 0.7 s frame, where one call is the whole bake.
-	_check(calls > 4 and (longest < 250 or longest * 4 < total),
-		"and it took %d calls, none over 250 ms or a quarter of the bake (longest %d ms of %d)" % [calls, longest, total])
-
-	p.queue_free()
-	_audio_firefight_rest()
 
 
 func _audio_firefight_rest() -> void:
@@ -278,6 +290,13 @@ func _test_effects_and_the_player_who_asked_for_none() -> void:
 		"and at the highest it is drawn (%s)" % str(why)
 	)
 
+	_check_render_quality(p)
+
+	p.queue_free()
+	_done()
+
+
+func _check_render_quality(p) -> void:
 	# Texture detail and filtering reach the world's viewport through dot-fx's render quality,
 	# which follows the presentation's settings only because the client hands them over.
 	var screen := SubViewport.new()
@@ -299,9 +318,6 @@ func _test_effects_and_the_player_who_asked_for_none() -> void:
 	for node: Node in [quality, screen, client.platform]:
 		node.free()
 	client.free()
-
-	p.queue_free()
-	_done()
 
 
 ## [b]Every effect this game names was refused once[/b], because `scenes/fx/` did not

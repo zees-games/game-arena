@@ -4,6 +4,7 @@ const ArenaGame := preload("arena_game.gd")
 
 
 const ArenaPlayer := preload("arena_player.gd")
+const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 
 ## The player-facing addons, stood up once and bound to the game. Seven addons that each know
 ## nothing about the arena, met here: session roster, sides, classes, spawns and physics settings.
@@ -127,3 +128,34 @@ func _can_see_site(from: Vector3, to: Vector3) -> bool:
 		return false
 
 	return physics.query().line_of_sight_3d(get_viewport().find_world_3d(), eye, head)
+
+
+## Puts [param node] on the layout's [param layer_id] layer, with that layer's mask.
+func classify(node: Node, layer_id: StringName) -> DotResult:
+	if physics == null or physics.layout == null:
+		return DotResult.fail(DotError.CODE_STATE, "No collision layout.")
+
+	return physics.classify(node, layer_id)
+
+
+## Puts every collision object under [param root] on [param layer_id]: one call for a level, so
+## `ArenaMap` keeps physics decisions out of its box list. Non-collision nodes are skipped.
+## Returns how many were classified.
+func classify_tree(root: Node, layer_id: StringName) -> int:
+	if root == null or physics == null or physics.layout == null:
+		return 0
+
+	var done := 0
+
+	# Importer hull bodies (clip, fence, glass) and the sky mark keep their layers, or shots and sight could not tell them from a wall.
+	if DotMapGlassSight.is_exempt(root) or root.is_in_group(ArenaBspMap.SKY_GROUP):
+		return 0
+
+	if root is CollisionObject3D or root is CollisionObject2D:
+		if classify(root, layer_id).ok:
+			done += 1
+
+	for child in root.get_children():
+		done += classify_tree(child, layer_id)
+
+	return done

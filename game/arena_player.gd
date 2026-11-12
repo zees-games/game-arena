@@ -1,5 +1,5 @@
 @tool
-extends "arena_player_part2.gd"
+extends "arena_player_part3.gd"
 
 ## Draws this player at where they are BETWEEN ticks. Called once per rendered frame.
 ##

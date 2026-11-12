@@ -274,48 +274,55 @@ func _tick_players_batched(commands: Dictionary, delta: float, hull_world: Objec
 			if row >= 0:
 				_motor_batch.skip(row)
 			continue
-		if fine:
-			t_fine = Time.get_ticks_usec()
-		var move: DotFpsCommand = _batch_pairs[i][0]
-		var fire: DotWeaponCommand = _batch_pairs[i][1]
-		var told := false
-		var t_ctl := Time.get_ticks_usec()
-		if row >= 0:
-			if controller.has_external_velocity():
-				ArenaHullGrid.batch_faults += 1
-			told = _motor_batch.finish(row)
-			controller.end_tick(_tick, player.body_d)
-		var rested := controller.state.position
-		ArenaFrameProbe.add(&"p_controller", t_ctl - player.ctl_usec)
-		var outcome := player.tick_post(_tick, delta, fire)
-		if fine:
-			ArenaFrameProbe.add(&"pl_sim", t_fine)
-			t_fine = Time.get_ticks_usec()
-		if surf_rides != null:
-			surf_rides.call(&"after", id, player, move, _tick)
-		_hull_grid.moved(id, player)
-		var feet := controller.state.position
-		var alive := player.is_alive()
-		if not told or feet != rested:
-			hull_world.moved(player.hull_slot, feet.x, feet.y, feet.z)
-		if not alive:
-			hull_world.set_alive(player.hull_slot, false)
-		if row >= 0 and (feet != rested or not alive):
-			_motor_batch.moved_after(row)
-		if demo_stats != null:
-			demo_stats.call(&"after", id, player, move, fire, _tick)
-		shots.append_array(outcome.shots)
-		_note_protected_action(id, player, move, not outcome.shots.is_empty())
-		if horde != null and (not outcome.shots.is_empty() or not outcome.spawns.is_empty()):
-			horde.note_fire(id, player.controller.state.position)
-		if projectiles != null:
-			projectiles.accept(outcome)
-		if fine:
-			ArenaFrameProbe.add(&"pl_post", t_fine)
+		_finish_batched_player(_batch_pairs[i], row, id, player, delta, hull_world, shots, fine)
 	ArenaHullGrid.batch_faults += _motor_batch.stale
 	ArenaHullGrid.batch_rows += _motor_batch.rows
 	_motor_batch.stale = 0
 	_motor_batch.rows = 0
+
+
+## The second half of one player's batched tick: the motor's answer, the rest of the player's tick and what it did.
+func _finish_batched_player(pair: Array, row: int, id: int, player: ArenaPlayer, delta: float, hull_world: Object, shots: Array[DotShot], fine: bool) -> void:
+	var controller := player.controller
+	var t_fine := 0
+	if fine:
+		t_fine = Time.get_ticks_usec()
+	var move: DotFpsCommand = pair[0]
+	var fire: DotWeaponCommand = pair[1]
+	var told := false
+	var t_ctl := Time.get_ticks_usec()
+	if row >= 0:
+		if controller.has_external_velocity():
+			ArenaHullGrid.batch_faults += 1
+		told = _motor_batch.finish(row)
+		controller.end_tick(_tick, player.body_d)
+	var rested := controller.state.position
+	ArenaFrameProbe.add(&"p_controller", t_ctl - player.ctl_usec)
+	var outcome := player.tick_post(_tick, delta, fire)
+	if fine:
+		ArenaFrameProbe.add(&"pl_sim", t_fine)
+		t_fine = Time.get_ticks_usec()
+	if surf_rides != null:
+		surf_rides.call(&"after", id, player, move, _tick)
+	_hull_grid.moved(id, player)
+	var feet := controller.state.position
+	var alive := player.is_alive()
+	if not told or feet != rested:
+		hull_world.moved(player.hull_slot, feet.x, feet.y, feet.z)
+	if not alive:
+		hull_world.set_alive(player.hull_slot, false)
+	if row >= 0 and (feet != rested or not alive):
+		_motor_batch.moved_after(row)
+	if demo_stats != null:
+		demo_stats.call(&"after", id, player, move, fire, _tick)
+	shots.append_array(outcome.shots)
+	_note_protected_action(id, player, move, not outcome.shots.is_empty())
+	if horde != null and (not outcome.shots.is_empty() or not outcome.spawns.is_empty()):
+		horde.note_fire(id, player.controller.state.position)
+	if projectiles != null:
+		projectiles.accept(outcome)
+	if fine:
+		ArenaFrameProbe.add(&"pl_post", t_fine)
 
 
 func tick(commands: Dictionary = {}) -> void:

@@ -99,6 +99,11 @@ func _run() -> void:
 	_check(director.session.rotation.order.has(&"dm_pit"), "but keeps it when its profile names a mode it hosts")
 	_check(director.session.mode_after(defs.get_map(&"dm_pit")).id == &"ffa", "mode_after answers the profile's mode")
 
+	_check_profile_cvars()
+
+	_report(CHECKS)
+
+func _check_profile_cvars() -> void:
 	# The profile's cvars, for one map only.
 	var console := DotConsole.new()
 	add_child(console)
@@ -116,4 +121,3 @@ func _run() -> void:
 	ArenaMapConfig.apply_profile(applier, console, plain)
 	_check(console.find_cvar("arena_profile_a").get_int() == 1, "the next map has the server's value back")
 
-	_report(CHECKS)

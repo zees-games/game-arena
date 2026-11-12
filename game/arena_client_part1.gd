@@ -1,6 +1,7 @@
 extends "arena_client_prewarm.gd"
 
 const ArenaContentGroups := preload("arena_content_groups.gd")
+const ArenaProfilerContext := preload("arena_profiler_context.gd")
 
 ## Milliseconds of level building between frames while the map loads ([method _enter_level]).
 const LEVEL_SLICE_MS := 10
@@ -650,3 +651,41 @@ func _build_interface_part2() -> void:
 				_hud_keys.call_deferred())
 		hud.set_safe_area(presentation.settings.get_float(&"hud_safe_area", 16.0))
 	_build_interface_rest()
+
+func _ragdoll_sound(id: StringName, at: Vector3, volume: float) -> void:
+	if presentation != null and presentation.audio != null:
+		var _played := presentation.audio.play_at(id, at, clampf(volume, 0.3, 1.0))
+
+## The dead bodies' yard: the game's ragdoll rules, the world's collision layers, and the
+## presentation's sound. Built once; cleared on a map change.
+func _build_ragdolls() -> void:
+	ragdolls = DotPlayerRagdolls.new()
+	ragdolls.name = "Ragdolls"
+	ragdolls.rules = game.ragdoll_rules
+	var stack := game.player_stack
+	if stack != null and stack.physics != null and stack.physics.layout != null:
+		# The level is classified onto `world` (see `_classify_level`); props are on `prop`.
+		game.ragdoll_rules.collision_mask = stack.physics.layout.mask_of([&"world", &"prop"])
+	ragdolls.sound_fn = _ragdoll_sound
+	add_child(ragdolls)
+	# The map's toys are heard the same way: a bounce, a knock, a barrel's roll.
+	if not game.toy_sound.is_connected(_ragdoll_sound):
+		var _toys := game.toy_sound.connect(_ragdoll_sound)
+
+
+## The profiler's game context and native timers, now if it is up and when it arrives if not.
+func _install_profiler_context() -> void:
+	var prof: Object = DotRegistry.get_service(&"dot_profiler")
+	if prof != null:
+		ArenaProfilerContext.install(prof, game, _bot_host(), presentation)
+		return
+	# Not one-shot: that would spend the connection on whichever service registers next, usually not the profiler.
+	if not DotRegistry.signals().service_registered.is_connected(_on_profiler_registered):
+		var _c := DotRegistry.signals().service_registered.connect(_on_profiler_registered)
+
+
+func _on_profiler_registered(svc_name: StringName, inst: Object) -> void:
+	if svc_name != &"dot_profiler":
+		return
+	DotRegistry.signals().service_registered.disconnect(_on_profiler_registered)
+	ArenaProfilerContext.install(inst, game, _bot_host(), presentation)

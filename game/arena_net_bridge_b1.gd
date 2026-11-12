@@ -219,10 +219,6 @@ func remove_peer(peer_id: int) -> void:
 	game.remove_player(session_id)
 
 
-func behaviour_for(session_id: int) -> ArenaPlayerNet:
-	return _behaviours.get(session_id)
-
-
 func session_for_peer(peer_id: int) -> int:
 	return int(_players_by_peer.get(peer_id, 0))
 
@@ -337,47 +333,8 @@ func _commands() -> Dictionary:
 ## from 1 for the life of the process), and far below the entity table's ids (10^12), so a
 ## bot's id is a player id like anybody's and can never be a person's.
 const BOT_SESSION_BASE := ArenaGame.BOT_SESSION_BASE
-
-
 var _bot_minds: Dictionary = {}
 var _next_bot := 0
-
-
-## Adds a server-side bot called [param display_name]. Its session id, or 0 if the game
-## refused it.
-func add_bot(display_name: String) -> int:
-	if net == null or not net.is_server:
-		return 0
-
-	_next_bot += 1
-	var session_id := BOT_SESSION_BASE + _next_bot
-	var added := game.add_player(session_id, display_name)
-
-	if not added.ok:
-		return 0
-
-	var player := added.value as ArenaPlayer
-	player.set_meta(&"bot", true)
-
-	# Owned by the server (peer 0): nobody predicts it, every client mirrors it.
-	var identity := _build_identity(player, 0)
-	var registered := net.registry.register(identity, 0, net.clock.tick, net.config)
-
-	if not registered.ok:
-		_behaviours.erase(session_id)
-		game.remove_player(session_id)
-		return 0
-
-	var mind := ArenaBots.Mind.new()
-	mind.seed = session_id
-	_bot_minds[session_id] = mind
-	ArenaBots.world_for(game).warm()
-
-	var payload := join_payload(session_id)
-	player_announced.emit(payload)
-	send_event(0, ArenaEvents.Kind.JOIN, payload)
-	return session_id
-
 
 ## Everything a client needs to mirror one player. A message rather than a spawn: [DotNetSpawner] builds entities from a prefab table,
 ## and an [ArenaPlayer] is built by [method ArenaGame.add_player] so the netted and headless deployments get the same player rather than two that drift.

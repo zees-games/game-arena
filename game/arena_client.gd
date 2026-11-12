@@ -1,4 +1,4 @@
-extends "arena_client_part3.gd"
+extends "arena_client_part4.gd"
 
 func _present_frame(delta: float) -> void:
 	if net != null and not _offline:
