@@ -42,7 +42,17 @@ A server owner may turn on `physics/3d/run_on_separate_thread` (or run Jolt) in 
 
 Every file under `game/` and `maps/` that queries a space is in `headless_match`'s audit table (`SPACE_QUERY_FILES`, part 10), marked `tick` or `client`; a new one fails the suite until it is placed. In the tick: the bots (`arena_bots_world.gd`; `arena_bots_world_nav.gd` on worker tasks joined inside the tick), `arena_map_io.gd` (use presses), `arena_props.gd`, `arena_surf.gd`. Client only, never on a dedicated server: `arena_client.gd`, `arena_kill_pov_view.gd`, `arena_player_part1.gd`, `arena_presentation_b1.gd`, `arena_touch.gd`, `maps/arena_bsp_map.gd` (`on_sky`).
 
-Still outside the step, on imported maps only (their spawn sight traces the space): console and chat commands that respawn or restart (`arena_restart`, `arena_map`, `arena_mode`, the vote, an admin respawn) and the map change, whose `ArenaMapDirector.change_to` resumes when the peers report. The remainder is on the nightly item `server-physics-thread-1`.
+Console lines, chat commands, admin actions and the map sync's peer reports also arrive in the idle frame, and those that respawn somebody go through the tick gate (`game/arena_tick_gate.gd`, `ArenaGame.tick_gate`): armed only by `ArenaModule` at load, opened first thing in its `_physics_process` (the server tick), disarmed at unload. Unarmed (solo, a client, a suite on a bare game) and inside a physics frame it runs at once.
+
+| Way in | What it reaches | Where it runs |
+| --- | --- | --- |
+| `arena_restart` | `game.start`: everybody respawns | `tick_gate.run`, at the top of the next tick; the reply goes at once |
+| `arena_mode` | `game.change_map` with the new mode | a bad mode is refused and the cvar put back at once; the change, its log and a failed change's revert at the next tick |
+| every map change: `arena_map`, the vote (map and mode choices), the rotation at a map's end, `host_change` | `ArenaMapSession.change_to_map` | `await tick_gate.reached()` before the swap, so it resumes inside the tick |
+| an admin respawn (`DotModTools.ACTION_RESPAWN`, `!respawn`) | `game.respawn_player` | an absent player fails at once; the respawn at the next tick |
+| the team menu bringing a player back (a side chosen from spectating, `play`) | `game.respawn_player` | the same |
+
+`headless_match` (part 10, `TICK_GATED_FILES`) fails if one of those files stops naming `tick_gate`. `ArenaGame.respawn_player` itself is not deferred: the match's own respawns already run in the tick, and suites call it directly.
 
 ## Later stages
 

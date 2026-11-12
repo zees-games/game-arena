@@ -452,6 +452,9 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_tick += 1
+	# What a console line, a chat command or an admin heard since the last tick: a restart, a mode
+	# change, a respawn, a map change's swap. Here, in the physics step, before the bridge.
+	game.tick_gate.open()
 	if loading != null:
 		loading.poll_loading()
 	bridge.server_tick(_tick)
@@ -605,18 +608,21 @@ func _change_mode(old_value: String, new_value: String) -> void:
 		if preferred != null:
 			map = preferred
 
-	var changed := game.change_map(map, wanted)
+	# The change respawns everybody, so on a server it waits for the next tick (arena_tick_gate.gd).
+	var target := map
+	game.tick_gate.run(func() -> void:
+		var changed := game.change_map(target, wanted)
 
-	if not changed.ok:
-		log_warn("the mode did not change", {"why": changed.error.message})
-		_revert_mode(old_value)
-		return
+		if not changed.ok:
+			log_warn("the mode did not change", {"why": changed.error.message})
+			_revert_mode(old_value)
+			return
 
-	log_info("the mode changed", {
-		"mode": new_value,
-		"map": String(game.map.id),
-		"objectives": String(game.mode.objective_layout),
-	})
+		log_info("the mode changed", {
+			"mode": new_value,
+			"map": String(game.map.id),
+			"objectives": String(game.mode.objective_layout),
+		}))
 
 
 ## Put the cvar back to what the game is actually playing. Refused and put back rather than left showing a mode the game is not playing:

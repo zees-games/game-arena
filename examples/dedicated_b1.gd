@@ -632,7 +632,17 @@ func _test_client_spawn() -> void:
 	_end()
 
 
+## Past the top of the next server tick: `physics_frame` is emitted before the nodes'
+## `_physics_process`, so the second one is the first after the module's tick opened the gate.
+func _next_tick() -> void:
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	# Back in the idle frame, where a console line arrives (a resumed `physics_frame` await is inside the step).
+	await get_tree().process_frame
+
+
 func _test_commands() -> void:
+	await get_tree().process_frame
 	_begin()
 	print("")
 	print("its commands")
@@ -648,6 +658,15 @@ func _test_commands() -> void:
 	var before := _game.match_node.round_number
 	var restart := _server.console.execute("arena_restart")
 	_check(restart.ok, "arena_restart runs", str(restart.error))
+	# A console line arrives in the idle frame, and a restart respawns everybody (a physics space
+	# query on a threaded server): it is held for the next server tick (arena_tick_gate.gd).
+	_check(
+		_game.tick_gate.armed and _game.tick_gate.pending() == 1,
+		"held for the next server tick",
+		"armed %s, pending %d" % [_game.tick_gate.armed, _game.tick_gate.pending()]
+	)
+	await _next_tick()
+	_check(_game.tick_gate.pending() == 0, "which runs it", "pending %d" % _game.tick_gate.pending())
 	_check(
 		_game.match_node.round_number <= before,
 		"and puts the match back to the start",
@@ -663,6 +682,8 @@ func _test_commands() -> void:
 	var was := String(_game.mode.id)
 	var switched := _server.console.execute("arena_mode koth")
 	_check(switched.ok, "arena_mode koth runs", str(switched.error))
+	_check(_game.mode.id == StringName(was), "and waits for the next server tick", String(_game.mode.id))
+	await _next_tick()
 	_check(
 		_game.mode.id == &"koth",
 		"and the game is playing it",
@@ -678,6 +699,7 @@ func _test_commands() -> void:
 	# its own `changed` signal: a cvar reading `koth` on a free-for-all server is believed.
 	var bad := _server.console.execute("arena_mode not_a_mode")
 	_check(bad.ok, "a bad mode does not error the console", str(bad.error))
+	_check(_game.tick_gate.pending() == 0, "and is refused at once, nothing held for the tick")
 	_check(
 		_game.mode.id == &"koth",
 		"and the game keeps playing what it was",
@@ -692,6 +714,7 @@ func _test_commands() -> void:
 	# And back, so the rest of the suite sees the game it expects.
 	var restored := _server.console.execute("arena_mode %s" % was)
 	_check(restored.ok, "and it changes back", str(restored.error))
+	await _next_tick()
 	_check(_game.mode.id == StringName(was), "to the mode it started on")
 	_end()
 

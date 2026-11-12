@@ -141,8 +141,8 @@ func _run() -> void:
 	_done()
 
 	_section("the kill-cam recording cap")
-	_check(ArenaKillcamBodies.record_hz == 60.0, "default 60 recordings a second")
-	_check(ArenaKillcamBodies.record_hz > 0.0 and 1.0e6 / ArenaKillcamBodies.record_hz < 20000.0, "a gap under 20 ms: a replay at 60 fps loses no frame")
+	_check(ArenaKillcamBodies.record_hz == 30.0, "default 30 recordings a second")
+	_check(ArenaKillcamBodies.record_hz > 0.0 and 1.0e6 / ArenaKillcamBodies.record_hz < 40000.0, "a gap under 40 ms: the replay interpolates between rows")
 	_done()
 
 	_test_anim_gate()

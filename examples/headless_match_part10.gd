@@ -560,6 +560,7 @@ func _test_siege() -> void:
 	)
 
 	_check_space_query_audit()
+	_check_tick_gate()
 
 	# --- Leaving ---------------------------------------------------------
 
@@ -664,3 +665,43 @@ func _check_space_query_audit() -> void:
 	var extra := found.filter(func(f: String) -> bool: return not want.has(f))
 	var gone := want.filter(func(f: String) -> bool: return not found.has(f))
 	_check(found == want, "every physics space query in game/ and maps/ is in the audit table (tick or client)", "new %s, gone %s" % [extra, gone])
+
+
+## The server's ways in from the idle frame that respawn somebody or swap the map, each through `game.tick_gate`
+## (arena_tick_gate.gd; docs/sim-thread.md "Physics space queries"). A file that stops using it fails here.
+const TICK_GATED_FILES := {
+	"game/arena_module.gd": "arena_restart",
+	"game/arena_module_b2.gd": "arena_mode, and the gate opened at the top of the tick",
+	"game/arena_map_session.gd": "every map change: arena_map, the vote, the rotation, host_change",
+	"game/arena_mod_tools.gd": "an admin respawn",
+	"game/arena_team_menu.gd": "a team menu choice that brings a player back",
+}
+
+
+## The tick gate: unarmed it runs at once; armed, outside the step it holds work for [method open]; disarmed it lets go.
+func _check_tick_gate() -> void:
+	var ungated: Array[String] = []
+
+	for file: String in TICK_GATED_FILES:
+		if not FileAccess.get_file_as_string("res://" + file).contains("tick_gate."):
+			ungated.append(file)
+
+	_check(ungated.is_empty(), "the server's off-tick respawns and map swaps go through the tick gate", str(ungated))
+
+	var gate := ArenaGame.ArenaTickGate.new()
+	var ran: Array[int] = []
+	gate.run(func() -> void: ran.append(1))
+	_check(ran == [1] and gate.pending() == 0, "an unarmed tick gate (solo, a client) runs at once", str(ran))
+
+	if Engine.is_in_physics_frame():
+		return
+
+	gate.armed = true
+	gate.run(func() -> void: ran.append(2))
+	gate.run(func() -> void: ran.append(3))
+	_check(ran == [1] and gate.pending() == 2, "an armed one holds what it hears between ticks", str(ran))
+	gate.open()
+	_check(ran == [1, 2, 3] and gate.pending() == 0, "and runs it at the top of the tick, in order", str(ran))
+	gate.run(func() -> void: ran.append(4))
+	gate.disarm()
+	_check(ran == [1, 2, 3] and not gate.waits(), "and a server going away drops it", str(ran))

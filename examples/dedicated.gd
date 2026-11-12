@@ -53,7 +53,7 @@ func _run() -> void:
 		_test_finish_round_waits_for_a_live_round()
 		_test_query()
 		await _test_browser()
-		_test_commands()
+		await _test_commands()
 		_test_match_cvars()
 		await _test_loadout_command()
 		await _test_bots()

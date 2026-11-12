@@ -159,9 +159,12 @@ func set_spectating(id: int, on: bool) -> DotResult:
 	return _bring_back(id)
 
 
+## The respawn's spawn sight queries the physics space, so on a server it waits for the next tick (arena_tick_gate.gd).
 func _bring_back(id: int) -> DotResult:
-	var res := game.respawn_player(id)
-	return DotResult.success(id) if res.ok else res
+	if game.player_for(id) == null:
+		return DotResult.fail(DotError.CODE_INVALID, "Player %d is not in the match." % id)
+	game.tick_gate.run(game.respawn_player.bind(id))
+	return DotResult.success(id)
 
 
 ## A lethal hit from the world that leaves no death, streak or feed line behind: choosing a side is not a mistake to be scored.

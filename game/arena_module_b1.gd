@@ -218,6 +218,8 @@ func _start_workbench() -> void:
 
 
 func _module_unload() -> void:
+	if game != null:
+		game.tick_gate.disarm()
 	if team_menu != null:
 		team_menu.release()
 		team_menu = null

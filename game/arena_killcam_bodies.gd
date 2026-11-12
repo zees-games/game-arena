@@ -6,8 +6,9 @@ const KillPov := preload("arena_kill_pov.gd")
 const KillcamShots := preload("arena_killcam_shots.gd")
 const ArenaPlayer := preload("arena_player.gd")
 ## `cl_killcam_hz`: most recordings of every body's state a second while no replay plays (0: one every frame). The replay
-## interpolates between rows, so 60 a second draws the same replay as 240; the recording was 0.03 ms a body a frame.
-static var record_hz: float = 60.0
+## interpolates between rows, so 30 a second (the kill view's pose rate) draws the same replay as 240; the recording was 0.03 ms a body a frame, 0.94 ms
+## a frame at 32 bodies when taken every frame.
+static var record_hz: float = 30.0
 
 const SKIP_ACTIONS: PackedStringArray = ["dot_fps_jump", "arena_fire", "ui_cancel"]
 const SEQ_RANGE := 4096

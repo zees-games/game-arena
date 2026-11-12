@@ -1,6 +1,12 @@
 @tool
 extends "arena_game_part3.gd"
 
+const ArenaTickGate := preload("arena_tick_gate.gd")
+
+## Work heard between ticks that touches the physics space (a respawn, a restart, a map change),
+## held for the next server tick; armed only by [code]ArenaModule[/code]. See arena_tick_gate.gd.
+var tick_gate := ArenaTickGate.new()
+
 ## The standing hulls player [param id] stops at: every other living player's, where they
 ## stand now; none while `mp_solidplayers` is 0. Asked per sweep by the movement body, so a
 ## player moved earlier in this tick is met where it moved to (the same on every machine:
