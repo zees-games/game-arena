@@ -319,6 +319,7 @@ func follow_server_cvars(source: Object) -> bool:
 	var _weapon_drops := weapon_drop_rules.follow_cvars(source)
 	var _view := view_rules.follow_cvars(source)
 	var _killview := killview_rules.follow_cvars(source)
+	var _mobile := mobile_rules.follow_cvars(source)
 	var _shots := shot_rules.follow_cvars(source)
 	var _ambient := ambient_rules.follow_cvars(source)
 	var _spectate := spectate_rules.follow_cvars(source)

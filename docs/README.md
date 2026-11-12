@@ -6,7 +6,7 @@ The detail behind [CLAUDE.md](../CLAUDE.md). Fatal Contact plays free-for-all, t
 | --- | --- |
 | [architecture.md](architecture.md) | adding or changing a join between two addons, the player id space, the order inside a tick, `ArenaMap`'s three representations, or how the game is delivered |
 | [netcode.md](netcode.md) | touching `ArenaNetBridge`, `ArenaPlayerNet`, the shared constants, event and request kinds, RULES, weapons over the wire, monsters on the wire, server bots, input copies, the clock, or lag compensation |
-| [client.md](client.md) | touching `ArenaClient`, the mouse, the keys, the camera, the presentation layer and effect scenes, the menus and settings screens, the HUD, the chat box, avatars, or the render tools |
+| [client.md](client.md) | touching `ArenaClient`, the mouse, the keys, touch controls, the camera, the presentation layer and effect scenes, the menus and settings screens, the HUD, the chat box, avatars, or the render tools |
 | [modes.md](modes.md) | touching the movement tunables, a mode, gun game and weapon pools, objectives, effects, spawn protection, spawning, spectating, criticals, drops, or streaks |
 | [maps.md](maps.md) | changing a built-in map, the map catalogue or versions, `change_map`, the map director and sync, which maps host which modes, or the survey |
 | [imported-maps.md](imported-maps.md) | touching the combat surf maps: the loader, the solid, settled spawns, pits, the surf air control, the rotation, delivered maps, or the maps' mechanics |

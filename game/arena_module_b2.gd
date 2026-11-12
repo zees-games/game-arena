@@ -68,6 +68,9 @@ func _bind_rule_cvars() -> void:
 	# mp_killview*: dot-replay's kill view.
 	var _killview_cvars := game.killview_rules.bind_cvars(add_cvar, replicated)
 
+	# sv_mobile_*, sv_aim_assist*, sv_autofire*: dot-mobile's touch controls.
+	var _mobile_cvars := game.mobile_rules.bind_cvars(add_cvar, replicated)
+
 	# snd_shot_*: dot-audio's DotShotRules (layered shots, room tails).
 	var _shot_cvars := game.shot_rules.bind_cvars(add_cvar, replicated)
 

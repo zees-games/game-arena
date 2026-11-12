@@ -29,6 +29,18 @@ A client's `game.mode` is whatever it was built with. The server puts the mode's
 - **C slides as well as Duck** while Duck is on its default and no other row has C (`ArenaClient._add_slide_key`, deferred after any rebind, because the table re-applies the row after the setting changes; C is not a stored binding, so the swap cannot see it and the client takes it off Duck itself).
 - Fire on Mouse 1 can be moved but not moved back by clicking (dot-menu's key button refuses the left button, which is how every button is clicked); "Reset keys to defaults" puts it back.
 
+## Touch: dot-mobile's overlay
+
+**On a phone, dot-mobile's `DotMobileControls` drives the client's own `DotFpsTouchSampler`** (`arena_touch.gd`): a stick planted where the left thumb lands, drag-look on the right half, and FIRE, JUMP, DUCK, R and NEXT drawn over the HUD (JUMP and DUCK hold the sampler's command bits; NEXT calls `touch_next_weapon`). The overlay forwards every touch itself; `_unhandled_input` forwards none and skips the mouse Godot emulates from a touch, so a drag never turns the view twice. That emulated left click also never reads as the Fire key while the overlay is up (`_touch_on`).
+
+- **Fire is one path.** `_read_fire` reads `_touch_held(&"fire")`, which is a thumb on FIRE or auto-fire holding it, exactly where it reads Mouse 1, so fire modes, cooldowns and ammunition stay the simulation's. Auto-fire presses separately for a weapon whose fire mode is not continuous (`ArenaTouch.sync`).
+- **Auto-fire is on for touch players.** `ArenaGame.mobile_rules` starts at `sv_autofire 1` (allowed, on by default, a player may turn it off); keyboard and mouse players are unaffected unless the server sets `sv_autofire_desktop 1`, which is why the overlay is built on every client and only shown on touch.
+- **It never shoots a team-mate or the dead.** `ArenaTouch.crosshair_kind` runs the name tags' own camera test (`TagRules.ray_hits_body`) over every player, takes the nearest body on the ray, holds fire when it is a team-mate or not alive, and fires on an opponent only when one physics ray (the tags' `occluder_mask`) finds no wall. `headless_touch` times it over 32 players at well under 0.1 ms.
+- **Aim assist** (`sv_aim_assist`, off by default) gets the chests of living opponents within 10 degrees and 80 m with no wall between; dot-mobile turns the look a little towards the nearest, before the command.
+- **Paused under a menu or the console**: the overlay hides and lifts its fingers. `touch_live` keeps auto-fire and aim assist off while dead, spectating or roaming.
+- The server's other cvars (`sv_mobile_touch`, `sv_mobile_schemes`, `sv_mobile_sens_*`, `sv_mobile_left_handed`, `sv_mobile_buttons`) are dot-mobile's; bound in `arena_module_b2.gd`, replicated, followed in `follow_server_cvars`.
+- Not verified on a real phone: the layout at real DPI, gyro look (web only, iOS asks on the first touch), and pointer capture in a mobile browser, which `_read_fire` still requires.
+
 ## The camera is written in exactly one place
 
 `ArenaPlayer.present` writes the camera. Shake is handed to the player as `camera_offset` / `camera_roll` rather than written by whoever computed it; the weapon's view punch is added there too. dot-fx computes a displacement and touches no camera, so one implementation serves the play rig, a spectator's and a headless suite. `attach_camera` is idempotent and re-applies the field of view when called again, or a player who moves that slider sees nothing happen. Aiming scales the lens from the player's own field of view, never from the last zoom.

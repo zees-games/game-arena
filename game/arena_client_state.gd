@@ -158,7 +158,7 @@ var _fire := DotWeaponCommand.new()
 ## sent — see [method _read_fire].
 var _wanted_slot: int = 0
 
-## The phone's on-screen buttons ([code]arena_touch.gd[/code]); null off touch.
+## dot-mobile's overlay ([code]arena_touch.gd[/code]); built on every client, shown only on touch.
 var _touch: RefCounted = null
 ## The light on the eye and the other players' beams (dot-flashlight); the server owns on/off.
 var flash: DotFlashlight = null
