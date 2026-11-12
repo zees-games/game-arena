@@ -217,12 +217,16 @@ func _build_arsenal() -> void:
 ## The tick the weapons are being simulated for, read by [method _idle_posture] (the flinch counts from it).
 var _posture_tick: int = 0
 
+## [method _idle_posture]'s context, refilled each idle tick: a new one per idle player per tick cost
+## an allocation of 21 fields and a dictionary. A behaviour's tick only reads it.
+var _posture_ctx := DotWeaponContext.new()
+
 
 ## The arsenal's [member DotWeaponArsenal.idle_posture] (set in [method _build_arsenal]): the posture fields
 ## of the full context [method simulate_tick] builds, from the same simulated state, so an idle tick's
 ## spread state matches a full tick's.
 func _idle_posture() -> DotWeaponContext:
-	var ctx := DotWeaponContext.new()
+	var ctx := _posture_ctx
 	ctx.tick = _posture_tick
 	ctx.authority = arsenal.authority if arsenal != null else false
 	if controller == null:
