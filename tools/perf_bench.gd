@@ -19,6 +19,7 @@ const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 ## `--first-use 1` (dot-game's first-use rows): every weapon equipped, fired once cold and once warm, before the warm-up (offline only;
 ## `--first-use-only a,b` for some ids); `--prewarm 0` skips the client's weapon warm-up, so `--ab DIR DIR::--prewarm 0 -- --first-use 1` prices it.
 ## `--proc-split 1`: the process phase split by wall clock and a census of what processes (tools/proc_split.gd); `--present-ablate N` (ArenaPlayer.present_ablate bits: 1 no figure animation, 2 no held, 4 held not processing, 8 no pose).
+## `--script-top N`: the N GDScript functions with the most self time in the report's script_functions (dot-profiler's profiler_script_top); needs the engine started with -d, which slows scripts, so read shares, not ms.
 
 var _pilot := true
 var _motor_us := false
@@ -247,6 +248,8 @@ func _record_begin() -> void:
 	_sched0 = _sched_snapshot()
 	ArenaFrameProbe.fine = _fine
 	_apply_ablate()
+	if args.has("script-top") and profiler != null:
+		profiler.config.script_top = int(args["script-top"])
 	if int(args.get("proc-split", 0)) != 0:
 		say("proc census %s" % JSON.stringify(ProcSplit.census(get_tree().root)))
 		_proc_split = ProcSplit.new()
