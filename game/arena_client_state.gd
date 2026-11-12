@@ -213,6 +213,8 @@ var _level_map: ArenaMap = null
 var _level_busy := false
 ## The killer's screens whose spares setup still has to build, one a frame (`KillPovView.mount`).
 var _pov_spares: Array[Node] = []
+## The stock figure models read on loader threads from the start of setup (`_request_figures`).
+var _figure_loads: PackedStringArray = []
 
 ## The map's sun and environment (`ArenaMapLighting.build`), replaced with the level.
 var _lighting: Node3D = null

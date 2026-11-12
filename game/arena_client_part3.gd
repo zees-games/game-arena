@@ -23,6 +23,7 @@ func _ready() -> void:
 	timeline.name = "LoadTimeline"
 	timeline.gate = gate
 	add_child(timeline)
+	_request_figures()
 	await _setup_frame()
 
 	# Reading the map is a frame's work of its own on a big import (169 ms for cp-orange-x3 on staging02),
@@ -87,14 +88,14 @@ func _ready() -> void:
 	_build_killview()
 	ArenaLoadTimeline.mark("setup: projectiles, ragdolls, killcam, kill view")
 	if not DotPlatform.is_headless():
-		# The first draw with a game camera (about 300 ms on staging02): marked, so a slow frame here says whether it is the draw.
+		# The first draw with a game camera, then the frames to the level's first draw traced (ticks, setup steps, draws).
 		RenderingServer.frame_pre_draw.connect(func() -> void: ArenaLoadTimeline.mark("first draw begins"), CONNECT_ONE_SHOT)
 		RenderingServer.frame_post_draw.connect(func() -> void:
 			ArenaLoadTimeline.mark("first draw done")
-			get_tree().physics_frame.connect(func() -> void: ArenaLoadTimeline.mark("first draw: next physics frame"), CONNECT_ONE_SHOT)
-			get_tree().process_frame.connect(func() -> void: ArenaLoadTimeline.mark("first draw: next process frame"), CONNECT_ONE_SHOT), CONNECT_ONE_SHOT)
+			timeline.trace_frames(24), CONNECT_ONE_SHOT)
 	_connect_solo_signals()
 	await _setup_frame()
+	await _warm_figures()
 	# Each killer's screen's spare hands (about 125 ms each on staging02) in a frame of its own.
 	# Headless, `mount` deferred them as before.
 	for pov in _pov_spares:
@@ -212,6 +213,48 @@ func _setup_frame() -> void:
 	tree.multiplayer_poll = false
 	await tree.process_frame
 	tree.multiplayer_poll = polling
+
+## The first figure built paid for the stock body models and the clip set (249 ms, in the killcam's spare
+## arms on staging02). The models start loading on the loader's threads here, at the start of setup.
+func _request_figures() -> void:
+	if not _builds_in_frames():
+		return
+	for body: StringName in [DotHumanoidLook.stock(1).body, DotHumanoidAssets.CLIP_BODY]:
+		var path := DotHumanoidAssets.body_path(body)
+		if not _figure_loads.has(path) and ResourceLoader.exists(path) and ResourceLoader.load_threaded_request(path) == OK:
+			_figure_loads.append(path)
+
+## Takes the models [method _request_figures] started (waiting a frame at a time if they are still loading),
+## then builds the clip set and the stock body's retarget of it a frame each, before the kill screens' spare arms are the first figure.
+func _warm_figures() -> void:
+	if _figure_loads.is_empty():
+		return
+	var held: Array[Resource] = []
+	for path in _figure_loads:
+		while ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			await _setup_frame()
+		var started := Time.get_ticks_usec()
+		held.append(ResourceLoader.load_threaded_get(path))
+		var _scene := DotHumanoidAssets.scene(path)
+		ArenaLoadTimeline.mark("setup: figure model %s, %d ms" % [path.get_file(), (Time.get_ticks_usec() - started) / 1000])
+	_figure_loads.clear()
+	await _setup_frame()
+	var started := Time.get_ticks_usec()
+	var _clips := DotHumanoidAssets.library_for(DotHumanoidAssets.CLIP_BODY, null)
+	ArenaLoadTimeline.mark("setup: figure clips, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
+	await _setup_frame()
+	# The stock body's clips retargeted, a frame of their own too (41 ms; the first spare arms fell from 76 to 42 ms).
+	var stock := DotHumanoidLook.stock(1).body
+	var scene := DotHumanoidAssets.scene(DotHumanoidAssets.body_path(stock)) if stock != DotHumanoidAssets.CLIP_BODY else null
+	var probe := scene.instantiate() if scene != null else null
+	if probe != null:
+		started = Time.get_ticks_usec()
+		var bones := probe.find_children("*", "Skeleton3D", true, false)
+		if not bones.is_empty():
+			_clips = DotHumanoidAssets.library_for(stock, bones.front() as Skeleton3D)
+		probe.free()
+		ArenaLoadTimeline.mark("setup: figure clips for %s, %d ms" % [stock, (Time.get_ticks_usec() - started) / 1000])
+		await _setup_frame()
 
 ## The platform's setup one piece a frame in a client that draws (all of it was one ~200 ms frame on staging02).
 ## By name: a linked dot-game older than API 57 has no setup_stepped, and sets up in one go, as headless does.
