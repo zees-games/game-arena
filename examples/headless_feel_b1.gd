@@ -116,18 +116,24 @@ func _measure() -> void:
 
 ## Why the frames since [method _measure] cannot be judged at [param fps], or "". A starved
 ## machine stalls frames: more than one in twenty (and at least four) over twice the display's
-## budget is a machine not keeping up; one or two hitches stay judged.
+## budget is a machine not keeping up; one or two hitches stay judged. So is one steadily
+## under 85% of the display's rate: its frames land between ticks unlike a real display's.
 func _starvation(fps: float) -> String:
 	var budget := 1.0 / maxf(fps, 1.0)
 	var over := 0
 	var worst := 0.0
+	var total := 0.0
 	for dt in _wall:
+		total += dt
 		if dt > budget * 2.0:
 			over += 1
 			worst = maxf(worst, dt)
 	if _wall.size() >= 10 and over > maxi(3, _wall.size() / 20):
 		return "%d of %d frames took over twice their %.1f ms budget, the worst %.0f ms" % [
 			over, _wall.size(), budget * 1000.0, worst * 1000.0]
+	if fps > 1.0 and _wall.size() >= 10 and _wall.size() < total * fps * 0.85:
+		return "%d frames in %.1f s, %.0f fps of the display's %.0f" % [
+			_wall.size(), total, _wall.size() / maxf(total, 0.001), fps]
 	return ""
 
 
