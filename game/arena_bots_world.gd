@@ -540,9 +540,11 @@ class World:
 		var nav := _nav_for_map()
 		return nav.closest(at) if nav != null and nav.is_ready() else Vector3.INF
 
-	## Whether an imported map's mesh is still baking; false on a built-in map or once landed.
+	## Whether an imported map's mesh is still baking or its edges still joining (each call steps that); false on a built-in map or once done.
 	func is_route_pending() -> bool:
-		return _nav != null and _nav_map == game.get("map") and _nav.is_baking()
+		if _nav == null or _nav_map != game.get("map"):
+			return false
+		return _nav.is_baking() or ((_joining or _nav.is_ready()) and not warm())
 
 	## How fast the held weapon's shot flies, m/s; 0 for hitscan, a swing or a throw.
 	func projectile_speed(shooter: DotBotContact) -> float:

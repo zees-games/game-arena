@@ -38,6 +38,10 @@ class NavWorld:
 	var _edges: DotBotLinks = null
 	## False in a test that wants ladders to be the only way up.
 	var join_edges := true
+	## The drop, hop and stitch search under way (dot-bot 26), a slice a frame: the map change's longest bot work.
+	var _joining := false
+	var _join_frame := -1
+	const JOIN_SLICE_USEC := 6000
 	## Parallel think (cvar `bot_threads`, ArenaBotThreads): while true, brains on worker threads ask this world, whose
 	## sight and wall rays then use queries of their own on [member _par_space] and whose other answers take [member _par_lock].
 	var par: bool = false
@@ -164,10 +168,14 @@ class NavWorld:
 	## on a map with no surf cache, and on a shell without dot-bot 4 or dot-player-controller 3.
 	func surf_for_map() -> RefCounted:
 		var nav := _nav_for_map()
-		if nav == null or not nav.is_ready():
+		if nav == null:
 			return null
 		if _surf_looked:
-			return _surf
+			return _surf if nav.is_ready() else null
+		if not _joining and not nav.is_ready():
+			return null
+		if not _join_sliced(nav):
+			return null
 		_surf_looked = true
 		var t_link := Time.get_ticks_usec()
 		_link_ladders(nav)
@@ -179,6 +187,24 @@ class NavWorld:
 		_surf = surf_script.call(&"load_for", game.get("map"), nav) if surf_script != null else null
 		ArenaFrameProbe.add(&"bot_surf_load", t_surf)
 		return _surf
+
+	## True once the edge search is done; until then one slice per frame, on the main thread (its rays are physics queries).
+	## The nav is held unready meanwhile, so bots walk as before the bake landed and route once every edge is in.
+	func _join_sliced(nav: DotBotNav) -> bool:
+		if not join_edges or DotAddonApi.build_level("dot_bot") < 26:
+			_edges = null
+			return true
+		if not _joining:
+			_joining = true
+			_edges = DotBotLinks.new()
+		if par or _join_frame == Engine.get_process_frames():
+			return false
+		_join_frame = Engine.get_process_frames()
+		var t_link := Time.get_ticks_usec()
+		var done := _edges.join_step(nav, t_link + JOIN_SLICE_USEC)
+		ArenaFrameProbe.add(&"bot_nav_join", t_link)
+		_joining = not done
+		return done
 
 	## How many ladders the bots can climb on this map: climb edges in the mesh.
 	func ladder_count() -> int:
@@ -195,8 +221,9 @@ class NavWorld:
 		ladder_fn = Callable()
 		# Drops off the rims and hops over gaps join a spawn island the plain bake leaves cut off.
 		if join_edges and DotAddonApi.build_level("dot_bot") >= 12:
-			_edges = DotBotLinks.new()
-			_edges.join(nav)
+			if _edges == null:
+				_edges = DotBotLinks.new()
+				_edges.join(nav)
 			_climb_back_ledges(nav)
 		if DotAddonApi.build_level("dot_bot") >= 13:
 			extra_waypoints = nav.spread_points(ROAM_PLACES, DotRandomStream.new(7919, &"roam"))
@@ -233,10 +260,11 @@ class NavWorld:
 		var nav := _nav_for_map()
 		if nav == null:
 			return true
-		if not nav.is_ready():
+		# The nav is held unready while the edge search is sliced, so a held nav still steps it here.
+		if not nav.is_ready() and not _joining:
 			return false
 		surf_for_map()
-		return true
+		return _surf_looked
 
 	## The imported map's mesh for the ride recorder (baking it if nothing has asked yet); null on a built-in map.
 	func nav_for_rides() -> DotBotNav:
@@ -288,6 +316,8 @@ class NavWorld:
 		_surf = null
 		_surf_looked = false
 		_ladders = null
+		_edges = null
+		_joining = false
 		var body := _body_tunables()
 		var source: Node3D = (map as Object).call(&"nav_source") if (map as Object).has_method(&"nav_source") else null
 		var started := _nav.bake_in_background(source if source != null else root as Node3D, {"radius": body.radius, "height": body.stand_height, "climb": body.step_height})
