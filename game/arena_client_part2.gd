@@ -1,6 +1,8 @@
 extends "arena_client_part1.gd"
 
 const ArenaProfilerContext := preload("arena_profiler_context.gd")
+## The load gate's give-up time in a browser (DotLoadGate's default is 20 s); see setup's use.
+const WEB_GATE_TIMEOUT_SEC := 60.0
 
 func _adopt(candidate: ArenaPlayer) -> void:
 	if candidate == null or player != null:
@@ -589,6 +591,10 @@ func _build_platform() -> void:
 	platform.spawned_fn = func() -> bool: return player != null and player.camera != null
 	add_child(platform)
 	gate = platform.gate
+	# A browser's first start compiles every shader while the weapons warm (slow frames of 0.3 to 3 s): the
+	# "weapons" hold, progressing all along, ended 19.9 s after the gate closed, past the 20 s default.
+	if DotPlatform.is_web():
+		gate.timeout_sec = maxf(gate.timeout_sec, WEB_GATE_TIMEOUT_SEC)
 	link = platform.link as Node
 	gate.ready_to_show.connect(func() -> void: ready_to_show.emit())
 	gate.hold(&"map", "Loading the map")
