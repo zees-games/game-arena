@@ -109,27 +109,44 @@ static func world_prefix(id: String, map_dir: String = "") -> String:
 ## Replaces [param drawn]'s legacy meshes with the map's dot-map world (free PBR art, same frame
 ## and scale); collision, spawns and mechanics stay the manifest's. False leaves the legacy meshes.
 static func draw_world(drawn: Node3D, id: String, map_dir: String = "") -> bool:
-	var plan := _draw_plan(drawn, id, map_dir)
+	var prefix := _draw_prefix(id, map_dir)
+	var plan := {} if prefix.is_empty() else _draw_plan(drawn, id, DotMapBspMesh.load_prefix(prefix))
 	if plan.is_empty():
 		return false
 	(plan.script as GDScript).call("attach", drawn, plan.mesh, plan.options)
 	return true
 
 
-## [method draw_world] in slices: awaits [param slice] between batches so the cover never freezes on one frame.
+## [method draw_world] in slices: the pack is read on a worker ([method DotMapBspMesh.load_prefix_async]) and the build
+## awaits [param slice] between batches, so the cover never freezes on one frame.
 static func draw_world_async(drawn: Node3D, id: String, map_dir: String, slice: DotFrameSlice) -> bool:
-	var plan := _draw_plan(drawn, id, map_dir)
+	var prefix := _draw_prefix(id, map_dir)
+	if prefix.is_empty():
+		return false
+	# The drawn-world script and the addon scripts behind it compile on a loader thread
+	# while the pack is read: a plain load() of them was a 40 to 110 ms frame.
+	var threaded := ResourceLoader.load_threaded_request(DRAWN_WORLD) == OK
+	var got: DotResult = await DotMapBspMesh.load_prefix_async(prefix)
+	var tree := Engine.get_main_loop() as SceneTree
+	while threaded and tree != null and ResourceLoader.load_threaded_get_status(DRAWN_WORLD) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		await tree.process_frame
+	if threaded:
+		ResourceLoader.load_threaded_get(DRAWN_WORLD)
+	if not is_instance_valid(drawn):
+		return false
+	var plan := _draw_plan(drawn, id, got)
 	if plan.is_empty():
 		return false
 	await (plan.script as GDScript).call("attach_async", drawn, plan.mesh, plan.options, slice)
 	return true
 
 
-static func _draw_plan(drawn: Node3D, id: String, map_dir: String) -> Dictionary:
-	var prefix := world_prefix(id, map_dir)
-	if prefix.is_empty() or not ResourceLoader.exists(DRAWN_WORLD):
-		return {}
-	var got: DotResult = DotMapBspMesh.load_prefix(prefix)
+## [method world_prefix], or "" when the drawn-world script is not linked either.
+static func _draw_prefix(id: String, map_dir: String) -> String:
+	return world_prefix(id, map_dir) if ResourceLoader.exists(DRAWN_WORLD) else ""
+
+
+static func _draw_plan(drawn: Node3D, id: String, got: DotResult) -> Dictionary:
 	if not got.ok:
 		DotLog.warn("arena.maps", "a map's world would not read; its legacy meshes are drawn", {"map": id, "why": got.error.message})
 		return {}

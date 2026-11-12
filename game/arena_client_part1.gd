@@ -2,6 +2,9 @@ extends "arena_client_prewarm.gd"
 
 const ArenaContentGroups := preload("arena_content_groups.gd")
 
+## Milliseconds of level building between frames while the map loads ([method _enter_level]).
+const LEVEL_SLICE_MS := 10
+
 ## Whether E is the prop tool's key here: only in a mode where players use props. Anywhere
 ## else E is the launch, which is what most of the arena's modes want it for.
 func props_on_e() -> bool:
@@ -86,7 +89,9 @@ func _classify_level() -> void:
 ## Builds the movers and the drawn level in slices behind the cover, then optionally lifts the map hold.
 func _enter_level(release: bool) -> void:
 	_level_busy = true
-	var slice := DotFrameSlice.new()
+	# 10 ms between yields, not the 40 ms default: the cover is up, but bots and the
+	# network keep ticking behind it, and a 40 ms build frame is a hitch they feel.
+	var slice := DotFrameSlice.new(LEVEL_SLICE_MS)
 	await game.build_map_io_async(slice)
 	ArenaLoadTimeline.mark("map_io_built")
 	var drawn := game.map
