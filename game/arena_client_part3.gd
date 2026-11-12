@@ -224,8 +224,8 @@ func _request_figures() -> void:
 		if not _figure_loads.has(path) and ResourceLoader.exists(path) and ResourceLoader.load_threaded_request(path) == OK:
 			_figure_loads.append(path)
 
-## Takes the models [method _request_figures] started (waiting a frame at a time if they are still loading),
-## then builds the clip set and the stock body's retarget of it a frame each, before the kill screens' spare arms are the first figure.
+## Takes the models [method _request_figures] started (waiting a frame at a time if they are still loading), then
+## waits for the clip set and the stock body's retarget, built off the frame, before the kill screens' spare arms are the first figure.
 func _warm_figures() -> void:
 	if _figure_loads.is_empty():
 		return
@@ -238,23 +238,15 @@ func _warm_figures() -> void:
 		var _scene := DotHumanoidAssets.scene(path)
 		ArenaLoadTimeline.mark("setup: figure model %s, %d ms" % [path.get_file(), (Time.get_ticks_usec() - started) / 1000])
 	_figure_loads.clear()
-	await _setup_frame()
 	var started := Time.get_ticks_usec()
-	var _clips := DotHumanoidAssets.library_for(DotHumanoidAssets.CLIP_BODY, null)
-	ArenaLoadTimeline.mark("setup: figure clips, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
-	await _setup_frame()
-	# The stock body's clips retargeted, a frame of their own too (41 ms; the first spare arms fell from 76 to 42 ms).
-	var stock := DotHumanoidLook.stock(1).body
-	var scene := DotHumanoidAssets.scene(DotHumanoidAssets.body_path(stock)) if stock != DotHumanoidAssets.CLIP_BODY else null
-	var probe := scene.instantiate() if scene != null else null
-	if probe != null:
-		started = Time.get_ticks_usec()
-		var bones := probe.find_children("*", "Skeleton3D", true, false)
-		if not bones.is_empty():
-			_clips = DotHumanoidAssets.library_for(stock, bones.front() as Skeleton3D)
-		probe.free()
-		ArenaLoadTimeline.mark("setup: figure clips for %s, %d ms" % [stock, (Time.get_ticks_usec() - started) / 1000])
+	var frames := 0
+	DotHumanoidAssets.prepare_libraries([DotHumanoidLook.stock(1).body])
+	# The models are instanced for their skeletons in that call, on this thread; the rest runs on a worker.
+	ArenaLoadTimeline.mark("setup: figure clips started, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
+	while not DotHumanoidAssets.poll_libraries():
+		frames += 1
 		await _setup_frame()
+	ArenaLoadTimeline.mark("setup: figure clips, %d ms over %d frames" % [(Time.get_ticks_usec() - started) / 1000, frames])
 
 ## The platform's setup one piece a frame in a client that draws (all of it was one ~200 ms frame on staging02).
 ## By name: a linked dot-game older than API 57 has no setup_stepped, and sets up in one go, as headless does.
