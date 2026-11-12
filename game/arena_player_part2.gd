@@ -429,9 +429,9 @@ func simulate_tick(
 	return tick_post(tick, delta, combat_command)
 
 
-## Body tiers (dot-bot 22, off by default): ticks between this bot's motor ticks, written by [code]ArenaBots[/code]
+## Body tiers (dot-bot 23, on above bot_tier_body_above players): ticks between this bot's motor ticks, written by [code]ArenaBots[/code]
 ## from [method DotBotThinkTier.body_period] for a bot no person sees, nears or fights; 1 = every tick (people, and
-## every bot unless [code]bot_tier_body_every_near/far[/code] are raised).
+## every bot while [code]bot_tier_body_every_near/far[/code] are 1 or the match has no more than [code]bot_tier_body_above[/code] players).
 var body_every: int = 1
 ## The tick of this player's last motor tick, for [method body_delta].
 var body_last_tick: int = -1

@@ -190,12 +190,14 @@ func _run_part2(was, off, on, rows, kept: StringName, kept_streams: Array) -> vo
 	else:
 		# The bots think once with the tiers on; each tick's motor period is recorded with its commands and replayed.
 		ArenaBots.tiers.above = 0
+		ArenaBots.tiers.body_above = 0
 		ArenaBots.tiers.body_near_every = 2
 		ArenaBots.tiers.body_far_every = 3
 		var stepped: Array = []
 		var _thought: Array = await _play(false, kept, SMALL_BOTS, SMALL_SECONDS, stepped, true)
 		ArenaBots.tiers.body_near_every = 1
 		ArenaBots.tiers.body_far_every = 1
+		ArenaBots.tiers.body_above = 24
 		ArenaBots.tiers.above = -1
 		var sat := ArenaPlayer.body_skipped
 		off = await _play(false, kept, SMALL_BOTS, SMALL_SECONDS, stepped, false)
