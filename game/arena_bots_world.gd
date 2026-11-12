@@ -101,6 +101,10 @@ const AUTO_STAGGER_ABOVE := 16
 ## The stagger in force this tick (1 = none): `think_every`, or what auto picks for the player count.
 static var _every: int = 1
 static var think_near: float = 30.0
+## Sight LOD (cvars `bot_sight_far`, `bot_sight_far_reuse`; dot-bot's DotBotWorld.sight_far): a body farther than this that a
+## bot did not see stays unseen for `sight_far_reuse` s before the next ray; never its target, never a "seen". 0 is off; 20 m (A/B 2026-11-12, staging02 31 bots: bot_los -45%, bot_brain -26%).
+static var sight_far: float = 20.0
+static var sight_far_reuse: float = 0.15
 
 
 ## Think-rate tiers (cvars `bot_tier_*`): above [member DotBotThinkTier.above] players a bot that fights a person,

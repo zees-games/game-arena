@@ -258,6 +258,16 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaBots.think_near = maxf(0.0, new_value.to_float()))
+	add_cvar("bot_sight_far", str(ArenaBots.sight_far),
+		"Metres: a body farther than this that a bot did not see is not traced again for bot_sight_far_reuse seconds (never its target; 0: off)",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.sight_far = maxf(0.0, new_value.to_float()))
+	add_cvar("bot_sight_far_reuse", str(ArenaBots.sight_far_reuse),
+		"Seconds a far, unseen body stays unseen before a bot traces it again (see bot_sight_far)",
+		DotConVar.FLAG_ARCHIVE).with_min(0.0).with_max(1.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBots.sight_far_reuse = clampf(new_value.to_float(), 0.0, 1.0))
 	_add_bot_tier_cvar("bot_tier_above", "tiers.above", "Players above which bot think-rate tiers apply (-1: never); see bot_tier_*", -1.0)
 	_add_bot_tier_cvar("bot_tier_every_near", "tiers.near_every", "Ticks between thinks of a bot no person fights, sees or is near, within bot_tier_range of one", 1.0)
 	_add_bot_tier_cvar("bot_tier_every_far", "tiers.far_every", "Ticks between thinks of such a bot beyond bot_tier_range of every person", 1.0)

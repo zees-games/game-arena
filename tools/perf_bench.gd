@@ -14,6 +14,7 @@ const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 ## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
 ## `--brain-native 0|1`: dot-bot's native mind (DotSimBotMind: aim, fight step, perception) off or on; without the dot-sim library it is script either way (the sidecar's `brain_native` says which ran).
 ## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
+## `--sight-far M`, `--sight-far-reuse S`: bot sight LOD (bot_sight_far, bot_sight_far_reuse; default 20 m and 0.15 s, 0 turns it off).
 ## `--tier-body-near N`, `--tier-body-far N`: ticks between motor ticks of a coasting bot nobody sees (bot_tier_body_every_near/far; 1, the default, every tick).
 ## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
 ## `--first-use 1` (dot-game's first-use rows): every weapon equipped, fired once cold and once warm, before the warm-up (offline only;
@@ -69,6 +70,10 @@ func _ready() -> void:
 		get_window().size = Vector2i(int(wh[0]), int(wh[1]))
 	if args.has("killcam-hz"):
 		preload("../game/arena_killcam_bodies.gd").record_hz = float(args["killcam-hz"])
+	if args.has("sight-far"):
+		preload("../game/arena_bots.gd").sight_far = float(args["sight-far"])
+	if args.has("sight-far-reuse"):
+		preload("../game/arena_bots.gd").sight_far_reuse = float(args["sight-far-reuse"])
 	if args.has("tier-idle-seen"):
 		preload("../game/arena_bots.gd").tiers.idle_view_every = int(args["tier-idle-seen"])
 	if args.has("tier-body-near"):
