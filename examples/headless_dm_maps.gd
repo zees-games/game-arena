@@ -29,7 +29,7 @@ func _run() -> void:
 
 	if resolved.is_empty() or not FileAccess.file_exists(json_path):
 		print("no maps/imported_dm link — nothing more to check (link arena-dm-maps)")
-		_report_sections(2, 2, 2, 38)
+		_report_sections(2, 2, 2, 39)
 		return
 
 	var listed: Array = JSON.parse_string(FileAccess.get_file_as_string(json_path)).get("maps", [])
@@ -101,6 +101,8 @@ func _test_solo() -> void:
 		solo_detail[str(each["id"])] = str(each["detail"])
 	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/crackhouse@1.0.5") and solo.get_map(&"crackhouse") != null,
 		"crackhouse is a suggested pack")
+	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/cp-orange-x3@1.0.6") and solo.get_map(&"cp-orange-x3") != null,
+		"cp-orange-x3 is a suggested pack")
 	_check(solo_detail.get("map:crackhouse", "") == "Deathmatch map", "crackhouse reads 'Deathmatch map'")
 	_check(solo_detail.get("map:gg-garage", "") == "Gun game map", "gg-garage reads 'Gun game map'")
 	var pick := await ArenaMaps.mount_delivered(solo.get_map(&"crackhouse"), DotMapLoader.new(), solo)
