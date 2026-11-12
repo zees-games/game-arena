@@ -96,7 +96,7 @@ func change_to_map(map: DotMapDef) -> DotResult:
 		return DotResult.success(world)
 
 	# The swap respawns everybody, and the map sync's last peer report lands in the idle frame:
-	# on a server the swap itself waits for the next tick (arena_tick_gate.gd).
+	# on a server the swap itself waits for the next tick (dot_tick_gate.gd).
 	await game.tick_gate.reached()
 
 	if changing_now:

@@ -668,7 +668,7 @@ func _check_space_query_audit() -> void:
 
 
 ## The server's ways in from the idle frame that respawn somebody or swap the map, each through `game.tick_gate`
-## (arena_tick_gate.gd; docs/sim-thread.md "Physics space queries"). A file that stops using it fails here.
+## (dot_tick_gate.gd; docs/sim-thread.md "Physics space queries"). A file that stops using it fails here.
 const TICK_GATED_FILES := {
 	"game/arena_module.gd": "arena_restart",
 	"game/arena_module_b2.gd": "arena_mode",
@@ -689,7 +689,7 @@ func _check_tick_gate() -> void:
 
 	_check(ungated.is_empty(), "the server's off-tick respawns and map swaps go through the tick gate", str(ungated))
 
-	var gate := ArenaGame.ArenaTickGate.new()
+	var gate := DotTickGate.new()
 	var ran: Array[int] = []
 	gate.run(func() -> void: ran.append(1))
 	_check(ran == [1] and gate.pending() == 0, "an unarmed tick gate (solo, a client) runs at once", str(ran))

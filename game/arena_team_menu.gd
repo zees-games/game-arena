@@ -159,7 +159,7 @@ func set_spectating(id: int, on: bool) -> DotResult:
 	return _bring_back(id)
 
 
-## The respawn's spawn sight queries the physics space, so on a server it waits for the next tick (arena_tick_gate.gd).
+## The respawn's spawn sight queries the physics space, so on a server it waits for the next tick (dot_tick_gate.gd).
 func _bring_back(id: int) -> DotResult:
 	if game.player_for(id) == null:
 		return DotResult.fail(DotError.CODE_INVALID, "Player %d is not in the match." % id)

@@ -77,7 +77,7 @@ static func handlers(game: ArenaGame) -> Dictionary:
 			return slap(game, id, float(args.get("damage", 0.0))),
 
 		DotModTools.ACTION_RESPAWN: func(id: StringName, _args: Dictionary) -> DotResult:
-			# The spawn sight queries the physics space: on a server, at the top of the next tick (arena_tick_gate.gd).
+			# The spawn sight queries the physics space: on a server, at the top of the next tick (dot_tick_gate.gd).
 			if _player(game, id) == null:
 				return _absent(id)
 			game.tick_gate.run(game.respawn_player.bind(int(String(id))))

@@ -659,7 +659,7 @@ func _test_commands() -> void:
 	var restart := _server.console.execute("arena_restart")
 	_check(restart.ok, "arena_restart runs", str(restart.error))
 	# A console line arrives in the idle frame, and a restart respawns everybody (a physics space
-	# query on a threaded server): it is held for the next server tick (arena_tick_gate.gd).
+	# query on a threaded server): it is held for the next server tick (dot_tick_gate.gd).
 	_check(
 		_game.tick_gate.armed and _game.tick_gate.pending() == 1,
 		"held for the next server tick",

@@ -78,7 +78,7 @@ func _module_load() -> DotResult:
 		)
 
 	# This module's _physics_process is the server tick and opens the gate first: from here a
-	# respawn, restart or map change heard between ticks waits for it (arena_tick_gate.gd).
+	# respawn, restart or map change heard between ticks waits for it (dot_tick_gate.gd).
 	game.tick_gate.armed = true
 
 	hook_post("client_spawn", _on_client_spawn)
@@ -293,6 +293,6 @@ func _module_load() -> DotResult:
 
 
 func _cmd_restart(ctx: DotCmdContext) -> void:
-	# Everybody respawns, so on a server it happens at the top of the next tick (arena_tick_gate.gd).
+	# Everybody respawns, so on a server it happens at the top of the next tick (dot_tick_gate.gd).
 	game.tick_gate.run(func() -> void: game.start(game.current_tick()))
 	ctx.reply("Match restarted.")

@@ -250,7 +250,7 @@ func server_tick(tick: int) -> void:
 	_tick = tick
 	_game_ticked_for = -1
 	# What a console line, a chat command or an admin heard since the last tick (a restart, a mode
-	# change, a respawn, a map change's swap), then the clients' queued asks (arena_tick_gate.gd).
+	# change, a respawn, a map change's swap), then the clients' queued asks (dot_tick_gate.gd).
 	if game != null:
 		game.tick_gate.open()
 	_answer_tick_asks()

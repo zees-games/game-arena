@@ -605,7 +605,7 @@ func _change_mode(old_value: String, new_value: String) -> void:
 		if preferred != null:
 			map = preferred
 
-	# The change respawns everybody, so on a server it waits for the next tick (arena_tick_gate.gd).
+	# The change respawns everybody, so on a server it waits for the next tick (dot_tick_gate.gd).
 	var target := map
 	game.tick_gate.run(func() -> void:
 		var changed := game.change_map(target, wanted)

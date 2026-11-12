@@ -42,7 +42,7 @@ A server owner may turn on `physics/3d/run_on_separate_thread` (or run Jolt) in 
 
 Every file under `game/` and `maps/` that queries a space is in `headless_match`'s audit table (`SPACE_QUERY_FILES`, part 10), marked `tick` or `client`; a new one fails the suite until it is placed. In the tick: the bots (`arena_bots_world.gd`; `arena_bots_world_nav.gd` on worker tasks joined inside the tick), `arena_map_io.gd` (use presses), `arena_props.gd`, `arena_surf.gd`. Client only, never on a dedicated server: `arena_client.gd`, `arena_kill_pov_view.gd`, `arena_player_part1.gd`, `arena_presentation_b1.gd`, `arena_touch.gd`, `maps/arena_bsp_map.gd` (`on_sky`).
 
-Console lines, chat commands, admin actions and the map sync's peer reports also arrive in the idle frame, and those that respawn somebody go through the tick gate (`game/arena_tick_gate.gd`, `ArenaGame.tick_gate`): armed only by `ArenaModule` at load, opened first thing in `ArenaNetBridge.server_tick` (the server tick, from the module's `_physics_process`), disarmed at unload. Unarmed (solo, a client, a suite on a bare game) and inside a physics frame it runs at once.
+Console lines, chat commands, admin actions and the map sync's peer reports also arrive in the idle frame, and those that respawn somebody go through the tick gate (dot-physics DotTickGate, `ArenaGame.tick_gate`): armed only by `ArenaModule` at load, opened first thing in `ArenaNetBridge.server_tick` (the server tick, from the module's `_physics_process`), disarmed at unload. Unarmed (solo, a client, a suite on a bare game) and inside a physics frame it runs at once.
 
 | Way in | What it reaches | Where it runs |
 | --- | --- | --- |
