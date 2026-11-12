@@ -175,7 +175,7 @@ func _prewarm_one_step(body: Variant, step: int) -> bool:
 	var host: Node = player.weapons.call(&"shot_fx") if weapon_draws_shots() else self
 	if step == 0:
 		what = "flash scenes"
-		if DotMuzzleFlash.available() and not DotMuzzleFlash.pin_scenes(8):
+		if DotMuzzleFlash.available() and not (_take_flash_scenes() and DotMuzzleFlash.pin_scenes(8) and _warm_flash_materials(body)):
 			_step_mark(what, began)
 			return false
 	elif step == 1:
@@ -213,6 +213,63 @@ func _prewarm_one_step(body: Variant, step: int) -> bool:
 			presentation.fx.warm([ArenaPresentation.EXPLOSION, &"impact_spark"], at)
 	_step_mark(what, began)
 	return true
+
+## Every muzzle flash scene's path, as [method DotMuzzleFlash.pin_scenes] loads them.
+static func _flash_scene_paths() -> Array[String]:
+	var out: Array[String] = []
+	for s: int in DotMuzzleFlash.FOLDERS:
+		for v in range(1, DotMuzzleFlash.VARIANTS + 1):
+			out.append("%s%s%02d.tscn" % [DotMuzzleFlash.ROOT, DotMuzzleFlash.FOLDERS[s], v])
+	return out
+
+## Starts reading the flash scenes on the loader's threads while phase 0 runs: read inline,
+## one scene was a 205 ms frame on staging02.
+func _request_flash_scenes() -> void:
+	if not DotMuzzleFlash.available():
+		return
+	var asked: Array[String] = []
+	for path in _flash_scene_paths():
+		if ResourceLoader.exists(path) and ResourceLoader.load_threaded_request(path) == OK:
+			asked.append(path)
+	_warm.flash_asked = asked
+
+## Takes the flash scenes the loader has read, false while one is still reading. Held in
+## [member _warm] until the flash's own pin loads them again from the cache.
+func _take_flash_scenes() -> bool:
+	var asked: Array = _warm.get("flash_asked", [])
+	for path: Variant in asked:
+		if ResourceLoader.load_threaded_get_status(str(path)) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			return false
+	var landed: Array = _warm.get("flash_landed", [])
+	for path: Variant in asked:
+		landed.append(ResourceLoader.load_threaded_get(str(path)))
+	_warm.flash_landed = landed
+	_warm.flash_asked = []
+	return true
+
+## Draws every flash scene's materials on tiny quads, rounds sized to the gate's warm budget, and
+## true once done: drawn first as four whole flashes, their compiles were 200-540 ms frames.
+func _warm_flash_materials(body: Variant) -> bool:
+	if _warm.has("flash_warm"):
+		return not is_instance_valid(_warm.flash_warm)
+	var items: Array = []
+	for path in _flash_scene_paths():
+		var scene := load(path) as PackedScene  # pinned: a cache hit
+		if scene != null:
+			var node := scene.instantiate()
+			var _found := DotRenderWarmup.collect(node, items)
+			node.free()
+	_warm.flash_landed = []
+	var warm := DotRenderWarmup.new()
+	warm.name = "FlashWarmup"
+	warm.budget_msec = float(gate.get(&"warm_budget_msec")) if &"warm_budget_msec" in gate else 100.0
+	warm.process_mode = Node.PROCESS_MODE_ALWAYS
+	warm.add_items(items)
+	_warm.flash_warm = warm
+	body.camera.add_child(warm)
+	warm.start()
+	ArenaLoadTimeline.mark("prewarm: drawing %d flash materials and meshes" % warm.item_count())
+	return false
 
 ## Stamps warm-up item [param what] when its own work since [param began_usec] passed [constant STEP_MARK_MSEC].
 func _step_mark(what: String, began_usec: int) -> void:
@@ -285,6 +342,11 @@ func _prewarm_end() -> void:
 		(_warm.spare as Node).queue_free()
 	if is_instance_valid(_warm.get("rig")):
 		(_warm.rig as Node).queue_free()
+	if is_instance_valid(_warm.get("flash_warm")):
+		(_warm.flash_warm as Node).queue_free()
+	# An end before phase 1 (the body went) takes what the loader still holds, or those scenes outlive the run.
+	for path: Variant in _warm.get("flash_asked", []):
+		var _dropped := ResourceLoader.load_threaded_get(str(path))
 	_warm = {}
 	# Draw the (hidden) loadout screen on the solo offer, so the first B finds the cards made; a dot-menu without it just draws on B.
 	if loadout_menu != null and loadout_menu.has_method(&"prepare"):
@@ -320,6 +382,7 @@ func _prewarm_weapons(body: ArenaPlayer) -> void:
 		weapon_previews().warmed.connect(func() -> void: ArenaLoadTimeline.mark("prewarm: %d weapon pictures, own work %d ms" % [weapon_previews().cached_count(), int(weapon_previews().warm_msec())]), CONNECT_ONE_SHOT)
 		weapon_previews().warm()
 	_warm = {"body": body, "spare": spare, "arts": AwWeaponArtTable.table().values(), "next": 0, "phase": 0, "frames": 0, "rig": null}
+	_request_flash_scenes()
 	# A tick on process_frame, not an await: a coroutine resumed after this client was freed is an
 	# engine error, while a connection to a method dies with the object.
 	get_tree().process_frame.connect(_prewarm_tick)
