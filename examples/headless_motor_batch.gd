@@ -308,8 +308,11 @@ func _play(batched: bool, map_id: StringName, bots: int, seconds: float, streams
 			var _fed := hashing.update(window)
 			digests.append(hashing.finish().hex_encode())
 			window.clear()
+		# Exactly one physics step every 8 ticks, never "a frame": a frame runs as many steps as the wall clock owes, so a loaded box
+		# moved the weapon drops' rigid bodies a different number of steps, the space's broadphase with them, and the motor's
+		# space queries settled a contact a tenth of a millimetre apart (dm-morpheus, 1 run in 20 on PH). Same in every run here.
 		if tick_index % 8 == 0:
-			await get_tree().process_frame
+			await get_tree().physics_frame
 	var out := [digests, kills[0], ArenaHullGrid.batch_rows, ArenaHullGrid.batch_faults, counts[0], meddler.done if meddler != null else counts[1]]
 	game.demo_stats = null
 	game.remote_feet_fn = Callable()
