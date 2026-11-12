@@ -235,7 +235,7 @@ func setup(p_map: ArenaMap = null) -> DotResult:
 
 ## The parts of [method setup] after the mode and the map, in order, one [method setup_step] each. Split
 ## because together they were one 222 ms frame on a drawing client (staging02, cp-orange-x3).
-const SETUP_STEPS: Array[StringName] = [&"collision", &"combat", &"match", &"loadouts", &"progress", &"layers", &"stack", &"toys"]
+const SETUP_STEPS: Array[StringName] = [&"collision", &"combat", &"match", &"loadouts", &"loadout_command", &"progress", &"layers", &"stack", &"toys"]
 
 ## The next [constant SETUP_STEPS] index; [code]SETUP_STEPS.size()[/code] once set up.
 var _setup_step := 0
@@ -301,7 +301,9 @@ func setup_step() -> DotResult:
 		&"match":
 			result = _build_match()
 		&"loadouts":
-			result = _build_loadouts()
+			result = _build_loadouts(false)
+		&"loadout_command":
+			_build_loadout_command()
 		&"progress":
 			result = _build_progress()
 		&"layers":

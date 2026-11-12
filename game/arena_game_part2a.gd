@@ -153,7 +153,8 @@ static func plain_data(value: Variant) -> Variant:
 		return out
 	return value
 
-func _build_loadouts() -> DotResult:
+## The loadout manager; and its B-menu command too unless [param with_command] is false (setup builds that a step later: its script load was a third of this step).
+func _build_loadouts(with_command := true) -> DotResult:
 	loadouts = DotLoadoutManager.new()
 	loadouts.name = "Loadouts"
 	loadouts.schema = ArenaContent.loadout_schema()
@@ -178,7 +179,8 @@ func _build_loadouts() -> DotResult:
 	DotGameStoreEntitlements.attach(loadouts)
 
 	add_child(loadouts)
-	_build_loadout_command()
+	if with_command:
+		_build_loadout_command()
 	return DotResult.success(null)
 
 ## Statistics, achievements and boards, if this instance keeps any.
