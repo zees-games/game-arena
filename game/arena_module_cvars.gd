@@ -267,6 +267,8 @@ func _add_bot_think_cvars() -> void:
 	_add_bot_tier_cvar("bot_tier_every_idle_seen", "tiers.idle_view_every", "Ticks between thinks of a bot with no target (or dead) inside a person's view cone but not close or nearest (1: every tick)", 1.0)
 	_add_bot_tier_cvar("bot_tier_engaged_range", "tiers.engaged_range", "Metres: a bot fighting a person this close thinks every tick", 0.0)
 	_add_bot_tier_cvar("bot_tier_view", "tiers.view_range", "Metres: a bot inside a person's view cone within this thinks every tick", 0.0)
+	_add_bot_tier_cvar("bot_tier_body_every_near", "tiers.body_near_every", "Ticks between motor ticks of a coasting bot no person fights, sees or is near, within bot_tier_range (1: every tick); it moves in steps nobody sees", 1.0)
+	_add_bot_tier_cvar("bot_tier_body_every_far", "tiers.body_far_every", "Ticks between motor ticks of such a bot beyond bot_tier_range of every person (1: every tick)", 1.0)
 	add_cvar("bot_tier_floor", str(ArenaBots.think_floor),
 		"Fewest ticks between thinks of a bot while the tiers apply, whatever its tier (1: every tick); it coasts between",
 		DotConVar.FLAG_ARCHIVE).with_min(1.0).changed.connect(

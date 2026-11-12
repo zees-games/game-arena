@@ -45,6 +45,8 @@ func _ready() -> void:
 			"--tier-far": preload("../game/arena_bots.gd").tiers.far_every = int(args[i + 1])
 			"--tier-engaged": preload("../game/arena_bots.gd").tiers.engaged_far_every = int(args[i + 1])
 			"--tier-idle-seen": preload("../game/arena_bots.gd").tiers.idle_view_every = int(args[i + 1])
+			"--tier-body-near": preload("../game/arena_bots.gd").tiers.body_near_every = int(args[i + 1])
+			"--tier-body-far": preload("../game/arena_bots.gd").tiers.body_far_every = int(args[i + 1])
 			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
 			"--native": DotBotWorld.native_enabled = int(args[i + 1]) != 0
 			"--brain-native":
@@ -93,6 +95,8 @@ func _run() -> void:
 				DotFpsPhysicsBody.native_ticks = 0
 			ArenaFrameProbe._reset()
 			preload("../game/arena_bots.gd").tiers.counts.clear()
+			preload("../game/arena_bots.gd").tiers.body_counts.clear()
+			ArenaPlayer.body_skipped = 0
 			_tally_on(_client.game)
 			_last = now
 			t0 = now
@@ -131,6 +135,7 @@ func _report() -> void:
 		print("  section %-14s %.3f ms/frame | %.3f ms/call x%d | max %.2f ms" % [key, float(row[0]) / _n / 1000.0, float(row[0]) / maxi(row[1], 1) / 1000.0, row[1], row[2] / 1000.0])
 	print("  combat shots %d hits %d headshots %d kills %d hit_rate %.3f" % [_shots, _hits, _heads, _kills, float(_hits) / maxi(1, _shots)])
 	print("  bot tiers: %s" % JSON.stringify(preload("../game/arena_bots.gd").tiers.describe()))
+	print("  bodies sat out: %.1f per frame" % (float(ArenaPlayer.body_skipped) / maxf(float(_n), 1.0)))
 	print("  controller queries per physics step: %.1f" % (float(_queries(self) - _q0) / maxf(float(Engine.get_physics_frames() - _steps0), 1.0)))
 	var pr := DotFpsPhysicsBody.prof
 	print("  engine queries/frame: cast %.1f (%.2f ms) rest %.1f (%.2f ms) overlap %.1f (%.2f ms) ray %.1f (%.2f ms)" % [pr[0] / float(_n), pr[1] / 1000.0 / _n, pr[2] / float(_n), pr[3] / 1000.0 / _n, pr[4] / float(_n), pr[5] / 1000.0 / _n, pr[6] / float(_n), pr[7] / 1000.0 / _n])

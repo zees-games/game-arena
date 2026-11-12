@@ -4,6 +4,7 @@ const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaHullGrid := preload("../game/arena_hull_grid.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
+const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaModTools := preload("../game/arena_mod_tools.gd")
 
 ## `arena_motor_batch`: the players' motors ticked in runs of one dot-sim call play exactly the
@@ -22,8 +23,8 @@ const MEDDLE_EVERY := 5
 const MEDDLES: Array[StringName] = [&"slay", &"slap", &"push"]
 const PUSH := Vector3(3.0, 6.0, -2.0)
 
-const SECTIONS := 5
-const CHECKS := 21
+const SECTIONS := 6
+const CHECKS := 24
 
 
 ## Kills, slaps and pushes players: between two ticks as the admin tools do, or in the place of the demo's statistics,
@@ -181,6 +182,31 @@ func _run_part2(was, off, on, rows, kept: StringName, kept_streams: Array) -> vo
 		print("%s, later: %d changed, %d faults, %s" % [kept, on[5], on[3], _first_diff(off[0], on[0])])
 		_check(on[5] > 3 and on[3] >= on[5], "before its turn: the batched loop counts each (%d changed, %d faults)" % [on[5], on[3]])
 	_done()
+
+	_section("body tiers: far coasting bots tick their motor every few ticks, the time made up")
+	if kept == &"":
+		for i in 3:
+			_check(true, "(skipped: no imported map is linked)")
+	else:
+		# The bots think once with the tiers on; each tick's motor period is recorded with its commands and replayed.
+		ArenaBots.tiers.above = 0
+		ArenaBots.tiers.body_near_every = 2
+		ArenaBots.tiers.body_far_every = 3
+		var stepped: Array = []
+		var _thought: Array = await _play(false, kept, SMALL_BOTS, SMALL_SECONDS, stepped, true)
+		ArenaBots.tiers.body_near_every = 1
+		ArenaBots.tiers.body_far_every = 1
+		ArenaBots.tiers.above = -1
+		var sat := ArenaPlayer.body_skipped
+		off = await _play(false, kept, SMALL_BOTS, SMALL_SECONDS, stepped, false)
+		var sat_off := ArenaPlayer.body_skipped - sat
+		on = await _play(true, kept, SMALL_BOTS, SMALL_SECONDS, stepped, false)
+		var sat_on := ArenaPlayer.body_skipped - sat - sat_off
+		print("%s, body tiers: %d and %d bodies sat out, %d kills, %d rows, %d faults" % [kept, sat_off, sat_on, off[1], on[2], on[3]])
+		_check(sat_off > SMALL_BOTS and sat_on == sat_off, "bodies sat out ticks (%d, batched %d)" % [sat_off, sat_on])
+		_check(on[0] == off[0] and off[0].size() > 5, "both loops play the same stepped match (%s)" % _first_diff(off[0], on[0]))
+		_check(on[2] > 0 and on[3] == 0, "through the batch with no fault (%d rows)" % on[2])
+	_done()
 	ArenaHullGrid.batch = was
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
@@ -276,7 +302,7 @@ func _play(batched: bool, map_id: StringName, bots: int, seconds: float, streams
 				var move: DotFpsCommand = pair[0]
 				var fire: DotWeaponCommand = pair[1]
 				commands[players[i].player_id] = pair
-				recorded[players[i].player_id] = [move.duplicate_command(), fire.duplicate_command()]
+				recorded[players[i].player_id] = [move.duplicate_command(), fire.duplicate_command(), players[i].body_every]
 			streams.append(recorded)
 		else:
 			var recorded: Dictionary = streams[tick_index]
@@ -284,6 +310,10 @@ func _play(batched: bool, map_id: StringName, bots: int, seconds: float, streams
 				var move: DotFpsCommand = recorded[id][0]
 				var fire: DotWeaponCommand = recorded[id][1]
 				commands[id] = [move.duplicate_command(), fire.duplicate_command()]
+				# The motor period the bot's think chose (body tiers); 1 when it was not recorded.
+				var body: Object = game.player_for(id)
+				if body != null:
+					body.body_every = recorded[id][2] if recorded[id].size() > 2 else 1
 				if lagging and _lag_of(id) > 0.0:
 					commands[id].append(_lag_of(id))
 		var now := game.current_tick()

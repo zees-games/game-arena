@@ -163,7 +163,10 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 		var idle := intent.target_id < 0
 		mind.every = DotBotThinkTier.until_beat(tick, mind.seed, maxi(tiers.period(bot.player_id, me.position, engaged, idle), think_floor_engaged if engaged else think_floor))
 		mind.coasting = mind.every > 1 and _tier_coastable(mind, intent)
+		# Body tiers (off unless bot_tier_body_every_near/far): a coasting bot nobody sees, nears or fights moves every few ticks.
+		bot.body_every = tiers.body_period(bot.player_id, me.position, engaged, idle) if mind.coasting else 1
 	else:
+		bot.body_every = 1
 		mind.far = _every > 1 and _nobody_near(me, world)
 		mind.every = _every if mind.far else 1
 		# Only a think on the bot's own beat starts a coast, so the coast's steps count from it.

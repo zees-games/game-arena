@@ -255,8 +255,9 @@ func _tick_players_batched(commands: Dictionary, delta: float, hull_world: Objec
 		player.tick_pre(_tick, move)
 		var controller := player.controller
 		var t_ctl := Time.get_ticks_usec()
-		# -2: the controller does not tick (not started); the rest of the player's tick still runs.
-		_batch_rows[i] = _motor_batch.add(controller.motor, controller.state, controller.current_command) if controller.begin_tick(_tick, delta) else -2
+		# -2: the controller does not tick (not started, or a far bot's body sitting this tick out); the rest of the player's tick still runs.
+		var d := player.body_delta(_tick, delta, controller.current_command)
+		_batch_rows[i] = _motor_batch.add(controller.motor, controller.state, controller.current_command, d) if d > 0.0 and controller.begin_tick(_tick, d) else -2
 		player.ctl_usec = Time.get_ticks_usec() - t_ctl
 		if fine:
 			ArenaFrameProbe.add(&"pl_sim", t_fine)
@@ -283,7 +284,7 @@ func _tick_players_batched(commands: Dictionary, delta: float, hull_world: Objec
 			if controller.has_external_velocity():
 				ArenaHullGrid.batch_faults += 1
 			told = _motor_batch.finish(row)
-			controller.end_tick(_tick, delta)
+			controller.end_tick(_tick, player.body_d)
 		var rested := controller.state.position
 		ArenaFrameProbe.add(&"p_controller", t_ctl - player.ctl_usec)
 		var outcome := player.tick_post(_tick, delta, fire)

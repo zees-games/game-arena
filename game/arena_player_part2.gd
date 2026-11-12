@@ -422,9 +422,49 @@ func simulate_tick(
 		return DotWeaponOutcome.nothing("Dead.")
 	tick_pre(tick, movement_command)
 	var t_ctl := Time.get_ticks_usec()
-	controller.simulate_tick(tick, delta)
+	var d := body_delta(tick, delta, movement_command)
+	if d > 0.0:
+		controller.simulate_tick(tick, d)
 	ArenaFrameProbe.add(&"p_controller", t_ctl)
 	return tick_post(tick, delta, combat_command)
+
+
+## Body tiers (dot-bot 22, off by default): ticks between this bot's motor ticks, written by [code]ArenaBots[/code]
+## from [method DotBotThinkTier.body_period] for a bot no person sees, nears or fights; 1 = every tick (people, and
+## every bot unless [code]bot_tier_body_every_near/far[/code] are raised).
+var body_every: int = 1
+## The tick of this player's last motor tick, for [method body_delta].
+var body_last_tick: int = -1
+## Ticks this body sat out, for the bench.
+static var body_skipped := 0
+## A gap longer than this (a death, a map change) is not made up.
+const BODY_MAX_GAP := 8
+## What [method body_delta] answered last, for the batched loop's [method DotFpsController.end_tick].
+var body_d := 0.0
+
+
+## The delta this tick's motor runs with: [param delta] at full rate; 0.0 when the body sits this tick out under
+## [member body_every] (its view still turns and its tick count still advances); else the ticks since its last
+## motor tick times [param delta], so the skipped time is made up in one longer tick. Any edge ticks at once: a
+## button change, a waiting push, or anything but walking on the ground (air, slide, wall run, ladder, swim).
+func body_delta(tick: int, delta: float, command: DotFpsCommand) -> float:
+	var gap := tick - body_last_tick
+	if body_last_tick < 0 or gap <= 0 or gap > BODY_MAX_GAP:
+		body_last_tick = tick
+		body_d = delta
+		return delta
+	var s := controller.state
+	if gap >= body_every or command.buttons != s.previous_buttons or controller.has_external_velocity() \
+			or not s.is_grounded() or s.is_sliding() or s.is_wall_running():
+		body_last_tick = tick
+		body_d = delta * float(gap)
+		return body_d
+	s.yaw = command.yaw
+	s.pitch = command.pitch
+	s.tick += 1
+	body_skipped += 1
+	body_d = 0.0
+	return 0.0
 
 
 ## Where this tick started ([method tick_pre]) and what its controller cost before the motor (the batched loop's).
