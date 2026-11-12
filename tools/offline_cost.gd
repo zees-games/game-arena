@@ -6,7 +6,7 @@ const ArenaPlayer := preload("../game/arena_player.gd")
 const ClientBench := preload("client_bench.gd")
 
 ## Solo (offline) client with N bots on `--map`: `godot --path . res://tools/offline_cost.tscn -- --map blackhawkdown --bots 10 --seconds 25`. Prints fps, frame p50/p95/max, the engine's monitors and physics steps per frame.
-## `--native 0` keeps the bots' sight scan in script, `--motor-native 0` the movement queries; `--motor-tick 1|0` toggles [member DotFpsMotor.native_tick] (needs a dot-sim with the motor tick).
+## `--native 0` keeps the bots' sight scan in script, `--brain-native 0` their aim, fight step and perception (DotSimBotMind), `--motor-native 0` the movement queries; `--motor-tick 1|0` toggles [member DotFpsMotor.native_tick] (needs a dot-sim with the motor tick).
 
 var _bots := 10
 ## `--physoff 1`: switch the engine's 3D physics step off after warm-up. What the "physics" phase still costs is script (game tick plus every _physics_process); the drop is the engine's own share.
@@ -47,6 +47,10 @@ func _ready() -> void:
 			"--tier-idle-seen": preload("../game/arena_bots.gd").tiers.idle_view_every = int(args[i + 1])
 			"--lod": ArenaPlayer.present_lod_enabled = int(args[i + 1]) != 0
 			"--native": DotBotWorld.native_enabled = int(args[i + 1]) != 0
+			"--brain-native":
+				# Through Script.set: the switches exist only on a dot-bot with the native mind.
+				(DotBotAim as Script).set(&"native_enabled", int(args[i + 1]) != 0)
+				(DotBotBrain as Script).set(&"native_perceive", int(args[i + 1]) != 0)
 			"--motor-native": DotFpsPhysicsBody.native_enabled = int(args[i + 1]) != 0
 			"--motor-us": _motor_us = int(args[i + 1]) != 0
 			"--motor-tick": DotFpsMotor.native_tick = int(args[i + 1]) != 0
@@ -117,7 +121,7 @@ func _report() -> void:
 	for f in _frames:
 		if f > 33.0:
 			hitches += 1
-	print("OFFLINE_COST native sight scan: %s, native motor queries: %s, native motor tick: %s" % [DotBotWorld.native_available(), DotFpsPhysicsBody.native_available(), DotFpsMotor.native_tick and DotFpsPhysicsBody.native_tick_available()])
+	print("OFFLINE_COST native sight scan: %s, native motor queries: %s, native motor tick: %s, native brain: %s" % [DotBotWorld.native_available(), DotFpsPhysicsBody.native_available(), DotFpsMotor.native_tick and DotFpsPhysicsBody.native_tick_available(), DotBotWorld.native_available() and (DotBotAim as Script).get(&"native_enabled") == true])
 	print("OFFLINE_COST fps %.1f | frame mean %.2f p50 %.2f p95 %.2f p99 %.2f max %.2f ms | >33ms %d | physics %.2f ms/frame process %.2f ms/frame | steps %.2f/frame (%d Hz, max %d) | %d bots" % [
 		1000.0 / mean, mean, sorted[n / 2], sorted[int(n * 0.95)], sorted[int(n * 0.99)], sorted[n - 1], hitches,
 		_phys / _n, _proc / _n, float(Engine.get_physics_frames() - _steps0) / _n,
