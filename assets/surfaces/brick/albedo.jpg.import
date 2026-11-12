@@ -3,20 +3,19 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://oo0x5jrmaft1"
-path.bptc="res://.godot/imported/albedo.jpg-5e482782e0ee1d0822eac186c5d7b0e0.bptc.ctex"
+path="res://.godot/imported/albedo.jpg-5e482782e0ee1d0822eac186c5d7b0e0.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
+"vram_texture": false
 }
 
 [deps]
 
 source_file="res://assets/surfaces/brick/albedo.jpg"
-dest_files=["res://.godot/imported/albedo.jpg-5e482782e0ee1d0822eac186c5d7b0e0.bptc.ctex"]
+dest_files=["res://.godot/imported/albedo.jpg-5e482782e0ee1d0822eac186c5d7b0e0.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=1
 compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0

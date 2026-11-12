@@ -110,5 +110,6 @@ Everything is flat under `game/` and `maps/`, grouped here by what it is for.
 | `game/arena_stats_store.gd`, `arena_award_store.gd` | the stats file and the achievement files written once per save, off the frame (the addons' file stores write per player in the saving frame; `ArenaProgress._exit_tree` calls `finish()`) |
 | `game/arena_paths.gd` | `rebase` for every `res://` path (pack delivery) |
 | `game/arena_content_groups.gd`, `groups.json` | each map's own files are the download group `map-<id>`; a client fetches the group of the map it plays and tops up on a map change |
+| `assets/surfaces/*/*.jpg.import` | `compress/mode=1` (lossy WebP), not 2 (VRAM): the headless import behind a publish writes only the desktop `bptc` variant, 1.4 MiB a texture, 25 MB of the 38 MB pack and unusable where a browser lacks BPTC; lossy is 0.26 MiB each and the pack is 15 MiB |
 | `maps/arena_map.gd`, `arena_map_survey.gd`, `arena_map_paint.gd`, `arena_map_lighting.gd` | the built-in maps as box lists, the survey, their colours, their lighting |
 | `maps/arena_bsp_map.gd`, `arena_imported_maps.gd`, `arena_map_mechanics.gd`, `arena_ladder_mode.gd`, `*.gdshader` | the combat surf maps (copies of g2gfast's loader); `maps/imported` is the fc-surf-dm-maps link |

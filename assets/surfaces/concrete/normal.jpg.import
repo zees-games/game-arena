@@ -3,20 +3,19 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dyr117dad38vi"
-path.bptc="res://.godot/imported/normal.jpg-109dfe3b1fa2098de6b0d2bf6080e2d9.bptc.ctex"
+path="res://.godot/imported/normal.jpg-109dfe3b1fa2098de6b0d2bf6080e2d9.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
+"vram_texture": false
 }
 
 [deps]
 
 source_file="res://assets/surfaces/concrete/normal.jpg"
-dest_files=["res://.godot/imported/normal.jpg-109dfe3b1fa2098de6b0d2bf6080e2d9.bptc.ctex"]
+dest_files=["res://.godot/imported/normal.jpg-109dfe3b1fa2098de6b0d2bf6080e2d9.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=1
 compress/high_quality=true
 compress/lossy_quality=0.7
 compress/uastc_level=0
