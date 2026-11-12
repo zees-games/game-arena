@@ -35,6 +35,7 @@ examples/headless_match_part8.gd::_test_progression	181
 examples/headless_match_part9.gd::_test_map_change	406
 examples/headless_net_b1.gd::_test_movement_rules_reach_clients	101
 examples/headless_net_b2.gd::_test_weapons_over_the_wire	95
+examples/headless_net_b2b.gd::_test_map_sync_wire	166
 examples/headless_presentation.gd::_test_every_key_is_an_action	152
 examples/headless_presentation.gd::_test_party_over_http	95
 examples/headless_presentation_b1.gd::_test_chat_box	115
