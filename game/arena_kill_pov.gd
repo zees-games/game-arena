@@ -40,6 +40,9 @@ const FOV_MAX := 160.0
 
 static var _ids: Dictionary = {}
 static var _ids_generation := -1
+## [method aux_of_tick]'s readings for the physics tick [member _tick_frame], by instance id.
+static var _tick_aux: Dictionary = {}
+static var _tick_frame := -1
 
 
 ## Marks [param cam] as showing a replay (the kill view or final killcam) while the view draws it.
@@ -67,6 +70,26 @@ static func clear_eye(space: PhysicsDirectSpaceState3D, eye: Vector3, forward: V
 static func aux_of(p: Object, size: int = DotKillViewRing.AUX) -> PackedFloat32Array:
 	var full := _aux_full(p)
 	full.resize(size)
+	return full
+
+
+## [method aux_of], read at most once per physics tick per player: the kill view's eye list reads it fresh
+## ([param fresh], every game tick, however many a physics frame runs) and keeps it; the killcam's body recording
+## (every drawn frame) reuses that reading, as the aux only changes inside a tick.
+## The returned array is shared until the next tick: copy it before writing to it.
+static func aux_of_tick(p: Object, size: int = DotKillViewRing.AUX, fresh := false) -> PackedFloat32Array:
+	if p == null or size != SIZE:
+		return aux_of(p, size)
+	var frame := Engine.get_physics_frames()
+	if frame != _tick_frame:
+		_tick_frame = frame
+		_tick_aux.clear()
+	var key := p.get_instance_id()
+	var hit: Variant = null if fresh else _tick_aux.get(key)
+	if hit != null:
+		return hit
+	var full := _aux_full(p)
+	_tick_aux[key] = full
 	return full
 
 

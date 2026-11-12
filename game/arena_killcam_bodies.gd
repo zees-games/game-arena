@@ -137,7 +137,7 @@ static func state_of(p: Node) -> Array:
 		feet = view.global_position - Vector3(0.0, eye_h, 0.0)
 	elif body != null and bool(p.get(&"interpolate_body")):
 		feet = body.global_position
-	return [feet, yaw, pitch, bool(p.call(&"is_alive")), eye_h] + Array(KillPov.aux_of(p))
+	return [feet, yaw, pitch, bool(p.call(&"is_alive")), eye_h] + Array(KillPov.aux_of_tick(p))
 
 
 static func restore_body(p: Node, saved: Array) -> void:
