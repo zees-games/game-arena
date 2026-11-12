@@ -44,6 +44,8 @@ static func server_map_keys(server: Object) -> PackedStringArray:
 # a CDN lacks is retried at its latest.json in solo (dev has 1.0.4 and no 1.0.3).
 const STANDALONE_KEYS: PackedStringArray = [
 	"gamemann/aim-forts@1.0.5",
+	# cp-orange-x3: stripped pack (every texture/model mapped, check_packs clean) from fc-dm-maps v1.0.6; prod still has only the stale 1.0.1 until it is published.
+	"gamemann/cp-orange-x3@1.0.6",
 	"gamemann/crackhouse@1.0.5",
 	"gamemann/dm-hot-cn-v1@1.0.5",
 	"gamemann/dm-industrial-gamma@1.0.5",
