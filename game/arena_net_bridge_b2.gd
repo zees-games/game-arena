@@ -673,14 +673,10 @@ func _on_request(message: DotNetMessage) -> void:
 		return
 
 	match request.kind:
-		ArenaEvents.Ask.READY:
-			mark_ready(peer_id)
-		ArenaEvents.Ask.RESPAWN:
-			# Asked for, never taken. dot-match owns respawning and has its own
-			# timer; a client that could respawn itself could respawn instantly. The one
-			# exception is a victim watching their kill view, who may skip it.
-			if killview != null:
-				killview.skip(session_for_peer(peer_id), game.current_tick())
+		# READY and RESPAWN can spawn a player, and a spawn's sight test traces the map (the physics space on an imported map):
+		# answered at the top of the next server tick ([method _answer_tick_asks]), never here in the idle frame.
+		ArenaEvents.Ask.READY, ArenaEvents.Ask.RESPAWN:
+			_tick_asks.append([peer_id, request.kind])
 		ArenaEvents.Ask.FOV:
 			var who: Object = game.player_for(session_for_peer(peer_id)) if game != null else null
 			if who != null:
@@ -693,7 +689,7 @@ func _on_request(message: DotNetMessage) -> void:
 			pass
 
 
-## A client asked to do something with a prop. [b]The origin comes from the simulation and only the direction comes off the wire[/b]: the server knows where the player is, and a client naming its own origin could grab a prop from anywhere.
+## A client asked to do something with a prop, answered in the next tick. [b]The origin comes from the simulation and only the direction comes off the wire[/b]: the server knows where the player is, and a client naming its own origin could grab a prop from anywhere.
 ## What it cannot know is where they were looking between two ticks, so that is the one thing the payload carries, and a claim.
 ## The tool decides whether it reaches: `DotPropTool.may_act_on` enforces the range, the mass limit and whose prop it is.
 func _on_prop_act(peer_id: int, body: Dictionary) -> void:
@@ -710,12 +706,8 @@ func _on_prop_act(peer_id: int, body: Dictionary) -> void:
 	if player == null or not player.is_alive():
 		return
 
-	game.props.act(
-		session_id,
-		int(body["act"]),
-		player.muzzle_position(),
-		DotFpsMotor.aim_for(float(body["yaw"]), float(body["pitch"]))
-	)
+	# Queued: a grab, punt or pull traces the physics space, so it runs in the next tick (`ArenaProps.queue_act`).
+	game.props.queue_act(session_id, int(body["act"]), DotFpsMotor.aim_for(float(body["yaw"]), float(body["pitch"])))
 
 
 ## The client's own tick rate comes from the SERVER, and from nowhere else. [b]This is the largest measured error in this family's history.[/b] g2gfast's client took its rate from `Engine.physics_ticks_per_second`,

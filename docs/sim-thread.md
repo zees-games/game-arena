@@ -29,6 +29,21 @@ The scene tree and everything that hangs off it: adding, removing or reparenting
 
 So a simulation thread may own plain data (states, commands, the rewind history, shape queries against a space it owns) and must hand the scene a finished snapshot.
 
+## Physics space queries (a server with physics on its own thread)
+
+A server owner may turn on `physics/3d/run_on_separate_thread` (or run Jolt) in an `override.cfg`; the default stays off. Then a query on a physics space (`direct_space_state`, a ray, a shape cast) is safe only inside the physics step. The rule is dot-physics' (`docs/threading.md`): **a request handler queues, and the next tick answers**. Packets are polled in the idle frame, so everything `ArenaNetBridge._on_request` does runs outside the step.
+
+| Request | What it reaches | Where it runs |
+| --- | --- | --- |
+| PROP_TOOL | `ArenaProps.act`: `DotPhysGun.grab`, `DotGravGun.punt`/`pull` trace the space | queued (`ArenaProps.queue_act`), answered at the top of `ArenaProps.tick`; the origin is the muzzle at that tick |
+| READY, RESPAWN | `mark_ready`, `DotKillViewServer.skip`: a spawn, whose sight test is `combat.trace` (the physics space on an imported map) | queued (`_tick_asks`), answered at the top of `server_tick` |
+| FOV | a number on the player | at once (no query) |
+| HOST | the sim host's console lines (`host_change` changes the map) | at once: only the solo sim host's own process answers it |
+
+Every file under `game/` and `maps/` that queries a space is in `headless_match`'s audit table (`SPACE_QUERY_FILES`, part 10), marked `tick` or `client`; a new one fails the suite until it is placed. In the tick: the bots (`arena_bots_world.gd`; `arena_bots_world_nav.gd` on worker tasks joined inside the tick), `arena_map_io.gd` (use presses), `arena_props.gd`, `arena_surf.gd`. Client only, never on a dedicated server: `arena_client.gd`, `arena_kill_pov_view.gd`, `arena_player_part1.gd`, `arena_presentation_b1.gd`, `arena_touch.gd`, `maps/arena_bsp_map.gd` (`on_sky`).
+
+Still outside the step, on imported maps only (their spawn sight traces the space): console and chat commands that respawn or restart (`arena_restart`, `arena_map`, `arena_mode`, the vote, an admin respawn) and the map change, whose `ArenaMapDirector.change_to` resumes when the peers report. The remainder is on the nightly item `server-physics-thread-1`.
+
 ## Later stages
 
 1. The same server in a thread of the client process, joined through an in-memory transport instead of a socket. It needs the simulation free of scene-tree calls (today `ArenaPlayer` bodies are nodes), which is the real work; it buys web-with-threads and delivered packs.

@@ -56,6 +56,11 @@ var _ready_peers: Dictionary = {}
 ## Peers whose READY came before their seat ([method add_player]). Server side.
 var _ready_unseated: Dictionary = {}
 
+## READY and RESPAWN requests heard between ticks, as [peer_id, kind]; answered by [method _answer_tick_asks] at the top of
+## [method server_tick]. A request handler runs in the idle frame, and what these start (a spawn and its sight trace) must not query
+## the physics space outside the physics step. Server side.
+var _tick_asks: Array = []
+
 
 ## Server: records every view and cuts the victims' clips (null until the first tick).
 var killview: DotKillViewServer = null
@@ -177,6 +182,7 @@ func remove_peer(peer_id: int) -> void:
 	# A peer that said READY and left before its seat: a peer id is reused, and a stale entry
 	# would answer the next owner's seat with a signon before it has asked.
 	_ready_unseated.erase(peer_id)
+	_tick_asks = _tick_asks.filter(func(ask: Array) -> bool: return int(ask[0]) != peer_id)
 
 	if not _players_by_peer.has(peer_id):
 		return
@@ -239,6 +245,7 @@ var _monster_world: Node3D = null
 func server_tick(tick: int) -> void:
 	_tick = tick
 	_game_ticked_for = -1
+	_answer_tick_asks()
 	_watch_horde()
 	_watch_projectiles()
 	_watch_drops()
@@ -775,6 +782,28 @@ func peer_for_session(session_id: int) -> int:
 		if int(_players_by_peer[peer]) == session_id:
 			return int(peer)
 	return 0
+
+
+## Answers the queued READY and RESPAWN requests ([member _tick_asks]) in arrival order. Inside the server tick.
+func _answer_tick_asks() -> void:
+	if _tick_asks.is_empty():
+		return
+
+	var asks := _tick_asks
+	_tick_asks = []
+
+	for ask: Array in asks:
+		var peer_id := int(ask[0])
+
+		match int(ask[1]):
+			ArenaEvents.Ask.READY:
+				mark_ready(peer_id)
+			ArenaEvents.Ask.RESPAWN:
+				# Asked for, never taken. dot-match owns respawning and has its own
+				# timer; a client that could respawn itself could respawn instantly. The one
+				# exception is a victim watching their kill view, who may skip it.
+				if killview != null and game != null:
+					killview.skip(session_for_peer(peer_id), game.current_tick())
 
 
 ## A peer has built its scene and may be sent things.

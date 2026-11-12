@@ -88,6 +88,11 @@ var _collision: Node3D = null
 
 var _limits: DotPropLimits = null
 
+## Prop intents that came off the wire between ticks, as [player_id, action, direction], answered at the top of [method tick].
+## [b]A request handler never queries the physics space[/b]: packets are polled in the idle frame, and with physics on its own
+## thread (`physics/3d/run_on_separate_thread`, or Jolt's) a query there races the step. dot-physics `docs/threading.md`.
+var _queued_acts: Array = []
+
 
 ## A basis looking along [param direction] whose up is never colinear with it (Basis.looking_at errors otherwise); identity for a zero direction.
 static func _look_basis(direction: Vector3) -> Basis:
@@ -260,6 +265,8 @@ static func _pallet() -> DotPropDef:
 
 ## Advances the spawner's rate limits and every held prop. Once per game tick.
 func tick(delta: float) -> void:
+	_answer_queued()
+
 	if spawner != null:
 		spawner.advance(delta)
 
@@ -405,6 +412,29 @@ func act(player_id: int, action: int, origin: Vector3, direction: Vector3) -> bo
 	return false
 
 
+## Queues a client's prop intent for the next tick ([member _queued_acts]); the network's door, where [method act] is the tick's.
+## The origin is read when it is answered: the simulation's, never the wire's.
+func queue_act(player_id: int, action: int, direction: Vector3) -> void:
+	_queued_acts.append([player_id, action, direction])
+
+
+## Answers every queued intent, in arrival order, from the holder's muzzle as it is now. Inside the tick.
+func _answer_queued() -> void:
+	if _queued_acts.is_empty():
+		return
+
+	var queued := _queued_acts
+	_queued_acts = []
+
+	for entry: Array in queued:
+		var player := game.player_for(int(entry[0])) if game != null else null
+
+		if player == null or not player.is_alive():
+			continue
+
+		var _done := act(int(entry[0]), int(entry[1]), player.muzzle_position(), entry[2] as Vector3)
+
+
 ## Keeps every held prop where its holder is looking. Once per tick.
 ##
 ## [b]Held props move every tick and a grab happens once.[/b] `DotPhysGun.hold` is what
@@ -480,6 +510,8 @@ func _space() -> Variant:
 ## Called when they leave. Without it the tool objects outlive the session, and the
 ## next player to be given the same id inherits whatever the last one was carrying.
 func release_player(player_id: int) -> void:
+	_queued_acts = _queued_acts.filter(func(entry: Array) -> bool: return int(entry[0]) != player_id)
+
 	if _phys_guns.has(player_id):
 		(_phys_guns[player_id] as DotPhysGun).release()
 		_phys_guns.erase(player_id)
@@ -568,6 +600,8 @@ func _on_map_changed(_map: ArenaMap) -> void:
 	# children of this node rather than of the map — so nothing freed them, and a
 	# crate left floating where a wall now is has no floor under it and falls for
 	# ever. The static geometry has to be replaced too, for the same reason.
+	_queued_acts.clear()
+
 	if spawner != null:
 		spawner.clear_all(DotPropSpawner.REASON_CLEANUP)
 

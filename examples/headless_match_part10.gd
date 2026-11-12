@@ -541,11 +541,13 @@ func _test_siege() -> void:
 				"%.3f m" % target.position().distance_to(was_at)
 			)
 
-			_check(
-				game.props.act(1, ArenaEvents.PropAct.RELEASE, Vector3.ZERO, Vector3.FORWARD),
-				"and it can be let go"
-			)
-			_check(game.props.phys_gun(1).held == null, "leaving nothing held")
+			# Off the wire it is queued (`queue_act`, what the bridge calls): a request handler runs in
+			# the idle frame, and a grab there would query the physics space outside the physics step.
+			game.props.queue_act(1, ArenaEvents.PropAct.RELEASE, Vector3.FORWARD)
+			_check(game.props.phys_gun(1).held != null, "a let-go off the wire waits for the tick")
+			game.props.tick(1.0 / float(TICK_RATE))
+			_check(game.props.phys_gun(1).held == null, "and the tick lets it go, leaving nothing held")
+			_check(game.props._queued_acts.is_empty(), "and the queue is empty after it")
 
 	# A grab needs somewhere to trace. A client mirroring this layer has no physics
 	# space, and a tool with nothing to trace against would act on whatever was last
@@ -556,6 +558,8 @@ func _test_siege() -> void:
 		),
 		"and a player with nothing in front of them grabs nothing"
 	)
+
+	_check_space_query_audit()
 
 	# --- Leaving ---------------------------------------------------------
 
@@ -613,3 +617,50 @@ func _test_geometry_held() -> void:
 		"%d of 64 directions" % blocked
 	)
 	_done()
+
+
+## Every file under game/ and maps/ that queries a physics space, and where it runs. docs/sim-thread.md
+## "Physics space queries". [b]A server query outside the physics step races the step[/b] once physics runs on its own
+## thread (`physics/3d/run_on_separate_thread`, Jolt's); a new file here is placed in that table first.
+const SPACE_QUERY_FILES := {
+	"game/arena_bots_world.gd": "tick",
+	"game/arena_bots_world_nav.gd": "tick",
+	"game/arena_map_io.gd": "tick",
+	"game/arena_props.gd": "tick",
+	"game/arena_surf.gd": "tick",
+	"game/arena_client.gd": "client",
+	"game/arena_kill_pov_view.gd": "client",
+	"game/arena_player_part1.gd": "client",
+	"game/arena_presentation_b1.gd": "client",
+	"game/arena_touch.gd": "client",
+	"maps/arena_bsp_map.gd": "client",
+}
+const SPACE_QUERY_CALLS := ["direct_space_state", "intersect_ray", "intersect_shape", "intersect_point", "cast_motion", "collide_shape", "get_rest_info", "body_test_motion"]
+
+
+## The space-query audit: the files that query a physics space are exactly [constant SPACE_QUERY_FILES].
+func _check_space_query_audit() -> void:
+	var found: Array[String] = []
+
+	for dir: String in ["game", "maps"]:
+		for file: String in DirAccess.get_files_at("res://" + dir):
+			if not file.ends_with(".gd"):
+				continue
+
+			var text := FileAccess.get_file_as_string("res://%s/%s" % [dir, file])
+
+			for token: String in SPACE_QUERY_CALLS:
+				if text.contains(token):
+					found.append("%s/%s" % [dir, file])
+					break
+
+	var want: Array[String] = []
+
+	for key: String in SPACE_QUERY_FILES:
+		want.append(key)
+
+	found.sort()
+	want.sort()
+	var extra := found.filter(func(f: String) -> bool: return not want.has(f))
+	var gone := want.filter(func(f: String) -> bool: return not found.has(f))
+	_check(found == want, "every physics space query in game/ and maps/ is in the audit table (tick or client)", "new %s, gone %s" % [extra, gone])
