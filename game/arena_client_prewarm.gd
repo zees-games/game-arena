@@ -256,21 +256,32 @@ func _prewarm_models() -> void:
 	_model_paths_next = 0
 	# The reads run on the loader's own threads: a big model read inline held one frame for seconds
 	# (7455 ms on a slow disk), and the tick below only takes a file once it has landed.
-	for path: Variant in _model_paths:
-		var real := AwModelCache.resolve(str(path))
-		if ResourceLoader.exists(real):
-			ResourceLoader.load_threaded_request(real)
+	# Not headless: the dummy renderer's mesh storage is not safe against a loader thread creating
+	# meshes beside the main thread (RID errors, a mesh leaked at exit, an odd viewarms failure), and
+	# there the tick below simply loads each file itself, a few ms a frame.
+	if DisplayServer.get_name() != "headless":
+		for path: Variant in _model_paths:
+			var real := AwModelCache.resolve(str(path))
+			if ResourceLoader.exists(real):
+				ResourceLoader.load_threaded_request(real)
 	ArenaLoadTimeline.mark("model reads start: %d files" % _model_paths.size())
 	gate.hold(&"weapon_models", "Preparing weapon models")
 	get_tree().process_frame.connect(_prewarm_models_tick)
 
-## A client freed mid-read takes what the loader holds for it, or those scenes outlive the run.
+## A client freed mid-read takes what the loader holds for it, or those scenes outlive the run: every
+## requested file (not only those the tick has not reached), the tick disconnected so it cannot take
+## one after this, and the model cache emptied so no scene or mesh outlives the renderer at exit.
 func _drain_model_reads() -> void:
-	while _model_paths_next >= 0 and _model_paths_next < _model_paths.size():
-		var real := AwModelCache.resolve(str(_model_paths[_model_paths_next]))
+	if is_inside_tree() and get_tree().process_frame.is_connected(_prewarm_models_tick):
+		get_tree().process_frame.disconnect(_prewarm_models_tick)
+	if _model_paths_next < 0:
+		return
+	for path: Variant in _model_paths:
+		var real := AwModelCache.resolve(str(path))
 		if ResourceLoader.load_threaded_get_status(real) != ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
 			var _dropped := ResourceLoader.load_threaded_get(real)
-		_model_paths_next += 1
+	_model_paths_next = _model_paths.size()
+	AwModelCache.clear()
 
 func _prewarm_models_tick() -> void:
 	var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate != null and gate.has_method(&"slice_msec") else 8)
