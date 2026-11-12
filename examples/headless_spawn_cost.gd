@@ -6,6 +6,8 @@ const ArenaMap := preload("../maps/arena_map.gd")
 ## The COUNTDOWN-start bulk spawn: the director's cost per player, and what ArenaGame.respawn_player costs, on the largest map.
 const PLAYERS := 11
 const BUDGET_MS := 4.0
+## The very first respawn pays lazy loadout/resource setup once (5-9 ms on PH 2026-11-11, 12-20 ms on 2026-11-07); budget is one 60 fps frame.
+const FIRST_BUDGET_MS := 16.0
 
 
 func _ready() -> void:
@@ -27,7 +29,7 @@ func _run() -> void:
 			continue
 		await _one(id)
 		ran += 1
-	_report_sections(maps.size(), ran, maps.size(), ran * 2)
+	_report_sections(maps.size(), ran, maps.size(), ran * 3)
 
 
 func _one(id: StringName) -> void:
@@ -72,5 +74,6 @@ func _one(id: StringName) -> void:
 	var mean := sum_choose / float(PLAYERS * 5)
 	print("COST %s: choose_spawn mean %.2f ms worst %.2f ms; respawn_player first %.2f ms, then worst %.2f ms (sites %d)" % [id, mean, worst_choose, first_respawn, worst_respawn, game.player_stack.spawns.sites().size()])
 	_check(mean <= BUDGET_MS, "%s: choose_spawn mean under %.0f ms" % [id, BUDGET_MS], "%.2f ms" % mean)
+	_check(first_respawn <= FIRST_BUDGET_MS, "%s: first respawn_player under %.0f ms" % [id, FIRST_BUDGET_MS], "first %.2f ms" % first_respawn)
 	_check(worst_respawn <= BUDGET_MS * 4.0, "%s: respawn_player worst under %.0f ms" % [id, BUDGET_MS * 4.0], "%.2f ms" % worst_respawn)
 	game.queue_free()
