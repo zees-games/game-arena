@@ -12,6 +12,7 @@ const BOTS := 4
 var _checks := 0
 var _failed := 0
 var _client: Node = null
+var _errors: RouteErrors = null
 
 
 func _ready() -> void:
@@ -44,6 +45,8 @@ func _players() -> int:
 
 func _run() -> void:
 	print("game-fatal-contact: the solo game hosted beside the client")
+	_errors = RouteErrors.new()
+	OS.add_logger(_errors)
 	_check(not ArenaSimHost.wanted(), "a suite's or a tool's client stays in this process")
 	_check(ArenaSimHost.wanted(true), "the launched game is hosted")
 	_check(ArenaSimHost.wanted_for(PackedStringArray(["--offline", "+bot_quota", "8"]), true), "a launcher's --offline is still hosted")
@@ -54,6 +57,8 @@ func _run() -> void:
 	ArenaSimHost.forced = 1
 	ArenaSimHost.ask_map = "dm_box"
 	ArenaSimHost.ask_mode = "ctf"
+	# As long as a slow machine builds after joining; headless builds in the same frame and hid the spam.
+	ArenaSimHost.hold_joined_sec = 3.0
 	_check(ArenaSimHost.wanted(), "a tool can ask for it")
 	_client = (load("res://game/arena.tscn") as PackedScene).instantiate()
 	# What a bench sets: the host is joined all the same.
@@ -80,6 +85,11 @@ func _run() -> void:
 		"the platform holds the host's link as local, so --offline keeps it")
 	var seen := await _until(func() -> bool: return _players() >= BOTS + 1, 40.0)
 	_check(seen, "the client sees itself and the bots", "%d of %d" % [_players(), BOTS + 1])
+	# The server sent snapshots from the join, while the client still built the scene its `Server/Arena` sits in:
+	# the owner's console had a screenful of these for the first 30 s of every solo start.
+	var lost := _errors.seen()
+	_check(lost.is_empty(), "no call from the server arrives before the client's node it is addressed to",
+		"%d, first: %s" % [lost.size(), lost[0] if not lost.is_empty() else ""])
 	# A client's own `mode` stays the default; what the server plays arrives as `shown_mode`.
 	var served := await _until(func() -> bool:
 		var shown: Object = game.get("shown_mode")
@@ -291,5 +301,34 @@ func _end() -> void:
 		_client.queue_free()
 		await get_tree().process_frame
 		await get_tree().process_frame
+	if _errors != null:
+		OS.remove_logger(_errors)
 	print("headless_sim_host: %d checks, %d failed" % [_checks, _failed])
 	get_tree().quit(1 if _failed > 0 else 0)
+
+
+## The engine's errors for an RPC whose node path does not exist on this end. They go to stderr and change no exit code.
+class RouteErrors extends Logger:
+	var _lock := Mutex.new()
+	var _seen := PackedStringArray()
+
+	func _log_error(
+		function: String, _file: String, _line: int, code: String, rationale: String,
+		_editor_notify: bool, _error_type: int, _script_backtraces: Array[ScriptBacktrace]
+	) -> void:
+		# The message is the rationale under an ERR_FAIL_*_MSG, the code otherwise.
+		var text := code + " " + rationale
+		if not (text.contains("Node not found") or text.contains("Failed to get path from RPC")):
+			return
+		_lock.lock()
+		_seen.append("%s (%s)" % [text.strip_edges(), function])
+		_lock.unlock()
+
+	func _log_message(_message: String, _error: bool) -> void:
+		pass
+
+	func seen() -> PackedStringArray:
+		_lock.lock()
+		var out := _seen.duplicate()
+		_lock.unlock()
+		return out

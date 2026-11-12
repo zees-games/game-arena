@@ -21,6 +21,8 @@ static var forced := -1
 ## The map and mode a tool asks for; "" reads `--map` and `--mode` from the command line.
 static var ask_map := ""
 static var ask_mode := ""
+## Seconds a suite holds the joined client before it builds: the window a slow machine's 30 s load is, in which the server already sends.
+static var hold_joined_sec := 0.0
 
 ## The host that is up, for a profile's or a bench's header (ArenaNetContext); null while none is.
 static var live: Node = null
@@ -124,6 +126,8 @@ func start(bots: int) -> DotResult:
 	if not link.is_playing():
 		stop()
 		return DotResult.fail(DotError.CODE_INVALID, "never joined the local server")
+	if hold_joined_sec > 0.0:
+		await get_tree().create_timer(hold_joined_sec).timeout
 	up = true
 	live = self
 	return DotResult.success({"port": port, "pid": _pid, "boot_sec": t})

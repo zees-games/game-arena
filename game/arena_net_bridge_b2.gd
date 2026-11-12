@@ -186,6 +186,19 @@ func _send(peer_id: int, payload: PackedByteArray, delivery: int) -> void:
 	if link == null:
 		return
 
+	# Over a socket, only to a peer that said READY, as [method send_event] does. dot-net sends its schema on
+	# add_peer and snapshots from the next tick, while the client may still be building the scene its `Server/Arena`
+	# node sits in: the solo host's client joins first and builds for 30 s after, and every call that arrived in that
+	# time was a `Node not found: "ArenaSimServer/Server/Arena"` error on its console. [method mark_ready] sends the schema again.
+	if net.is_server and holds_unready():
+		if peer_id == 0:
+			for ready_peer in _ready_peers:
+				_send(int(ready_peer), payload, delivery)
+			return
+		if not _ready_peers.has(peer_id):
+			unready_held += 1
+			return
+
 	if delivery == DotNetMessage.Delivery.UNRELIABLE:
 		link.send_snapshot(peer_id, payload)
 	elif net.is_server:

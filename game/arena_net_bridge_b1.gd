@@ -56,6 +56,10 @@ var _ready_peers: Dictionary = {}
 ## Peers whose READY came before their seat ([method add_player]). Server side.
 var _ready_unseated: Dictionary = {}
 
+
+## dot-net's own sends (snapshots, its schema) held back from a peer that has not said READY. Server side.
+var unready_held: int = 0
+
 ## READY and RESPAWN requests heard between ticks, as [peer_id, kind]; answered by [method _answer_tick_asks] at the top of
 ## [method server_tick]. A request handler runs in the idle frame, and what these start (a spawn and its sight trace) must not query
 ## the physics space outside the physics step. Server side.
@@ -810,6 +814,12 @@ func _answer_tick_asks() -> void:
 					killview.skip(session_for_peer(peer_id), game.current_tick())
 
 
+## Whether dot-net's sends wait for a peer's READY: over a socket, where a call to a node the client has not built yet
+## is an engine error per call. A loopback harness delivers to bridges that exist, and keeps its old timing.
+func holds_unready() -> bool:
+	return link != null and not link.loopback.is_valid()
+
+
 ## A peer has built its scene and may be sent things.
 func mark_ready(peer_id: int) -> void:
 	if net == null or not net.is_server or _ready_peers.has(peer_id):
@@ -822,6 +832,9 @@ func mark_ready(peer_id: int) -> void:
 		return
 
 	_ready_peers[peer_id] = true
+	# The schema dot-net sent on add_peer was held back while the peer built its scene ([method _send]).
+	if holds_unready():
+		var _announced := net.announce_schema(peer_id)
 	send_signon(peer_id)
 
 	if peer_ready_fn.is_valid():
