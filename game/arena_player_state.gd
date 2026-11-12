@@ -325,6 +325,8 @@ const MAX_SLOTS := AwWeaponIds.SLOT_THROWN ## the highest slot either layout use
 ## reports it.
 static var _shared_catalogue: DotWeaponCatalogue = null
 static var _shared_generation := -1
+## Whether every behaviour script of [member _shared_catalogue] is loaded (see [method warm_catalogue_step]).
+static var _shared_warm := false
 
 ## How far behind the eye your own body is drawn in first person, in metres: far enough that the
 ## chest under a hidden neck stays out of the near plane.

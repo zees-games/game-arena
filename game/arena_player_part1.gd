@@ -137,15 +137,42 @@ func _build_health() -> void:
 
 static func _catalogue() -> DotWeaponCatalogue:
 	Roles.ensure()
-	if _shared_catalogue == null or _shared_generation != Roles.generation:
-		_shared_generation = Roles.generation
-		_shared_catalogue = ArenaContent.weapon_catalogue()
-		var res := _shared_catalogue.validate()
-		if not res.ok:
-			push_error(res.error.message)
+	_build_shared_catalogue()
+	if not _shared_warm:
+		_shared_warm = true
 		# Built once at setup, under the loading cover; the first spawn then loads no script.
 		_shared_catalogue.warm_scripts()
 	return _shared_catalogue
+
+static func _build_shared_catalogue() -> void:
+	if _shared_catalogue != null and _shared_generation == Roles.generation:
+		return
+	_shared_generation = Roles.generation
+	_shared_warm = false
+	_shared_catalogue = ArenaContent.weapon_catalogue()
+	var res := _shared_catalogue.validate()
+	if not res.ok:
+		push_error(res.error.message)
+
+## [method weapon_catalogue]'s first build in steps a loading screen can spread over frames (it was one
+## 53 ms step on staging02): the roles, the table, then one weapon's behaviour script per step, kept in
+## [param held] so the last step's warm finds each cached. False once the table is ready.
+static func warm_catalogue_step(step: int, held: Array) -> bool:
+	if step == 0:
+		Roles.ensure()
+		return true
+	if step == 1:
+		_build_shared_catalogue()
+		return not _shared_warm
+	var ids := _shared_catalogue.ids()
+	if step - 2 < ids.size():
+		var path := _shared_catalogue.get_def(ids[step - 2]).behaviour_path
+		if path != "" and ResourceLoader.exists(path):
+			held.append(load(path))
+		return true
+	_catalogue()
+	held.clear()
+	return false
 
 func _on_used(outcome: DotWeaponOutcome) -> void:
 	if camera != null:

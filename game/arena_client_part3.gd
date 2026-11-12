@@ -76,10 +76,23 @@ func _ready() -> void:
 	projectile_view.name = "Projectiles"
 	add_child(projectile_view)
 
+	ArenaLoadTimeline.mark("setup: projectiles")
+	await _setup_frame()
 	_build_ragdolls()
+	ArenaLoadTimeline.mark("setup: ragdolls")
+	await _setup_frame()
 	_build_killcam()
+	ArenaLoadTimeline.mark("setup: killcam")
+	await _setup_frame()
 	_build_killview()
 	ArenaLoadTimeline.mark("setup: projectiles, ragdolls, killcam, kill view")
+	if not DotPlatform.is_headless():
+		# The first draw with a game camera (about 300 ms on staging02): marked, so a slow frame here says whether it is the draw.
+		RenderingServer.frame_pre_draw.connect(func() -> void: ArenaLoadTimeline.mark("first draw begins"), CONNECT_ONE_SHOT)
+		RenderingServer.frame_post_draw.connect(func() -> void:
+			ArenaLoadTimeline.mark("first draw done")
+			get_tree().physics_frame.connect(func() -> void: ArenaLoadTimeline.mark("first draw: next physics frame"), CONNECT_ONE_SHOT)
+			get_tree().process_frame.connect(func() -> void: ArenaLoadTimeline.mark("first draw: next process frame"), CONNECT_ONE_SHOT), CONNECT_ONE_SHOT)
 	_connect_solo_signals()
 	await _setup_frame()
 	# Each killer's screen's spare hands (about 125 ms each on staging02) in a frame of its own.
@@ -158,6 +171,8 @@ func _setup_game(first: ArenaMap) -> DotResult:
 	var built := game.setup_begin(first)
 	var was := game.process_mode
 	game.process_mode = Node.PROCESS_MODE_DISABLED
+	if built.ok:
+		await _warm_weapon_table()
 	while built.ok and not game.setup_done():
 		await _setup_frame()
 		var step := game.setup_next_step()
@@ -166,6 +181,20 @@ func _setup_game(first: ArenaMap) -> DotResult:
 		ArenaLoadTimeline.mark("setup: game %s, %d ms" % [step, (Time.get_ticks_usec() - started) / 1000])
 	game.process_mode = was
 	return built
+
+## The shared weapon table the combat step reads, built before it about 8 ms a frame.
+func _warm_weapon_table() -> void:
+	var held: Array = []
+	var step := 0
+	var going := true
+	while going:
+		await _setup_frame()
+		var started := Time.get_ticks_usec()
+		var first := step
+		while going and Time.get_ticks_usec() - started < 8000:
+			going = ArenaPlayer.warm_catalogue_step(step, held)
+			step += 1
+		ArenaLoadTimeline.mark("setup: weapon table %d-%d, %d ms" % [first, step - 1, (Time.get_ticks_usec() - started) / 1000])
 
 ## A frame boundary between setup steps, under the cover, in a client that draws. The build was one
 ## 2.7 s frame on staging02 (setup 1012 ms, then the first draw 672 ms, the 32 players 320 ms and the
