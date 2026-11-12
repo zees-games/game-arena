@@ -53,6 +53,12 @@ var game: ArenaGame = null
 ## "play team deathmatch on this one". Null means keep the mode that is running.
 var mode_from_meta: bool = true
 
+## The mode running before a rotation profile (`DotMapDef.profile.mode`) changed it, put back on the
+## next map that names none. Null when no profile map is playing or an operator chose the mode since.
+var _base_mode: ArenaMode = null
+var _profile_moded: bool = false
+var _warned: Dictionary = {}
+
 
 func change_to_map(map: DotMapDef) -> DotResult:
 	if map == null:
@@ -131,6 +137,7 @@ func change_to_map(map: DotMapDef) -> DotResult:
 	changing_now = true
 
 	var previous := current
+	var previous_mode: ArenaMode = game.mode
 
 	# Before anything is torn down, exactly as the base class does it: this is what a
 	# netcode listens to so it can stop replicating entities that are about to be
@@ -156,6 +163,7 @@ func change_to_map(map: DotMapDef) -> DotResult:
 		return world_result
 
 	current = map
+	_note_profile_mode(map, previous_mode, wanted)
 
 	# No zones. dot-timer is not in this game; an arena map's "zones" are its spawn
 	# points, and those come from ArenaMap with the geometry.
@@ -264,9 +272,28 @@ func _mode_after(map: DotMapDef) -> ArenaMode:
 	return game.mode if game != null else null
 
 
+## [method _mode_after] for the director's rotation filter: a map whose profile names a mode it hosts stays in.
+func mode_after(map: DotMapDef) -> ArenaMode:
+	return _mode_after(map) if map != null else null
+
+
 func _mode_for(map: DotMapDef) -> ArenaMode:
 	if not mode_from_meta:
 		return null
+
+	var from_profile := _profile_mode(map)
+	if from_profile != "":
+		var picked := ArenaModes.by_id(StringName(from_profile))
+		if picked != null and ArenaMaps.supports_mode(map, picked):
+			return picked
+		_warn_once("%s/%s" % [String(map.id), from_profile],
+			"a rotation profile names a mode this map cannot host; the current mode stays",
+			{"map": String(map.id), "mode": from_profile, "known": picked != null})
+		return null
+
+	if String(map.meta.get("mode", "")) == "" and _profile_moded and _base_mode != null:
+		# The previous map's profile changed the mode; this map names none, so the server's own comes back.
+		return _base_mode if ArenaMaps.supports_mode(map, _base_mode) else null
 
 	var wanted := String(map.meta.get("mode", ""))
 
@@ -281,3 +308,34 @@ func _mode_for(map: DotMapDef) -> ArenaMode:
 		})
 
 	return found
+
+
+## The mode id the rotation's profile names for [param map], or "". Read through `get` so a dot-map
+## without [code]DotMapDef.profile[/code] still loads.
+static func _profile_mode(map: DotMapDef) -> String:
+	var prof: Variant = map.get(&"profile")
+	if prof is Dictionary:
+		return String((prof as Dictionary).get("mode", ""))
+	return ""
+
+
+func _note_profile_mode(map: DotMapDef, before: ArenaMode, applied: ArenaMode) -> void:
+	if applied != null and _profile_mode(map) != "" and applied.id == StringName(_profile_mode(map)):
+		if not _profile_moded:
+			_base_mode = before
+			_profile_moded = true
+		return
+	_profile_moded = false
+	_base_mode = null
+
+
+## An operator set the mode (`arena_mode`): it is the server's mode now, not a profile's to undo.
+func forget_profile_mode() -> void:
+	_profile_moded = false
+	_base_mode = null
+
+
+func _warn_once(key: String, message: String, fields: Dictionary) -> void:
+	if not _warned.has(key):
+		_warned[key] = true
+		DotLog.warn(LOG_CHANNEL, message, fields)

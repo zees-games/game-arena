@@ -341,7 +341,9 @@ func restrict_rotation() -> void:
 
 	for id in base:
 		var def := session.catalogue.get_map(id)
-		if def != null and def.in_rotation and ArenaMaps.supports_mode(def, mode):
+		# The mode this map would be played in: its rotation profile's when it names one this map hosts.
+		var plays: ArenaMode = session.mode_after(def) if session.has_method(&"mode_after") else mode
+		if def != null and def.in_rotation and ArenaMaps.supports_mode(def, plays):
 			allowed.append(def.id)
 
 	# Never leave it empty. A mode no map can host is a configuration mistake, and the
