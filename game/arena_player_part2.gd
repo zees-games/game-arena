@@ -530,11 +530,10 @@ func tick_post(tick: int, delta: float, combat_command: DotWeaponCommand) -> Dot
 	# builds its own posture then, so the context below (a dozen writes and an extra dictionary) is skipped.
 	var t_wp := Time.get_ticks_usec()
 	var out: DotWeaponOutcome
-	# (Proper home: AwWeaponRig.would_idle(command) in fc-weapons; until it exists, ask the arsenal directly.)
 	# The posture feeds the spread (running, air, slide and crouch change the cone): the arsenal asks
 	# [method _idle_posture] for the same fields the context below gets, so a moving player takes this path too.
 	_posture_tick = tick
-	if weapons.arsenal.is_idle_for(_command, weapons.get(&"_previous_command")):
+	if weapons.would_idle(_command):
 		out = weapons.simulate_tick(_command, tick, null)
 		# The rig's idle tick asks the shared player bridge for the sprint, and this player has none of
 		# its controller nodes: without this the hands never go to the sprint carry on a plain run.
