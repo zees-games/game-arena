@@ -2,6 +2,7 @@ extends Node
 
 const ArenaNetBridge := preload("arena_net_bridge.gd")
 const ArenaNetLink := preload("arena_net_link.gd")
+const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
 ## The four remote calls this game needs, on one node that exists on both ends.
 ##
@@ -288,7 +289,10 @@ func _net_snapshot(payload: PackedByteArray) -> void:
 	snapshots_received += 1
 
 	if bridge != null:
+		# Its own span: the receive (decode, apply, reconcile, push hooks) runs from the RPC poll, outside every frame span.
+		var t := Time.get_ticks_usec()
 		bridge.receive_snapshot(payload)
+		ArenaFrameProbe.add(&"net_snapshot", t)
 
 
 ## Anything from the authority that must arrive: HELLO, joins, kills, the match state.
@@ -297,7 +301,9 @@ func _net_event(payload: PackedByteArray) -> void:
 	events_received += 1
 
 	if bridge != null:
+		var t := Time.get_ticks_usec()
 		bridge.receive_event(payload)
+		ArenaFrameProbe.add(&"net_event", t)
 
 
 ## A client's intent. Unreliable, and deliberately not resent: the next tick's packet
