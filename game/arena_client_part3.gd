@@ -161,7 +161,9 @@ func _ready() -> void:
 		_set_client_processing(true)
 		# The first draw of the built level and HUD compiles their pipelines (672 ms on staging02): marked, so it is not mistaken for setup.
 		RenderingServer.frame_pre_draw.connect(func() -> void: ArenaLoadTimeline.mark("level draw begins"), CONNECT_ONE_SHOT)
-		RenderingServer.frame_post_draw.connect(func() -> void: ArenaLoadTimeline.mark("level draw done"), CONNECT_ONE_SHOT)
+		RenderingServer.frame_post_draw.connect(func() -> void:
+			ArenaLoadTimeline.mark("level draw done")
+			timeline.trace_frames(12), CONNECT_ONE_SHOT)
 
 ## [method ArenaGame.setup], one step a frame in a client that draws (the steps shared one 222 ms frame on
 ## staging02; combat and loadouts were most of it). The game does not process between steps, so nothing

@@ -396,8 +396,20 @@ func _arm(body: ArenaPlayer) -> void:
 	view_arms = ArenaViewArms.mount(self, view_model, body, ArenaAvatars.look_of(body.avatar, StringName("arena-player-%08d" % body.player_id)), game)
 	body.arm_first_person(view_model, _offline)
 	ArenaLoadTimeline.mark("hands armed")
-	_prewarm_weapons.call_deferred(body)
-	_prewarm_models.call_deferred()
+	if _builds_in_frames():
+		# Each in a frame of its own: the arming and both starts shared one frame with the joins.
+		get_tree().process_frame.connect(_prewarm_weapons_next_frame, CONNECT_ONE_SHOT)
+	else:
+		_prewarm_weapons.call_deferred(body)
+		_prewarm_models.call_deferred()
+
+## Whether setup is spread over frames: in a client that draws, and not headless (see `_setup_frame`).
+func _builds_in_frames() -> bool:
+	return not DotPlatform.is_headless() and is_inside_tree()
+
+func _prewarm_weapons_next_frame() -> void:
+	_prewarm_weapons(player)
+	get_tree().process_frame.connect(_prewarm_models, CONNECT_ONE_SHOT)
 
 ## One tick of weapon use, predicted. An outcome rather than a shot, because a use is
 ## not always one: a rocket produces a spawn and no shot at all, and a burst produces

@@ -3,6 +3,8 @@ extends "arena_client_part1.gd"
 const ArenaProfilerContext := preload("arena_profiler_context.gd")
 ## The load gate's give-up time in a browser (DotLoadGate's default is 20 s); see setup's use.
 const WEB_GATE_TIMEOUT_SEC := 60.0
+## A drawing client's share of a frame for the server's events; the join backlog spreads over frames.
+const EVENT_BUDGET_USEC := 8000
 
 func _adopt(candidate: ArenaPlayer) -> void:
 	if candidate == null or player != null:
@@ -210,6 +212,8 @@ func _build_netcode() -> DotResult:
 
 	bridge = ArenaNetBridge.new()
 	bridge.name = "Bridge"
+	if _builds_in_frames():
+		bridge.event_budget_usec = EVENT_BUDGET_USEC
 	add_child(bridge)
 
 	var attached := bridge.attach(game, net)
@@ -330,10 +334,6 @@ func _announce() -> void:
 func send_field_of_view() -> void:
 	if bridge != null and not _offline:
 		bridge.send_request(ArenaEvents.Ask.FOV, ArenaEvents.write_fov(_field_of_view()))
-
-## Whether setup is spread over frames: in a client that draws, and not headless (see `_setup_frame`).
-func _builds_in_frames() -> bool:
-	return not DotPlatform.is_headless() and is_inside_tree()
 
 func _build_killview() -> void:
 	killview = DotKillViewClient.new()

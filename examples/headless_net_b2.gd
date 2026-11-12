@@ -461,6 +461,57 @@ func _test_ready_gate() -> void:
 	_done()
 
 
+## A drawing client's event budget: a backlog past it waits for later frames, then lands whole and in order.
+func _test_event_budget() -> void:
+	print("")
+	_section("[events over a frame budget]")
+	var sent: Array[PackedByteArray] = []
+	var bridge := ArenaNetBridge.new()
+	bridge.name = "BudgetBridge"
+	add_child(bridge)
+	var game := _make_game(true)
+	var net := _make_manager(true, &"budget", 1)
+	var _attached := bridge.attach(game, net)
+	_start(net)
+	var link := bridge.open_link(bridge)
+	link.loopback = func(method: StringName, peer: int, payload: PackedByteArray) -> void:
+		if method == &"event" and peer == 77:
+			sent.append(payload)
+	bridge.mark_ready(77)
+	var _seated := bridge.add_player(77, 701, "First")
+	var expected: Array[int] = [701]
+	for i in 5:
+		var _joined := bridge.add_player(80 + i, 710 + i, "Joiner %d" % i)
+		expected.append(710 + i)
+
+	var watcher := ArenaNetBridge.new()
+	watcher.name = "BudgetWatcher"
+	watcher.event_budget_usec = 1
+	add_child(watcher)
+	var watcher_game := _make_game(false)
+	var watcher_net := _make_manager(false, &"budgetwatch", 77)
+	var _watching := watcher.attach(watcher_game, watcher_net)
+	_start(watcher_net)
+	var order: Array[int] = []
+	watcher_game.player_added.connect(func(added: ArenaPlayer) -> void: order.append(added.player_id))
+	for payload in sent:
+		var _got := watcher.receive_event(payload)
+	_check(sent.size() >= 6 and watcher.events_waiting() > 0 and order.size() < expected.size(),
+		"a backlog past the frame budget waits for later frames",
+		"%d sent, %d waiting, %d joined" % [sent.size(), watcher.events_waiting(), order.size()])
+	var frames := 0
+	while watcher.events_waiting() > 0 and frames < 120:
+		await get_tree().process_frame
+		frames += 1
+	_check(watcher.events_waiting() == 0 and order == expected and frames > 1,
+		"and every event lands over the frames that follow, in arrival order",
+		"%d frames, joined %s" % [frames, str(order)])
+
+	for node: Node in [watcher, watcher_game, watcher_net, bridge, game, net]:
+		node.queue_free()
+	_done()
+
+
 func _test_predicted_node_is_not_moved() -> void:
 	print("")
 	_section("[the predicted entity's node]")

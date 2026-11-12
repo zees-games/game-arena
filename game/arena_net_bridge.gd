@@ -6,6 +6,13 @@ const ArenaNetCommand := preload("arena_net_command.gd")
 ## packet. Fixed width, so the command that follows starts at a known offset.
 const ACK_BYTES := 4
 
+## Microseconds of event handling a frame may spend before later events wait a frame; 0 handles each on arrival.
+var event_budget_usec := 0
+
+var _events_waiting: Array[PackedByteArray] = []
+var _event_frame := -1
+var _event_usec := 0
+
 
 # --- Bots ------------------------------------------------------------------
 
@@ -299,11 +306,53 @@ func note_score_limit_changed() -> void:
 ## Through `DotNetManager.receive` rather than straight to the registry: that is where
 ## the payload cap, the per-peer rate limit and the direction check live, and a bridge
 ## that decoded for itself would be a second entry point with none of them.
+##
+## With [member event_budget_usec] set, events past a frame's budget wait for the next frame, in
+## arrival order (a join backlog of 32 players and the arming was one 300 ms frame on staging02).
 func receive_event(payload: PackedByteArray) -> DotResult:
 	if net == null:
 		return DotResult.fail(DotError.CODE_STATE, "No manager.")
+	if event_budget_usec <= 0:
+		return net.receive(payload, 1)
+	if not _events_waiting.is_empty() or _event_usec_this_frame() >= event_budget_usec:
+		_wait_event(payload)
+		return DotResult.success(0)
+	return _receive_timed(payload)
 
-	return net.receive(payload, 1)
+
+## Events [method receive_event] holds for a later frame.
+func events_waiting() -> int:
+	return _events_waiting.size()
+
+
+func _event_usec_this_frame() -> int:
+	return _event_usec if _event_frame == Engine.get_process_frames() else 0
+
+
+func _receive_timed(payload: PackedByteArray) -> DotResult:
+	var frame := Engine.get_process_frames()
+	if _event_frame != frame:
+		_event_frame = frame
+		_event_usec = 0
+	var started := Time.get_ticks_usec()
+	var received := net.receive(payload, 1)
+	_event_usec += Time.get_ticks_usec() - started
+	return received
+
+
+func _wait_event(payload: PackedByteArray) -> void:
+	_events_waiting.append(payload)
+	if is_inside_tree() and not get_tree().process_frame.is_connected(_drain_events):
+		get_tree().process_frame.connect(_drain_events)
+
+
+## On process_frame, after the frame's poll: what the poll's events left of the budget goes to the oldest waiting.
+func _drain_events() -> void:
+	while not _events_waiting.is_empty() and net != null and _event_usec_this_frame() < event_budget_usec:
+		var _received := _receive_timed(_events_waiting.pop_front())
+	if _events_waiting.is_empty() or net == null:
+		_events_waiting.clear()
+		get_tree().process_frame.disconnect(_drain_events)
 
 
 ## A request arrived. Server side.
@@ -363,4 +412,5 @@ func describe() -> Dictionary:
 		"tick": _tick,
 		"ticked_for": _game_ticked_for,
 		"inputs_from": inputs_from,
+		"events_waiting": _events_waiting.size(),
 	}

@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_acks_and_recovery()
 	_test_owner_only()
 	_test_ready_gate()
+	await _test_event_budget()
 	_test_predicted_node_is_not_moved()
 	await _test_map_sync_wire()
 	# The new map's TOYS, which a real link delivers to every ready peer (this harness routes
