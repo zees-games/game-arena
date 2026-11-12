@@ -24,6 +24,9 @@ const STATE_NAMES: Array[String] = ["closed", "warming", "open"]
 ## A frame at least this long is stamped and counted: the startup goal is none over 100 ms.
 const SLOW_FRAME_MS := 100
 var _slow_frames := 0
+var _title := "time to playable"
+## The first load starts with the gate closed; a rearmed one waits for it to close.
+var _seen_closed := true
 
 
 ## A named moment in the client's own load, e.g. `mark("level_built")`. A frame's own stamps pass [param detail] (a hold, a gap, a state) instead of a built string; [method _report] words them once.
@@ -37,6 +40,20 @@ func _ready() -> void:
 	process_physics_priority = 1 << 30
 	set_physics_process(false)
 	_last_ms = Time.get_ticks_msec()
+	mark("timeline_start")
+
+
+## Times a later load the same way, e.g. a map change: stamps from now, reported (under [param title]) once the
+## gate has closed and opened again. The gate is still open when a change starts, so it must close before it counts.
+func rearm(title: String) -> void:
+	_marks.clear()
+	_title = title
+	_worst_ms = 0
+	_slow_frames = 0
+	_last_ms = Time.get_ticks_msec()
+	_done = false
+	_seen_closed = false
+	set_process(true)
 	mark("timeline_start")
 
 
@@ -100,7 +117,9 @@ func _process(_delta: float) -> void:
 	if s != _state:
 		_state = s
 		mark("gate", s)
-	if gate.is_open():
+	if not gate.is_open():
+		_seen_closed = true
+	elif _seen_closed:
 		_done = true
 		set_process(false)
 		_report.call_deferred()
@@ -121,6 +140,6 @@ func _report() -> void:
 		rows.append("%d(+%d,f%d) %s" % [int(m[0]), int(m[0]) - prev, int(m[1]), label])
 		marks.append([m[0], m[1], label])
 		prev = int(m[0])
-	DotLog.info(CHANNEL, "time to playable, engine ms (+gap, frame): " + "; ".join(rows), {"worst_frame_ms": _worst_ms, "slow_frames": _slow_frames})
+	DotLog.info(CHANNEL, _title + ", engine ms (+gap, frame): " + "; ".join(rows), {"worst_frame_ms": _worst_ms, "slow_frames": _slow_frames})
 	if DotWeb.available():
 		DotWeb.publish("arena_load", JSON.stringify({"marks": marks, "worst_frame_ms": _worst_ms, "slow_frames": _slow_frames}))

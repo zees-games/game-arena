@@ -1,6 +1,7 @@
 extends RefCounted
 
 const ArenaPaths := preload("../game/arena_paths.gd")
+const ArenaLoadTimeline := preload("../game/arena_load_timeline.gd")
 
 ## A map imported from a compiled `.bsp` by game-airdrift's importer, built here from the
 ## manifest it wrote: the drawn mesh, the baked lightmap, the brushes as convex hulls, the
@@ -127,16 +128,19 @@ static func draw_world_async(drawn: Node3D, id: String, map_dir: String, slice: 
 	# while the pack is read: a plain load() of them was a 40 to 110 ms frame.
 	var threaded := ResourceLoader.load_threaded_request(DRAWN_WORLD) == OK
 	var got: DotResult = await DotMapBspMesh.load_prefix_async(prefix)
+	ArenaLoadTimeline.mark("world: pack read")
 	var tree := Engine.get_main_loop() as SceneTree
 	while threaded and tree != null and ResourceLoader.load_threaded_get_status(DRAWN_WORLD) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
 		await tree.process_frame
 	if threaded:
 		ResourceLoader.load_threaded_get(DRAWN_WORLD)
+	ArenaLoadTimeline.mark("world: script loaded")
 	if not is_instance_valid(drawn):
 		return false
 	var plan := _draw_plan(drawn, id, got)
 	if plan.is_empty():
 		return false
+	ArenaLoadTimeline.mark("world: planned")
 	await (plan.script as GDScript).call("attach_async", drawn, plan.mesh, plan.options, slice)
 	return true
 
