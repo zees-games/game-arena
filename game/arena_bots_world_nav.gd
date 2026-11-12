@@ -169,11 +169,15 @@ class NavWorld:
 		if _surf_looked:
 			return _surf
 		_surf_looked = true
+		var t_link := Time.get_ticks_usec()
 		_link_ladders(nav)
+		ArenaFrameProbe.add(&"bot_nav_links", t_link)
 		if DotAddonApi.build_level("dot_bot") < 4 or DotAddonApi.build_level("dot_player_controller") < 3:
 			return null
+		var t_surf := Time.get_ticks_usec()
 		var surf_script := load(ArenaPaths.rebase("res://game/arena_surf.gd")) as GDScript
 		_surf = surf_script.call(&"load_for", game.get("map"), nav) if surf_script != null else null
+		ArenaFrameProbe.add(&"bot_surf_load", t_surf)
 		return _surf
 
 	## How many ladders the bots can climb on this map: climb edges in the mesh.

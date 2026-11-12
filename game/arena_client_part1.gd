@@ -5,6 +5,8 @@ const ArenaProfilerContext := preload("arena_profiler_context.gd")
 
 ## Milliseconds of level building between frames while the map loads ([method _enter_level]).
 const LEVEL_SLICE_MS := 10
+## Frames a menu map change traces (ArenaLoadTimeline.trace_frames): its ticks, steps and draws, to the level's first frames.
+const CHANGE_TRACE_FRAMES := 40
 
 ## Whether E is the prop tool's key here: only in a mode where players use props. Anywhere
 ## else E is the launch, which is what most of the arena's modes want it for.
@@ -184,12 +186,30 @@ func change_from_menu(id: StringName, picked_mode: StringName = &"") -> DotResul
 		return await _change_on_host(String(id), String(picked_mode))
 	if not _offline:
 		return DotResult.fail(DotError.CODE_STATE, "The server changes the map.")
+	var timeline := get_node_or_null(^"LoadTimeline") as ArenaLoadTimeline
+	if timeline != null:
+		timeline.rearm("map change %s to playable" % String(id))
+		if not DotPlatform.is_headless():
+			timeline.trace_frames(CHANGE_TRACE_FRAMES)
+	# The cover goes up before any of the work, under a reason of its own: the fetch and the level each hold and
+	# release &"map", and a gap between them would draw the half-changed game for a frame.
+	gate.hold(&"change", "Loading the map")
+	_changing = true
+	Engine.max_physics_steps_per_frame = 1
+	var changed: DotResult = await _change_covered(id, picked_mode)
+	_changing = false
+	gate.release(&"change")
+	return changed
+
+
+## [method change_from_menu] behind its cover, one heavy step a frame: the menu's map list, the game's
+## [code]change_map[/code], then the level in slices ([method _on_map_changed]).
+func _change_covered(id: StringName, picked_mode: StringName) -> DotResult:
 	var text := String(id)
 	var map := game.map
 	var mode: ArenaMode = null
-	var timeline := get_node_or_null(^"LoadTimeline") as ArenaLoadTimeline
-	if timeline != null:
-		timeline.rearm("map change %s to playable" % text)
+	var _listed := await _catalogue_sliced()
+	ArenaLoadTimeline.mark("change: maps listed")
 	if text.begins_with("map:"):
 		var fetched := await _fetch_picked(StringName(text.substr(4)))
 		ArenaLoadTimeline.mark("change: map fetched")
@@ -212,13 +232,15 @@ func change_from_menu(id: StringName, picked_mode: StringName = &"") -> DotResul
 		map = rebuilt.value
 	if map == null:
 		return DotResult.fail(DotError.CODE_INVALID, "There is no map called '%s'." % text)
+	await get_tree().process_frame
 	var changed := game.change_map(map, mode)
 	ArenaLoadTimeline.mark("change: game changed")
 	if not changed.ok:
 		return changed
 	var def := _catalogue().get_map(map.id)
 	if def != null:
-		_on_map_changed.call(def)
+		await get_tree().process_frame
+		await _on_map_changed(def)
 	return DotResult.success(id)
 
 ## The cursor, from one place. A screen that wants the mouse gets it; otherwise the game does, subject to the
