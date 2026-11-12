@@ -62,6 +62,10 @@ MIN_TIMEOUTS="headless_imported=3000 headless_bots=2400"
 # `test NAME.SHARD` plays one shard; `test NAME.merge` only the merge over logs already in .godot/test-logs.
 # `suites --shards` lists the shards instead of the suite (`hv shard` runs them as separate jobs, then NAME.merge).
 SUITE_SHARDS="headless_bots=easy,medium,hard,nightmare headless_imported=rest,maps0,maps1,maps2,maps3 headless_hitbox=stand_still,stand_strafe,crouch_still,crouch_strafe headless_viewarms=w0,w1,w2,w3 headless_bot_hitreg=direct,brain,crowd headless_lossy=windows,moves,rest"
+# A suite whose frames are stepped at a fixed rate instead of on the wall clock, as
+# name=frames-per-second (the engine's --fixed-fps): what it measures between a frame and
+# a tick is then the same on an idle box and a starved one.
+FIXED_FPS="headless_aimlocal=132"
 RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; OFF=$'\033[0m'
 CR=$'\r\033[K'
 [ -t 1 ] || { RED=""; GRN=""; YLW=""; OFF=""; CR=""; }
@@ -144,7 +148,11 @@ run_suite() {
     for mkv in $MIN_TIMEOUTS; do
         [ "${mkv%%=*}" = "$base" ] && [ "$limit" -lt "${mkv#*=}" ] && limit="${mkv#*=}"
     done
-    timeout "$limit" "$GODOT" --headless --path . "res://examples/$base.tscn" ${extra[@]+-- "${extra[@]}"} >"$log" 2>&1
+    local fixed=()
+    for mkv in $FIXED_FPS; do
+        [ "${mkv%%=*}" = "$base" ] && fixed=(--fixed-fps "${mkv#*=}")
+    done
+    timeout "$limit" "$GODOT" --headless --path . ${fixed[@]+"${fixed[@]}"} "res://examples/$base.tscn" ${extra[@]+-- "${extra[@]}"} >"$log" 2>&1
     status=$?
     summary="$(grep -Eo '[0-9]+ (passed|checks), [0-9]+ failed' "$log" | tail -1)"
     # Section accounting: "N sections entered, M finished" from DotGameCheckSuite._report_sections.

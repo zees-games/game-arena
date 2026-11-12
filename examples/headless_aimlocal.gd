@@ -21,6 +21,8 @@ var _shots: Array = []
 ## Frames in the firing windows, and how many of them ran a physics tick: the cadence the gap depends on.
 var _frames := 0
 var _frames_ticked := 0
+var _worst_gap := 0.0
+var _worst_tag := ""
 
 
 func _ready() -> void:
@@ -185,6 +187,10 @@ func _run() -> void:
 				fired_total += fired
 				all_origin.append_array(origins)
 				all_extra.append_array(extra)
+				for e in extra:
+					if float(e) > _worst_gap:
+						_worst_gap = float(e)
+						_worst_tag = tag
 				print("  %s: %d/%d hit | camera-vs-bullet deg %s | pitch gap (bullet-camera) %s | camera-muzzle m %s | raw gap %s" % [
 					tag, landed, fired, _stat(gaps), _stat(pitch_gaps), _stat(origins), _stat(extra)])
 	var worst := 0.0
@@ -199,7 +205,7 @@ func _run() -> void:
 	print("  firing frames %d, %d of them ran a tick%s" % [_frames, _frames_ticked,
 		"" if _frames_ticked * 2 == _frames else "  (NOT STEPPED: run with --fixed-fps 132, as game.sh does; the gap below depends on this box's load)"])
 	_check(fired_total > 0, "shots were fired and measured", str(fired_total))
-	_check(worst <= MAX_RAY_GAP_EXTRA, "the bullet leaves the camera ray (spread is added later, so the gap is recoil follow only: <= %.2f deg)" % MAX_RAY_GAP_EXTRA, "worst %.3f" % worst)
+	_check(worst <= MAX_RAY_GAP_EXTRA, "the bullet leaves the camera ray (spread is added later, so the gap is recoil follow only: <= %.2f deg)" % MAX_RAY_GAP_EXTRA, "worst %.3f at %s, %d frames %d ticked" % [worst, _worst_tag, _frames, _frames_ticked])
 	_check(worst_origin <= MAX_ORIGIN_GAP, "the muzzle sits on the camera (+%.2f m)" % MAX_ORIGIN_GAP, "worst %.3f" % worst_origin)
 	client.queue_free()
 	var ok := _failed == 0
