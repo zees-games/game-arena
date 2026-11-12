@@ -74,6 +74,8 @@ static func world() -> DotDamageType:
 ## to the pack, so a launcher's splash and the registered "blast" are one rule. Two copies
 ## built independently would agree today and drift the first time somebody tuned one.
 static var _damage: Dictionary = {}
+static var _item_catalogue: DotItemCatalogue = null
+static var _item_catalogue_generation := -1
 
 
 static func damage_table() -> Dictionary:
@@ -321,11 +323,17 @@ static func in_give_order(entries: Array[Dictionary]) -> Array[Dictionary]:
 ## not something dot-loadout requires — it is what makes `weapon_table()[item.id]` the
 ## whole of the mapping, and dot-loadout's `arsenal_slot` hint the whole of the rest.
 static func catalogue() -> DotItemCatalogue:
+	Roles.ensure()
+	# Built once per role table: it rebuilt the whole weapon list twice per call, and a
+	# client builds a loadout schema inside a loading frame.
+	if _item_catalogue != null and _item_catalogue_generation == Roles.generation:
+		return _item_catalogue
 	var items: Array[DotItem] = []
+	var all_weapons := weapons()
 
 	# Utility grenades are entitled by `sv_grenade_utility`, like the launcher is by the game's source.
-	var utility := Grenades.utility_ids(weapons())
-	for weapon in weapons():
+	var utility := Grenades.utility_ids(all_weapons)
+	for weapon in all_weapons:
 		var item := DotItem.make(weapon.id, DotItem.KIND_WEAPON, weapon.id != PAID_WEAPON and not utility.has(weapon.id))
 		item.display_name = weapon.display_name
 		# One loadout slot per weapon, from the pack's arsenal slot. A knife in the
@@ -342,7 +350,9 @@ static func catalogue() -> DotItemCatalogue:
 	armour.cost = 0
 	items.append(armour)
 
-	return DotItemCatalogue.of(items)
+	_item_catalogue = DotItemCatalogue.of(items)
+	_item_catalogue_generation = Roles.generation
+	return _item_catalogue
 
 
 ## The loadout schema: a melee, a sidearm, a primary, a throwable and a gear slot, on a
