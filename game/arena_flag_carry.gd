@@ -97,10 +97,16 @@ static func filter_command(player, cmd: DotWeaponCommand) -> void:
 static func mark_carriers(objectives) -> void:
 	var game = objectives.game
 	var ctf: DotObjectiveCtf = objectives.ctf
+	# One flags() pass a tick instead of one carried_by (a new flags() array) per player.
+	var carriers := {}
+	if one_hand and ctf != null:
+		for f in ctf.flags():
+			if f.state == DotObjectiveFlag.State.CARRIED:
+				carriers[f.carrier] = true
 	for id in game.player_ids():
 		var player = game.player_for(id)
 		if player != null:
-			player.flag_one_hand = one_hand and ctf != null and ctf.carried_by(str(id)) != null
+			player.flag_one_hand = carriers.has(str(id))
 
 
 ## Server: the drop key while carrying drops the flag ahead of the aim. True when it did (the weapon stays in hand).

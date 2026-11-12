@@ -645,19 +645,19 @@ func _resolve_stomps() -> void:
 	_sync_stomp_config()
 	if not stomp.rules.enabled or combat == null:
 		return
+	# The hull list is gathered only once someone falls fast enough to stomp: DotStomp.find
+	# returns 0 below min_speed without reading it, and most ticks nobody does.
 	var hulls: Array = []
-	for id in player_ids():
-		var other: ArenaPlayer = _players[id]
-		if not other.is_alive() or other.controller == null:
-			continue
-		hulls.append({
-			"id": id, "feet": other.controller.state.position, "team": team_of(id) if not teams().is_empty() else -1,
-			"height": other.controller.tunables.stand_height, "radius": other.controller.tunables.radius,
-		})
+	var gathered := false
 	for id in player_ids():
 		var player: ArenaPlayer = _players[id]
 		if not _pre_vy.has(id) or not player.is_alive():
 			continue
+		if -float(_pre_vy[id]) < stomp.rules.min_speed:
+			continue
+		if not gathered:
+			hulls = _stomp_hulls()
+			gathered = true
 		var state: DotFpsState = player.controller.state
 		var victim := stomp.find(
 			id, state.position, player.controller.tunables.radius, -float(_pre_vy[id]),
@@ -678,6 +678,20 @@ func _resolve_stomps() -> void:
 		stomped.emit(id, victim, -float(_pre_vy[id]), state.position, stomp.rules.sound, stomp.rules.effect)
 		if progress != null:
 			progress.record(id, ArenaStats.STOMPS)
+
+## Every live player's hull for DotStomp.find.
+func _stomp_hulls() -> Array:
+	var hulls: Array = []
+	for id in player_ids():
+		var other: ArenaPlayer = _players[id]
+		if not other.is_alive() or other.controller == null:
+			continue
+		hulls.append({
+			"id": id, "feet": other.controller.state.position, "team": team_of(id) if not teams().is_empty() else -1,
+			"height": other.controller.tunables.stand_height, "radius": other.controller.tunables.radius,
+		})
+	return hulls
+
 
 # --- Simulation ------------------------------------------------------------
 
