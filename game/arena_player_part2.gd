@@ -441,7 +441,8 @@ func tick_pre(tick: int, movement_command: DotFpsCommand) -> void:
 	_tick_start = controller.state.position
 	_yaw_before_tick = controller.state.yaw
 	# The previous state's position before this tick replaces it: two ticks back after it.
-	_position_two_back = controller.render_state(0.0).position
+	# previous_position() (dot-player-controller 25) is render_state(0.0).position without duplicating the state, once per player per tick.
+	_position_two_back = controller.previous_position()
 	ladder.now = tick
 	var view := DotFpsMotor._view_basis(controller.state.yaw, 0.0)
 	var intent: Vector3 = view.right * movement_command.move.x + view.forward * movement_command.move.y
@@ -620,8 +621,7 @@ func _render_state(alpha: float) -> DotFpsState:
 		# A controller that does not blend hands back its state itself; never move that.
 		return drawn
 	if alpha > 1.0:
-		var before := controller.render_state(0.0)
-		drawn.position += (drawn.position - before.position) * minf(alpha - 1.0, 1.0)
+		drawn.position += (drawn.position - controller.previous_position()) * minf(alpha - 1.0, 1.0)
 	elif _position_two_back.is_finite():
 		drawn.position = _position_two_back.lerp(drawn.position, maxf(alpha + 1.0, 0.0))
 	return drawn
@@ -640,7 +640,7 @@ func _absorb_step(alpha: float, delta: float) -> float:
 		_step_tick = state.tick
 		_step_rise = 0.0
 		_step_drawn = 0.0
-		var before := controller.render_state(0.0).position
+		var before := controller.previous_position()
 		var rise := state.position.y - before.y
 		var across := Vector2(state.position.x - before.x, state.position.z - before.z).length()
 		var tunables := controller.tunables
