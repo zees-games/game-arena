@@ -77,13 +77,19 @@ const ROAM_SECONDS := 90.0
 ## the last to get any; see docs/imported-maps.md, "Which maps have rides".
 const ROTATION_RIDE_MAPS: Array[StringName] = [&"surf_10x_reloaded_fixed", &"surf_snipers_island", &"surf_the_flow"]
 ## Their starts, and how many must land. Wider than [constant RIDE_STARTS] on purpose: 10x's
-## edge lands 55% of live rides, so 2 of 6 fails about one in fifteen and still catches a
-## ride that has stopped working.
+## edges are 10 s rides that land one start in four to eight.
 const ROTATION_RIDE_STARTS := 6
-## Per planned edge in file order (10x: edges 0, 2 and 5 of the file, the last to the far platform 22).
-## Measured live 55%, 45% and 40% (`tools/surf_rides.tscn --measure`), and 2 of 6 starts landed on
-## each here; 2 is the bar for the same reason as before, and a ride that has stopped working lands none.
-const ROTATION_RIDE_LANDING: Array = [1, 2, 2]
+## While short of the bar, a ride check spends up to this many times its starts (48 for 6).
+const RIDE_START_BUDGET := 8
+## The seed of the perturbed starts; `-- --rotation --rotation-seed=N` draws others.
+const ROTATION_RIDE_SEED := 41
+var _rotation_seed := ROTATION_RIDE_SEED
+## Per planned edge in file order (10x: file edges 0, 1 and 2, about 300 m each). Ridden here at 66 Hz
+## from 5 seeds (`-- --rotation --rotation-seed=N`) they landed 8 of 35, 10 of 76 and 10 of 28 starts
+## (23%, 13%, 36%; the cache's own records say 52%, 22%, 20% simulated); most misses fall into the
+## teleport under the ramp. With 48 starts, 1, 1 and 2 landings fail by chance about once in 700
+## runs (2 of 24 on edge 1 failed about one run in six), and a ride that has stopped working lands none.
+const ROTATION_RIDE_LANDING: Array = [1, 1, 2]
 ## surf_snipers_island's three edges go from the pads its teleports put a player on down to the
 ## island with the spawns (0.6 to 1.7 s, 64 to 107 m); they land 100% of simulated and live rides
 ## (`--measure`), so five of six is the bar and one miss is tolerated.
@@ -520,11 +526,17 @@ func _ride_edge(map_id: StringName, world: ArenaBots.World, surf: ArenaSurf, edg
 	var alive := 0
 	var notes: Array[String] = []
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 41
-	# A long, chaotic ride lands about half its starts, so a bare 'need of starts' fails on chance alone:
-	# while short of the bar, spend up to four times the starts before judging.
+	rng.seed = _rotation_seed
+	# Ridden at the rate the cache was planned at ([constant RIDE_CACHE_RATE]), as the recorded ride and
+	# `--measure` are, not at the suite's 64 Hz (on 10x's edge 1 that cost little: 6 of 51 starts landed
+	# at 64 Hz, 10 of 76 at 66; the plan's own rate is what limits it).
+	var suite_rate := _game.tick_rate
+	_game.set_tick_rate(RIDE_CACHE_RATE)
+	var rate := float(RIDE_CACHE_RATE)
+	# A long, chaotic ride lands one start in four to eight, so a bare 'need of starts' fails on chance
+	# alone: while short of the bar, spend up to [constant RIDE_START_BUDGET] times the starts before judging.
 	var k := -1
-	while k + 1 < starts or (landed < need and k + 1 < starts * 4):
+	while k + 1 < starts or (landed < need and k + 1 < starts * RIDE_START_BUDGET):
 		k += 1
 		if not bot.is_alive():
 			_game.respawn_player(id)
@@ -539,11 +551,11 @@ func _ride_edge(map_id: StringName, world: ArenaBots.World, surf: ArenaSurf, edg
 		var mind := ArenaBots.Mind.new()
 		mind.seed = 77 + k
 		# What the route hands it when it reaches the edge's start.
-		mind.ride = DotBotSurfRide.new().begin(edge.cache, edge.course, surf._sim_for(edge, bot.controller), tick, float(TICK_RATE))
+		mind.ride = DotBotSurfRide.new().begin(edge.cache, edge.course, surf._sim_for(edge, bot.controller), tick, rate)
 		var before := surf.landed
 		var ticks := 0
-		while mind.ride != null and ticks < int(ArenaSurf.RIDE_SECONDS * TICK_RATE) + 4:
-			_game.tick({id: ArenaBots.think(_game, bot, mind, tick, float(TICK_RATE))})
+		while mind.ride != null and ticks < int(ArenaSurf.RIDE_SECONDS * rate) + 4:
+			_game.tick({id: ArenaBots.think(_game, bot, mind, tick, rate)})
 			tick += 1
 			ticks += 1
 			if ticks % 32 == 0:
@@ -552,7 +564,8 @@ func _ride_edge(map_id: StringName, world: ArenaBots.World, surf: ArenaSurf, edg
 		var made_it := surf.landed > before and surf.nav.on_island(edge.course.landing_island, feet, 0.6)
 		landed += 1 if made_it else 0
 		alive += 1 if made_it and bot.is_alive() else 0
-		notes.append("%s %.2f s at %s" % ["landed" if made_it else "missed", float(ticks) / TICK_RATE, str(feet.round())])
+		notes.append("%s %.2f s at %s" % ["landed" if made_it else "missed", float(ticks) / rate, str(feet.round())])
+	_game.set_tick_rate(suite_rate)
 	_line("     edge %d, %.0f m: %s" % [edge.id, edge.from.distance_to(edge.to), "; ".join(notes)])
 	_check(landed >= need and alive == landed,
 		"a bot rides it to the platform below and lands alive (%d of %d, %d needed)" % [landed, k + 1, need])

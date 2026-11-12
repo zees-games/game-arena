@@ -131,6 +131,16 @@ func _run_part2() -> void:
 		get_tree().quit(1 if _failed > 0 else 0)
 		return
 
+	# `-- --rotation [--rotation-seed=N]`: only the rotation's rides, their perturbed starts drawn from seed N
+	# (ROTATION_RIDE_SEED by default), for measuring how often an edge lands (the suite's own totals then do not hold).
+	if OS.get_cmdline_user_args().has("--rotation"):
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--rotation-seed="):
+				_rotation_seed = int(arg.trim_prefix("--rotation-seed="))
+		await _test_rotation_rides()
+		get_tree().quit(1 if _failed > 0 else 0)
+		return
+
 	await _test_spawns_on_the_floor()
 	await _test_deathmatch()
 	await _test_bot_routes()
