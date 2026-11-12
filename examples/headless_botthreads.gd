@@ -143,7 +143,11 @@ func _play(count: int, map_id: StringName = &"") -> Array:
 		while world.is_route_pending() and frames < 3000:
 			await get_tree().process_frame
 			frames += 1
-		var _warm := world.warm()
+		# The navigation server syncs its map a frame or more after the bake lands; a match that starts before
+		# warm() is true gets its routes and surf on a load-dependent tick, and no two runs then agree.
+		while not world.warm() and frames < 3000:
+			await get_tree().process_frame
+			frames += 1
 	var digests := PackedStringArray()
 	var window := PackedStringArray()
 	for tick_index in int((SECONDS if map_id == &"" else IMPORTED_SECONDS) * TICK_RATE):
