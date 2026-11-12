@@ -2,6 +2,9 @@ extends "arena_module_b2.gd"
 
 
 const ArenaTeamMenu := preload("arena_team_menu.gd")
+const _Content := preload("arena_content.gd")
+## arena-weapons' `AwWeaponGroups` (API 14), loaded by path: a build on an older arena-weapons has no such class, and naming it would not parse.
+const WEAPON_GROUPS_SCRIPT := "res://addons/arena_weapons/aw_weapon_groups.gd"
 
 
 func _module_name() -> String:
@@ -15,6 +18,38 @@ func _map_config_game() -> String:
 ## FFA stays solid; see [method ArenaGame.block_side].
 func _noblock_side(id: Variant) -> Variant:
 	return game.block_side(id)
+
+
+## The download groups a joining web client needs, per addon dir: dot-server-deploy's host announces them, and the shell fetches
+## only those of the fc-weapons pack. Every weapon this server can hand out (loadouts, pickups, drops, admin gives all come from
+## the catalogue), because a group the client did not fetch cannot be added while it plays.
+func addon_groups() -> Dictionary:
+	var ids: Array = []
+
+	for def: DotWeaponDef in _Content.weapons():
+		ids.append(def.id)
+
+	return {"arena_weapons": weapon_groups(ids)}
+
+
+## The arena-weapons groups that hold [param ids]' art, or `["*"]` (everything) when that cannot be known for sure:
+## an arena-weapons older than API 14, or a weapon that is not arena-weapons' own (another pack's, whose art this list cannot name).
+static func weapon_groups(ids: Array) -> Array:
+	if DotAddonApi.build_level("arena_weapons") < 14 or not ResourceLoader.exists(WEAPON_GROUPS_SCRIPT):
+		return ["*"]
+
+	var groups: Script = load(WEAPON_GROUPS_SCRIPT)
+
+	if groups == null:
+		return ["*"]
+
+	var core: Array = groups.get_script_constant_map().get("CORE", [])
+
+	for id: Variant in ids:
+		if not core.has(StringName(id)) and str(groups.call("group_of", StringName(id))) == "":
+			return ["*"]
+
+	return Array(groups.call("groups_for", ids))
 
 
 func _module_version() -> String:
