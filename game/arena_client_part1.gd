@@ -119,6 +119,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 		await get_tree().process_frame
 	# The new map's own files (its bake, its rides) are a download group of their own; fetch them first.
 	var _topped: DotResult = await ArenaContentGroups.top_up(map.id)
+	ArenaLoadTimeline.mark("change: groups topped up")
 	# **The client has to ADOPT the map it was handed, and this is where that was missing.**
 	# `ArenaGame.map` is assigned in exactly three places — `setup`, the module's mode change, and
 	# `change_map` — and every one of them runs on the SERVER.
@@ -148,6 +149,7 @@ func _on_map_changed(map: DotMapDef) -> void:
 	else:
 		# The rebuilt game's drop layer is empty; fill it before the cover lifts (the hold must precede the map's release).
 		_repool_drops()
+		ArenaLoadTimeline.mark("change: repool armed")
 		await _enter_level(true)
 
 	# A mirroring client's combat manager is never rebuilt — `change_map` is the server's —
@@ -185,11 +187,16 @@ func change_from_menu(id: StringName, picked_mode: StringName = &"") -> DotResul
 	var text := String(id)
 	var map := game.map
 	var mode: ArenaMode = null
+	var timeline := get_node_or_null(^"LoadTimeline") as ArenaLoadTimeline
+	if timeline != null:
+		timeline.rearm("map change %s to playable" % text)
 	if text.begins_with("map:"):
 		var fetched := await _fetch_picked(StringName(text.substr(4)))
+		ArenaLoadTimeline.mark("change: map fetched")
 		if not fetched.ok:
 			return fetched
 		var built := _build_map(StringName(text.substr(4)))
+		ArenaLoadTimeline.mark("change: map read")
 		if not built.ok:
 			return built
 		map = built.value
@@ -206,6 +213,7 @@ func change_from_menu(id: StringName, picked_mode: StringName = &"") -> DotResul
 	if map == null:
 		return DotResult.fail(DotError.CODE_INVALID, "There is no map called '%s'." % text)
 	var changed := game.change_map(map, mode)
+	ArenaLoadTimeline.mark("change: game changed")
 	if not changed.ok:
 		return changed
 	var def := _catalogue().get_map(map.id)
