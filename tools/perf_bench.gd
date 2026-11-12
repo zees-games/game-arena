@@ -13,6 +13,8 @@ const ProcSplit := preload("proc_split.gd")
 ## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
 ## `--tier-body-near N`, `--tier-body-far N`: ticks between motor ticks of a coasting bot nobody sees (bot_tier_body_every_near/far; 1, the default, every tick).
 ## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
+## `--first-use 1` (dot-game's first-use rows): every weapon equipped, fired once cold and once warm, before the warm-up (offline only;
+## `--first-use-only a,b` for some ids); `--prewarm 0` skips the client's weapon warm-up, so `--ab DIR DIR::--prewarm 0 -- --first-use 1` prices it.
 ## `--proc-split 1`: the process phase split by wall clock and a census of what processes (tools/proc_split.gd); `--present-ablate N` (ArenaPlayer.present_ablate bits: 1 no figure animation, 2 no held, 4 held not processing, 8 no pose).
 
 var _pilot := true
@@ -81,6 +83,7 @@ func _ready() -> void:
 		(DotBotBrain as Script).set(&"target_first", false)
 	_ablate = String(args.get("ablate", "")).split(",", false)
 	preload("../game/arena_player.gd").present_ablate = int(args.get("present-ablate", 0))
+	preload("../game/arena_client_prewarm.gd").prewarm_weapons_enabled = int(args.get("prewarm", 1)) != 0
 
 
 func _setup_client(c: Node) -> void:
@@ -125,6 +128,42 @@ func _select_hosted() -> void:
 		await wait(0.25)
 		t += 0.25
 	say("sim host: hosted %s, map %s, players %d" % [client.get("_sim_host") != null, String(client.get("game").get("map").id), _players(client.get("game"))])
+
+
+## Each weapon id: equip it (the draw), fire it cold, then again warm, the player invulnerable. Rows "equip ID", "shot ID", "shot2 ID".
+func _first_use(_game: Object) -> void:
+	if _sim_host:
+		say("first use: offline only, not with --sim-host")
+		return
+	var ids: Array[StringName] = []
+	for id: StringName in AwWeaponCatalogue.table():
+		ids.append(id)
+	if args.has("first-use-only"):
+		ids.clear()
+		for s in String(args["first-use-only"]).split(",", false):
+			ids.append(StringName(s))
+	for id in ids:
+		var def: DotWeaponDef = AwWeaponCatalogue.table().get(id)
+		var me: Variant = client.get("player")
+		if def == null or me == null:
+			say("first use: skip %s (%s)" % [id, "no def" if def == null else "no player"])
+			continue
+		me.health.invulnerable = true
+		var _given: Variant = me.arsenal.give(id)
+		var _eq := await time_first_use("equip %s" % id, func() -> void: me.arsenal.equip(def.slot), Callable(), 0, 45)
+		var t := 0.0
+		while t < 3.0 and not (me.arsenal.current() != null and me.arsenal.current().id() == id):
+			await wait(0.1)
+			t += 0.1
+		if me.arsenal.current() == null or me.arsenal.current().id() != id:
+			say("first use: %s did not equip" % id)
+			continue
+		await wait(0.8)
+		for row in ["shot", "shot2"]:
+			# Held ten frames, so a physics tick sees it at any frame rate; the window runs on to the impact and the shell.
+			var _shot := await time_first_use("%s %s" % [row, id], func() -> void: Input.action_press(&"arena_fire"),
+				func() -> void: Input.action_release(&"arena_fire"), 10, 45)
+			await wait(1.0)
 
 
 func _start_pilot(_game: Object) -> void:

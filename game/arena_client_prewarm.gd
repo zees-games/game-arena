@@ -22,6 +22,9 @@ const PREWARM_FIGURES := 4
 const FX_POOL_SHOTS := 32
 const FX_POOL_CHARGES := 12
 const FX_POOL_FLASH_FRAMES := 600
+## False skips the weapon warm-up below (views, flashes, effect pool, drop bodies, kill screens): the perf bench's `--prewarm 0`,
+## for the A/B of what it buys a first shot. Read when the local player first spawns.
+static var prewarm_weapons_enabled := true
 
 ## Builds the pool every remote hand takes its first shot, charge and flash from, [param budget_msec] a frame.
 ## True when it is full. The first shot of each of 24 bots built its own in the tick (345 ms in the owner's profile).
@@ -79,6 +82,12 @@ func _prewarm_tick() -> void:
 				for category in ["pistol", "smg", "rifle", "shotgun"]:
 					for fp in [true, false]:
 						DotWeaponMuzzle.warm(host, category, null, fp)
+				# The first layered shot builds dot-audio's manager, room and player (65 ms on the first knife swing): now, under the cover.
+				if host != self and host.has_method(&"prewarm_layers"):
+					var _layered: Variant = host.call(&"prewarm_layers")
+				# The launcher's round: its glowing sphere compiled on the first launcher shot.
+				if projectile_view != null:
+					gate.warm_up(projectile_view.warm())
 				# The first death builds bodies, joints and shapes the physics server has never made (32 ms in a web build): make and drop one now.
 				if ragdolls != null:
 					ragdolls.prewarm()
@@ -217,7 +226,7 @@ func _prewarm_end() -> void:
 ## Builds every weapon's first-person view once on a spare view model, under the loading cover.
 func _prewarm_weapons(body: ArenaPlayer) -> void:
 	# Headless draws nothing, so the spare views only add nodes, memory and frames (perf smoke).
-	if DotPlatform.is_headless() or gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
+	if not prewarm_weapons_enabled or DotPlatform.is_headless() or gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
 		return
 	var spare := AwViewModel.new()
 	spare.name = "WeaponPrewarm"

@@ -126,19 +126,16 @@ func _fuse_light() -> OmniLight3D:
 	return light
 
 
+## The round's mesh and material, built now for a draw under the loading cover (DotLoadGate.warm_up): the first
+## launcher shot compiled them, 34 ms and 4 pipelines on a GPU box.
+func warm() -> Array:
+	_round_assets()
+	return [_round_mesh, _round_material]
+
+
 ## A small hot sphere with a light: a launcher's round, or anything without a model.
 func _round() -> Node3D:
-	if _round_mesh == null:
-		_round_mesh = SphereMesh.new()
-		_round_mesh.radius = ROUND_RADIUS
-		_round_mesh.height = ROUND_RADIUS * 2.0
-		_round_material = StandardMaterial3D.new()
-		_round_material.albedo_color = ROUND_COLOUR
-		_round_material.emission_enabled = true
-		_round_material.emission = ROUND_COLOUR
-		_round_material.emission_energy_multiplier = 3.0
-		_round_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-
+	_round_assets()
 	var holder := Node3D.new()
 
 	var mesh := MeshInstance3D.new()
@@ -154,6 +151,20 @@ func _round() -> Node3D:
 	holder.add_child(light)
 
 	return holder
+
+
+func _round_assets() -> void:
+	if _round_mesh != null:
+		return
+	_round_mesh = SphereMesh.new()
+	_round_mesh.radius = ROUND_RADIUS
+	_round_mesh.height = ROUND_RADIUS * 2.0
+	_round_material = StandardMaterial3D.new()
+	_round_material.albedo_color = ROUND_COLOUR
+	_round_material.emission_enabled = true
+	_round_material.emission = ROUND_COLOUR
+	_round_material.emission_energy_multiplier = 3.0
+	_round_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 
 static func _up_for(direction: Vector3) -> Vector3:
