@@ -21,6 +21,9 @@ var _tick_started := 0
 
 
 const STATE_NAMES: Array[String] = ["closed", "warming", "open"]
+## A frame at least this long is stamped and counted: the startup goal is none over 100 ms.
+const SLOW_FRAME_MS := 100
+var _slow_frames := 0
 
 
 ## A named moment in the client's own load, e.g. `mark("level_built")`. A frame's own stamps pass [param detail] (a hold, a gap, a state) instead of a built string; [method _report] words them once.
@@ -80,7 +83,8 @@ func _process(_delta: float) -> void:
 		return
 	var now := Time.get_ticks_msec()
 	_worst_ms = maxi(_worst_ms, now - _last_ms)
-	if now - _last_ms >= 250:
+	if now - _last_ms >= SLOW_FRAME_MS:
+		_slow_frames += 1
 		mark("slow_frame ms", now - _last_ms)
 	_last_ms = now
 	var reasons := gate.reasons()
@@ -117,6 +121,6 @@ func _report() -> void:
 		rows.append("%d(+%d,f%d) %s" % [int(m[0]), int(m[0]) - prev, int(m[1]), label])
 		marks.append([m[0], m[1], label])
 		prev = int(m[0])
-	DotLog.info(CHANNEL, "time to playable, engine ms (+gap, frame): " + "; ".join(rows), {"worst_frame_ms": _worst_ms})
+	DotLog.info(CHANNEL, "time to playable, engine ms (+gap, frame): " + "; ".join(rows), {"worst_frame_ms": _worst_ms, "slow_frames": _slow_frames})
 	if DotWeb.available():
-		DotWeb.publish("arena_load", JSON.stringify({"marks": marks, "worst_frame_ms": _worst_ms}))
+		DotWeb.publish("arena_load", JSON.stringify({"marks": marks, "worst_frame_ms": _worst_ms, "slow_frames": _slow_frames}))

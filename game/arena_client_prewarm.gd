@@ -69,6 +69,7 @@ func _prewarm_phase3(tick_start: int) -> void:
 	ArenaPlayer.warm_health_tag()
 	var slice_end := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
 	while int(_warm.get("figures", 0)) < PREWARM_FIGURES and Time.get_ticks_msec() < slice_end:
+		var figure_began := Time.get_ticks_usec()
 		var key := StringName("prewarm-%d" % int(_warm.get("figures", 0)))
 		var host := Node3D.new()
 		add_child(host)
@@ -76,6 +77,7 @@ func _prewarm_phase3(tick_start: int) -> void:
 		host.add_child(person)
 		person.build(ArenaAvatars.look_of(ArenaAvatars.stock_avatar(key), key), 1.8)
 		host.queue_free()
+		_step_mark("figure %d" % int(_warm.get("figures", 0)), figure_began)
 		_warm.figures = int(_warm.get("figures", 0)) + 1
 	if int(_warm.get("figures", 0)) >= PREWARM_FIGURES:
 		_warm.phase = 4
@@ -98,7 +100,9 @@ func _prewarm_phase2(tick_start: int) -> void:
 		gate.warm_up(looks)
 	elif _warm.drop_next >= ids.size() and int(_warm.get("screens", 0)) < KILL_SCREENS.size():
 		# The killer's screen: view models holding the starting weapons, arms, flash pool, crosshair. One screen a frame.
+		var screen_began := Time.get_ticks_usec()
 		_warm_kill_screen(int(_warm.get("screens", 0)))
+		_step_mark("kill screen %d" % int(_warm.get("screens", 0)), screen_began)
 		_warm.screens = int(_warm.get("screens", 0)) + 1
 	elif _warm.drop_next >= ids.size() and _warm_kill_meshes(drops_until):
 		pass
@@ -112,29 +116,13 @@ func _prewarm_phase2(tick_start: int) -> void:
 
 ## Phase 1: the muzzle flash scenes, the shot pools, the first explosion.
 func _prewarm_phase1(body: Variant, tick_start: int) -> void:
-	if not DotMuzzleFlash.available() or DotMuzzleFlash.pin_scenes(8):
-		var rig: Node3D = DotMuzzleFlash.prewarm(body.camera)
-		if rig != null:
-			rig.position = Vector3(0.0, 0.0, -1.5)
-		_warm.rig = rig
-		# One pool per size and view, built a node a frame, for the first real shot to take.
-		var host: Node = player.weapons.call(&"shot_fx") if weapon_draws_shots() else self
-		for category in ["pistol", "smg", "rifle", "shotgun"]:
-			for fp in [true, false]:
-				DotWeaponMuzzle.warm(host, category, null, fp)
-		# The first layered shot builds dot-audio's manager, room and player (65 ms on the first knife swing): now, under the cover.
-		if host != self and host.has_method(&"prewarm_layers"):
-			var _layered: Variant = host.call(&"prewarm_layers")
-		# The launcher's round: its glowing sphere compiled on the first launcher shot.
-		if projectile_view != null:
-			gate.warm_up(projectile_view.warm())
-		# The first death builds bodies, joints and shapes the physics server has never made (32 ms in a web build): make and drop one now.
-		if ragdolls != null:
-			ragdolls.prewarm()
-		if presentation != null and presentation.fx != null:
-			var cam: Transform3D = body.camera.global_transform
-			var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
-			presentation.fx.warm([ArenaPresentation.EXPLOSION, &"impact_spark"], at)
+	# Items while the slice lasts: built together these were one 410-650 ms frame on staging02, one a frame 14 frames.
+	var items_until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
+	while int(_warm.get("step", 0)) < PHASE1_STEPS and Time.get_ticks_msec() < items_until:
+		if not _prewarm_one_step(body, int(_warm.get("step", 0))):
+			break
+		_warm.step = int(_warm.get("step", 0)) + 1
+	if int(_warm.get("step", 0)) >= PHASE1_STEPS:
 		_warm.phase = 2
 		ArenaLoadTimeline.mark("prewarm 1 done: flash scenes, muzzle pools, explosion, own work %d ms" % (int(_warm_work_usec.get(1, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 
@@ -147,7 +135,13 @@ func _prewarm_phase0(tick_start: int) -> void:
 		if not is_instance_valid(_warm.spare):
 			break
 		var spare := _warm.spare as AwViewModel
-		# One weapon's equip split into stages (a cold sight fit, cuts and red dot are 220-440 ms in one go), one stage a frame.
+		var step_began := Time.get_ticks_usec()
+		var stage_now := int(_warm.get("stage", 0)) if bool(_warm.get("stepping", false)) else 0
+		_warm.stage = stage_now + 1
+		var step_of := "view %d stage %d" % [int(_warm.next), stage_now]
+		# One weapon's equip split into stages (a cold sight fit, cuts and red dot are 220-440 ms in one go). As many
+		# stages a frame as fit the slice: one a frame was ~250 frames for 27 weapons, most stages well under the
+		# slice, and every load frame also runs the match's ticks (11.6 s of a 21 s cover on staging02).
 		if bool(_warm.get("stepping", false)):
 			if not spare.prewarm_step():
 				_warm.stepping = false
@@ -156,8 +150,7 @@ func _prewarm_phase0(tick_start: int) -> void:
 			_warm.stepping = spare.prewarm_begin(arts[_warm.next] as AwWeaponVisual)
 			if not _warm.stepping:
 				_warm.next += 1
-		if bool(_warm.get("stepping", false)):
-			break  # the next frame continues this weapon
+		_step_mark(step_of, step_began)
 	if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
 		if is_instance_valid(_warm.spare):
 			(_warm.spare as Node).queue_free()
@@ -167,6 +160,65 @@ func _prewarm_phase0(tick_start: int) -> void:
 		_warm.phase = 1
 		ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000])
 
+
+## The muzzle pools phase 1 builds, one size and view a frame.
+const MUZZLE_CATEGORIES: Array[String] = ["pistol", "smg", "rifle", "shotgun"]
+## Phase 1's items: the flash scenes, a muzzle pool per category and view, the layered shot, the launcher round, a ragdoll, two effects.
+const PHASE1_STEPS := 2 + 8 + 4
+## A single warm-up item over this is stamped on the load timeline, so a slow frame names its cause.
+const STEP_MARK_MSEC := 50
+
+## Phase 1 item [param step]. False while it is still waiting (the flash scenes pin over several frames).
+func _prewarm_one_step(body: Variant, step: int) -> bool:
+	var began := Time.get_ticks_usec()
+	var what := ""
+	var host: Node = player.weapons.call(&"shot_fx") if weapon_draws_shots() else self
+	if step == 0:
+		what = "flash scenes"
+		if DotMuzzleFlash.available() and not DotMuzzleFlash.pin_scenes(8):
+			_step_mark(what, began)
+			return false
+	elif step == 1:
+		what = "flash draw"
+		var rig: Node3D = DotMuzzleFlash.prewarm(body.camera)
+		if rig != null:
+			rig.position = Vector3(0.0, 0.0, -1.5)
+		_warm.rig = rig
+	elif step < 10:
+		# One pool per size and view, built a node a frame, for the first real shot to take.
+		var category := MUZZLE_CATEGORIES[(step - 2) / 2]
+		var fp := (step - 2) % 2 == 0
+		what = "muzzle %s %s" % [category, "view" if fp else "world"]
+		DotWeaponMuzzle.warm(host, category, null, fp)
+	elif step == 10:
+		# The first layered shot builds dot-audio's manager, room and player (65 ms on the first knife swing): now, under the cover.
+		what = "layered shot"
+		if host != self and host.has_method(&"prewarm_layers"):
+			var _layered: Variant = host.call(&"prewarm_layers")
+	elif step == 11:
+		# The launcher's round: its glowing sphere compiled on the first launcher shot.
+		what = "launcher round"
+		if projectile_view != null:
+			gate.warm_up(projectile_view.warm())
+	elif step == 12:
+		# The first death builds bodies, joints and shapes the physics server has never made (32 ms in a web build): make and drop one now.
+		what = "ragdoll"
+		if ragdolls != null:
+			ragdolls.prewarm()
+	else:
+		what = "explosion, impact spark"
+		if presentation != null and presentation.fx != null:
+			var cam: Transform3D = body.camera.global_transform
+			var at := Transform3D(Basis.IDENTITY, cam.origin - cam.basis.z * 6.0)
+			presentation.fx.warm([ArenaPresentation.EXPLOSION, &"impact_spark"], at)
+	_step_mark(what, began)
+	return true
+
+## Stamps warm-up item [param what] when its own work since [param began_usec] passed [constant STEP_MARK_MSEC].
+func _step_mark(what: String, began_usec: int) -> void:
+	var msec := (Time.get_ticks_usec() - began_usec) / 1000
+	if msec >= STEP_MARK_MSEC:
+		ArenaLoadTimeline.mark("prewarm step %s: %d ms" % [what, msec])
 
 ## The two screens that draw a killer's view: the kill view's and the final killcam's.
 const KILL_SCREENS: Array[String] = ["KillViewScreen", "KillcamScreen"]
