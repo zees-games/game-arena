@@ -14,14 +14,25 @@ while (($#)); do
   case $1 in
     --anim | --anims) anims=$2; shift 2 ;;
     --soft) soft=1; shift ;;
-    *) echo "anim_review.sh: unknown argument $1" >&2; exit 2 ;;
+    *) echo "anim_review.sh: unknown argument $1 (weapons and clips are one comma list each: launcher,knife)" >&2; exit 2 ;;
   esac
 done
+# heavy and the godot it hands on live in gamedev's own bin dirs, which sudo -u gamedev leaves off PATH.
+command -v heavy > /dev/null || PATH=$HOME/bin:$HOME/.local/bin:/home/gamedev/bin:/home/gamedev/.local/bin:$PATH
+command -v heavy > /dev/null || { echo "anim_review.sh: no heavy on PATH (run as gamedev)" >&2; exit 2; }
 cd "$game"
 out=screenshots/anim_review
 log=$out/capture.log
 mkdir -p "$out"
-rm -f "$out"/*/*_sheet.png "$out"/*/*_metrics.json
+# Only the picked weapons' old sheets go: a run for one weapon keeps every other weapon's review.
+if [[ $weapons == all ]]; then
+  rm -f "$out"/*/*_sheet.png "$out"/*/*_metrics.json
+else
+  IFS=, read -ra picked <<< "$weapons"
+  for w in "${picked[@]}"; do
+    [[ -n $w && $w != */* && $w != .* ]] && rm -f "$out/$w"/*_sheet.png "$out/$w"/*_metrics.json
+  done
+fi
 pick=()
 [[ $weapons == all ]] || pick=(--only "$weapons")
 [[ $soft == 1 ]] && export GPU_OFFLOAD=0
