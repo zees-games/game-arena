@@ -121,6 +121,11 @@ static func profile() -> DotLightProfile:
 static func _build_imported(root: Node3D, map: Object) -> void:
 	var manifest := ArenaImportedMaps.manifest(map.id)
 
+	# A local copy has no legacy lighting block, which is expected rather than a broken manifest.
+	if manifest.is_empty() and str(map.get("local_prefix")) != "":
+		_fixed(root)
+		return
+
 	if manifest.is_empty():
 		DotLog.warn(CHANNEL, "an imported map's manifest did not read; it gets the fixed light", {
 			"map": String(map.id),

@@ -90,6 +90,15 @@ A server names its combat surf maps the way every game does: `ArenaMapDirector.s
 
 **Naming them is the server owner's, and publishing is a tag of fc-surf-dm-maps.** The ready-to-paste `cfg/game/game-arena/server.yml` block for every map is in that repository's README ("Naming them on a server"); dot-server-deploy's own `cfg/game/game-arena/server.yml` has no `game-fatal-contact` entry yet, and a map added after the last tag (v1.0.1) is not a pack until the next. Not covered by a suite: a real client fetching a real pack over the wire, and `_prefer_delivered`.
 
+## Maps copied in by hand
+
+A raw convert folder (`<name>.json`, `<name>.bin`, `textures/`) copied to `addons/maps/<folder>/` in a source checkout or to the user data folder's `maps/<folder>/` plays solo as `<name>_local`, titled "(local)". The folder may be the convert folder itself or a map folder with `convert/` inside; dot-map's `DotMapLocalMaps` finds it, and the first root wins.
+
+- Listed only when `ArenaMaps.list_local` is on, which the solo client and its sim host set. A server never lists one, so no rotation, vote or announcement can name a map other machines lack.
+- `ArenaLocalMaps` (maps/arena_local_maps.gd) builds the map from the mesh itself: spawns from its `spawns` (one is generated on the widest floor when it names none), bounds and the solid from the world hulls plus the solid props. The world is drawn and its movers built through `ArenaBspMap.world_prefix`, which answers a local id with the copied folder. There is no legacy manifest, so with no world drawn the level is empty but still solid.
+- Its version is the md5 of the manifest, so a re-converted copy is a new map.
+- `headless_local_maps` covers both roots with a small fixture; `-- --source=<convert folder>` repeats the checks on a real conversion.
+
 ## Doors, lifts and buttons
 
 A converted map whose manifest lists `movers` gets `ArenaMapIo` (`game/arena_map_io.gd`) as `game.map_io`: a dot-map `DotMapWorld` built with `movers_only` on every machine, so the brush entities, their I/O and their collision exist while the world model stays the game's own solid. A map with no movers, or a built-in one, gets null and pays nothing per frame. The host steps it in `ArenaGame.tick` and sends the state as `Kind.MAP_STATE` (a snapshot at signon, then change lists); a client applies it and advances the I/O clock between messages. `sv_use_reach` and `sv_use_cooldown` come from `DotMapUse`.

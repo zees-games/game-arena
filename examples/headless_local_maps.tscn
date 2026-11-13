@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://examples/headless_local_maps.gd" id="1_lm"]
+
+[node name="HeadlessLocalMaps" type="Node"]
+script = ExtResource("1_lm")

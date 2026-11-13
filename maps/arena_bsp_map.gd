@@ -2,6 +2,7 @@ extends RefCounted
 
 const ArenaPaths := preload("../game/arena_paths.gd")
 const ArenaLoadTimeline := preload("../game/arena_load_timeline.gd")
+const ArenaLocalMaps := preload("arena_local_maps.gd")
 
 ## A map imported from a compiled `.bsp` by game-airdrift's importer, built here from the
 ## manifest it wrote: the drawn mesh, the baked lightmap, the brushes as convex hulls, the
@@ -96,6 +97,9 @@ const WORLD_ROOT_DM := "res://worlds_dm"
 
 ## Where [param id]'s converted world is, without extension, or "" when there is none. A delivered map ([param map_dir], its manifest's directory) carries its own under `worlds/`, which wins over the linked root.
 static func world_prefix(id: String, map_dir: String = "") -> String:
+	var local := ArenaLocalMaps.prefix_in(id, map_dir)
+	if not local.is_empty():
+		return local
 	var candidates: Array[String] = []
 	if not map_dir.is_empty():
 		candidates.append(map_dir.path_join("worlds").path_join(id).path_join(id))

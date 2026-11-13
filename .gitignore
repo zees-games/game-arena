@@ -90,6 +90,8 @@ Thumbs.db
 # bootstrap-natives: dot-sim v0.2.5
 /addons/dot_sim
 /addons/dot_workbench
+# Maps copied in by hand to play solo (see maps/arena_local_maps.gd). No leading slash: tools read "/addons/<name>" lines as addons to link.
+addons/maps/
 /lightbake_work/
 
 # Generated

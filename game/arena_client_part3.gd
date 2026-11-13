@@ -13,6 +13,8 @@ func _ready() -> void:
 	# Closed before anything else is built, so no frame shows a half-made world.
 	_build_platform()
 	_offline = platform.offline
+	# Solo only, before any catalogue is built: maps copied in by hand exist on this machine alone.
+	ArenaMaps.list_local = _offline or _sim_host != null
 	var timeline := ArenaLoadTimeline.new()
 	timeline.name = "LoadTimeline"
 	timeline.gate = gate

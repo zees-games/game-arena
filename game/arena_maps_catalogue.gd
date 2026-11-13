@@ -56,6 +56,7 @@ static func catalogue(content: DotContentIndex = null) -> DotMapCatalogue:
 	for id in ArenaMap.ids() + ArenaMap.imported_ids():
 		_list(out, id)
 
+	_list_local(out)
 	_follow_content(out, content)
 	return out
 
@@ -68,8 +69,33 @@ static func catalogue_async(slice: DotFrameSlice, content: DotContentIndex = nul
 		if slice.due():
 			await slice.pause()
 		_list(out, id)
+	_list_local(out)
 	_follow_content(out, content)
 	return out
+
+
+## Whether [method catalogue] lists the maps copied in by hand (`ArenaLocalMaps`). Set by a solo client and its sim host
+## only, so a server's rotation, vote and announcements never carry a map no other machine has.
+static var list_local := false
+
+
+static func _list_local(out: DotMapCatalogue) -> void:
+	if not list_local:
+		return
+	for id in ArenaMap.ArenaLocalMaps.ids():
+		var map := ArenaMap.local(id, true)
+		if map == null:
+			continue
+		var def := _imported_def_for(id, map)
+		def.version = DotMapLocalMaps.version_of(ArenaMap.ArenaLocalMaps.entry(id))
+		# Enabled: the solo menu lists available maps only, and nothing but this machine ever sees the row.
+		def.enabled = true
+		def.author = "local"
+		def.description = "A local map from %s, %d spawns." % [map.local_prefix.get_base_dir(), map.spawns.size()]
+		def.meta["local"] = true
+		var added := out.add(def)
+		if not added.ok:
+			DotLog.warn(CHANNEL, "a local map could not be catalogued", {"map": String(id), "why": added.error.message})
 
 
 static func _list(out: DotMapCatalogue, id: StringName) -> void:
@@ -336,7 +362,7 @@ static func apply_rotation(catalogue: DotMapCatalogue) -> void:
 		return
 
 	for def in catalogue.maps:
-		if bool(def.meta.get("imported", false)):
+		if bool(def.meta.get("imported", false)) and not bool(def.meta.get("local", false)):
 			def.enabled = in_rotation(def.id)
 
 

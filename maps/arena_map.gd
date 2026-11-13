@@ -46,12 +46,17 @@ func to_scene() -> Node3D:
 		var dir := manifest_path.get_base_dir()
 		# A world replaces every legacy mesh, so building them first only to free them
 		# was most of a multi-second frame on the biggest maps.
-		if ArenaMap.use_worlds:
+		if ArenaMap.use_worlds or local_prefix != "":
 			var bare := Node3D.new()
 			bare.name = "Level"
 			if ArenaBspMap.draw_world(bare, String(id), dir):
 				return bare
 			bare.free()
+		if local_prefix != "":
+			# A local copy has no legacy meshes to fall back on; its solid still plays.
+			var empty := Node3D.new()
+			empty.name = "Level"
+			return empty
 		var drawn := ArenaBspMap.build_visual(ArenaImportedMaps.manifest(id), dir)
 		drawn.name = "Level"
 		return drawn
@@ -97,7 +102,7 @@ func _level_box(painter: ArenaMapPaint.Painter, index: int, bake_floor: float) -
 ## [method to_scene] built in slices behind a loading cover. A headless process keeps the one-shot build.
 func to_scene_async(slice: DotFrameSlice) -> Node3D:
 	if is_imported():
-		if ArenaMap.use_worlds:
+		if ArenaMap.use_worlds or local_prefix != "":
 			var bare := Node3D.new()
 			bare.name = "Level"
 			if await ArenaBspMap.draw_world_async(bare, String(id), manifest_path.get_base_dir(), slice):
@@ -176,6 +181,8 @@ func to_collision() -> Node3D:
 			prebuilt_collision = null
 			if is_instance_valid(built):
 				return built
+		if local_prefix != "":
+			return ArenaLocalMaps.build_collision(local_prefix)
 		return ArenaBspMap.build_collision(
 			ArenaImportedMaps.manifest(id), manifest_path.get_base_dir()
 		)
@@ -200,7 +207,7 @@ func to_collision() -> Node3D:
 ## Builds an imported map's solid in slices for the next [method to_collision], so a client changing map does
 ## not build it in the frame that swaps the world. Other maps are a few boxes and keep the one-shot build.
 func to_collision_async(slice: DotFrameSlice) -> void:
-	if not is_imported() or prebuilt_collision != null:
+	if not is_imported() or local_prefix != "" or prebuilt_collision != null:
 		return
 	prebuilt_collision = await ArenaBspMap.build_collision_async(
 		ArenaImportedMaps.manifest(id), manifest_path.get_base_dir(), slice

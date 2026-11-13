@@ -6,6 +6,7 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("arena_module.gd")
 const ArenaSimOwner := preload("arena_sim_owner.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
+const ArenaMaps := preload("arena_maps.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
 ## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
@@ -29,6 +30,8 @@ var _load_us := 0
 
 
 func _ready() -> void:
+	# A sim host serves one solo client, so it offers the maps copied onto this machine as that client does.
+	ArenaMaps.list_local = true
 	var port := int(_arg("--port", "0"))
 	var bots := int(_arg("--bots", "0"))
 	if port <= 0:

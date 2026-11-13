@@ -36,7 +36,7 @@ static func build_async(game, use_rules: DotMapUse, slice: DotFrameSlice):
 
 static func _plan(game) -> Dictionary:
 	var map = game.map
-	if map == null or not map.is_imported() or not ArenaMap.use_worlds:
+	if map == null or not map.is_imported() or not (ArenaMap.use_worlds or map.local_prefix != ""):
 		return {}
 	var prefix := ArenaBspMap.world_prefix(String(map.id), map.manifest_path.get_base_dir())
 	if prefix.is_empty():

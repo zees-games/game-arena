@@ -14,6 +14,9 @@ extends "arena_map_part2.gd"
 ## keeps those modes off it rather than letting them build a layout out of nothing.
 ## [param light] stops after what a listing reads (name, author, bounds, spawns and their tags, the modes, the movement): no pits, jail or mechanics, which a catalogue of sixty maps would build and discard (about a third of the time a cold catalogue takes).
 static func imported(map_id: StringName, light: bool = false) -> ArenaMap:
+	if ArenaLocalMaps.is_local(map_id):
+		return local(map_id, light)
+
 	var manifest := ArenaImportedMaps.manifest(map_id)
 
 	if manifest.is_empty():
@@ -52,6 +55,37 @@ static func imported(map_id: StringName, light: bool = false) -> ArenaMap:
 	map.jail = ArenaJail.detect(map.pits)
 	map.mechanics = ArenaMapMechanics.new()
 	map.mechanics.read(manifest)
+	return map
+
+## A map copied in by hand ([code]ArenaLocalMaps[/code]), or null when there is none by that id or it does not load.
+## It has no pits, jail, mechanics or listed modes: a raw convert carries none of the legacy manifest's extras.
+static func local(map_id: StringName, light: bool = false) -> ArenaMap:
+	var found := ArenaLocalMaps.entry(map_id)
+	var got: DotMapBspMesh = ArenaLocalMaps.mesh(found) if not found.is_empty() else null
+
+	if got == null:
+		return null
+
+	var map := ArenaMap.new()
+	map.id = map_id
+	map.display_name = str(found["title"])
+	map.local_prefix = str(found["prefix"])
+	map.manifest_path = map.local_prefix + ".json"
+	map.source_kind = String(found["kind"])
+	map.movement_profile = &"surf" if found["kind"] == DotMapDef.KIND_SURF else &""
+	map.bounds = ArenaLocalMaps.bounds_of(got)
+	map.floor_y = map.bounds.position.y
+	map.wall_height = map.bounds.size.y
+	map.extent = maxf(
+		maxf(absf(map.bounds.position.x), absf(map.bounds.end.x)),
+		maxf(absf(map.bounds.position.z), absf(map.bounds.end.z))
+	)
+
+	for spot: Dictionary in ArenaLocalMaps.spawns_of(got):
+		var _m := map.add_spawn(spot["at"], StringName(str(spot["tag"])))
+
+	if not light:
+		map.mechanics = ArenaMapMechanics.new()
 	return map
 
 ## Every map this game ships, by id.

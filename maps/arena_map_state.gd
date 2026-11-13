@@ -4,6 +4,7 @@ const ArenaMap := preload("arena_map.gd")
 const ArenaBspMap := preload("arena_bsp_map.gd")
 const ArenaGlassTrace := preload("../game/arena_glass_trace.gd")
 const ArenaImportedMaps := preload("arena_imported_maps.gd")
+const ArenaLocalMaps := preload("arena_local_maps.gd")
 const ArenaMapMechanics := preload("arena_map_mechanics.gd")
 const ArenaMapPaint := preload("arena_map_paint.gd")
 const ArenaJail := preload("arena_jail.gd")
@@ -140,6 +141,10 @@ const DAYLIGHT := {
 
 ## The manifest this map was built from; empty for a built-in map.
 var manifest_path: String = ""
+
+## A map copied in by hand ([code]ArenaLocalMaps[/code]): its dot-bsp-mesh prefix, which is drawn and collided through dot-map
+## rather than the legacy manifest. Empty for every other map.
+var local_prefix: String = ""
 
 ## Where each side's flag sits on a map that places them (an imported map's `flag_spawns`), by spawn
 ## tag, in metres. Empty means [method ArenaObjectives.build] puts them at the ends of the longest axis.
