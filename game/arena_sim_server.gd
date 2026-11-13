@@ -6,11 +6,12 @@ const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("arena_module.gd")
 const ArenaSimOwner := preload("arena_sim_owner.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
+const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaMaps := preload("arena_maps.gd")
 const ArenaPaths := preload("arena_paths.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
-## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
+## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1 --bot_native_brain 0|1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
 
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
@@ -40,6 +41,10 @@ func _ready() -> void:
 		return
 	# The brains on worker threads: the same match as one thread (headless_botthreads), less of each tick.
 	ArenaBotThreads.threads = maxi(0, int(_arg("--bot_threads", str(default_bot_threads()))))
+	# dot-bot's native mind (the `bot_native_brain` cvar, off by default) for a bench's A/B; brains on workers leave it.
+	var brain_native := _arg("--bot_native_brain", "")
+	if brain_native != "":
+		ArenaPlayerStack.set_brain_native(brain_native.to_int() != 0)
 	_load_us = maxi(0, int(_arg("--sim_load_us", "0")))
 	set_physics_process(_load_us > 0)
 	# Where a tick goes: the [ArenaFrameProbe] sections the server's tick records (srv_*, tick_*, p_*, bot_*, w_*),
@@ -110,7 +115,8 @@ func _ready() -> void:
 			var _stored := f.store_string(str(config.effective_enet_port()))
 			f.close()
 	_server = server
-	print("SIM_HOST ready map=%s mode=%s bots=%d" % [String(game.map.id), String(game.mode.id), bots])
+	print("SIM_HOST ready map=%s mode=%s bots=%d bot_threads=%d brain=%s" % [String(game.map.id), String(game.mode.id), bots,
+		ArenaBotThreads.threads, "native" if ArenaPlayerStack.brain_native() else "script"])
 	_report(module.net)
 
 

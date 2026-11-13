@@ -113,6 +113,12 @@ func start(bots: int) -> DotResult:
 	var sim_sections := _arg("--sim_sections")
 	if sim_sections != "":
 		args.append_array(["--sim_sections", sim_sections])
+	# dot-bot's native mind on the server (perf_bench's `--brain-native` names the same switch).
+	var brain_native := _arg("--bot_native_brain")
+	if brain_native == "":
+		brain_native = _arg("--brain-native")
+	if brain_native != "":
+		args.append_array(["--bot_native_brain", brain_native])
 	args.append_array(shell_child_args())
 	_pid = OS.create_process(OS.get_executable_path(), args)
 	if _pid <= 0:
