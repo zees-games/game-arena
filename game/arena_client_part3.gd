@@ -237,8 +237,10 @@ func _warm_weapon_table() -> void:
 func _request_figures() -> void:
 	if not _builds_in_frames():
 		return
+	var paths: Array[String] = [DotHumanoidAssets.real_clips_path()]
 	for body: StringName in [DotHumanoidLook.stock(1).body, DotHumanoidAssets.CLIP_BODY]:
-		var path := DotHumanoidAssets.body_path(body)
+		paths.append(DotHumanoidAssets.body_path(body))
+	for path in paths:
 		if not _figure_loads.has(path) and ResourceLoader.exists(path) and ResourceLoader.load_threaded_request(path) == OK:
 			_figure_loads.append(path)
 
@@ -253,7 +255,9 @@ func _warm_figures() -> void:
 			await _setup_frame()
 		var started := Time.get_ticks_usec()
 		held.append(ResourceLoader.load_threaded_get(path))
-		var _scene := DotHumanoidAssets.scene(path)
+		# The clip set's real clips are only held, so the build's own load of them (on a worker) finds them loaded.
+		if path != DotHumanoidAssets.real_clips_path():
+			var _scene := DotHumanoidAssets.scene(path)
 		ArenaLoadTimeline.mark("setup: figure model %s, %d ms" % [path.get_file(), (Time.get_ticks_usec() - started) / 1000])
 	_figure_loads.clear()
 	var started := Time.get_ticks_usec()
