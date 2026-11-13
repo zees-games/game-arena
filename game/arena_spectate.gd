@@ -28,6 +28,8 @@ const ArenaPlayer := preload("arena_player.gd")
 const CHANNEL := "arena.spectate"
 
 var game: ArenaGame = null
+var _participant_ids: Array[int] = []
+var _participant_keys := PackedStringArray()
 
 
 func setup() -> DotResult:
@@ -98,10 +100,17 @@ func _channel() -> String:
 	return CHANNEL
 
 
+## Asked for by every spectator rule check (about 20 a frame with 32 players). game.player_ids() hands back the same
+## array until the roster changes and then a new one, so the keys are rebuilt only when that array is a new one.
 func _participants() -> PackedStringArray:
+	var ids: Array[int] = game.player_ids()
+	if is_same(ids, _participant_ids) and ids.size() == _participant_keys.size():
+		return _participant_keys
 	var out := PackedStringArray()
-	for id in game.player_ids():
+	for id in ids:
 		out.append(str(id))
+	_participant_ids = ids
+	_participant_keys = out
 	return out
 
 
