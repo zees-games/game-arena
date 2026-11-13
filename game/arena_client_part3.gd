@@ -31,6 +31,8 @@ func _ready() -> void:
 	timeline.name = "LoadTimeline"
 	timeline.gate = gate
 	add_child(timeline)
+	# Names the process phase's untimed time in a recorded profile (arena.pf_head, pf_nodes, pf_tail).
+	add_child(preload("arena_process_spans.gd").new())
 	_request_figures()
 	await _setup_frame()
 
