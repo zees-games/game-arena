@@ -176,6 +176,9 @@ func _present_held(remote: bool = false) -> void:
 		held.visible = false
 	if held.has_method(&"on_reloading"):
 		held.call(&"on_reloading", reloading and is_alive())
+	# Aiming is not replicated: only a body this client drives shoulders its gun for it (a shot does for all).
+	if held.has_method(&"on_aiming"):
+		held.call(&"on_aiming", aim_held and not mirrored and is_alive())
 
 	if held.has_method(&"on_charge"):
 		held.call(&"on_charge", mirror_charge if mirrored else 0.0)

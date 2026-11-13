@@ -16,7 +16,7 @@ const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 ## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
 ## `--sight-far M`, `--sight-far-reuse S`: bot sight LOD (bot_sight_far, bot_sight_far_reuse; default 20 m and 0.15 s, 0 turns it off).
 ## `--tier-body-near N`, `--tier-body-far N`: ticks between motor ticks of a coasting bot nobody sees (bot_tier_body_every_near/far; 1, the default, every tick).
-## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
+## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--carry 0` (AwWorldModel.person_carry off: the held gun's own kick and reload dip, no humanoid carry), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
 ## `--first-use 1` (dot-game's first-use rows): every weapon equipped, fired once cold and once warm, before the warm-up (offline only;
 ## `--first-use-only a,b` for some ids); `--prewarm 0` skips the client's weapon warm-up, so `--ab DIR DIR::--prewarm 0 -- --first-use 1` prices it.
 ## `--proc-split 1`: the process phase split by wall clock and a census of what processes (tools/proc_split.gd); `--present-ablate N` (ArenaPlayer.present_ablate bits: 1 no figure animation, 2 no held, 4 held not processing, 8 no pose).
@@ -87,6 +87,9 @@ func _ready() -> void:
 		preload("../game/arena_player.gd").present_lod_enabled = false
 	if int(args.get("anim-gate", 1)) == 0:
 		preload("../game/arena_player.gd").anim_gate_enabled = false
+	if int(args.get("carry", 1)) == 0:
+		# By name: a no-op against an arena-weapons older than the switch.
+		(AwWorldModel as Script).set(&"person_carry", false)
 	if args.has("brain-native"):
 		ArenaPlayerStack.set_brain_native(int(args["brain-native"]) != 0)
 	say("brain: %s" % ("native" if ArenaPlayerStack.brain_native() else "script"))
