@@ -612,6 +612,11 @@ func _build_platform() -> void:
 	# "weapons" hold, progressing all along, ended 19.9 s after the gate closed, past the 20 s default.
 	if DotPlatform.is_web():
 		gate.timeout_sec = maxf(gate.timeout_sec, WEB_GATE_TIMEOUT_SEC)
+		# The gate's warm-up keeps to the handed-in weapon and effect items: quad copies of the level's
+		# own materials are variants the real draw never uses. On staging02 a return visit went from
+		# 52.8 s to 35.7 s download-to-playable (median of 3), after-open worst frames no worse.
+		if &"warm_game_root" in gate:
+			gate.set(&"warm_game_root", false)
 	# The warm-up sizes its rounds by what is left of this budget after a bare frame, and a load frame
 	# here (the match's ticks and the view) is 56-100 ms on staging02: at dot-core's 40 nothing is
 	# left, every round is 4 items over 2 frames, and the warm-up took 9-11 s of the cover.
