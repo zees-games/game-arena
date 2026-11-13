@@ -11,21 +11,26 @@ func _present_frame(delta: float) -> void:
 		ArenaFrameProbe.add(&"interpolate", t)
 
 	# Where every speaker is, so a proximity voice comes from the player who said it.
+	var lap := ArenaFrameProbe.lap_start()
 	if extras != null:
 		extras.pump_voice(delta)
+	lap = ArenaFrameProbe.lap(&"c_voice", lap)
 
 	_ease_view_turn(delta)
 	_fold_look()
 	_fold_correction()
 	_fold_alpha()
+	lap = ArenaFrameProbe.lap(&"c_fold", lap)
 
 	# Your own body when you look down: the player's setting, else the server's mp_fp_body.
 	if player != null and game != null and player.controller != null:
 		player.present_own_body(own_body_mode(),
 			(player.view_now as Vector2).x if player.view_now != null else player.controller.state.yaw)
 
+	lap = ArenaFrameProbe.lap(&"c_own_body", lap)
 	_face_a_respawn()
 	_present_sprite_view()
+	lap = ArenaFrameProbe.lap(&"c_sprite_view", lap)
 
 	if presentation != null:
 		# Neither dot-audio nor dot-fx ticks itself: `_process` stops while paused.
@@ -42,7 +47,9 @@ func _present_frame(delta: float) -> void:
 		var t_walk := Time.get_ticks_usec()
 		presentation.keep_walkers(game.players())
 		ArenaFrameProbe.add(&"c_walkers", t_walk)
+		lap = ArenaFrameProbe.lap_start()
 		_present_roof(delta, eye)
+		lap = ArenaFrameProbe.lap(&"c_roof", lap)
 
 	# A position report once a second: the only way to see where a browser client thinks it is.
 	_report_timer += delta

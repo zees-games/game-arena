@@ -8,7 +8,7 @@ const ArenaSimOwner := preload("arena_sim_owner.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
-## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
+## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1` (2 adds the fine laps). It writes PATH once it accepts players, and quits a few seconds after its player left.
 
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
@@ -40,8 +40,12 @@ func _ready() -> void:
 	set_physics_process(_load_us > 0)
 	# Where a tick goes: the [ArenaFrameProbe] sections the server's tick records (srv_*, tick_*, p_*, bot_*, w_*),
 	# printed per tick beside each SIM_HOST line. Off by default: each section costs two clock reads.
-	if _arg("--sim_sections", "0") == "1":
+	# 2 adds the fine laps too (pl_pre, pl_sim, p_wctx...), which cost a few more.
+	var sections := _arg("--sim_sections", "0")
+	if sections == "1" or sections == "2":
 		ArenaFrameProbe.set_interval(1.0e9)
+	if sections == "2":
+		ArenaFrameProbe.fine = true
 	var data := "user://sim_host"
 	var _made := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data))
 

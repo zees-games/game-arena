@@ -72,13 +72,17 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	if game == null or bot == null:
 		return [DotFpsCommand.new(), DotWeaponCommand.new()]
 
+	var t_lap := Time.get_ticks_usec() if ArenaFrameProbe.fine else 0
 	var world := world_for(game)
 	# Counted once a tick for every bot (player_ids is a new array each call).
 	var players := world.player_count(tick)
 	_every = think_every if think_every > 0 else (2 if players > AUTO_STAGGER_ABOVE else 1)
 	_tier_on = tiers.applies(players)
+	t_lap = _fine_add(&"tb_world", t_lap)
 	if (_every > 1 or _tier_on) and _coasts(mind, tick, world, bot.player_id):
-		return _recoil_comp(bot, mind, _coast(mind, tick), tick, tick_rate)
+		var coasted := _recoil_comp(bot, mind, _coast(mind, tick), tick, tick_rate)
+		_fine_add(&"tb_coast", t_lap)
+		return coasted
 
 	var t_refresh := Time.get_ticks_usec()
 	world.near_reach = think_near
@@ -87,6 +91,7 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	world.tiers = tiers
 	world.refresh(tick, tick_rate)
 	ArenaFrameProbe.add(&"bot_refresh", t_refresh)
+	t_lap = Time.get_ticks_usec() if t_lap != 0 else 0
 
 	var pool := world.personas_for(personas_mode)
 	# A brain a caller made itself (persona_epoch -1) is never replaced.
@@ -108,6 +113,7 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	world.brains[bot.player_id] = mind.brain
 	if mind.settings != null:
 		var _resynced := mind.settings.sync()
+	t_lap = _fine_add(&"tb_mind", t_lap)
 
 	var me := world.contact(bot.player_id)
 	# A team job in a flag mode, kept until the bot changes team (assign is a lookup after the first); the
@@ -127,7 +133,17 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	mind.last_position = me.position
 	mind.t_me = me
 	mind.t_world = world
+	_fine_add(&"tb_contact", t_lap)
 	return []
+
+
+## Charges the time since [param since] to [param section] while [member ArenaFrameProbe.fine] is on (the server's
+## `--sim_sections 2`) and returns the clock; 0 and nothing charged while it is off.
+static func _fine_add(section: StringName, since: int) -> int:
+	if since == 0:
+		return 0
+	ArenaFrameProbe.add(section, since)
+	return Time.get_ticks_usec()
 
 
 ## The part of [method think] after the brain ran, on the main thread: the bot's commands from [member Mind.t_intent].

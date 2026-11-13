@@ -35,16 +35,23 @@ static func think_all(game: Object, players: Array, minds: Array, tick: int, tic
 	var out: Array = []
 	out.resize(players.size())
 	var pending: Array[int] = []
+	var t_fine := Time.get_ticks_usec() if ArenaFrameProbe.fine else 0
 	for i in players.size():
 		var early := ArenaBots.think_begin(game, players[i], minds[i], tick, tick_rate)
 		if early.is_empty():
 			pending.append(i)
 		else:
 			out[i] = early
+	if t_fine != 0:
+		ArenaFrameProbe.add(&"bt_begin", t_fine)
 	if not pending.is_empty():
 		_decide(pending, minds)
+		if t_fine != 0:
+			t_fine = Time.get_ticks_usec()
 		for i in pending:
 			out[i] = ArenaBots.think_finish(game, players[i], minds[i], tick, tick_rate)
+		if t_fine != 0:
+			ArenaFrameProbe.add(&"bt_finish", t_fine)
 	return out
 
 

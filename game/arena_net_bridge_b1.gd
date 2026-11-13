@@ -247,6 +247,7 @@ func server_tick(tick: int) -> void:
 	_game_ticked_for = -1
 	# What a console line, a chat command or an admin heard since the last tick (a restart, a mode
 	# change, a respawn, a map change's swap), then the clients' queued asks (dot_tick_gate.gd).
+	var t_watch := Time.get_ticks_usec()
 	if game != null:
 		game.tick_gate.open()
 	_answer_tick_asks()
@@ -261,6 +262,7 @@ func server_tick(tick: int) -> void:
 	_send_ctf(0, tick)
 	_send_teams(0, tick)
 	_send_scores(0, tick)
+	ArenaFrameProbe.add(&"srv_watch", t_watch)
 
 	var t_net := Time.get_ticks_usec()
 	if net != null:
@@ -285,7 +287,9 @@ func ensure_game_ticked(tick: int) -> void:
 	var t_game := Time.get_ticks_usec()
 	game.tick(cmds)
 	ArenaFrameProbe.add(&"srv_game", t_game)
+	var t_kv := Time.get_ticks_usec()
 	_tick_killview()
+	ArenaFrameProbe.add(&"srv_killview", t_kv)
 
 	# The toys where the physics left them, before the snapshot: a toy's own `_net_simulate`
 	# can run before the player whose turns this tick.
