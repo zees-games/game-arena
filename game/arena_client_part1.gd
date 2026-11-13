@@ -96,20 +96,32 @@ func _classify_level() -> void:
 	var done := game.player_stack.classify_tree(_level, &"world")
 	DotLog.debug(CHANNEL, "level classified", {"bodies": done})
 
+## The world and prop shader warm-up of [method _enter_level]; sets `done` in [param state] when both finished.
+func _warm_boot_shaders(state: Dictionary) -> void:
+	await DotMapSurfaces.warm_shaders_async(get_tree())
+	await DotMapBspMesh.warm_prop_shaders_async(get_tree())
+	ArenaLoadTimeline.mark("world shaders warmed")
+	state["done"] = true
+
+
 ## Builds the movers and the drawn level in slices behind the cover, then optionally lifts the map hold.
 func _enter_level(release: bool) -> void:
 	_level_busy = true
 	# 10 ms between yields, not the 40 ms default: the cover is up, but bots and the
 	# network keep ticking behind it, and a 40 ms build frame is a hitch they feel.
 	var slice := DotFrameSlice.new(LEVEL_SLICE_MS)
+	# The converted worlds' and their props' shaders compile under the boot cover, one per frame: compiled at a later map
+	# change, the first world material held one frame for 85 ms on staging02 and the first textured prop 89 ms. They run
+	# beside the map-io build (their frames are mostly waits on loader threads, ~130 ms of wall time in series) and are
+	# joined before the level is drawn.
+	var warm := {"done": true}
 	if _level == null and not DotPlatform.is_headless():
-		# The converted worlds' and their props' shaders compile here under the boot cover, one per frame: compiled at a later
-		# map change, the first world material held one frame for 85 ms on staging02 and the first textured prop 89 ms.
-		await DotMapSurfaces.warm_shaders_async(get_tree())
-		await DotMapBspMesh.warm_prop_shaders_async(get_tree())
-		ArenaLoadTimeline.mark("world shaders warmed")
+		warm["done"] = false
+		_warm_boot_shaders(warm)
 	await game.build_map_io_async(slice)
 	ArenaLoadTimeline.mark("map_io_built")
+	while not warm["done"]:
+		await get_tree().process_frame
 	var drawn := game.map
 	var made: Node3D = await game.map.to_scene_async(slice)
 	ArenaLoadTimeline.mark("map_scene_built")
