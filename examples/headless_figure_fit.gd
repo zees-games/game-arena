@@ -2,15 +2,14 @@ extends DotGameCheckSuite
 
 ## "Crosshair on his chest at 65 m and nothing": does the body the client draws stand inside
 ## the hit zones the server traces? For every stock avatar and each way a player moves (idle,
-## walking away, strafing, walking at you, aiming up and down, crouched still), a shot from
+## walking away, strafing, walking at you, aiming up and down, crouched still, crouch walking), a shot from
 ## 65 m at the drawn skeleton's head, neck, torso, belly and hips (and arms when standing)
 ## must land in a zone, on every tick of the walk cycle. Only the hit zones' own fit is
 ## measured here; the netcode and the gun are headless_hitreg_ping's and headless_hitreg_scope's.
 ##
-## Known gap, logged and not failed: a crouch WALK. The made CROUCH_WALK clip in dot-player-char
-## (CROUCH_WALK_BEND 1.0 plus bob) draws the head higher than standing while the zones squeeze
-## to the crouch height, so shots at the drawn head and upper chest of a crouch-walking player
-## pass over the zones. The fix is the clip's (board: fc-hitreg-sniper-video-1), not the sim's.
+## The crouch walk once drew the head higher than standing while the zones squeezed to crouch
+## height (head shots missed 43-64 of 64); dot-player-char's made CROUCH_WALK now holds the hips
+## at the crouch's height (dpc-crouch-walk-pose-fit-1), so it is asserted like the rest.
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
@@ -35,8 +34,8 @@ const CASES: Array = [
 	["aim down", Vector2(0, 1), false, -10.0, true],
 	["aim up", Vector2(0, 1), false, 10.0, true],
 	["crouch", Vector2.ZERO, true, 0.0, false],
+	["crouch walk", Vector2(1, 0), true, 0.0, false],
 ]
-const KNOWN_GAP: Array = ["crouch walk", Vector2(1, 0), true, 0.0, false]
 
 var _game: ArenaGame = null
 
@@ -58,8 +57,6 @@ func _run() -> void:
 		for case: Array in CASES:
 			var misses := await _measure(target, case)
 			_check(misses.is_empty(), "%s %s: every shot at the drawn body lands in a zone" % [key, case[0]], str(misses))
-		var gap := await _measure(target, KNOWN_GAP)
-		print("  known gap (dot-player-char crouch_walk clip), %s: %s" % [key, gap])
 	_report()
 	get_tree().quit(0 if _failed == 0 else 1)
 
