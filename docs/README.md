@@ -15,6 +15,7 @@ The detail behind [CLAUDE.md](../CLAUDE.md). Fatal Contact plays free-for-all, t
 | [services.md](services.md) | touching progression, chat and its commands, moderation, voice, the website relay, the admin tools, the map vote, the server browser, or private matches |
 | [sim-thread.md](sim-thread.md) | touching `--sim_host`, the solo server process, or planning what may leave the main thread |
 | [perf-architecture.md](perf-architecture.md) | planning frame-time work: where a 32-player frame goes, per thread and system, and what each lever is worth |
+| [perf-vs-css.md](perf-vs-css.md) | asking why CS:S runs 32 players faster: a CS:S server profiled on staging02 beside FC's budget, and the five structural differences ranked by what FC could gain |
 | [anim-review.md](anim-review.md) | judging or fixing a weapon's first-person or third-person animation: the capture, the contact sheets, the glitch metrics, the loop |
 | [testing.md](testing.md) | adding a check, or believing a green run |
 | [history.md](history.md) | a bug that "cannot be happening"; what this game found and how it looked |
