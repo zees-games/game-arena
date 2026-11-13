@@ -537,11 +537,49 @@ static func build_collision(manifest: Dictionary, dir: String) -> StaticBody3D:
 		visual.free()
 		return body
 
-	var offset := int(info.get("hull_offset", 0))
+	var _end := _add_hulls(body, blob, int(info.get("hull_offset", 0)), int(info.get("hull_count", 0)))
+	_finish_collision(body, blob, info, id, dir)
+	return body
 
-	for _h in range(int(info.get("hull_count", 0))):
+
+## Hulls a [method build_collision_async] step adds before it asks the slice whether the frame is spent.
+const COLLISION_HULLS_PER_STEP := 64
+
+## [method build_collision] a few hundred hulls a frame, for a client changing map behind its cover: the
+## same body, built in the same order, so the solid the game is handed is the one the one-shot build makes.
+## A map with no hull table takes the one-shot build.
+static func build_collision_async(manifest: Dictionary, dir: String, slice: DotFrameSlice) -> StaticBody3D:
+	var id := str(manifest.get("id", ""))
+	var info: Dictionary = manifest.get("collision", {})
+	var blob := FileAccess.get_file_as_bytes(dir.path_join("%s.bin" % id))
+
+	if blob.is_empty() or info.is_empty():
+		return build_collision(manifest, dir)
+
+	var body := StaticBody3D.new()
+	body.name = "ImportedSolid"
+	var offset := int(info.get("hull_offset", 0))
+	var left := int(info.get("hull_count", 0))
+
+	while left > 0 and offset >= 0:
+		var step := mini(left, COLLISION_HULLS_PER_STEP)
+		offset = _add_hulls(body, blob, offset, step)
+		left -= step
+
+		if slice.due():
+			await slice.pause()
+
+	await slice.pause()
+	_finish_collision(body, blob, info, id, dir)
+	return body
+
+
+## Adds [param hulls] convex hulls read from [param blob] at [param offset] to [param body]. Returns the
+## offset after them, or -1 when the blob ran out (the hulls before it are kept).
+static func _add_hulls(body: StaticBody3D, blob: PackedByteArray, offset: int, hulls: int) -> int:
+	for _h in range(hulls):
 		if offset + 4 > blob.size():
-			break
+			return -1
 
 		var count := int(blob.decode_u32(offset))
 		offset += 4
@@ -549,7 +587,7 @@ static func build_collision(manifest: Dictionary, dir: String) -> StaticBody3D:
 		offset += count * 12
 
 		if floats.size() < count * 3:
-			break
+			return -1
 
 		var points := PackedVector3Array()
 		points.resize(count)
@@ -565,13 +603,16 @@ static func build_collision(manifest: Dictionary, dir: String) -> StaticBody3D:
 		shape.shape = hull
 		body.add_child(shape)
 
+	return offset
+
+
+## What follows the hulls: the sky, glass and fence classes, and the terrain.
+static func _finish_collision(body: StaticBody3D, blob: PackedByteArray, info: Dictionary, id: String, dir: String) -> void:
 	_mark_sky(body, id, dir, info)
 	_swap_glass(body, id, dir)
 	_split_fences(body, id, dir)
 
 	_add_terrain(body, blob, info)
-
-	return body
 
 
 static func _add_terrain(body: StaticBody3D, blob: PackedByteArray, info: Dictionary) -> void:

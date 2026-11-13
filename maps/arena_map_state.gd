@@ -182,6 +182,10 @@ var mechanics: ArenaMapMechanics = null
 ## player is built or re-bodied on this map.
 var collision_root: Node3D = null
 
+## An imported map's solid built ahead, a slice a frame, behind a client's change cover ([method to_collision_async]).
+## The next [method to_collision] hands it over (the same body the one-shot build makes) and clears it.
+var prebuilt_collision: Node3D = null
+
 ## The jail glass rule of the game that built this map's solid, when the map has a cell. Set by [ArenaGame].
 var glass: DotMapGlassSight = null
 

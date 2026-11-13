@@ -171,6 +171,11 @@ static func _read_threaded(paths: PackedStringArray, slice: DotFrameSlice) -> Ar
 ## the other, never both.
 func to_collision() -> Node3D:
 	if is_imported():
+		if prebuilt_collision != null:
+			var built := prebuilt_collision
+			prebuilt_collision = null
+			if is_instance_valid(built):
+				return built
 		return ArenaBspMap.build_collision(
 			ArenaImportedMaps.manifest(id), manifest_path.get_base_dir()
 		)
@@ -191,6 +196,21 @@ func to_collision() -> Node3D:
 		root.add_child(_make_box(boxes[index], null, "Box%02d" % index))
 
 	return root
+
+## Builds an imported map's solid in slices for the next [method to_collision], so a client changing map does
+## not build it in the frame that swaps the world. Other maps are a few boxes and keep the one-shot build.
+func to_collision_async(slice: DotFrameSlice) -> void:
+	if not is_imported() or prebuilt_collision != null:
+		return
+	prebuilt_collision = await ArenaBspMap.build_collision_async(
+		ArenaImportedMaps.manifest(id), manifest_path.get_base_dir(), slice
+	)
+
+## Frees a [member prebuilt_collision] nothing took.
+func drop_prebuilt_collision() -> void:
+	if prebuilt_collision != null and is_instance_valid(prebuilt_collision) and not prebuilt_collision.is_inside_tree():
+		prebuilt_collision.free()
+	prebuilt_collision = null
 
 # --- Dev texture -----------------------------------------------------------
 
