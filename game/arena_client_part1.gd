@@ -9,6 +9,11 @@ const ArenaFlagView := preload("arena_flag_view.gd")
 const LEVEL_SLICE_MS := 10
 ## Frames a menu map change traces (ArenaLoadTimeline.trace_frames): its ticks, steps and draws, to the level's first frames.
 const CHANGE_TRACE_FRAMES := 40
+## Milliseconds a round of the new level's warm-up may cost its frame ([method _warm_level]): a map change's bare
+## frame is about 18 ms on staging02, so a round leaves room for a compile or two and stays near 33 ms.
+const LEVEL_WARM_BUDGET_MSEC := 30.0
+## Most proxies one warm-up round places (each a material and vertex format): [member DotRenderWarmup.batch_size].
+const LEVEL_WARM_BATCH := 4
 
 ## Whether E is the prop tool's key here: only in a mode where players use props. Anywhere
 ## else E is the launch, which is what most of the arena's modes want it for.
@@ -102,6 +107,16 @@ func _enter_level(release: bool) -> void:
 	var drawn := game.map
 	var made: Node3D = await game.map.to_scene_async(slice)
 	ArenaLoadTimeline.mark("map_scene_built")
+	var lit := false
+	if _level != null and is_instance_valid(_level):
+		# The new map's sun and sky first: its fog, ambient and shadow mode are part of every pipeline the warm-up compiles,
+		# and warmed under the old map's, the level's first frame still compiled 26 on staging02.
+		_light()
+		lit = true
+		# The sky and environment rebuild in a frame of their own, not in the warm-up's first (a 191 ms frame together).
+		ArenaLoadTimeline.mark("level lit")
+		await get_tree().process_frame
+		await _warm_level(made)
 	if _level != null and is_instance_valid(_level):
 		remove_child(_level)
 		# free(), not queue_free(): a deferred free leaves two levels drawn for a frame.
@@ -110,10 +125,44 @@ func _enter_level(release: bool) -> void:
 	_level_map = drawn
 	_classify_level()
 	add_child(_level)
-	_light()
+	if not lit:
+		_light()
 	_level_busy = false
 	if release:
 		gate.release(&"map")
+
+
+## Draws [param made]'s surfaces once, out of sight in budgeted rounds, before it replaces the shown level. Its first
+## draw compiled every pipeline in one frame (634 ms with a cold shader cache on staging02, 18 ms warm), under a cover
+## but with the match ticking behind it. Meshes only: each is drawn as one triangle per (material, vertex format),
+## the variants the level's draw uses; a material alone would be drawn on a quad, a format the level never has.
+func _warm_level(made: Node3D) -> void:
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if cam == null or DotPlatform.is_headless():
+		return
+	var meshes: Array = []
+	for item: Variant in DotRenderWarmup.collect(made):
+		if item is Mesh:
+			meshes.append(item)
+	var warm := DotRenderWarmup.new()
+	warm.name = "LevelWarmup"
+	warm.budget_msec = LEVEL_WARM_BUDGET_MSEC
+	# Few per round: a round's first draw also uploads its props' textures, and the warm-up's first 16 were 34 pipelines
+	# and +39 MB in one 191 ms frame on staging02.
+	warm.batch_size = LEVEL_WARM_BATCH
+	# The camera is often under a frozen body, and a disabled warm-up never times out.
+	warm.process_mode = Node.PROCESS_MODE_ALWAYS
+	warm.add_items(meshes)
+	var done := [false]
+	var _c := warm.finished.connect(func(_count: int) -> void: done[0] = true)
+	cam.add_child(warm)
+	warm.start()
+	ArenaLoadTimeline.mark("level warm-up: %d meshes" % meshes.size())
+	# Polled, not awaited on the signal: a camera freed mid-warm-up takes the warm-up with it, and finished never comes.
+	while not done[0] and is_instance_valid(warm):
+		await get_tree().process_frame
+	ArenaLoadTimeline.mark("level warmed")
+
 
 ## The world was replaced under this client.
 func _on_map_changed(map: DotMapDef) -> void:
