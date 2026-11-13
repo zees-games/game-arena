@@ -165,6 +165,8 @@ static func _draw_plan(drawn: Node3D, id: String, got: DotResult) -> Dictionary:
 	return {"script": load(DRAWN_WORLD), "mesh": got.value, "options": {
 		"props": true,
 		"mark": func(label: String) -> void: ArenaLoadTimeline.mark(label),
+		# A local `<map>_orig` pack only (dot-map 24); every shipped and delivered map keeps the free textures.
+		"original_textures": ArenaLocalMaps.is_original(StringName(id)),
 		"surfaces_root": surfaces if DirAccess.dir_exists_absolute(surfaces) else DotMapSurfaces.DEFAULT_ROOT,
 	}}
 

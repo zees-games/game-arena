@@ -75,6 +75,10 @@ func _on_line(peer_id: int, seq: int, line: String) -> void:
 func _change(map_id: String, mode_id: String) -> DotResult:
 	var game: Object = module.game
 	if map_id != "-" and map_id != "":
+		# A map dropped onto the client's window after this process started is not in its catalogue yet.
+		var listed: DotMapCatalogue = module.maps.session.catalogue if module.maps != null and module.maps.session != null else null
+		if listed != null and not listed.has(StringName(map_id)):
+			var _local := ArenaMaps.add_local(listed, StringName(map_id))
 		var changed: DotResult = await module.maps.change_to(StringName(map_id))
 		if not changed.ok:
 			return changed

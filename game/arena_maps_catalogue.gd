@@ -83,19 +83,31 @@ static func _list_local(out: DotMapCatalogue) -> void:
 	if not list_local:
 		return
 	for id in ArenaMap.ArenaLocalMaps.ids():
-		var map := ArenaMap.local(id, true)
-		if map == null:
-			continue
-		var def := _imported_def_for(id, map)
-		def.version = DotMapLocalMaps.version_of(ArenaMap.ArenaLocalMaps.entry(id))
-		# Enabled: the solo menu lists available maps only, and nothing but this machine ever sees the row.
-		def.enabled = true
-		def.author = "local"
-		def.description = "A local map from %s, %d spawns." % [map.local_prefix.get_base_dir(), map.spawns.size()]
-		def.meta["local"] = true
-		var added := out.add(def)
-		if not added.ok:
-			DotLog.warn(CHANNEL, "a local map could not be catalogued", {"map": String(id), "why": added.error.message})
+		var _added := add_local(out, id)
+
+
+## Puts local map [param id] in [param out] (solo only: [member list_local] off adds nothing), replacing an older row of the
+## same id, so a map dropped onto the window or re-converted while the game runs can be picked without rebuilding the
+## catalogue. False when there is no such local map, it does not load, or the add is refused.
+static func add_local(out: DotMapCatalogue, id: StringName) -> bool:
+	if not list_local or out == null or not ArenaMap.ArenaLocalMaps.is_local(id):
+		return false
+	var map := ArenaMap.local(id, true)
+	if map == null:
+		return false
+	var def := _imported_def_for(id, map)
+	def.version = DotMapLocalMaps.version_of(ArenaMap.ArenaLocalMaps.entry(id))
+	# Enabled: the solo menu lists available maps only, and nothing but this machine ever sees the row.
+	def.enabled = true
+	def.author = "local"
+	def.description = "A local map from %s, %d spawns." % [map.local_prefix.get_base_dir(), map.spawns.size()]
+	def.meta["local"] = true
+	if out.has(id):
+		var _gone := out.remove(id)
+	var added := out.add(def)
+	if not added.ok:
+		DotLog.warn(CHANNEL, "a local map could not be catalogued", {"map": String(id), "why": added.error.message})
+	return added.ok
 
 
 static func _list(out: DotMapCatalogue, id: StringName) -> void:

@@ -259,6 +259,39 @@ func _adopt_catalogue(built: DotMapCatalogue) -> void:
 		var _adopted := ArenaMaps.adopt_delivered(_menu_catalogue, ArenaMaps.standalone_keys(_menu_catalogue))
 
 
+## Solo: a converted map folder or `.zip` dragged onto the window (`DotMapLocalMaps.watch_drops`) is copied into
+## `user://maps` and offered in M as "<title> (local)"; a `<map>_orig` pack draws with its own textures. Never on a
+## client of a public server: a local map exists on this machine alone.
+func watch_map_drops() -> void:
+	if not ArenaMaps.list_local or not is_inside_tree() or DotAddonApi.build_level("dot_map") < 24:
+		return
+	var local_maps: Object = DotMapLocalMaps  # API 24 by name: a call on the class itself does not parse
+	local_maps.call(&"watch_drops", get_window(), on_maps_dropped)
+
+
+## What a drop did, in the M menu and on screen: each added map joins the built catalogue (a rebuild is 156 ms), and a
+## path that is not a map is said with its reason. Returns the line shown.
+func on_maps_dropped(result: Dictionary) -> String:
+	var titles := PackedStringArray()
+	for entry: Dictionary in result.get("added", []):
+		var id := StringName(str(entry["id"]))
+		if _menu_catalogue != null and not ArenaMaps.add_local(_menu_catalogue, id):
+			continue
+		titles.append(str(entry.get("title", id)))
+	var errors: PackedStringArray = result.get("errors", PackedStringArray())
+	var lines := PackedStringArray()
+	if not titles.is_empty():
+		lines.append("Added %s. Press M to play it." % ", ".join(titles))
+	if not errors.is_empty():
+		lines.append("Not a map: %s" % "; ".join(errors))
+	var text := "\n".join(lines)
+	for line in errors:
+		DotLog.warn(CHANNEL, "a dropped path is not a map", {"why": line})
+	if hud != null and text != "":
+		hud.notice(text)
+	return text
+
+
 ## Builds [method _catalogue] a few maps a frame once the cover lifts, so neither M nor a map change pays the 156 ms
 ## (staging02) in one frame. A [method _catalogue] call meanwhile builds it at once, and this one's result is dropped.
 func _prebuild_catalogue() -> void:

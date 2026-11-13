@@ -720,6 +720,8 @@ func _build_interface() -> void:
 			if &"mode_group" in maps:
 				(maps as Object).set(&"mode_group", "Mode")
 	_use_loadout_menu()
+	# Solo: a converted map dragged onto the window joins M as "(local)".
+	watch_map_drops()
 	if game_menu.has_method(&"use_teams"):
 		var offer := Callable()
 		var choose := Callable()

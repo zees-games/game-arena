@@ -97,7 +97,11 @@ A raw convert folder (`<name>.json`, `<name>.bin`, `textures/`) copied to `addon
 - Listed only when `ArenaMaps.list_local` is on, which the solo client and its sim host set. A server never lists one, so no rotation, vote or announcement can name a map other machines lack.
 - `ArenaLocalMaps` (maps/arena_local_maps.gd) builds the map from the mesh itself: spawns from its `spawns` (one is generated on the widest floor when it names none), bounds and the solid from the world hulls plus the solid props. The world is drawn and its movers built through `ArenaBspMap.world_prefix`, which answers a local id with the copied folder. There is no legacy manifest, so with no world drawn the level is empty but still solid.
 - Its version is the md5 of the manifest, so a re-converted copy is a new map.
-- `headless_local_maps` covers both roots with a small fixture; `-- --source=<convert folder>` repeats the checks on a real conversion.
+- **Needs dot-map API 24 on the host** for the next three points (`ArenaLocalMaps.can_drop`). The floor stays 23 because the live web shell pins dot-map 23 (fc-publish-blocked-1), so these calls go through `call()` and an older host plays copied folders only; raise the floor and call directly once a shell ships dot-map 24.
+- A `.zip` of such a folder works too: it is unpacked into `user://maps/.zip_cache` on first use.
+- **Drag and drop.** The solo client calls `DotMapLocalMaps.watch_drops` once it is ready (`watch_map_drops` in game/arena_client_view.gd). A folder or `.zip` dropped onto the window is copied into `user://maps/` and added to the M menu's catalogue as `<title> (local)` with no rebuild (`ArenaMaps.add_local`); a bad drop shows `Not a map: <file>: <reason>` from `accept_dropped`. The sim host, a separate process, adds a local map it has not listed yet when the client asks to change to it (`ArenaSimOwner._change`).
+- **`<map>_orig` packs** (internal, never published) draw with the map's original textures: `ArenaLocalMaps.is_original` is true only for a `*_orig_local` id, which `ArenaBspMap._draw_plan` passes as dot-map's `original_textures`. Every shipped and delivered map keeps the free textures.
+- `headless_local_maps` covers both roots, drops of a folder, a zip and junk, and `_orig`, with a small fixture; `-- --source=<convert folder>` repeats the checks on a real conversion.
 
 ## Doors, lifts and buttons
 

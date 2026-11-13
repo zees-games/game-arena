@@ -9,6 +9,8 @@ extends RefCounted
 ## answers a local id with its folder.
 
 const CHANNEL := "arena.maps"
+## The dot-map API level with `watch_drops`, `accept_dropped`, zips and `is_original`.
+const DROP_LEVEL := 24
 
 ## prefix -> {version, mesh}: the listing and the load read the same copy once, and a re-converted copy (a new version) is read again.
 static var _meshes: Dictionary = {}
@@ -25,6 +27,21 @@ static func ids() -> Array[StringName]:
 	for entry: Dictionary in DotMapLocalMaps.scan():
 		out.append(StringName(str(entry["id"])))
 	return out
+
+
+## Whether local map [param id] is an internal original pack (`<map>_orig_local`), drawn with the map's own textures.
+## Never true for a shipped or delivered id, so original textures never leave this machine.
+static func is_original(id: StringName) -> bool:
+	if not is_local(id) or not can_drop():
+		return false
+	var local_maps: Object = DotMapLocalMaps  # API 24 by name: a call on the class itself does not parse
+	return bool(local_maps.call(&"is_original", {"name": String(id).trim_suffix(DotMapLocalMaps.ID_SUFFIX)}))
+
+
+## Whether the host's dot-map has drops, zips and `_orig` (API 24). The live web shell pins dot-map 23 (fc-publish-blocked-1),
+## so the floor stays 23 and the API 24 calls go through `call()`, which parses on an older host; remove when the oldest shell is 24.
+static func can_drop() -> bool:
+	return DotAddonApi.build_level("dot_map") >= DROP_LEVEL
 
 
 ## The entry for [param id], or empty.
