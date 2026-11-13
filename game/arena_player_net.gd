@@ -501,8 +501,13 @@ func _push_weapons() -> void:
 		var _changed := ArenaContent.apply_carry(player.arsenal, net_carry)
 
 	# The owner's own selector is predicted; only a remote copy adopts and clicks.
-	var clicks := not owned and DotWeaponNetSync.fire_mode_will_change(self, player.arsenal)
-	DotWeaponNetSync.push(self, player.arsenal, not owned)
+	# A remote copy whose inputs match the last push skips it: the push copies a fitting per call.
+	var unchanged := not owned and not _pushed_key.is_empty() and _remote_push_key() == _pushed_key
+	var clicks := not owned and not unchanged and DotWeaponNetSync.fire_mode_will_change(self, player.arsenal)
+	if not unchanged:
+		DotWeaponNetSync.push(self, player.arsenal, not owned)
+		if not owned:
+			_pushed_key = _remote_push_key()
 
 	if owned:
 		DotWeaponNetSync.correct_ammo(self, player.arsenal)
@@ -522,6 +527,20 @@ func _push_weapons() -> void:
 		player.mirror_mode_click()
 
 
+## What [method DotWeaponNetSync.push] reads and writes on a remote arsenal, as of the last push: the snapshot's
+## slot, mode and fitting code, and the held slot, its mode and its fitting by identity. Empty when the push
+## could not land (a slot the arsenal lacks), so that case is always pushed again.
+var _pushed_key := PackedInt64Array()
+
+
+func _remote_push_key() -> PackedInt64Array:
+	var held := player.arsenal.current()
+	if held == null or (net_slot > 0 and net_slot != player.arsenal.current_slot()):
+		return PackedInt64Array()
+	var fitting_id := held.fitting.get_instance_id() if held.fitting != null else 0
+	return PackedInt64Array([net_slot, net_fire_mode, net_fitted, held.get_instance_id(), held.fire_mode_index, fitting_id])
+
+
 ## Copies the interpolated state onto the player, every frame, on a remote one.
 ##
 ## [b]Without this the interpolator's work is thrown away.[/b]
@@ -537,8 +556,13 @@ func _net_interpolated(_tick: int) -> void:
 	if player == null:
 		return
 
-	DotFpsNetSync.push(self, player.controller.state)
-	player.global_position = player.controller.state.position
+	# Only the interpolated vars: the rest changes per snapshot, and [method _net_state_applied] pushed it.
+	var state := player.controller.state
+	state.position = net_position
+	state.yaw = net_yaw
+	state.pitch = net_pitch
+	state.crouch_fraction = net_crouch
+	player.global_position = state.position
 
 
 func describe() -> Dictionary:
