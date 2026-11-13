@@ -213,6 +213,8 @@ var _level_map: ArenaMap = null
 var _level_busy := false
 ## A menu map change is under way ([method change_from_menu]): one physics tick a frame until it is done.
 var _changing := false
+## A menu map change on the sim host: the server builds first, so the client's frames are traced from its announcement ([method _on_map_changed]).
+var _trace_hosted_change := false
 ## The killer's screens whose spares setup still has to build, one a frame (`KillPovView.mount`).
 var _pov_spares: Array[Node] = []
 ## The stock figure models read on loader threads from the start of setup (`_request_figures`).

@@ -11,7 +11,7 @@ const ProcSplit := preload("proc_split.gd")
 const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 
 ## The 16v16 benchmark: dot-game's DotGamePerfBench (flags, recording, sidecar; see it) on arena's client. Windowed on a GPU box (tools/perf_bench.sh) or headless through hv: `godot --path . res://tools/perf_bench.tscn -- --map cp-orange-x3 --mode ctf --bots 31 --seconds 30`.
-## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines).
+## Arena's flags: `--pilot 0`, `--motor-us 1`, `--queries 1` (script query timers; native body off), `--ctl-us 1`, `--max-steps N`, `--native-us 1`, `--batch 0` (`arena_motor_batch` off), `--hull-min N`, `--sim-host 1` (solo game as a loopback server; its cost is the `SIM_HOST` log lines; `--boot-map dm_box` boots there and times a menu map change to the map).
 ## `--brain-native 0|1`: dot-bot's native mind (DotSimBotMind: aim, fight step, perception) off or on; without the dot-sim library it is script either way (the sidecar's `brain_native` says which ran).
 ## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
 ## `--sight-far M`, `--sight-far-reuse S`: bot sight LOD (bot_sight_far, bot_sight_far_reuse; default 20 m and 0.15 s, 0 turns it off).
@@ -113,7 +113,8 @@ func _setup_client(c: Node) -> void:
 	_sim_host = int(args.get("sim-host", 0)) != 0
 	if _sim_host:
 		ArenaSimHost.forced = 1
-		ArenaSimHost.ask_map = map
+		# `--boot-map ID`: the server boots there, and the bench changes to the map from the menu (a timed map change).
+		ArenaSimHost.ask_map = String(args.get("boot-map", map))
 		ArenaSimHost.ask_mode = mode
 
 
@@ -144,6 +145,12 @@ func _select_hosted() -> void:
 		t += 0.25
 	await wait_gate(120.0)
 	var _warmed := AwModelCache.warm(AwWeaponArtTable.model_paths())
+	# Booted elsewhere (`--boot-map`, or a map the server could not mount): change to the map from the menu as a
+	# player would; the client's timeline reports the change ("map change map:ID to playable").
+	if String(client.get("game").get("map").id) != map:
+		var picked: DotResult = await client.call("change_from_menu", StringName("map:" + map), StringName("mode:" + mode))
+		say("sim host: map change to %s mode %s: %s" % [map, mode, "ok" if picked.ok else picked.error.message])
+		await wait_gate(120.0)
 	t = 0.0
 	while _players(client.get("game")) < bots + 1 and t < 30.0:
 		await wait(0.25)

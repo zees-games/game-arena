@@ -119,6 +119,11 @@ func _enter_level(release: bool) -> void:
 func _on_map_changed(map: DotMapDef) -> void:
 	# Cover and stop the frozen body until the new level is in (released below).
 	gate.hold(&"map", "Loading the map")
+	if _trace_hosted_change:
+		_trace_hosted_change = false
+		var timeline := get_node_or_null(^"LoadTimeline") as ArenaLoadTimeline
+		if timeline != null:
+			timeline.trace_frames(CHANGE_TRACE_FRAMES)
 	while _level_busy:
 		await get_tree().process_frame
 	# The new map's own files (its bake, its rides) are a download group of their own; fetch them first.
@@ -184,13 +189,19 @@ func _on_map_changed(map: DotMapDef) -> void:
 ## Solo: a map (`map:<id>`) or a mode on this map (`mode:<id>`), now. The game changes and the
 ## level is rebuilt as a server's change would have it rebuilt ([method _on_map_changed]).
 func change_from_menu(id: StringName, picked_mode: StringName = &"") -> DotResult:
-	if host_console != null:
-		return await _change_on_host(String(id), String(picked_mode))
-	if not _offline:
+	if host_console == null and not _offline:
 		return DotResult.fail(DotError.CODE_STATE, "The server changes the map.")
 	var timeline := get_node_or_null(^"LoadTimeline") as ArenaLoadTimeline
 	if timeline != null:
 		timeline.rearm("map change %s to playable" % String(id))
+	if host_console != null:
+		_trace_hosted_change = timeline != null and not DotPlatform.is_headless()
+		var hosted: DotResult = await _change_on_host(String(id), String(picked_mode))
+		ArenaLoadTimeline.mark("change: host answered")
+		if not hosted.ok:
+			_trace_hosted_change = false
+		return hosted
+	if timeline != null:
 		if not DotPlatform.is_headless():
 			timeline.trace_frames(CHANGE_TRACE_FRAMES)
 	# The cover goes up before any of the work, under a reason of its own: the fetch and the level each hold and

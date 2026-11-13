@@ -23,6 +23,10 @@ var _tick_usec := 0
 var _tick_started := 0
 var _pass_start: PassStart = null
 var _pass_end: PassStart = null
+## The renderer's totals at the last "drawn", for its deltas; -1 until the first.
+var _drawn_pipelines := -1
+var _drawn_texture_kb := 0
+var _drawn_buffer_kb := 0
 
 
 const STATE_NAMES: Array[String] = ["closed", "warming", "open"]
@@ -98,6 +102,7 @@ func trace_frames(frames: int) -> void:
 	tracing = true
 	var tree := get_tree()
 	if not tree.physics_frame.is_connected(_on_tick):
+		_drawn_pipelines = -1
 		tree.physics_frame.connect(_on_tick)
 		tree.process_frame.connect(_on_frame)
 		RenderingServer.frame_post_draw.connect(_on_drawn)
@@ -151,8 +156,26 @@ func _on_frame() -> void:
 		tracing = false
 
 
+## "drawn" with what that draw cost the renderer: pipelines compiled since the last draw (mesh, surface, draw,
+## specialization), its draw calls, and how far texture and buffer memory moved. A slow draw with pipelines is
+## shader first-use; with memory, an upload.
 func _on_drawn() -> void:
-	mark("drawn")
+	var pipelines := 0
+	for info: int in [RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE,
+			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION]:
+		pipelines += int(RenderingServer.get_rendering_info(info))
+	var texture_kb := int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED)) >> 10
+	var buffer_kb := int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_BUFFER_MEM_USED)) >> 10
+	var draws := int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
+	if _drawn_pipelines < 0:
+		_drawn_pipelines = pipelines
+		_drawn_texture_kb = texture_kb
+		_drawn_buffer_kb = buffer_kb
+	mark("drawn", "pipelines +%d, draws %d, textures %+d KB, buffers %+d KB" % [
+		pipelines - _drawn_pipelines, draws, texture_kb - _drawn_texture_kb, buffer_kb - _drawn_buffer_kb])
+	_drawn_pipelines = pipelines
+	_drawn_texture_kb = texture_kb
+	_drawn_buffer_kb = buffer_kb
 	var now := Time.get_ticks_usec()
 	if not _warm_new.is_empty() and (now - _drawn_usec) / 1000 >= WARM_ITEM_MARK_MS:
 		mark("warm drew %s: %d ms" % [", ".join(_warm_new), (now - _drawn_usec) / 1000])
