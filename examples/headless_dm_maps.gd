@@ -112,7 +112,7 @@ func _test_solo() -> void:
 		solo_detail[str(each["id"])] = str(each["detail"])
 	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/crackhouse@1.0.5") and solo.get_map(&"crackhouse") != null,
 		"crackhouse is a suggested pack")
-	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/cp-orange-x3@1.0.7") and solo.get_map(&"cp-orange-x3") != null,
+	_check(ArenaMaps.STANDALONE_KEYS.has("gamemann/cp-orange-x3@1.0.8") and solo.get_map(&"cp-orange-x3") != null,
 		"cp-orange-x3 is a suggested pack")
 	_check(solo_detail.get("map:crackhouse", "") == "Deathmatch map", "crackhouse reads 'Deathmatch map'")
 	_check(solo_detail.get("map:gg-garage", "") == "Gun game map", "gg-garage reads 'Gun game map'")
