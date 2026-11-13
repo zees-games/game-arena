@@ -617,11 +617,6 @@ var feel_rules: AwViewFeel = AwViewFeel.new()
 ## Aim-down-sights and hip-size numbers (`aw_ads_rules`, REPLICATED): the server's cfg over fc-weapons' defaults. One per game, shared by every rig and the view model.
 var ads_rules: AwAdsRules = AwAdsRules.load_config()
 
-## The weapon definitions by id, for the death reaction a weapon asks for. Built on the first
-## kill rather than per kill: the table is twenty-seven fresh resources.
-var _weapon_defs: Dictionary = {}
-
-
 ## Whether a death leaves a real weapon in the world, so the client skips its look-alike prop.
 func drops_weapon_on_death() -> bool:
 	return weapon_drops != null and weapon_drop_rules.enabled and weapon_drop_rules.on_death

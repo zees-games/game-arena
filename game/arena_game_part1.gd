@@ -204,9 +204,10 @@ func _sync_award_config() -> void:
 ## killing weapon's def is what lets the sniper and the launcher throw a body
 ## (fc-weapons' `params.death_reaction`).
 func decide_death(entity_id: int, damage: DotDamage) -> DotPlayerDeath:
-	if _weapon_defs.is_empty():
-		_weapon_defs = ArenaContent.weapon_table()
-	var def: Object = _weapon_defs.get(damage.weapon_id)
+	# The shared catalogue, built under the loading cover. A table of its own, built here, made the
+	# first kill of a match 37 ms on staging02: twenty-seven fresh copies of the same defs.
+	var catalogue := ArenaPlayer.weapon_catalogue()
+	var def: Object = catalogue.get_def(damage.weapon_id) if catalogue.has(damage.weapon_id) else null
 	var direction := damage.direction
 	if direction.length_squared() < 0.0001 and damage.attacker != 0 and damage.attacker != entity_id:
 		var killer := player_for(damage.attacker)
