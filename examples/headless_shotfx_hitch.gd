@@ -95,6 +95,8 @@ func _run() -> void:
 	_check(int(shared.nodes) < int(own.nodes), "and a shared volley builds fewer nodes", "%d vs %d" % [shared.nodes, own.nodes])
 	_check(p.remote_shot(&"rifle", &"shot", Vector3(0, 1, -5), false), "the presentation plays a rifle's report for another player")
 	_check(p.remote_shot(&"pistol", &"shot", Vector3(0, 1, -5), false), "and a pistol's (every stock class is registered)")
+	_check(p.shots.has_shot(AwShotLayers.gun_shot_id(&"sniper")) and p.remote_shot(&"sniper", &"shot", Vector3(0, 1, -5), false),
+		"and a sniper's own report (each fc-weapons gun's layers are registered)")
 	_check(float(shared.mean) < float(own.mean), "and the shared first shot is cheaper", "%.2f vs %.2f ms" % [shared.mean, own.mean])
 
 	# Hands that take their effects from a pool filled under the cover: the first shot builds nothing at all.

@@ -510,7 +510,8 @@ func use_shot_rules(rules: DotShotRules) -> void:
 
 ## The report of somebody else's gun (`AwShotFx.shot_sound`) through this presentation's one layered player.
 ## Without it each shooter's `AwShotFx` made its own audio manager, enclosure and shot player on its first shot:
-## 40 ms a shooter, thirty-one times a match at 16 v 16. False for a class with no stock shot (the single sound plays).
+## 40 ms a shooter, thirty-one times a match at 16 v 16. A gun's own report when fc-weapons ships one, else its class's
+## stock; false for a class with neither (the single sound plays).
 func remote_shot(id: StringName, kind: StringName, at: Vector3, _indoors: bool) -> bool:
 	var t_shot := Time.get_ticks_usec()
 	var done := _remote_shot(id, kind, at)
@@ -522,10 +523,13 @@ func _remote_shot(id: StringName, kind: StringName, at: Vector3) -> bool:
 	if shots == null or audio == null:
 		return false
 	var weapon_class := AwWeaponSound.class_for(id, kind)
-	var stock_class := AwShotLayers.shot_class(weapon_class)
-	if stock_class == &"":
-		return false
-	var res := shots.fire(DotAudioShotStock.id_of(stock_class), at, weapon_class == AwWeaponSound.SUPPRESSED)
+	var shot_id := AwShotLayers.gun_shot_id(id) if kind == DotWeaponOutcome.KIND_SHOT else &""
+	if not shots.has_shot(shot_id):
+		var stock_class := AwShotLayers.shot_class(weapon_class)
+		if stock_class == &"":
+			return false
+		shot_id = DotAudioShotStock.id_of(stock_class)
+	var res := shots.fire(shot_id, at, weapon_class == AwWeaponSound.SUPPRESSED)
 	return res.ok and int(res.value_or(0)) > 0
 
 

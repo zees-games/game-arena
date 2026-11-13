@@ -389,6 +389,10 @@ func _build_audio() -> DotResult:
 	# (`remote_shot`), so none of them builds a manager, a player and thirteen registrations (40 ms) on its first shot.
 	for weapon_class in AwShotLayers.STOCK_CLASSES:
 		var _registered := shots.register(DotAudioShotStock.shot(weapon_class))
+	for gun: StringName in AwWeaponPack.SOUND_CLASSES:
+		var own := AwShotLayers.gun_shot(gun) as DotShotDef
+		if own != null:
+			var _own_registered := shots.register(own)
 	ambient = DotAmbienceDirector.new()
 	ambient.name = "Ambient"
 	ambient.manager = audio

@@ -159,8 +159,11 @@ func _check_recipes_cover_ids(cat: DotAudioCatalogue, recipes: Dictionary) -> vo
 	var uncovered: Array[String] = []
 	for id in cat.ids():
 		# dot-audio's stock footsteps and beds are files the addon ships: no stand-in needed.
-		# Nor are the ambience moods' files, which DotAmbience registers when a mood starts.
-		if not recipes.has(id) and not DotAudioStock.ids().has(id) and not String(id).begins_with("shot_") and not String(id).begins_with(DotAmbience.ID_PREFIX):
+		# Nor are the ambience moods' files, which DotAmbience registers when a mood starts,
+		# nor fc-weapons' own per-gun reports (aw_gun_*), recordings the pack ships.
+		var sid := String(id)
+		if not recipes.has(id) and not DotAudioStock.ids().has(id) and not sid.begins_with("shot_") and not sid.begins_with(DotAmbience.ID_PREFIX) \
+				and not sid.begins_with(AwShotLayers.GUN_PREFIX):
 			uncovered.append(String(id))
 	_check(
 		uncovered.is_empty(),
