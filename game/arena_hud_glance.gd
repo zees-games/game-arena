@@ -716,7 +716,8 @@ class PortraitCache extends Node:
 		view.size = Vector2i(SIDE, SIDE)
 		view.transparent_bg = true
 		view.own_world_3d = true
-		view.msaa_3d = Viewport.MSAA_4X
+		# The rest of the client runs msaa 0 on the web (gl_compatibility); a 4x resolve per glance face is wasted there.
+		view.msaa_3d = Viewport.MSAA_DISABLED if (DotPlatform.is_web() or RenderingServer.get_current_rendering_method() == "gl_compatibility") else Viewport.MSAA_4X
 		view.render_target_update_mode = SubViewport.UPDATE_ONCE
 		add_child(view)
 
