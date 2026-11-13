@@ -109,6 +109,8 @@ static func lap(section: StringName, since_usec: int) -> int:
 	var now := Time.get_ticks_usec()
 	if DotFrameCost.enabled:
 		DotFrameCost.add_usec(_profiled(section), now - since_usec)
+	if now - since_usec >= ArenaLoadTimeline.SLOW_SECTION_USEC and ArenaLoadTimeline.tracing:
+		ArenaLoadTimeline.mark("lap %s %d ms" % [section, (now - since_usec) / 1000])
 	return now
 
 

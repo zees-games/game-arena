@@ -225,7 +225,9 @@ static func _flash_scene_paths() -> Array[String]:
 ## Starts reading the flash scenes on the loader's threads while phase 0 runs: read inline,
 ## one scene was a 205 ms frame on staging02.
 func _request_flash_scenes() -> void:
-	if not DotMuzzleFlash.available():
+	# No loader threads (the web build): a request reads inline, every scene in this one frame. Left to
+	# DotMuzzleFlash.pin_scenes instead, which reads them a slice at a time.
+	if not DotMuzzleFlash.available() or not DotPlatform.has_threads():
 		return
 	var asked: Array[String] = []
 	for path in _flash_scene_paths():
@@ -403,7 +405,9 @@ func _prewarm_models() -> void:
 	# Not headless: the dummy renderer's mesh storage is not safe against a loader thread creating
 	# meshes beside the main thread (RID errors, a mesh leaked at exit, an odd viewarms failure), and
 	# there the tick below simply loads each file itself, a few ms a frame.
-	if DisplayServer.get_name() != "headless":
+	# No loader threads either on the web build: a request reads the file inline, so the 27 requests
+	# were one 2074-2426 ms frame on staging02. There the tick reads them itself, one or two a frame.
+	if DisplayServer.get_name() != "headless" and DotPlatform.has_threads():
 		for path: Variant in _model_paths:
 			var real := AwModelCache.resolve(str(path))
 			if ResourceLoader.exists(real):
@@ -436,7 +440,10 @@ func _prewarm_models_tick() -> void:
 		# Landed (or never requested). Taking it from the loader frees the loader's hold on it; kept in
 		# `landed` while the cache loads it, that load is a cache hit, a few ms at most.
 		var landed: Resource = ResourceLoader.load_threaded_get(real) if ResourceLoader.load_threaded_get_status(real) != ResourceLoader.THREAD_LOAD_INVALID_RESOURCE else null
+		var read_began := Time.get_ticks_msec()
 		AwModelCache.warm([_model_paths[_model_paths_next]])
+		if Time.get_ticks_msec() - read_began >= 50:
+			ArenaLoadTimeline.mark("model read %s" % str(_model_paths[_model_paths_next]).get_file(), Time.get_ticks_msec() - read_began)
 		landed = null
 		_model_paths_next += 1
 	if _model_paths_next >= _model_paths.size():

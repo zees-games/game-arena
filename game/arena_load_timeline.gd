@@ -32,6 +32,23 @@ var _slow_frames := 0
 var _title := "time to playable"
 ## The first load starts with the gate closed; a rearmed one waits for it to close.
 var _seen_closed := true
+## Play watched after the gate opens, and the frame length stamped there: the goal is a smooth 60 fps from the first frame.
+const SETTLE_MSEC := 8000
+const SETTLE_SLOW_MS := 50
+var _settle_until := 0
+var _settle_from := 0
+var _settle_worst := 0
+var _settle_slow := 0
+## `?cl_load_trace=1` on the page (`--cl_load_trace 1` on a desktop): every frame under the cover and through the
+## settle window traced as by [method trace_frames], so a slow frame splits into its setup step, the nodes' pass and
+## the draw. `cl_load_trace=items` also makes every [DotRenderWarmup] draw one item a round (far slower, but each
+## slow draw names its one material).
+var _trace_load := false
+var _trace_items := false
+## Under that trace, what each [DotRenderWarmup] round put up, stamped with a slow draw.
+var _warm_new: Array[String] = []
+var _drawn_usec := 0
+const WARM_ITEM_MARK_MS := 100
 
 
 ## A named moment in the client's own load, e.g. `mark("level_built")`. A frame's own stamps pass [param detail] (a hold, a gap, a state) instead of a built string; [method _report] words them once.
@@ -46,12 +63,22 @@ func _ready() -> void:
 	set_physics_process(false)
 	_last_ms = Time.get_ticks_msec()
 	mark("timeline_start")
+	var probe: GDScript = load("res://game/arena_frame_probe.gd")
+	var trace := str(probe.call(&"launch_value", "cl_load_trace"))
+	_trace_items = trace == "items"
+	_trace_load = trace == "1" or _trace_items
+	if _trace_load:
+		# The sub-spans too (`s_resolve`, `p_hitbox`, ...), so a slow section names its part.
+		probe.set(&"fine", true)
+		trace_frames.call_deferred(1 << 20)
+		get_tree().node_added.connect(_on_node_added)
 
 
 ## Times a later load the same way, e.g. a map change: stamps from now, reported (under [param title]) once the
 ## gate has closed and opened again. The gate is still open when a change starts, so it must close before it counts.
 func rearm(title: String) -> void:
 	_marks.clear()
+	_settle_until = 0
 	_title = title
 	_worst_ms = 0
 	_slow_frames = 0
@@ -125,9 +152,54 @@ func _on_frame() -> void:
 
 func _on_drawn() -> void:
 	mark("drawn")
+	var now := Time.get_ticks_usec()
+	if not _warm_new.is_empty() and (now - _drawn_usec) / 1000 >= WARM_ITEM_MARK_MS:
+		mark("warm drew %s: %d ms" % [", ".join(_warm_new), (now - _drawn_usec) / 1000])
+	_warm_new.clear()
+	_drawn_usec = now
+
+
+## The load trace's warm-up attribution: every warm-up draws one item a round, each named with its draw.
+func _on_node_added(node: Node) -> void:
+	if node is DotRenderWarmup:
+		if _trace_items:
+			(node as DotRenderWarmup).batch_size = 1
+	elif node is GeometryInstance3D and node.get_parent() is DotRenderWarmup:
+		_warm_new.append(_describe_item(node))
+
+
+static func _describe_item(node: Node) -> String:
+	var mi := node as MeshInstance3D
+	if mi != null and mi.material_override != null:
+		return _describe_material(mi.material_override)
+	if mi != null and mi.mesh != null:
+		var parts: Array[String] = []
+		for i in mi.mesh.get_surface_count():
+			parts.append(_describe_material(mi.mesh.surface_get_material(i)))
+		return "mesh %s [%s]" % [mi.mesh.resource_path.get_file(), " ".join(parts)]
+	var gp := node as GPUParticles3D
+	if gp != null:
+		return "particles " + _describe_material(gp.process_material)
+	return node.get_class()
+
+
+static func _describe_material(m: Material) -> String:
+	if m == null:
+		return "none"
+	var named := m.resource_path.get_file() if not m.resource_path.is_empty() else m.resource_name
+	var sm := m as ShaderMaterial
+	var bm := m as BaseMaterial3D
+	if sm != null and sm.shader != null:
+		named += " shader " + sm.shader.resource_path.get_file()
+	elif bm != null:
+		named += " t%d s%d" % [bm.transparency, bm.shading_mode]
+	return named if not named.strip_edges().is_empty() else m.get_class()
 
 
 func _process(_delta: float) -> void:
+	if _settle_until > 0:
+		_settle()
+		return
 	if _done or gate == null or not is_instance_valid(gate):
 		return
 	var now := Time.get_ticks_msec()
@@ -153,15 +225,51 @@ func _process(_delta: float) -> void:
 		_seen_closed = true
 	elif _seen_closed:
 		_done = true
-		set_process(false)
+		if _trace_load and get_tree().node_added.is_connected(_on_node_added):
+			get_tree().node_added.disconnect(_on_node_added)
 		_report.call_deferred()
+		_settle_from = _marks.size()
+		_settle_until = now + SETTLE_MSEC
+		_settle_worst = 0
+		_settle_slow = 0
+
+
+## The first [const SETTLE_MSEC] of play after the gate opens: each frame of [const SETTLE_SLOW_MS] or more is
+## stamped between the client's own marks, so a spike right after the cover names its work. Reported once, as
+## `arena.load` "after open" and `window.dotWeb.published.arena_after_open`.
+func _settle() -> void:
+	var now := Time.get_ticks_msec()
+	var ms := now - _last_ms
+	_last_ms = now
+	_settle_worst = maxi(_settle_worst, ms)
+	if ms >= SETTLE_SLOW_MS:
+		_settle_slow += 1
+		mark("slow_frame ms", ms)
+	if now < _settle_until:
+		return
+	_settle_until = 0
+	set_process(false)
+	if _trace_load:
+		_trace_left = mini(_trace_left, 1)
+	var rows := _rows(_marks.slice(_settle_from))
+	DotLog.info(CHANNEL, "after open, engine ms (+gap, frame): " + "; ".join(rows[0]), {"worst_frame_ms": _settle_worst, "slow_frames": _settle_slow})
+	if DotWeb.available():
+		DotWeb.publish("arena_after_open", JSON.stringify({"marks": rows[1], "worst_frame_ms": _settle_worst, "slow_frames": _settle_slow, "now_ms": now}))
 
 
 func _report() -> void:
+	var rows := _rows(_marks)
+	DotLog.info(CHANNEL, _title + ", engine ms (+gap, frame): " + "; ".join(rows[0]), {"worst_frame_ms": _worst_ms, "slow_frames": _slow_frames})
+	if DotWeb.available():
+		DotWeb.publish("arena_load", JSON.stringify({"marks": rows[1], "worst_frame_ms": _worst_ms, "slow_frames": _slow_frames, "now_ms": Time.get_ticks_msec()}))
+
+
+## [param list]'s stamps worded: the log rows and the published [ms, frame, label] triples.
+func _rows(list: Array) -> Array:
 	var rows: PackedStringArray = []
 	var marks: Array = []
-	var prev := int(_marks[0][0]) if not _marks.is_empty() else 0
-	for m: Array in _marks:
+	var prev := int(list[0][0]) if not list.is_empty() else 0
+	for m: Array in list:
 		var label := String(m[2])
 		if label == "gate":
 			label += " " + STATE_NAMES[int(m[3])]
@@ -172,6 +280,4 @@ func _report() -> void:
 		rows.append("%d(+%d,f%d) %s" % [int(m[0]), int(m[0]) - prev, int(m[1]), label])
 		marks.append([m[0], m[1], label])
 		prev = int(m[0])
-	DotLog.info(CHANNEL, _title + ", engine ms (+gap, frame): " + "; ".join(rows), {"worst_frame_ms": _worst_ms, "slow_frames": _slow_frames})
-	if DotWeb.available():
-		DotWeb.publish("arena_load", JSON.stringify({"marks": marks, "worst_frame_ms": _worst_ms, "slow_frames": _slow_frames}))
+	return [rows, marks]
