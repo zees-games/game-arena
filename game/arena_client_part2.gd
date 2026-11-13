@@ -775,6 +775,10 @@ func _start_offline() -> void:
 		_restore_loadout.call_deferred()
 		await _setup_frame()
 
+	# The line tools/browser_solo_overlay_check.mjs looks for: the start map (a built-in one writes no
+	# "map changed") is built and the player is in it.
+	DotLog.info(CHANNEL, "map loaded", {"map": String(game.map.id) if game.map != null else ""})
+
 	_bind_bot_console()
 	await _launch_offline_bots(_launch_bots())
 	_run_launch_commands()
