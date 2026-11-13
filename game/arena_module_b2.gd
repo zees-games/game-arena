@@ -120,6 +120,8 @@ func _build_netcode() -> DotResult:
 	# From the game, so the client cannot be given a different one. See
 	# ArenaGame.NET_WORLD_EXTENT.
 	config.world_extent = ArenaGame.NET_WORLD_EXTENT
+	# Per-peer snapshots on worker threads (sv_snapshot_workers, the same bytes): see default_snapshot_workers.
+	config.snapshot_workers = default_snapshot_workers()
 	net.config = config
 	add_child(net)
 

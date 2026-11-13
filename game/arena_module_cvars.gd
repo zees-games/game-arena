@@ -20,6 +20,8 @@ var game: ArenaGame = null
 var net: DotNetManager = null
 var _cv_maxrate: DotConVar = null
 var _cv_snapshot_rate: DotConVar = null
+## The most snapshot workers [method default_snapshot_workers] picks: 4 was the measured win (fc-snapshot-workers-1).
+const SNAPSHOT_WORKERS_MAX := 4
 ## Relevance rings for a big room (sv_net_aoi_players and friends); see arena_net_aoi.gd.
 var net_aoi: ArenaNetAoi = null
 ## The team menu server and its team layout cvars (arena_team_menu.gd).
@@ -424,6 +426,27 @@ func _add_snapshot_rate_cvar() -> void:
 	_cv_snapshot_rate = add_cvar("sv_snapshot_rate", "0",
 		"Snapshots a second to aim at; 0 is the default (32). Applies when the game is built; clients learn it at join.",
 		DotConVar.FLAG_ARCHIVE).with_range(0.0, 128.0)
+
+
+## `sv_snapshot_workers`: [member DotNetConfig.snapshot_workers], live. The same bytes on the wire either way (dot-net builds each peer's snapshot from one frozen instant);
+## net_probe, 31 bots + 31 fake peers on PH: send 4.31 -> 2.86 ms/tick with 4 (nightly fc-snapshot-workers-1). Launch `+sv_snapshot_workers N` or env ARENA_SNAPSHOT_WORKERS.
+func _add_snapshot_workers_cvar() -> void:
+	add_cvar("sv_snapshot_workers", str(net.config.snapshot_workers if net != null and net.config != null else 0),
+		"Worker threads that build the per-peer snapshots; 0 builds them on the tick thread, -1 is the processor count less one. Same bytes either way",
+		DotConVar.FLAG_ARCHIVE).with_range(-1.0, 64.0).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			if net != null and net.config != null:
+				net.config.snapshot_workers = clampi(int(new_value.to_float()), -1, 64))
+
+
+## The snapshot workers a server starts with: env ARENA_SNAPSHOT_WORKERS when set, else a quarter of the machine's threads, at most
+## [constant SNAPSHOT_WORKERS_MAX], and 0 (inline) under 8 threads, where the bots' threads and the tick already want the cores.
+static func default_snapshot_workers() -> int:
+	var env := OS.get_environment("ARENA_SNAPSHOT_WORKERS")
+	if env.is_valid_int():
+		return clampi(env.to_int(), -1, 64)
+	var n := mini(floori(OS.get_processor_count() / 4.0), SNAPSHOT_WORKERS_MAX)
+	return n if n >= 2 else 0
 
 
 ## The arena's own limits on `sv_tickrate` (dot-server's range is wider; [constant ArenaGame.MIN_TICK_RATE] to

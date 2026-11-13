@@ -28,7 +28,8 @@ var _aoi: PackedStringArray = PackedStringArray()
 
 ## --fake N: N extra synthetic peers (no observer entity, unreliable sends dropped, acks 2 snapshots late) on the server, to measure per-peer snapshot cost without N full clients.
 var _fake := 0
-var _workers := 0
+## --workers N: DotNetConfig.snapshot_workers; unset keeps the server's own (sv_snapshot_workers' default).
+var _workers := -2
 var _native := 1
 var _noshort := false
 var _fake_sent := [0, 0]
@@ -129,7 +130,8 @@ func _tune_server() -> void:
 	if _game.match_node.state == DotMatch.State.IDLE:
 		_game.start(0)
 	DotNetBehaviour.native_encode_shortcuts = not _noshort
-	_net.config.snapshot_workers = _workers
+	if _workers >= -1:
+		_net.config.snapshot_workers = _workers
 	_net.config.native = _native != 0
 	if _budget >= 0:
 		_net.config.per_client_budget = _budget

@@ -202,6 +202,7 @@ func _bind_commands_and_cvars() -> void:
 	var _glass_cvars := game.glass_rules.bind_cvars(add_cvar, DotConVar.FLAG_ARCHIVE | DotConVar.FLAG_NOTIFY)
 	_add_rate_cvar()
 	_add_snapshot_rate_cvar()
+	_add_snapshot_workers_cvar()
 	_add_tick_rate_cvars()
 	_add_aoi_cvars()
 	if game.config_binder != null:
