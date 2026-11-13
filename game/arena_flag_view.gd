@@ -35,6 +35,9 @@ var _dist_tenth := {}
 var _seen := {}
 ## Formats the distance; held as a callable because it runs only when the shown tenth changes.
 var _format_distance: Callable = distance_text
+## The floor under each resting flag: {team: [at, grounded]}. The trace is redone only when the flag's point moves,
+## not every frame (a resting flag's floor does not change).
+var _ground := {}
 const NODE_NAMES := {1: &"Flag1", 2: &"Flag2", 3: &"Flag3", 4: &"Flag4"}
 ## Who held each flag last frame: {team: player}, to let go of their arm.
 var _holders := {}
@@ -241,7 +244,14 @@ func _place(flag: DotObjectiveFlag) -> Vector3:
 		return carrier.global_position
 	if ArenaFlagCarry.flying(game, flag.home_team()):
 		return flag.at
-	return _grounded(flag.at)
+	if game == null or game.combat == null or game.combat.trace == null:
+		return flag.at
+	var team := flag.home_team()
+	var held: Array = _ground.get(team, [])
+	if held.is_empty() or held[0] != flag.at:
+		held = [flag.at, _grounded(flag.at)]
+		_ground[team] = held
+	return held[1]
 
 
 func _grounded(at: Vector3) -> Vector3:

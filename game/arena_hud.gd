@@ -458,30 +458,59 @@ func present_gear() -> void:
 			ammo.show_ammo(_weapon_label, slot.magazine, reserve,
 				float(slot.magazine) <= float(slot.def.magazine) * 0.25)
 
+	# The slot rows and the key hints are rebuilt (and compared as text by their widgets) only when what they show
+	# from changes: an integer over the keys, the carried weapons and the mode, not two arrays and strings a frame.
+	var key_sig := keys.hash()
 	if slots != null:
-		var rows: Array[Dictionary] = []
-		if live and player.arsenal != null:
-			for index in player.arsenal.slots():
-				var held := player.arsenal.slot_at(index)
-				if held != null:
-					rows.append({"slot": index, "id": held.def.id, "name": held.def.display_name,
-						"key": String(keys.get(SLOT_KEYS[index] if index < SLOT_KEYS.size() else &"", String.num_int64(index)))})
-		slots.show_slots(rows, player.arsenal.current_slot() if live and player.arsenal != null else 0)
+		var arsenal: DotWeaponArsenal = player.arsenal if live else null
+		var row_sig := hash([key_sig, live, arsenal.get_instance_id() if arsenal != null else 0])
+		if arsenal != null:
+			row_sig = hash([row_sig, arsenal.current_slot()])
+			for index in arsenal.slots():
+				var held := arsenal.slot_at(index)
+				row_sig = hash([row_sig, index, held.def.get_instance_id() if held != null and held.def != null else 0])
+		if row_sig != _rows_sig:
+			_rows_sig = row_sig
+			_present_slots(live)
 
 	if hints != null:
 		# Keyboard keys mean nothing on a phone, and the list covers the view there.
 		hints.visible = live and not DotPlatform.has_touch()
-		var shown: Array = [
-			["Scoreboard", keys[&"scoreboard"]], ["Menu", keys[&"menu"]], ["Help", keys[&"help"]],
-			["Maps", keys[&"maps"]],
-		]
-		# The loadout's key only where there is a loadout menu: an older shell, or a mode that
-		# hands out the weapons, has none to open.
 		var shown_mode: Variant = game.displayed_mode() if game != null else null
-		if String(keys.get(&"loadout", "")) != "" and (shown_mode == null or not bool(shown_mode.call(&"arms_players"))):
-			shown.append(["Loadout", keys[&"loadout"]])
-		shown.append_array([["Chat", keys[&"chat"]], ["Slide", keys[&"slide"]]])
-		hints.show_hints(shown)
+		var arms := shown_mode != null and bool(shown_mode.call(&"arms_players"))
+		var hint_sig := hash([key_sig, shown_mode == null, arms])
+		if hint_sig != _hints_sig:
+			_hints_sig = hint_sig
+			_present_hints(shown_mode == null or not arms)
+
+
+## The signatures of what the slot rows and the key hints last showed ([method present_gear]); -1 forces a rebuild.
+var _rows_sig := -1
+var _hints_sig := -1
+
+
+func _present_slots(live: bool) -> void:
+	var rows: Array[Dictionary] = []
+	if live and player.arsenal != null:
+		for index in player.arsenal.slots():
+			var held := player.arsenal.slot_at(index)
+			if held != null:
+				rows.append({"slot": index, "id": held.def.id, "name": held.def.display_name,
+					"key": String(keys.get(SLOT_KEYS[index] if index < SLOT_KEYS.size() else &"", String.num_int64(index)))})
+	slots.show_slots(rows, player.arsenal.current_slot() if live and player.arsenal != null else 0)
+
+
+func _present_hints(loadout_menu: bool) -> void:
+	var shown: Array = [
+		["Scoreboard", keys[&"scoreboard"]], ["Menu", keys[&"menu"]], ["Help", keys[&"help"]],
+		["Maps", keys[&"maps"]],
+	]
+	# The loadout's key only where there is a loadout menu: an older shell, or a mode that
+	# hands out the weapons, has none to open.
+	if String(keys.get(&"loadout", "")) != "" and loadout_menu:
+		shown.append(["Loadout", keys[&"loadout"]])
+	shown.append_array([["Chat", keys[&"chat"]], ["Slide", keys[&"slide"]]])
+	hints.show_hints(shown)
 
 
 ## What the ammunition counter shows for [param who]: the magazine, or for a weapon that
