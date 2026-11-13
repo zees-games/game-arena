@@ -46,7 +46,7 @@ var PACK_ROOT := "user://arena_pack_maps_check_%d" % OS.get_process_id()
 var GROUPS_ROOT := "user://arena_map_groups_check_%d" % OS.get_process_id()
 const SECTIONS := 8
 ## Without a frame; two more with `--shot`.
-const CHECKS := 37
+const CHECKS := 38
 ## The groups section's mount checks, skipped (and not expected) on a dot-cloud before API 22.
 const GROUP_MOUNT_CHECKS := 5
 
@@ -109,7 +109,8 @@ func _run() -> void:
 
 
 ## The site's "Play map" (`?map=`): the shell names a start map on `dot_solo`; a built-in one is
-## the first map, anything else waits for the change after setup (a delivered pack's download).
+## the first map, a delivered pack is fetched before the first map is read (`_fetch_solo_start_map`), and
+## until it is mounted the first map is dm_box.
 func _test_solo_start_map() -> void:
 	_section("a solo session's start map is the first map")
 	var solo := StandInSolo.new()
@@ -121,7 +122,7 @@ func _test_solo_start_map() -> void:
 		ArenaSimHost.asked_map_id())
 	solo.start_map = &"surf_not_built_in"
 	_check(ArenaClientView._solo_start_map() == "surf_not_built_in" and ArenaClientView._startup_map().id == &"dm_box",
-		"a delivered one starts on dm_box, to change once set up")
+		"a delivered one not yet mounted starts on dm_box")
 	solo.start_map = &"../dm_pit"
 	_check(ArenaClientView._solo_start_map() == "", "a start map that is not a map id is ignored")
 	DotRegistry.unregister(&"dot_solo")
@@ -381,6 +382,17 @@ func _test_fetch_and_build(keys: Dictionary) -> ArenaGame:
 	_check(solid != null and solid.is_inside_tree() and solid.get_child_count() > 100,
 		"with its brushes in the tree (%d)" % (solid.get_child_count() if solid != null else -1))
 	_check(map != null and map.movement_profile == &"surf" and map.spawns.size() > 0, "on the surf profile, with spawns")
+	# What `_fetch_solo_start_map` relies on: once the pack is mounted, the solo start map is the first map,
+	# so a `?map=` game is built on it once rather than on dm_box first.
+	var solo := StandInSolo.new()
+	add_child(solo)
+	DotRegistry.register(&"dot_solo", solo)
+	solo.start_map = MAP
+	var first := ArenaClientView._startup_map()
+	_check(first != null and first.id == MAP, "a mounted solo start map is the first map, with no dm_box before it",
+		str(first.id) if first != null else "none")
+	DotRegistry.unregister(&"dot_solo")
+	solo.queue_free()
 	_done()
 	_director = director
 	_server = server
@@ -471,7 +483,7 @@ func _test_surf_keys() -> void:
 	_check(ArenaMaps.is_delivered(def), "a prefixed surf pack counts as delivered (is_delivered)")
 	var surf := 0
 	for key in ArenaMaps.STANDALONE_KEYS:
-		if key.begins_with("gamemann/" + ArenaMaps.PACK_PREFIX) and key.ends_with("@1.2.3"):
+		if key.begins_with("gamemann/" + ArenaMaps.PACK_PREFIX) and "@1.2." in key:
 			surf += 1
 	_check(surf == 39, "STANDALONE_KEYS holds 39 surf packs (%d)" % surf)
 	var listed := ArenaMaps.standalone_keys(null)

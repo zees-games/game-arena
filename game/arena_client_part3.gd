@@ -36,6 +36,9 @@ func _ready() -> void:
 	_request_figures()
 	await _setup_frame()
 
+	# A solo start map from a pack (the web's `?map=`) is fetched before the first map is read, under the boot
+	# cover, so the game is built on it once instead of on dm_box and then again on it.
+	await _fetch_solo_start_map()
 	# Reading the map is a frame's work of its own on a big import (169 ms for cp-orange-x3 on staging02),
 	# and it needs no game: read before the game exists, so no frame has a game without a map.
 	var first := _first_map()

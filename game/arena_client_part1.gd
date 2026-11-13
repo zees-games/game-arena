@@ -843,9 +843,23 @@ func _wrap_suppressed(fx: AwShotFx) -> void:
 	ArenaAttach.wrap_report(fx, func(at: Vector3) -> bool: return ArenaAttach.play_suppressed(presentation, at))
 
 
+## Offline, before the first map is read: a solo start map that is a delivered pack not yet mounted is fetched
+## and mounted under the boot cover, with its progress, so [method _startup_map] finds it and the game is built on
+## it directly, with no dm_box built first only to be replaced. A failed fetch is logged and leaves dm_box to
+## [method _start_on_solo_map], which says the failure on the cover the way M would.
+func _fetch_solo_start_map() -> void:
+	var start := StringName(_solo_start_map())
+	if not _offline or start == &"" or ArenaMap.by_id(start) != null:
+		return
+	if not ArenaMaps.is_delivered(_catalogue().get_map(start)):
+		return
+	var fetched: DotResult = await _fetch_picked(start)
+	DotLog.result(CHANNEL, "solo start map %s fetched before the first map" % start, fetched)
+
+
 ## A solo start map this build does not hold is a delivered pack: once the first level is up, it
-## changes to it the way M would, so the download shows on the load cover. A built-in one was
-## already the first map ([method _startup_map]).
+## changes to it the way M would, so the download shows on the load cover. A built-in one, or a pack
+## [method _fetch_solo_start_map] already mounted, was the first map ([method _startup_map]).
 func _start_on_solo_map() -> void:
 	var start := StringName(_solo_start_map())
 	if not _offline or start == &"" or game == null or (game.map != null and game.map.id == start):
