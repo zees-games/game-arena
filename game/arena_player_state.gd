@@ -92,6 +92,11 @@ var mirror_fitted: int = 0
 ## The fitting code [member held] last drew, and whether it had a suppressor on (-1: not drawn yet).
 var _held_fitted: int = -1
 var _held_suppressed: bool = false
+## [method _held_code_cached]'s last answer and the held slot, definition and attachments catalogue it was for.
+var _held_code: int = 0
+var _held_code_slot: DotWeaponSlot = null
+var _held_code_def: DotWeaponDef = null
+var _held_code_cat: DotWeaponAttachments = null
 var _mode_click_audio: AudioStreamPlayer3D = null
 var health: DotHealth = null
 var hitboxes: DotHitboxSet = null

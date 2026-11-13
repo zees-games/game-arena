@@ -199,7 +199,7 @@ func _present_held(remote: bool = false) -> void:
 
 ## Draws the held gun's attachments, and marks the hand (and the local rig) suppressed for ArenaAttach.wrap_report.
 func _present_fitting(id: StringName) -> void:
-	var code := mirror_fitted if mirrored else ArenaAttach.held_code(arsenal)
+	var code := mirror_fitted if mirrored else _held_code_cached()
 	if held.equipped() != id:
 		return
 	if code == _held_fitted:
@@ -211,6 +211,20 @@ func _present_fitting(id: StringName) -> void:
 	held.set_meta(ArenaAttach.SUPPRESSED_META, _held_suppressed)
 	if weapons != null:
 		weapons.set_meta(ArenaAttach.SUPPRESSED_META, _held_suppressed)
+
+## [method ArenaAttach.held_code] for this body's own arsenal, worked out again only when the held slot or its
+## definition changes (`DotWeaponArsenal.fit` always puts a new definition in the slot). The code walks the whole
+## attachments catalogue twice, and this runs per drawn body per frame: with varied bot guns it was ~0.6 ms a frame.
+func _held_code_cached() -> int:
+	var slot: DotWeaponSlot = arsenal.current() if arsenal != null else null
+	var def: DotWeaponDef = slot.def if slot != null else null
+	var cat: DotWeaponAttachments = arsenal.attachments if arsenal != null else null
+	if slot != _held_code_slot or def != _held_code_def or cat != _held_code_cat:
+		_held_code_slot = slot
+		_held_code_def = def
+		_held_code_cat = cat
+		_held_code = ArenaAttach.held_code(arsenal)
+	return _held_code
 
 ## Hangs a [AwWorldModel] on [method attachment]'s hand. Client side, with the body.
 func _hold_weapon() -> void:
