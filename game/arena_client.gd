@@ -192,6 +192,13 @@ func switch_flashlight() -> void:
 	if flash != null and is_instance_valid(flash):
 		var _asked := flash.toggle()
 
+## Plays the inspect clip on the gun in hand (the Inspect key). Only the local view model moves:
+## nothing goes to the server. False while aiming, reloading, switching or already inspecting.
+func inspect_weapon() -> bool:
+	if _watching_other() or player == null or not player.is_alive() or view_model == null:
+		return false
+	return view_model.inspect()
+
 ## Whether [param event] is on [param action], pressed or released. False for an action the
 ## InputMap does not have, which `InputEvent.is_action` reports as an error.
 static func _is(event: InputEvent, action: StringName) -> bool:
@@ -300,6 +307,9 @@ func _press_action(event: InputEvent) -> void:
 		return
 	if InputMap.has_action(ArenaBindings.ATTACH) and event.is_action_pressed(ArenaBindings.ATTACH):
 		var _opened := open_attachments()
+		return
+	if InputMap.has_action(ArenaBindings.INSPECT) and event.is_action_pressed(ArenaBindings.INSPECT):
+		var _looked := inspect_weapon()
 		return
 	if InputMap.has_action(ArenaBindings.FLASHLIGHT) and event.is_action_pressed(ArenaBindings.FLASHLIGHT):
 		switch_flashlight()

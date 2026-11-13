@@ -280,7 +280,29 @@ func _fp_animation(a: String, me, id: StringName, def: DotWeaponDef, wdir: Strin
 						view.set_sprinting(false), res)
 				view.set_sprinting(false)
 		"inspect":
-			res = {"status": "n/a", "why": "no inspect animation exists in arena-weapons yet"}
+			await _ensure_in_hand(me, id, def)
+			var looked := _view_model(me)
+			if looked == null or not looked.has_method(&"inspect"):
+				res = {"status": "missing", "why": "fc-weapons below API 21 has no inspect"}
+			else:
+				# The bound key itself, through the client's input as a player presses it (the client reads keys and
+				# buttons only, not bare action events).
+				var key_event: InputEvent = null
+				for bound in InputMap.action_get_events(&"arena_inspect") if InputMap.has_action(&"arena_inspect") else []:
+					if bound is InputEventKey:
+						key_event = bound
+				if key_event == null:
+					res = {"status": "missing", "why": "no key bound to arena_inspect"}
+					return res
+				await _clip(wdir, key, 96, func(i: int) -> void:
+					if i == 3 or i == 5:
+						var press := key_event.duplicate() as InputEventKey
+						press.pressed = i == 3
+						Input.parse_input_event(press)
+					elif i == 10:
+						res["inspect_started"] = looked.inspect_fraction() < 1.0, res)
+				if not bool(res.get("inspect_started", false)):
+					res = {"status": "missing", "why": "the inspect key started nothing"}
 		_:
 			res = {"status": "n/a", "why": "unknown animation"}
 	return res

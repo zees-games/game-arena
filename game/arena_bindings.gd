@@ -44,6 +44,8 @@ const AIM := &"arena_aim"
 const BASH := &"arena_bash"
 const FLASHLIGHT := &"arena_flashlight"
 const RELOAD := &"arena_reload"
+## Look the gun in hand over (fc-weapons' inspect clip). Fire, aim, reload or a switch cut it short.
+const INSPECT := &"arena_inspect"
 ## Slots 1 to 5: melee, sidearm, primary, heavy, throwable (the pack's five).
 const SLOTS: Array[StringName] = [
 	&"arena_slot_1", &"arena_slot_2", &"arena_slot_3", &"arena_slot_4", &"arena_slot_5",
@@ -87,6 +89,7 @@ static func make() -> DotMenuBindings:
 	keys.add(BASH, &"bind_bash", "Bash (freeze a prop in a props mode)", "X", "Weapons")
 	keys.add(FLASHLIGHT, &"bind_flashlight", "Flashlight", "F", "Weapons")
 	keys.add(RELOAD, &"bind_reload", "Reload", "R", "Weapons")
+	keys.add(INSPECT, &"bind_inspect", "Inspect the weapon in hand", "L", "Weapons")
 	for i in range(SLOTS.size()):
 		keys.add(SLOTS[i], StringName("bind_slot_%d" % (i + 1)),
 			"Slot %d: %s" % [i + 1, SLOT_NAMES[i]], str(i + 1), "Weapons")
