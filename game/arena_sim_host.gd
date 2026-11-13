@@ -1,5 +1,7 @@
 extends Node
 
+const ArenaPaths := preload("arena_paths.gd")
+
 ## Solo play with the simulation off the render thread (on for the launched game; `-- --sim_host 0` turns it off): starts the solo game as a loopback server process ([code]arena_sim_server.gd[/code]) and joins it,
 ## so this process only predicts its own player, interpolates the rest from snapshots and draws. See docs/sim-thread.md. A failure at any step leaves [member up] false and the client plays the stock in-process solo game.
 
@@ -7,10 +9,13 @@ const CHANNEL := "arena.sim_host"
 const SERVER_SCENE := "res://scenes/arena_sim_server.tscn"
 ## The user arg that makes a started game the server: the child runs the main scene, which hands over to
 ## [constant SERVER_SCENE]. A release export refuses a scene path (and `--path`) on its command line.
+## Delivered as a pack, the child is the shell that loaded it: [constant SOLO_SERVICE] says what it needs to mount the same packs.
 const SERVER_FLAG := "--sim_server"
 ## The child's own log, so a boot failure can say why; its default log is the parent's file.
 const SERVER_LOG := "user://logs/sim_server.log"
 const ANCHOR := "ArenaSimServer"
+## The shell's solo session, duck-typed: one with `sim_child_args()` can start this game again in a second process.
+const SOLO_SERVICE := &"dot_solo"
 const BOOT_LIMIT_SEC := 60.0
 const JOIN_LIMIT_SEC := 30.0
 ## How often the boot and the join are looked at: a coarser step is the average of half of it added to the load, twice.
@@ -41,6 +46,7 @@ static func is_server_child() -> bool:
 
 
 ## Whether this session is hosted: a second process needs a desktop build. [param launched] is true for the game started as itself, which is hosted unless `--sim_host 0`, `--offline` included (the launchers pass it); a suite or tool that instances the client in its own scene keeps the in-process game it reads, unless it sets [member forced].
+## A shell's solo session that can start the child ([method shell_child_args]) counts as launched.
 static func wanted(launched: bool = false) -> bool:
 	return wanted_for(OS.get_cmdline_user_args(), launched)
 
@@ -56,11 +62,27 @@ static func wanted_for(args: PackedStringArray, launched: bool) -> bool:
 	var index := args.find("--sim_host")
 	if index >= 0 and index + 1 < args.size():
 		return args[index + 1].to_int() == 1
-	return launched
+	return launched or not shell_child_args().is_empty()
+
+
+## The user args a shell's solo session adds to the child, so it mounts the packs this one did and loads this game; empty when the game was not delivered by one, or the shell cannot start one.
+static func shell_child_args() -> PackedStringArray:
+	var solo: Object = DotRegistry.get_service(SOLO_SERVICE)
+	if solo == null or not solo.has_method(&"sim_child_args"):
+		return PackedStringArray()
+	var got: Variant = solo.call(&"sim_child_args")
+	if got is PackedStringArray:
+		return got as PackedStringArray
+	return PackedStringArray()
+
+
+## [constant SERVER_SCENE] where this copy of the game is: under its pack's mount when delivered.
+static func server_scene() -> String:
+	return ArenaPaths.rebase(SERVER_SCENE)
 
 
 func start(bots: int) -> DotResult:
-	if not ResourceLoader.exists(SERVER_SCENE):
+	if not ResourceLoader.exists(server_scene()):
 		return DotResult.fail(DotError.CODE_UNSUPPORTED, "the server scene is not in this build")
 	var port := _free_port()
 	if port <= 0:
@@ -91,6 +113,7 @@ func start(bots: int) -> DotResult:
 	var sim_sections := _arg("--sim_sections")
 	if sim_sections != "":
 		args.append_array(["--sim_sections", sim_sections])
+	args.append_array(shell_child_args())
 	_pid = OS.create_process(OS.get_executable_path(), args)
 	if _pid <= 0:
 		return DotResult.fail(DotError.CODE_INVALID, "the server process did not start")

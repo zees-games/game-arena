@@ -21,7 +21,9 @@ The client owns its server process (`ArenaSimOwner`, `game/arena_sim_owner.gd`; 
 
 Match end, the kill view, the team menu and chat take the connected paths, the ones a public server tests.
 
-Not covered: web and shell-delivered packs (no second process, or no server scene in the pack).
+A pack the TMC shell delivers for solo hosts too, on a desktop shell. The shell registers its solo session as `dot_solo`; one with `sim_child_args()` counts as launched, and its args (`--solo`, `--solo-version`, `--solo-packs`, the cache folder and any `--content-url`) go on the child's command line. The child is the shell executable: it mounts exactly those packs, with no menu or sign-in, and loads the client scene, which hands over to the server scene inside the shell instead of changing the scene. `ArenaSimHost.server_scene()` and the module path are rebased onto the pack's mount (`ArenaPaths`), because the publisher does not rewrite paths inside a `.gd`.
+
+Not covered: the web. A browser build cannot start a second process, so `wanted_for` is false there and solo stays in-process. Workshop-subscribed packs are not passed to the child.
 
 ## What must stay on the main thread
 

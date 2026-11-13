@@ -572,7 +572,19 @@ func _become_sim_server() -> void:
 	set_physics_process(false)
 	set_process_input(false)
 	set_process_unhandled_input(false)
-	get_tree().change_scene_to_file.call_deferred(ArenaSimHost.SERVER_SCENE)
+	if get_tree().current_scene == self:
+		get_tree().change_scene_to_file.call_deferred(ArenaSimHost.server_scene())
+		return
+	# Loaded by a shell: changing its scene would free the shell and the solo session that mounted this pack.
+	var packed := load(ArenaSimHost.server_scene()) as PackedScene
+	if packed == null:
+		push_error("the sim server scene would not load: %s" % ArenaSimHost.server_scene())
+		get_tree().quit(1)
+		return
+	var server := packed.instantiate()
+	server.name = ArenaSimHost.ANCHOR
+	get_tree().root.add_child.call_deferred(server)
+	queue_free()
 
 func _physics_process(delta: float) -> void:
 	var t := Time.get_ticks_usec()

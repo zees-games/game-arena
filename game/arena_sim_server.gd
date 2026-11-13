@@ -7,6 +7,7 @@ const ArenaModule := preload("arena_module.gd")
 const ArenaSimOwner := preload("arena_sim_owner.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 const ArenaMaps := preload("arena_maps.gd")
+const ArenaPaths := preload("arena_paths.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
 ## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
@@ -82,7 +83,7 @@ func _ready() -> void:
 	if not booted.ok:
 		_die("boot: %s" % booted.error.message)
 		return
-	var loaded: DotResult = await server.modules.load_module("res://game/arena_module.gd")
+	var loaded: DotResult = await server.modules.load_module(ArenaPaths.rebase("res://game/arena_module.gd"))
 	if not loaded.ok:
 		_die("module: %s" % loaded.error.message)
 		return
