@@ -102,6 +102,12 @@ func _apply_launch_art() -> void:
 	# Before anything reads the art table: the first read caches it.
 	ArenaWeaponSkins.apply()
 	ArenaFrameProbe.from_launch()
+	# A map change respawns everybody in one tick, and every third-person gun was built
+	# in that one frame (~66 ms of the 117 ms worst frame with 15 bots). Past ~4 ms a
+	# frame the rest wait for the next frames; presentation only, the shot never reads it.
+	# Set through the script so an fc-weapons before level 22 still parses.
+	if DotAddonApi.build_level("arena_weapons") >= 22:
+		(AwWorldModel as Script).set(&"equip_budget_usec", 4000)
 
 ## Part of [method _ready].
 func _setup_pieces(timeline: ArenaLoadTimeline) -> void:
