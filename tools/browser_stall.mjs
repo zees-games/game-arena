@@ -9,7 +9,8 @@
 // download's end (the page's .pck/.dot-pack responses), the cover drop, the time to the first smooth
 // second (no frame of 50 ms or more for 1 s) and the worst frames after the drop, each named by the
 // client's last load mark before it (arena_load / arena_after_open, published by ArenaLoadTimeline).
-// --phases also prints the load marks on the page clock. Several runs end in a median line. Exits 1
+// --phases also prints the load marks on the page clock, after the boot marks (each .wasm/.pck/.js
+// fetch with its size over the wire, wasm compile, the engine's first prints). Several runs end in a median line. Exits 1
 // when a run's first 2 s of play hold a frame over --budget-ms (default 0, off). How to run it:
 // docs/client.md.
 const pw = (await import(process.env.PLAYWRIGHT_CORE ?? '/home/christian/.local/share/mcp/playwright-mcp/node_modules/playwright-core/index.js')).default;
@@ -41,6 +42,14 @@ async function run(i) {
     window.__frames = []; let last = performance.now();
     const tick = (t) => { window.__frames.push([t, t - last]); last = t; requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
+    // Boot marks before the engine's own load marks exist: wasm compile and the first engine prints.
+    window.__boot = []; const mark = (l) => window.__boot.push([performance.now(), l]);
+    for (const f of ['instantiate', 'instantiateStreaming', 'compile', 'compileStreaming']) {
+      const orig = WebAssembly[f]; if (!orig) continue;
+      WebAssembly[f] = function (...a) { mark(`wasm ${f} begins`); const p = orig.apply(this, a); p.then(() => mark(`wasm ${f} done`), () => {}); return p; };
+    }
+    let printed = 0;
+    for (const f of ['log', 'info']) { const orig = console[f]; console[f] = function (...a) { if (printed < 4) { printed++; mark(`console: ${String(a[0]).slice(0, 80)}`); } return orig.apply(this, a); }; }
   });
   await page.goto(url, { waitUntil: 'load' });
   let open = null;
@@ -51,14 +60,18 @@ async function run(i) {
     const gl = document.createElement('canvas').getContext('webgl2');
     const packs = performance.getEntriesByType('resource').filter(e => /\.(pck|dot-pack|wasm)(\?|$)/.test(e.name));
     const w = window.dotWeb ?? { published: {}, publishedAt: {} };
+    const MB = (b) => (b / 1048576).toFixed(1);
+    const files = performance.getEntriesByType('resource').filter(e => /\.(pck|dot-pack|wasm|js)(\?|$)/.test(e.name))
+      .flatMap(e => [[e.startTime, `fetch ${e.name.split('/').pop().split('?')[0]} begins`],
+        [e.responseEnd, `fetch ${e.name.split('/').pop().split('?')[0]} done ${MB(e.decodedBodySize)} MB, ${MB(e.transferSize)} MB over the wire, ${(e.responseEnd - e.startTime).toFixed(0)} ms`]]);
     return { frames: window.__frames, gpu: gl.getParameter(gl.getExtension('WEBGL_debug_renderer_info').UNMASKED_RENDERER_WEBGL),
       download: packs.length ? Math.max(...packs.map(e => e.responseEnd)) : null,
-      load: w.published.arena_load, loadAt: w.publishedAt.arena_load, after: w.published.arena_after_open, afterAt: w.publishedAt.arena_after_open };
+      boot: [...performance.getEntriesByType('navigation').flatMap(n => [[n.requestStart, 'page request'], [n.responseEnd, 'page received'], [n.domContentLoadedEventEnd, 'page parsed']]), ...files, ...(window.__boot ?? [])], load: w.published.arena_load, loadAt: w.publishedAt.arena_load, after: w.published.arena_after_open, afterAt: w.publishedAt.arena_after_open };
   });
   await page.close();
   if (i === 0) console.log('gpu', r.gpu, 'url', url);
   if (open === null) { console.log(`run ${i + 1} FAIL the cover never dropped`); return null; }
-  const marks = [...pageMarks(r.load, r.loadAt), ...pageMarks(r.after, r.afterAt)].sort((a, b) => a[0] - b[0]);
+  const marks = [...r.boot.map(([t, label]) => [t, 0, label]), ...pageMarks(r.load, r.loadAt), ...pageMarks(r.after, r.afterAt)].sort((a, b) => a[0] - b[0]);
   const nameAt = (t) => { let m = null; for (const x of marks) { if (x[0] <= t) m = x; else break; } return m ? m[2] : '?'; };
   const after = r.frames.filter(f => f[0] > open);
   let smooth = null;

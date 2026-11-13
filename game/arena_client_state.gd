@@ -238,6 +238,8 @@ var _repool_next := -1
 var _frame_at_usec := 0
 ## State of the load-gate warm-up, see [method _prewarm_tick]; empty when idle.
 var _warm := {}
+## The weapon views a web client builds after the cover drops ([method _late_views_tick]); empty when none are left.
+var _late_views := {}
 ## Shot effects, charge balls and muzzle flashes built under the cover for every other player's hand
 ## ([method _fill_fx_pool]). A child of the client, so a map change keeps what is still parked.
 var fx_pool: AwFxPool = null

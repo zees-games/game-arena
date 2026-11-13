@@ -127,38 +127,173 @@ func _prewarm_phase1(body: Variant, tick_start: int) -> void:
 		ArenaLoadTimeline.mark("prewarm 1 done: flash scenes, muzzle pools, explosion, own work %d ms" % (int(_warm_work_usec.get(1, 0) + Time.get_ticks_usec() - tick_start) / 1000))
 
 
-## Phase 0: the view models of every weapon art, a slice a frame.
+## Phase 0: the view models of every weapon art (on the web the carried ones, see [member defer_views_on_web]), a slice a frame.
 func _prewarm_phase0(tick_start: int) -> void:
 	var arts: Array = _warm.arts
 	var until := Time.get_ticks_msec() + (int(gate.call(&"slice_msec", 8)) if gate.has_method(&"slice_msec") else 8)
+	# As many stages a frame as fit the slice: one a frame was ~250 frames for 27 weapons, most stages well under the
+	# slice, and every load frame also runs the match's ticks (11.6 s of a 21 s cover on staging02).
 	while _warm.next < arts.size() and Time.get_ticks_msec() < until:
 		if not is_instance_valid(_warm.spare):
 			break
-		var spare := _warm.spare as AwViewModel
-		var step_began := Time.get_ticks_usec()
-		var stage_now := int(_warm.get("stage", 0)) if bool(_warm.get("stepping", false)) else 0
-		_warm.stage = stage_now + 1
-		var step_of := "view %d stage %d" % [int(_warm.next), stage_now]
-		# One weapon's equip split into stages (a cold sight fit, cuts and red dot are 220-440 ms in one go). As many
-		# stages a frame as fit the slice: one a frame was ~250 frames for 27 weapons, most stages well under the
-		# slice, and every load frame also runs the match's ticks (11.6 s of a 21 s cover on staging02).
-		if bool(_warm.get("stepping", false)):
-			if not spare.prewarm_step():
-				_warm.stepping = false
-				_warm.next += 1
-		else:
-			_warm.stepping = spare.prewarm_begin(arts[_warm.next] as AwWeaponVisual)
-			if not _warm.stepping:
-				_warm.next += 1
-		_step_mark(step_of, step_began)
+		_view_step(_warm)
 	if _warm.next >= arts.size() or not is_instance_valid(_warm.spare):
 		if is_instance_valid(_warm.spare):
 			(_warm.spare as Node).queue_free()
 		_warm.erase("spare")
-		gate.warm_up(AwViewModel.prepared_materials())
+		var drawn := AwViewModel.prepared_materials()
+		gate.warm_up(drawn)
 		gate.warm_up(AwShotFx.warm())
+		if not _late_views.is_empty():
+			for material: Variant in drawn:
+				_late_views.drawn[material] = true
 		_warm.phase = 1
 		ArenaLoadTimeline.mark("prewarm 0 done: view models of %d arts, own work %d ms" % [arts.size(), int(_warm_work_usec.get(0, 0) + Time.get_ticks_usec() - tick_start) / 1000])
+
+## One stage of one weapon's view on [code]w.spare[/code] ([code]w.arts[w.next][/code]), moving [code]w.next[/code] on when it is built.
+## One weapon's equip split into stages: a cold sight fit, cuts and red dot are 220-440 ms in one go.
+func _view_step(w: Dictionary) -> void:
+	var spare := w.spare as AwViewModel
+	var arts: Array = w.arts
+	var step_began := Time.get_ticks_usec()
+	var stepping := bool(w.get("stepping", false))
+	var stage_now := int(w.get("stage", 0)) if stepping else 0
+	w.stage = stage_now + 1
+	var step_of := "view %d stage %d" % [int(w.next), stage_now]
+	if stepping:
+		if not spare.prewarm_step():
+			w.stepping = false
+			w.next = int(w.next) + 1
+	else:
+		w.stepping = spare.prewarm_begin(arts[int(w.next)] as AwWeaponVisual)
+		if not w.stepping:
+			w.next = int(w.next) + 1
+	_step_mark(step_of, step_began)
+
+## True: a web client builds under the cover only the views of the weapons the local player carries (and the default
+## loadout's), and every other weapon's after the cover drops, a stage at a time in quick frames ([method _late_views_tick]).
+## All 27 under the cover were 14-20 s of a 36-62 s web load on staging02, each frame a stage of 60-400 ms plus the match's
+## ticks. A desktop client builds them all under the cover as before. False: the web builds them all there too.
+static var defer_views_on_web := true
+## A late view stage runs only while the player is away (dead, or spectating), after a frame this quick (msec), and at
+## most one every [constant LATE_VIEW_GAP] frames: a stage is one 70-400 ms frame, which in play is a hitch.
+const LATE_VIEW_QUICK_MSEC := 25.0
+const LATE_VIEW_GAP := 2
+
+## The arts whose views are built under the cover: all of them, or on the web those [param body] carries and the default
+## loadout's, the rest set aside in [member _late_views]. Never empty while there are any: the first view also warms the reload parts.
+func _cover_arts(body: ArenaPlayer) -> Array:
+	var arts: Array = AwWeaponArtTable.table().values()
+	_late_views = {}
+	if not defer_views_on_web or not DotPlatform.is_web():
+		return arts
+	var wanted: Dictionary = {}
+	for id: StringName in ArenaContent.default_loadout():
+		wanted[id] = true
+	if body.arsenal != null:
+		for slot: int in body.arsenal.slots():
+			var held := body.arsenal.slot_at(slot)
+			if held != null:
+				wanted[held.id()] = true
+	var now: Array = []
+	var late: Array = []
+	for art: Variant in arts:
+		if art is AwWeaponVisual and wanted.has((art as AwWeaponVisual).id):
+			now.append(art)
+		else:
+			late.append(art)
+	if now.is_empty() and not late.is_empty():
+		now.append(late.pop_front())
+	if not late.is_empty():
+		_late_views = {"arts": late, "next": 0, "drawn": {}, "gap": 0, "began": 0}
+	return now
+
+## After the cover drops, the views [method _cover_arts] set aside, built while the player is dead or spectating: one
+## stage in a quick frame, the kill view's hold of each, then their new materials drawn once on tiny quads before the
+## camera in use, a few ms a frame. Waits while a cover is up (a map change), there is no camera or the player plays;
+## a weapon picked up before is built when it is equipped, as before the prewarm.
+func _late_views_tick() -> void:
+	if _late_views.is_empty():
+		_late_views_end()
+		return
+	var cam: Camera3D = player.camera if is_instance_valid(player) else null
+	if gate == null or not gate.is_open() or cam == null or view_model == null:
+		return
+	if int(_late_views.began) == 0:
+		_late_views.began = Time.get_ticks_usec()
+		ArenaLoadTimeline.mark("late views: %d weapons to build" % (_late_views.arts as Array).size())
+	if player.is_alive() and not (game != null and game.spectate != null and game.spectate.is_spectating(str(player.player_id))):
+		return
+	_late_views.gap = int(_late_views.gap) + 1
+	if int(_late_views.gap) < LATE_VIEW_GAP or get_process_delta_time() * 1000.0 > LATE_VIEW_QUICK_MSEC:
+		return
+	_late_views.gap = 0
+	if int(_late_views.next) < (_late_views.arts as Array).size():
+		if not is_instance_valid(_late_views.get("spare")) or (_late_views.spare as Node).get_parent() != cam:
+			if is_instance_valid(_late_views.get("spare")):
+				(_late_views.spare as Node).queue_free()
+			_late_views.stepping = false
+			_late_views.spare = _spare_view(cam)
+		var work := Time.get_ticks_usec()
+		_view_step(_late_views)
+		_late_views.work = int(_late_views.get("work", 0)) + Time.get_ticks_usec() - work
+		return
+	var kill_ids := _late_ids(_late_views.arts)
+	var screen := get_node_or_null(KILL_SCREENS[0])
+	if screen != null and screen.has_method(&"warm_meshes") and int(_late_views.get("kill_next", 0)) < kill_ids.size():
+		var work := Time.get_ticks_usec()
+		var at := int(_late_views.get("kill_next", 0))
+		_late_views.kill_next = maxi(at + 1, int(screen.call(&"warm_meshes", kill_ids, at, Time.get_ticks_msec())))
+		_late_views.work = int(_late_views.get("work", 0)) + Time.get_ticks_usec() - work
+		return
+	var items: Array = []
+	for material: Variant in AwViewModel.prepared_materials():
+		if not (_late_views.drawn as Dictionary).has(material):
+			items.append(material)
+	var warm := DotRenderWarmup.new()
+	warm.name = "LateViewWarmup"
+	warm.budget_msec = 8.0
+	warm.add_items(items)
+	var seen := get_viewport().get_camera_3d()
+	(seen if seen != null else cam).add_child(warm)
+	warm.start()
+	var built := {"weapons": (_late_views.arts as Array).size(), "ms": (Time.get_ticks_usec() - int(_late_views.began)) / 1000,
+		"own_work_ms": int(_late_views.get("work", 0)) / 1000, "new_materials": items.size()}
+	ArenaLoadTimeline.mark("late views built", built)
+	DotLog.info("arena.load", "late weapon views built", built)
+	_late_views_end()
+
+## The weapon ids of [param arts] (weapon visuals).
+static func _late_ids(arts: Array) -> Array:
+	var ids: Array = []
+	for art: Variant in arts:
+		ids.append(art.id)
+	return ids
+
+func _late_views_end() -> void:
+	if get_tree().process_frame.is_connected(_late_views_tick):
+		get_tree().process_frame.disconnect(_late_views_tick)
+	if is_instance_valid(_late_views.get("spare")):
+		(_late_views.spare as Node).queue_free()
+	_late_views = {}
+
+## A hidden view model like the player's, under [param cam], to build weapon views on.
+func _spare_view(cam: Camera3D) -> AwViewModel:
+	var spare := AwViewModel.new()
+	spare.name = "WeaponPrewarm"
+	spare.feel_rules = view_model.feel_rules
+	spare.ads_rules = view_model.ads_rules
+	spare.feel = view_model.feel
+	spare.view_layer = view_model.view_layer
+	spare.finish_materials = view_model.finish_materials
+	spare.finish_metal = view_model.finish_metal
+	spare.finish_metal_roughness = view_model.finish_metal_roughness
+	spare.finish_polymer_roughness = view_model.finish_polymer_roughness
+	spare.finish_wood_roughness = view_model.finish_wood_roughness
+	spare.finish_lift = view_model.finish_lift
+	spare.visible = false
+	cam.add_child(spare)
+	return spare
 
 
 ## The muzzle pools phase 1 builds, one size and view a frame.
@@ -297,7 +432,7 @@ func _warm_kill_screen(index: int) -> void:
 ## Holds every weapon once on the kill view's own kind of view model, a slice a frame: true while there is more.
 func _warm_kill_meshes(until_msec: int) -> bool:
 	var screen := get_node_or_null(KILL_SCREENS[0])
-	var arts: Array = _warm.get("kill_ids", AwWeaponArtTable.table().keys())
+	var arts: Array = _warm.get("kill_ids", _late_ids(_warm.get("arts", [])) if not _late_views.is_empty() else AwWeaponArtTable.table().keys())
 	_warm.kill_ids = arts
 	var at := int(_warm.get("kill_next", 0))
 	if screen == null or not screen.has_method(&"warm_meshes") or at >= arts.size():
@@ -358,32 +493,21 @@ func _prewarm_end() -> void:
 	ArenaLoadTimeline.mark("prewarm end")
 	if gate != null:
 		gate.release(&"weapons")
+	if not _late_views.is_empty() and not get_tree().process_frame.is_connected(_late_views_tick):
+		get_tree().process_frame.connect(_late_views_tick)
 
 ## Builds every weapon's first-person view once on a spare view model, under the loading cover.
 func _prewarm_weapons(body: ArenaPlayer) -> void:
 	# Headless draws nothing, so the spare views only add nodes, memory and frames (perf smoke).
 	if not prewarm_weapons_enabled or DotPlatform.is_headless() or gate == null or gate.is_open() or body == null or body.camera == null or view_model == null:
 		return
-	var spare := AwViewModel.new()
-	spare.name = "WeaponPrewarm"
-	spare.feel_rules = view_model.feel_rules
-	spare.ads_rules = view_model.ads_rules
-	spare.feel = view_model.feel
-	spare.view_layer = view_model.view_layer
-	spare.finish_materials = view_model.finish_materials
-	spare.finish_metal = view_model.finish_metal
-	spare.finish_metal_roughness = view_model.finish_metal_roughness
-	spare.finish_polymer_roughness = view_model.finish_polymer_roughness
-	spare.finish_wood_roughness = view_model.finish_wood_roughness
-	spare.finish_lift = view_model.finish_lift
-	spare.visible = false
-	body.camera.add_child(spare)
+	var spare := _spare_view(body.camera)
 	gate.hold(&"weapons", "Preparing weapons")
 	# The loadout menu's weapon pictures, one a frame beside the view models below (they wait on the renderer, this on a frame each), so B finds them drawn.
 	if loadout_menu != null:
 		weapon_previews().warmed.connect(func() -> void: ArenaLoadTimeline.mark("prewarm: %d weapon pictures, own work %d ms" % [weapon_previews().cached_count(), int(weapon_previews().warm_msec())]), CONNECT_ONE_SHOT)
 		weapon_previews().warm()
-	_warm = {"body": body, "spare": spare, "arts": AwWeaponArtTable.table().values(), "next": 0, "phase": 0, "frames": 0, "rig": null}
+	_warm = {"body": body, "spare": spare, "arts": _cover_arts(body), "next": 0, "phase": 0, "frames": 0, "rig": null}
 	_request_flash_scenes()
 	# A tick on process_frame, not an await: a coroutine resumed after this client was freed is an
 	# engine error, while a connection to a method dies with the object.
