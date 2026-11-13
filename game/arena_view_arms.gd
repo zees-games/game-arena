@@ -30,6 +30,9 @@ var _own_lean := 0.4
 var rules: Object = null
 var _arm_set: Array = []
 var _boxes: Dictionary = {}
+var _art_model := 0
+var _art: Array = []
+var _look_override := false
 
 
 static func available() -> bool:
@@ -51,6 +54,7 @@ static func mount(parent: Node, model: AwViewModel, body: Node3D, look: DotHuman
 	mounted.add_child(mounted.arms)
 	mounted.arms.build(look, 1.8)
 	mounted._own_lean = mounted.arms.max_lean
+	mounted._look_override = mounted.arms.has_method(&"set_look_override")
 	if &"hands_scale" in model:
 		model.hands_scale = mounted.arms.held_scale
 		model.hands_min_distance = HANDS_MIN_DISTANCE
@@ -114,22 +118,33 @@ func _process(delta: float) -> void:
 	global_position = camera.global_position
 	global_rotation = Vector3(camera.global_rotation.x if holding() else 0.0, camera.global_rotation.y, 0.0)
 	visible = model != null and model.visible and not model.arms_hidden_by_scope() and body.is_alive()
-	if model != null and model.has_method(&"art_hand_scale"):
-		var own: float = model.call(&"art_hand_scale")
-		arms.hand_scale = (own if own > 0.0 else DEFAULT_HAND_SCALE) * hand_scale_mult
-	if model != null and model.has_method(&"art_forearm_scale"):
-		var fore: float = model.call(&"art_forearm_scale")
-		arms.forearm_scale = (fore if fore > 0.0 else 1.0) * forearm_scale_mult
 	if model != null:
+		var art := _art_of(model)
+		if art[0]:
+			var own: float = model.call(&"art_hand_scale")
+			arms.hand_scale = (own if own > 0.0 else DEFAULT_HAND_SCALE) * hand_scale_mult
+		if art[1]:
+			var fore: float = model.call(&"art_forearm_scale")
+			arms.forearm_scale = (fore if fore > 0.0 else 1.0) * forearm_scale_mult
 		model.scope_arms_hide_override = scope_arms_hide_override
-		var lean: float = model.call(&"art_max_lean") if model.has_method(&"art_max_lean") else -1.0
+		var lean: float = model.call(&"art_max_lean") if art[2] else -1.0
 		arms.max_lean = max_lean_override if max_lean_override >= 0.0 else (lean if lean >= 0.0 else _own_lean)
-	if arms.has_method(&"set_look_override"):
+	if _look_override:
 		arms.set_look_override(arm_set_look(rules, _arm_set))
 	if &"debug_pose" in arms and arms.debug_pose != debug_pose:
 		arms.debug_pose = debug_pose
 	var v: Vector3 = body.controller.state.velocity
 	arms.tick(Vector2(v.x, v.z).length(), delta)
+
+
+## Which of art_hand_scale, art_forearm_scale and art_max_lean [param model] has, asked once per view model
+## rather than three has_method calls a frame.
+func _art_of(model: AwViewModel) -> Array:
+	var id := model.get_instance_id()
+	if id != _art_model:
+		_art_model = id
+		_art = [model.has_method(&"art_hand_scale"), model.has_method(&"art_forearm_scale"), model.has_method(&"art_max_lean")]
+	return _art
 
 
 func holding() -> bool:

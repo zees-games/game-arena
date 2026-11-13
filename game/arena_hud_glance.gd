@@ -352,6 +352,7 @@ class KillFeed extends Control:
 	const ROW_GAP := 3.0
 	const ICON_H := 20.0
 	const NAME_SIZE := 15
+	const FADE_SEC := 0.6
 
 	var max_lines: int = 5
 	var lifetime_sec: float = 6.0
@@ -380,17 +381,24 @@ class KillFeed extends Control:
 	func advance(delta: float) -> void:
 		if lifetime_sec <= 0.0 or entries.is_empty():
 			return
+		# Redraw only while a row fades or leaves: a steady feed was redrawn every frame (0.32 ms).
+		var changed := false
 		for i in range(entries.size() - 1, -1, -1):
-			entries[i]["age"] = float(entries[i]["age"]) + delta
-			if float(entries[i]["age"]) >= lifetime_sec:
+			var age := float(entries[i]["age"]) + delta
+			entries[i]["age"] = age
+			if age >= lifetime_sec:
 				entries.remove_at(i)
-		queue_redraw()
+				changed = true
+			elif age > lifetime_sec - FADE_SEC:
+				changed = true
+		if changed:
+			queue_redraw()
 
 	func _draw() -> void:
 		ArenaWeaponIcons.shared.filter(self)
 		var y := 0.0
 		for e in entries:
-			var fade := 1.0 if lifetime_sec <= 0.0 else clampf((lifetime_sec - float(e["age"])) / 0.6, 0.0, 1.0)
+			var fade := 1.0 if lifetime_sec <= 0.0 else clampf((lifetime_sec - float(e["age"])) / FADE_SEC, 0.0, 1.0)
 			_row(e, y, fade)
 			y += ROW_H + ROW_GAP
 
