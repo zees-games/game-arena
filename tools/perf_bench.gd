@@ -16,6 +16,7 @@ const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 ## `--tier-idle-seen N`: ticks between thinks of an idle bot a person only sees (bot_tier_every_idle_seen; 1 is the old every tick).
 ## `--sight-far M`, `--sight-far-reuse S`: bot sight LOD (bot_sight_far, bot_sight_far_reuse; default 20 m and 0.15 s, 0 turns it off).
 ## `--tier-body-near N`, `--tier-body-far N`: ticks between motor ticks of a coasting bot nobody sees (bot_tier_body_every_near/far; 1, the default, every tick).
+## `--web-defaults 1`: the browser build's defaults (cl_remote_lod_every 8).
 ## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--carry 0` (AwWorldModel.person_carry off: the held gun's own kick and reload dip, no humanoid carry), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
 ## `--first-use 1` (dot-game's first-use rows): every weapon equipped, fired once cold and once warm, before the warm-up (offline only;
 ## `--first-use-only a,b` for some ids); `--prewarm 0` skips the client's weapon warm-up, so `--ab DIR DIR::--prewarm 0 -- --first-use 1` prices it.
@@ -68,6 +69,11 @@ func _ready() -> void:
 	var wh := String(args.get("res", "")).split("x")
 	if wh.size() == 2 and DisplayServer.get_name() != "headless":
 		get_window().size = Vector2i(int(wh[0]), int(wh[1]))
+	if int(args.get("web-defaults", 0)) != 0:
+		# The browser build's defaults (DotPlatform.is_web()), before the flags below may override one.
+		var ap := preload("../game/arena_player.gd")
+		ap.lod_off_every = ap.WEB_LOD_OFF_EVERY
+		say("web defaults: lod_off_every %d" % ap.lod_off_every)
 	if args.has("killcam-hz"):
 		preload("../game/arena_killcam_bodies.gd").record_hz = float(args["killcam-hz"])
 	if args.has("sight-far"):

@@ -389,7 +389,9 @@ static func held_equip_allowed() -> bool:
 static var lod_frustum: bool = true
 
 ## `cl_remote_lod_every`: frames between presents of a body out of sight (1 turns the off-screen thinning off).
-static var lod_off_every: int = 4
+## In a browser [constant WEB_LOD_OFF_EVERY]: an unseen body's pose matters only to the killcam and a glance back.
+const WEB_LOD_OFF_EVERY := 8
+static var lod_off_every: int = WEB_LOD_OFF_EVERY if DotPlatform.is_web() else 4
 
 ## A remote body nearer than this (metres) is always drawn in full.
 const LOD_NEAR := 6.0

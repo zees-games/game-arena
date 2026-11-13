@@ -160,7 +160,7 @@ func _add_remote_vars(local: DotConsoleLocal) -> void:
 			ArenaPlayer.anim_gate_enabled = str(v).strip_edges() != "0"
 			return DotResult.success(1 if ArenaPlayer.anim_gate_enabled else 0)
 	)
-	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default).",
+	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default, 8 in a browser).",
 		func() -> Variant: return ArenaPlayer.lod_off_every,
 		func(v: Variant) -> Variant:
 			var text := str(v).strip_edges()
