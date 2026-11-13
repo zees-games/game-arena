@@ -8,6 +8,7 @@ const ArenaImportedMaps := preload("../maps/arena_imported_maps.gd")
 const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
 const ArenaContentGroups := preload("../game/arena_content_groups.gd")
+const ArenaClientView := preload("../game/arena_client_view.gd")
 
 ## An arena map delivered the way a player gets it: published as a signed pack, fetched by a
 ## real [DotCloudClient], mounted, and built from the mount alone.
@@ -40,9 +41,9 @@ const STAGE := "res://.godot/arena_delivered_stage"
 const PACK_ROOT := "user://arena_pack_maps_check"
 ## Where the per-map groups section publishes and mounts its stand-in pack.
 const GROUPS_ROOT := "user://arena_map_groups_check"
-const SECTIONS := 7
+const SECTIONS := 8
 ## Without a frame; two more with `--shot`.
-const CHECKS := 33
+const CHECKS := 36
 ## The groups section's mount checks, skipped (and not expected) on a dot-cloud before API 22.
 const GROUP_MOUNT_CHECKS := 5
 
@@ -50,6 +51,12 @@ var _skipped := 0
 
 var _entered := 0
 var _completed := 0
+
+
+## The browser shell's `dot_solo`, as far as a start map goes.
+class StandInSolo:
+	extends Node
+	var start_map: StringName = &""
 
 
 class StandInServer:
@@ -73,6 +80,7 @@ func _ready() -> void:
 func _run() -> void:
 	_line("arena — a combat surf map delivered as a signed pack")
 	_test_game_pack_leaves_maps_out()
+	_test_solo_start_map()
 	var source_manifest := ArenaImportedMaps.manifest_path(MAP)
 
 	if source_manifest.is_empty():
@@ -95,6 +103,25 @@ func _run() -> void:
 	# Last: mounting a pack makes res:// pack-backed, so staging above must come first.
 	await _test_map_groups()
 	_finish()
+
+
+## The site's "Play map" (`?map=`): the shell names a start map on `dot_solo`; a built-in one is
+## the first map, anything else waits for the change after setup (a delivered pack's download).
+func _test_solo_start_map() -> void:
+	_section("a solo session's start map is the first map")
+	var solo := StandInSolo.new()
+	add_child(solo)
+	DotRegistry.register(&"dot_solo", solo)
+	solo.start_map = &"dm_pit"
+	_check(ArenaClientView._startup_map().id == &"dm_pit", "a built-in start map is the first map")
+	solo.start_map = &"surf_not_built_in"
+	_check(ArenaClientView._solo_start_map() == "surf_not_built_in" and ArenaClientView._startup_map().id == &"dm_box",
+		"a delivered one starts on dm_box, to change once set up")
+	solo.start_map = &"../dm_pit"
+	_check(ArenaClientView._solo_start_map() == "", "a start map that is not a map id is ignored")
+	DotRegistry.unregister(&"dot_solo")
+	solo.queue_free()
+	_done()
 
 
 ## The game's own pack carries no maps: they are their own packs (docs/imported-maps.md), and

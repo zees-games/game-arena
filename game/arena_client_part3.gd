@@ -74,6 +74,7 @@ func _ready() -> void:
 	await _setup_interface_and_net()
 
 	await _setup_finish(timeline)
+	await _start_on_solo_map()
 
 ## Part of [method _ready].
 func _apply_launch_art() -> void:

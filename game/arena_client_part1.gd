@@ -763,3 +763,16 @@ func open_attachments() -> bool:
 ## Wraps [param fx]'s report so a gun with a suppressor on plays the suppressed set (`ArenaAttach.wrap_report`).
 func _wrap_suppressed(fx: AwShotFx) -> void:
 	ArenaAttach.wrap_report(fx, func(at: Vector3) -> bool: return ArenaAttach.play_suppressed(presentation, at))
+
+
+## A solo start map this build does not hold is a delivered pack: once the first level is up, it
+## changes to it the way M would, so the download shows on the load cover. A built-in one was
+## already the first map ([method _startup_map]).
+func _start_on_solo_map() -> void:
+	var start := StringName(_solo_start_map())
+	if not _offline or start == &"" or game == null or (game.map != null and game.map.id == start):
+		return
+	if _catalogue().get_map(start) == null:
+		DotLog.warn(CHANNEL, "the solo start map is not a map this game lists", {"map": start})
+		return
+	DotLog.result(CHANNEL, "solo start map %s" % start, await change_from_menu(StringName("map:%s" % start)))

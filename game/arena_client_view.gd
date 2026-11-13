@@ -324,7 +324,9 @@ static func _startup_map() -> ArenaMap:
 	var index := args.find("--map")
 
 	if index < 0 or index + 1 >= args.size():
-		return ArenaMap.dm_box()
+		var solo := _solo_start_map()
+		var start: ArenaMap = ArenaMap.by_id(StringName(solo)) if solo != "" else null
+		return start if start != null else ArenaMap.dm_box()
 
 	var map := ArenaMap.by_id(StringName(args[index + 1]))
 
@@ -336,6 +338,16 @@ static func _startup_map() -> ArenaMap:
 		return ArenaMap.dm_box()
 
 	return map
+
+
+## The browser shell's solo start map (the site's "Play map", `?map=`, read duck-typed off
+## `dot_solo`), or "" outside one, without one or when it is not a map id.
+static func _solo_start_map() -> String:
+	var solo := DotRegistry.get_service(&"dot_solo")
+	if solo == null or not (&"start_map" in solo):
+		return ""
+	var id := str(solo.get(&"start_map"))
+	return id if RegEx.create_from_string("^[a-z0-9][a-z0-9_-]{0,63}$").search(id) != null else ""
 
 
 ## Solo: the same cfg/ layers as a server (lenient here), so shipped defaults and a yml reach a
