@@ -34,14 +34,16 @@ const ArenaSimHost := preload("../game/arena_sim_host.gd")
 const MAP := &"surf_10x_reloaded_fixed"
 const OWNER := "gamemann"
 const VERSION := "1.0.4"
-const ROOT := "user://arena_delivered_check"
+## user:// is shared by every worktree of this project, so parallel shards (and runs in two worktrees) wiped
+## each other's tree: the three scratch roots carry the process id.
+var ROOT := "user://arena_delivered_check_%d" % OS.get_process_id()
 ## Inside the project, so the publisher finds the imported outputs the markers name; under
 ## `.godot`, which git ignores.
 const STAGE := "res://.godot/arena_delivered_stage"
 ## Where the game-pack section stages its stand-in tree.
-const PACK_ROOT := "user://arena_pack_maps_check"
+var PACK_ROOT := "user://arena_pack_maps_check_%d" % OS.get_process_id()
 ## Where the per-map groups section publishes and mounts its stand-in pack.
-const GROUPS_ROOT := "user://arena_map_groups_check"
+var GROUPS_ROOT := "user://arena_map_groups_check_%d" % OS.get_process_id()
 const SECTIONS := 8
 ## Without a frame; two more with `--shot`.
 const CHECKS := 37
