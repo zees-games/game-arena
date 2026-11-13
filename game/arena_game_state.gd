@@ -9,6 +9,7 @@ const ArenaWeaponDropWiring := preload("arena_weapon_drop_wiring.gd")
 const ArenaConfig := preload("arena_config.gd")
 const ArenaMapIo := preload("arena_map_io.gd")
 const ArenaContent := preload("arena_content.gd")
+const ArenaBotLoadouts := preload("arena_bot_loadouts.gd")
 const ArenaEffects := preload("arena_effects.gd")
 const ArenaHorde := preload("arena_horde.gd")
 const ArenaLoadoutIdentity := preload("arena_loadout_identity.gd")
@@ -227,6 +228,10 @@ var loadouts: DotLoadoutManager = null
 ## a dot-loadout older than API 2 has no such class, and this script must still parse there
 ## (`requires.floor.json`); null on such a host, and the B menu is then not offered.
 var loadout_command: Object = null
+
+## The kits bots draw at each spawn (`cfg/game/game-arena/bot_loadout/`, narrowed by `sv_bot_loadouts`);
+## loaded on the first bot spawn. See [method apply_loadout].
+var bot_loadouts: ArenaBotLoadouts = null
 
 ## Rockets in flight. Built alongside the combat manager, because it traces against
 ## the same world and resolves through the same rules.

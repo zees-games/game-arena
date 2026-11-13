@@ -151,6 +151,7 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 	_write(intent, move, fire)
 	t_lap = ArenaFrameProbe.lap(&"ba_write", t_lap)
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)
+	_choose_gun(bot, mind, world, me, intent, fire, tick)
 	t_lap = ArenaFrameProbe.lap(&"ba_throw", t_lap)
 	move.sanitise()
 	fire.sanitise()
@@ -384,6 +385,91 @@ static func _throw(bot: ArenaPlayer, mind: Mind, intent: DotBotIntent, move: Dot
 		for command: Object in [move, fire]:
 			command.set(&"yaw", mind.throw_view.x)
 			command.set(&"pitch", mind.throw_view.y)
+
+
+## Draws the carried gun that suits the fight: one that reaches the target (`params.max_range`) and
+## can still pay for a shot, the primary before the sidearm, the sidearm inside [constant GUN_CLOSE]
+## when the primary is scoped. Only for a bot that drew a kit; checked one tick in [constant GUN_CHECK_EVERY].
+static func _choose_gun(bot: ArenaPlayer, mind: Mind, world: World, me: DotBotContact, intent: DotBotIntent, fire: DotWeaponCommand, tick: int) -> void:
+	if mind.throw_stage != 0 or fire.slot != 0 or (tick + mind.seed) % GUN_CHECK_EVERY != 0:
+		return
+	# Only a bot that drew a kit switches; one on the default loadout plays as it always has.
+	if not bot.has_meta(&"bot_loadout"):
+		return
+	var arsenal := bot.arsenal
+	if arsenal == null or me == null or arsenal.is_switching() or not bot.is_alive():
+		return
+	var dist := -1.0
+	if intent.target_id >= 0:
+		var target := world.contact(intent.target_id)
+		if target != null:
+			dist = target.position.distance_to(me.position)
+	var want := gun_for(arsenal, dist)
+	if want > 0 and want != arsenal.current_slot():
+		fire.slot = want
+
+
+## The slot of the gun to hold against a target [param dist] metres off (-1 for none), or 0 for no
+## change: the held gun while it suits, else a suiting primary, a suiting sidearm, the longest reach.
+static func gun_for(arsenal: DotWeaponArsenal, dist: float) -> int:
+	var held := arsenal.current_slot()
+	# With nobody to shoot, a bot holding its sidearm goes back to the primary.
+	if _gun_suits(arsenal, held, dist) and (dist >= 0.0 or _gun_kind(held) != 2):
+		return 0
+	var best := 0
+	var longest := 0
+	for slot in arsenal.slots():
+		var kind := _gun_kind(slot)
+		if kind == 0 or not _can_pay(arsenal, slot):
+			continue
+		if _gun_suits(arsenal, slot, dist) and (best == 0 or kind < _gun_kind(best)):
+			best = slot
+		if longest == 0 or _gun_range(arsenal, slot) > _gun_range(arsenal, longest):
+			longest = slot
+	# Nothing reaches: the longest gun at least gets the bot into the fight.
+	if best == 0:
+		best = longest
+	return 0 if best == held else best
+
+
+## Whether the gun in [param slot] can shoot a target [param dist] metres off (-1 for none).
+static func _gun_suits(arsenal: DotWeaponArsenal, slot: int, dist: float) -> bool:
+	if _gun_kind(slot) == 0 or not _can_pay(arsenal, slot):
+		return false
+	if dist < 0.0:
+		return true
+	if dist > _gun_range(arsenal, slot):
+		return false
+	return dist >= GUN_CLOSE or not arsenal.slot_at(slot).def.has_tag(AwWeaponIds.TAG_SCOPED)
+
+
+## 1 for a primary or heavy, 2 for a sidearm, 0 for what is not a gun (melee, throwables).
+static func _gun_kind(slot: int) -> int:
+	var rank := ArenaContent.give_rank(slot)
+	if rank == 0 or rank == 3:
+		return 0
+	return 2 if rank == 2 else 1
+
+
+## How far the gun in [param slot] reaches, metres; unbounded when the weapon does not say.
+static func _gun_range(arsenal: DotWeaponArsenal, slot: int) -> float:
+	var held := arsenal.slot_at(slot)
+	if held == null or held.def == null:
+		return 0.0
+	return float(held.def.params.get(&"max_range", INF))
+
+
+## Whether the weapon in [param slot] can pay for a shot, from its magazine or its reserve.
+static func _can_pay(arsenal: DotWeaponArsenal, slot: int) -> bool:
+	var held := arsenal.slot_at(slot)
+	if held == null or held.def == null:
+		return false
+	var def := held.def
+	if not def.uses_ammo() or def.infinite_reserve:
+		return true
+	if def.uses_magazine() and held.magazine >= def.cost_per_use:
+		return true
+	return arsenal.ammo().has(def.ammo_type, def.cost_per_use)
 
 
 ## Whether [param arsenal] holds a throwable it can pay for.

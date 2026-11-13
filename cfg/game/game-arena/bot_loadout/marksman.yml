@@ -1,0 +1,8 @@
+# Holds a long line with a marksman rifle; a machine pistol up close.
+name: Marksman
+weight: 1.5
+primary: marksman
+secondary: machine_pistol
+melee: knife
+thrown: frag
+tags: [long]

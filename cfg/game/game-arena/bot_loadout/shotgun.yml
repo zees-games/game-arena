@@ -1,0 +1,8 @@
+# Doorways and corners: a pump shotgun backed by a revolver.
+name: Breacher
+weight: 1.5
+primary: shotgun
+secondary: revolver
+melee: knife
+thrown: sticky
+tags: [close]

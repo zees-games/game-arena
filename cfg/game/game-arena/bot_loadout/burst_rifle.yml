@@ -1,0 +1,8 @@
+# Three-round bursts; the pistol covers the gaps.
+name: Burst
+weight: 1
+primary: burst_rifle
+secondary: pistol
+melee: knife
+thrown: frag
+tags: [mid]

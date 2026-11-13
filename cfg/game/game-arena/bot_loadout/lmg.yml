@@ -1,0 +1,9 @@
+# Suppression: a belt-fed LMG and armour.
+name: Gunner
+weight: 1
+primary: lmg
+secondary: pistol
+melee: knife
+thrown: frag
+gear: armour
+tags: [mid, heavy]

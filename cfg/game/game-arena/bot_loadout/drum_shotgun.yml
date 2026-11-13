@@ -1,0 +1,9 @@
+# A drum-fed shotgun for crowds; kept to the harder bots.
+name: Sweeper
+weight: 1
+primary: drum_shotgun
+secondary: pistol
+melee: knife
+thrown: frag
+difficulty: [hard, nightmare]
+tags: [close]

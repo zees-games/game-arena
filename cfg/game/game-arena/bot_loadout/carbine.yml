@@ -1,0 +1,8 @@
+# Light and quick to aim: a carbine and a pistol.
+name: Skirmisher
+weight: 2
+primary: carbine
+secondary: pistol
+melee: knife
+thrown: frag
+tags: [assault, mid]

@@ -4,6 +4,7 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaPlayer := preload("arena_player.gd")
 const ArenaNetAoi := preload("arena_net_aoi.gd")
 const ArenaBots := preload("arena_bots.gd")
+const ArenaBotLoadouts := preload("arena_bot_loadouts.gd")
 const ArenaBotBrain := preload("arena_bot_brain.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 const ArenaPlayerStack := preload("arena_player_stack.gd")
@@ -256,6 +257,11 @@ func _add_bot_think_cvars() -> void:
 		DotConVar.FLAG_ARCHIVE).changed.connect(
 		func(_old: String, new_value: String) -> void:
 			ArenaBots.personas_mode = new_value.strip_edges())
+	add_cvar("sv_bot_loadouts", ArenaBotLoadouts.mode,
+		"Kits bots draw at each spawn (cfg/game/game-arena/bot_loadout/*.yml): 'all' every enabled one by its weight, 'id[:weight],...' only those",
+		DotConVar.FLAG_ARCHIVE).changed.connect(
+		func(_old: String, new_value: String) -> void:
+			ArenaBotLoadouts.mode = new_value.strip_edges())
 	add_cvar("bot_think_near", str(ArenaBots.think_near),
 		"Metres: a bot with an enemy closer than this thinks every tick",
 		DotConVar.FLAG_ARCHIVE).with_min(0.0).changed.connect(

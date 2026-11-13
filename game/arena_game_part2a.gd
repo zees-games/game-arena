@@ -12,6 +12,9 @@ func apply_loadout(id: int, at_spawn := false) -> void:
 	if player == null:
 		return
 
+	if at_spawn and (player.has_meta(&"bot") or id >= BOT_SESSION_BASE) and _give_bot_loadout(player):
+		return
+
 	if at_spawn and loadout_command != null and not player.has_meta(&"bot") and id < 900_000_000:
 		var rolled: DotLoadout = await loadout_command.roll_for_spawn(_loadout_key(id))
 		player = player_for(id)
@@ -36,6 +39,44 @@ func apply_loadout(id: int, at_spawn := false) -> void:
 
 	player.give_loadout(ArenaContent.in_give_order(loadouts.resolve(res.value)))
 	arm_for_mode(player)
+
+## Gives bot [param player] the next kit it draws from [member bot_loadouts]; false (the bot then
+## takes the stored or default loadout) when no kit can be drawn. The difficulty filter reads the
+## server's `bot_difficulty`.
+func _give_bot_loadout(player: ArenaPlayer) -> bool:
+	if loadouts == null:
+		return false
+	if bot_loadouts == null:
+		bot_loadouts = ArenaBotLoadouts.new()
+		DotLog.info(CHANNEL, "bot loadouts loaded", {"kits": bot_loadouts.load_from(), "sv_bot_loadouts": ArenaBotLoadouts.mode})
+	var difficulty := ""
+	if has_meta(DotBotSettings.META):
+		difficulty = DotBotSettings.of(self).difficulty()
+	var drawn := bot_loadouts.draw(loadouts, _loadout_key(player.player_id), player.player_id, difficulty)
+	if drawn == null:
+		return false
+	player.give_loadout(ArenaContent.in_give_order(loadouts.resolve(drawn.loadout)))
+	player.set_meta(&"bot_loadout", drawn.kit.id)
+	_fit_bot_attachments(player, drawn.kit)
+	arm_for_mode(player)
+	return true
+
+## Fits [param kit]'s attachments to the guns [param player] carries; nothing while the arsenal has no attachment catalogue.
+func _fit_bot_attachments(player: ArenaPlayer, kit: ArenaBotLoadouts.Kit) -> void:
+	if kit.attachments.is_empty() or player.arsenal.attachments == null:
+		return
+	for slot in player.arsenal.slots():
+		var held := player.arsenal.slot_at(slot)
+		if held == null or held.def == null or not kit.attachments.has(String(held.def.id)):
+			continue
+		var fitting := DotWeaponFitting.make(held.def.id)
+		var mounts: Variant = kit.attachments[String(held.def.id)]
+		if mounts is Dictionary:
+			for mount: Variant in mounts:
+				fitting.fit(StringName(str(mount)), StringName(str(mounts[mount])))
+		var res: DotResult = player.arsenal.fit(slot, fitting)
+		if not res.ok:
+			DotLog.debug(CHANNEL, "a bot attachment did not fit", {"kit": String(kit.id), "weapon": String(held.def.id), "error": str(res.error)})
 
 ## Why the B menu has nothing to choose right now, or "": a mode that decides what everybody
 ## carries (gun game, Only Snipers) makes a loadout pointless, and the menu says so rather than

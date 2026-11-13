@@ -1,0 +1,8 @@
+# Close and fast: an SMG, a machine pistol for when it runs dry, a knife.
+name: Rusher
+weight: 2
+primary: smg
+secondary: machine_pistol
+melee: knife
+thrown: frag
+tags: [close, rush]

@@ -1,0 +1,8 @@
+# A bullpup rifle and a sticky grenade.
+name: Trooper
+weight: 1.5
+primary: bullpup
+secondary: pistol
+melee: knife
+thrown: sticky
+tags: [assault, mid]

@@ -1,0 +1,9 @@
+# The long game: a sniper rifle, a revolver to finish, never on easy.
+name: Sniper
+weight: 1
+primary: sniper
+secondary: revolver
+melee: knife
+thrown: sticky
+difficulty: [medium, hard, nightmare]
+tags: [long, scoped]

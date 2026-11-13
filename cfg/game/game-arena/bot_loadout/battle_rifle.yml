@@ -1,0 +1,8 @@
+# Hard-hitting at range, slower to follow up.
+name: Rifleman
+weight: 1.5
+primary: battle_rifle
+secondary: revolver
+melee: knife
+thrown: frag
+tags: [mid, long]

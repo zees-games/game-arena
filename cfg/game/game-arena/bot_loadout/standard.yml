@@ -1,0 +1,8 @@
+# The everyday kit, the same as a player's default loadout.
+name: Standard
+weight: 3
+primary: rifle
+secondary: pistol
+melee: knife
+thrown: frag
+tags: [assault, mid]

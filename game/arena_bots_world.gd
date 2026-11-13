@@ -19,6 +19,11 @@ const COOK_SEC := 0.3
 const HILL := &"hill"
 
 
+## A bot looks at which gun to hold one tick in this many (see `ArenaBots._choose_gun`).
+const GUN_CHECK_EVERY := 8
+## Metres inside which a scoped gun gives way to the sidearm.
+const GUN_CLOSE := 10.0
+
 ## How long a throw may take from the switch to the switch back before it is given up, seconds.
 const THROW_GIVE_UP_SEC := 2.5
 
