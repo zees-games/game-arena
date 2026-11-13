@@ -102,6 +102,12 @@ func _enter_level(release: bool) -> void:
 	# 10 ms between yields, not the 40 ms default: the cover is up, but bots and the
 	# network keep ticking behind it, and a 40 ms build frame is a hitch they feel.
 	var slice := DotFrameSlice.new(LEVEL_SLICE_MS)
+	if _level == null and not DotPlatform.is_headless():
+		# The converted worlds' and their props' shaders compile here under the boot cover, one per frame: compiled at a later
+		# map change, the first world material held one frame for 85 ms on staging02 and the first textured prop 89 ms.
+		await DotMapSurfaces.warm_shaders_async(get_tree())
+		await DotMapBspMesh.warm_prop_shaders_async(get_tree())
+		ArenaLoadTimeline.mark("world shaders warmed")
 	await game.build_map_io_async(slice)
 	ArenaLoadTimeline.mark("map_io_built")
 	var drawn := game.map

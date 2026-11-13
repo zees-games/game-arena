@@ -164,6 +164,7 @@ static func _draw_plan(drawn: Node3D, id: String, got: DotResult) -> Dictionary:
 	var surfaces := ArenaPaths.rebase("res://assets/surfaces")
 	return {"script": load(DRAWN_WORLD), "mesh": got.value, "options": {
 		"props": true,
+		"mark": func(label: String) -> void: ArenaLoadTimeline.mark(label),
 		"surfaces_root": surfaces if DirAccess.dir_exists_absolute(surfaces) else DotMapSurfaces.DEFAULT_ROOT,
 	}}
 

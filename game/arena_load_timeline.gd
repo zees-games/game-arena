@@ -25,6 +25,11 @@ var _pass_start: PassStart = null
 var _pass_end: PassStart = null
 ## The renderer's totals at the last "drawn", for its deltas; -1 until the first.
 var _drawn_pipelines := -1
+var _drawn_by_source: Array[int] = []
+## Where a drawn frame's pipelines were compiled: at a mesh's or material's load (on worker threads), or at the draw itself.
+const PIPELINE_SOURCES := [RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE,
+		RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION]
+const PIPELINE_SOURCE_NAMES := ["mesh", "surface", "draw", "specialization"]
 var _drawn_texture_kb := 0
 var _drawn_buffer_kb := 0
 
@@ -161,19 +166,28 @@ func _on_frame() -> void:
 ## shader first-use; with memory, an upload.
 func _on_drawn() -> void:
 	var pipelines := 0
-	for info: int in [RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_MESH, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SURFACE,
-			RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_DRAW, RenderingServer.RENDERING_INFO_PIPELINE_COMPILATIONS_SPECIALIZATION]:
-		pipelines += int(RenderingServer.get_rendering_info(info))
+	var by_source: Array[int] = []
+	for info: int in PIPELINE_SOURCES:
+		var n := int(RenderingServer.get_rendering_info(info))
+		pipelines += n
+		by_source.append(n)
 	var texture_kb := int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED)) >> 10
 	var buffer_kb := int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_BUFFER_MEM_USED)) >> 10
 	var draws := int(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
 	if _drawn_pipelines < 0:
 		_drawn_pipelines = pipelines
+		_drawn_by_source = by_source
 		_drawn_texture_kb = texture_kb
 		_drawn_buffer_kb = buffer_kb
-	mark("drawn", "pipelines +%d, draws %d, textures %+d KB, buffers %+d KB" % [
-		pipelines - _drawn_pipelines, draws, texture_kb - _drawn_texture_kb, buffer_kb - _drawn_buffer_kb])
+	var sources: PackedStringArray = []
+	for i in by_source.size():
+		if by_source[i] > _drawn_by_source[i]:
+			sources.append("%s %d" % [PIPELINE_SOURCE_NAMES[i], by_source[i] - _drawn_by_source[i]])
+	mark("drawn", "pipelines +%d%s, draws %d, textures %+d KB, buffers %+d KB" % [
+		pipelines - _drawn_pipelines, " (%s)" % ", ".join(sources) if not sources.is_empty() else "", draws,
+		texture_kb - _drawn_texture_kb, buffer_kb - _drawn_buffer_kb])
 	_drawn_pipelines = pipelines
+	_drawn_by_source = by_source
 	_drawn_texture_kb = texture_kb
 	_drawn_buffer_kb = buffer_kb
 	var now := Time.get_ticks_usec()
