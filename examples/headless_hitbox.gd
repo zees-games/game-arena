@@ -4,7 +4,6 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaPlayer := preload("../game/arena_player.gd")
 const ArenaPlayerTunables := preload("../game/arena_player_tunables.gd")
-const ShardArgs := DotGameShardArgs
 
 ## Server-side hit accuracy against a moving, animated target, by body region: a synthetic shot
 ## resolved as ArenaGame.tick does at `tick - lag`, aimed where the bone was, must hit.
@@ -170,13 +169,13 @@ func _cell(label: String, stance_crouch: bool, moving: bool, table: Dictionary) 
 
 
 func _run() -> void:
-	if ShardArgs.is_merge():
-		var logs := ShardArgs.merge_logs()
-		_ok(logs.size() == CELLS.size() and ShardArgs.missing(logs).is_empty(), "every shard's log is there (%d logs)" % logs.size())
+	if DotGameShardArgs.is_merge():
+		var logs := DotGameShardArgs.merge_logs()
+		_ok(logs.size() == CELLS.size() and DotGameShardArgs.missing(logs).is_empty(), "every shard's log is there (%d logs)" % logs.size())
 		print("%d checks, %d failed" % [_checks, _failed])
 		get_tree().quit(0 if _failed == 0 else 1)
 		return
-	var shard := ShardArgs.shard()
+	var shard := DotGameShardArgs.shard()
 	await _boot()
 	var table := {}
 	for key: String in CELLS:

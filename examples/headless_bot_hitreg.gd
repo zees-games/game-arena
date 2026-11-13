@@ -1,6 +1,5 @@
 extends DotGameCheckSuite
 
-const ShardArgs := DotGameShardArgs
 
 const ArenaBots := preload("../game/arena_bots.gd")
 const ArenaContent := preload("../game/arena_content.gd")
@@ -39,22 +38,22 @@ func _ready() -> void:
 
 
 func _merge() -> void:
-	var logs := ShardArgs.merge_logs()
-	var missing := ShardArgs.missing(logs)
+	var logs := DotGameShardArgs.merge_logs()
+	var missing := DotGameShardArgs.missing(logs)
 	_check(logs.size() == SHARDS.size() and missing.is_empty(), "every shard's log is there (%d logs)" % logs.size(), "missing %s" % [missing])
-	var entered := ShardArgs.sections_entered(logs)
+	var entered := DotGameShardArgs.sections_entered(logs)
 	_check(entered == SECTIONS, "the shards entered every section (%d of %d)" % [entered, SECTIONS])
 	_report_sections(1, 1, 1)
 
 
 func _run() -> void:
 	print("game-fatal-contact headless bot hit registration")
-	if ShardArgs.is_merge():
+	if DotGameShardArgs.is_merge():
 		_merge()
 		return
 	ArenaBots.think_every = 2
 	ArenaBots.think_near = 0.0
-	var shard := ShardArgs.shard()
+	var shard := DotGameShardArgs.shard()
 	if shard == "" or shard == "direct":
 		await _direct("calm server, one tick per frame", 1, 0)
 		await _direct("loaded server, 6 ticks back to back then a 40 ms stall", 6, 40)

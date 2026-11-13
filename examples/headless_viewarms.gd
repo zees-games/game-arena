@@ -7,7 +7,6 @@ extends DotGameCheckSuite
 ## every shard's log is there and that together they entered one section per weapon.
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
-const ShardArgs := DotGameShardArgs
 
 const SHARDS := 4
 ## The catalogue size (the merge has no booted client to count it from): add a weapon and the merge says so.
@@ -32,7 +31,7 @@ var _scratch_dir := ""
 
 func _ready() -> void:
 	DotLog.set_level(DotLog.Level.ERROR)
-	if ShardArgs.is_merge():
+	if DotGameShardArgs.is_merge():
 		_merge.call_deferred()
 		return
 	# One settings directory per process: user:// is shared by every run on this machine, and a second run wiping or
@@ -46,11 +45,11 @@ func _ready() -> void:
 
 
 func _merge() -> void:
-	var logs := ShardArgs.merge_logs()
-	var missing := ShardArgs.missing(logs)
+	var logs := DotGameShardArgs.merge_logs()
+	var missing := DotGameShardArgs.missing(logs)
 	_check(logs.size() == SHARDS and missing.is_empty(), "every shard's log is there (%d logs)" % logs.size(), "missing %s" % [missing])
 	var weapons := WEAPONS
-	var entered := ShardArgs.sections_entered(logs)
+	var entered := DotGameShardArgs.sections_entered(logs)
 	_check(entered == weapons, "the shards entered one section per weapon (%d of %d)" % [entered, weapons])
 	_report_sections(1, 1, 1)
 
@@ -72,7 +71,7 @@ func _run() -> void:
 	me.health.invulnerable = true
 	var ids: Array = AwWeaponCatalogue.table().keys()
 	ids.sort()
-	var shard := ShardArgs.shard()
+	var shard := DotGameShardArgs.shard()
 	var play: Array = []
 	for i in ids.size():
 		if shard == "" or shard == "w%d" % (i % SHARDS):

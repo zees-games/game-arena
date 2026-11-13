@@ -1,7 +1,6 @@
 extends "headless_lossy_b1.gd"
 
 const SECTIONS := 15
-const ShardArgs := DotGameShardArgs
 ## `-- --shard NAME` boots and connects its own server and plays one part, declaring [sections, checks]; `-- --merge LOG...`
 ## holds that every shard's log is there and that together they entered all SECTIONS.
 ## Every shard boots and connects: two sections each, which the merge counts once.
@@ -16,20 +15,20 @@ func _ready() -> void:
 
 
 func _merge() -> void:
-	var logs := ShardArgs.merge_logs()
-	var missing := ShardArgs.missing(logs)
+	var logs := DotGameShardArgs.merge_logs()
+	var missing := DotGameShardArgs.missing(logs)
 	_check(logs.size() == SHARDS.size() and missing.is_empty(), "every shard's log is there (%d logs)" % logs.size(), "missing %s" % [missing])
-	var entered := ShardArgs.sections_entered(logs)
+	var entered := DotGameShardArgs.sections_entered(logs)
 	_check(entered - SHARED_SECTIONS * (SHARDS.size() - 1) == SECTIONS, "the shards entered every section (%d, boot and connect counted once, of %d)" % [entered, SECTIONS])
 	_report_sections(1, 1, 1)
 
 
 func _run() -> void:
 	print("game-fatal-contact: a real server and real ENet clients through real packet loss")
-	if ShardArgs.is_merge():
+	if DotGameShardArgs.is_merge():
 		_merge()
 		return
-	var shard := ShardArgs.shard()
+	var shard := DotGameShardArgs.shard()
 	DotPaths.remove_tree(DATA)
 	Engine.physics_ticks_per_second = TICK_RATE
 
