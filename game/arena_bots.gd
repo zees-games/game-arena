@@ -72,13 +72,18 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	if game == null or bot == null:
 		return [DotFpsCommand.new(), DotWeaponCommand.new()]
 
+	var t_gate := ArenaFrameProbe.lap_start()
 	var world := world_for(game)
 	# Counted once a tick for every bot (player_ids is a new array each call).
 	var players := world.player_count(tick)
 	_every = think_every if think_every > 0 else (2 if players > AUTO_STAGGER_ABOVE else 1)
 	_tier_on = tiers.applies(players)
 	if (_every > 1 or _tier_on) and _coasts(mind, tick, world, bot.player_id):
-		return _recoil_comp(bot, mind, _coast(mind, tick), tick, tick_rate)
+		t_gate = ArenaFrameProbe.lap(&"bt_gate", t_gate)
+		var coasted := _recoil_comp(bot, mind, _coast(mind, tick), tick, tick_rate)
+		ArenaFrameProbe.lap(&"bt_coast", t_gate)
+		return coasted
+	ArenaFrameProbe.lap(&"bt_gate", t_gate)
 
 	var t_refresh := Time.get_ticks_usec()
 	world.near_reach = think_near
@@ -87,6 +92,7 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	world.tiers = tiers
 	world.refresh(tick, tick_rate)
 	ArenaFrameProbe.add(&"bot_refresh", t_refresh)
+	var t_setup := ArenaFrameProbe.lap_start()
 
 	var pool := world.personas_for(personas_mode)
 	# A brain a caller made itself (persona_epoch -1) is never replaced.
@@ -127,6 +133,7 @@ static func think_begin(game: Object, bot: ArenaPlayer, mind: Mind, tick: int, t
 	mind.last_position = me.position
 	mind.t_me = me
 	mind.t_world = world
+	ArenaFrameProbe.lap(&"bt_setup", t_setup)
 	return []
 
 
@@ -159,6 +166,7 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 	fire.sanitise()
 	ArenaFrameProbe.lap(&"ba_sanitise", t_lap)
 	ArenaFrameProbe.add(&"bot_after", t_after)
+	var t_tail := ArenaFrameProbe.lap_start()
 	world.woken.erase(bot.player_id)
 	if _tier_on and tiers.is_on():
 		mind.far = false
@@ -193,13 +201,38 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 		move.yaw = body.x + clampf(_turn(body.x, move.yaw), -rate, rate)
 		move.pitch = body.y + clampf(move.pitch - body.y, -rate, rate)
 	mind.last_think_tick = tick
-	mind.last_move = move.duplicate_command()
-	mind.last_fire = fire.duplicate_command()
+	# Copied into the bot's own pair, never handed out (a coast returns copies of it), so no two new commands a think.
+	mind.last_move = _keep_move(mind.last_move, move)
+	mind.last_fire = _keep_fire(mind.last_fire, fire)
 	if mind.coasting and _tier_on:
 		# A tiered coast repeats only held buttons: a jump or a weapon switch is pressed on the think tick, then let go.
 		mind.last_move.buttons &= _COAST_MOVE if intent.state != &"dead" else 0
 		mind.last_fire.buttons &= _COAST_FIRE if intent.state != &"dead" else 0
-	return _recoil_comp(bot, mind, [move, fire], tick, tick_rate)
+	var made := _recoil_comp(bot, mind, [move, fire], tick, tick_rate)
+	ArenaFrameProbe.lap(&"ba_tail", t_tail)
+	return made
+
+
+## [param from] copied into [param into] (as [method DotFpsCommand.duplicate_command] copies it), or a copy when there is none yet.
+static func _keep_move(into: DotFpsCommand, from: DotFpsCommand) -> DotFpsCommand:
+	if into == null:
+		return from.duplicate_command()
+	into.move = from.move
+	into.yaw = from.yaw
+	into.pitch = from.pitch
+	into.buttons = from.buttons
+	return into
+
+
+## [param from] copied into [param into] (as [method DotWeaponCommand.duplicate_command] copies it), or a copy when there is none yet.
+static func _keep_fire(into: DotWeaponCommand, from: DotWeaponCommand) -> DotWeaponCommand:
+	if into == null:
+		return from.duplicate_command()
+	into.slot = from.slot
+	into.buttons = from.buttons
+	into.yaw = from.yaw
+	into.pitch = from.pitch
+	return into
 
 
 ## [method DotBotIntent.write_move] (air jump on BUTTON_USER_0) and [method DotBotIntent.write_fire] for this game's

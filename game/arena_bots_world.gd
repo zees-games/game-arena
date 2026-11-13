@@ -494,9 +494,49 @@ class World:
 			if root is Node3D and (root as Node3D).is_inside_tree() \
 					and (rules as DotMapGlassSight).blocks((root as Node3D).get_world_3d().direct_space_state, from, to):
 				return false
+		if trace is DotTracePhysics and _plain_sight_trace(trace as Object):
+			return _sight_ray(trace as DotTracePhysics, from, to)
 		if trace is DotTrace:
 			return (trace as DotTrace).line_of_sight(from, to)
 		return true
+
+	## The trace's own line_of_sight is a [DotHitbox.Hit] world ray: two Hit objects and, on a hit, the surface's
+	## material looked up, all of which a yes/no sight drops. Only the plain physics trace and the glass one (whose
+	## sight ray leaves the glass layer out) take this path; any other trace keeps its own rules.
+	const _GLASS_TRACE := preload("res://game/arena_glass_trace.gd")
+	var _sight_query: PhysicsRayQueryParameters3D = null
+
+	static func _plain_sight_trace(trace: Object) -> bool:
+		var script: Variant = trace.get_script()
+		return script == _GLASS_TRACE or script == DotTracePhysics
+
+	## [method DotTrace.line_of_sight] on a [DotTracePhysics] (and [code]arena_glass_trace.gd[/code]'s sight mask), the
+	## same answer from one ray query; headless_bots checks both agree.
+	func _sight_ray(trace: DotTracePhysics, from: Vector3, to: Vector3) -> bool:
+		var offset := to - from
+		var distance := offset.length()
+		if distance <= 0.0001:
+			return true
+		var bound: Variant = trace.get("_world")
+		if not bound is World3D:
+			return true
+		var space := (bound as World3D).direct_space_state
+		if space == null:
+			return true
+		var mask: int = trace.collision_mask
+		var glass: Variant = trace.get("glass")
+		if glass is DotMapGlassSight and (glass as DotMapGlassSight).glass_mask != 0:
+			mask &= ~(glass as DotMapGlassSight).glass_mask
+		if _sight_query == null:
+			_sight_query = PhysicsRayQueryParameters3D.new()
+			_sight_query.collide_with_areas = false
+			_sight_query.collide_with_bodies = true
+			_sight_query.hit_from_inside = false
+		_sight_query.from = from
+		_sight_query.to = from + offset / distance * distance
+		_sight_query.collision_mask = mask
+		_sight_query.exclude = trace.exclude_rids
+		return space.intersect_ray(_sight_query).is_empty()
 
 	const SPAWN_THINNING := 25.0
 	static func _near_any(points: PackedVector3Array, at: Vector3, within: float) -> bool:

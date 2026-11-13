@@ -190,8 +190,30 @@ func _test_shots() -> void:
 
 	_check(blocked >= 6, "a shot out of the spawn room hits a wall in %d of 8 directions" % blocked)
 	_check(trace.ray(eye, Vector3.DOWN, 5.0).blocked, "and the floor under the spawn")
+	_check_sight_ray(trace, eye)
 
 	_done()
+
+
+## The bots' sight ray (one ray query: no Hit, no material lookup) answers as the trace's own line_of_sight,
+## on 200 seeded rays around the spawn.
+func _check_sight_ray(trace: DotTrace, eye: Vector3) -> void:
+	var world := ArenaBots.world_for(_game)
+	var fast := trace is DotTracePhysics and ArenaBots.World._plain_sight_trace(trace)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 0x5197
+	var same := 0
+	var blocked := 0
+	for i in 200:
+		var from := eye + Vector3(rng.randf_range(-12.0, 12.0), rng.randf_range(-1.0, 2.0), rng.randf_range(-12.0, 12.0))
+		var to := eye + Vector3(rng.randf_range(-30.0, 30.0), rng.randf_range(-1.0, 3.0), rng.randf_range(-30.0, 30.0))
+		var want := trace.line_of_sight(from, to)
+		if fast and world._sight_ray(trace as DotTracePhysics, from, to) == want:
+			same += 1
+		if not want:
+			blocked += 1
+	_check(fast and same == 200 and blocked > 0 and blocked < 200, "the bots' sight ray answers as the trace's line_of_sight",
+		"fast %s, %d of 200 the same, %d blocked" % [fast, same, blocked])
 
 
 # --- The map's mechanics ------------------------------------------------------------
