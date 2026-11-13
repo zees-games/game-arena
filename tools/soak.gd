@@ -5,6 +5,8 @@ const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
 const ArenaStats := preload("../game/arena_stats.gd")
+const ArenaFrameProbe := preload("../game/arena_frame_probe.gd")
+const ArenaSimServer := preload("../game/arena_sim_server.gd")
 
 ## Bot soak on the real Arena: N bots play a free-for-all on one map for M simulated minutes
 ## through dot-bot's DotBotSoak, fed by dot-spawn's DotSpawnWatch and the game's kill stats.
@@ -15,6 +17,9 @@ const ArenaStats := preload("../game/arena_stats.gd")
 ## [/codeblock]
 ##
 ## --seed N makes the run a pure function of N: bot count (4 to 12, unless --bots), difficulty preset and every bot's brain come from it. tools/fuzz.sh sweeps it.
+##
+## --sections 1 prints where the ticks went (the sim host's SIM_HOST_SECTIONS line, plus soak_think for the brains
+## and soak_tick for the game, and on a surf map the rides' SOAK_SURF counts), `2` adds the fine sub-spans. Off by default: each section costs two clock reads.
 ##
 ## Also takes the harness's own flags (--soak-max-stuck-sec and the rest of DotBotSoakConfig).
 ## Writes .godot/test-logs/soak-<map>.json, prints the SOAK line, exits 1 when the run fails.
@@ -95,6 +100,10 @@ func _run() -> void:
 
 	var cfg := DotBotSoakConfig.new()
 	var difficulty := _configure(cfg)
+	var sections := _arg("sections", "0")
+	if sections == "1" or sections == "2":
+		ArenaFrameProbe.set_interval(1.0e9)
+		ArenaFrameProbe.fine = sections == "2"
 
 	_add_game()
 	if not difficulty.is_empty():
@@ -154,6 +163,11 @@ func _run() -> void:
 			await get_tree().physics_frame
 
 	var report := soak.finish()
+	if ArenaFrameProbe.on():
+		print(ArenaSimServer.sections_line(ArenaFrameProbe._sections, maxi(1, soak.ticks)))
+		var surf: RefCounted = ArenaBots.world_for(_game).surf_at(_tick)
+		if surf != null:
+			print("SOAK_SURF ", JSON.stringify(surf.call(&"describe")))
 	report["map"] = String(map_id)
 	report["seed"] = cfg.seed_value
 	report["difficulty"] = difficulty
@@ -169,10 +183,14 @@ func _run() -> void:
 
 func _step(_delta: float) -> void:
 	_commands.clear()
+	var t_think := Time.get_ticks_usec()
 	for player in _game.players():
 		if player.is_alive():
 			_commands[player.player_id] = ArenaBots.think(_game, player, _minds[player.player_id], _tick, float(TICK_RATE))
+	ArenaFrameProbe.add(&"soak_think", t_think)
+	var t_tick := Time.get_ticks_usec()
 	_game.tick(_commands)
+	ArenaFrameProbe.add(&"soak_tick", t_tick)
 	_tick += 1
 
 

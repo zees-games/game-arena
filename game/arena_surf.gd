@@ -106,6 +106,8 @@ var fell: int = 0
 var timed_out: int = 0
 var steer_usec: int = 0
 var steer_ticks: int = 0
+## The pilots' own counts (DotBotSurfPilot.describe: simulated look-ahead and veto ticks, checks, vetoes, resyncs) summed over ended rides, and how many rode a recording instead.
+var pilot_totals: Dictionary = {}
 
 
 ## The cache path for a map id.
@@ -381,6 +383,7 @@ func steer(bot: Object, mind: Object, intent: DotBotIntent, tick: int, tick_rate
 			timed_out += 1
 		_:
 			fell += 1
+	_tally(ride)
 	mind.set(&"ride", null)
 	var brain: Variant = mind.get(&"brain")
 	if brain is DotBotBrain:
@@ -420,4 +423,16 @@ func describe() -> Dictionary:
 	return {"edges": edges.size(), "linked": edges.filter(func(e: Edge) -> bool: return e.linked).size(),
 		"teleports": teleports.size(), "begun": begun, "landed": landed,
 		"fell": fell, "timed_out": timed_out,
-		"steer_us_per_tick": snappedf(float(steer_usec) / maxf(1.0, float(steer_ticks)), 0.1)}
+		"steer_us_per_tick": snappedf(float(steer_usec) / maxf(1.0, float(steer_ticks)), 0.1),
+		"steer_ticks": steer_ticks, "pilot": pilot_totals}
+
+
+func _tally(ride: DotBotSurfRide) -> void:
+	if not ride.recorded.is_empty():
+		pilot_totals["recorded"] = int(pilot_totals.get("recorded", 0)) + 1
+		return
+	if ride.pilot == null:
+		return
+	var d := ride.pilot.describe()
+	for key: String in ["checks", "vetoes", "hopeless", "resyncs", "lookahead_ticks", "veto_ticks"]:
+		pilot_totals[key] = int(pilot_totals.get(key, 0)) + int(d.get(key, 0))
