@@ -161,7 +161,9 @@ func _make_game(authority: bool) -> ArenaGame:
 	game.name = "Arena%s" % ("Server" if authority else str(_clients.size()))
 	game.tick_rate = TICK_RATE
 	game.score_limit = 0
-	game.time_limit_sec = 0.0
+	# Not 0: that keeps the mode's 600 s, and a run past it ends the match mid-round and
+	# stands everyone on a map spawn (headless_hitreg_chaos crossed it at tick 41054).
+	game.time_limit_sec = 7200.0
 	game.headless = true
 	game.is_authority = authority
 	game.register_service = false
@@ -206,7 +208,9 @@ func _build() -> void:
 	_server_bridge.player_announced.connect(func(payload: PackedByteArray) -> void:
 		_joins.append(payload))
 	_server_net.send_fn = func(peer_id: int, payload: PackedByteArray, _d: int) -> void:
-		_down.append({"at": _step + _down_ticks, "peer": peer_id, "bytes": payload})
+		var at := _down_at()
+		if at >= 0:
+			_down.append({"at": at, "peer": peer_id, "bytes": payload})
 	_server_game.combat.shot_resolved.connect(_on_resolved)
 
 	for pair: Vector2i in [Vector2i(SHOOTER_PEER, SHOOTER), Vector2i(TARGET_PEER, TARGET)]:
@@ -332,6 +336,19 @@ func _round(weapon_id: StringName, ping: int) -> void:
 		weapon_id, distance, shots_sent, matched, hit, edge_hit, edges, mean_err, worst_err, worst_off])
 	if first_miss != "":
 		print("      first miss: %s" % first_miss)
+	_judge(weapon_id, ping, {"sent": shots_sent, "matched": matched, "aimed": aimed, "hit": hit,
+		"mean_err": mean_err, "worst_err": worst_err, "first_miss": first_miss})
+
+
+## The round's checks, from its counts: every shot resolved, aimed and hit, the rewind within tolerance.
+func _judge(weapon_id: StringName, ping: int, c: Dictionary) -> void:
+	var matched: int = c["matched"]
+	var shots_sent: int = c["sent"]
+	var aimed: int = c["aimed"]
+	var hit: int = c["hit"]
+	var first_miss: String = c["first_miss"]
+	var worst_err: float = c["worst_err"]
+	var mean_err: float = c["mean_err"]
 	var tag := "%d ms %s" % [ping, weapon_id]
 	_check(matched >= 2, "%s: the server resolves the shots" % tag, "%d of %d sent" % [matched, shots_sent])
 	_check(_as_played or aimed == matched, "%s: every trace leaves the eye along the aim, to the wire's angle step" % tag, "%d of %d" % [aimed, matched])
@@ -373,7 +390,7 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 
 	# The clocks where a client would have them: the input runs ahead by the flight up and a
 	# tick of margin, the receive timeline is the newest snapshot that can have arrived.
-	var input_tick := k + _up_ticks + 1
+	var input_tick := k + _lead_ticks()
 	for peer_id: int in _clients:
 		var clock: DotNetClock = _clients[peer_id]["net"].clock
 		clock.tick = input_tick
@@ -387,7 +404,7 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 		var fire := DotWeaponCommand.new()
 		fire.slot = slot
 		if peer_id == TARGET_PEER:
-			move.move = Vector2(1.0 if (index / 30) % 2 == 0 else -1.0, -1.0 if _as_played else 0.0)
+			move.move = _target_move(index)
 			# As bots do at range: down while shooting, up again; [constant CROUCH_TICKS] drifts across the taps.
 			move.set_button(DotFpsCommand.BUTTON_CROUCH, _as_played and (index / CROUCH_TICKS) % 2 == 1)
 		elif not _last_frame.is_empty():
@@ -408,7 +425,10 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 				fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
 		var bridge: ArenaNetBridge = entry["bridge"]
 		bridge.client_tick(input_tick, move, fire)
-		_up.append({"at": k + _up_ticks, "peer": peer_id, "bytes": bridge.encode_input(input_tick, move, fire)})
+		var packet := bridge.encode_input(input_tick, move, fire)
+		var lands := _up_at(k)
+		if lands >= 0:
+			_up.append({"at": lands, "peer": peer_id, "bytes": packet})
 		if peer_id == SHOOTER_PEER and firing and not _last_frame.is_empty():
 			fired = input_tick
 			var seen := _last_frame.duplicate()
@@ -441,8 +461,32 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 			"time": float(net.clock.received_tick()) + alpha - net.interpolator.delay_ticks(),
 			"alpha": alpha,
 			"crouch": drawn.controller.state.crouch_fraction,
+			"newest": net._receiving_tick,
+			"bracket": net.interpolator.bracket_at(float(net.clock.received_tick()) + alpha - net.interpolator.delay_ticks()),
 		}
 	return fired
+
+
+# --- The link, overridden by headless_hitreg_chaos ----------------------------
+
+## The step a snapshot sent now lands on the clients, or -1 when it is lost.
+func _down_at() -> int:
+	return _step + _down_ticks
+
+
+## The step an input packet sent on step [param k] reaches the server, or -1 when it is lost.
+func _up_at(k: int) -> int:
+	return k + _up_ticks
+
+
+## How far the input clock runs ahead of the server: the flight up and a tick of margin.
+func _lead_ticks() -> int:
+	return _up_ticks + 1
+
+
+## Peer 3's stick on step [param index]: across, turning every 30 ticks (and at the shooter when played).
+func _target_move(index: int) -> Vector2:
+	return Vector2(1.0 if (index / 30) % 2 == 0 else -1.0, -1.0 if _as_played else 0.0)
 
 
 ## How far the drawn body is squeezed down by its stance: [method ArenaPlayer.fit_hitboxes_to_stance]'s factor.
