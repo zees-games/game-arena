@@ -7,8 +7,8 @@ const ArenaAudioManager := preload("../game/arena_audio_manager.gd")
 ## accumulates, at most `cap` ticks run) with ArenaTickBudget choosing the cap from the cost of
 ## a tick, and checks the simulated ticks per wall second at 17 fps with cheap ticks.
 
-const SECTIONS := 5
-const CHECKS := 26
+const SECTIONS := 6
+const CHECKS := 33
 
 var _entered := 0
 var _completed := 0
@@ -165,6 +165,54 @@ func _run_part2(hitched) -> void:
 	await get_tree().process_frame
 	audio.play_at(&"no_such_sound", Vector3(40, 0, 0))
 	_check(audio.shed_count == was, "and the next frame has its own allowance")
+	ArenaTickBudget.shed_now = 0.0
+	audio.queue_free()
+	_done()
+
+	await _run_slow_frames()
+
+
+## `cl_shed_slow_frames`: a client of a server never drops owed ticks (its clock is the server's), so
+## [method ArenaTickBudget.note_slow_frame] calls it behind on frame LENGTH alone: longer than
+## SLOW_FRAME_TICKS ticks. Only a browser has it on by default; the shedding itself is the solo one.
+func _run_slow_frames() -> void:
+	_section("a joined client sheds distant sounds while its frames run long")
+	var period := 1.0 / 66.0
+	_check(ArenaTickBudget.shed_slow_frames == OS.has_feature("web"), "slow-frame shedding is on by default only in a browser",
+		"%s, web %s" % [ArenaTickBudget.shed_slow_frames, OS.has_feature("web")])
+	var jb := ArenaTickBudget.new()
+	for _f in 100:
+		jb.note_slow_frame(period * 3.9, period)
+	_check(is_zero_approx(jb.shed()), "frames up to four ticks long shed nothing", "%.2f" % jb.shed())
+	var to_on := 0
+	while jb.shed() < ArenaTickBudget.SHED_ON and to_on < 100:
+		jb.note_slow_frame(period * 4.5, period)
+		to_on += 1
+	# SHED_ON / SHED_RISE frames, give or take the float sum's last bit.
+	var want_on := roundi(ArenaTickBudget.SHED_ON / ArenaTickBudget.SHED_RISE)
+	_check(to_on >= want_on and to_on <= want_on + 1, "a run of frames longer than four ticks turns shedding on", "after %d frames" % to_on)
+	var hitch := ArenaTickBudget.new()
+	hitch.note_slow_frame(0.5, period)
+	_check(hitch.shed() < ArenaTickBudget.SHED_ON, "one hitched frame does not", "%.2f" % hitch.shed())
+	_check(is_zero_approx(ArenaTickBudget.new().note_slow_frame(1.0, 0.0)), "no tick period, no verdict")
+	var audio := ArenaAudioManager.new()
+	add_child(audio)
+	audio.listener_position = Vector3.ZERO
+	ArenaTickBudget.shed_now = jb.note_slow_frame(period * 6.0, period)
+	for _n in 5:
+		audio.play_at(&"no_such_sound", Vector3(0, 0, 30))
+		audio.play_at(&"no_such_sound", Vector3(0, 0, 4))
+	_check(audio.shed_count == 5 - ArenaAudioManager.SHED_FAR_PER_FRAME, "while slow, the distant one-shots past two a frame are shed and the near ones play",
+		"%d shed" % audio.shed_count)
+	var frames := 0
+	while jb.shed() >= ArenaTickBudget.SHED_ON and frames < 1000:
+		ArenaTickBudget.shed_now = jb.note_slow_frame(period * 2.0, period)
+		frames += 1
+	await get_tree().process_frame
+	var was := audio.shed_count
+	for _n in 5:
+		audio.play_at(&"no_such_sound", Vector3(0, 0, 30))
+	_check(audio.shed_count == was and frames < 1000, "once frames are short again every sound plays", "after %d short frames, %d shed" % [frames, audio.shed_count - was])
 	ArenaTickBudget.shed_now = 0.0
 	audio.queue_free()
 	_done()

@@ -392,12 +392,25 @@ func _test_toys_reach_a_client() -> void:
 		_pump(1)
 		await get_tree().physics_frame
 		furthest = maxf(furthest, client_ball.body.global_position.distance_to(start))
+	# The ball is still rolling after 70 ticks (about 4.5 m/s), and a client's toy is the server's pose a
+	# snapshot and an interpolation behind (more after a lost packet), so the two are not compared at the
+	# same tick: the client's ball must sit on the path the server's took over that window. At 66 ticks the
+	# snapshot rate is 11 Hz, and the same-tick distance swings between 0.03 and 0.8 m with snapshot arrival.
+	var window := maxi(roundi(TICK_RATE * 0.5), 4 * ceili(float(TICK_RATE) / SNAPSHOT_RATE))
+	var path: Array[Vector3] = []
 	for _i in range(40):
 		_pump(1)
 		await get_tree().physics_frame
-	var apart := client_ball.body.global_position.distance_to(server_ball.body.global_position)
-	_check(furthest > 1.0 and apart < 0.6, "a ball kicked on the server rolls off on the client and rests where the server's did",
-		"%.2f m out, %.2f m apart" % [furthest, apart])
+		path.append(server_ball.body.global_position)
+		if path.size() > window:
+			path.pop_front()
+	var seen_at := client_ball.body.global_position
+	var apart := INF
+	for p in path:
+		apart = minf(apart, seen_at.distance_to(p))
+	_check(furthest > 1.0 and apart < 0.25, "a ball kicked on the server rolls off on the client, on the path the server's took",
+		"%.2f m out, %.2f m off the server's last %d ticks, %.2f m from where it is now" % [furthest, apart, window,
+			seen_at.distance_to(server_ball.body.global_position)])
 	# A shot on the server: the client sees the second ball go.
 	var server_other := _server_game.toys.toy(1)
 	var client_other := client_game.toys.toy(1)
