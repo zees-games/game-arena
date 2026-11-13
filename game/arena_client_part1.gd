@@ -2,6 +2,8 @@ extends "arena_client_prewarm.gd"
 
 const ArenaContentGroups := preload("arena_content_groups.gd")
 const ArenaProfilerContext := preload("arena_profiler_context.gd")
+const ArenaObjectives := preload("arena_objectives.gd")
+const ArenaFlagView := preload("arena_flag_view.gd")
 
 ## Milliseconds of level building between frames while the map loads ([method _enter_level]).
 const LEVEL_SLICE_MS := 10
@@ -232,8 +234,17 @@ func _change_covered(id: StringName, picked_mode: StringName) -> DotResult:
 		map = rebuilt.value
 	if map == null:
 		return DotResult.fail(DotError.CODE_INVALID, "There is no map called '%s'." % text)
+	# The imported solid in slices first: built inside change_map it was 40-70 ms of the swap frame.
+	await map.to_collision_async(DotFrameSlice.new(LEVEL_SLICE_MS))
+	ArenaLoadTimeline.mark("change: solid built")
+	# The flag views' first build, in a frame of its own: built in the swap frame it was 143 ms of it.
+	var played := mode if mode != null else game.displayed_mode()
+	if played != null and played.objective_layout == ArenaObjectives.CTF:
+		await ArenaFlagView.warm(self)
+		ArenaLoadTimeline.mark("change: flag views warmed")
 	await get_tree().process_frame
 	var changed := game.change_map(map, mode)
+	map.drop_prebuilt_collision()
 	ArenaLoadTimeline.mark("change: game changed")
 	if not changed.ok:
 		return changed

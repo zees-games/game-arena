@@ -26,7 +26,7 @@ const SCORE_LIMIT := 4
 
 const SECTIONS := 26
 ## Fixed checks, plus one audit check per imported map: the catalogue grows without this changing.
-const CHECKS_FIXED := 167
+const CHECKS_FIXED := 168
 
 
 func _finish() -> void:
@@ -289,6 +289,31 @@ func _water_drawn() -> int:
 	return drawn
 
 
+## Each node below [param root] in tree order: where it sits (child indices: an unnamed child's generated name
+## differs between two builds), its name when given one, class, groups, layers and shape points, for comparing two builds.
+func _solid_signature(root: Node) -> Array:
+	var out := []
+	for node: Node in root.find_children("*", "", true, false):
+		var at := PackedInt32Array()
+		var walk := node
+		while walk != root:
+			at.append(walk.get_index())
+			walk = walk.get_parent()
+		var given := "" if String(node.name).begins_with("@") else String(node.name)
+		var row := [at, given, node.get_class(), node.get_groups()]
+		if node is CollisionObject3D:
+			row.append([(node as CollisionObject3D).collision_layer, (node as CollisionObject3D).collision_mask])
+		if node is CollisionShape3D and (node as CollisionShape3D).shape != null:
+			var shape := (node as CollisionShape3D).shape
+			row.append(shape.get_class())
+			if shape is ConvexPolygonShape3D:
+				row.append((shape as ConvexPolygonShape3D).points)
+			elif shape is ConcavePolygonShape3D:
+				row.append((shape as ConcavePolygonShape3D).get_faces().size())
+		out.append(row)
+	return out
+
+
 func _test_loads() -> bool:
 	_section("the game loads it, with its solid in the tree")
 
@@ -324,6 +349,15 @@ func _test_loads() -> bool:
 			shapes += 0 if shape.get_parent().is_in_group(ArenaBspMap.SKY_GROUP) else 1
 	_check(solid != null and solid.is_inside_tree() and shapes == expected,
 		"one shape per brush is in the tree (%d of %d)" % [shapes, expected])
+	# A client changing map builds this solid a slice a frame (ArenaMap.to_collision_async): it must be the same body.
+	var dir := _game.map.manifest_path.get_base_dir()
+	var one_shot := ArenaBspMap.build_collision(manifest, dir)
+	var sliced: Node = await ArenaBspMap.build_collision_async(manifest, dir, DotFrameSlice.new(0))
+	var one_sig := _solid_signature(one_shot)
+	_check(one_sig.size() > 0 and one_sig == _solid_signature(sliced),
+		"the solid built in slices is the one-shot solid (%d nodes)" % one_sig.size())
+	one_shot.free()
+	sliced.free()
 	_check(_game.combat.trace is DotTracePhysics,
 		"the shots trace the physics space, not a box list")
 	_check(_game.match_node.spawn_points().size() == _game.map.spawns.size()

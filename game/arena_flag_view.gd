@@ -41,6 +41,31 @@ var _holders := {}
 const FLIGHT_EASE := 18.0
 
 
+## A flag view built once per process, hidden, so its materials, icon and label are compiled and held before a
+## CTF map's first frame: built in that frame they were 143 ms of a map change's swap frame on the bench.
+static var _warm: Node3D = null
+## This script, for [method warm] to make one of itself.
+const _SELF_PATH := "res://game/arena_flag_view.gd"
+
+
+## Builds [member _warm] under [param host] (behind a loading cover: it is a slow frame of its own), lets it be drawn
+## a frame far below the world, then hides it. A second call, or a headless process, does nothing.
+static func warm(host: Node) -> void:
+	if DotPlatform.is_headless() or (_warm != null and is_instance_valid(_warm)):
+		return
+	var view: Node3D = load(_SELF_PATH).new()
+	view.name = "FlagViewWarm"
+	view.position = Vector3(0.0, -10000.0, 0.0)
+	view.set_process(false)
+	host.add_child(view)
+	view._build(1)
+	_warm = view
+	await host.get_tree().process_frame
+	await host.get_tree().process_frame
+	if is_instance_valid(view):
+		view.visible = false
+
+
 ## The colour of a team's flag.
 static func name_of(team: int) -> String:
 	return NAMES.get(team, "TEAM %d" % team)
