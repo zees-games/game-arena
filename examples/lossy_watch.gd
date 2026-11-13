@@ -41,16 +41,16 @@ func _measured(section: Callable) -> void:
 		var behind := (Time.get_ticks_usec() - began_usec) / 1000 \
 			- (Engine.get_physics_frames() - began_frame) * 1000 / Engine.physics_ticks_per_second
 		var stalled := maxi(maxi(_stall_ms, _watchdog_stall_ms()), behind)
-		if _failed == failed or stalled < _stall_limit_ms() or attempt == MEASURE_ATTEMPTS - 1:
-			if stalled >= _stall_limit_ms():
+		if _failed == failed or stalled < _first_stall_limit_ms() or attempt == MEASURE_ATTEMPTS - 1:
+			if stalled >= _first_stall_limit_ms():
 				print("    (the runner stalled this process for up to %d ms during it)" % stalled)
 			elif _failed != failed:
 				# A failure the box did not cause, said in so many words: it is the netcode's to explain.
 				print("    (failed with no stall over the limit: longest physics gap %d ms, sleeper %d ms, %d ms behind; limit %d; gaps as (tick, ms) %s)" % [
-					_stall_ms, _watchdog_stall_ms(), behind, _stall_limit_ms(), _gaps])
+					_stall_ms, _watchdog_stall_ms(), behind, _first_stall_limit_ms(), _gaps])
 			return
 		print("    NOT A MEASUREMENT: the runner stalled this process for %d ms (limit %d) and %d checks failed; again" % [
-			stalled, _stall_limit_ms(), _failed - failed])
+			stalled, _first_stall_limit_ms(), _failed - failed])
 		_passed = passed
 		_failed = failed
 		_failures.resize(failures)
@@ -63,6 +63,13 @@ func _measured(section: Callable) -> void:
 ## Three ticks of wall time: the clock check's own tolerance.
 func _stall_limit_ms() -> int:
 	return 3000 / TICK_RATE
+
+
+## Two ticks of wall time, 80 ms at least. A's first seconds run once per connection and are judged on a share of
+## ticks, so a stall of 110 ms (2.4 ticks at 22 Hz, under [method _stall_limit_ms], which also reruns a failed section from here) already starves
+## them and a retry costs only seconds; a failure past all the tries with such a stall is not judged.
+func _first_stall_limit_ms() -> int:
+	return maxi(2000 / TICK_RATE, 80)
 
 
 ## The longest gap between two physics callbacks since [method _measured] began, and the last one.

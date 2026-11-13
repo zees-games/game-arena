@@ -139,8 +139,10 @@ func _physics_rest(server_tick: int) -> void:
 	if _clients.has("A") and _clients["A"].get("link") != null:
 		var hop_buffer := _module().net.input_buffer_for(int((_clients["A"]["link"] as DotClientLink).multiplayer.get_unique_id()))
 		if hop_buffer != null and hop_buffer.starved_count != _hop_starved_seen:
+			# One entry per tick the server ran without a command: after a stall several run in one frame.
+			for k in range(mini(8, hop_buffer.starved_count - _hop_starved_seen)):
+				_hop_starved.append(server_tick - k)
 			_hop_starved_seen = hop_buffer.starved_count
-			_hop_starved.append(server_tick)
 	if _hop_from >= 0:
 		var predictor: Object = (_clients["A"]["net"] as DotNetManager).predictor
 		var applied := int(predictor.get("_corrections_applied"))

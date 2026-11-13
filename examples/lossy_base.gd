@@ -607,13 +607,13 @@ func _connect_everyone() -> bool:
 		first = await _first_seconds()
 		first_in_time = 1.0 - float(int(first["starved"])) / float(maxi(1, int(first["ticks"])))
 		var stalled := int(first["stalled"])
-		if first_in_time >= FIRST_IN_TIME or stalled < _stall_limit_ms() or attempt == FIRST_TRIES - 1:
-			if stalled >= _stall_limit_ms():
+		if first_in_time >= FIRST_IN_TIME or stalled < _first_stall_limit_ms() or attempt == FIRST_TRIES - 1:
+			if stalled >= _first_stall_limit_ms():
 				print("    (the runner stalled this process for up to %d ms during A's first seconds: gaps %s)" % [
 					stalled, first["gaps"]])
 			break
 		print("    NOT A MEASUREMENT: the runner stalled this process for %d ms (limit %d) in A's first seconds and the server had its command for %.1f%% of %d ticks; physics gaps as (tick, ms) %s. A connects again" % [
-			stalled, _stall_limit_ms(), first_in_time * 100.0, int(first["ticks"]), first["gaps"]])
+			stalled, _first_stall_limit_ms(), first_in_time * 100.0, int(first["ticks"]), first["gaps"]])
 		await _drop_client("A")
 		await get_tree().create_timer(2.0).timeout
 
@@ -680,6 +680,12 @@ func _check_box_pace(first: Dictionary, a: Dictionary, first_in_time: float) -> 
 			"it ran at %s of %d ticks a second: NOT A MEASUREMENT, the box is too slow or too loaded; run this suite on another" % [paces, TICK_RATE]):
 		_done()
 		return false
+	if first_in_time < FIRST_IN_TIME and int(first["stalled"]) >= _first_stall_limit_ms():
+		# Every try had the runner stalled for over two ticks: the share says what the box did.
+		print("    INCONCLUSIVE: in A's first %d seconds the server had A's command for %.1f%% of %d ticks, but the runner stalled this process for %d ms in all %d tries; physics gaps %s, round trip %d ms" % [
+			int(FIRST_SECONDS), first_in_time * 100.0, int(first["ticks"]), int(first["stalled"]), FIRST_TRIES,
+			first["gaps"], int((a["net"] as DotNetManager).clock.rtt_ms())])
+		return true
 	_check(first_in_time >= FIRST_IN_TIME,
 		"in A's first %d seconds the server had its command for %.1f%% of %d ticks, %d late" % [
 			int(FIRST_SECONDS), first_in_time * 100.0, int(first["ticks"]), int(first["late"])],

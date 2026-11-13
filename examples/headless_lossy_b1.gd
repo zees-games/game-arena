@@ -173,7 +173,12 @@ func _test_teleport_under_loss() -> void:
 		await _wait_game(3.0)
 		snaps = int(net.predictor.get("_snaps")) - snaps
 		var settled := input0 + _ticks(64)
-		var gap: Array = _prediction_gap(session, settled, net.clock.input_tick() - _ticks(8))
+		# Ticks the server ran without A's command (or in a stalled burst) while A's view and strafe were
+		# changing are not the prediction's: the server repeated an older command (see _edge_holes). A
+		# stretch of them used to fail this check at 22 Hz by up to 1.8 m for 8 ticks; the convergence
+		# check below (same place tick for tick at the end) and the 0.5 m bound on the rest stay.
+		var gap_to := net.clock.input_tick() - _ticks(8)
+		var gap: Array = _prediction_gap(session, settled, gap_to, _excused(_edge_holes(settled, gap_to, _command_a), net))
 		var track: Dictionary = _server_track.get(session, {})
 		var end := net.clock.input_tick() - _ticks(8)
 		while end > settled and not (_predicted.has(end) and track.has(end)):

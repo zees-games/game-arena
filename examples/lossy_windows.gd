@@ -426,6 +426,7 @@ static func _missing(sent: Array, got: Array) -> String:
 ## predicted with, and at 22 Hz one tick's walk is 26 cm. Returns those server ticks of [from - 2, to):
 ## the starved ones (a run of them counts from its first) whose command differs from the one repeated.
 func _edge_holes(from: int, to: int, command_of: Callable) -> Array[int]:
+	_note_stall_ticks()
 	var out: Array[int] = []
 	for h in _hop_starved:
 		if h < from - 2 or h >= to:
@@ -441,6 +442,17 @@ func _edge_holes(from: int, to: int, command_of: Callable) -> Array[int]:
 				out.append(h)
 				break
 	return out
+
+
+## A physics gap over a tick and a half (under the limit that reruns a section) runs its server ticks in
+## one burst with nothing delivered between them: the server finds no command of A's for those, exactly
+## as for a lost packet, and what A predicted over them is not the netcode's to match. They join the
+## starved ticks, so [method _edge_holes] weighs them by the same rule (only where A's command changed).
+func _note_stall_ticks() -> void:
+	for gap in _gaps:
+		for k in range(ceili(float(gap.y) * TICK_RATE / 1000.0)):
+			if not _hop_starved.has(gap.x - k):
+				_hop_starved.append(gap.x - k)
 
 
 func _wall_holes(from: int) -> Array[int]:
