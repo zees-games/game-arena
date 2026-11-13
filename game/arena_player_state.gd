@@ -406,11 +406,17 @@ const LOD_FAR := 45.0
 const LOD_FARTHEST := 90.0
 
 ## `cl_remote_anim_gate`: thin remote bodies by game time as well as by frame count. A body in view past
-## [constant ANIM_GATE_NEAR] steps its clip at most every [constant ANIM_GATE_DT]; a thinned one waits its minimum time.
-## At 20 to 60 fps this changes nothing, since a frame is already longer than every interval below.
+## [constant ANIM_GATE_NEAR] steps its clip at most every [constant ANIM_GATE_DT], past [constant ANIM_GATE_FAR] (and in the
+## LOD_FAR tiers) every [constant ANIM_GATE_FAR_DT]; a thinned one waits its minimum time. Only the skeleton's clip is
+## stepped less often: the body is still moved and turned every frame, and hitboxes follow the stance, not the bones.
 static var anim_gate_enabled: bool = true
-const ANIM_GATE_NEAR := 15.0
-const ANIM_GATE_DT := 1.0 / 60.0
+const ANIM_GATE_NEAR := 8.0
+const ANIM_GATE_DT := 1.0 / 30.0
+const ANIM_GATE_FAR := 20.0
+const ANIM_GATE_FAR_DT := 1.0 / 20.0
+## A body nobody can see (out of the frustum past LOD_NEAR) steps its clip at most 10 times a second: only its
+## shadow could show the pose, and it is presented in full the frame it comes into view.
+const ANIM_GATE_OFF_DT := 1.0 / 10.0
 ## Minimum game seconds between presents of a thinned body: out of sight, past LOD_FAR, past LOD_FARTHEST.
 const LOD_OFF_DT := 1.0 / 30.0
 const LOD_FAR_DT := 1.0 / 45.0
@@ -419,6 +425,9 @@ const LOD_FARTHEST_DT := 1.0 / 30.0
 var _figure_motion: Dictionary = {}
 var _anim_min_dt: float = 0.0
 var _anim_owed: float = 0.0
+## Per-body head start (game seconds) on the first gated step, so that bodies gated on the same frame
+## (a round start) do not all step their clips together on one frame.
+var _anim_phase: float = -1.0
 var _held_thin: bool = false
 ## A remote body past [constant DotHumanoidFigure.DRAW_RANGE] from the eye: its figure is culled there, so
 ## what hangs off it (gun, held sprite, crest, spawn bubble) is hidden too rather than floating alone.

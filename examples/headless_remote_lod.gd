@@ -8,7 +8,7 @@ const ArenaKillcamBodies := preload("../game/arena_killcam_bodies.gd")
 ## story. Run: [code]godot --headless --path . res://examples/headless_remote_lod.tscn[/code]
 
 const SECTIONS := 6
-const CHECKS := 22
+const CHECKS := 24
 
 var _entered := 0
 var _completed := 0
@@ -172,10 +172,16 @@ func _test_anim_gate() -> void:
 			ungated_n += 1
 	_check(ungated_n == 9, "cl_remote_anim_gate 0: back to every fourth frame (9 of 36)", "%d" % ungated_n)
 	ArenaPlayer.anim_gate_enabled = true
-	var mid := _body(Vector3(0, 0, -30))
+	var mid := _body(Vector3(0, 0, -12))
 	var _m := _passes(mid, 1)
-	_check(is_equal_approx(mid.get("_anim_min_dt") as float, ArenaPlayer.ANIM_GATE_DT), "in view past 15 m: the clip is stepped at 60 Hz at most")
-	var close := _body(Vector3(0, 0, -8))
+	_check(is_equal_approx(mid.get("_anim_min_dt") as float, ArenaPlayer.ANIM_GATE_DT), "in view past 8 m: the clip is stepped at 30 Hz at most")
+	var far := _body(Vector3(0, 0, -30))
+	var _f := _passes(far, 1)
+	_check(is_equal_approx(far.get("_anim_min_dt") as float, ArenaPlayer.ANIM_GATE_FAR_DT), "in view past 20 m: the clip is stepped at 20 Hz at most")
+	var behind := _body(Vector3(0, 0, 20))
+	var _b := _passes(behind, 8)
+	_check(is_equal_approx(behind.get("_anim_min_dt") as float, ArenaPlayer.ANIM_GATE_OFF_DT), "out of sight: the clip is stepped at 10 Hz at most")
+	var close := _body(Vector3(0, 0, -5))
 	var _c := _passes(close, 1)
-	_check((close.get("_anim_min_dt") as float) == 0.0, "in view within 15 m: the clip is stepped every frame")
+	_check((close.get("_anim_min_dt") as float) == 0.0, "in view within 8 m: the clip is stepped every frame")
 	_done()
