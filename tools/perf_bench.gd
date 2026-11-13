@@ -170,6 +170,7 @@ func _first_use(_game: Object) -> void:
 		ids.clear()
 		for s in String(args["first-use-only"]).split(",", false):
 			ids.append(StringName(s))
+	await _first_hit()
 	for id in ids:
 		var def: DotWeaponDef = AwWeaponCatalogue.table().get(id)
 		var me: Variant = client.get("player")
@@ -192,6 +193,24 @@ func _first_use(_game: Object) -> void:
 			var _shot := await time_first_use("%s %s" % [row, id], func() -> void: Input.action_press(&"arena_fire"),
 				func() -> void: Input.action_release(&"arena_fire"), 10, 45)
 			await wait(1.0)
+
+
+## Row "hit": the server's HIT event for a body in front of the player, before any shot, through the client's own handler
+## (hit marker, damage number, blood decal, body impact), as an in-process host runs it inside the first resolved shot.
+func _first_hit() -> void:
+	var me: Variant = client.get("player")
+	var game: Variant = client.get("game")
+	if me == null or game == null or me.camera == null:
+		return
+	var victim := 0
+	for p: Variant in game.players():
+		if p != me:
+			victim = int(p.player_id)
+			break
+	var cam: Transform3D = me.camera.global_transform
+	var point := cam.origin - cam.basis.z * 3.0
+	var _row := await time_first_use("hit", func() -> void:
+		client.call(&"_on_hit", {"point": point, "victim_id": victim, "amount": 25.0, "headshot": false, "lethal": false}), Callable(), 0, 30)
 
 
 func _start_pilot(_game: Object) -> void:
