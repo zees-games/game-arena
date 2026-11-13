@@ -330,7 +330,15 @@ func _connect() -> bool:
 	var extras: Node = _client.get("extras")
 	var gate: DotLoadGate = _client.get("gate")
 	if extras != null:
+		# Ahead of the client's own handler: on the map it booted on, that releases the cover inside the same
+		# emit, and a listener after it heard the map only once the gate had opened (1 run in 2 failed).
+		var own := Callable(_client, &"_on_map_changed")
+		var had := extras.is_connected("map_changed", own)
+		if had:
+			extras.disconnect("map_changed", own)
 		extras.connect("map_changed", func(_m: DotMapDef) -> void: map_in[0] = true)
+		if had:
+			extras.connect("map_changed", own)
 	if gate != null:
 		gate.opened.connect(func() -> void:
 			if opened_on[0] == "":

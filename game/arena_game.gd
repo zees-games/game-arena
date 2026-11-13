@@ -245,15 +245,22 @@ func respawn_player(id: int) -> DotResult:
 	_on_respawn_due(key, match_node.choose_spawn(key, _tick), _tick)
 	return DotResult.success(player)
 
+## FC's kill view server: asks for an eye only when the ring would keep it.
+const ArenaKillViewServer := preload("arena_killview_server.gd")
+
 ## The kill view's server half over this game: every living eye, respawns held in dot-match's queue.
 func make_killview_server() -> DotKillViewServer:
-	var server := DotKillViewServer.new(killview_rules)
+	var server := ArenaKillViewServer.new(killview_rules)
 	server.tick_rate = tick_rate
 	KillPov.watch_hits(self)
+	var due := server.due
 	server.eyes_fn = func() -> Array:
 		var eyes: Array = []
 		for p: ArenaPlayer in players():
 			if not p.is_alive() or p.controller == null or p.controller.state == null:
+				continue
+			# Only the eyes the ring keeps this tick: one tick in three at 66 ticks and 30 Hz.
+			if not due.check(p.player_id):
 				continue
 			var st: DotFpsState = p.controller.state
 			var eye: Vector3 = p.controller.motor.eye_position(st) if p.controller.motor != null else st.position + Vector3(0.0, ArenaPlayer.eye_height(), 0.0)

@@ -25,6 +25,12 @@ var player: ArenaPlayer = null
 ## The bridge, so the authority can drive the whole game exactly once per tick.
 var bridge: ArenaNetBridge = null
 
+## Whether a bot's replicated copy is filled only on the ticks a snapshot is written. Its
+## properties are read by nothing but the snapshot (and the history recorded with it): nobody
+## predicts a bot, so nothing pushes them back into its simulation. Off is the old every-tick
+## copy, for headless_bot_pull, which holds the two to the same sim and the same snapshots.
+static var skip_idle_pull := true
+
 # --- Movement, from DotFpsNetSync.state_specs() ---
 var net_position: Vector3 = Vector3.ZERO
 var net_velocity: Vector3 = Vector3.ZERO
@@ -277,6 +283,11 @@ func _net_simulate(tick: int, delta: float) -> void:
 	else:
 		_predict(tick, delta)
 
+	# A bot's copy between snapshots is read by nobody: at 66 ticks and 33 snapshots, half
+	# of 31 bots' pulls a tick were thrown away. A person's is never skipped: _pull_exact
+	# puts his simulation itself back through float32 every tick, as his client's replay does.
+	if skip_idle_pull and bridge != null and _server_owned() and not bridge.snapshot_due():
+		return
 	pull()
 
 

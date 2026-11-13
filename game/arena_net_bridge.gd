@@ -12,6 +12,19 @@ var event_budget_usec := 0
 var _events_waiting: Array[PackedByteArray] = []
 var _event_frame := -1
 var _event_usec := 0
+## 1 when dot-net has DotNetManager.snapshot_due(), 0 when not, -1 before the first ask.
+var _snapshot_due_api := -1
+
+
+## Whether the tick being simulated ends in a snapshot (and the history recorded with it):
+## dot-net 19's [code]DotNetManager.snapshot_due()[/code]. True on a shell's older dot-net, which
+## cannot say: every tick is then pulled, as before. Called by name, so an older dot-net parses.
+func snapshot_due() -> bool:
+	if net == null:
+		return true
+	if _snapshot_due_api < 0:
+		_snapshot_due_api = 1 if DotAddonApi.build_level("dot_net") >= 19 and net.has_method(&"snapshot_due") else 0
+	return _snapshot_due_api == 0 or bool(net.call(&"snapshot_due"))
 
 
 # --- Bots ------------------------------------------------------------------
