@@ -87,7 +87,7 @@ Thumbs.db
 /addons/dot_game
 # dot-sim: optional native library (movement motor, bot senses, snapshot codec); without its built library the GDScript twins run.
 # bootstrap fetches this release's library for the machine (dot-bootstrap: bootstrap-natives); the log says "dot-sim: native ...".
-# bootstrap-natives: dot-sim v0.2.4
+# bootstrap-natives: dot-sim v0.2.5
 /addons/dot_sim
 /addons/dot_workbench
 /lightbake_work/
