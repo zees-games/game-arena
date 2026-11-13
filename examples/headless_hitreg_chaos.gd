@@ -25,8 +25,8 @@ const LINKS: Array = [
 	["jitter+loss, buffer adapted", JITTER_MS, LOSS, -1.0],
 	["jitter+loss, buffer 2 (not grown)", JITTER_MS, LOSS, 2.0],
 ]
-const CHAOS_CHECKS := 376
-const CHAOS_SECTIONS := 11
+const CHAOS_CHECKS := 379
+const CHAOS_SECTIONS := 12
 
 var _rng := RandomNumberGenerator.new()
 var _move_rng := RandomNumberGenerator.new()
@@ -43,6 +43,10 @@ var _ups: Dictionary = {}
 ## Up packets sent and lost this section, every peer.
 var _ups_sent := 0
 var _ups_lost := 0
+## The late-tap section: the send step of each tap, and how many were sent.
+var _late_mode := false
+var _late_sends: Array[int] = []
+var _late_sent := 0
 
 
 func _run() -> void:
@@ -50,6 +54,13 @@ func _run() -> void:
 	_build()
 	var weapons := _hitscan_weapons()
 	_check(weapons.size() >= 3, "the pack has hitscan guns to try", str(weapons))
+	if "--late" in OS.get_cmdline_user_args():
+		# Only the late-tap section, for the quick loop: `hv <wt> scene res://examples/headless_hitreg_chaos.tscn -- --late`.
+		# A fresh match still has the target under spawn protection, which refuses the first shots: play a round first.
+		_round(&"pistol", 6)
+		_late_tap_section(weapons)
+		_report_sections(_entered, _completed, 2, -1)
+		return
 	var net: DotNetManager = _clients[SHOOTER_PEER]["net"]
 	var period := float(net.config.ticks_per_snapshot())
 	print("    tick %d Hz, snapshots %d Hz (every %d ticks), input copies %d, max extrapolation %.3f s" % [
@@ -84,7 +95,59 @@ func _run() -> void:
 			print("    up packets lost: %d of %d (%.1f%%)" % [_ups_lost, _ups_sent, 100.0 * float(_ups_lost) / float(maxi(1, _ups_sent))])
 			_done()
 	_summary(weapons)
+	_late_tap_section(weapons)
 	_report_sections(_entered, _completed, CHAOS_SECTIONS, CHAOS_CHECKS if CHAOS_CHECKS > 0 else -1)
+
+
+## Taps whose every early copy is lost and whose one surviving copy lands after the server has
+## simulated the tick, as at tick 26660 of the 60 ms jitter+loss link: the copies sent with the tap
+## and the two steps after are lost, the fourth lands two ticks after the tap's tick, the fifth is
+## lost. The shooter drew each and the server must fire it, with the rewind of the shooter's view.
+func _late_tap_section(weapons: Array[StringName]) -> void:
+	var id: StringName = &"pistol" if &"pistol" in weapons else weapons[0]
+	_section("a tap whose only surviving copy lands late (%s, 60 ms, clean link otherwise)" % id)
+	_late_mode = true
+	_late_sends.clear()
+	_link = "clean"
+	_jitter_ticks = 0
+	_loss = 0.0
+	for peer_id: int in _clients:
+		var interp: DotNetInterpolator = _clients[peer_id]["net"].interpolator
+		interp._delay_snapshots = 2.0
+		interp._target_snapshots = 2.0
+	var honoured := _late_counter("late_fire_honoured")
+	var dropped := _late_counter("late_fire_dropped")
+	_round(id, 60)
+	_late_mode = false
+	var buffer := _server_net.input_buffer_for(SHOOTER_PEER)
+	print("    late shots fired %d, dropped %d; the input buffer counted %d late" % [
+		_late_counter("late_fire_honoured") - honoured, _late_counter("late_fire_dropped") - dropped, buffer.late_count])
+	_check(_late_counter("late_fire_honoured") - honoured == _late_sent, "every late tap is fired by the server and counted",
+		"%d of %d" % [_late_counter("late_fire_honoured") - honoured, _late_sent])
+	_done()
+
+
+func _late_counter(counter: StringName) -> int:
+	var value: Variant = _server_bridge.get(counter)
+	return 0 if value == null else int(value)
+
+
+func _judge_late(weapon_id: StringName, c: Dictionary) -> void:
+	_late_sent = int(c["sent"])
+	var hits := 0
+	for r in _resolved:
+		if r["hit"]:
+			hits += 1
+	_check(_resolved.size() == _late_sent, "%s: a tap that arrived late still resolves once" % weapon_id,
+		"%d resolved of %d sent" % [_resolved.size(), _late_sent])
+	_check(hits == _resolved.size(), "%s: and hits where the shooter drew the target (lag compensated)" % weapon_id,
+		"%d of %d hit" % [hits, _resolved.size()])
+
+
+func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
+	if _late_mode and firing:
+		_late_sends.append(_step + 1)
+	return super(slot, firing, index, side)
 
 
 func _plan_strafe() -> void:
@@ -120,6 +183,14 @@ func _down_at() -> int:
 
 
 func _up_at(k: int) -> int:
+	if _late_mode:
+		for f in _late_sends:
+			var d: int = k - f
+			if d == 3:
+				return f + _lead_ticks() + 2
+			if d >= 0 and d <= 4:
+				return -1
+		return k + _up_ticks
 	var f := _flight()
 	var lands := -1 if f < 0 else k + _up_ticks + f
 	_ups_sent += 1
@@ -135,6 +206,9 @@ func _lead_ticks() -> int:
 
 
 func _judge(weapon_id: StringName, ping: int, c: Dictionary) -> void:
+	if _late_mode:
+		_judge_late(weapon_id, c)
+		return
 	var causes := {"unresolved": int(c["sent"]) - int(c["matched"])}
 	var period := float((_clients[SHOOTER_PEER]["net"] as DotNetManager).config.ticks_per_snapshot())
 	var errs: Array = _rewinds.get_or_add(_link, {}).get_or_add(ping, [])

@@ -550,6 +550,10 @@ func tick_post(tick: int, delta: float, combat_command: DotWeaponCommand) -> Dot
 	_command = combat_command.duplicate_command()
 	_command.yaw = state.yaw
 	_command.pitch = state.pitch
+	if not is_nan(late_fire_aim.x):
+		_command.yaw = late_fire_aim.x
+		_command.pitch = late_fire_aim.y
+		late_fire_aim = Vector2(NAN, 0.0)
 	ArenaFlagCarry.filter_command(self, _command)
 	aiming = _command.is_pressed(BUTTON_AIM)
 	_flashlight_hands(_command.is_pressed(ArenaFlashlight.BUTTON), delta)

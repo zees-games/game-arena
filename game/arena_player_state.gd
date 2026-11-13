@@ -282,6 +282,8 @@ var _combat: DotCombatManager = null
 var _hand: Node3D = null
 var _seen_fire_seq: int = 0
 var _command := DotWeaponCommand.new()
+## A late shot's own aim (yaw, pitch), used for one tick in place of the current view; NAN x means none.
+var late_fire_aim := Vector2(NAN, 0.0)
 var _tick_rate: int = ArenaContent.TICK_RATE
 
 ## A [DotFpsController] that collides against analytic geometry rather than physics. `_make_body` is

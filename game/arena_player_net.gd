@@ -237,6 +237,16 @@ func _net_apply_input(input: DotNetInput, _tick: int) -> void:
 	last_view_span = command.view_span
 	last_view_tick = _tick
 
+	# A shot whose own command came after its tick fires on this one, aimed where the shooter drew.
+	if bridge != null and identity != null and identity.is_authoritative and identity.owner_peer_id != 0:
+		var late := bridge.take_late_fire(identity.owner_peer_id, _tick, command)
+		if not late.is_empty():
+			last_fire = late[0]
+			last_view_lag = late[1]
+			last_view_back = late[2]
+			last_view_span = late[3]
+			player.late_fire_aim = Vector2(late[4], late[5])
+
 
 # --- Simulation ------------------------------------------------------------
 

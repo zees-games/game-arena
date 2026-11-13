@@ -297,7 +297,74 @@ func receive_input(peer_id: int, payload: PackedByteArray) -> DotResult:
 	# One call a packet: the copies of ticks already simulated are skipped rather than counted
 	# late, and the arrival lead is measured on the packet's own command only. A resend seen
 	# first here was in a lost packet, and measuring it made the client's clock jump under loss.
-	return net.input_buffer_for(peer_id).push_batch(batch)
+	var buffer := net.input_buffer_for(peer_id)
+	_note_late_fires(peer_id, buffer, batch)
+	return buffer.push_batch(batch)
+
+
+## Shots whose command reached the server after its tick was simulated, per peer, oldest first:
+## each [tick, view tick or -1, view_back, view_span]. See [method _note_late_fires].
+var late_fires: Dictionary = {}
+## Late shots fired on the tick after they arrived, and late shots too old to fire.
+var late_fire_honoured := 0
+var late_fire_dropped := 0
+## The ticks each peer's commands have reached the server on, any copy: a resend of one is not a late shot.
+var _seen_ticks: Dictionary = {}
+
+## A late shot is still fired up to this many ticks after its own (a quarter second at 64 Hz).
+const LATE_FIRE_MAX_TICKS := 16
+
+
+## Finds the shots in [param batch] whose command is new here but for a tick the server has simulated.
+## Three lost packets and a late fourth left the only copy of a tap behind its tick, and
+## [method DotNetInput.Buffer.push_batch] skips such a copy without a count: the shooter saw the
+## shot and the server never fired it. It is queued to fire on the next command with the view
+## the shooter drew ([method take_late_fire]); one too old is counted as late and dropped.
+func _note_late_fires(peer_id: int, buffer: DotNetInput.Buffer, batch: Array) -> void:
+	var seen: Dictionary = _seen_ticks.get_or_add(peer_id, {})
+	var consumed := buffer.last_consumed_tick()
+	for i in batch.size():
+		var command := batch[i] as ArenaNetCommand
+		if command == null or seen.has(command.tick):
+			continue
+		seen[command.tick] = true
+		if consumed < 0 or command.tick > consumed or not command.fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK):
+			continue
+		var age := consumed - command.tick
+		if age >= LATE_FIRE_MAX_TICKS:
+			late_fire_dropped += 1
+			if i != batch.size() - 1:
+				# The packet's own command is counted late by the buffer.
+				buffer.late_count += 1
+			continue
+		var view := float(command.tick) - command.view_lag_ticks() if command.view_lag_q >= 0 else -1.0
+		(late_fires.get_or_add(peer_id, []) as Array).append([command.tick, view, command.view_back, command.view_span, command.move.yaw, command.move.pitch])
+	if seen.size() > 256:
+		for tick: int in seen.keys():
+			if tick < consumed - 128:
+				seen.erase(tick)
+
+
+## Puts the oldest late shot of [param peer_id] on [param command] (for [param tick]) when that command
+## is not firing itself, with the view lag the shooter drew it at moved to this tick. Returns
+## [fire, lag, back, span] for the player to use, or an empty array. A late shot that waits too
+## long behind firing commands is dropped and counted.
+func take_late_fire(peer_id: int, tick: int, command: ArenaNetCommand) -> Array:
+	var queue: Array = late_fires.get(peer_id, [])
+	while not queue.is_empty() and tick - int((queue[0] as Array)[0]) >= LATE_FIRE_MAX_TICKS:
+		queue.pop_front()
+		late_fire_dropped += 1
+	if queue.is_empty() or command.fire.is_pressed(DotWeaponCommand.BUTTON_ATTACK):
+		return []
+	var late: Array = queue.pop_front()
+	late_fire_honoured += 1
+	var fire := command.fire.duplicate_command()
+	fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
+	var behind := tick - int(late[0])
+	var view: float = late[1]
+	var back: int = int(late[2])
+	return [fire, float(tick) - view if view >= 0.0 else command.view_lag_ticks(),
+		back + behind if back >= 0 else command.view_back, int(late[3]) if back >= 0 else command.view_span, float(late[4]), float(late[5])]
 
 
 # --- Events and requests ---------------------------------------------------
