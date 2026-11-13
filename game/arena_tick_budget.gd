@@ -33,6 +33,13 @@ const SHED_ON := 0.5
 ## the simulation or what goes on the wire may look at it.
 static var shed_now := 0.0
 
+## Cvar `cl_shed_slow_frames`: a client of a server sheds the same distant one-shots while its frames run
+## longer than [constant SLOW_FRAME_TICKS] ticks. Its simulation is the server's and keeps wall-clock time, so it
+## is never "behind" the way a solo game is, yet a long frame then gathers every far shot and footstep of
+## the ticks it spans. On by default only in a browser, where joined frames run that long.
+static var shed_slow_frames := DotPlatform.is_web()
+const SLOW_FRAME_TICKS := 4.0
+
 var _cost_sec := 0.0
 var _ticks := 0
 var _shed := 0.0
@@ -71,6 +78,14 @@ func note_tick() -> void:
 func note_frame(frame_sec: float, period_sec: float, cap: int) -> float:
 	var behind := period_sec > 0.0 and _ticks >= cap and frame_sec / period_sec > float(_ticks) + 0.5
 	_ticks = 0
+	_shed = minf(_shed + SHED_RISE, 1.0) if behind else maxf(_shed - SHED_FALL, 0.0)
+	return _shed
+
+
+## [method note_frame] for a client of a server: a frame longer than [constant SLOW_FRAME_TICKS] ticks counts as
+## behind. Returns [method shed].
+func note_slow_frame(frame_sec: float, period_sec: float) -> float:
+	var behind := period_sec > 0.0 and frame_sec > period_sec * SLOW_FRAME_TICKS
 	_shed = minf(_shed + SHED_RISE, 1.0) if behind else maxf(_shed - SHED_FALL, 0.0)
 	return _shed
 

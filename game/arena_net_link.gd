@@ -98,6 +98,21 @@ var voice_sent: int = 0
 var voice_received: int = 0
 var map_sent: int = 0
 var map_received: int = 0
+## Snapshots received but never decoded, because a newer tick came in the same poll.
+var snapshots_coalesced: int = 0
+
+## [b]Decode only the newest snapshot a poll brings[/b] (`cl_snapshot_coalesce`). A browser
+## frame that runs long receives several snapshots at once, and decoding every one of them
+## (header, entities, reconcile) is most of what a joined browser client spends. With this
+## on, a poll's snapshots are held until the end of the poll and only the newest tick's
+## parts are applied; the older ones count as lost. That is exactly the loss the server
+## already repairs: the ack stays on the last applied tick, so a strict-ack server re-sends
+## whatever the skipped ticks carried. Reliable events and map messages flush the held
+## snapshots first, so the order between state and events is kept. On by default only in
+## a browser; native clients (and every hit-reg suite) decode each snapshot as before.
+static var coalesce: bool = DotPlatform.is_web()
+
+var _held: Array[PackedByteArray] = []
 
 ## Sends dropped because there was no peer to send them on.
 var dropped: int = 0
@@ -288,17 +303,60 @@ func send_map_report(payload: Dictionary) -> void:
 func _net_snapshot(payload: PackedByteArray) -> void:
 	snapshots_received += 1
 
-	if bridge != null:
-		# Its own span: the receive (decode, apply, reconcile, push hooks) runs from the RPC poll, outside every frame span.
-		var t := Time.get_ticks_usec()
-		bridge.receive_snapshot(payload)
-		ArenaFrameProbe.add(&"net_snapshot", t)
+	if bridge == null:
+		return
+
+	if coalesce:
+		if _held.is_empty():
+			_flush_held.call_deferred()
+		_held.append(payload)
+		return
+
+	_apply_snapshot(payload)
+
+
+## Its own span: the receive (decode, apply, reconcile, push hooks) runs from the RPC poll,
+## outside every frame span.
+func _apply_snapshot(payload: PackedByteArray) -> void:
+	var t := Time.get_ticks_usec()
+	bridge.receive_snapshot(payload)
+	ArenaFrameProbe.add(&"net_snapshot", t)
+
+
+## Applies the held snapshots of the newest tick (every part of it, in arrival order) and
+## drops the rest. Peeking the tick is a 32-bit read; the decode is what is saved.
+func _flush_held() -> void:
+	if _held.is_empty():
+		return
+	var held := _held
+	_held = []
+	if bridge == null:
+		return
+	if held.size() == 1:
+		_apply_snapshot(held[0])
+		return
+
+	var ticks := PackedInt64Array()
+	ticks.resize(held.size())
+	var newest := -1
+	for i in held.size():
+		var reader := DotNetReader.new(held[i])
+		var tick := reader.read_uint(32) if held[i].size() >= 4 else -1
+		ticks[i] = tick
+		newest = maxi(newest, tick)
+
+	for i in held.size():
+		if ticks[i] == newest:
+			_apply_snapshot(held[i])
+		else:
+			snapshots_coalesced += 1
 
 
 ## Anything from the authority that must arrive: HELLO, joins, kills, the match state.
 @rpc("authority", "reliable", "call_remote", CHANNEL_STATE)
 func _net_event(payload: PackedByteArray) -> void:
 	events_received += 1
+	_flush_held()
 
 	if bridge != null:
 		var t := Time.get_ticks_usec()
@@ -352,6 +410,7 @@ func _net_voice_frame(payload: PackedByteArray) -> void:
 @rpc("authority", "reliable", "call_remote", CHANNEL_STATE)
 func _net_map(payload: Dictionary) -> void:
 	map_received += 1
+	_flush_held()
 
 	if bridge != null:
 		bridge.receive_map(payload)
@@ -419,4 +478,5 @@ func describe() -> Dictionary:
 		"voice": [voice_sent, voice_received],
 		"map": [map_sent, map_received],
 		"dropped": dropped,
+		"coalesced": snapshots_coalesced,
 	}

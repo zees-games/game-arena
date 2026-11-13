@@ -1,6 +1,8 @@
 extends "arena_presentation_b0.gd"
 
 const ArenaScopePrefs := preload("arena_scope_prefs.gd")
+const ArenaNetLink := preload("arena_net_link.gd")
+const ArenaTickBudget := preload("arena_tick_budget.gd")
 
 func _local_commands() -> DotConsoleLocal:
 	var local := DotConsoleLocal.new()
@@ -159,6 +161,18 @@ func _add_remote_vars(local: DotConsoleLocal) -> void:
 		func(v: Variant) -> Variant:
 			ArenaPlayer.anim_gate_enabled = str(v).strip_edges() != "0"
 			return DotResult.success(1 if ArenaPlayer.anim_gate_enabled else 0)
+	)
+	local.add_var(&"cl_snapshot_coalesce", "1 decodes only the newest snapshot a network poll brings and drops older ones as lost (on in a browser), 0 decodes every one.",
+		func() -> Variant: return 1 if ArenaNetLink.coalesce else 0,
+		func(v: Variant) -> Variant:
+			ArenaNetLink.coalesce = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaNetLink.coalesce else 0)
+	)
+	local.add_var(&"cl_shed_slow_frames", "1 drops distant one-shot sounds (past 12 m, beyond 2 a frame) while a client's frames run longer than 4 ticks (on in a browser), 0 plays them all.",
+		func() -> Variant: return 1 if ArenaTickBudget.shed_slow_frames else 0,
+		func(v: Variant) -> Variant:
+			ArenaTickBudget.shed_slow_frames = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaTickBudget.shed_slow_frames else 0)
 	)
 	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default, 8 in a browser).",
 		func() -> Variant: return ArenaPlayer.lod_off_every,

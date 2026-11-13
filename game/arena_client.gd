@@ -107,6 +107,8 @@ func _process(delta: float) -> void:
 	# Frames that run their whole step cap and still drop owed ticks: shed cosmetic work (ArenaTickBudget.shed).
 	if _offline and _tick_budget != null and _frame_at_usec > 0:
 		ArenaTickBudget.shed_now = _tick_budget.note_frame((t - _frame_at_usec) / 1000000.0, 1.0 / maxf(float(Engine.physics_ticks_per_second), 1.0), Engine.max_physics_steps_per_frame)
+	elif ArenaTickBudget.shed_slow_frames and _tick_budget != null and _frame_at_usec > 0:
+		ArenaTickBudget.shed_now = _tick_budget.note_slow_frame((t - _frame_at_usec) / 1000000.0, 1.0 / maxf(float(Engine.physics_ticks_per_second), 1.0))
 	else:
 		ArenaTickBudget.shed_now = 0.0
 	_frame_at_usec = t
