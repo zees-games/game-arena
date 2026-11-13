@@ -68,6 +68,17 @@ func _local_commands() -> DotConsoleLocal:
 		return client.call("describe_position")
 	)
 
+	local.add_command(&"solo_map", "Change the map of this offline match, as the M menu does: solo_map <id>", func(a: PackedStringArray) -> Variant:
+		# The in-process web match has no server console, so dot-server-deploy's rotation check (a page
+		# changing maps back to back, the wasm heap's real test) types this instead of paging the M menu.
+		if client == null or not client.has_method("change_from_menu"):
+			return "no client"
+		if a.size() < 1 or a[0].is_empty():
+			return "usage: solo_map <map id>"
+		client.call("change_from_menu", StringName("map:" + a[0]))
+		return "changing to %s" % a[0]
+	)
+
 	return local
 
 
