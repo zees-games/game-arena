@@ -482,6 +482,8 @@ func _read_fire(move: DotFpsCommand) -> void:
 		_sampler.look_scale = player.aim_zoom() if player != null else 1.0
 	# On the wire as well, for the server's No Scope medal; nothing simulated reads it.
 	_fire.set_button(ArenaPlayer.BUTTON_AIM, right and aims)
+	# And on the move command, where the motor slows an aimed player (sv_ads_speed_mult) the same in prediction and on the server.
+	move.set_button(ArenaPlayer.MOVE_BUTTON_AIM, right and aims and not is_roaming())
 	_fire.set_button(DotWeaponCommand.BUTTON_RELOAD, mouse_drives_view() and (_held(ArenaBindings.RELOAD) or _touch_held(&"reload")))
 	_fire.set_button(DotWeaponCommand.BUTTON_FIRE_MODE, mouse_drives_view() and _held(ArenaBindings.FIRE_MODE))
 	_fire.set_button(DotWeaponCommand.BUTTON_DROP, mouse_drives_view() and _held(ArenaBindings.WEAPON_DROP))

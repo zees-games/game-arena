@@ -38,6 +38,7 @@ const _OTHER_MOVEMENT_CVARS := {
 	"arena_walk_scale": ["walk_speed_scale", "Walk speed as a fraction of run"],
 	"arena_sprint_scale": ["sprint_speed_scale", "Sprint speed as a fraction of run"],
 	"arena_crouch_scale": ["crouch_speed_scale", "Crouch speed as a fraction of run"],
+	"sv_ads_speed_mult": ["aim_speed_scale", "Ground speed while aiming down the sights, as a fraction (1 for no slowdown)"],
 	"arena_launch": ["launch_enabled", "E throws the player into the air (1) or does nothing (0, the default)"],
 	"arena_launch_velocity": ["launch_velocity", "Upward speed of a launch, m/s"],
 	"arena_launch_forward": ["launch_forward", "Forward speed a launch adds, m/s"],

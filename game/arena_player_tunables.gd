@@ -18,6 +18,10 @@ const LEGACY_HEIGHT := 1.8
 ## Sprint speed as a fraction of the run (`arena_sprint_scale`).
 const SPRINT_SCALE := 1.25
 
+## The movement command's aim bit and the share of ground speed an aimed player keeps (sv_ads_speed_mult).
+const AIM_BUTTON := DotFpsCommand.BUTTON_USER_1
+const AIM_SPEED_SCALE := 0.45
+
 
 static func configure_body(height_units: float, crouch_units: float, radius_units: float, unit_metres: float) -> void:
 	avatar_height_units = maxf(height_units, 8.0)
@@ -87,6 +91,9 @@ static func make() -> DotFpsTunables:
 	tunables.launch_button = DotFpsCommand.BUTTON_USER_0
 	tunables.launch_velocity = 15.5
 	tunables.launch_cooldown = 8.0
+	# Down the sights the motor slows the player, the same in prediction and on the server.
+	tunables.aim_button = AIM_BUTTON
+	tunables.aim_speed_scale = AIM_SPEED_SCALE
 	# Shift dashes when this is on (it shares the sprint bit). A press throws you along the way you steer.
 	# Off by default: arena_dash 1 turns it on (a mode or an operator's choice).
 	tunables.dash_enabled = false
@@ -113,7 +120,7 @@ static func make() -> DotFpsTunables:
 ## The movement keys a server owner may change on a running server (`arena_slide*`,
 ## `arena_launch*`), and that RULES carries to every client so prediction agrees.
 const MOVEMENT_RULES: PackedStringArray = [
-	"speed_scale", "max_speed", "walk_speed_scale", "sprint_speed_scale", "crouch_speed_scale",
+	"speed_scale", "max_speed", "walk_speed_scale", "sprint_speed_scale", "crouch_speed_scale", "aim_speed_scale",
 	"slide_enabled", "slide_min_speed", "slide_boost", "slide_max_speed",
 	"slide_friction", "slide_duration", "slide_cooldown",
 	"launch_enabled", "launch_velocity", "launch_forward", "launch_cooldown",

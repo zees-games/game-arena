@@ -143,6 +143,10 @@ var aim_held: bool = false
 ## the simulation does and exists for one medal, No Scope ([member aiming]).
 const BUTTON_AIM := DotWeaponCommand.BUTTON_USER_0
 
+## The aim on the movement command (the launch has its first user bit): the motor's
+## [code]aim_button[/code], so an aimed player walks at [code]sv_ads_speed_mult[/code] on both ends.
+const MOVE_BUTTON_AIM := ArenaPlayerTunables.AIM_BUTTON
+
 ## Whether the command this player last simulated held the aim. Both ends; the server's
 ## is what [code]ArenaAwards[/code] reads. A claim, like every button: a client can say
 ## it was not aiming when it was, which earns a medal and nothing else (docs/client.md).
