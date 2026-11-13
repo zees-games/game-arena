@@ -229,6 +229,8 @@ func _build_arsenal() -> void:
 	# copy would be twenty-seven resources per player for nothing. Behaviour instances
 	# are per-player, which is the half that actually holds state.
 	arsenal.catalogue = _catalogue()
+	# Fitted only by the server (Ask.ATTACH); a client's copy follows `net_fitted`.
+	arsenal.attachments = ArenaAttach.catalogue()
 	# The posture from the simulated state, as the full weapon context has it; set before the rig, which
 	# otherwise puts its own (read from the controller's motion, without the flinch) there.
 	arsenal.idle_posture = _idle_posture

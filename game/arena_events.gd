@@ -150,6 +150,9 @@ enum Ask {
 	FOV,
 	## A console line from the owner of a solo server process (arena_net_host.gd); every other server drops it.
 	HOST,
+	## Put an attachment on my gun, or take one off (`ArenaAttach.write_request`: slot, mount, id). The server fits its own
+	## arsenal only when the attachments catalogue allows it; everybody sees the result as `net_fitted`.
+	ATTACH,
 }
 
 ## What a [constant Ask.PROP_TOOL] asks for.

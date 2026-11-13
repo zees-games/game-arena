@@ -9,6 +9,7 @@ const ArenaPlayerTunables := preload("arena_player_tunables.gd")
 const ArenaAvatars := preload("arena_avatars.gd")
 const ArenaContent := preload("arena_content.gd")
 const ArenaKillPov := preload("arena_kill_pov.gd")
+const ArenaAttach := preload("arena_attach.gd")
 const TagRules := preload("arena_name_tag_rules.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaLadderMode := preload("../maps/arena_ladder_mode.gd")
@@ -86,6 +87,11 @@ var mirror_fire_kind: int = 0
 var mirror_switching: bool = false
 var mirror_charge: float = 0.0
 var mirror_reloading: bool = false
+## The held gun's fitting as `net_fitted` carries it (`DotWeaponAttachments.encode`), 0 for none.
+var mirror_fitted: int = 0
+## The fitting code [member held] last drew, and whether it had a suppressor on (-1: not drawn yet).
+var _held_fitted: int = -1
+var _held_suppressed: bool = false
 var _mode_click_audio: AudioStreamPlayer3D = null
 var health: DotHealth = null
 var hitboxes: DotHitboxSet = null

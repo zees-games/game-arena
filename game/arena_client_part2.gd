@@ -413,6 +413,14 @@ func _on_player_added(added: ArenaPlayer) -> void:
 func _share_shots_of(added: ArenaPlayer) -> void:
 	if presentation != null and added.held != null:
 		presentation.share_shots(added.held)
+		# After the presentation's own handler, so the report it sets is the one wrapped.
+		if not added.held.child_entered_tree.is_connected(_wrap_suppressed_child):
+			added.held.child_entered_tree.connect(_wrap_suppressed_child)
+
+
+func _wrap_suppressed_child(child: Node) -> void:
+	if child is AwShotFx:
+		_wrap_suppressed(child as AwShotFx)
 
 ## The players whose stock bodies are not built yet, oldest first (see [method _queue_body]).
 var _bodies_due: Array[ArenaPlayer] = []

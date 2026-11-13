@@ -1,6 +1,7 @@
 extends "arena_net_bridge_b1.gd"
 
 const KillPov := preload("arena_kill_pov.gd")
+const ArenaAttach := preload("arena_attach.gd")
 const ArenaLinkRtt := preload("arena_link_rtt.gd")
 
 
@@ -698,6 +699,10 @@ func _on_request(message: DotNetMessage) -> void:
 			_on_prop_act(peer_id, ArenaEvents.read_prop_act(request.reader()))
 		ArenaEvents.Ask.HOST:
 			_on_host_ask(peer_id, request.reader())
+		ArenaEvents.Ask.ATTACH:
+			var fitter: Object = game.player_for(session_for_peer(peer_id)) if game != null else null
+			if fitter != null and fitter.get(&"arsenal") != null:
+				var _fitted := ArenaAttach.serve(fitter.get(&"arsenal"), request.reader())
 		_:
 			pass
 

@@ -3,6 +3,12 @@ extends "arena_client_state.gd"
 const KillPovView := preload("arena_kill_pov_view.gd")
 ## Helpers of [ArenaClient] that touch only its state, split out so the client file stays under the size gate.
 
+const ArenaAttach := preload("arena_attach.gd")
+const ArenaAttachPanel := preload("arena_attach_panel.gd")
+
+## The attachments menu, built on the first press of its key (see [method open_attachments]).
+var attach_panel: ArenaAttachPanel = null
+
 
 ## The figure an avatar action plays on: that peer's player, or the local one offline.
 func _avatar_figure(peer_id: int) -> Object:
@@ -362,7 +368,7 @@ func _say_ready() -> void:
 
 ## Something other than the cover has the keyboard or the screen.
 func _input_busy() -> bool:
-	return _workbench_open or (presentation != null and presentation.swallows_input()) \
+	return _workbench_open or _attach_open() or (presentation != null and presentation.swallows_input()) \
 		or (game_menu != null and game_menu.any_open())
 
 
@@ -377,7 +383,11 @@ func _suspend_input(blocked: bool) -> void:
 
 ## Whether the menu, its help, the console, the workbench or a ballot in pointer mode is up, in which case the mouse is a pointer.
 func _menu_open() -> bool:
-	return _workbench_open or game_menu != null and game_menu.any_open() or _pointer_modal_up()
+	return _workbench_open or _attach_open() or game_menu != null and game_menu.any_open() or _pointer_modal_up()
+
+
+func _attach_open() -> bool:
+	return attach_panel != null and attach_panel.is_open()
 
 
 ## A `dot_pointer_modal` node (dot-ui's ballot) that has freed the mouse; a click must not recapture it.

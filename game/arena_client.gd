@@ -298,6 +298,9 @@ func _press_action(event: InputEvent) -> void:
 		)
 		_holding = not _holding
 		return
+	if InputMap.has_action(ArenaBindings.ATTACH) and event.is_action_pressed(ArenaBindings.ATTACH):
+		var _opened := open_attachments()
+		return
 	if InputMap.has_action(ArenaBindings.FLASHLIGHT) and event.is_action_pressed(ArenaBindings.FLASHLIGHT):
 		switch_flashlight()
 		return

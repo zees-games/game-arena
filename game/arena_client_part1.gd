@@ -453,6 +453,8 @@ func _arm_mount(body: ArenaPlayer) -> void:
 func _arm_rig(body: ArenaPlayer) -> void:
 	var started := Time.get_ticks_usec()
 	body.arm_first_person(view_model, _offline)
+	if body.weapons != null:
+		_wrap_suppressed(body.weapons.shot_fx())
 	ArenaLoadTimeline.mark("arming: first-person rig, %d ms" % ((Time.get_ticks_usec() - started) / 1000))
 
 func _arm_end(body: ArenaPlayer) -> void:
@@ -719,3 +721,34 @@ func _on_profiler_registered(svc_name: StringName, inst: Object) -> void:
 		return
 	DotRegistry.signals().service_registered.disconnect(_on_profiler_registered)
 	ArenaProfilerContext.install(inst, game, _bot_host(), presentation)
+
+
+## Opens the attachments menu on the local player's gun in hand (the Attachments key); false when it has
+## nothing to fit. A pick is a request to the server, which alone fits (`ArenaAttach.serve`).
+func open_attachments() -> bool:
+	if player == null or not player.is_alive() or player.arsenal == null:
+		return false
+	if attach_panel == null:
+		attach_panel = ArenaAttachPanel.new()
+		attach_panel.name = "AttachPanel"
+		attach_panel.arsenal_fn = func() -> DotWeaponArsenal:
+			return player.arsenal if player != null and player.is_alive() else null
+		attach_panel.send_fn = func(body: PackedByteArray) -> void:
+			if bridge != null and not _offline:
+				bridge.send_request(ArenaEvents.Ask.ATTACH, body)
+		add_child(attach_panel)
+		attach_panel.open_changed.connect(func(open: bool) -> void:
+			if platform != null and open:
+				platform.hold_pointer(&"attach")
+			elif platform != null:
+				platform.release_pointer(&"attach")
+			_apply_mouse())
+	# Offline the panel fits the arsenal itself: there is no server to ask.
+	if _offline:
+		attach_panel.send_fn = Callable()
+	return attach_panel.open()
+
+
+## Wraps [param fx]'s report so a gun with a suppressor on plays the suppressed set (`ArenaAttach.wrap_report`).
+func _wrap_suppressed(fx: AwShotFx) -> void:
+	ArenaAttach.wrap_report(fx, func(at: Vector3) -> bool: return ArenaAttach.play_suppressed(presentation, at))

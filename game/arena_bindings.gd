@@ -55,6 +55,8 @@ const WEAPON_NEXT := &"arena_weapon_next"
 const WEAPON_LAST := &"arena_weapon_last"
 const PUNT := &"arena_punt"
 const FIRE_MODE := &"arena_fire_mode"
+## The attachments menu on the gun in hand (dot-weapon's action, so its menu closes on the same key).
+const ATTACH := DotWeaponAttachMenu.ACTION
 const WEAPON_DROP := &"arena_weapon_drop"
 const USE := &"arena_use"
 ## First or third person, where the server allows it (`mp_forceview`).
@@ -95,6 +97,7 @@ static func make() -> DotMenuBindings:
 	keys.add(USE, &"bind_use", "Pick up the dropped weapon you are looking at", "E", "Weapons")
 	keys.add(PUNT, &"bind_punt", "Punt a prop", "G", "Weapons")
 	keys.add(FIRE_MODE, &"bind_fire_mode", "Cycle fire mode (semi / burst / auto)", "N", "Weapons")
+	keys.add(ATTACH, &"bind_attach", "Attachments on the weapon in hand", "I", "Weapons")
 
 	keys.add(CHAT, &"chat_open_key", "Chat", "Y", "Chat", DotSettingsDef.Scope.ACCOUNT)
 	keys.add(CHAT_TEAM, &"chat_team_key", "Team chat", "U", "Chat", DotSettingsDef.Scope.ACCOUNT)

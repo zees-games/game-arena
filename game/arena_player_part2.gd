@@ -163,11 +163,14 @@ func _present_held(remote: bool = false) -> void:
 	if id != held.equipped() and (not remote or id == &"" or held_equip_allowed()):
 		var t_equip := Time.get_ticks_usec()
 		var art: Variant = AwWeaponArtTable.table().get(id)
+		_held_fitted = -1
 		if art is AwWeaponVisual:
 			var _drawn := held.equip(art as AwWeaponVisual)
 		else:
 			held.clear()
 		ArenaFrameProbe.add(&"r_held_equip", t_equip)
+
+	_present_fitting(id)
 
 	var t_hooks := Time.get_ticks_usec()
 	held.on_switching(switching)
@@ -193,6 +196,21 @@ func _present_held(remote: bool = false) -> void:
 		var t_fired := Time.get_ticks_usec()
 		held.on_fired(WATCHED_RECOIL.get(kind, Vector2(0.6, 0.1)), kind)
 		ArenaFrameProbe.add(&"r_held_fired", t_fired)
+
+## Draws the held gun's attachments, and marks the hand (and the local rig) suppressed for ArenaAttach.wrap_report.
+func _present_fitting(id: StringName) -> void:
+	var code := mirror_fitted if mirrored else ArenaAttach.held_code(arsenal)
+	if held.equipped() != id:
+		return
+	if code == _held_fitted:
+		return
+	held.attachments = ArenaAttach.catalogue()
+	held.on_fitted(code)
+	_held_fitted = code
+	_held_suppressed = ArenaAttach.suppressed(id, code)
+	held.set_meta(ArenaAttach.SUPPRESSED_META, _held_suppressed)
+	if weapons != null:
+		weapons.set_meta(ArenaAttach.SUPPRESSED_META, _held_suppressed)
 
 ## Hangs a [AwWorldModel] on [method attachment]'s hand. Client side, with the body.
 func _hold_weapon() -> void:

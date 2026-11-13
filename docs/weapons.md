@@ -48,6 +48,17 @@ Bots do not throw. `examples/headless_knife_throw.gd` is the suite, and `tools/k
 
 The loadout menu's pictures are the models rendered at 512x256 with MSAA (fc-weapons' `AwWeaponPreview`, cached per weapon), not the sprite sheet upscaled; a weapon without a model keeps the sprite.
 
+## Attachments
+
+fc-weapons' ten attachments (API 19: optics, muzzle devices, grips, the laser, the extended magazine) fit the guns whose `def.mounts` name their mount. `game/arena_attach.gd` holds the one catalogue (`AwSpawnProvider.attachment_defs()`), set as every arsenal's `attachments` in `ArenaPlayer._build_arsenal`.
+
+- **Only the server fits.** The client's menu (the Attachments key, I, `game/arena_attach_panel.gd` over dot-weapon's `DotWeaponAttachMenu`) changes nothing: a pick is `Ask.ATTACH` (slot, mount, attachment), and the server's `ArenaAttach.serve` reads it into a `DotWeaponAttachRequest` whose `apply` runs the catalogue's `validate_fitting` before `arsenal.fit`. An unknown attachment, a mount the gun lacks or a cut-off request is refused and nothing changes. Offline, with no server, the panel serves the pick itself through the same function.
+- **The fitting replicates as `net_fitted`** (dot-weapon's `DotWeaponNetSync.fitting_specs`, the held gun's code). The owner's arsenal takes it in `push` like everybody's, so the menu's rows show what the server decided; a mirror reads it into `mirror_fitted`.
+- **What a fitting changes** is the fitted definition's stats, which the arsenal already fires with, the drawn attachments (the rig's view model and its world model, `AwWorldModel.on_fitted` on everybody else's hand) and an optic's sight picture. Hit registration is untouched beyond those stats.
+- **A suppressor changes the report.** `ArenaPlayer._present_fitting` marks the hand (and the local rig) `arena_suppressed`; `ArenaAttach.wrap_report` wraps each `AwShotFx` report so a marked holder plays the suppressed set through the presentation's shot player, and anything else plays the report it had.
+
+`examples/headless_net_attach.gd` is the suite.
+
 ## Recoil
 
 Every firearm kicks, and the numbers live in the Dot profile, not in code.

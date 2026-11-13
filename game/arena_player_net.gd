@@ -68,6 +68,8 @@ var net_alive: bool = false
 var net_slot: int = 0
 ## The held weapon's selector mode, for everyone so a remote click can be heard.
 var net_fire_mode: int = 0
+## The held gun's attachments (`DotWeaponNetSync.fitting_specs`): everybody's, so a watcher sees the suppressor.
+var net_fitted: int = 0
 var net_magazine: int = 0
 var net_reserve: int = 0
 
@@ -168,7 +170,7 @@ func _register_net_vars() -> void:
 	# The pack's `all_specs()` is dot-weapon's three plus its own four, and is the one call
 	# its README asks a game to make: concatenating the halves by hand is how a game forgets
 	# the second one and has weapons that are silent for everybody but their owner.
-	for spec in DotCombatNetSync.specs() + AwWeaponNet.all_specs() + AwWeaponNet.charge_specs() + DotWeaponNetSync.fire_mode_specs(false):
+	for spec in DotCombatNetSync.specs() + AwWeaponNet.all_specs() + AwWeaponNet.charge_specs() + DotWeaponNetSync.fire_mode_specs(false) + DotWeaponNetSync.fitting_specs():
 		var declaration := replicate(spec["property"], DotNetVar.Type[spec["type"]])
 
 		if int(spec["bits"]) > 0:
@@ -515,6 +517,7 @@ func _push_weapons() -> void:
 	player.mirror_switching = net_switching
 	player.mirror_charge = float(net_charge) / AwWeaponNet.CHARGE_MAX
 	player.mirror_reloading = net_reloading
+	player.mirror_fitted = net_fitted
 	if clicks:
 		player.mirror_mode_click()
 
