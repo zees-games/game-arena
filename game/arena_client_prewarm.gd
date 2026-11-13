@@ -76,6 +76,8 @@ func _prewarm_phase3(tick_start: int) -> void:
 		var person := DotHumanoidFigure.new()
 		host.add_child(person)
 		person.build(ArenaAvatars.look_of(ArenaAvatars.stock_avatar(key), key), 1.8)
+		# The skin arrays a death reads, read now so the first death per model is not the one that pays (8.1 to 2.6 ms).
+		DotSkinSurfaces.warm(person)
 		host.queue_free()
 		_step_mark("figure %d" % int(_warm.get("figures", 0)), figure_began)
 		_warm.figures = int(_warm.get("figures", 0)) + 1
