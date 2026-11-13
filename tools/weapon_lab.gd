@@ -186,15 +186,17 @@ func _first_person(id: StringName, def: DotWeaponDef, wdir: String, anims: Packe
 	var given: DotResult = me.arsenal.give(id)
 	if not given.ok:
 		print("WEAPON_LAB %s: give failed: %s" % [id, given.message])
+	else:
+		# The game's catalogue may put a weapon in another slot than the pack's table does; the arsenal switches by its own.
+		def = (given.value as DotWeaponSlot).def
 	# The weapon swapped to for draw/holster: the first catalogue weapon (by id) in a different slot, so it is the same every run.
 	var other_slot := -1
-	var table := AwWeaponCatalogue.table()
-	var keys: Array = table.keys()
+	var keys: Array = me.arsenal.catalogue.ids()
 	keys.sort()
 	for k: StringName in keys:
-		if (table[k] as DotWeaponDef).slot != def.slot:
-			me.arsenal.give(k)
-			other_slot = (table[k] as DotWeaponDef).slot
+		var other: DotWeaponDef = me.arsenal.catalogue.get_def(k)
+		if other.slot != def.slot and me.arsenal.give(k).ok:
+			other_slot = other.slot
 			break
 	for a in anims:
 		var res: Dictionary = await _fp_animation(a, me, id, def, wdir, other_slot)
@@ -215,7 +217,7 @@ func _fp_animation(a: String, me, id: StringName, def: DotWeaponDef, wdir: Strin
 			await _wait(0.8)
 			await _clip(wdir, key, 36, func(i: int) -> void:
 				if i == 2:
-					me.arsenal.equip(def.slot), res)
+					_switch_to(me, def.slot), res)
 		"holster":
 			await _ensure_in_hand(me, id, def)
 			await _clip(wdir, key, 30, func(i: int) -> void:
@@ -296,7 +298,14 @@ func _refill(me: Node, def: DotWeaponDef) -> void:
 
 
 func _equip_slot_now(me: Node, slot: int) -> void:
-	me.arsenal.equip(slot)
+	_switch_to(me, slot)
+
+
+## A switch as a slot key makes it (holster, then deploy); `equip` is the spawn hand-out and swaps with no motion at all.
+func _switch_to(me: Node, slot: int) -> void:
+	if not me.arsenal.select(slot, me.controller.state.tick):
+		var held: DotWeaponSlot = me.arsenal.current()
+		print("WEAPON_LAB switch to slot %d refused (holding %s, slots %s)" % [slot, held.def.id if held != null else &"", str(me.arsenal.slots())])
 
 
 func _equip_slot(me: Node, slot: int) -> void:
