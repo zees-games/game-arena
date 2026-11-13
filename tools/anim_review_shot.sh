@@ -12,7 +12,7 @@ mkdir -p "$out"
 rc=0
 xvfb-run -a -s "-screen 0 960x540x24" timeout 3300 "${GODOT:-godot}" --path . --resolution 960x540 --fixed-fps 30 \
   --script tools/anim_review.gd -- --out "$out" --no-turntable "$@" 2>&1 \
-  | grep -E '^ANIMREVIEW |WEAPON_LAB|SCRIPT ERROR|ERROR: .*(anim_review|weapon_lab)' || rc=$?
+  | grep -E '^ANIM(REVIEW|FRAMES) |WEAPON_LAB|SCRIPT ERROR|ERROR: .*(anim_review|weapon_lab)' || rc=$?
 # Every second frame (15 per second), eight to a row, each cell labelled with its frame index and time.
 sheet() {
   local pattern=$1 count=$2 dest=$3

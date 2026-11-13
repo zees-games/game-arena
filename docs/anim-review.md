@@ -4,7 +4,7 @@ How to find and fix glitches in fc-weapons' first-person and third-person animat
 
 ## The loop
 
-1. Capture: `tools/anim_review.sh . <weapon[,weapon]|all> [--anim reload_empty,draw]`, run as gamedev from the checkout or a `~/wt` worktree (`sudo -u gamedev env WT_ROOT=$HOME/wt tools/anim_review.sh . rifle`; the script puts gamedev's `bin` dirs on PATH itself). A run replaces only the named weapons' sheets; the others' stay. The default clips are idle, draw, holster, fire, ads, reload_empty, reload_tactical, sprint and inspect.
+1. Capture: `tools/anim_review.sh . <weapon[,weapon]|all> [--anim reload_empty,draw] [--frames]`, run as gamedev from the checkout or a `~/wt` worktree (`sudo -u gamedev env WT_ROOT=$HOME/wt tools/anim_review.sh . rifle`; the script puts gamedev's `bin` dirs on PATH itself). A run replaces only the named weapons' sheets; the others' stay. The default clips are idle, draw, holster, fire, ads, reload_empty, reload_tactical, sprint and inspect.
 2. Read `screenshots/anim_review/report.md`: one row per weapon and clip with PASS, FAIL, N/A (the weapon has no such clip: no magazine, no sights) or MISSING (no inspect animation), the failing metrics with their frame numbers, and the paths of both sheets.
 3. Open **every** sheet with the Read tool, FAIL rows first, then every reload and draw sheet even when it passes. Judge each by the [checklist](#reading-a-sheet).
 4. Fix what is wrong where it lives: the weapon pose and rig in arena-weapons (`view/aw_weapon_pose.gd`, `view/aw_view_model.gd`, `runtime/aw_weapon_rig*.gd`), the arms and grip in dot-player-char (`DotPlayerViewArms`, `DotViewGrip`), or one weapon's numbers in its def. Work in a `~/wt` worktree of that addon with a board claim, and link the worktree's addon into your game worktree for the run.
@@ -32,7 +32,7 @@ A draw or holster is a real switch (`DotWeaponArsenal.select`, the holster then 
 
 ## The metrics
 
-Every frame is sampled just before it is drawn. Each clip's verdict, with every frame's numbers, is in `<weapon>/fp_<clip>_metrics.json` when the capture ran locally; the GPU route brings back only the sheets and the `ANIMREVIEW` line in the log.
+Every frame is sampled just before it is drawn. Each clip's verdict, with every frame's numbers, is in `<weapon>/fp_<clip>_metrics.json` when the capture ran locally; the GPU route brings back only the sheets and the log, so every clip also prints an `ANIMFRAMES` line with the per-frame numbers. `anim_review.sh` turns those into `<weapon>/<clip>_frames.tsv` and prints the table for every failing clip (every clip with `--frames`): switch (`sw`), reload (`rl`) and deploy state, the weapon's swap id, and each frame's step from the previous one for the weapon, both hands and both forearms, plus hand error, intersection, near-plane and cut. A pop reported "at #n" is the step from frame n-1 to frame n.
 
 | Metric | Fails when | What it usually is |
 | --- | --- | --- |

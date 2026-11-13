@@ -2,7 +2,8 @@ extends "weapon_lab.gd"
 
 ## The animation review: the weapon lab's first-person clips, plus a third-person view of your own body and numeric
 ## glitch metrics per frame, judged per clip. See docs/anim-review.md; run through tools/anim_review.sh.
-## Per clip it prints one `ANIMREVIEW {json}` line (the metrics travel on stdout, since a GPU box only sends PNGs back).
+## Per clip it prints an `ANIMREVIEW {json}` verdict line and an `ANIMFRAMES {json}` line with every frame's numbers (both
+## travel on stdout, since a GPU box only sends PNGs back).
 
 ## Your own body draws only in the third-person view; the arms only in the first-person one.
 const BODY_LAYER := 1 << 18
@@ -108,9 +109,9 @@ func _sample(time: float) -> Dictionary:
 	out["cut"] = snappedf(view.weapon_cut_depth(cam, cam.near), 0.0001)
 	if weapon != null:
 		var local := to_cam * weapon.global_transform
-		out["weapon"] = [local.origin.x, local.origin.y, local.origin.z]
+		out["weapon"] = _v(local.origin)
 		var q := local.basis.get_rotation_quaternion()
-		out["weapon_q"] = [q.x, q.y, q.z, q.w]
+		out["weapon_q"] = [snappedf(q.x, 0.00001), snappedf(q.y, 0.00001), snappedf(q.z, 0.00001), snappedf(q.w, 0.00001)]
 		out["weapon_id"] = weapon.get_instance_id()
 	var mounted := client.get("view_arms") as Node3D
 	if mounted == null or not (mounted.get("arms") is DotPlayerViewArms):
@@ -131,8 +132,7 @@ func _sample(time: float) -> Dictionary:
 	if at.size() < ARM_BONES.size():
 		return out
 	for bone: String in at:
-		var p: Vector3 = to_cam * (at[bone] as Vector3)
-		out[bone] = [p.x, p.y, p.z]
+		out[bone] = _v(to_cam * (at[bone] as Vector3))
 	var grip_at := grip.grip_world()
 	out["hand_swap"] = snappedf((at["Middle1.R"] as Vector3).distance_to(grip_at) - (at["Middle1.L"] as Vector3).distance_to(grip_at), 0.0001) if grip.is_two_hand() else 0.0
 	out["seen.R"] = _arm_seen(cam, at, ".R")
@@ -141,6 +141,10 @@ func _sample(time: float) -> Dictionary:
 	out["near"] = snappedf(_near_depth(cam, at, arms.arm_radius), 0.0001)
 	out["intersect"] = snappedf(_inside_weapon(weapon, at), 0.0001) if weapon != null else 0.0
 	return out
+
+
+func _v(p: Vector3) -> Array:
+	return [snappedf(p.x, 0.0001), snappedf(p.y, 0.0001), snappedf(p.z, 0.0001)]
 
 
 ## The upper arm held straight out sideways and level: a T-pose (no IK applied).
@@ -228,6 +232,7 @@ func _finish_clip(wdir: String, key: String, count: int) -> void:
 	if file != null:
 		file.store_string(JSON.stringify({"verdict": verdict, "frames": _frames}))
 	print("ANIMREVIEW " + JSON.stringify(verdict))
+	print("ANIMFRAMES " + JSON.stringify({"weapon": verdict["weapon"], "anim": verdict["anim"], "frames": _frames}))
 	super._finish_clip(wdir, key, count)
 
 
