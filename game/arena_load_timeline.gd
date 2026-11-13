@@ -63,7 +63,8 @@ func _ready() -> void:
 	set_physics_process(false)
 	_last_ms = Time.get_ticks_msec()
 	mark("timeline_start")
-	var probe: GDScript = load("res://game/arena_frame_probe.gd")
+	# Beside this script, not "res://game/": a pack mounted under res://dot_cloud/<id>/<version>/ has no such path.
+	var probe: GDScript = load((get_script() as Script).resource_path.get_base_dir().path_join("arena_frame_probe.gd"))
 	var trace := str(probe.call(&"launch_value", "cl_load_trace"))
 	_trace_items = trace == "items"
 	_trace_load = trace == "1" or _trace_items
