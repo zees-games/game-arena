@@ -368,7 +368,9 @@ func tick(commands: Dictionary = {}) -> void:
 			var pair: Array = commands.get(shot.attacker, [])
 			var lag: float = float(pair[2]) if pair.size() > 2 else -1.0
 			_unlag_shooter = shot.attacker
+			_unlag_shot = true
 			_resolve_shot(shot, float(_tick) - lag if lag >= 0.0 else -1.0)
+			_unlag_shot = false
 		t_lap = ArenaFrameProbe.lap(&"s_resolve", t_lap)
 		if bullet_bridge != null:
 			bullet_bridge.tick(float(_tick))

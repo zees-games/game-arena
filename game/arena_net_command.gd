@@ -51,8 +51,14 @@ const MAX_VIEW_LAG_Q := 1023
 const VIEW_LAG_BITS := 10
 
 ## The snapshot ticks the client drew the others between at the view tick, as this command's tick
-## less [member view_back] and that plus [member view_span]; -1 for none. Sent with the lag while
-## players are solid, so the server rewinds between the same two samples, a lost one included.
+## less [member view_back] and that plus [member view_span]; -1 for none. Sent with the lag (while
+## players are solid, and on a firing command), so the server rewinds between the same two samples,
+## a lost one included.
+##
+## [b]Why a shot needs it[/b] (2026-11-13). The client draws the others as a blend of two snapshots
+## two ticks apart; the server's ring has every tick. At a strafe reversal the blend cuts the
+## corner the ring keeps, by up to 12 cm in headless_hitreg_chaos, and torso-edge shots aimed at
+## the drawn body missed (pistol at 60 ms, minigun at 30 ms, with a two-snapshot buffer).
 var view_back: int = -1
 var view_span: int = 0
 const VIEW_BACK_BITS := 7
@@ -68,7 +74,9 @@ func _write(writer: DotNetWriter) -> void:
 	writer.write_bool(lagged)
 	if lagged:
 		writer.write_uint(clampi(view_lag_q, 0, MAX_VIEW_LAG_Q), VIEW_LAG_BITS)
-		var bracketed := lag_always and view_back >= 0
+		# A firing command carries it too: the shot is rewound between the same two samples
+		# the shooter drew between (`ArenaNetBridge.shot_feet`), not to the ring's own ticks.
+		var bracketed := view_back >= 0
 		writer.write_bool(bracketed)
 		if bracketed:
 			writer.write_uint(clampi(view_back, 0, (1 << VIEW_BACK_BITS) - 1), VIEW_BACK_BITS)

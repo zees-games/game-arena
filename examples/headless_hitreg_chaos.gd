@@ -25,8 +25,10 @@ const LINKS: Array = [
 	["jitter+loss, buffer adapted", JITTER_MS, LOSS, -1.0],
 	["jitter+loss, buffer 2 (not grown)", JITTER_MS, LOSS, 2.0],
 ]
-const CHAOS_CHECKS := 379
+const CHAOS_CHECKS := 532
 const CHAOS_SECTIONS := 12
+# A drawn body still this far off its interpolated spot is easing out of an extrapolation.
+const EASED_M := 0.005
 
 var _rng := RandomNumberGenerator.new()
 var _move_rng := RandomNumberGenerator.new()
@@ -212,17 +214,35 @@ func _judge(weapon_id: StringName, ping: int, c: Dictionary) -> void:
 	var causes := {"unresolved": int(c["sent"]) - int(c["matched"])}
 	var period := float((_clients[SHOOTER_PEER]["net"] as DotNetManager).config.ticks_per_snapshot())
 	var errs: Array = _rewinds.get_or_add(_link, {}).get_or_add(ping, [])
+	# The worst rewind of a frame the client drew between two snapshots it held, within the span a
+	# shot is blended across: the server must stand the body where that frame drew it. Not a frame
+	# still easing out of an extrapolation (DotNetInterpolator._ease_resume): that offset is the
+	# client's alone, up to resume_ease_max (6 m), and a server that took it from the command
+	# would let a client move hitboxes.
+	var worst_blend := 0.0
+	var blend_at := -1
+	var blend_how := ""
 	for r in _resolved:
 		var seen: Dictionary = _drawn_for.get(int(r["tick"]), {})
 		if seen.is_empty():
 			continue
 		errs.append(float(r["rewind_error"]))
+		var held: Vector2i = seen["bracket"]
+		if float(seen["time"]) <= float(seen["newest"]) and held.x >= 0 and held.y - held.x <= ArenaNetBridge.SHOT_BRACKET_MAX_SPAN \
+				and float(seen.get("eased", 0.0)) <= EASED_M and float(r["rewind_error"]) > worst_blend:
+			worst_blend = float(r["rewind_error"])
+			blend_at = int(r["tick"])
+			blend_how = "; drawn at %.2f in %s, sent %s, rewound to %.2f, %s" % [float(seen.get("drawn_tick", -1.0)), seen["bracket"],
+				seen.get("sent_bracket", Vector2i(-1, -1)), float(r.get("view", -1.0)), "blended" if r.get("blended", false) else "the ring"]
+			blend_how += ", eased %.3f m" % float(seen.get("eased", 0.0))
 		if r["hit"]:
 			continue
 		var bracket: Vector2i = seen["bracket"]
 		var cause := "rewind %.3f m" % float(r["rewind_error"])
 		if float(seen["time"]) > float(seen["newest"]):
 			cause = "extrapolated"
+		elif float(seen.get("eased", 0.0)) > EASED_M:
+			cause = "easing out of an extrapolation"
 		elif float(bracket.y - bracket.x) > period:
 			cause = "blend across a lost snapshot"
 		elif float(r["rewind_error"]) <= REWIND_TOLERANCE_M:
@@ -236,6 +256,10 @@ func _judge(weapon_id: StringName, ping: int, c: Dictionary) -> void:
 	# A miss from a gap in the rewind ring is the harness's own (a match that ended mid-round
 	# stood the target on a spawn once), never the network's: the ring is two seconds deep.
 	_check(float(c["worst_err"]) < INF, "%s: every shot finds the target in the rewind history" % tag, "worst %.3f m" % float(c["worst_err"]))
+	# The ring's own tick is not the drawn body: at a strafe reversal the blend of two snapshots cut
+	# the corner by up to 12 cm, and edge shots missed (ArenaNetBridge.shot_feet).
+	_check(worst_blend <= REWIND_TOLERANCE_M, "%s: the server rewinds each shot to the body the shooter drew" % tag,
+		"worst %.3f m at tick %d%s" % [worst_blend, blend_at, blend_how])
 	if _link == "clean":
 		_check(int(c["hit"]) == int(c["matched"]), "%s: every shot at the drawn torso hits" % tag, "%d of %d; %s" % [c["hit"], c["matched"], c["first_miss"]])
 	if c["first_miss"] != "":
@@ -304,8 +328,8 @@ func _summary(weapons: Array[StringName]) -> void:
 			var worst: float = errs.back() if not errs.is_empty() else 0.0
 			print("      %d ms: misses by cause %s; rewind error p50 %.3f worst %.3f m" % [rtt, str(totals[rtt][2]), p50, worst])
 			if link[0] == "clean":
-				# Resolved, not sent: the burst rifle's taps land inside its burst and two of twelve
-				# are refused on every link, as in headless_hitreg_ping.
+				# Resolved, not sent: a tap lost on a lossy link is counted by "unresolved". (The burst
+				# rifle's "10 of 12" was its magazine: twelve bursts are 36 rounds of 30; it taps ten now.)
 				_check(int(totals[rtt][1]) == int(totals[rtt][3]), "clean %d ms: every resolved shot hits" % rtt,
 					"%d of %d" % [totals[rtt][1], totals[rtt][3]])
 	_done()

@@ -597,6 +597,15 @@ var remote_feet_fn: Callable = Callable()
 ## `(mover_id) -> bool`: whether [member remote_feet_fn] could answer other than now for that mover (`ArenaNetBridge.remote_lags`). Unset: assume it could.
 var remote_lags_fn: Callable = Callable()
 
+## `(other_id, shooter_id, view_tick) -> Vector3 or null`: where [param other_id] stood on the
+## shooter's screen for a hitscan shot rewound to [param view_tick], blended between the two
+## snapshots the shooter's command named (`ArenaNetBridge.shot_feet`). Null, or unset: the
+## server's own ring at that tick ([method ArenaGame.unlag_position_at]).
+var shot_feet_fn: Callable = Callable()
+## Set while a hitscan shot of this tick is traced, so [member shot_feet_fn] is asked; a bullet's
+## or a projectile's rewind is not the click's.
+var _unlag_shot := false
+
 ## Which pairs of players stop at each other (dot-team's `DotTeamBlockRules`: `mp_teamblock`,
 ## `mp_enemyblock`, `!block` / `!noblock`); null until [method make_noblock] or a client's
 ## `add_noblock` sets it. Feeds [member body_rules] `pair_fn`; the same answer on every machine,

@@ -87,6 +87,11 @@ var _drawn_for: Dictionary = {}
 var _last_frame: Dictionary = {}
 ## Server resolutions of the shooter's shots, as they come.
 var _resolved: Array[Dictionary] = []
+## Where the server's rewind for the shot being traced stood the target (null: no rewind).
+var _stood: Variant = null
+## The view tick of that rewind, and whether it blended the shooter's bracket (ArenaNetBridge.shot_feet).
+var _stood_view := -1.0
+var _stood_blended := false
 ## Ticks between taps this round: the gun's refire, at least [constant TAP_TICKS].
 var _tap_ticks := TAP_TICKS
 ## A round as it is played rather than with the gun's noise zeroed: the tuning kept, the aim
@@ -212,6 +217,15 @@ func _build() -> void:
 		if at >= 0:
 			_down.append({"at": at, "peer": peer_id, "bytes": payload})
 	_server_game.combat.shot_resolved.connect(_on_resolved)
+	# Where the server's rewind stood the target, read inside the rewind: that, not the ring
+	# recomputed here, is what the trace met.
+	var rewind: Callable = _server_game.combat.rewind_fn
+	_server_game.combat.rewind_fn = func(view_tick: float) -> void:
+		rewind.call(view_tick)
+		var target := _server_game.player_for(_target)
+		_stood = target.global_position if target != null else null
+		_stood_view = view_tick
+		_stood_blended = _server_bridge.shot_feet(_target, SHOOTER, view_tick) != null
 
 	for pair: Vector2i in [Vector2i(SHOOTER_PEER, SHOOTER), Vector2i(TARGET_PEER, TARGET)]:
 		var game := _make_game(false)
@@ -258,7 +272,10 @@ func _round(weapon_id: StringName, ping: int) -> void:
 	var distance := _range if _range > 0.0 else minf(DISTANCE, 0.8 * tuning.max_range)
 	_tap_ticks = maxi(PLAYED_TAP_TICKS if _as_played else TAP_TICKS, def.use_interval_ticks + 4)
 	# A tap past the magazine would wait out a reload; the edges come first, then the middle.
-	var taps := mini(TAPS, def.magazine) if def.magazine > 0 else TAPS
+	# A burst gun spends a burst a tap: the burst rifle's twelve taps were 36 rounds from 30, and
+	# the last two waited out the reload (its "10 of 12" under every link, the harness's own).
+	var per_tap := maxi(1, def.burst_count) if def.fire_mode == DotWeaponDef.Fire.BURST else 1
+	var taps := mini(TAPS, def.magazine / per_tap) if def.magazine > 0 else TAPS
 
 	# Both stand whole, the shooter holding only this gun, everywhere it exists.
 	var tick := _server_game.current_tick()
@@ -436,6 +453,9 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 			seen["muzzle"] = (entry["game"] as ArenaGame).player_for(SHOOTER).muzzle_position()
 			seen["side"] = side
 			seen["lag"] = float(bridge._lag_for_q) * 0.25
+			seen["drawn_tick"] = bridge._drawn_tick
+			seen["sent_bracket"] = Vector2i(input_tick - bridge._back_for, input_tick - bridge._back_for + bridge._span_for) \
+				if bridge._back_for >= 0 else Vector2i(-1, -1)
 			_drawn_for[input_tick] = seen
 
 	var still: Array[Dictionary] = []
@@ -463,6 +483,7 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 			"crouch": drawn.controller.state.crouch_fraction,
 			"newest": net._receiving_tick,
 			"bracket": net.interpolator.bracket_at(float(net.clock.received_tick()) + alpha - net.interpolator.delay_ticks()),
+			"eased": _ease_offset(net, _clients[SHOOTER_PEER]["bridge"]),
 		}
 	return fired
 
@@ -484,6 +505,24 @@ func _lead_ticks() -> int:
 	return _up_ticks + 1
 
 
+## How far the interpolator's resume ease ([method DotNetInterpolator._ease_resume]) moved the drawn
+## target off its blend this frame, in metres: what is left of the jump out of an extrapolation. The
+## server rewinds to the blend; it cannot know this offset (and must not take one from a client).
+func _ease_offset(net: DotNetManager, bridge: ArenaNetBridge) -> float:
+	var behaviour: DotNetBehaviour = bridge._behaviours.get(_target)
+	if behaviour == null or behaviour.identity == null:
+		return 0.0
+	var track: Variant = net.interpolator._tracks.get(behaviour.identity.net_id)
+	if track == null:
+		return 0.0
+	var most := 0.0
+	for property: Variant in track.offsets:
+		var offset: Variant = track.offsets[property]
+		if offset is Vector3:
+			most = maxf(most, (offset as Vector3).length())
+	return most
+
+
 ## Peer 3's stick on step [param index]: across, turning every 30 ticks (and at the shooter when played).
 func _target_move(index: int) -> Vector2:
 	return Vector2(1.0 if (index / 30) % 2 == 0 else -1.0, -1.0 if _as_played else 0.0)
@@ -502,14 +541,26 @@ func _on_resolved(shot: DotShot) -> void:
 	for d: DotDamage in shot.damages:
 		if d.victim == _target and not d.refused:
 			hit = true
-	# Where the server stood the target for this shot, read now: its ring keeps only the last ticks.
+	# The tap this is: a late shot (ArenaNetBridge.take_late_fire) fires on a later tick than its
+	# command's, so it is the newest tap not yet resolved within the late-fire window before it.
+	var tap := shot.tick
+	if not _drawn_for.has(tap):
+		var done := {}
+		for r in _resolved:
+			done[int(r["tick"])] = true
+		tap = -1
+		for t: int in _drawn_for:
+			if t < shot.tick and t >= shot.tick - ArenaNetBridge.LATE_FIRE_MAX_TICKS and not done.has(t) and t > tap:
+				tap = t
+	# Where the server stood the target for this shot: as its rewind left it, else its ring now.
 	var error := INF
-	var seen: Dictionary = _drawn_for.get(shot.tick, {})
+	var seen: Dictionary = _drawn_for.get(tap, {})
 	if not seen.is_empty():
-		var rewound: Variant = _server_game.unlag_position_at(_target, float(shot.tick) - float(seen["lag"]))
+		var rewound: Variant = _stood if _stood != null else _server_game.unlag_position_at(_target, float(shot.tick) - float(seen["lag"]))
 		if rewound != null:
 			error = (rewound as Vector3).distance_to(seen["feet"])
-	_resolved.append({"tick": shot.tick, "origin": shot.origin, "direction": shot.direction,
-		"pellets": shot.pellets.duplicate(), "hit": hit, "rewind_error": error,
+	_stood = null
+	_resolved.append({"tick": tap, "fired": shot.tick, "origin": shot.origin, "direction": shot.direction,
+		"pellets": shot.pellets.duplicate(), "hit": hit, "rewind_error": error, "view": _stood_view, "blended": _stood_blended,
 		"crouch": _server_game.player_for(_target).controller.state.crouch_fraction,
 		"victims": shot.damages.map(func(d: DotDamage) -> int: return d.victim), "impacts": shot.impacts.duplicate()})

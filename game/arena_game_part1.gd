@@ -153,7 +153,10 @@ func _unlag_rewind(view_tick: float) -> void:
 		var player: ArenaPlayer = _players[id]
 		if not player.is_alive():
 			continue
-		var then: Variant = unlag_position_at(id, view_tick)
+		# A hitscan shot: where the shooter's screen blended them, when the command named its two snapshots.
+		var then: Variant = shot_feet_fn.call(id, _unlag_shooter, view_tick) if _unlag_shot and shot_feet_fn.is_valid() else null
+		if then == null:
+			then = unlag_position_at(id, view_tick)
 		if then == null:
 			continue
 		_unlag_moved[id] = player.global_position

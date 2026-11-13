@@ -149,6 +149,8 @@ func attach(p_game: ArenaGame, p_net: DotNetManager) -> DotResult:
 
 	game.remote_feet_fn = remote_feet
 	game.remote_lags_fn = remote_lags
+	if net.is_server:
+		game.shot_feet_fn = shot_feet
 	# Server toys leave the registry before their nodes go; a client's mirrors stay registered.
 	if net.is_server:
 		game.toys_clearing.connect(_release_toys)
@@ -285,6 +287,31 @@ func remote_feet(other_id: int, mover_id: int, tick: int) -> Variant:
 	if solid_trace:
 		_trace_feet(other_id, mover, tick, lag, at)
 	return at
+
+
+## Where [param other_id] stood on [param shooter_id]'s screen for a shot rewound to [param view_tick]:
+## blended between the two snapshots the shooter's firing command named, as the client drew them,
+## not the ring's own tick there, which a strafe reversal between two snapshots puts up to 12 cm off
+## the drawn body (headless_hitreg_chaos). Null, for the ring, when no bracket came, when it does
+## not hold the view tick (a held or repeated command), or when it spans more than
+## [constant SHOT_BRACKET_MAX_SPAN] ticks: a client may pick its two samples, never far-apart ones.
+func shot_feet(other_id: int, shooter_id: int, view_tick: float) -> Variant:
+	var shooter: ArenaPlayerNet = _behaviours.get(shooter_id)
+	if shooter == null or game == null or shooter.last_view_back < 0 or shooter.last_view_tick < 0:
+		return null
+	var span := shooter.last_view_span
+	var older := shooter.last_view_tick - shooter.last_view_back
+	# The view lag goes up in quarter ticks: a drawn tick on a bracket's end rounds up to an eighth past it.
+	if span < 0 or span > SHOT_BRACKET_MAX_SPAN or view_tick < float(older) - SHOT_BRACKET_SLACK \
+			or view_tick > float(older + span) + SHOT_BRACKET_SLACK:
+		return null
+	return game.unlag_position_between(other_id, older, older + span,
+		clampf(view_tick, float(older), float(older + span)), _position_wire(other_id))
+
+## The widest snapshot bracket a shot is blended across: four snapshot periods, three lost in a row.
+const SHOT_BRACKET_MAX_SPAN := 8
+## How far, in ticks, a shot's view tick may sit outside its bracket and still be blended in it.
+const SHOT_BRACKET_SLACK := 0.2
 
 
 ## Between the snapshot ticks [param older] and older + [param span] when the command named them
