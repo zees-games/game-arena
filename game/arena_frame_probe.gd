@@ -111,6 +111,13 @@ static func lap(section: StringName, since_usec: int) -> int:
 		DotFrameCost.add_usec(_profiled(section), now - since_usec)
 	if now - since_usec >= ArenaLoadTimeline.SLOW_SECTION_USEC and ArenaLoadTimeline.tracing:
 		ArenaLoadTimeline.mark("lap %s %d ms" % [section, (now - since_usec) / 1000])
+	# The sim host's `--sim_sections 2` has no recording: its laps go on the sections line.
+	if interval > 0.0:
+		var row: PackedInt64Array = _sections.get(section, PackedInt64Array([0, 0, 0]))
+		row[0] += now - since_usec
+		row[1] += 1
+		row[2] = maxi(row[2], now - since_usec)
+		_sections[section] = row
 	return now
 
 
