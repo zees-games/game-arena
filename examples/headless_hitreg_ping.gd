@@ -59,6 +59,9 @@ const AIM_NOISE: Array[StringName] = [&"spread", &"spread_moving", &"spread_airb
 	&"bloom", &"bloom_max", &"spread_aim", &"spread_hip", &"spread_sprint", &"spread_slide", &"spread_flinch",
 	&"bloom_crouch", &"recoil_pitch", &"recoil_yaw", &"recoil_build", &"recoil_build_max"]
 
+const PLAYED_TAP_TICKS := 96
+## Played rounds: the target crouches and stands every this many ticks.
+const CROUCH_TICKS := 13
 const CHECKS := 220
 const SECTIONS := 4
 
@@ -86,6 +89,15 @@ var _last_frame: Dictionary = {}
 var _resolved: Array[Dictionary] = []
 ## Ticks between taps this round: the gun's refire, at least [constant TAP_TICKS].
 var _tap_ticks := TAP_TICKS
+## A round as it is played rather than with the gun's noise zeroed: the tuning kept, the aim
+## button held all round (scoped), the range [member _range] when above 0, the target walking at
+## the shooter while it strafes, every shot at the middle of the drawn torso, a second and a half
+## apart as the owner shot ([constant PLAYED_TAP_TICKS]). Off here; headless_hitreg_scope turns it on.
+## The trace may leave a recoil's residue off the aim then, so only the hit is held.
+var _as_played := false
+var _range := 0.0
+## Who is shot at: peer 3's player, or a server bot (headless_hitreg_scope).
+var _target := TARGET
 
 
 func _ready() -> void:
@@ -234,13 +246,13 @@ func _round(weapon_id: StringName, ping: int) -> void:
 	# The catalogue's def is the one all three ends read: zeroed here, restored after.
 	var tuning := def.tuning as DotWeaponBallistics
 	var kept: Dictionary = {}
-	for field in AIM_NOISE:
+	for field in ([] if _as_played else AIM_NOISE):
 		if field in tuning:
 			kept[field] = tuning.get(field)
 			tuning.set(field, 0.0)
 
-	var distance := minf(DISTANCE, 0.8 * tuning.max_range)
-	_tap_ticks = maxi(TAP_TICKS, def.use_interval_ticks + 4)
+	var distance := _range if _range > 0.0 else minf(DISTANCE, 0.8 * tuning.max_range)
+	_tap_ticks = maxi(PLAYED_TAP_TICKS if _as_played else TAP_TICKS, def.use_interval_ticks + 4)
 	# A tap past the magazine would wait out a reload; the edges come first, then the middle.
 	var taps := mini(TAPS, def.magazine) if def.magazine > 0 else TAPS
 
@@ -251,8 +263,12 @@ func _round(weapon_id: StringName, ping: int) -> void:
 		p.arsenal.clear()
 		var _g := p.arsenal.give(weapon_id)
 		p.hold(def.slot)
-	for p in _players(TARGET):
+	for p in _players(_target):
 		p.spawn(Transform3D(Basis(), Vector3(0.0, 0.05, -distance)), tick)
+	# Peer 3 keeps walking when the target is someone else: well clear of the line of fire.
+	if _target != TARGET:
+		for p in _players(TARGET):
+			p.spawn(Transform3D(Basis(), Vector3(40.0, 0.05, 0.0)), tick)
 
 	_drawn_for.clear()
 	_resolved.clear()
@@ -261,7 +277,7 @@ func _round(weapon_id: StringName, ping: int) -> void:
 	for i in SETTLE_TICKS + taps * _tap_ticks:
 		var tap := (i - SETTLE_TICKS) / _tap_ticks
 		var firing := i >= SETTLE_TICKS and (i - SETTLE_TICKS) % _tap_ticks == 0
-		if _step_once(def.slot, firing, i, [-1, 1, 0][tap % 3]) >= 0:
+		if _step_once(def.slot, firing, i, 0 if _as_played else [-1, 1, 0][tap % 3]) >= 0:
 			shots_sent += 1
 	# The last shots' packets.
 	for i in _up_ticks + _down_ticks + 8:
@@ -303,8 +319,9 @@ func _round(weapon_id: StringName, ping: int) -> void:
 			if int(seen["side"]) != 0:
 				edge_hit += 1
 		elif first_miss == "":
-			first_miss = "tick %d side %d drawn at %.2f (alpha %.2f) lag %.2f, trace %.3f m off the aim, rewind error %.3f m" % [
-				r["tick"], seen["side"], seen["time"], seen["alpha"], seen["lag"], lateral, error]
+			first_miss = "tick %d side %d drawn at %.2f (alpha %.2f) lag %.2f, trace %.3f m off the aim, rewind error %.3f m, crouch drawn %.2f server %.2f, struck %s at %s" % [
+				r["tick"], seen["side"], seen["time"], seen["alpha"], seen["lag"], lateral, error,
+				seen["crouch"], r["crouch"], r["victims"], r["impacts"]]
 
 	var worst_err := 0.0
 	var mean_err := 0.0
@@ -317,7 +334,7 @@ func _round(weapon_id: StringName, ping: int) -> void:
 		print("      first miss: %s" % first_miss)
 	var tag := "%d ms %s" % [ping, weapon_id]
 	_check(matched >= 2, "%s: the server resolves the shots" % tag, "%d of %d sent" % [matched, shots_sent])
-	_check(aimed == matched, "%s: every trace leaves the eye along the aim, to the wire's angle step" % tag, "%d of %d" % [aimed, matched])
+	_check(_as_played or aimed == matched, "%s: every trace leaves the eye along the aim, to the wire's angle step" % tag, "%d of %d" % [aimed, matched])
 	_check(hit == matched, "%s: every shot at the drawn torso hits, edges too" % tag, "%d of %d; %s" % [hit, matched, first_miss])
 	_check(worst_err <= REWIND_TOLERANCE_M, "%s: the server rewinds the target to where it was drawn" % tag,
 		"worst %.3f m, mean %.3f m" % [worst_err, mean_err])
@@ -370,7 +387,9 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 		var fire := DotWeaponCommand.new()
 		fire.slot = slot
 		if peer_id == TARGET_PEER:
-			move.move = Vector2(1.0 if (index / 30) % 2 == 0 else -1.0, 0.0)
+			move.move = Vector2(1.0 if (index / 30) % 2 == 0 else -1.0, -1.0 if _as_played else 0.0)
+			# As bots do at range: down while shooting, up again; [constant CROUCH_TICKS] drifts across the taps.
+			move.set_button(DotFpsCommand.BUTTON_CROUCH, _as_played and (index / CROUCH_TICKS) % 2 == 1)
 		elif not _last_frame.is_empty():
 			var me: ArenaPlayer = (entry["game"] as ArenaGame).player_for(SHOOTER)
 			var muzzle := me.muzzle_position()
@@ -383,8 +402,10 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 			move.pitch = aim.y
 			fire.yaw = aim.x
 			fire.pitch = aim.y
+			if _as_played:
+				fire.set_button(ArenaPlayer.BUTTON_AIM, true)
 			if firing:
-				fire.buttons = DotWeaponCommand.BUTTON_ATTACK
+				fire.set_button(DotWeaponCommand.BUTTON_ATTACK, true)
 		var bridge: ArenaNetBridge = entry["bridge"]
 		bridge.client_tick(input_tick, move, fire)
 		_up.append({"at": k + _up_ticks, "peer": peer_id, "bytes": bridge.encode_input(input_tick, move, fire)})
@@ -404,7 +425,8 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 			continue
 		_server_bridge.receive_input(int(packet["peer"]), packet["bytes"])
 	_up = still
-	_server_game.combat.health_of(TARGET).health = 1.0e7
+	_server_game.combat.health_of(_target).health = 1.0e7
+	_server_game.combat.health_of(SHOOTER).health = 1.0e7
 	_server_bridge.server_tick(k)
 
 	# The frame on the shooter's screen until the next tick reads the mouse.
@@ -412,14 +434,21 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 	if net.clock.is_synced():
 		var alpha: float = ALPHAS[k % ALPHAS.size()]
 		(_clients[SHOOTER_PEER]["bridge"] as ArenaNetBridge).draw_frame(alpha)
-		var drawn: ArenaPlayer = (_clients[SHOOTER_PEER]["game"] as ArenaGame).player_for(TARGET)
+		var drawn: ArenaPlayer = (_clients[SHOOTER_PEER]["game"] as ArenaGame).player_for(_target)
 		_last_frame = {
 			"feet": drawn.global_position,
-			"point": drawn.global_position + Vector3.UP * TORSO_HEIGHT * ArenaPlayerTunables.body_scale(),
+			"point": drawn.global_position + Vector3.UP * TORSO_HEIGHT * ArenaPlayerTunables.body_scale() * _stance_scale(drawn),
 			"time": float(net.clock.received_tick()) + alpha - net.interpolator.delay_ticks(),
 			"alpha": alpha,
+			"crouch": drawn.controller.state.crouch_fraction,
 		}
 	return fired
+
+
+## How far the drawn body is squeezed down by its stance: [method ArenaPlayer.fit_hitboxes_to_stance]'s factor.
+static func _stance_scale(player: ArenaPlayer) -> float:
+	var t := player.controller.tunables
+	return lerpf(1.0, t.crouch_height / maxf(t.stand_height, 0.01), clampf(player.controller.state.crouch_fraction, 0.0, 1.0))
 
 
 func _on_resolved(shot: DotShot) -> void:
@@ -427,14 +456,16 @@ func _on_resolved(shot: DotShot) -> void:
 		return
 	var hit := false
 	for d: DotDamage in shot.damages:
-		if d.victim == TARGET and not d.refused:
+		if d.victim == _target and not d.refused:
 			hit = true
 	# Where the server stood the target for this shot, read now: its ring keeps only the last ticks.
 	var error := INF
 	var seen: Dictionary = _drawn_for.get(shot.tick, {})
 	if not seen.is_empty():
-		var rewound: Variant = _server_game.unlag_position_at(TARGET, float(shot.tick) - float(seen["lag"]))
+		var rewound: Variant = _server_game.unlag_position_at(_target, float(shot.tick) - float(seen["lag"]))
 		if rewound != null:
 			error = (rewound as Vector3).distance_to(seen["feet"])
 	_resolved.append({"tick": shot.tick, "origin": shot.origin, "direction": shot.direction,
-		"pellets": shot.pellets.duplicate(), "hit": hit, "rewind_error": error})
+		"pellets": shot.pellets.duplicate(), "hit": hit, "rewind_error": error,
+		"crouch": _server_game.player_for(_target).controller.state.crouch_fraction,
+		"victims": shot.damages.map(func(d: DotDamage) -> int: return d.victim), "impacts": shot.impacts.duplicate()})

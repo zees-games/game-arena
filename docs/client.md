@@ -149,7 +149,7 @@ What makes a kill feel like one, laid out the way the genre's best-liked shooter
 - "+points  Victim" sits level with the crosshair, to its right, and holds 2.6 s: above it, it was drawn over the number of the shot that killed (rendered).
 - The killstreak meter is a thin gold bar up the left edge with a flame over it and "Killstreak xN" under it. Its count is the server's streak from AWARD, and KILL events end it on a death. It is 180 tall so its words end above a full chat log (eight rows reach y 424 at 1280x720); at 250 the sixth line of chat wrote over "Killstreak xN" in the client shell, where a ballot's "Vote: …" line wraps to two. `headless_presentation` checks the two apart.
 - Every medal is a dot-audio id (`medal_<name>`) and a lethal hit is `kill_confirmed`; until recordings exist each is a `DotAudioSynth` voice at its own pitch (`MEDAL_VOICES`).
-- **No Scope reads the aim button**: the weapon command carries it as `ArenaPlayer.BUTTON_AIM` (`DotWeaponCommand.BUTTON_USER_0`, read by no addon) and `ArenaPlayer.aiming` records it on the server. It is a claim like every button, and since aiming changes nothing the server simulates, a client that lies about it earns a medal and nothing else.
+- **No Scope reads the aim button**: the weapon command carries it as `ArenaPlayer.BUTTON_AIM` (`DotWeaponCommand.BUTTON_USER_0`, which dot-weapon's arsenal reads as `ctx.aiming` for the scoped cone) and `ArenaPlayer.aiming` records it on the server. It is a claim like every button, and since aiming changes nothing the server simulates, a client that lies about it earns a medal and nothing else.
 
 ## The chat box
 
