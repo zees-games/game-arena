@@ -185,6 +185,12 @@ func _add_remote_vars(local: DotConsoleLocal) -> void:
 			ArenaTickBudget.shed_slow_frames = str(v).strip_edges() != "0"
 			return DotResult.success(1 if ArenaTickBudget.shed_slow_frames else 0)
 	)
+	local.add_var(&"cl_remote_occlusion", "1 treats a remote player behind the level's walls (nothing of it in line of sight) as out of sight, 0 only by the view frustum.",
+		func() -> Variant: return 1 if ArenaPlayer.occlusion_enabled else 0,
+		func(v: Variant) -> Variant:
+			ArenaPlayer.occlusion_enabled = str(v).strip_edges() != "0"
+			return DotResult.success(1 if ArenaPlayer.occlusion_enabled else 0)
+	)
 	local.add_var(&"cl_remote_lod_every", "Frames between updates of a remote player out of sight (1 to 16; 4 is the default, 8 in a browser).",
 		func() -> Variant: return ArenaPlayer.lod_off_every,
 		func(v: Variant) -> Variant:

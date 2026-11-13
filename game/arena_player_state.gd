@@ -399,6 +399,14 @@ static var held_shadows: bool = not DotPlatform.is_web()
 ## `cl_remote_lod_frustum`: judge "out of sight" by the camera's real frustum instead of the cone below.
 static var lod_frustum: bool = true
 
+## `cl_remote_occlusion`: a body inside the frustum but behind the level's solid world (chest, head and knee rays all
+## blocked, refreshed every [constant OCCLUSION_RECHECK_MSEC]) counts as out of sight. Source's dormant/PVS cull, done
+## with three rays per body per refresh. Drawing only: the tick and the hitboxes are never touched.
+static var occlusion_enabled: bool = true
+const OCCLUSION_RECHECK_MSEC := 100
+var _occluded: bool = false
+var _occlusion_next_msec: int = 0
+
 ## `cl_remote_lod_every`: frames between presents of a body out of sight (1 turns the off-screen thinning off).
 ## In a browser [constant WEB_LOD_OFF_EVERY]: an unseen body's pose matters only to the killcam and a glance back.
 const WEB_LOD_OFF_EVERY := 8

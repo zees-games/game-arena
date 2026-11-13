@@ -79,7 +79,7 @@ Note that the bench runs the editor binary. A release export runs GDScript faste
 | 4 | An interpolation list: skip remote identities whose bracket has not changed (a standing or dead body) | dot-net | 0.3-0.5 | board item; a cache inside the math reached only 0.45 |
 | 5 | Run FC's `_net_state_applied` hooks only for fields that changed (0.6-0.85 ms per snapshot) | FC + dot-net | 0.3-0.5 | board item |
 | 6 | Render thread (`thread_model=2`), as Source's threaded material system does | engine | about 1 | perf-render-thread-1 (crashes on 4.7.2) |
-| 7 | Occlusion dormancy: treat a body in the frustum but behind the level's occluders as out of sight | FC | 0.1-0.3 on open maps | board item |
+| 7 | Occlusion dormancy: a body in the frustum but behind the level's solid world (three rays, 10 Hz) counts as out of sight (`cl_remote_occlusion`) | FC | measured p50 -0.7 to -1.7 ms, bodies -0.64 (n=3, shared box) | kept |
 | 8 | Bench a release export, not the editor binary | tools | measurement, not a cut | board item |
 
 ## Cut 1, measured

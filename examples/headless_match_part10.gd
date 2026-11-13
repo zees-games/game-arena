@@ -648,6 +648,7 @@ const SPACE_QUERY_FILES := {
 	"game/arena_surf.gd": "tick",
 	"game/arena_client.gd": "client",
 	"game/arena_kill_pov_view.gd": "client",
+	"game/arena_player.gd": "client",
 	"game/arena_player_part1.gd": "client",
 	"game/arena_presentation_b1.gd": "client",
 	"game/arena_touch.gd": "client",

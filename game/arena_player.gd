@@ -196,7 +196,27 @@ func _out_of_sight(to: Vector3, d2: float, forward: Vector3, frustum: Array) -> 
 	for plane: Plane in frustum:
 		if plane.distance_to(centre) > LOD_RADIUS:
 			return true
-	return false
+	return occlusion_enabled and _behind_world(global_position - to)
+
+## Whether the solid world hides the chest, the head and the knee of this body from [param eye]. Cached for
+## [constant OCCLUSION_RECHECK_MSEC]: a body stepping out from behind a corner is presented at the thinned rate for at
+## most that long, then in full. A body with no world mask or outside the tree is never hidden.
+func _behind_world(eye: Vector3) -> bool:
+	var now := Time.get_ticks_msec()
+	if now < _occlusion_next_msec:
+		return _occluded
+	_occlusion_next_msec = now + OCCLUSION_RECHECK_MSEC
+	_occluded = false
+	if TagRules.occluder_mask == 0 or not is_inside_tree():
+		return false
+	var space := get_world_3d().direct_space_state
+	var feet := global_position
+	for lift in [1.0, 1.7, 0.4]:
+		var query := PhysicsRayQueryParameters3D.create(eye, feet + Vector3(0.0, lift, 0.0), TagRules.occluder_mask)
+		if space.intersect_ray(query).is_empty():
+			return false
+	_occluded = true
+	return true
 
 ## Hides what a culled figure carries the frame it passes [constant DotHumanoidFigure.DRAW_RANGE] (a thinned body
 ## is presented only every few frames, which would leave its gun in the sky until then).
