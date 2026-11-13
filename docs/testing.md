@@ -4,7 +4,7 @@ The family's rules for checks are in [testing.md](../../../docs/testing.md) and 
 
 **Run the suites after changing any dot-* addon this game links.** That is what this project is for.
 
-`./game.sh soak [map] [minutes]` is not a suite: it drives dot-bot's `DotBotSoak` (`tools/soak.tscn`) with eight bots on one map, the real `DotSpawnWatch` and the game's kill and hit signals, and fails on a stuck bot, a fall-out, object or memory growth, tick cost or a run with no kills. On a map with a navigation mesh the watch also gets the real mesh (off-nav distance, a route to the first spawn for unreachable); a bot mid-ride is not off the mesh. The report is `.godot/test-logs/soak-<map>.json`. Its max tick cost is the surf pilot's forecast on a resync, not the first tick (nightly `surf-pilot-forecast-spike`).
+`./game.sh soak [map] [minutes]` is not a suite: it drives dot-bot's `DotBotSoak` (`tools/soak.tscn`) with eight bots on one map, the real `DotSpawnWatch` and the game's kill and hit signals, and fails on a stuck bot, a fall-out, object or memory growth, tick cost or a run with no kills. On a map with a navigation mesh the watch also gets the real mesh (off-nav distance, a route to the first spawn for unreachable); a bot mid-ride is not off the mesh. The memory baseline is taken after min(60 s, a fifth of the run) (`--soak-warmup-sec` overrides): dm_box and dm_pit fill lazy caches for the first minute (+41% static at 1 min, +74.6% at both 3 and 6 min, a plateau), which failed every 3-minute run against the 50% limit when the baseline was 10 s. The report is `.godot/test-logs/soak-<map>.json`. Its max tick cost is the surf pilot's forecast on a resync, not the first tick (nightly `surf-pilot-forecast-spike`).
 
 ## The suites
 

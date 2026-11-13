@@ -59,6 +59,9 @@ func _configure(cfg: DotBotSoakConfig) -> String:
 	cfg.bots = DEFAULT_BOTS
 	cfg.apply_cli()
 	cfg.minutes = float(_arg("minutes", str(cfg.minutes)))
+	# The memory baseline is taken after the warm-up. Lazy caches (weapon art, sounds, effects) fill for the first minute or so: dm_box grew +41% by 1 min and +74.6% at both 3 and 6 min (plateau, not a leak), which tripped the 50% limit on every 3-minute run. A flat 10 s baseline was too early; --soak-warmup-sec still overrides.
+	if _arg("soak-warmup-sec", "").is_empty():
+		cfg.warmup_sec = clampf(cfg.minutes * 20.0, 10.0, 60.0)
 	cfg.bots = int(_arg("bots", str(cfg.bots)))
 	var difficulty := ""
 	if not _arg("seed", "").is_empty():
