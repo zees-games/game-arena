@@ -340,14 +340,9 @@ static func _startup_map() -> ArenaMap:
 	return map
 
 
-## The browser shell's solo start map (the site's "Play map", `?map=`, read duck-typed off
-## `dot_solo`), or "" outside one, without one or when it is not a map id.
+## The shell's solo start map (the site's "Play map"): [method ArenaSimHost.solo_start_map].
 static func _solo_start_map() -> String:
-	var solo := DotRegistry.get_service(&"dot_solo")
-	if solo == null or not (&"start_map" in solo):
-		return ""
-	var id := str(solo.get(&"start_map"))
-	return id if RegEx.create_from_string("^[a-z0-9][a-z0-9_-]{0,63}$").search(id) != null else ""
+	return ArenaSimHost.solo_start_map()
 
 
 ## Solo: the same cfg/ layers as a server (lenient here), so shipped defaults and a yml reach a

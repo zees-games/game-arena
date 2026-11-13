@@ -9,6 +9,7 @@ const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaMapDirector := preload("../game/arena_map_director.gd")
 const ArenaContentGroups := preload("../game/arena_content_groups.gd")
 const ArenaClientView := preload("../game/arena_client_view.gd")
+const ArenaSimHost := preload("../game/arena_sim_host.gd")
 
 ## An arena map delivered the way a player gets it: published as a signed pack, fetched by a
 ## real [DotCloudClient], mounted, and built from the mount alone.
@@ -43,7 +44,7 @@ const PACK_ROOT := "user://arena_pack_maps_check"
 const GROUPS_ROOT := "user://arena_map_groups_check"
 const SECTIONS := 8
 ## Without a frame; two more with `--shot`.
-const CHECKS := 36
+const CHECKS := 37
 ## The groups section's mount checks, skipped (and not expected) on a dot-cloud before API 22.
 const GROUP_MOUNT_CHECKS := 5
 
@@ -114,6 +115,8 @@ func _test_solo_start_map() -> void:
 	DotRegistry.register(&"dot_solo", solo)
 	solo.start_map = &"dm_pit"
 	_check(ArenaClientView._startup_map().id == &"dm_pit", "a built-in start map is the first map")
+	_check(ArenaSimHost.asked_map_id() == "dm_pit", "a sim host starts its server child on the start map",
+		ArenaSimHost.asked_map_id())
 	solo.start_map = &"surf_not_built_in"
 	_check(ArenaClientView._solo_start_map() == "surf_not_built_in" and ArenaClientView._startup_map().id == &"dm_box",
 		"a delivered one starts on dm_box, to change once set up")

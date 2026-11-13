@@ -216,9 +216,23 @@ static func _free_port() -> int:
 	return 0
 
 
-## The map the server child is started on: the tool's ask, else `--map`; "" leaves it to the server.
+## The map the server child is started on: the tool's ask, else `--map`, else the shell's solo start map
+## ([method solo_start_map]: the site's "Play map", which the in-process game switches to itself); "" leaves it to the server.
 static func asked_map_id() -> String:
-	return ask_map if ask_map != "" else _arg("--map")
+	if ask_map != "":
+		return ask_map
+	var flag := _arg("--map")
+	return flag if flag != "" else solo_start_map()
+
+
+## The shell's solo start map (`?map=`, `--solo-map`, read duck-typed off [constant SOLO_SERVICE]), or "" outside
+## one, without one or when it is not a map id.
+static func solo_start_map() -> String:
+	var solo: Object = DotRegistry.get_service(SOLO_SERVICE)
+	if solo == null or not (&"start_map" in solo):
+		return ""
+	var id := str(solo.get(&"start_map"))
+	return id if RegEx.create_from_string("^[a-z0-9][a-z0-9_-]{0,63}$").search(id) != null else ""
 
 
 static func _arg(flag: String) -> String:
