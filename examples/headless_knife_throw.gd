@@ -165,7 +165,7 @@ func _run() -> void:
 
 	_check_pickup_rule(game, ids, thrower, stuck, target, floor_y, events)
 
-	_throw_at_mate_and_slow(game, ids, thrower, mate, here, floor_y, pitch)
+	await _throw_at_mate_and_slow(game, ids, thrower, mate, here, floor_y, pitch)
 	_finished += 1
 
 	print("%d sections entered, %d finished" % [_entered, _finished])
