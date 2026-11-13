@@ -5,7 +5,10 @@ func _present_frame(delta: float) -> void:
 		# Every frame: remote players otherwise step at the snapshot rate.
 		var t := Time.get_ticks_usec()
 		var replays := bridge.probe_replays_before() if bridge != null else -1
-		net.interpolate_frame()
+		if bridge != null:
+			bridge.draw_frame()
+		else:
+			net.interpolate_frame()
 		if bridge != null:
 			bridge.probe_replays_after(replays)
 		ArenaFrameProbe.add(&"interpolate", t)

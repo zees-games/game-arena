@@ -230,7 +230,45 @@ func view_lag_q(tick: int) -> int:
 	if net == null or net.interpolator == null or not net.clock.is_synced():
 		return -1
 	var drawn := float(net.clock.received_tick()) - net.interpolator.delay_ticks()
+	# The click was aimed at the frame on screen, drawn a fraction into an earlier tick, not at
+	# the start of the tick the receive clock has walked on to since: up to a tick of strafe
+	# (9 cm at 66 Hz) between the body drawn and the one rewound.
+	var since := net.clock.received_tick() - _drawn_received
+	if _drawn_tick >= 0.0 and since >= 0 and since <= DRAWN_FRESH_TICKS:
+		drawn = _drawn_tick
 	return clampi(int(roundf((float(tick) - drawn) * 4.0)), 0, ArenaNetCommand.MAX_VIEW_LAG_Q)
+
+
+## How many ticks the receive clock may walk past the last frame drawn before that frame stops
+## being what the player is looking at (a frame rate under 16 at 66 Hz, a stall, a re-anchor).
+const DRAWN_FRESH_TICKS := 4
+
+var _drawn_tick := -1.0
+var _drawn_received := -1
+
+
+## Draws the remote entities for this frame ([method DotNetManager.interpolate_frame]) and keeps
+## the render tick it drew at, which the next command's view lag is measured from. The client
+## calls this instead of the manager's; [param alpha] as there.
+func draw_frame(alpha: float = -1.0) -> void:
+	if net == null:
+		return
+	if alpha < 0.0:
+		alpha = net.clock.render_alpha()
+	net.interpolate_frame(alpha)
+	_drawn_tick = -1.0
+	if net.interpolator != null and net.clock.is_synced():
+		_drawn_received = net.clock.received_tick()
+		_drawn_tick = drawn_tick(alpha)
+
+
+## The render tick [method DotNetManager.interpolate_frame] draws remote entities at for
+## [param alpha], the same arithmetic; -1 when it draws nothing.
+func drawn_tick(alpha: float) -> float:
+	if net == null or net.is_server or net.interpolator == null or not net.clock.is_synced():
+		return -1.0
+	return float(net.clock.received_tick()) + clampf(alpha, -1.0, 2.0) + net.clock.receive_slip() \
+		- net.interpolator.delay_ticks()
 
 
 ## Takes one of those packets. Server side.
