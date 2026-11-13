@@ -1,7 +1,8 @@
 extends Node
 
 ## Every weapon kind dropped by a kill (the game's own death drop, from a live game) at spots over dm_atrium (open floor, plinth, stairs, beside walls): after settling, the client's lowest mesh point
-## is not below the surface, the drop does not jitter, and it came to rest. Run: [code]godot --headless --path . res://examples/headless_weapondrop_death.tscn[/code]
+## is not below the surface nor floating above it (the burst of deaths passes the active cap, which used to rest a drop
+## in the air where it spawned: the small dark gun floating by a wall in arena-stray-weapon-3), the drop does not jitter, and it came to rest. Run: [code]godot --headless --path . res://examples/headless_weapondrop_death.tscn[/code]
 
 const ArenaGame := preload("../game/arena_game.gd")
 const ArenaMode := preload("../game/arena_mode.gd")
@@ -11,6 +12,8 @@ const Wiring := preload("../game/arena_weapon_drop_wiring.gd")
 const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")
 
 const TOLERANCE := 0.02
+## Most a settled drop's lowest mesh point may sit above the surface under it, in metres (DotWeaponDrops grounds a drop resting higher than 0.25).
+const FLOAT_MAX := 0.3
 const TICK_RATE := 64
 const RUN_TICKS := 640
 const JITTER_TICKS := 96
@@ -102,6 +105,7 @@ func _run() -> void:
 	var jitter := 0.0
 	var lost := 0
 	var unrested := 0
+	var floating: Array[String] = []
 	for e: int in sent:
 		var cb: RigidBody3D = client.get("_entries")[e]["body"]
 		if cb.global_position.y < -50.0:
@@ -110,13 +114,16 @@ func _run() -> void:
 		if not bool(drops.get("_entries")[e]["rest"]):
 			unrested += 1
 		var s := _sunk(cb, mask)
+		if -s > FLOAT_MAX:
+			floating.append("%s at %s y %.2f" % [sent[e][0], sent[e][1], cb.global_position.y])
 		if s > deepest:
 			deepest = s
 			worst = "%s at %s" % [sent[e][0], sent[e][1]]
 		jitter = maxf(jitter, ((trail[e][1] as Vector3) - (trail[e][0] as Vector3)).length())
-	print("  death drops=%d deepest=%+.3f (%s) jitter=%.4f unrested=%d lost=%d" % [sent.size(), deepest, worst, jitter, unrested, lost])
+	print("  death drops=%d deepest=%+.3f (%s) jitter=%.4f unrested=%d lost=%d floating=%d" % [sent.size(), deepest, worst, jitter, unrested, lost, floating.size()])
 	_check(lost == 0, "no dead player's weapon fell out of the world", str(lost))
 	_check(deepest <= TOLERANCE, "client mesh not below the surface at 10 s", "%.3f %s" % [deepest, worst])
+	_check(floating.is_empty(), "no settled drop floats above the surface (the active cap rests a burst of drops)", "%d: %s" % [floating.size(), floating.slice(0, 6)])
 	_check(jitter <= 0.003, "resting drops do not jitter", "%.4f" % jitter)
 	_check(unrested == 0, "every drop came to rest", str(unrested))
 	print("weapondrop_death: %d checks, %d failed" % [_checks, _failed])
