@@ -118,6 +118,7 @@ func _process(delta: float) -> void:
 		game.knives.bind_view(ragdolls, presentation.blood if presentation != null else null)
 	_present_frame(delta)
 	ArenaFrameProbe.add(&"present", t)
+	_watch_draw()
 	ArenaFrameProbe.frame(delta, _probe_extra)
 
 ## The free-roam key: into a free camera while spectating, and back onto a player from it.

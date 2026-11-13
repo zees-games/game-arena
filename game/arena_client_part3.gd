@@ -1,11 +1,23 @@
 extends "arena_client_part2.gd"
 
+## A browser draws the sun's shadow in one orthogonal map, not in dot-game's web default of 2 splits: each split is
+## another depth pass over every body and gun, the largest single cost of a 16v16 browser frame after the bodies themselves.
+## Built-in maps already use one (see arena_map_lighting.gd); this covers imported ones. `r_sun_shadow_splits=2`, as a
+## launch argument or URL query, still wins. Native is unchanged.
+const WEB_SUN_SHADOW_SPLITS := 1.0
+const _RenderQuality := preload("res://addons/dot_game/runtime/dot_game_render_quality.gd")
+
+func _web_render_defaults() -> void:
+	if DotPlatform.is_web() and float(_RenderQuality.values[&"r_sun_shadow_splits"]) < 0.0:
+		_RenderQuality.values[&"r_sun_shadow_splits"] = WEB_SUN_SHADOW_SPLITS
+
 func _ready() -> void:
 	# The server a hosted game started runs this same main scene: an export takes no scene path.
 	if ArenaSimHost.is_server_child():
 		_become_sim_server()
 		return
 	_apply_launch_art()
+	_web_render_defaults()
 
 	if ArenaSimHost.wanted(get_tree().current_scene == self):
 		await _start_sim_host()

@@ -4,16 +4,49 @@ extends "arena_client_part3.gd"
 func _render_cost() -> Dictionary:
 	var lights := 0
 	var casters := 0
+	var shown := 0
+	var local := 0
 	for l in get_tree().root.find_children("*", "Light3D", true, false):
 		lights += 1
-		if (l as Light3D).shadow_enabled:
+		var light := l as Light3D
+		if light.shadow_enabled:
 			casters += 1
+		if light.is_visible_in_tree():
+			shown += 1
+			if light is OmniLight3D or light is SpotLight3D:
+				local += 1
+	var vp := get_viewport().get_viewport_rid()
 	return {
 		"draw_calls": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
 		"objects": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_OBJECTS_IN_FRAME),
+		"prims": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
 		"lights": lights,
+		"lights_on": shown,
+		"local_lights_on": local,
 		"shadow_lights": casters,
+		"vp_cpu_ms": snappedf(RenderingServer.viewport_get_measured_render_time_cpu(vp), 0.01),
+		"setup_cpu_ms": snappedf(RenderingServer.get_frame_setup_time_cpu(), 0.01),
 	}
+
+## Times the draw itself, from `frame_pre_draw` to `frame_post_draw`, as the probe's "draw"
+## section: on the web the draw runs on the same thread as the scripts, so it is part of the frame.
+## Wired once, and only while the probe runs.
+var _draw_at_usec := 0
+
+func _watch_draw() -> void:
+	if ArenaFrameProbe.interval <= 0.0 or RenderingServer.frame_post_draw.is_connected(_on_post_draw):
+		return
+	RenderingServer.frame_pre_draw.connect(_on_pre_draw)
+	RenderingServer.frame_post_draw.connect(_on_post_draw)
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+
+func _on_pre_draw() -> void:
+	_draw_at_usec = Time.get_ticks_usec()
+
+func _on_post_draw() -> void:
+	if _draw_at_usec > 0:
+		ArenaFrameProbe.add(&"draw", _draw_at_usec)
+		_draw_at_usec = 0
 
 ## The round trip and the input lead beside a frame report: a stalled frame shows up in
 ## both before it shows up anywhere else.

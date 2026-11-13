@@ -7,8 +7,8 @@ const ArenaKillcamBodies := preload("../game/arena_killcam_bodies.gd")
 ## A bare ArenaPlayer has no controller, so `present` returns at once and the counters in `present_lod` are the whole
 ## story. Run: [code]godot --headless --path . res://examples/headless_remote_lod.tscn[/code]
 
-const SECTIONS := 6
-const CHECKS := 24
+const SECTIONS := 7
+const CHECKS := 26
 
 var _entered := 0
 var _completed := 0
@@ -184,4 +184,19 @@ func _test_anim_gate() -> void:
 	var close := _body(Vector3(0, 0, -5))
 	var _c := _passes(close, 1)
 	_check((close.get("_anim_min_dt") as float) == 0.0, "in view within 8 m: the clip is stepped every frame")
+	_done()
+
+	_section("in a browser a gated body steps its clip every second present (web-frame-1)")
+	var drawn := DotFpsState.new()
+	for every: int in [2, 1]:
+		ArenaPlayer.anim_gate_every = every
+		var gated := _armed_body(Vector3(0, 0, -12))
+		gated.set("_anim_min_dt", ArenaPlayer.ANIM_GATE_DT)
+		var stepped := 0
+		for _i in 8:  # 8 frames of 70 ms (a 14 fps browser): the time gate alone lets every one through
+			gated.present_part2(0.07, drawn)
+			if (gated.get("_anim_owed") as float) == 0.0:
+				stepped += 1
+		_check(stepped == 8 / every, "anim_gate_every %d at 14 fps: the clip steps %d of 8 presents" % [every, 8 / every], "%d" % stepped)
+	ArenaPlayer.anim_gate_every = 1
 	_done()

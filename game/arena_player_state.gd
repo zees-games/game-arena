@@ -387,6 +387,15 @@ static func held_equip_allowed() -> bool:
 	_held_equips_used += 1
 	return true
 
+## A held gun stops drawing past this many metres (0: no limit), its attachments too. In a browser
+## [constant WEB_HELD_DRAW_RANGE]: there a gun is a few pixels, and each one is several draw calls a frame
+## (body, parts, attachments), which a browser's WebGL pays for far more than a native driver does.
+const WEB_HELD_DRAW_RANGE := 30.0
+static var held_draw_range: float = WEB_HELD_DRAW_RANGE if DotPlatform.is_web() else 0.0
+## Whether a held gun casts a shadow. Not in a browser: the sun's shadow pass draws every gun a second time,
+## and the body holding it still casts its own.
+static var held_shadows: bool = not DotPlatform.is_web()
+
 ## `cl_remote_lod_frustum`: judge "out of sight" by the camera's real frustum instead of the cone below.
 static var lod_frustum: bool = true
 
@@ -423,6 +432,11 @@ const ANIM_GATE_FAR_DT := 1.0 / 20.0
 const ANIM_GATE_OFF_DT := 1.0 / 10.0
 ## Minimum game seconds between presents of a thinned body: out of sight, past LOD_FAR, past LOD_FARTHEST.
 const LOD_OFF_DT := 1.0 / 30.0
+## In a browser a gated body also steps its clip only every [constant WEB_ANIM_GATE_EVERY]th time it is presented: there
+## the frame is longer than [constant ANIM_GATE_DT] already, so the time gate alone never skips, and each step re-skins the
+## body, which WebGL pays for heavily. Native keeps 1 (the time gate alone).
+const WEB_ANIM_GATE_EVERY := 2
+static var anim_gate_every: int = WEB_ANIM_GATE_EVERY if DotPlatform.is_web() else 1
 const LOD_FAR_DT := 1.0 / 45.0
 const LOD_FARTHEST_DT := 1.0 / 30.0
 
@@ -432,6 +446,8 @@ var _anim_owed: float = 0.0
 ## Per-body head start (game seconds) on the first gated step, so that bodies gated on the same frame
 ## (a round start) do not all step their clips together on one frame.
 var _anim_phase: float = -1.0
+## Presents since the clip last stepped under the gate (-1: not gated yet; the first count is per body, see [member _anim_phase]).
+var _anim_frames: int = -1
 var _held_thin: bool = false
 ## A remote body past [constant DotHumanoidFigure.DRAW_RANGE] from the eye: its figure is culled there, so
 ## what hangs off it (gun, held sprite, crest, spawn bubble) is hidden too rather than floating alone.

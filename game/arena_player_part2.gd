@@ -207,10 +207,18 @@ func _present_fitting(id: StringName) -> void:
 	held.attachments = ArenaAttach.catalogue()
 	held.on_fitted(code)
 	_held_fitted = code
+	_range_held()
 	_held_suppressed = ArenaAttach.suppressed(id, code)
 	held.set_meta(ArenaAttach.SUPPRESSED_META, _held_suppressed)
 	if weapons != null:
 		weapons.set_meta(ArenaAttach.SUPPRESSED_META, _held_suppressed)
+
+## Gives every part of the held gun (attachments included) [member held_draw_range] as its draw distance.
+func _range_held() -> void:
+	if held_draw_range <= 0.0:
+		return
+	for part: Node in held.find_children("*", "GeometryInstance3D", true, false):
+		(part as GeometryInstance3D).visibility_range_end = held_draw_range
 
 ## [method ArenaAttach.held_code] for this body's own arsenal, worked out again only when the held slot or its
 ## definition changes (`DotWeaponArsenal.fit` always puts a new definition in the slot). The code walks the whole
@@ -233,6 +241,7 @@ func _hold_weapon() -> void:
 
 	held = AwWorldModel.new()
 	held.name = "Held"
+	held.cast_shadow = held_shadows
 
 	if not held.attach_to(self):
 		held.free()

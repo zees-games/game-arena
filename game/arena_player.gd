@@ -108,15 +108,20 @@ func present_part2(delta: float, drawn) -> void:
 		# the skipped time carried. Nobody sees a 30 Hz walk cycle at 8 m or a 20 Hz one at 20 m.
 		if _anim_phase < 0.0:
 			_anim_phase = fmod(float(get_instance_id() % 1000) * 0.618034, 1.0) * _anim_min_dt
+		if _anim_frames < 0:
+			_anim_frames = get_instance_id() % anim_gate_every
 		_anim_owed += delta
-		if _anim_owed + _anim_phase >= _anim_min_dt:
+		_anim_frames += 1
+		if _anim_owed + _anim_phase >= _anim_min_dt and _anim_frames >= anim_gate_every:
 			_animate_figure(drawn, _anim_owed)
 			_anim_owed = 0.0
 			_anim_phase = 0.0
+			_anim_frames = 0
 	else:
 		_animate_figure(drawn, delta + _anim_owed)
 		_anim_owed = 0.0
 		_anim_phase = -1.0
+		_anim_frames = -1
 	ArenaFrameProbe.add(&"r_anim", t_anim)
 	var t_beacon := Time.get_ticks_usec()
 	_present_beacon(delta, drawn.position)
