@@ -4,6 +4,7 @@ extends Node3D
 
 const ArenaGame := preload("arena_game.gd")
 const ArenaFlagCarry := preload("arena_flag_carry.gd")
+const ArenaLoadTimeline := preload("arena_load_timeline.gd")
 
 const POLE_HEIGHT := 3.4
 const BANNER_SIZE := Vector2(1.8, 1.2)
@@ -46,10 +47,13 @@ const FLIGHT_EASE := 18.0
 static var _warm: Node3D = null
 ## This script, for [method warm] to make one of itself.
 const _SELF_PATH := "res://game/arena_flag_view.gd"
+## The parts of a flag, in the order [method _build] adds them; [method warm] adds one a frame.
+const _BUILD_PARTS: Array[StringName] = [&"_add_pole", &"_add_cloth", &"_add_icon", &"_add_label", &"_add_light"]
 
 
-## Builds [member _warm] under [param host] (behind a loading cover: it is a slow frame of its own), lets it be drawn
-## a frame far below the world, then hides it. A second call, or a headless process, does nothing.
+## Builds [member _warm] under [param host] (behind a loading cover) one part a frame, so no frame compiles every
+## part's materials at once (all in one frame it was a 163 ms frame on the bench), each drawn far below the world,
+## then hides it. A second call, or a headless process, does nothing.
 static func warm(host: Node) -> void:
 	if DotPlatform.is_headless() or (_warm != null and is_instance_valid(_warm)):
 		return
@@ -58,9 +62,14 @@ static func warm(host: Node) -> void:
 	view.position = Vector3(0.0, -10000.0, 0.0)
 	view.set_process(false)
 	host.add_child(view)
-	view._build(1)
 	_warm = view
-	await host.get_tree().process_frame
+	var root: Node3D = view._add_root(1)
+	for part in _BUILD_PARTS:
+		await host.get_tree().process_frame
+		if not is_instance_valid(view):
+			return
+		view.call(part, root, 1)
+		ArenaLoadTimeline.mark("change: flag view %s" % String(part).trim_prefix("_add_"))
 	await host.get_tree().process_frame
 	if is_instance_valid(view):
 		view.visible = false
@@ -245,20 +254,23 @@ func _grounded(at: Vector3) -> Vector3:
 
 
 func _build(team: int) -> Node3D:
-	var colour := color_of(team)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = colour
-	mat.emission_enabled = true
-	mat.emission = colour
-	mat.emission_energy_multiplier = 0.8
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var pole_mat := StandardMaterial3D.new()
-	pole_mat.albedo_color = Color(0.85, 0.85, 0.88)
+	var root := _add_root(team)
+	for part in _BUILD_PARTS:
+		call(part, root, team)
+	_parts[team] = [root.get_node(^"Plate"), root.get_node(^"Icon"), root.get_node(^"Dist")]
+	return root
 
+
+func _add_root(team: int) -> Node3D:
 	var root := Node3D.new()
 	root.name = NODE_NAMES.get(team, &"Flag")
 	add_child(root)
+	return root
 
+
+func _add_pole(root: Node3D, _team: int) -> void:
+	var pole_mat := StandardMaterial3D.new()
+	pole_mat.albedo_color = Color(0.85, 0.85, 0.88)
 	var pole := MeshInstance3D.new()
 	var cyl := CylinderMesh.new()
 	cyl.top_radius = 0.04
@@ -269,6 +281,17 @@ func _build(team: int) -> Node3D:
 	pole.position = Vector3(0.0, POLE_HEIGHT * 0.5, 0.0)
 	root.add_child(pole)
 
+
+## The banner and the capture plate under the stand: one glowing, two-sided material in the team's colour.
+func _add_cloth(root: Node3D, team: int) -> void:
+	var colour := color_of(team)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = colour
+	mat.emission_enabled = true
+	mat.emission = colour
+	mat.emission_energy_multiplier = 0.8
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+
 	var banner := MeshInstance3D.new()
 	var quad := QuadMesh.new()
 	quad.size = BANNER_SIZE
@@ -277,7 +300,6 @@ func _build(team: int) -> Node3D:
 	banner.position = Vector3(BANNER_SIZE.x * 0.5 + 0.05, POLE_HEIGHT - BANNER_SIZE.y * 0.5 - 0.1, 0.0)
 	root.add_child(banner)
 
-	# The capture plate under the stand.
 	var plate := MeshInstance3D.new()
 	var pm := CylinderMesh.new()
 	pm.top_radius = 1.4
@@ -289,22 +311,10 @@ func _build(team: int) -> Node3D:
 	plate.name = "Plate"
 	root.add_child(plate)
 
-	var marker := _build_marker(root, colour)
-	var icon: Sprite3D = marker[0]
-	var dist: Label3D = marker[1]
 
-	var light := OmniLight3D.new()
-	light.light_color = colour
-	light.omni_range = 5.0
-	light.light_energy = 0.8
-	light.position = Vector3(0.0, 1.5, 0.0)
-	root.add_child(light)
-	_parts[team] = [plate, icon, dist]
-	return root
-
-## The marker over the pole: [icon, distance label].
-func _build_marker(root: Node3D, colour: Color) -> Array:
-	# The marker, over the pole and (by default) through walls: a small see-through flag icon in the team's colour, and its distance beside it in small text.
+## The marker over the pole and (by default) through walls: a small see-through flag icon in the team's colour.
+func _add_icon(root: Node3D, team: int) -> void:
+	var colour := color_of(team)
 	var icon := Sprite3D.new()
 	icon.name = "Icon"
 	icon.texture = icon_texture()
@@ -320,6 +330,10 @@ func _build_marker(root: Node3D, colour: Color) -> Array:
 	icon.position = Vector3(0.0, POLE_HEIGHT + 0.7, 0.0)
 	root.add_child(icon)
 
+
+## The marker's distance, beside the icon in small text.
+func _add_label(root: Node3D, team: int) -> void:
+	var colour := color_of(team)
 	var dist := Label3D.new()
 	dist.name = "Dist"
 	dist.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -334,7 +348,15 @@ func _build_marker(root: Node3D, colour: Color) -> Array:
 	# Beside the icon, to its right, as Halo puts it: half the icon's width plus a gap, in the label's own pixels.
 	dist.offset = Vector2(ICON_PX * 0.5 * ICON_PIXEL / DIST_PIXEL + 4.0, 0.0)
 	dist.render_priority = 10
-	dist.position = icon.position
+	dist.position = Vector3(0.0, POLE_HEIGHT + 0.7, 0.0)
 	root.add_child(dist)
-	return [icon, dist]
 
+
+func _add_light(root: Node3D, team: int) -> void:
+	var colour := color_of(team)
+	var light := OmniLight3D.new()
+	light.light_color = colour
+	light.omni_range = 5.0
+	light.light_energy = 0.8
+	light.position = Vector3(0.0, 1.5, 0.0)
+	root.add_child(light)
