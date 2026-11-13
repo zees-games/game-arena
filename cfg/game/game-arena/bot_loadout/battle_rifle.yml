@@ -6,3 +6,7 @@ secondary: revolver
 melee: knife
 thrown: frag
 tags: [mid, long]
+attachments:
+  battle_rifle:
+    optic: prism_3x
+    muzzle: compensator

@@ -6,3 +6,7 @@ secondary: machine_pistol
 melee: knife
 thrown: frag
 tags: [close, rush]
+attachments:
+  smg:
+    muzzle: suppressor
+    optic: red_dot

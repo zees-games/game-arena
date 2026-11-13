@@ -22,7 +22,7 @@ const SPAWNED := 12
 const FIGHT_SECONDS := 120.0
 
 const SECTIONS := 7
-const CHECKS := 22
+const CHECKS := 23
 
 var _entered := 0
 var _completed := 0
@@ -151,6 +151,8 @@ func _spawned(game: ArenaGame) -> void:
 	_check(wrong.is_empty(), "every bot carries its whole kit and holds its primary", "; ".join(wrong))
 	_check(kinds.size() >= 4, "%d bots spawn with at least four different kits" % SPAWNED, str(kinds.keys()))
 	_check(not game.player_for(7).has_meta(&"bot_loadout"), "a human does not draw a bot kit")
+	var bare := _bare_fittings(game)
+	_check(bare.is_empty(), "a kit's attachments are fitted to its guns", bare)
 	_done()
 
 
@@ -197,7 +199,7 @@ func _fight() -> void:
 	_check(fired.has(&"smg"), "under 'smg' the bots fire the smg", str(fired.keys()))
 	_check(stray.is_empty(), "no bot fires a gun its kit did not give", ", ".join(stray))
 	var choice := _gun_choices(game.player_for(ids[0]))
-	_check(choice.is_empty(), "the gun choice keeps the smg close and picks a gun that reaches far", choice)
+	_check(choice.is_empty(), "the smg wears its kit's suppressor, and the gun choice keeps it close and picks a gun that reaches far", choice)
 	_free(game)
 	await get_tree().process_frame
 	_done()
@@ -211,6 +213,8 @@ func _gun_choices(bot: ArenaPlayer) -> String:
 	var smg := _slot_of(arsenal, &"smg")
 	if smg == 0:
 		return "no smg slot"
+	if arsenal.fitting_at(smg).attachment_on(&"muzzle") != &"suppressor":
+		return "the kit's suppressor is not on the smg"
 	var _e := arsenal.equip(smg)
 	if arsenal.current_slot() != smg:
 		return "the smg is not held"
@@ -267,6 +271,24 @@ func _kit_of(game: ArenaGame, bot: ArenaPlayer) -> ArenaBotLoadouts.Kit:
 		if kit.id == bot.get_meta(&"bot_loadout"):
 			return kit
 	return null
+
+
+## The kit attachments missing from the guns of the spawned bots, or "" (also when no bot drew a kit with any).
+func _bare_fittings(game: ArenaGame) -> String:
+	var missing: Array[String] = []
+	for i in SPAWNED:
+		var bot := game.player_for(ArenaGame.BOT_SESSION_BASE + 1 + i)
+		var kit := _kit_of(game, bot)
+		if kit == null:
+			continue
+		for gun: Variant in kit.attachments:
+			var slot := _slot_of(bot.arsenal, StringName(str(gun)))
+			var fitting := bot.arsenal.fitting_at(slot)
+			var mounts: Dictionary = kit.attachments[gun]
+			for mount: Variant in mounts:
+				if fitting.attachment_on(StringName(str(mount))) != StringName(str(mounts[mount])):
+					missing.append("%s %s.%s" % [kit.id, gun, mount])
+	return ", ".join(missing)
 
 
 func _carried(arsenal: DotWeaponArsenal) -> Dictionary:

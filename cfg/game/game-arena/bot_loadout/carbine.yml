@@ -6,3 +6,7 @@ secondary: pistol
 melee: knife
 thrown: frag
 tags: [assault, mid]
+attachments:
+  carbine:
+    optic: holo
+    underbarrel: vertical_grip

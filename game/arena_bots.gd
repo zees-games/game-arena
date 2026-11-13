@@ -151,7 +151,9 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 	_write(intent, move, fire)
 	t_lap = ArenaFrameProbe.lap(&"ba_write", t_lap)
 	_throw(bot, mind, intent, move, fire, tick, tick_rate)
-	_choose_gun(bot, mind, world, me, intent, fire, tick)
+	# Only a bot that drew a kit switches; one on the default loadout plays as it always has.
+	if bot.has_meta(&"bot_loadout"):
+		_choose_gun(bot, mind, world, me, intent, fire, tick)
 	t_lap = ArenaFrameProbe.lap(&"ba_throw", t_lap)
 	move.sanitise()
 	fire.sanitise()
@@ -392,9 +394,6 @@ static func _throw(bot: ArenaPlayer, mind: Mind, intent: DotBotIntent, move: Dot
 ## when the primary is scoped. Only for a bot that drew a kit; checked one tick in [constant GUN_CHECK_EVERY].
 static func _choose_gun(bot: ArenaPlayer, mind: Mind, world: World, me: DotBotContact, intent: DotBotIntent, fire: DotWeaponCommand, tick: int) -> void:
 	if mind.throw_stage != 0 or fire.slot != 0 or (tick + mind.seed) % GUN_CHECK_EVERY != 0:
-		return
-	# Only a bot that drew a kit switches; one on the default loadout plays as it always has.
-	if not bot.has_meta(&"bot_loadout"):
 		return
 	var arsenal := bot.arsenal
 	if arsenal == null or me == null or arsenal.is_switching() or not bot.is_alive():

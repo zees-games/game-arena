@@ -61,7 +61,7 @@ func _give_bot_loadout(player: ArenaPlayer) -> bool:
 	arm_for_mode(player)
 	return true
 
-## Fits [param kit]'s attachments to the guns [param player] carries; nothing while the arsenal has no attachment catalogue.
+## Fits [param kit]'s attachments to the guns [param player] carries, through the arsenal's attachments catalogue.
 func _fit_bot_attachments(player: ArenaPlayer, kit: ArenaBotLoadouts.Kit) -> void:
 	if kit.attachments.is_empty() or player.arsenal.attachments == null:
 		return
