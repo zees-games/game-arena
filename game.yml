@@ -45,6 +45,8 @@ cvars:
 # admin holding that command's flag. A server owner can rename or remove these in their own
 # cfg/admin_menu.yml, which always wins.
 metadata:
+  # Ids this game was published under before the rename; an origin redirects them here (moved_to).
+  former_ids: [gamemann/game-final-contact, gamemann/game-arena]
   admin_menu:
     title: "Fatal Contact"
     items:
