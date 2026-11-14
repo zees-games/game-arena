@@ -308,12 +308,26 @@ func on_used(outcome: DotWeaponOutcome, weapon_draws: bool = false) -> void:
 			else:
 				on_impact(facing(at, shot.direction), false, shot.weapon_id)
 
-		fx.spawn_penetration_decals(shot.penetrations)
-		fx.spawn_ricochet_decals(shot.ricochets)
+		fx.spawn_penetration_decals(without_sky(space, shot.penetrations, shot.direction))
+		fx.spawn_ricochet_decals(without_sky(space, shot.ricochets, shot.direction))
 
 		# No hit marker here. `shot.damages` is this client's PREDICTION of what its shot
 		# did, and the server may refuse it (a lag-compensated miss, a protected spawn);
 		# the marker and its sound wait for the server's HIT ([method on_hit_confirmed]).
+
+
+## [param marks] (a shot's penetrations or ricochets) without the entries that touch a sky brush: a wall's exit face or a bounce on the sky takes no mark either.
+static func without_sky(space: PhysicsDirectSpaceState3D, marks: Array, direction: Vector3) -> Array:
+	var kept := []
+	for m: Variant in marks:
+		var d := m as Dictionary
+		var on := false
+		for key: String in ["entry", "exit", "point"]:
+			if d != null and d.has(key) and ArenaBspMap.on_sky(space, d[key], direction):
+				on = true
+		if not on:
+			kept.append(m)
+	return kept
 
 
 ## The physics this presentation's world answers queries from, or null outside the tree.

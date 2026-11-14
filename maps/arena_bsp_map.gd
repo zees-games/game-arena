@@ -293,7 +293,16 @@ static func on_sky(space: PhysicsDirectSpaceState3D, at: Vector3, direction: Vec
 		var node := hit.get("collider") as Node
 		if node != null and node.is_in_group(SKY_GROUP):
 			return true
-	return false
+	# A grazing or thin-hull hit can end beside the point: a short ray along the shot finds the hull's face too.
+	var dir := direction.normalized()
+	if not dir.is_finite() or dir == Vector3.ZERO:
+		return false
+	var ray := PhysicsRayQueryParameters3D.create(at - dir * 0.1, at + dir * 0.2, SKY_BIT)
+	ray.collide_with_bodies = false
+	ray.collide_with_areas = true
+	var found := space.intersect_ray(ray)
+	var area := found.get("collider") as Node if not found.is_empty() else null
+	return area != null and area.is_in_group(SKY_GROUP)
 
 
 ## Moves the legacy player-clip, fence, grate, vent and glass hulls off the shot layer: they still stop a body, and a shot passes.
