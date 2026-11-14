@@ -27,34 +27,42 @@ set -euo pipefail
 # A short frame sequence beside each still (DotShotSeq), so Nightly -> Review can play and scrub it.
 export DOT_SHOT_FRAMES=${DOT_SHOT_FRAMES:-16} DOT_SHOT_SECS=${DOT_SHOT_SECS:-2}
 cd "$(dirname "$0")/.."
-if [ "${1:-}" = "--weapon-drops" ]; then
-  shift
-  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/weapondrop_shot.gd -- "$@"
-fi
-if [ "${1:-}" = "--profiler-menu" ]; then
-  shift
-  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/profiler_menu_shot.gd -- "$@"
-fi
-if [ "${1:-}" = "--map-drop" ]; then
-  shift
-  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/local_map_drop_shot.gd -- "$@"
-fi
-if [ "${1:-}" = "--map-menu" ]; then
-  shift
-  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/map_menu_shot.gd -- "$@"
-fi
-if [ "${1:-}" = "--team-menu-key" ]; then
-  shift
-  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/team_menu_period_shot.gd -- "$@"
-fi
-if [ "${1:-}" = "--team-menu" ]; then
-  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/team_menu_shot.gd
-fi
-map="${1:-dm_box}"
-shift || true
 # RENDERER picks the rendering method. The client shell runs gl_compatibility everywhere,
 # and a look tuned under the editor's default (Forward+) can come out clipped to white
 # there; see docs/maps.md, "Colour and light".
-exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1600x900}" \
-  ${RENDERER:+--rendering-method "$RENDERER"} \
+# With no Vulkan GPU (dev02 and PH when gpu.sh finds no box free), Forward+ runs on lavapipe, and
+# Debian 13's lavapipe (LLVM 19, on these VMs' QEMU CPU) dies in LLVM's InstCombine compiling the
+# first 3D material: "propagate_notification" from a thread, then signal 11 (fc-windowed-client-crash-1).
+# Such a run draws with gl_compatibility unless RENDERER is set (RENDERER= keeps the project default).
+if [ -z "${RENDERER+x}" ] && ! vulkaninfo --summary 2>/dev/null | grep -qE 'PHYSICAL_DEVICE_TYPE_(DISCRETE|INTEGRATED)_GPU'; then
+  RENDERER=gl_compatibility
+  echo "screenshot.sh: no Vulkan GPU here, drawing with gl_compatibility (Forward+ on lavapipe crashes); RENDERER=forward_plus to force it" >&2
+fi
+R=(${RENDERER:+--rendering-method "$RENDERER"})
+if [ "${1:-}" = "--weapon-drops" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" "${R[@]}" --script tools/weapondrop_shot.gd -- "$@"
+fi
+if [ "${1:-}" = "--profiler-menu" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" "${R[@]}" --script tools/profiler_menu_shot.gd -- "$@"
+fi
+if [ "${1:-}" = "--map-drop" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" "${R[@]}" --script tools/local_map_drop_shot.gd -- "$@"
+fi
+if [ "${1:-}" = "--map-menu" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" "${R[@]}" --script tools/map_menu_shot.gd -- "$@"
+fi
+if [ "${1:-}" = "--team-menu-key" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" "${R[@]}" --script tools/team_menu_period_shot.gd -- "$@"
+fi
+if [ "${1:-}" = "--team-menu" ]; then
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" "${R[@]}" --script tools/team_menu_shot.gd
+fi
+map="${1:-dm_box}"
+shift || true
+exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1600x900}" "${R[@]}" \
   --script tools/screenshot.gd -- --map "$map" "$@"
