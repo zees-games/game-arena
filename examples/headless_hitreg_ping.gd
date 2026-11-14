@@ -499,17 +499,18 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 		net._last_frame_usec = Time.get_ticks_usec() - int(1.0e6 / float(TICK_RATE))
 		(_clients[SHOOTER_PEER]["bridge"] as ArenaNetBridge).draw_frame(alpha)
 		var drawn: ArenaPlayer = (_clients[SHOOTER_PEER]["game"] as ArenaGame).player_for(_target)
+		var drawn_at := float(net.clock.received_tick()) + alpha - net.interpolator.delay_ticks()
 		_last_frame = {
 			"feet": drawn.global_position,
 			"point": drawn.global_position + Vector3.UP * TORSO_HEIGHT * ArenaPlayerTunables.body_scale() * _stance_scale(drawn),
-			"time": float(net.clock.received_tick()) + alpha - net.interpolator.delay_ticks(),
+			"time": drawn_at,
 			"alpha": alpha,
 			"crouch": drawn.controller.state.crouch_fraction,
 			"newest": net._receiving_tick,
-			"bracket": net.interpolator.bracket_at(float(net.clock.received_tick()) + alpha - net.interpolator.delay_ticks()),
-			"eased": _ease_offset(net, _clients[SHOOTER_PEER]["bridge"]),
+			"bracket": net.interpolator.bracket_at(drawn_at),
+			"eased": _ease_offset(net, _clients[SHOOTER_PEER]["bridge"], drawn_at),
 		}
-		_note_ease(_ease_vector(net, _clients[SHOOTER_PEER]["bridge"]), drawn.global_position)
+		_note_ease(_ease_vector(net, _clients[SHOOTER_PEER]["bridge"], drawn_at), drawn.global_position)
 	return fired
 
 
@@ -533,17 +534,31 @@ func _lead_ticks() -> int:
 ## How far the interpolator's resume ease ([method DotNetInterpolator._ease_resume]) moved the drawn
 ## target off its blend this frame, in metres: what is left of the jump out of an extrapolation. The
 ## server rewinds to the blend; it cannot know this offset (and must not take one from a client).
-func _ease_offset(net: DotNetManager, bridge: ArenaNetBridge) -> float:
-	return _ease_vector(net, bridge).length()
+func _ease_offset(net: DotNetManager, bridge: ArenaNetBridge, render_tick: float) -> float:
+	return _ease_vector(net, bridge, render_tick).length()
 
 
-## The resume ease's offset on the drawn target's position this frame (zero when none).
-func _ease_vector(net: DotNetManager, bridge: ArenaNetBridge) -> Vector3:
+## The resume ease's offset on the drawn target's position this frame, drawn at [param render_tick]
+## (zero when none).
+func _ease_vector(net: DotNetManager, bridge: ArenaNetBridge, render_tick: float) -> Vector3:
 	var behaviour: DotNetBehaviour = bridge._behaviours.get(_target)
 	if behaviour == null or behaviour.identity == null:
 		return Vector3.ZERO
-	var track: Variant = net.interpolator._tracks.get(behaviour.identity.net_id)
+	var net_id: int = behaviour.identity.net_id
+	var track: Variant = net.interpolator._tracks.get(net_id)
 	if track == null:
+		return Vector3.ZERO
+	if net.interpolator.is_native():
+		# dot-sim's DotSimInterpolator draws the whole frame, ease included, and keeps its offsets to
+		# itself: the GDScript track's offsets stay empty. The ease is how far the drawn position is
+		# off the blend of the same snapshots at the same tick; none while extrapolating, as
+		# DotNetInterpolator._ease_resume eases only once the draw is back inside a bracket.
+		if track.samples.size() < 2 or render_tick >= float(track.newest_tick()):
+			return Vector3.ZERO
+		var blend: Variant = net.interpolator.value_at(net_id, &"net_position", render_tick)
+		var drawn: Variant = behaviour.get(&"net_position")
+		if blend is Vector3 and drawn is Vector3:
+			return (drawn as Vector3) - (blend as Vector3)
 		return Vector3.ZERO
 	var most := Vector3.ZERO
 	for property: Variant in track.offsets:
