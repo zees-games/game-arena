@@ -19,11 +19,11 @@ func _prediction_gap(session: int, from: int, to: int, skip: Dictionary = {}) ->
 	return [diffs.size(), diffs[int(diffs.size() * 0.95)], diffs[diffs.size() - 1], over]
 
 
-## [b]Stamina on, sprinting and wall-running through 20% loss.[/b] The arena has no stamina cvar (its
+## [b]Stamina on, sprinting and wall-running through loss.[/b] The arena has no stamina cvar (its
 ## sprint bit is the dash), so both ends' tunables are set the way a game that turned it on would.
 ## A drains to empty, waits out the refill delay and drains again, then runs the wall with sprint held.
 func _test_stamina_under_loss() -> void:
-	_section("sprint stamina and a wall run through 20% loss")
+	_section("sprint stamina and a wall run through loss")
 
 	var a: Dictionary = _clients["A"]
 	var net: DotNetManager = a["net"]
@@ -139,7 +139,7 @@ func _stamina_wall_run(server_a: ArenaPlayer, session: int, net: DotNetManager) 
 ## design (dot-net's reconcile_snap_distance). Either way A must end where the server's A is and
 ## stay there: one snap at most per teleport, then replays that agree.
 func _test_teleport_under_loss() -> void:
-	_section("a server teleport of a moving player through 20% loss")
+	_section("a server teleport of a moving player through loss")
 
 	var a: Dictionary = _clients["A"]
 	var net: DotNetManager = a["net"]
@@ -277,7 +277,7 @@ func _test_leave() -> void:
 	var b_net: DotNetManager = b["net"]
 	b_net.stop()
 
-	# RELIABLE_SECONDS: the link is still at the last window's 20% loss. Ten failed a CI
+	# RELIABLE_SECONDS: the link is at 5% loss after the windows (20% until 2026-11-13). Ten failed a CI
 	# release run (v0.1.6) on exactly that tail; the wait ends when A is told.
 	var gone := await _until(func() -> bool: return a_game.player_for(b_session) == null, RELIABLE_SECONDS)
 	_check(gone, "A's B is gone once the server has seen the disconnect",

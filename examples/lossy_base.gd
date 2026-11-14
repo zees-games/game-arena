@@ -65,10 +65,10 @@ const WINDOWS := [
 ## How long the first-seconds measurement runs, right after A connects.
 const FIRST_SECONDS := 3.0
 
-## How long anything sent reliably may take to land: ENet's own contract, not a guess. With
-## dot-core's peer timeouts a reliable command either arrives within 30 s or the peer is
-## dropped. ENet doubles a command's resend timeout every time it goes unacknowledged, and a
-## try fails if the data OR its acknowledgement is lost: 36% a try at 20% each way. So the
+## How long anything sent reliably may take to land. ENet doubles a command's resend timeout
+## every time it goes unacknowledged, with no cap, and a try fails if the data OR its
+## acknowledgement is lost: 36% a try at 20% each way. Once a timeout passes dot-core's 30 s
+## peer maximum (eight failed tries) the peer is dropped, so what follows the windows runs at 5%. The
 ## tail is long and real: a wait shorter than this is a wait on the dice, and every one that
 ## was written shorter (6 s for the windows' streams, 10 s for B's leave, 5 s for the cvars)
 ## flaked on exactly that tail. A wait on it ends the moment the thing arrives.
@@ -405,8 +405,8 @@ func _test_server_cvars_reach_the_client() -> void:
 		"the join carried the server's level and A's world is on it",
 		str(link.replicated_cvars))
 
-	# Each change is one reliable CVARS message through the link, still at the last window's
-	# 20% loss each way, so each wait is RELIABLE_SECONDS. These were 5 s and failed one run
+	# Each change is one reliable CVARS message through the link, at 5% loss each way after
+	# the windows (20% until 2026-11-13), so each wait is RELIABLE_SECONDS. These were 5 s and failed one run
 	# in 30 (2026-10-11): 60 changes measured 48 ms to 4.2 s (one resend 270 ms, three or
 	# four 1.1-2.1 s), and one 2 took past 5 s with the 0 queued behind it, in order on the
 	# channel, landing 9 s after the 2 was sent. At 35 s, six runs: one 2 at 12.3 s, one
