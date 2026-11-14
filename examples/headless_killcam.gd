@@ -6,7 +6,7 @@ const Bodies := preload("../game/arena_killcam_bodies.gd")
 const KillcamShots := preload("../game/arena_killcam_shots.gd")
 const KillPovView := preload("../game/arena_kill_pov_view.gd")
 
-const EXPECTED_CHECKS := 56
+const EXPECTED_CHECKS := 62
 
 ## The standalone game, as a player lives it: a bot kills the local player (the kill view of the
 ## killer plays), then a bot's kill ends the match (the final killcam plays its time, a skip key
@@ -115,6 +115,9 @@ func _run() -> void:
 	_check(await _until(func() -> bool: return me.is_alive(), 15.0), "then the player respawns")
 
 	await _test_final_killcam(gm, me, killer, bots)
+	await get_tree().process_frame
+	_check(_ghost_passes(get_tree().root).is_empty(), "after the deaths, kill views and final killcam no hidden view model still draws its gun", str(_ghost_passes(get_tree().root)))
+	_check(_shown_guns(get_tree().root) <= 1, "and at most one first-person gun is shown", str(_shown_guns(get_tree().root)))
 	_report(EXPECTED_CHECKS)
 
 
@@ -393,5 +396,71 @@ func _check_lens(gm: Object, me: Object, killer: Object) -> void:
 	view.present({"camera": cam, "aux": aux, "fov": 75.0, "behind": false})
 	_check(view.hands != null and view.hands == parked_rig, "the next kill by that weapon takes the parked view model")
 	view.present({})
+	await _check_ghost_guns(view, cam, aux, wall_eye, wall_dir)
 	cam.queue_free()
 	view.queue_free()
+
+
+## Owner video: small dark copies of the player's gun floated in the map, switching and reloading with it, up to one
+## per kill-view rig. A rig parked hidden at a wall kept its wall pass (a CanvasLayer, which no hidden or stopped
+## parent hides) on, drawing the view layer (the player's own gun) from the rig's stale camera.
+## Kill views at a wall, with a different weapon each time, then ended: no parked rig may keep that pass on.
+func _check_ghost_guns(view: Node, cam: Camera3D, aux: PackedFloat32Array, wall_eye: Vector3, wall_dir: Vector3) -> void:
+	var was := get_viewport().get_camera_3d()
+	# The live client makes the player's camera current each frame; in a real kill view the replay camera is.
+	var client_ran := _client.is_processing()
+	_client.set_process(false)
+	var ids: Array = AwWeaponArtTable.table().keys()
+	var lit := 0
+	var ghosts := 0
+	for i in 12:
+		var held := aux.duplicate()
+		held[0] = float(String(ids[i % ids.size()]).hash() & 0xFFFFFF)
+		for f in 20:
+			cam.current = true
+			cam.look_at_from_position(wall_eye, wall_eye + wall_dir)
+			view.present({"camera": cam, "aux": held, "fov": 75.0, "behind": false})
+			await get_tree().physics_frame
+		if not _wall_passes(cam).is_empty():
+			lit += 1
+		view.present({})
+		await get_tree().process_frame
+		ghosts += _ghost_passes(view).size()
+	_check(lit > 0, "control: the replayed gun at a wall draws its wall pass", "%d of 12" % lit)
+	_check(ghosts == 0, "no parked kill-view rig keeps drawing its gun after 12 kill views at a wall", "%d left on" % ghosts)
+	_check(_ghost_passes(get_tree().root).is_empty() and _shown_guns(view) == 0, "nor any other hidden view model, and no rig shows a gun", str(_ghost_passes(get_tree().root)))
+	cam.current = false
+	if was != null:
+		was.current = true
+	_client.set_process(client_ran)
+	await get_tree().process_frame
+	_check(_ghost_passes(get_tree().root).is_empty(), "nor once the replay camera is no longer the one on screen")
+
+
+## The view models' wall passes that are on.
+func _wall_passes(root: Node) -> Array[Node]:
+	var out: Array[Node] = []
+	for canvas in root.find_children("ViewOverlay", "CanvasLayer", true, false):
+		if (canvas as CanvasLayer).visible and canvas.get_parent() is AwViewModel:
+			out.append(canvas)
+	return out
+
+
+## Wall passes that are on for a view model not drawn on the screen's camera: each draws a ghost gun.
+func _ghost_passes(root: Node) -> Array[String]:
+	var out: Array[String] = []
+	for canvas in _wall_passes(root):
+		var host := canvas.get_parent() as AwViewModel
+		var camera := host.get_parent() as Camera3D
+		if not host.is_visible_in_tree() or not host.can_process() or camera == null or not camera.current:
+			out.append(str(host.get_path()))
+	return out
+
+
+## First-person guns shown under [param root].
+func _shown_guns(root: Node) -> int:
+	var n := 0
+	for node in root.find_children("*", "Node3D", true, false):
+		if node is AwViewModel and (node as AwViewModel).is_visible_in_tree() and (node as AwViewModel).equipped() != &"":
+			n += 1
+	return n
