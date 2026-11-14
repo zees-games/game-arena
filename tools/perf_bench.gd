@@ -17,7 +17,7 @@ const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 ## `--sight-far M`, `--sight-far-reuse S`: bot sight LOD (bot_sight_far, bot_sight_far_reuse; default 20 m and 0.15 s, 0 turns it off).
 ## `--tier-body-near N`, `--tier-body-far N`: ticks between motor ticks of a coasting bot nobody sees (bot_tier_body_every_near/far; 1, the default, every tick).
 ## `--web-defaults 1`: the browser build's defaults (cl_remote_lod_every 8).
-## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--occl 0` (cl_remote_occlusion off), `--carry 0` (AwWorldModel.person_carry off: the held gun's own kick and reload dip, no humanoid carry), `--ablate a,b` (after the warm-up: shadowcensus, smallcast, smallcast2, noshadow, nofx, nohud, nobots, no3d, norender).
+## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--occl 0` (cl_remote_occlusion off), `--held-shadows 0|1` (remote held guns cast a shadow), `--carry 0` (AwWorldModel.person_carry off: the held gun's own kick and reload dip, no humanoid carry), `--ablate a,b` (after the warm-up: shadowcensus, smallcast, smallcast2, noshadow, nofx, nohud, nobots, no3d, norender).
 ## `--first-use 1` (dot-game's first-use rows): every weapon equipped, fired once cold and once warm, before the warm-up (offline only;
 ## `--first-use-only a,b` for some ids); `--prewarm 0` skips the client's weapon warm-up, so `--ab DIR DIR::--prewarm 0 -- --first-use 1` prices it.
 ## `--proc-split 1`: the process phase split by wall clock and a census of what processes (tools/proc_split.gd); `--present-ablate N` (ArenaPlayer.present_ablate bits: 1 no figure animation, 2 no held, 4 held not processing, 8 no pose).
@@ -95,6 +95,8 @@ func _ready() -> void:
 		preload("../game/arena_player.gd").occlusion_enabled = false
 	if int(args.get("anim-gate", 1)) == 0:
 		preload("../game/arena_player.gd").anim_gate_enabled = false
+	if args.has("held-shadows"):
+		preload("../game/arena_player.gd").held_shadows = int(args["held-shadows"]) != 0
 	if int(args.get("carry", 1)) == 0:
 		# By name: a no-op against an arena-weapons older than the switch.
 		(AwWorldModel as Script).set(&"person_carry", false)
