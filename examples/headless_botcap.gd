@@ -12,7 +12,7 @@ const SERVER_DIR := "user://arena_botcap"
 const TICK_RATE := 64
 
 const SECTIONS := 1
-const CHECKS := 17
+const CHECKS := 19
 
 
 
@@ -53,7 +53,7 @@ func _test_counts() -> void:
 	_cmd("sv_maxplayers 0")
 	_cmd("bot_quota_mode fixed")
 	_check(_server.config.max_players == 0, "sv_maxplayers 0 is unlimited")
-	for n in [16, 17, 32, 64, 128, 256, 300]:
+	for n in [16, 17, 32, 64, 128, 256, 300, 512]:
 		_cmd("bot_quota %d" % n)
 		_module._keep_bots()
 		_step(2)

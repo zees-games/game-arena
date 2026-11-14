@@ -126,7 +126,7 @@ static func _server_config(port: int, tickrate: int, data: String) -> DotServerC
 	config.hostname = "solo"
 	config.port = port
 	config.tickrate = tickrate
-	config.max_players = 64
+	config.max_players = 0  # unlimited, as on the dedicated stack: bot_quota sets the bots; nothing caps them at 64
 	config.bind_address = "127.0.0.1"
 	config.transport_mode = "dual"
 	config.rcon_password = ""

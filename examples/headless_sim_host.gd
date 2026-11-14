@@ -288,6 +288,14 @@ func _owner_checks(game: Object) -> void:
 	var quota: DotResult = await _ask("bot_quota 3")
 	var three := await _until(func() -> bool: return _players() == 3, 20.0)
 	_check(quota.ok and three, "bot_quota counts the player, as solo does", "%s, %d players" % [quota.ok, _players()])
+	# No cap at 64: the loopback server's max_players was 64 and clipped `bot_quota 128` to 64 players.
+	for want: int in [128, 200]:
+		var many: DotResult = await _ask("bot_quota %d" % want)
+		var all := await _until(func() -> bool: return _players() == want, 90.0)
+		_check(many.ok and all, "bot_quota %d spawns %d players, the owner included" % [want, want], "%s, %d players" % [many.ok, _players()])
+	var back: DotResult = await _ask("bot_quota 3")
+	var back_down := await _until(func() -> bool: return _players() == 3, 60.0)
+	_check(back.ok and back_down, "and bot_quota 3 brings it back down", "%d players" % _players())
 	var hard: DotResult = await _ask("bot_difficulty hard")
 	var hard_now: DotResult = await _ask("bot_difficulty")
 	_check(hard.ok and str(hard_now.value).contains("hard"), "bot_difficulty reaches the server", str(hard_now.value))
