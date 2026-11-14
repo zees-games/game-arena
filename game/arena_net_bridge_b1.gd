@@ -722,11 +722,14 @@ func _tick_killview() -> void:
 		killview = game.make_killview_server()
 	var tick := game.current_tick()
 	var now := float(tick) / float(game.tick_rate)
+	var t_kv := ArenaFrameProbe.lap_start()
 	killview.record(now)
+	t_kv = ArenaFrameProbe.lap(&"kv_record", t_kv)
 	for ready: Dictionary in killview.collect(now, tick):
 		var peer := peer_for_session(int(ready["victim"]))
 		if peer != 0:
 			send_event(peer, ArenaEvents.Kind.KILLVIEW, DotKillViewClip.pack(ready["clip"], ready["info"], ArenaEvents.KILLVIEW_BYTES))
+	ArenaFrameProbe.lap(&"kv_collect", t_kv)
 
 
 ## Sends this tick's hits, each to the player who dealt it. A bot has no peer and is told

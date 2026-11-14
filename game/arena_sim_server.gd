@@ -186,11 +186,20 @@ func _report(net: DotNetManager) -> void:
 			ticks / secs, Engine.physics_ticks_per_second,
 			(int(now[&"server_sim_usec"]) - int(last[&"server_sim_usec"])) / 1000.0 / ticks,
 			(int(now[&"server_send_usec"]) - int(last[&"server_send_usec"])) / 1000.0 / ticks])
+		# server_tick's own sections (a dot-net without them reports 0): input before sim, the
+		# still-registered check inside sim, the rewind history record inside send.
+		print("SIM_HOST_NET ms/tick | input %.3f, check %.3f, hist %.3f" % [
+			_per_tick(now, last, &"server_input_usec", ticks), _per_tick(now, last, &"server_check_usec", ticks),
+			_per_tick(now, last, &"server_history_usec", ticks)])
 		if ArenaFrameProbe.on():
 			print(sections_line(ArenaFrameProbe._sections, ticks))
 			ArenaFrameProbe._reset()
 		last = now
 		t0 = Time.get_ticks_usec()
+
+
+static func _per_tick(now: Dictionary, last: Dictionary, key: StringName, ticks: int) -> float:
+	return (int(now.get(key, 0)) - int(last.get(key, 0))) / 1000.0 / ticks
 
 
 ## `SIM_HOST_SECTIONS name ms/tick xcalls/tick, ...`, costliest first. Sections nest (srv_game holds tick_players,
