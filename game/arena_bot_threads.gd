@@ -14,7 +14,23 @@ const MIN_BOTS := 8
 const CHUNK := 4
 
 ## Threads that decide (the main thread is one); 0 and 1 think on the main thread.
-static var threads: int = 0
+static var threads: int = launch_default()
+
+## [member threads] on a threaded web engine (dot-server-deploy's `index-mt`, picked when the page is
+## cross-origin isolated): the browser's main thread draws too, so the brains go to workers there.
+const WEB_THREADS := 4
+
+
+## [member threads] before the cvar says otherwise: [constant WEB_THREADS] (at most the browser's
+## cores) on a threaded web engine, else 0. The page's `?bot_threads=N` overrides it, so a browser
+## measurement can compare counts from a URL. The single-threaded engine always thinks on the main thread.
+static func launch_default() -> int:
+	if not (DotPlatform.is_web() and DotPlatform.has_threads()):
+		return 0
+	var asked := ArenaFrameProbe.launch_value("bot_threads")
+	if asked.is_valid_int():
+		return clampi(int(asked), 0, 64)
+	return mini(WEB_THREADS, OS.get_processor_count())
 
 ## Ticks whose brains went through the worker path (for the suite).
 static var par_ticks: int = 0
