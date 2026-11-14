@@ -119,6 +119,12 @@ func start(bots: int) -> DotResult:
 		brain_native = _arg("--brain-native")
 	if brain_native != "":
 		args.append_array(["--bot_native_brain", brain_native])
+	# dot-sim's native bot loop on the server (perf_bench's `--native-loop` names the same switch).
+	var native_loop := _arg("--bot_native_loop")
+	if native_loop == "":
+		native_loop = _arg("--native-loop")
+	if native_loop != "":
+		args.append_array(["--bot_native_loop", native_loop])
 	args.append_array(shell_child_args())
 	_pid = OS.create_process(OS.get_executable_path(), args)
 	if _pid <= 0:

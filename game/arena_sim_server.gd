@@ -5,13 +5,14 @@ const ArenaGame := preload("arena_game.gd")
 const ArenaMap := preload("../maps/arena_map.gd")
 const ArenaModule := preload("arena_module.gd")
 const ArenaSimOwner := preload("arena_sim_owner.gd")
+const ArenaBots := preload("arena_bots.gd")
 const ArenaBotThreads := preload("arena_bot_threads.gd")
 const ArenaPlayerStack := preload("arena_player_stack.gd")
 const ArenaMaps := preload("arena_maps.gd")
 const ArenaPaths := preload("arena_paths.gd")
 
 ## The authoritative game of a solo session in its own process (`--sim_host 1`, [ArenaSimHost]): a loopback dedicated server the solo client spawns and joins, so the 66 Hz simulation never runs on the render thread. The same [ArenaModule] a public server runs.
-## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1 --bot_native_brain 0|1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
+## Launch flags (after `--`): `--port N --bots N --map ID --mode ID --ready PATH --bot_threads N --sim_load_us N --sim_sections 1 --bot_native_brain 0|1 --bot_native_loop 0|1`. It writes PATH once it accepts players, and quits a few seconds after its player left.
 
 const ArenaFrameProbe := preload("arena_frame_probe.gd")
 
@@ -45,6 +46,10 @@ func _ready() -> void:
 	var brain_native := _arg("--bot_native_brain", "")
 	if brain_native != "":
 		ArenaPlayerStack.set_brain_native(brain_native.to_int() != 0)
+	# dot-sim's native bot loop (think tiers so far; on when the library is loaded) off for a bench's A/B.
+	var native_loop := _arg("--bot_native_loop", "")
+	if native_loop != "":
+		ArenaBots.tiers.native = native_loop.to_int() != 0
 	_load_us = maxi(0, int(_arg("--sim_load_us", "0")))
 	set_physics_process(_load_us > 0)
 	# Where a tick goes: the [ArenaFrameProbe] sections the server's tick records (srv_*, tick_*, p_*, bot_*, w_*),
@@ -115,8 +120,9 @@ func _ready() -> void:
 			var _stored := f.store_string(str(config.effective_enet_port()))
 			f.close()
 	_server = server
-	print("SIM_HOST ready map=%s mode=%s bots=%d bot_threads=%d brain=%s" % [String(game.map.id), String(game.mode.id), bots,
-		ArenaBotThreads.threads, "native" if ArenaPlayerStack.brain_native() else "script"])
+	print("SIM_HOST ready map=%s mode=%s bots=%d bot_threads=%d brain=%s loop=%s" % [String(game.map.id), String(game.mode.id), bots,
+		ArenaBotThreads.threads, "native" if ArenaPlayerStack.brain_native() else "script",
+		"native" if ArenaBots.tiers.native and ClassDB.class_exists(&"DotSimThinkTier") else "script"])
 	_report(module.net)
 
 

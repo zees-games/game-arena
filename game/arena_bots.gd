@@ -174,10 +174,13 @@ static func think_finish(_game: Object, bot: ArenaPlayer, mind: Mind, tick: int,
 		# every here is the coast's length: to the bot's next beat at its tier's period.
 		# Idle: no target, or dead (a bot fighting a bot is neither); a seen idle bot thins to tiers.idle_view_every.
 		var idle := intent.target_id < 0
-		mind.every = DotBotThinkTier.until_beat(tick, mind.seed, maxi(tiers.period(bot.player_id, me.position, engaged, idle), think_floor_engaged if engaged else think_floor))
-		mind.coasting = mind.every > 1 and _tier_coastable(mind, intent)
 		# Body tiers (on above tiers.body_above players, bot_tier_body_every_near/far; 1 is off): a coasting bot nobody sees, nears or fights moves every few ticks.
-		bot.body_every = tiers.body_period(bot.player_id, me.position, engaged, idle) if mind.coasting else 1
+		# One classification for the period, the beat and the body (dot-bot API 27; native in dot-sim when loaded).
+		var coastable := _tier_coastable(mind, intent)
+		var plan := tiers.schedule(bot.player_id, me.position, engaged, idle, tick, mind.seed, think_floor_engaged if engaged else think_floor, coastable)
+		mind.every = plan.x
+		mind.coasting = plan.x > 1 and coastable
+		bot.body_every = plan.y
 	else:
 		bot.body_every = 1
 		mind.far = _every > 1 and _nobody_near(me, world)
