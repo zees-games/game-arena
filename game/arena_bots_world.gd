@@ -503,7 +503,7 @@ class World:
 	## The trace's own line_of_sight is a [DotHitbox.Hit] world ray: two Hit objects and, on a hit, the surface's
 	## material looked up, all of which a yes/no sight drops. Only the plain physics trace and the glass one (whose
 	## sight ray leaves the glass layer out) take this path; any other trace keeps its own rules.
-	const _GLASS_TRACE := preload("res://game/arena_glass_trace.gd")
+	const _GLASS_TRACE := preload("arena_glass_trace.gd")
 	var _sight_query: PhysicsRayQueryParameters3D = null
 
 	static func _plain_sight_trace(trace: Object) -> bool:
