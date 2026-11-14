@@ -77,6 +77,10 @@ func _ready() -> void:
 			"--thinknear": ArenaBots.think_near = float(args[i + 1])
 			"--tierabove": ArenaBots.tiers.above = int(args[i + 1])
 			"--motorprof": _motorprof = args[i + 1] != "0"
+			"--spawn": _spawn = args[i + 1] != "0"
+			"--wphases":
+				AwWeaponRig.phase_timers = args[i + 1] != "0"
+				DotWeaponArsenal.phase_timers = AwWeaponRig.phase_timers
 			"--native": DotBotWorld.native_enabled = args[i + 1] != "0"
 			"--motornative": DotFpsPhysicsBody.native_enabled = args[i + 1] != "0"
 	DotLog.set_level(DotLog.Level.ERROR)
@@ -168,10 +172,31 @@ func _report(extra: Dictionary) -> void:
 		out["hull_native_gathers"] = c[0]
 		out["hull_native_pair_calls"] = c[1]
 	out["motor_us_per_bot_tick"] = _motor_phases(_count)
+	if AwWeaponRig.phase_timers:
+		# Weapon tick sub-phases (ms per tick), the split of p_weapons, and how many idle/full ticks they cover.
+		var wp := {}
+		for i in AwWeaponRig.PHASES.size():
+			wp["rig_" + AwWeaponRig.PHASES[i]] = snappedf(AwWeaponRig.phase_us[i] / 1000.0 / maxi(1, _count), 0.001)
+		for i in DotWeaponArsenal.PHASES.size():
+			wp["ars_" + DotWeaponArsenal.PHASES[i]] = snappedf(DotWeaponArsenal.phase_us[i] / 1000.0 / maxi(1, _count), 0.001)
+		wp["rig_calls"] = AwWeaponRig.phase_calls
+		wp["ars_calls"] = DotWeaponArsenal.phase_calls
+		out["weapon_phases_ms"] = wp
 	print("SCALE128 ", JSON.stringify(out))
 
 
 var _motorprof := false
+var _spawn := false
+
+
+## `--spawn 1`: respawns the dead (or, with [param all], everyone) through ArenaGame.respawn_player, about once a
+## second; the match's own queue never runs without a person in it.
+func _respawn_dead(game: Node, all: bool) -> void:
+	for p in game.players():
+		if all or not p.is_alive():
+			var _r: DotResult = game.respawn_player(p.player_id)
+
+
 var _shots := 0
 var _hits := 0
 var _heads := 0
@@ -211,6 +236,10 @@ func _begin_record() -> void:
 		DotFpsController.phase_us.fill(0)
 	ArenaFrameProbe.set_interval(1.0e9)
 	ArenaFrameProbe._sections.clear()
+	AwWeaponRig.phase_us.fill(0)
+	AwWeaponRig.phase_calls.fill(0)
+	DotWeaponArsenal.phase_us.fill(0)
+	DotWeaponArsenal.phase_calls.fill(0)
 	_script_us.clear()
 	_phys_ms.clear()
 	_count = 0
@@ -256,12 +285,20 @@ func _serve() -> void:
 	made = module.bridge.bot_ids().size()
 	var add_ms := (Time.get_ticks_usec() - t_add) / 1000.0
 	game = module.game
+	if _spawn:
+		# With no person in it the match never runs its respawn queue: the bots would stand where they joined with
+		# empty hands, and p_weapons would time unarmed players. Spawn each one the way a respawn does (loadout too).
+		_respawn_dead(game, true)
 	await get_tree().create_timer(_settle).timeout
 	var net: DotNetManager = module.net
 	var before: Dictionary = net.perf_counters()
 	_begin_record()
 	_tally_on(game)
-	await get_tree().create_timer(_seconds).timeout
+	var t_end := Time.get_ticks_usec() + int(_seconds * 1.0e6)
+	while Time.get_ticks_usec() < t_end:
+		await get_tree().create_timer(minf(1.0, (t_end - Time.get_ticks_usec()) / 1.0e6)).timeout
+		if _spawn:
+			_respawn_dead(game, false)
 	_recording = false
 	var after: Dictionary = net.perf_counters()
 	var nt := maxi(1, int(after[&"server_ticks"]) - int(before[&"server_ticks"]))
