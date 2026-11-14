@@ -135,7 +135,7 @@ Use **`tools/perf_bench.sh --release`** (also with `--ab DIR_A DIR_B -n 3`): `gp
 2. Start the match you want to measure (solo with bots, or join a server) and play until the map has loaded.
 3. Press F10. It records `profiler_capture_seconds` (10 unless set) and writes the report; F10 again stops early. Play normally meanwhile.
 4. For another length open the console (the key left of 1) and type `profiler_record 60`; `profiler_stop` ends it, `profiler_report` prints the last one, `profiler_overlay 1` shows the live graph.
-5. The files are in `%APPDATA%\Godot\app_userdata\game-arena\profiles` (Linux: `~/.local/share/godot/app_userdata/game-arena/profiles`): `<stamp>.json` (send this one), `.txt` (readable) and `.folded` (flame graph).
+5. The files are in `%APPDATA%\game-fatal-contact\profiles` (Linux: `~/.local/share/game-fatal-contact/profiles`; a build from before 2026-11-13 wrote to `...\Godot\app_userdata\game-arena\profiles`): `<stamp>.json` (send this one), `.txt` (readable) and `.folded` (flame graph).
 6. Compare two runs with `profiler_compare a.json b.json`.
 
 Every report's `context` names the machine, GPU and driver, the build's commit and each addon's, the launch arguments, every console variable and which were changed, map, mode, players and bots, the sound driver, and whether the dot-sim natives loaded, so a file needs no covering note. `arena.audio` in the system table is the game thread's share of sound (starting and reaping voices), not the mix thread. `--no-profiler` on the command line removes the profiler for an A/B. In a release build `profiler_script_top` has nothing to show (the engine keeps per-function script times only under the debugger); the system table, frame times and spikes are the same.

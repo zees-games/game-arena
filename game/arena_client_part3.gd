@@ -6,6 +6,7 @@ extends "arena_client_part2.gd"
 ## launch argument or URL query, still wins. Native is unchanged.
 const WEB_SUN_SHADOW_SPLITS := 1.0
 const _RenderQuality := preload("res://addons/dot_game/runtime/dot_game_render_quality.gd")
+const _UserDir := preload("arena_user_dir.gd")
 
 func _web_render_defaults() -> void:
 	if DotPlatform.is_web() and float(_RenderQuality.values[&"r_sun_shadow_splits"]) < 0.0:
@@ -16,6 +17,8 @@ func _ready() -> void:
 	if ArenaSimHost.is_server_child():
 		_become_sim_server()
 		return
+	# Before anything reads user://: the first run under game-fatal-contact copies the game-arena folder in.
+	_UserDir.migrate()
 	_apply_launch_art()
 	_web_render_defaults()
 

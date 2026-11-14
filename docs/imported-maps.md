@@ -92,7 +92,7 @@ A server names its combat surf maps the way every game does: `ArenaMapDirector.s
 
 ## Maps copied in by hand
 
-A raw convert folder (`<name>.json`, `<name>.bin`, `textures/`) copied to `addons/maps/<folder>/` in a source checkout or to the user data folder's `maps/<folder>/` plays solo as `<name>_local`, titled "(local)". The folder may be the convert folder itself or a map folder with `convert/` inside; dot-map's `DotMapLocalMaps` finds it, and the first root wins.
+A raw convert folder (`<name>.json`, `<name>.bin`, `textures/`) copied to `addons/maps/<folder>/` in a source checkout or to the user data folder's `maps/<folder>/` (`~/.local/share/game-fatal-contact/maps` on Linux, `%APPDATA%\game-fatal-contact\maps` on Windows; `game/arena_user_dir.gd` copies the older `godot/app_userdata/game-arena` folder in on the first run) plays solo as `<name>_local`, titled "(local)". The folder may be the convert folder itself or a map folder with `convert/` inside; dot-map's `DotMapLocalMaps` finds it, and the first root wins.
 
 - Listed only when `ArenaMaps.list_local` is on, which the solo client and its sim host set. A server never lists one, so no rotation, vote or announcement can name a map other machines lack.
 - `ArenaLocalMaps` (maps/arena_local_maps.gd) builds the map from the mesh itself: spawns from its `spawns` (one is generated on the widest floor when it names none), bounds and the solid from the world hulls plus the solid props. The world is drawn and its movers built through `ArenaBspMap.world_prefix`, which answers a local id with the copied folder. There is no legacy manifest, so with no world drawn the level is empty but still solid.

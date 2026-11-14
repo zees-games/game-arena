@@ -5,6 +5,7 @@ const ArenaBspMap := preload("../maps/arena_bsp_map.gd")
 const ArenaLocalMaps := preload("../maps/arena_local_maps.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaClient := preload("../game/arena_client.gd")
+const ArenaUserDir := preload("../game/arena_user_dir.gd")
 
 ## Maps copied in by hand (`ArenaLocalMaps`): a raw convert folder under `res://addons/maps/` or `user://maps/` is listed
 ## as `<name>_local` only while `ArenaMaps.list_local` is on (solo), and loads with spawns, a solid, movers and a drawn world.
@@ -25,6 +26,9 @@ const DROPPED_FOLDER := "user://maps/zz_local_maps_suite_drop"
 const DROPPED_ZIP := "user://maps/zz_local_maps_suite.zip"
 ## The suite's own zip cache, so a run never wipes a player's unpacked zips.
 const ZIP_CACHE := "user://zz_local_maps_suite_cache"
+## A stand-in for the old game-arena user folder and the new one, for the copy `ArenaUserDir.migrate` makes.
+const OLD_USER := "user://zz_local_maps_suite_old_user"
+const NEW_USER := "user://zz_local_maps_suite_new_user"
 
 var _source := ""
 
@@ -39,6 +43,9 @@ func _ready() -> void:
 
 func _run() -> void:
 	var sections := 0
+	_clean()
+	_test_user_dir()
+	sections += 1
 	_clean()
 	_test_listing()
 	sections += 1
@@ -60,7 +67,7 @@ func _run() -> void:
 		sections += 1
 	else:
 		print("-- drops and _orig skipped: dot-map API %d < %d" % [DotAddonApi.build_level("dot_map"), ArenaLocalMaps.DROP_LEVEL])
-	var planned := 5 if ArenaLocalMaps.can_drop() else 3
+	var planned := 6 if ArenaLocalMaps.can_drop() else 4
 	if not _source.is_empty():
 		var name := DotMapLocalMaps.prefix_in(_source).get_file()
 		if not _check(not name.is_empty(), "the source holds a converted map", _source):
@@ -181,6 +188,35 @@ func _test_drops() -> void:
 
 
 ## `DotMapLocalMaps.accept_dropped` (API 24), called so the suite still parses on an older host.
+## The user folder is game-fatal-contact, and the first run copies the old game-arena folder's maps and settings in.
+func _test_user_dir() -> void:
+	_check(ArenaUserDir.is_ours(), "project.godot names the user folder %s" % ArenaUserDir.DIR_NAME,
+		str(ProjectSettings.get_setting("application/config/custom_user_dir_name", "")))
+	_check(OS.get_user_data_dir().get_file() == ArenaUserDir.DIR_NAME, "user:// is the game-fatal-contact folder",
+		OS.get_user_data_dir())
+	_check(ArenaUserDir.old_dir().ends_with("app_userdata/game-arena"), "the old folder is Godot's app_userdata/game-arena",
+		ArenaUserDir.old_dir())
+	_write(OLD_USER.path_join("settings/video.cfg"), "old")
+	_write(OLD_USER.path_join("maps/gm_fork/convert/manifest.json"), "{}")
+	_write(OLD_USER.path_join("maps/kept.json"), "old")
+	_write(OLD_USER.path_join(".hidden"), "old")
+	_write(OLD_USER.path_join("shader_cache/x.bin"), "cache")
+	_write(NEW_USER.path_join("maps/kept.json"), "new")
+	var copied := ArenaUserDir.copy_tree(ProjectSettings.globalize_path(OLD_USER), ProjectSettings.globalize_path(NEW_USER))
+	_check(copied == 3, "three files are copied (settings, a map, a hidden file)", str(copied))
+	_check(FileAccess.get_file_as_string(NEW_USER.path_join("settings/video.cfg")) == "old", "settings are copied")
+	_check(FileAccess.file_exists(NEW_USER.path_join("maps/gm_fork/convert/manifest.json")), "a local map is copied")
+	_check(FileAccess.get_file_as_string(NEW_USER.path_join("maps/kept.json")) == "new", "a file already there is kept")
+	_check(not DirAccess.dir_exists_absolute(NEW_USER.path_join("shader_cache")), "the shader cache is not copied")
+	_check(FileAccess.file_exists(OLD_USER.path_join("maps/kept.json")), "the old folder is left as it was")
+
+
+func _write(path: String, text: String) -> void:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+
+
 func _drop(path: String) -> Dictionary:
 	var local_maps: Object = DotMapLocalMaps
 	return local_maps.call(&"accept_dropped", PackedStringArray([ProjectSettings.globalize_path(path)]))
@@ -220,6 +256,8 @@ func _clean() -> void:
 	_wipe(DROP_SOURCE)
 	_wipe(DROPPED_FOLDER)
 	_wipe(ZIP_CACHE)
+	_wipe(OLD_USER)
+	_wipe(NEW_USER)
 	DirAccess.remove_absolute(DROPPED_ZIP)
 	for parent in ["res://addons/maps"]:
 		if DirAccess.dir_exists_absolute(parent) and DirAccess.get_directories_at(parent).is_empty() \
@@ -242,8 +280,10 @@ func _copy_tree(from_dir: String, to_dir: String, only: Array = []) -> int:
 func _wipe(dir: String) -> void:
 	if not DirAccess.dir_exists_absolute(dir):
 		return
-	for d in DirAccess.get_directories_at(dir):
-		_wipe(dir.path_join(d))
-	for n in DirAccess.get_files_at(dir):
+	var d := DirAccess.open(dir)
+	d.include_hidden = true
+	for sub in d.get_directories():
+		_wipe(dir.path_join(sub))
+	for n in d.get_files():
 		DirAccess.remove_absolute(dir.path_join(n))
 	DirAccess.remove_absolute(dir)
