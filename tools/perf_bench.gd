@@ -17,7 +17,7 @@ const ArenaPlayerStack := preload("../game/arena_player_stack.gd")
 ## `--sight-far M`, `--sight-far-reuse S`: bot sight LOD (bot_sight_far, bot_sight_far_reuse; default 20 m and 0.15 s, 0 turns it off).
 ## `--tier-body-near N`, `--tier-body-far N`: ticks between motor ticks of a coasting bot nobody sees (bot_tier_body_every_near/far; 1, the default, every tick).
 ## `--web-defaults 1`: the browser build's defaults (cl_remote_lod_every 8).
-## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--occl 0` (cl_remote_occlusion off), `--carry 0` (AwWorldModel.person_carry off: the held gun's own kick and reload dip, no humanoid carry), `--ablate a,b` (after the warm-up: noshadow, nofx, nohud, nobots, no3d, norender).
+## Render knobs: `--res 1920x1080`, `--killcam-hz N`, `--lod 0` (ArenaPlayer.present_lod_enabled off), `--anim-gate 0` (cl_remote_anim_gate off), `--occl 0` (cl_remote_occlusion off), `--carry 0` (AwWorldModel.person_carry off: the held gun's own kick and reload dip, no humanoid carry), `--ablate a,b` (after the warm-up: shadowcensus, smallcast, smallcast2, noshadow, nofx, nohud, nobots, no3d, norender).
 ## `--first-use 1` (dot-game's first-use rows): every weapon equipped, fired once cold and once warm, before the warm-up (offline only;
 ## `--first-use-only a,b` for some ids); `--prewarm 0` skips the client's weapon warm-up, so `--ab DIR DIR::--prewarm 0 -- --first-use 1` prices it.
 ## `--proc-split 1`: the process phase split by wall clock and a census of what processes (tools/proc_split.gd); `--present-ablate N` (ArenaPlayer.present_ablate bits: 1 no figure animation, 2 no held, 4 held not processing, 8 no pose).
@@ -394,12 +394,45 @@ func _sidecar_extra(_game: Object) -> Dictionary:
 	return {"phases_ms_per_frame": phases, "weapon_us_per_call": weapon, "native": native, "hulls": hulls, "sim_host": _sim_host and client.get("_sim_host") != null, "sched": _sched, "net": ArenaNetContext.describe(client.get("bridge")), "pilot": _pilot, "brain_native": ArenaPlayerStack.brain_native(), "queries": _queries, "max_steps": _max_steps, "fine": _fine, "motor_queries": queries, "body_skipped": preload("../game/arena_player.gd").body_skipped, "tiers": preload("../game/arena_bots.gd").tiers.describe()}
 
 
+## Casters by size: the census (`shadowcensus`) and the cuts `smallcast` (longest side < 0.6 m) and `smallcast2` (< 1.5 m).
+func _shadow_cap(mode: String) -> void:
+	var limit := 0.6 if mode == "smallcast" else 1.5
+	var buckets := {"<0.3": 0, "<0.6": 0, "<1.5": 0, "<4": 0, "big": 0}
+	var cut := 0
+	var whos := {}
+	for n in get_tree().root.find_children("*", "MeshInstance3D", true, false):
+		var m := n as MeshInstance3D
+		if m.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_ON or not m.is_visible_in_tree() or m.mesh == null:
+			continue
+		var box := m.mesh.get_aabb().size
+		var b := m.global_transform.basis
+		var size := maxf(box.x * b.x.length(), maxf(box.y * b.y.length(), box.z * b.z.length()))
+		var k := "<0.3" if size < 0.3 else "<0.6" if size < 0.6 else "<1.5" if size < 1.5 else "<4" if size < 4.0 else "big"
+		buckets[k] += 1
+		if mode == "shadowcensus" and size < 1.5:
+			var a := m.get_parent()
+			var who := ""
+			while a != null and who.length() < 90 and a != get_tree().root:
+				who = String(a.get_class()) + ":" + String(a.name).left(14) + "/" + who
+				a = a.get_parent()
+			who = who.right(70)
+			whos[who] = int(whos.get(who, 0)) + 1
+		if mode != "shadowcensus" and size < limit:
+			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			cut += 1
+	for w in whos:
+		say("census %d %s" % [whos[w], w])
+	say("%s: casters by longest side %s, cut %d" % [mode, buckets, cut])
+
+
 func _apply_ablate() -> void:
 	for a in _ablate:
 		match a:
 			"noshadow":
 				for l in get_tree().root.find_children("*", "Light3D", true, false):
 					(l as Light3D).shadow_enabled = false
+			"shadowcensus", "smallcast", "smallcast2":
+				_shadow_cap(a)
 			"nofx":
 				var envs: Array[Environment] = []
 				for we in get_tree().root.find_children("*", "WorldEnvironment", true, false):
