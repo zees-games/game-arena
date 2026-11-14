@@ -62,6 +62,23 @@ func _run() -> void:
 	_report_sections(_entered, _completed, SECTIONS, CHECKS)
 
 
+## The levels of the addons the live shell ships, `requires.pins.json` (refresh it when a shell ships; same shape as requires.floor.json), so a floor is judged against what the shell has, not the linked head. Where dot-server-deploy's addons.lock is reachable it must pin at least these levels, or the file claims more than any shell will have.
+func _pinned_levels() -> Dictionary:
+	var read := DotAddonApi.parse(FileAccess.get_file_as_string("res://requires.pins.json"), "requires.pins.json")
+	return read.value as Dictionary if read.ok else {}
+
+
+func _lock_covers(pins: Dictionary) -> String:
+	for root in [OS.get_environment("DOT_REPOS_ROOT"), "/home/gamedev/godot", "/home/gamedev/projects/godot"]:
+		var lock := str(root).path_join("dot-server-deploy/addons.lock")
+		if str(root) != "" and FileAccess.file_exists(lock):
+			var locked := DotAddonApi.pinned_levels(lock, str(root))
+			for addon in pins:
+				if locked.has(addon) and int(locked[addon]) < int(pins[addon]):
+					return "%s is %d in requires.pins.json, %d in addons.lock" % [addon, pins[addon], locked[addon]]
+	return ""
+
+
 ## Every key `ArenaClient` reads is a row in `ArenaBindings`; the action names are written out here
 ## so a missing row fails the check rather than shrinking the table.
 func _test_every_key_is_an_action() -> void:
@@ -108,9 +125,12 @@ func _test_every_key_is_an_action() -> void:
 	# A branch only matters if an older shell gets to run it.
 	var floors := DotAddonApi.parse(FileAccess.get_file_as_string("res://" + DotAddonApi.FLOOR_FILE), DotAddonApi.FLOOR_FILE)
 	var derived := DotAddonApi.derive()
-	var unsound := DotAddonApi.floor_audit(floors.value if floors.ok else {}, derived, DotAddonApi.guarded()) \
+	var unsound := DotAddonApi.floor_audit(floors.value if floors.ok else {}, derived, DotAddonApi.guarded(), {}, _pinned_levels()) \
 		if floors.ok else PackedStringArray([str(floors.error)])
 	_check(unsound.is_empty(), "requires.floor.json is sound: every floor has a guard behind it", str(unsound))
+	var pins := _pinned_levels()
+	var behind := _lock_covers(pins)
+	_check(not pins.is_empty() and behind == "", "requires.pins.json is read and addons.lock pins nothing lower", behind)
 	var asked := DotAddonApi.apply_floors(derived, floors.value if floors.ok else {})
 	_check(
 		asked.get("dot_ui") == 23 and asked.get("dot_lighting") == derived.get("dot_lighting") \
