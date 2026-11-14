@@ -262,11 +262,185 @@ func _adopt_catalogue(built: DotMapCatalogue) -> void:
 ## Solo: a converted map folder or `.zip` dragged onto the window (`DotMapLocalMaps.watch_drops`) is copied into
 ## `user://maps` and offered in M as "<title> (local)"; a `<map>_orig` pack draws with its own textures. Never on a
 ## client of a public server: a local map exists on this machine alone.
+## Every drop is answered on screen, on the menu's layer so an open Esc menu does not hide it: "Importing <map>…" while it
+## copies, then what was added or why not. A server client, or a build whose dot-map is older than API 24, says so.
 func watch_map_drops() -> void:
-	if not ArenaMaps.list_local or not is_inside_tree() or DotAddonApi.build_level("dot_map") < 24:
+	if not is_inside_tree() or get_window().files_dropped.is_connected(_on_files_dropped):
 		return
-	var local_maps: Object = DotMapLocalMaps  # API 24 by name: a call on the class itself does not parse
-	local_maps.call(&"watch_drops", get_window(), on_maps_dropped)
+	get_window().files_dropped.connect(_on_files_dropped)
+
+
+## The dot-map API level with `accept_dropped` (ArenaLocalMaps.DROP_LEVEL, which is not reachable from here).
+const MAP_DROP_LEVEL := 24
+## Seconds a drop's answer stays up.
+const DROP_SAY_SEC := 9.0
+## What the last drop said on screen, for a suite.
+var last_drop_said := ""
+
+
+func _on_files_dropped(files: PackedStringArray) -> void:
+	var _said := await import_dropped(files)
+
+
+## Imports [param files] dropped onto the window and says each step on screen. Returns the last line said.
+func import_dropped(files: PackedStringArray) -> String:
+	var shown := PackedStringArray()
+	for f in files:
+		shown.append(f.replace("\\", "/").rstrip("/").get_file())
+	var names := ", ".join(shown)
+	if not ArenaMaps.list_local:
+		return _drop_say("%s: dropped maps play in solo only. Leave this server, start a solo game and drop it again." % names)
+	var level := DotAddonApi.build_level("dot_map")
+	if level < MAP_DROP_LEVEL:
+		return _drop_say("Cannot import %s: this build's dot-map is API %d, importing a dropped map needs %d. Update the game." % [
+			names, level, MAP_DROP_LEVEL])
+	var _shown := _drop_say("Importing %s…" % names, 0.0)
+	# The copy blocks: let the panel draw first.
+	if is_inside_tree():
+		await get_tree().process_frame
+		await get_tree().process_frame
+	var added: Array = []
+	var errors := PackedStringArray()
+	for f in files:
+		var one := accept_drop(f)
+		added.append_array(one.get("added", []))
+		errors.append_array(one.get("errors", PackedStringArray()))
+	var text := on_maps_dropped({"added": added, "errors": errors})
+	for entry: Dictionary in added:
+		var looks := looks_line(entry)
+		if looks != "":
+			text += "\n" + looks
+	if not added.is_empty():
+		# Where it went, as the player's OS names it (the game-fatal-contact folder: ArenaUserDir).
+		text += "\nCopied to %s." % ProjectSettings.globalize_path(str((added[0] as Dictionary).get("dir", "user://maps")))
+	# Under a sim host M lists the server process's catalogue: it is told, and its answer waited for, before M is offered.
+	if host_console != null:
+		var unlisted := PackedStringArray()
+		for entry: Dictionary in added:
+			var told: DotResult = await host_console.ask("host_local %s" % str(entry["id"]))
+			if not told.ok:
+				unlisted.append("%s (%s)" % [str(entry.get("title", entry["id"])), told.error.message])
+		if not unlisted.is_empty():
+			text += "\nThe solo server could not list %s." % ", ".join(unlisted)
+	if text == "":
+		text = "Nothing to import in %s." % names
+	return _drop_say(text)
+
+
+## dot-map's `accept_dropped` for one dropped [param path], plus what it does not look for: a pack up to three folders down
+## (a whole download), the `<map>_orig` pack with the map's own textures before the free one beside it, and a folder named
+## `convert`, copied as `<map>/convert` so another map's `convert` does not replace it.
+func accept_drop(path: String) -> Dictionary:
+	var local_maps: Object = DotMapLocalMaps  # API 24 by name: a call on the class itself does not parse on older hosts
+	path = path.replace("\\", "/").simplify_path().rstrip("/")
+	var into := "user://maps"
+	if DirAccess.dir_exists_absolute(path):
+		var pack := _pack_dir_under(local_maps, path, 3)
+		if pack.get_file().to_lower().ends_with(ORIG_MARK):
+			path = pack  # copied as user://maps/<map>_orig: drawn with its own textures (DotMapLocalMaps.is_original)
+		elif pack != "" and pack.get_file() == "convert":
+			var map_name := str(local_maps.call(&"prefix_in", pack)).get_file()
+			into = into.path_join(map_name)
+			_forget_bare_convert(local_maps, map_name)
+			path = pack
+		elif pack != "" and pack != path and pack.get_base_dir() != path:
+			path = pack  # deeper than dot-map looks (one level)
+	return local_maps.call(&"accept_dropped", PackedStringArray([path]), into)
+
+
+## The first folder at or under [param dir], at most [param depth] folders down, holding a converted map (`<name>.json`
+## beside `<name>.bin`), `convert` first then by name; empty when there is none. A `<map>_orig` pack in a pack's folder
+## (`dot-map-convert regen --orig-textures` writes it there) is taken instead of that free one.
+static func _pack_dir_under(local_maps: Object, dir: String, depth: int) -> String:
+	if str(local_maps.call(&"prefix_in", dir)) != "":
+		for sub in DirAccess.get_directories_at(dir):
+			if sub.to_lower().ends_with(ORIG_MARK) and str(local_maps.call(&"prefix_in", dir.path_join(sub))) != "":
+				return dir.path_join(sub)
+		return dir
+	if depth <= 0:
+		return ""
+	var subs := DirAccess.get_directories_at(dir)
+	subs.sort()
+	if subs.has("convert"):
+		subs.remove_at(subs.find("convert"))
+		subs.insert(0, "convert")
+	for sub in subs:
+		if sub.begins_with(".") or sub == "__MACOSX":
+			continue
+		var found := _pack_dir_under(local_maps, dir.path_join(sub), depth - 1)
+		if found != "":
+			return found
+	return ""
+
+
+## A `convert` folder dropped before this fix was copied as `user://maps/convert`; that copy of the same map would be found
+## before the new `user://maps/<map>/convert` (scan order), so it goes.
+static func _forget_bare_convert(local_maps: Object, map_name: String) -> void:
+	var old := "user://maps/convert"
+	if str(local_maps.call(&"prefix_in", old)).get_file() == map_name:
+		_remove_tree(old)
+
+
+static func _remove_tree(dir: String) -> void:
+	var d := DirAccess.open(dir)
+	if d == null:
+		return
+	d.include_hidden = true
+	for sub in d.get_directories():
+		_remove_tree(dir.path_join(sub))
+	for file in d.get_files():
+		var _gone := DirAccess.remove_absolute(dir.path_join(file))
+	var _removed := DirAccess.remove_absolute(dir)
+
+
+## The name end of an original-textures pack (DotMapLocalMaps.ORIG_MARK, not reachable on older hosts).
+const ORIG_MARK := "_orig"
+## Missing texture names a drop's answer lists before "and N more".
+const LOOKS_LIST := 16
+
+
+## How the dropped [param entry] will look, from its pack's json, for a map converted from a game's BSP (its json has a
+## `licence`): an `_orig` pack names the original textures that are not in it (the game's own, not inside the BSP) and
+## are drawn with free stand-ins; a free pack says it has none of the originals. Empty for any other pack.
+static func looks_line(entry: Dictionary) -> String:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(str(entry.get("prefix", "")) + ".json"))
+	if not parsed is Dictionary or not (parsed as Dictionary).get("licence") is Dictionary:
+		return ""
+	var data: Dictionary = parsed
+	var title := str(entry.get("title", entry.get("id", "")))
+	var props := 0
+	for model: Variant in (data["licence"] as Dictionary).get("models", []):
+		if model is Dictionary:
+			props += int((model as Dictionary).get("count", 0))
+	var props_said := " Its %d props are stand-in models (the game's models are not in the BSP)." % props if props > 0 else ""
+	var orig: Variant = data.get("original_textures")
+	if not str(entry.get("name", "")).to_lower().ends_with(ORIG_MARK) or not orig is Dictionary:
+		return "%s uses free stand-in textures: the drop has no %s_orig folder with the map's own.%s" % [
+			title, str(entry.get("name", "")), props_said]
+	var missing: Array = (orig as Dictionary).get("missing", [])
+	var have := int((orig as Dictionary).get("from_base", 0)) + int((orig as Dictionary).get("from_pak", 0))
+	if missing.is_empty():
+		return "%s uses all %d of its own textures.%s" % [title, have, props_said]
+	var names := PackedStringArray()
+	for missed: Variant in missing.slice(0, LOOKS_LIST):
+		names.append(str(missed))
+	if missing.size() > LOOKS_LIST:
+		names.append("and %d more" % (missing.size() - LOOKS_LIST))
+	return "%s: %d of %d original textures missing (not in the BSP), using free stand-ins: %s.%s" % [
+		title, missing.size(), have + missing.size(), ", ".join(names), props_said]
+
+
+## [param text] on the menu's toast plate (drawn over an open menu) and on the HUD's notice line; [param seconds] 0 keeps
+## the toast up until the next.
+func _drop_say(text: String, seconds: float = DROP_SAY_SEC) -> String:
+	last_drop_said = text
+	if text == "":
+		return text
+	if game_menu != null and game_menu.has_method(&"toast"):
+		game_menu.call(&"toast", text, seconds)
+	if hud != null:
+		hud.notice(text)
+	return text
 
 
 ## What a drop did, in the M menu and on screen: each added map joins the built catalogue (a rebuild is 156 ms), and a
@@ -280,15 +454,15 @@ func on_maps_dropped(result: Dictionary) -> String:
 		titles.append(str(entry.get("title", id)))
 	var errors: PackedStringArray = result.get("errors", PackedStringArray())
 	var lines := PackedStringArray()
-	if not titles.is_empty():
-		lines.append("Added %s. Press M to play it." % ", ".join(titles))
+	if titles.size() == 1:
+		lines.append("Added %s. Press M and pick %s." % [titles[0], titles[0]])
+	elif not titles.is_empty():
+		lines.append("Added %s. Press M and pick one." % ", ".join(titles))
 	if not errors.is_empty():
-		lines.append("Not a map: %s" % "; ".join(errors))
+		lines.append("Could not import %s" % "; ".join(errors))
 	var text := "\n".join(lines)
 	for line in errors:
 		DotLog.warn(CHANNEL, "a dropped path is not a map", {"why": line})
-	if hud != null and text != "":
-		hud.notice(text)
 	return text
 
 

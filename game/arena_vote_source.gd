@@ -87,7 +87,9 @@ func choices() -> Array[DotVoteChoice]:
 		# A map that cannot host what is being played is not on the ballot. Offering
 		# it and refusing the change afterwards is a vote whose winner does not
 		# happen, which reads to the players as a broken server.
-		if not ArenaMaps.supports_mode(def, mode):
+		# A map dropped onto a solo window is listed whatever is played: picking it plays it in a mode it can host
+		# ([method apply]); only this machine ever sees the row.
+		if not ArenaMaps.supports_mode(def, mode) and not bool(def.meta.get("local", false)):
 			DotLog.debug(CHANNEL, "a map is off the ballot for the mode being played", {
 				"map": String(def.id), "mode": String(mode.id) if mode != null else "",
 			})
@@ -174,6 +176,9 @@ func apply(id: StringName) -> DotResult:
 	var text := String(id)
 
 	if text.begins_with(MAP_PREFIX):
+		var fits := mode_for_local(StringName(text.substr(MAP_PREFIX.length())))
+		if fits != &"":
+			return await apply_with_mode(id, StringName(MODE_PREFIX + String(fits)))
 		return await director.change_to(StringName(text.substr(MAP_PREFIX.length())))
 
 	if text.begins_with(MODE_PREFIX):
@@ -184,6 +189,19 @@ func apply(id: StringName) -> DotResult:
 		"A vote choice must say whether it is a map or a mode.",
 		text
 	)
+
+
+## For a local map [param map_id] that cannot host the mode being played, the first mode it can (free-for-all runs
+## anywhere); empty for any other map, which changes under the mode being played.
+func mode_for_local(map_id: StringName) -> StringName:
+	var def: DotMapDef = catalogue.get_map(map_id) if catalogue != null and catalogue.has(map_id) else null
+	var mode: ArenaMode = game.mode if game != null else null
+	if def == null or mode == null or not bool(def.meta.get("local", false)) or ArenaMaps.supports_mode(def, mode):
+		return &""
+	for candidate in ArenaModes.all():
+		if ArenaMaps.supports_mode(def, candidate):
+			return candidate.id
+	return &""
 
 
 ## The map menu's pick of a map and a mode together (`map:<id>`, `mode:<id>`): the map changes under the mode, as one change. The stamp is put back like [method _apply_mode]'s.

@@ -2,6 +2,7 @@ extends Node
 
 const ArenaPresentation := preload("../game/arena_presentation.gd")
 const ArenaSimHost := preload("../game/arena_sim_host.gd")
+const ArenaMaps := preload("../game/arena_maps.gd")
 
 ## `--sim_host 1`: the solo game runs as a loopback server process and this client joins it, so
 ## the simulation is off the render thread. Off unless asked for; the client sees the bots, lives,
@@ -108,6 +109,7 @@ func _run() -> void:
 	await _menu_checks(host)
 	_board_checks()
 	await _kill_feed_checks(host, game)
+	await _drop_checks()
 	await _owner_checks(game)
 	_check(OS.is_process_running(pid), "the server process outlived all of that")
 
@@ -239,6 +241,38 @@ func _kill_feed_checks(host: ArenaSimHost, game: Object) -> void:
 	_check(repeated.is_empty(), "no kill is said again in chat", str(repeated))
 	host.link.chat_received.disconnect(heard)
 	bridge.disconnect(&"kill_received", killed)
+
+
+## A map folder dropped onto the window is copied, then the server process is told: M asks that process, so it is
+## listed there at once, during CTF too (it plays free-for-all when picked).
+func _drop_checks() -> void:
+	if DotAddonApi.build_level("dot_map") < 24 or _client.get("host_console") == null:
+		print("-- drop checks skipped: dot-map API %d" % DotAddonApi.build_level("dot_map"))
+		return
+	var source := "user://zz_sim_host_drop_src/convert"
+	DirAccess.make_dir_recursive_absolute(source)
+	for n in ["fixture.json", "fixture.bin"]:
+		var _copied := DirAccess.copy_absolute("res://examples/local_maps".path_join(n), source.path_join(n))
+	var was_listing := ArenaMaps.list_local
+	ArenaMaps.list_local = true
+	var refused: DotResult = await _ask("host_local no_such_map_local")
+	_check(not refused.ok, "host_local refuses a map that is not there", "" if refused.ok else refused.error.message)
+	var said: String = await _client.call("import_dropped", PackedStringArray([ProjectSettings.globalize_path(source)]))
+	_check(said.begins_with("Added fixture (local).") and not said.contains("could not list"), "a dropped map is added and the server lists it", said)
+	var maps: Object = (_client.get("game_menu") as Object).get("maps")
+	maps.call("open")
+	var offered := await _until(func() -> bool:
+		for row: Dictionary in (maps.get("last_offer") as Dictionary).get("maps", []):
+			if str(row.get("id", "")) == "map:fixture_local":
+				return true
+		return false, 10.0)
+	_check(offered, "M, asked of the server process, offers it during CTF", str((maps.get("last_offer") as Dictionary).get("maps", []).size()))
+	(_client.get("game_menu") as Object).call("close_all")
+	ArenaMaps.list_local = was_listing
+	for dir in ["user://zz_sim_host_drop_src/convert", "user://zz_sim_host_drop_src", "user://maps/fixture/convert", "user://maps/fixture"]:
+		for n in DirAccess.get_files_at(dir):
+			var _gone := DirAccess.remove_absolute(dir.path_join(n))
+		var _removed := DirAccess.remove_absolute(dir)
 
 
 ## What solo does in its own process, asked of the server process: bots, difficulty, cheats, pause, map and mode.

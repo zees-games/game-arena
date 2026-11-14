@@ -1,7 +1,8 @@
 extends Node
 ## The solo server process obeying its owner: the one loopback player it was started for runs its
 ## console (bot_quota, bot_difficulty, sv_cheats, arena_mode and the rest) and two verbs of its own:
-## `host_change <map|-> [mode]`, awaited so the answer is the real result, and `host_pause 0|1`.
+## `host_change <map|-> [mode]`, awaited so the answer is the real result, `host_pause 0|1`, and `host_local <id>`
+## for a map dropped onto the client's window (its M menu lists this process's catalogue).
 
 const ArenaModule := preload("arena_module.gd")
 const ArenaMaps := preload("arena_maps.gd")
@@ -57,6 +58,10 @@ func _on_line(peer_id: int, seq: int, line: String) -> void:
 			result = await _change(words[1] if words.size() > 1 else "-", words[2] if words.size() > 2 else "-")
 		"host_names":
 			_send_names(peer_id, seq)
+		"host_local":
+			result = list_local(words[1] if words.size() > 1 else "")
+			if result.ok:
+				answer = str(result.value)
 		"host_pause":
 			if words.size() > 1:
 				module.bridge.host_paused = words[1].to_int() != 0
@@ -89,6 +94,17 @@ func _change(map_id: String, mode_id: String) -> DotResult:
 		if String(game.mode.id) != mode_id:
 			return DotResult.fail(DotError.CODE_STATE, "This map cannot play %s." % mode_id)
 	return DotResult.success(String(game.map.id))
+
+
+## Lists the dropped map [param map_id] (found in user://maps, shared with the client) in this process's catalogue, so the
+## owner's M menu offers it at once; a map dropped again replaces its row. Answers with its title.
+func list_local(map_id: String) -> DotResult:
+	var listed: DotMapCatalogue = module.maps.session.catalogue if module.maps != null and module.maps.session != null else null
+	if listed == null:
+		return DotResult.fail(DotError.CODE_STATE, "no map catalogue")
+	if map_id == "" or not ArenaMaps.add_local(listed, StringName(map_id)):
+		return DotResult.fail(DotError.CODE_INVALID, "%s is not a local map here" % map_id)
+	return DotResult.success(listed.get_map(StringName(map_id)).name_or_id())
 
 
 ## Every command and cvar name, a line of them at a time: what the owner's Tab and launch lines know.

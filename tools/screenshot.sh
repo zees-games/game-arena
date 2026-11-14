@@ -5,6 +5,7 @@
 #   tools/screenshot.sh --weapon-drops [out.png]   # dropped weapons settled on floor, step; any sunk one shows
 #   tools/screenshot.sh --profiler-menu [out.png]   # the real client, menu on Advanced, Performance card
 #   tools/screenshot.sh --map-menu [dir]   # the solo map picker (M), every page
+#   tools/screenshot.sh --map-drop [dir] [convert folder] [map id]   # a map dropped on the solo window: toasts, M, then the map
 #   tools/screenshot.sh --team-menu-key [--unwired] [out.png]   # the period key in the real client (or a bare menu: Play, Spectate)
 #   tools/screenshot.sh --team-menu   # the team menu: two teams, four renamed, free-for-all
 #   tools/screenshot.sh dm_box --admin   # a beacon, a beacon behind a wall, a blind
@@ -33,6 +34,10 @@ fi
 if [ "${1:-}" = "--profiler-menu" ]; then
   shift
   exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/profiler_menu_shot.gd -- "$@"
+fi
+if [ "${1:-}" = "--map-drop" ]; then
+  shift
+  exec xvfb-run -a godot --path . --resolution "${RESOLUTION:-1280x720}" --script tools/local_map_drop_shot.gd -- "$@"
 fi
 if [ "${1:-}" = "--map-menu" ]; then
   shift

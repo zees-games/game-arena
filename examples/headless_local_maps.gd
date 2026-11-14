@@ -6,6 +6,7 @@ const ArenaLocalMaps := preload("../maps/arena_local_maps.gd")
 const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaClient := preload("../game/arena_client.gd")
 const ArenaUserDir := preload("../game/arena_user_dir.gd")
+const ArenaVoteSource := preload("../game/arena_vote_source.gd")
 
 ## Maps copied in by hand (`ArenaLocalMaps`): a raw convert folder under `res://addons/maps/` or `user://maps/` is listed
 ## as `<name>_local` only while `ArenaMaps.list_local` is on (solo), and loads with spawns, a solid, movers and a drawn world.
@@ -29,6 +30,8 @@ const ZIP_CACHE := "user://zz_local_maps_suite_cache"
 ## A stand-in for the old game-arena user folder and the new one, for the copy `ArenaUserDir.migrate` makes.
 const OLD_USER := "user://zz_local_maps_suite_old_user"
 const NEW_USER := "user://zz_local_maps_suite_new_user"
+## A download's `convert` folder is copied as `user://maps/<its map>/convert`; the suite's map is named so.
+const LAYOUT_MAP := "zz_local_maps_suite_map"
 
 var _source := ""
 
@@ -63,11 +66,14 @@ func _run() -> void:
 		_test_drops()
 		sections += 1
 		_clean()
+		await _test_drop_layouts()
+		sections += 1
+		_clean()
 		_test_original()
 		sections += 1
 	else:
 		print("-- drops and _orig skipped: dot-map API %d < %d" % [DotAddonApi.build_level("dot_map"), ArenaLocalMaps.DROP_LEVEL])
-	var planned := 6 if ArenaLocalMaps.can_drop() else 4
+	var planned := 7 if ArenaLocalMaps.can_drop() else 4
 	if not _source.is_empty():
 		var name := DotMapLocalMaps.prefix_in(_source).get_file()
 		if not _check(not name.is_empty(), "the source holds a converted map", _source):
@@ -174,7 +180,7 @@ func _test_drops() -> void:
 	f.close()
 	var before := client._menu_catalogue.size()
 	said = client.on_maps_dropped(_drop(junk))
-	_check(said.begins_with("Not a map: notes.txt: "), "a bad drop is said with its reason", said)
+	_check(said.begins_with("Could not import notes.txt: "), "a bad drop is said with its reason", said)
 	_check(client._menu_catalogue.size() == before, "a bad drop adds no row")
 	_check(not FileAccess.file_exists("user://maps/notes.txt"), "a bad drop copies nothing")
 
@@ -185,6 +191,130 @@ func _test_drops() -> void:
 	ArenaMaps.list_local = true
 	local_maps.set(&"zip_cache", player_cache)
 	client.free()
+
+
+## What the owner dropped: a download's `convert` folder (`<map>.bsp`, SOURCE.txt and `convert/` beside it), a whole download
+## with the pack deeper than dot-map looks, and a map named like a shipped one; each is said on screen and listed in M.
+func _test_drop_layouts() -> void:
+	print("-- dropped layouts: a download's convert folder, a deep folder, a shipped map's name")
+	ArenaMaps.list_local = true
+	var local_maps: Object = DotMapLocalMaps
+	var player_cache: Variant = local_maps.get(&"zip_cache")
+	local_maps.set(&"zip_cache", ZIP_CACHE)
+	var client := ArenaClient.new()
+	client._menu_catalogue = ArenaMaps.catalogue()
+	var download := DROP_SOURCE.path_join("download")
+	_pack_as(download.path_join("convert"), LAYOUT_MAP)
+	_touch(download.path_join(LAYOUT_MAP + ".bsp"))
+	_touch(download.path_join("SOURCE.txt"))
+	# A copy from before this fix, at user://maps/convert, would be found first: it goes.
+	var had_bare := DirAccess.dir_exists_absolute("user://maps/convert")
+	if not had_bare:
+		_pack_as("user://maps/convert", LAYOUT_MAP)
+	var said: String = await client.import_dropped(PackedStringArray([ProjectSettings.globalize_path(download.path_join("convert"))]))
+	var id := StringName(LAYOUT_MAP + DotMapLocalMaps.ID_SUFFIX)
+	var title := LAYOUT_MAP + DotMapLocalMaps.TAG
+	_check(DotMapLocalMaps.prefix_in("user://maps".path_join(LAYOUT_MAP).path_join("convert")) != "",
+		"a dropped convert folder is copied as user://maps/<map>/convert")
+	if not had_bare:
+		_check(not DirAccess.dir_exists_absolute("user://maps/convert"), "and an older bare convert copy of it is gone")
+	_check(said.begins_with("Added %s. Press M and pick %s.\n" % [title, title]), "the player is told the title to pick", said)
+	_check(said.ends_with("Copied to %s." % ProjectSettings.globalize_path("user://maps".path_join(LAYOUT_MAP).path_join("convert"))),
+		"and the folder it was copied to", said)
+	_check(client.last_drop_said == said, "and it is what was last said on screen", client.last_drop_said)
+	_check(client._menu_catalogue.has(id), "M lists it at once")
+	_check(str(ArenaLocalMaps.entry(id).get("dir", "")).begins_with("user://maps".path_join(LAYOUT_MAP)), "found there",
+		str(ArenaLocalMaps.entry(id)))
+	_wipe("user://maps".path_join(LAYOUT_MAP))
+
+	var deep := DROP_SOURCE.path_join("deep")
+	_pack_as(deep.path_join("a/b/convert"), LAYOUT_MAP)
+	said = await client.import_dropped(PackedStringArray([ProjectSettings.globalize_path(deep) + "/"]))
+	_check(said.begins_with("Added " + title), "a pack three folders down is found", said)
+	_check(DotMapLocalMaps.prefix_in("user://maps".path_join(LAYOUT_MAP).path_join("convert")) != "",
+		"and copied as user://maps/<map>/convert")
+	_wipe("user://maps".path_join(LAYOUT_MAP))
+
+	# A download converted with --orig-textures: the <map>_orig pack beside the free one is the one taken, and what it lacks is said.
+	var orig_tree := DROP_SOURCE.path_join("orig/convert")
+	var orig_name := LAYOUT_MAP + "_orig"
+	var licence := {"licence": {"models": [{"count": 3}]}}
+	_pack_as(orig_tree, LAYOUT_MAP, licence)
+	_pack_as(orig_tree.path_join(orig_name), orig_name, licence.merged({"original_textures":
+		{"from_base": 1, "from_pak": 0, "missing": ["tfcustoms/color_grey", "brick/brickwall003"]}}))
+	said = await client.import_dropped(PackedStringArray([ProjectSettings.globalize_path(orig_tree.get_base_dir())]))
+	_check(client._menu_catalogue.has(StringName(orig_name + DotMapLocalMaps.ID_SUFFIX)),
+		"a download with a <map>_orig pack imports that one", said)
+	_check(DotMapLocalMaps.prefix_in("user://maps".path_join(orig_name)) != "", "copied as user://maps/<map>_orig")
+	_check(said.contains("2 of 3 original textures missing") and said.contains("tfcustoms/color_grey, brick/brickwall003"),
+		"and says which original textures it lacks", said)
+	_check(said.contains("3 props are stand-in models"), "and that its props are stand-ins", said)
+	_wipe("user://maps".path_join(orig_name))
+	_wipe(orig_tree.path_join(orig_name))
+	said = await client.import_dropped(PackedStringArray([ProjectSettings.globalize_path(orig_tree)]))
+	_check(said.contains("uses free stand-in textures: the drop has no %s folder" % orig_name),
+		"a free pack alone says it has none of the map's own textures", said)
+	_wipe("user://maps".path_join(LAYOUT_MAP))
+
+	var empty := DROP_SOURCE.path_join("empty/a")
+	DirAccess.make_dir_recursive_absolute(empty)
+	said = await client.import_dropped(PackedStringArray([ProjectSettings.globalize_path(empty.get_base_dir())]))
+	_check(said.begins_with("Could not import empty: "), "a folder with no map in it is said with its reason", said)
+
+	var shipped := StringName()
+	for def: DotMapDef in client._menu_catalogue.maps:
+		if not bool(def.meta.get("local", false)) and def.enabled \
+				and not DirAccess.dir_exists_absolute("user://maps".path_join(String(def.id))):
+			shipped = def.id
+			break
+	if _check(shipped != &"", "the catalogue has a shipped map"):
+		_pack_as(DROP_SOURCE.path_join("same/convert"), String(shipped))
+		said = await client.import_dropped(PackedStringArray([ProjectSettings.globalize_path(DROP_SOURCE.path_join("same/convert"))]))
+		var local_id := StringName(String(shipped) + DotMapLocalMaps.ID_SUFFIX)
+		_check(client._menu_catalogue.has(shipped) and client._menu_catalogue.has(local_id),
+			"a map named like a shipped one is listed beside it", said)
+		var label := ""
+		for row: Dictionary in ArenaMaps.menu_rows(client._menu_catalogue, &"", null, []):
+			if row["id"] == "map:%s" % local_id:
+				label = str(row["name"])
+		_check(label.ends_with(DotMapLocalMaps.TAG), "its M row says (local)", label)
+		# The solo server's M rows (ArenaVoteSource): a local map whatever is played, nothing the mode cannot host.
+		var source: Object = ArenaVoteSource.of(client._menu_catalogue, null, null)
+		var listed := PackedStringArray()
+		for choice: DotVoteChoice in source.call(&"choices"):
+			listed.append(String(choice.id))
+		_check(listed.has("map:%s" % local_id), "the solo server's M lists the local map in any mode", str(listed.size()))
+		_check(not listed.has("map:%s" % shipped), "and not a map the mode cannot host")
+		_wipe("user://maps".path_join(String(shipped)))
+
+	ArenaMaps.list_local = false
+	said = await client.import_dropped(PackedStringArray(["C:\\Users\\x\\Downloads\\%s\\convert" % LAYOUT_MAP]))
+	_check(said.begins_with("convert: dropped maps play in solo only"), "a server's client says drops are solo only", said)
+	ArenaMaps.list_local = true
+	local_maps.set(&"zip_cache", player_cache)
+	client.free()
+
+
+## The fixture as map [param map_name] in [param dir]: `<name>.json` naming `<name>.bin`.
+## The fixture pack as [param map_name] in [param dir], with [param extra] keys added to its json.
+func _pack_as(dir: String, map_name: String, extra: Dictionary = {}) -> void:
+	DirAccess.make_dir_recursive_absolute(dir)
+	var json := FileAccess.get_file_as_string(FIXTURE_DIR.path_join("fixture.json")).replace("\"fixture.bin\"", "\"%s.bin\"" % map_name)
+	if not extra.is_empty():
+		var data: Dictionary = JSON.parse_string(json)
+		data.merge(extra, true)
+		json = JSON.stringify(data)
+	var f := FileAccess.open(dir.path_join(map_name + ".json"), FileAccess.WRITE)
+	f.store_string(json)
+	f.close()
+	var _copied := DirAccess.copy_absolute(FIXTURE_DIR.path_join("fixture.bin"), dir.path_join(map_name + ".bin"))
+
+
+func _touch(path: String) -> void:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("x")
+	f.close()
 
 
 ## `DotMapLocalMaps.accept_dropped` (API 24), called so the suite still parses on an older host.
@@ -255,6 +385,9 @@ func _clean() -> void:
 	_wipe(USER_FOLDER)
 	_wipe(DROP_SOURCE)
 	_wipe(DROPPED_FOLDER)
+	_wipe("user://maps".path_join(LAYOUT_MAP))
+	if DotMapLocalMaps.prefix_in("user://maps/convert").get_file() == LAYOUT_MAP:
+		_wipe("user://maps/convert")
 	_wipe(ZIP_CACHE)
 	_wipe(OLD_USER)
 	_wipe(NEW_USER)
