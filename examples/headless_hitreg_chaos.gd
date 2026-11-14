@@ -88,6 +88,7 @@ func _run() -> void:
 				buffer, buffer * period])
 			_ups_sent = 0
 			_ups_lost = 0
+			_ease_reset()
 			for id in weapons:
 				_ups.clear()
 				_rng.seed = hash([_link, rtt, String(id)])
@@ -95,6 +96,8 @@ func _run() -> void:
 				_plan_strafe()
 				_round(id, rtt)
 			print("    up packets lost: %d of %d (%.1f%%)" % [_ups_lost, _ups_sent, 100.0 * float(_ups_lost) / float(maxi(1, _ups_sent))])
+			print("    resume ease: %d frames drawn off the blend, largest offset %.3f m; worst pop on screen %.3f m" % [
+				_eased_frames, _ease_most, _pop])
 			_done()
 	_summary(weapons)
 	_late_tap_section(weapons)

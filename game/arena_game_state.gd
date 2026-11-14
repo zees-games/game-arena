@@ -56,6 +56,15 @@ const SERVICE := &"arena_game"
 ## bits a position axis at 1 cm, for every map.
 const NET_WORLD_EXTENT := 512.0
 
+## How long a remote body takes to ease back onto its snapshot blend after the buffer ran
+## dry and dot-net extrapolated it (`DotNetConfig.resume_ease_sec`, dot-net's 0.12 default).
+## The server rewinds a shot to the blend, never to the eased body (the offset is the
+## client's and is not sent), so every frame drawn off the blend is a frame where the
+## crosshair and the hitbox disagree. At 0.12 s `headless_hitreg_chaos` missed 1 tap of
+## 173 on the 2-snapshot buffer; at 0.06 s none, and the worst on-screen pop grew 3 mm
+## (0.109 to 0.112 m) with the ease frames halved (docs/netcode.md, "Lag compensation").
+const CLIENT_RESUME_EASE_SEC := 0.06
+
 ## The range of tick rates the arena is tuned and tested for (`sv_tickrate`, `arena_tick_rate`).
 ## Tick counts in the code (THROWER_GRACE_TICKS, flashlight HOLD_TICKS, COLLISION_LAG_MAX_SEC) are seconds; see docs/netcode.md "Tick rate".
 const MIN_TICK_RATE := 20

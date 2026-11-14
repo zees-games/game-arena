@@ -308,6 +308,8 @@ func _client_net_config() -> DotNetConfig:
 	config.max_entities_per_snapshot = 0
 	# From the game: a quantised position decoded against the wrong range is a different position.
 	config.world_extent = ArenaGame.NET_WORLD_EXTENT
+	# A shorter ease back onto the blend the server rewinds to (ArenaGame.CLIENT_RESUME_EASE_SEC).
+	config.resume_ease_sec = ArenaGame.CLIENT_RESUME_EASE_SEC
 	# By name, as a pack runs on whatever dot-net its shell carries (docs/netcode.md, "A frame's cost").
 	if &"reconcile_once_per_frame" in config:
 		config.set(&"reconcile_once_per_frame", ArenaFrameProbe.launch_value("cl_reconcile_per_snapshot") != "1")

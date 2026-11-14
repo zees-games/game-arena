@@ -85,6 +85,16 @@ var _step := 0
 var _drawn_for: Dictionary = {}
 ## The frame drawn last: {"point": chest, "time": render tick}.
 var _last_frame: Dictionary = {}
+## The resume ease ([method DotNetInterpolator._ease_resume]) on the shooter's screen since
+## [method _ease_reset]: frames drawn off the blend and the largest offset; and the drawn body's
+## worst pop, the largest change of its per-frame step (a second difference: a strafe reversal is
+## about a centimetre, a snap out of an extrapolation the whole jump).
+var _eased_frames := 0
+var _ease_most := 0.0
+var _pop := 0.0
+var _drawn_prev: Array[Vector3] = []
+## Whether frames count into those: from the end of a round's settle (its spawns are teleports) to its last tap.
+var _ease_counting := false
 ## Server resolutions of the shooter's shots, as they come.
 var _resolved: Array[Dictionary] = []
 ## Where the server's rewind for the shot being traced stood the target (null: no rewind).
@@ -195,6 +205,13 @@ func _make_manager(is_server: bool, scope: StringName, peer_id: int) -> DotNetMa
 	# Sized from wall-clock arrival gaps it would be a different delay on every box.
 	net.config.adaptive_interpolation = false
 	net.config.world_extent = ArenaGame.NET_WORLD_EXTENT
+	# The game's client ease; `--ease-sec=` / `--ease-max=` try others.
+	net.config.resume_ease_sec = ArenaGame.CLIENT_RESUME_EASE_SEC
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--ease-sec="):
+			net.config.resume_ease_sec = float(arg.get_slice("=", 1))
+		elif arg.begins_with("--ease-max="):
+			net.config.resume_ease_max = float(arg.get_slice("=", 1))
 	add_child(net)
 	_check(net.setup().ok, "%s manager sets up" % scope)
 	return net
@@ -298,8 +315,11 @@ func _round(weapon_id: StringName, ping: int) -> void:
 	for i in SETTLE_TICKS + taps * _tap_ticks:
 		var tap := (i - SETTLE_TICKS) / _tap_ticks
 		var firing := i >= SETTLE_TICKS and (i - SETTLE_TICKS) % _tap_ticks == 0
+		_ease_counting = i >= SETTLE_TICKS
 		if _step_once(def.slot, firing, i, 0 if _as_played else [-1, 1, 0][tap % 3]) >= 0:
 			shots_sent += 1
+	_ease_counting = false
+	_drawn_prev.clear()
 	# The last shots' packets.
 	for i in _up_ticks + _down_ticks + 8:
 		var _t := _step_once(def.slot, false, i, 0)
@@ -473,6 +493,10 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 	var net: DotNetManager = _clients[SHOOTER_PEER]["net"]
 	if net.clock.is_synced():
 		var alpha: float = ALPHAS[k % ALPHAS.size()]
+		# One frame per tick, a tick of frame time each: the resume ease decays on frame time, and
+		# the wall clock of a headless step (a millisecond here, more on a loaded box) stretched it
+		# over ten times as many ticks as a 64 Hz screen shows it, a different number on every box.
+		net._last_frame_usec = Time.get_ticks_usec() - int(1.0e6 / float(TICK_RATE))
 		(_clients[SHOOTER_PEER]["bridge"] as ArenaNetBridge).draw_frame(alpha)
 		var drawn: ArenaPlayer = (_clients[SHOOTER_PEER]["game"] as ArenaGame).player_for(_target)
 		_last_frame = {
@@ -485,6 +509,7 @@ func _step_once(slot: int, firing: bool, index: int, side: int) -> int:
 			"bracket": net.interpolator.bracket_at(float(net.clock.received_tick()) + alpha - net.interpolator.delay_ticks()),
 			"eased": _ease_offset(net, _clients[SHOOTER_PEER]["bridge"]),
 		}
+		_note_ease(_ease_vector(net, _clients[SHOOTER_PEER]["bridge"]), drawn.global_position)
 	return fired
 
 
@@ -509,18 +534,45 @@ func _lead_ticks() -> int:
 ## target off its blend this frame, in metres: what is left of the jump out of an extrapolation. The
 ## server rewinds to the blend; it cannot know this offset (and must not take one from a client).
 func _ease_offset(net: DotNetManager, bridge: ArenaNetBridge) -> float:
+	return _ease_vector(net, bridge).length()
+
+
+## The resume ease's offset on the drawn target's position this frame (zero when none).
+func _ease_vector(net: DotNetManager, bridge: ArenaNetBridge) -> Vector3:
 	var behaviour: DotNetBehaviour = bridge._behaviours.get(_target)
 	if behaviour == null or behaviour.identity == null:
-		return 0.0
+		return Vector3.ZERO
 	var track: Variant = net.interpolator._tracks.get(behaviour.identity.net_id)
 	if track == null:
-		return 0.0
-	var most := 0.0
+		return Vector3.ZERO
+	var most := Vector3.ZERO
 	for property: Variant in track.offsets:
 		var offset: Variant = track.offsets[property]
-		if offset is Vector3:
-			most = maxf(most, (offset as Vector3).length())
+		if offset is Vector3 and (offset as Vector3).length() > most.length():
+			most = offset
 	return most
+
+
+## Counts this frame's resume ease into [member _eased_frames], [member _ease_most] and [member _ease_step].
+func _note_ease(offset: Vector3, feet: Vector3) -> void:
+	if not _ease_counting:
+		return
+	if offset.length() > 0.0005:
+		_eased_frames += 1
+	_ease_most = maxf(_ease_most, offset.length())
+	if _drawn_prev.size() == 2:
+		var pop := (feet - _drawn_prev[1]) - (_drawn_prev[1] - _drawn_prev[0])
+		pop.y = 0.0  # a jump's arc is not a pop
+		_pop = maxf(_pop, pop.length())
+		_drawn_prev.pop_front()
+	_drawn_prev.append(feet)
+
+
+func _ease_reset() -> void:
+	_eased_frames = 0
+	_ease_most = 0.0
+	_pop = 0.0
+	_drawn_prev.clear()
 
 
 ## Peer 3's stick on step [param index]: across, turning every 30 ticks (and at the shooter when played).
