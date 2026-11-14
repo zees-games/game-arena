@@ -225,7 +225,7 @@ func _set_beyond_figure(far: bool) -> void:
 		return
 	beyond_figure = far
 	if held != null:
-		held.visible = not far and health != null and is_alive() and not ArenaWeaponIcons.shared.sprites
+		held.visible = health != null and held_may_show()
 	if _held_sprite != null:
 		_held_sprite.visible = not far and _held_sprite.visible
 	if is_instance_valid(_crest):

@@ -75,7 +75,7 @@ func _mend_body() -> void:
 		_fell = false
 		body_mesh.visible = true
 		if held != null:
-			held.visible = true
+			held.visible = held_may_show()
 
 	if _broken.is_empty() or not is_alive() or body_mesh == null:
 		return
@@ -88,7 +88,20 @@ func _mend_body() -> void:
 	body_mesh.visible = true
 
 	if held != null:
-		held.visible = true
+		held.visible = held_may_show()
+
+## Whether the held gun may be drawn: a live, standing body drawn near enough, whose own skin is drawn. A gun
+## shown while the figure's skin was hidden (a camera fade or a break hides the skin, not the body) hung in the air.
+func held_may_show() -> bool:
+	if not is_alive() or _fell or beyond_figure or ArenaWeaponIcons.shared.sprites:
+		return false
+	if body_mesh != null and not body_mesh.visible:
+		return false
+	# A respawned body still in its death pose (the figure keeps it while in the air) lays its hand on the floor.
+	if figure != null and figure.state == DotPlayerAnimState.DEAD:
+		return false
+	var skin: MeshInstance3D = figure.mesh() if figure != null else null
+	return skin == null or skin.visible
 
 ## The node a held weapon hangs from, by the name [AwWorldModel] asks for.
 ##
@@ -153,7 +166,7 @@ func _present_held(remote: bool = false) -> void:
 		switching = arsenal.is_switching()
 		reloading = arsenal.is_reloading()
 
-	var shown := is_alive() and not _fell and not ArenaWeaponIcons.shared.sprites and not beyond_figure
+	var shown := held_may_show()
 	held.visible = shown
 	var t_sprite := Time.get_ticks_usec()
 	_present_held_sprite(id)
@@ -246,6 +259,10 @@ func _hold_weapon() -> void:
 	if not held.attach_to(self):
 		held.free()
 		held = null
+		return
+	# Hidden until a present says it may show: a body built for a joiner while its player is dead
+	# drew its gun at the hand's rest, in mid-air, until the first present reached it.
+	held.visible = false
 
 ## Builds the avatar's rig under [member body_mesh]. Returns whether anything drew.
 ##

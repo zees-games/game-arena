@@ -14,6 +14,7 @@ const ArenaWeaponRoles := preload("../game/arena_weapon_roles.gd")
 const TOLERANCE := 0.02
 ## Most a settled drop's lowest mesh point may sit above the surface under it, in metres (DotWeaponDrops grounds a drop resting higher than 0.25).
 const FLOAT_MAX := 0.3
+const GAP := 0.05
 const TICK_RATE := 64
 const RUN_TICKS := 640
 const JITTER_TICKS := 96
@@ -106,11 +107,21 @@ func _run() -> void:
 	var lost := 0
 	var unrested := 0
 	var floating: Array[String] = []
+	var gap := [0.0, 0.0]  ## widest fall left under a resting drop: [server pose, client pose]
+	var gap_at := ["", ""]
 	for e: int in sent:
 		var cb: RigidBody3D = client.get("_entries")[e]["body"]
 		if cb.global_position.y < -50.0:
 			lost += 1
 			continue
+		# floatgun-ak-1: nothing to land on within GAP below either pose, or the gun hangs in the air.
+		for side in 2:
+			var layer: DotWeaponDrops = drops if side == 0 else client
+			var b: RigidBody3D = layer.get("_entries")[e]["body"]
+			var g: float = (layer.call("_sweep_down", b, b.global_transform, 3.0) as Vector3).length()
+			if g > gap[side]:
+				gap[side] = g
+				gap_at[side] = "%s at %s" % [sent[e][0], b.global_position]
 		if not bool(drops.get("_entries")[e]["rest"]):
 			unrested += 1
 		var s := _sunk(cb, mask)
@@ -124,6 +135,8 @@ func _run() -> void:
 	_check(lost == 0, "no dead player's weapon fell out of the world", str(lost))
 	_check(deepest <= TOLERANCE, "client mesh not below the surface at 10 s", "%.3f %s" % [deepest, worst])
 	_check(floating.is_empty(), "no settled drop floats above the surface (the active cap rests a burst of drops)", "%d: %s" % [floating.size(), floating.slice(0, 6)])
+	_check(gap[0] <= GAP, "server pose: ground within %.2f m under every drop" % GAP, "%.3f %s" % [gap[0], gap_at[0]])
+	_check(gap[1] <= GAP, "client pose: ground within %.2f m under every drop" % GAP, "%.3f %s" % [gap[1], gap_at[1]])
 	_check(jitter <= 0.003, "resting drops do not jitter", "%.4f" % jitter)
 	_check(unrested == 0, "every drop came to rest", str(unrested))
 	print("weapondrop_death: %d checks, %d failed" % [_checks, _failed])

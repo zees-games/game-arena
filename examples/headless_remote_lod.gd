@@ -7,8 +7,8 @@ const ArenaKillcamBodies := preload("../game/arena_killcam_bodies.gd")
 ## A bare ArenaPlayer has no controller, so `present` returns at once and the counters in `present_lod` are the whole
 ## story. Run: [code]godot --headless --path . res://examples/headless_remote_lod.tscn[/code]
 
-const SECTIONS := 7
-const CHECKS := 26
+const SECTIONS := 9
+const CHECKS := 34
 
 var _entered := 0
 var _completed := 0
@@ -138,6 +138,42 @@ func _run() -> void:
 	armed.global_position = Vector3(0, 0, -(DotHumanoidFigure.DRAW_RANGE - 20.0))
 	_n = _passes(armed, 1)
 	_check(armed.held.visible and _shown(armed.get("_crest")), "back in range: both drawn again")
+	_done()
+
+	_section("a figure whose skin is hidden draws no gun either (floatgun-ak-1)")
+	# A camera fade or a death hides the skin; the gun at its hand would hang in the air alone (the owner's AK).
+	armed.figure.build(null)
+	var skin: MeshInstance3D = armed.figure.mesh()
+	_check(skin != null, "the built figure has a skin")
+	if skin != null:
+		skin.visible = false
+		armed.call(&"_present_held", true)
+		_check(not armed.held.visible, "skin hidden: the gun is hidden")
+		skin.visible = true
+		armed.call(&"_present_held", true)
+		_check(armed.held.visible, "skin drawn again: the gun is back")
+	else:
+		_check(false, "skin hidden: the gun is hidden", "no skin")
+		_check(false, "skin drawn again: the gun is back", "no skin")
+	_done()
+
+	_section("a body built while its player is dead draws no gun (floatgun-ak-1)")
+	# A joiner builds every body at once; one whose player was dead hung its gun at the hand's rest until a present reached it.
+	var joined := _body(Vector3(0, 0, -10))
+	joined.health = DotHealth.new()
+	joined.add_child(joined.health)
+	joined.health.alive = false
+	joined.attach_body_mesh(Color.WHITE)
+	_check(joined.held != null, "the built body holds a gun model")
+	_check(joined.held == null or not joined.held.visible, "built hidden: nothing drawn before a present")
+	joined.call(&"_mend_body")
+	_check(joined.held == null or not joined.held.visible, "dead: mending the body does not show the gun")
+	joined.health.alive = true
+	joined.call(&"_present_held", true)
+	_check(joined.held != null and joined.held.visible, "alive and presented: the gun is drawn")
+	joined.figure.state = DotPlayerAnimState.DEAD
+	joined.call(&"_present_held", true)
+	_check(joined.held != null and not joined.held.visible, "alive but still in the death pose: the gun is hidden")
 	_done()
 
 	_section("the kill-cam recording cap")

@@ -89,7 +89,7 @@ func _boot_server() -> void:
 	_game.headless = true
 	_game.register_service = true
 	server_side.add_child(_game)
-	_game.setup(ArenaMap.dm_box())
+	_setup_game()
 
 	_config = DotServerConfig.new()
 	_config.hostname = "net probe"
@@ -116,6 +116,11 @@ func _boot_server() -> void:
 	server_side.add_child(_server)
 	await _server.boot()
 	await _server.modules.load_module("res://game/arena_module.gd")
+
+
+## The map (and mode) the server plays; a probe built on this one overrides it.
+func _setup_game() -> void:
+	_game.setup(ArenaMap.dm_box())
 
 
 func _tune_server() -> void:
