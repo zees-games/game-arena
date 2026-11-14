@@ -5,6 +5,7 @@ const KillPovView := preload("arena_kill_pov_view.gd")
 
 const ArenaAttach := preload("arena_attach.gd")
 const ArenaAttachPanel := preload("arena_attach_panel.gd")
+const ArenaSourceInstall := preload("arena_source_install.gd")
 
 ## The attachments menu, built on the first press of its key (see [method open_attachments]).
 var attach_panel: ArenaAttachPanel = null
@@ -265,9 +266,37 @@ func _adopt_catalogue(built: DotMapCatalogue) -> void:
 ## Every drop is answered on screen, on the menu's layer so an open Esc menu does not hide it: "Importing <map>…" while it
 ## copies, then what was added or why not. A server client, or a build whose dot-map is older than API 24, says so.
 func watch_map_drops() -> void:
+	if presentation != null and presentation.settings != null \
+			and not presentation.settings.changed.is_connected(_on_source_game_path):
+		presentation.settings.changed.connect(_on_source_game_path)
 	if not is_inside_tree() or get_window().files_dropped.is_connected(_on_files_dropped):
 		return
 	get_window().files_dropped.connect(_on_files_dropped)
+
+
+## The player's own Source game install a dropped `_orig` pack's missing stock textures are read from, LOCAL ONLY
+## (ArenaSourceInstall): this when set (a suite), else the `source_game_path` setting, else the usual Steam folders.
+var source_game_path := ""
+
+
+func source_install() -> String:
+	var configured := source_game_path
+	if configured == "" and presentation != null and presentation.settings != null:
+		configured = presentation.settings.get_string(ArenaSourceInstall.SETTING)
+	return ArenaSourceInstall.find_install(configured)
+
+
+## A new `source_game_path` (menu or console) fills every local `_orig` pack from it at once, and says what it found.
+func _on_source_game_path(key: StringName, _value: Variant, _why: StringName) -> void:
+	if key != ArenaSourceInstall.SETTING:
+		return
+	var install := source_install()
+	var lines := PackedStringArray()
+	for one: Dictionary in ArenaSourceInstall.fill_all(install):
+		lines.append("%s: %d filled from %s, %d still stand-ins.%s" % [one["title"], (one["filled"] as Array).size(),
+			install, (one["missing"] as Array).size(), "" if str(one["error"]) == "" else " " + str(one["error"]) + "."])
+	var _said := _drop_say("\n".join(lines) if not lines.is_empty() else "Source game install: %s. It fills the next dropped _orig map." % (
+		install if not ArenaSourceInstall.archives(install).is_empty() else "none found" if install == "" else install + " has no *_dir.vpk"))
 
 
 ## The dot-map API level with `accept_dropped` (ArenaLocalMaps.DROP_LEVEL, which is not reachable from here).
@@ -307,6 +336,8 @@ func import_dropped(files: PackedStringArray) -> String:
 		errors.append_array(one.get("errors", PackedStringArray()))
 	var text := on_maps_dropped({"added": added, "errors": errors})
 	for entry: Dictionary in added:
+		if str(entry.get("name", "")).to_lower().ends_with(ORIG_MARK) and not entry.has("zip"):
+			var _filled := ArenaSourceInstall.fill(str(entry.get("prefix", "")), source_install())
 		var looks := looks_line(entry)
 		if looks != "":
 			text += "\n" + looks
@@ -418,16 +449,27 @@ static func looks_line(entry: Dictionary) -> String:
 		return "%s uses free stand-in textures: the drop has no %s_orig folder with the map's own.%s" % [
 			title, str(entry.get("name", "")), props_said]
 	var missing: Array = (orig as Dictionary).get("missing", [])
-	var have := int((orig as Dictionary).get("from_base", 0)) + int((orig as Dictionary).get("from_pak", 0))
+	var filled: Array = (orig as Dictionary).get("filled", [])
+	var install := str((orig as Dictionary).get("install", ""))
+	var have := int((orig as Dictionary).get("from_base", 0)) + int((orig as Dictionary).get("from_pak", 0)) + filled.size()
+	# What the player's own install filled (ArenaSourceInstall), and how to point at one when none was found.
+	var from_game := " %d filled from your game install (%s): %s." % [filled.size(), install, _listed(filled)] \
+		if not filled.is_empty() else ""
 	if missing.is_empty():
-		return "%s uses all %d of its own textures.%s" % [title, have, props_said]
-	var names := PackedStringArray()
-	for missed: Variant in missing.slice(0, LOOKS_LIST):
-		names.append(str(missed))
-	if missing.size() > LOOKS_LIST:
-		names.append("and %d more" % (missing.size() - LOOKS_LIST))
-	return "%s: %d of %d original textures missing (not in the BSP), using free stand-ins: %s.%s" % [
-		title, missing.size(), have + missing.size(), ", ".join(names), props_said]
+		return "%s uses all %d of its own textures.%s%s" % [title, have, from_game, props_said]
+	var hint := " No TF2 install found: set Source game install path (General > Local maps, or source_game_path in the console)." \
+		if install == "" else " Not in the archives at %s." % install if filled.is_empty() else ""
+	return "%s: %d of %d original textures missing (not in the BSP), using free stand-ins: %s.%s%s%s" % [
+		title, missing.size(), have + missing.size(), _listed(missing), from_game, hint, props_said]
+
+
+static func _listed(names: Array) -> String:
+	var out := PackedStringArray()
+	for n: Variant in names.slice(0, LOOKS_LIST):
+		out.append(str(n))
+	if names.size() > LOOKS_LIST:
+		out.append("and %d more" % (names.size() - LOOKS_LIST))
+	return ", ".join(out)
 
 
 ## [param text] on the menu's toast plate (drawn over an open menu) and on the HUD's notice line; [param seconds] 0 keeps

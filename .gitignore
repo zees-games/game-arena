@@ -114,3 +114,11 @@ __pycache__/
 /wt-*/
 # Written by addons/dot_profiler/tools/build_stamp.sh for a build without .git.
 /build_id.json
+
+# Valve's own files: a player's Source game install is read LOCAL ONLY (game/arena_source_install.gd, cached in the user
+# folder) and never enters the repository; headless_local_maps checks the project holds none.
+*.vpk
+*.vtf
+*.vmt
+*.mdl
+textures/orig/

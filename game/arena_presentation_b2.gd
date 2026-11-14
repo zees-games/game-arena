@@ -202,6 +202,12 @@ static func _add_chat_and_comfort(s: DotSettingsSchema) -> void:
 		&"gameplay"
 	).with_description("How well the bots play in a solo match. A server sets its own."))
 
+	# LOCAL ONLY: the player's own Source game (TF2) folder, read for the stock textures a dropped `<map>_orig` pack lacks
+	# (ArenaSourceInstall caches them in the user folder; they never ship). Empty: the usual Steam folders. A setting is its
+	# own console command, so `source_game_path <folder>` sets it too; General > Local maps has a field.
+	s.add(DotSettingsDef.text(&"source_game_path", "", &"gameplay")
+		.with_description("Your own Source game (TF2) install folder, for the stock textures of a dropped _orig map. Empty: look in Steam's usual folders."))
+
 
 ## The camera motion settings, in [method ArenaPlayer.set_camera_motion_scales]' order, with
 ## what each moves.

@@ -7,6 +7,9 @@ const ArenaMaps := preload("../game/arena_maps.gd")
 const ArenaClient := preload("../game/arena_client.gd")
 const ArenaUserDir := preload("../game/arena_user_dir.gd")
 const ArenaVoteSource := preload("../game/arena_vote_source.gd")
+const ArenaVpk := preload("../game/arena_vpk.gd")
+const ArenaVtf := preload("../game/arena_vtf.gd")
+const ArenaSourceInstall := preload("../game/arena_source_install.gd")
 
 ## Maps copied in by hand (`ArenaLocalMaps`): a raw convert folder under `res://addons/maps/` or `user://maps/` is listed
 ## as `<name>_local` only while `ArenaMaps.list_local` is on (solo), and loads with spawns, a solid, movers and a drawn world.
@@ -15,6 +18,7 @@ const ArenaVoteSource := preload("../game/arena_vote_source.gd")
 ## [codeblock]
 ## ./game.sh test headless_local_maps
 ## ./game.sh test headless_local_maps -- --source=/path/to/gm_fork/convert
+## godot --headless --path . res://examples/headless_local_maps.tscn -- --source=/path/to/cp_x_orig --source-game=/path/to/tf2
 ## [/codeblock]
 
 const FIXTURE_DIR := "res://examples/local_maps"
@@ -32,8 +36,13 @@ const OLD_USER := "user://zz_local_maps_suite_old_user"
 const NEW_USER := "user://zz_local_maps_suite_new_user"
 ## A download's `convert` folder is copied as `user://maps/<its map>/convert`; the suite's map is named so.
 const LAYOUT_MAP := "zz_local_maps_suite_map"
+## A made-up Source game install (synthetic VPKs written by the suite: no Valve file is in the repository).
+const SOURCE_STEAM := "user://zz_local_maps_suite_steam"
+const SOURCE_GAME := SOURCE_STEAM + "/steamapps/common/Team Fortress 2"
 
 var _source := ""
+## `--source-game=<a real Source game install>`: with a `--source` holding an `_orig` pack, drops it filled from there.
+var _source_game := ""
 
 
 func _ready() -> void:
@@ -41,6 +50,8 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--source="):
 			_source = a.trim_prefix("--source=")
+		elif a.begins_with("--source-game="):
+			_source_game = a.trim_prefix("--source-game=")
 	_run.call_deferred()
 
 
@@ -71,9 +82,12 @@ func _run() -> void:
 		_clean()
 		_test_original()
 		sections += 1
+		_clean()
+		await _test_source_install()
+		sections += 1
 	else:
 		print("-- drops and _orig skipped: dot-map API %d < %d" % [DotAddonApi.build_level("dot_map"), ArenaLocalMaps.DROP_LEVEL])
-	var planned := 7 if ArenaLocalMaps.can_drop() else 4
+	var planned := 8 if ArenaLocalMaps.can_drop() else 4
 	if not _source.is_empty():
 		var name := DotMapLocalMaps.prefix_in(_source).get_file()
 		if not _check(not name.is_empty(), "the source holds a converted map", _source):
@@ -87,9 +101,61 @@ func _run() -> void:
 		_copy_tree(_source, USER_FOLDER)
 		_test_load(id, "user://maps", false)
 		sections += 2
+		if not _source_game.is_empty() and name.ends_with("_orig") and ArenaLocalMaps.can_drop():
+			_clean()
+			await _test_real_install(name)
+			sections += 1
+			planned += 1
 	_clean()
 	ArenaMaps.list_local = false
 	_report_sections(sections, sections, planned if _source.is_empty() else planned + 2)
+
+
+## The real `_orig` pack in `--source`, dropped with the real install in `--source-game` (read in place, cached in the
+## user folder): what it filled and what is still a stand-in, as the drop says it.
+func _test_real_install(name: String) -> void:
+	print("-- %s filled from the install at %s" % [name, _source_game])
+	var t := Time.get_ticks_msec()
+	var found := ArenaSourceInstall.archives(_source_game)
+	if not _check(not found.is_empty(), "the install has archives", _source_game):
+		return
+	var sets: Array = ArenaSourceInstall.open_install(_source_game)
+	var files := 0
+	for v: Variant in sets:
+		files += (v as ArenaVpk).entries.size()
+	print("   %d archives, %d materials/textures listed in %d ms: %s" % [found.size(), files, Time.get_ticks_msec() - t, ", ".join(found)])
+	var src: Variant = JSON.parse_string(FileAccess.get_file_as_string(DotMapLocalMaps.prefix_in(_source) + ".json"))
+	var before: Array = ((src as Dictionary).get("original_textures", {}) as Dictionary).get("missing", []) if src is Dictionary else []
+	var target := "user://maps".path_join(name)
+	var had := DirAccess.dir_exists_absolute(target)
+	ArenaMaps.list_local = true
+	var local_maps: Object = DotMapLocalMaps
+	var player_cache: Variant = local_maps.get(&"zip_cache")
+	local_maps.set(&"zip_cache", ZIP_CACHE)
+	var client := ArenaClient.new()
+	client._menu_catalogue = ArenaMaps.catalogue()
+	client.source_game_path = _source_game
+	t = Time.get_ticks_msec()
+	var said: String = await client.import_dropped(PackedStringArray([_source]))
+	print("   dropped in %d ms: %s" % [Time.get_ticks_msec() - t, said])
+	var prefix := DotMapLocalMaps.prefix_in(target)
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(prefix + ".json"))
+	var orig: Dictionary = (data as Dictionary).get("original_textures", {}) if data is Dictionary else {}
+	var filled: Array = orig.get("filled", [])
+	var missing: Array = orig.get("missing", [])
+	print("   filled %d of %d: %s\n   still stand-ins: %s" % [filled.size(), before.size(), ", ".join(filled), ", ".join(missing)])
+	_check(not filled.is_empty() and filled.size() + missing.size() == before.size(), "the install fills some of the missing ones",
+		"%d filled, %d missing of %d" % [filled.size(), missing.size(), before.size()])
+	_check(said.contains("%d filled from your game install" % filled.size()), "and the drop says so", said)
+	var drawn := 0
+	for m: Variant in filled:
+		if FileAccess.file_exists(prefix.get_base_dir().path_join("textures/orig/%s.png" % ArenaVtf.safe_name(str(m)))):
+			drawn += 1
+	_check(drawn == filled.size(), "each filled one is a texture in the pack", "%d of %d" % [drawn, filled.size()])
+	local_maps.set(&"zip_cache", player_cache)
+	client.free()
+	if not had:
+		_wipe(target)
 
 
 func _test_listing() -> void:
@@ -203,6 +269,8 @@ func _test_drop_layouts() -> void:
 	local_maps.set(&"zip_cache", ZIP_CACHE)
 	var client := ArenaClient.new()
 	client._menu_catalogue = ArenaMaps.catalogue()
+	# No game install, whatever the machine has: _test_source_install fills from a fixture one.
+	client.source_game_path = DROP_SOURCE.path_join("no_such_install")
 	var download := DROP_SOURCE.path_join("download")
 	_pack_as(download.path_join("convert"), LAYOUT_MAP)
 	_touch(download.path_join(LAYOUT_MAP + ".bsp"))
@@ -368,6 +436,233 @@ func _test_original() -> void:
 		drawn.free()
 
 
+func _test_source_install() -> void:
+	print("-- an _orig pack's missing stock textures come from the player's own install, locally only")
+	_check(ArenaVpk.crc32("123456789".to_ascii_buffer()) == 0xCBF43926, "VPK CRC-32 is zlib's",
+		"%x" % ArenaVpk.crc32("123456789".to_ascii_buffer()))
+	_check(ArenaVtf.safe_name("maps/cp_x/Concrete/Floor001_12_-3_40") == "concrete_floor001", "a cubemap-patched name is its base",
+		ArenaVtf.safe_name("maps/cp_x/Concrete/Floor001_12_-3_40"))
+	var keys := ArenaVtf.vmt_keys("\"LightmappedGeneric\"\n{\n\t\"$baseTexture\" \"Concrete/Floor\" // a comment\n\t$surfaceprop concrete\n}")
+	_check(keys.get("$basetexture") == "Concrete/Floor" and keys.get("$surfaceprop") == "concrete", "a VMT's keys are read", str(keys))
+	_check(Array(ArenaSourceInstall.library_folders("\"libraryfolders\"\n{\n\t\"1\"\n\t{\n\t\t\"path\"\t\t\"D:\\\\SteamLibrary\"\n\t}\n}")) \
+		== ["D:/SteamLibrary"], "a Steam libraryfolders.vdf's libraries are read",
+		str(ArenaSourceInstall.library_folders("\"path\"\t\t\"D:\\\\SteamLibrary\"")))
+
+	# The fixture install: tf/tf2_textures_dir.vpk (VPK v2) and its part _000. A VMT stored in the dir names an RGBA8888
+	# VTF in the part (green, its smaller mips blue); a patch VMT includes a base naming a DXT1 VTF (red) partly preloaded.
+	var green := _vtf_rgba(4, 4, 3, Color8(20, 200, 30), Color8(0, 0, 255))
+	var red := _vtf_dxt1(8, 8, 0xF800)
+	var tf := SOURCE_GAME.path_join("tf")
+	_write_vpk(tf.path_join("tf2_textures"), {
+		"materials/concrete/concretefloor001.vmt": [("\"LightmappedGeneric\"\n{\n\t\"$basetexture\" \"Concrete/ConcreteFloor001\"\n}"
+			).to_utf8_buffer(), -1, 0],
+		"materials/concrete/concretefloor001.vtf": [green, 0, 0],
+		"materials/metal/metalwall001.vmt": [("\"patch\"\n{\n\tinclude \"materials\\metal\\metalwall_base.vmt\"\n\tinsert\n\t{\n\t}\n}"
+			).to_utf8_buffer(), -1, 0],
+		"materials/metal/metalwall_base.vmt": ["\"VertexLitGeneric\" { \"$basetexture\" \"metal/metalwall_red\" }".to_utf8_buffer(), 0, 10],
+		"materials/metal/metalwall_red.vtf": [red, 0, 40],
+	})
+	DirAccess.make_dir_recursive_absolute(SOURCE_GAME.path_join("bin"))
+	var install := ProjectSettings.globalize_path(SOURCE_GAME)
+	_check(Array(ArenaSourceInstall.archives(install)) == [install.path_join("tf/tf2_textures_dir.vpk")], "the install's archives are found",
+		str(ArenaSourceInstall.archives(install)))
+	_check(ArenaSourceInstall.archives(install.path_join("tf")) == ArenaSourceInstall.archives(install), "also from its tf folder")
+	_check(ArenaSourceInstall.archives(install.get_base_dir()) == ArenaSourceInstall.archives(install),
+		"and from the folder above it (a server's tf2/ + hl2/)", str(ArenaSourceInstall.archives(install.get_base_dir())))
+	_check(ArenaSourceInstall.find_install(install + "/") == install, "a set path wins, its trailing / dropped")
+	var vpk := ArenaVpk.new()
+	if not _check(vpk.open(install.path_join("tf/tf2_textures_dir.vpk")), "the fixture VPK opens", vpk.error):
+		return
+	_check(vpk.entries.size() == 5 and vpk.has("Materials/Metal/MetalWall001.vmt"), "and lists its 5 files", str(vpk.entries.keys()))
+	_check(vpk.read("materials/metal/metalwall_red.vtf") == red, "a preloaded file reads whole from its part")
+	var img := ArenaVtf.image(vpk.read("materials/concrete/concretefloor001.vtf"))
+	_check(img != null and img.get_size() == Vector2i(4, 4) and img.get_pixel(3, 3).to_rgba32() == Color8(20, 200, 30).to_rgba32(),
+		"an RGBA8888 VTF decodes its largest mip", ArenaVtf.error if img == null else str(img.get_pixel(3, 3)))
+	img = ArenaVtf.image(green, 2)
+	_check(img != null and img.get_size() == Vector2i(2, 2) and img.get_pixel(0, 0).to_rgba32() == Color8(0, 0, 255).to_rgba32(),
+		"and a smaller mip when it is too big", ArenaVtf.error if img == null else str(img.get_size()))
+	img = ArenaVtf.image(red)
+	_check(img != null and img.get_size() == Vector2i(8, 8) and img.get_pixel(5, 6).r > 0.95 and img.get_pixel(5, 6).g < 0.05,
+		"a DXT1 VTF decodes", ArenaVtf.error if img == null else str(img.get_pixel(5, 6)))
+	var bad := ArenaVpk.new()
+	_write_vpk(SOURCE_GAME.path_join("broken/bad"), {"materials/x.vtf": [red, 0, 0]}, true)
+	_check(bad.open(SOURCE_GAME.path_join("broken/bad_dir.vpk")) and bad.read("materials/x.vtf").is_empty()
+		and bad.error.begins_with("crc mismatch"), "a file that fails its CRC is not read", bad.error)
+	DirAccess.remove_absolute(SOURCE_GAME.path_join("broken/bad_dir.vpk"))
+	DirAccess.remove_absolute(SOURCE_GAME.path_join("broken/bad_000.vpk"))
+	DirAccess.remove_absolute(SOURCE_GAME.path_join("broken"))
+
+	# Dropped with the install set: two of three filled, the third still a stand-in, and the drop says so.
+	ArenaMaps.list_local = true
+	var local_maps: Object = DotMapLocalMaps
+	var player_cache: Variant = local_maps.get(&"zip_cache")
+	local_maps.set(&"zip_cache", ZIP_CACHE)
+	var client := ArenaClient.new()
+	client._menu_catalogue = ArenaMaps.catalogue()
+	client.source_game_path = install
+	var orig_name := LAYOUT_MAP + "_orig"
+	var tree := DROP_SOURCE.path_join("orig/convert")
+	_pack_as(tree.path_join(orig_name), orig_name, {"licence": {"models": []}, "original_textures":
+		{"from_base": 1, "from_pak": 0, "textures": 1, "missing": ["concrete/concretefloor001", "metal/metalwall001", "dev/nothere"]}})
+	var said: String = await client.import_dropped(PackedStringArray([ProjectSettings.globalize_path(tree)]))
+	var prefix := DotMapLocalMaps.prefix_in("user://maps".path_join(orig_name))
+	_check(said.contains("1 of 4 original textures missing") and said.contains("using free stand-ins: dev/nothere."),
+		"the drop says what is still a stand-in", said)
+	_check(said.contains("2 filled from your game install (%s): concrete/concretefloor001, metal/metalwall001." % install),
+		"and what its game install filled", said)
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(prefix + ".json"))
+	var orig: Dictionary = (data as Dictionary).get("original_textures", {}) if data is Dictionary else {}
+	_check(orig.get("missing") == ["dev/nothere"] and orig.get("filled") == ["concrete/concretefloor001", "metal/metalwall001"]
+		and int(orig.get("textures", 0)) == 3, "the pack's json lists them", str(orig))
+	var pack_dir := prefix.get_base_dir()
+	var floor_png := Image.load_from_file(pack_dir.path_join("textures/orig/concrete_concretefloor001.png"))
+	_check(floor_png != null and floor_png.get_pixel(0, 0).to_rgba32() == Color8(20, 200, 30).to_rgba32(),
+		"the texture is in the pack's textures/orig", pack_dir)
+	_check(FileAccess.file_exists(pack_dir.path_join("textures/orig/metal_metalwall001.png")), "the included one too")
+	var drawn_as := {}
+	var surfaces: Array = (data as Dictionary).get("surfaces", []) if data is Dictionary else []
+	for s: Variant in surfaces:
+		drawn_as[str((s as Dictionary).get("material"))] = str((s as Dictionary).get("orig", ""))
+	_check(drawn_as.get("metal/metalwall001") == "textures/orig/metal_metalwall001.png", "and its surfaces draw it", str(drawn_as))
+	var cache := ArenaSourceInstall.cache_dir(install)
+	_check(cache.begins_with("user://") and FileAccess.file_exists(cache.path_join("concrete_concretefloor001.png")),
+		"decoded textures are cached in the user folder", cache)
+
+	# Never into the project: a res:// pack is refused, and the project holds no Valve file and no textures/orig.
+	var refused := ArenaSourceInstall.fill("res://addons/maps/x/x_orig", install)
+	_check(not refused["ok"] and str(refused["error"]).begins_with("refused"), "a pack outside the user folder is refused",
+		str(refused["error"]))
+	var found := PackedStringArray()
+	_valve_files("res://", found)
+	_check(found.is_empty(), "the project holds no .vpk, .vtf, .vmt, .mdl or textures/orig", ", ".join(found))
+	var ignored := FileAccess.get_file_as_string("res://.gitignore").split("\n")
+	var unlisted := PackedStringArray()
+	for line in ["*.vpk", "*.vtf", "*.vmt", "*.mdl", "textures/orig/"]:
+		if not ignored.has(line):
+			unlisted.append(line)
+	_check(unlisted.is_empty(), "and .gitignore keeps them out", ", ".join(unlisted))
+
+	_wipe("user://maps".path_join(orig_name))
+	_wipe(cache)
+	ArenaMaps.list_local = false
+	local_maps.set(&"zip_cache", player_cache)
+	client.free()
+
+
+## Valve's file kinds and `textures/orig` folders under [param dir], into [param found]. Skips what is not this
+## repository's: `.godot`, the linked addons and map repositories (.gitignore), and the suite's own leftovers.
+func _valve_files(dir: String, found: PackedStringArray) -> void:
+	for skip in ["res://.godot", "res://addons", "res://maps/imported", "res://maps/imported_dm", "res://worlds",
+			"res://worlds_dm", "res://dot_cloud", "res://build", "res://lightbake_work", "res://android"]:
+		if dir == skip:
+			return
+	if dir.ends_with("textures/orig"):
+		found.append(dir)
+	for f in DirAccess.get_files_at(dir):
+		if f.get_extension().to_lower() in ["vpk", "vtf", "vmt", "mdl"]:
+			found.append(dir.path_join(f))
+	for d in DirAccess.get_directories_at(dir):
+		_valve_files(dir.path_join(d), found)
+
+
+## A VPK v2 at [param base]`_dir.vpk` (and `_000.vpk`) holding [param files]: path -> [bytes, part (-1 in the dir),
+## bytes preloaded in the tree]; each CRC is off by one when [param bad_crc].
+func _write_vpk(base: String, files: Dictionary, bad_crc := false) -> void:
+	var by_ext := {}
+	for path: String in files:
+		var folders: Dictionary = by_ext.get_or_add(path.get_extension(), {})
+		(folders.get_or_add(path.get_base_dir(), []) as Array).append(path)
+	var tree := PackedByteArray()
+	var in_dir := PackedByteArray()
+	var part := PackedByteArray()
+	for ext: String in by_ext:
+		tree.append_array(_cstr(ext))
+		for folder: String in by_ext[ext]:
+			tree.append_array(_cstr(folder))
+			for path: String in by_ext[ext][folder]:
+				var bytes: PackedByteArray = files[path][0]
+				var preloaded: int = files[path][2]
+				var body := bytes.slice(preloaded)
+				var stored := in_dir if int(files[path][1]) < 0 else part
+				var e := PackedByteArray()
+				e.resize(18)
+				e.encode_u32(0, ArenaVpk.crc32(bytes) ^ (1 if bad_crc else 0))
+				e.encode_u16(4, preloaded)
+				e.encode_u16(6, ArenaVpk.IN_DIR if int(files[path][1]) < 0 else 0)
+				e.encode_u32(8, stored.size())
+				e.encode_u32(12, body.size())
+				e.encode_u16(16, 0xFFFF)
+				tree.append_array(_cstr(path.get_file().get_basename()))
+				tree.append_array(e)
+				tree.append_array(bytes.slice(0, preloaded))
+				if int(files[path][1]) < 0:
+					in_dir.append_array(body)
+				else:
+					part.append_array(body)
+			tree.append(0)
+		tree.append(0)
+	tree.append(0)
+	var head := PackedByteArray()
+	head.resize(28)
+	head.encode_u32(0, ArenaVpk.SIG)
+	head.encode_u32(4, 2)
+	head.encode_u32(8, tree.size())
+	head.encode_u32(12, in_dir.size())
+	DirAccess.make_dir_recursive_absolute(base.get_base_dir())
+	var f := FileAccess.open(base + "_dir.vpk", FileAccess.WRITE)
+	f.store_buffer(head + tree + in_dir)
+	f.close()
+	f = FileAccess.open(base + "_000.vpk", FileAccess.WRITE)
+	f.store_buffer(part)
+	f.close()
+
+
+func _cstr(s: String) -> PackedByteArray:
+	var out := s.to_utf8_buffer()
+	out.append(0)
+	return out
+
+
+## A VTF 7.2 header (80 bytes, no thumbnail) for a [param w] x [param h] image of [param mips] in [param format].
+func _vtf_head(w: int, h: int, format: int, mips: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(80)
+	out.encode_u32(0, 0x00465456)  # "VTF\0"
+	out.encode_u32(4, 7)
+	out.encode_u32(8, 2)
+	out.encode_u32(12, 80)
+	out.encode_u16(16, w)
+	out.encode_u16(18, h)
+	out.encode_u16(24, 1)
+	out.encode_float(48, 1.0)
+	out.encode_s32(52, format)
+	out[56] = mips
+	out.encode_s32(57, -1)
+	out.encode_u16(63, 1)
+	return out
+
+
+## An RGBA8888 VTF: its largest mip [param top], the smaller ones [param rest] (stored smallest first).
+func _vtf_rgba(w: int, h: int, mips: int, top: Color, rest: Color) -> PackedByteArray:
+	var out := _vtf_head(w, h, 0, mips)
+	for m in range(mips - 1, -1, -1):
+		var c := top if m == 0 else rest
+		for _i in maxi(1, w >> m) * maxi(1, h >> m):
+			out.append_array(PackedByteArray([c.r8, c.g8, c.b8, c.a8]))
+	return out
+
+
+## A one-mip DXT1 VTF, every block colour0 [param rgb565].
+func _vtf_dxt1(w: int, h: int, rgb565: int) -> PackedByteArray:
+	var out := _vtf_head(w, h, 13, 1)
+	for _b in (w / 4) * (h / 4):
+		var block := PackedByteArray()
+		block.resize(8)
+		block.encode_u16(0, rgb565)
+		out.append_array(block)
+	return out
+
+
 func _zip_fixture(zip_path: String) -> bool:
 	DirAccess.make_dir_recursive_absolute(zip_path.get_base_dir())
 	var zip := ZIPPacker.new()
@@ -389,6 +684,9 @@ func _clean() -> void:
 	if DotMapLocalMaps.prefix_in("user://maps/convert").get_file() == LAYOUT_MAP:
 		_wipe("user://maps/convert")
 	_wipe(ZIP_CACHE)
+	_wipe(SOURCE_STEAM)
+	_wipe(ArenaSourceInstall.cache_dir(ProjectSettings.globalize_path(SOURCE_GAME)))
+	_wipe("user://maps".path_join(LAYOUT_MAP + "_orig"))
 	_wipe(OLD_USER)
 	_wipe(NEW_USER)
 	DirAccess.remove_absolute(DROPPED_ZIP)
